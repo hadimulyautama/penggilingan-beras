@@ -16,11 +16,12 @@
 {% if VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
 <form method="get" action="/barang-masuk" class="saring">
 <input type="hidden" name="status" value="{{ status }}">
-{% for key in ['kepemilikan','gudang','cari','pemasok'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
+{% for key in ['kepemilikan','gudang','cari','pemasok','pelanggan_id','kembali_jasa'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
 <label class="kerja-filter">Jenis barang<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for k,n in jenis_barang %}<option value="{{ k }}"{{ ' selected' if jenis==k }}>{{ n }}</option>{% endfor %}</select></label>
 <button class="btn btn--kecil" type="submit">Tampilkan</button>
 </form>
 </details>
+{% if pelanggan_saring %}<p class="bantu">Pelanggan: <strong>{{ pelanggan_saring }}</strong> · <a href="{{ href(pelanggan_id='') }}">Semua pelanggan</a></p>{% endif %}
 {% include '_kerja_cari.html' %}
 </header>
 {% if status=='belum' %}

@@ -91,8 +91,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                        or await _is_g1_operator(akun.user)))
 
     draf_saya = []
+    from app.web.stok_navigasi import pelanggan_diminta
+    pid=pelanggan_diminta(request)
     async with SessionLocal() as db:
-        if boleh_perintah and transaksi_id is None:
+        if boleh_perintah and transaksi_id is None and not pid:
             from app.web.draf_keluar import daftar_draf
             draf_saya = await daftar_draf(db, akun.user)
         if transaksi_id is not None:
@@ -102,10 +104,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             sebelum_berikut = None
         else:
             aktif = (await svc.daftar(db, status=(status,) if status else OUT_HIDUP,
-                                      batas=500, pencarian=q, sejak=tanggal)
+                                      batas=500, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid)
                      if not status or status in OUT_HIDUP else [])
             riwayat = (await svc.daftar(db, status=(status,) if status else (OUT_SELESAI, OUT_BATAL),
-                                        batas=51, sebelum_id=sebelum, pencarian=q, sejak=tanggal)
+                                        batas=51, sebelum_id=sebelum, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid)
                        if not status or status not in OUT_HIDUP else [])
             sebelum_berikut = riwayat[49][0].id if len(riwayat) > 50 else None
             baris = aktif + riwayat[:50]

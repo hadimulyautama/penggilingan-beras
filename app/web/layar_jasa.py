@@ -12,6 +12,7 @@ memakan silo dan lantai, dan tak terbaca di mana pun. Halaman ini yang
 menutup lubang yang dibuat saringan itu.
 """
 from __future__ import annotations
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -24,39 +25,85 @@ router = APIRouter()
 
 @router.get("/jasa")
 async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
-    """Pesanan jasa yang berjalan, sisanya per fase, dan umurnya."""
+    """Satu pelanggan, seluruh pesanan dan saldo aslinya."""
     from app.peran import can_see_financials
-    from app.services.jasa import FASE_JASA, daftar_jasa
-    from app.models.jasa import BERJALAN, DIBATALKAN, DIGABUNG, SELESAI
-
-    # Kerja MEJA. Pintunya sudah tak ditawarkan ke operator, tetapi pintu yang
-    # disembunyikan bukan penjagaan: alamatnya bisa diketik.
+    from app.services import jasa_pelanggan as svc, berjalan
+    from app.services.kelompok_kerja import bagi
     if not can_see_financials(akun.user):
         raise HTTPException(403, "Layar Jasa milik Admin ke atas.")
-
-    tapis = (request.query_params.get("status") or BERJALAN).strip()
-    if tapis not in (BERJALAN, SELESAI, DIBATALKAN, DIGABUNG):
-        tapis = BERJALAN
+    tapis = request.query_params.get('status','')
+    if tapis not in dict(svc.STATUS):
+        tapis=''
+    cari=request.query_params.get('cari','').strip()[:200]
+    try:
+        halaman=max(1,int(request.query_params.get('halaman','1')))
+    except ValueError:
+        halaman=1
     async with SessionLocal() as db:
-        kartu = await daftar_jasa(db, status=tapis)
-    # Berapa ton barang orang lain di gudang hari ini — satu angka, dan ia
-    # satu-satunya hitungan yang pemilik minta di layar ini (keputusan 10: tak
-    # ada ambang, tak ada pagar; angka apa adanya saja).
-    #
-    # Dijumlah dari `total` tiap pesanan dan DISEBUT sebagai perkiraan: satu
-    # muatan bisa terhitung dua kali bila ia sedang berpindah fase, dan angka
-    # yang disebut pasti akan dibaca sebagai janji.
-    ton = sum(k.sisa.total for k in kartu)
+        data=await svc.daftar(db,cari=cari,status=tapis,halaman=halaman)
+        b=await berjalan.untuk(db,akun.user)
+        k=bagi(b)
+        for d in data['kartu']:
+            cocok=await svc.saring_kartu(db,k.tindakan+k.masuk,d['id'])
+            d['pekerjaan']=sum(x in k.tindakan for x in cocok)
+            _tambah_tiket(d,[x for x in cocok if x in k.masuk])
     return await render_laci(
-        request, "jasa.html",
-        kartu=kartu, FASE_JASA=FASE_JASA, tapis=tapis, ton=ton,
-        # DIGABUNG ikut ditawarkan (10 Oktober 2026) — "cermin bertanda, bukan
-        # dihapus" berlaku di sini juga: pesanan yang digabung tetap harus
-        # bisa DILIHAT (nota-nya menunjuk ke survivor-nya), bukan menghilang
-        # dari layar begitu statusnya berubah.
-        STATUS_PILIHAN=((BERJALAN, "Berjalan"), (SELESAI, "Selesai"),
-                        (DIBATALKAN, "Dibatalkan"), (DIGABUNG, "Digabung")),
-    )
+        request,"jasa.html",layar='jasa',**data,tapis=tapis,cari=cari,
+        STATUS_PILIHAN=svc.STATUS,kg=svc.kg_rinci)
+
+
+def _tambah_tiket(d,rows):
+    for r in rows:
+        if any(x['kode']==r.kode for x in d['penerimaan']):
+            continue
+        d['penerimaan'].append(dict(id=None,kode=r.kode,jenis=r.judul or r.isi,
+            catatan=[],pesanan='Mengikuti tiket asal',status='Belum diterima',
+            href='/barang-masuk?'+urlencode(
+                {'pelanggan_id':d['id'],'cari':r.kode})))
+
+
+@router.get('/jasa/pelanggan/{pelanggan_id:int}')
+async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_akun)):
+    from app.peran import can_see_financials
+    from app.services import jasa_pelanggan as svc,berjalan
+    from app.services.kelompok_kerja import bagi
+    from urllib.parse import urlencode
+    if not can_see_financials(akun.user):
+        raise HTTPException(403,'Layar Jasa milik Admin ke atas.')
+    tab=request.query_params.get('tab','ringkasan')
+    if tab not in {'ringkasan','penerimaan','proses','stok'}:
+        raise HTTPException(422,'Tab pelanggan tidak dikenal.')
+    async with SessionLocal() as db:
+        d=await svc.pelanggan(db,pelanggan_id)
+        if d is None:
+            raise HTTPException(404,'Pelanggan jasa tidak ditemukan.')
+        b=await berjalan.untuk(db,akun.user)
+        k=bagi(b)
+        cocok=await svc.saring_kartu(db,k.tindakan+k.berjalan+k.informasi+k.masuk,pelanggan_id)
+        d['pekerjaan']=sum(x in k.tindakan for x in cocok)
+        _tambah_tiket(d,[x for x in cocok if x in k.masuk])
+    konteks=f'/jasa/pelanggan/{pelanggan_id}?'+urlencode({'tab':tab,**{k:v for k,v in request.query_params.items() if k in ('status','cari','halaman')}})
+    kembali='/jasa?'+urlencode({k:v for k,v in request.query_params.items() if k in ('status','cari','halaman')})
+    return await render_laci(request,'jasa_pelanggan_detail.html',layar='jasa',d=d,tab=tab,
+        kembali=kembali,konteks=konteks,kg=svc.kg_rinci,ke=lambda h:svc.ke(h,konteks),
+        stok_href=lambda t:'/stok?'+urlencode(dict(tab=t,pemilik='jasa',pelanggan_id=pelanggan_id)),
+        kerja_href='/pekerjaan?'+urlencode(dict(pelanggan_id=pelanggan_id)),
+        masuk_href='/barang-masuk?'+urlencode(dict(pelanggan_id=pelanggan_id)),
+        buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''))
+
+
+@router.get('/jasa/{jasa_id:int}')
+async def referensi_pesanan(jasa_id:int,request:Request,akun=Depends(butuh_akun)):
+    from app.models import Jasa
+    from app.peran import can_see_financials
+    from fastapi.responses import RedirectResponse
+    if not can_see_financials(akun.user):
+        raise HTTPException(403,'Layar Jasa milik Admin ke atas.')
+    async with SessionLocal() as db:
+        j=await db.get(Jasa,jasa_id)
+        if not j:
+            raise HTTPException(404,'Pesanan tidak ditemukan.')
+        return RedirectResponse(f'/jasa/pelanggan/{j.pelanggan_id}?tab=ringkasan#pesanan-{j.id}',303)
 
 
 @router.get("/jasa/{jasa_id:int}/nota")

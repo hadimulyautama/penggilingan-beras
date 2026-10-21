@@ -162,6 +162,8 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     # pernah menghitungnya sendiri — lihat `app.web.layar`.
     konteks.setdefault("VIEW", getattr(request.state, "view", "tamu"))
     konteks.setdefault("MENUNGGU", 0)
+    from app.web.jasa_navigasi import kembali_aman
+    konteks['JASA_KEMBALI'] = kembali_aman(request.query_params.get('kembali_jasa'))
     # ── Token CSRF, satu per peramban ──
     #
     # Dibaca dari cookie bila sudah ada; kalau belum, diterbitkan di sini dan

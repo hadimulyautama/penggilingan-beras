@@ -1976,9 +1976,15 @@ async def balik_batal(db: AsyncSession, *, rec_id: int) -> str:
 
 async def daftar(db: AsyncSession, *, status: tuple[str, ...] | None = None,
                  batas: int = 50, transaksi_id: int | None = None,
-                 sebelum_id: int | None = None, pencarian: str = "", sejak=None) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
+                 sebelum_id: int | None = None, pencarian: str = "", sejak=None,
+                 pelanggan_jasa_id: int | None = None) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
     """Transaksi barang keluar beserta isinya — untuk halaman & kartunya."""
     q = select(OutgoingRecord).order_by(OutgoingRecord.id.desc()).limit(batas)
+    if pelanggan_jasa_id is not None:
+        from app.models import Jasa
+        milik=select(Jasa.id).where(Jasa.pelanggan_id==pelanggan_jasa_id)
+        q=q.where(OutgoingRecord.id.in_(select(OutgoingItem.outgoing_record_id)
+                  .where(OutgoingItem.jasa_id.in_(milik))))
     if pencarian:
         from sqlalchemy import or_
         pola = "%" + pencarian.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"

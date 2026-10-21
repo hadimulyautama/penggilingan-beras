@@ -372,7 +372,8 @@ class Berjalan:
         # pemilik memutuskan kelak. Halaman `/jasa` sendiri TAK disentuh:
         # masih bisa dibuka lewat alamatnya, dan `Berjalan.untuk_staff()`
         # dkk. yang membacanya tak berubah sama sekali.
-        mati.append("jasa")
+        # Pesanan Jasa kini kembali menjadi pintu untuk pelanggan. Hak layar
+        # tetap MEJA; tampilan ini tidak memperluas kewenangan operator.
         # "Kabar" — permintaan pemilik 7 Oktober 2026, sama pola dengan
         # "Jasa" barusan: disembunyikan sementara, tanpa jalan pengganti.
         # Lencananya (`jumlah_kabar`/`kabar_merah`) TETAP dihitung — kelak

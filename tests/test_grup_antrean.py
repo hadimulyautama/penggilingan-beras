@@ -244,8 +244,9 @@ def test_audit_jasa_kabar_padam_di_laci_permintaan_pemilik_7_oktober():
         sampai pemilik memutuskan kelak. Alamatnya (`/jasa`, `/kabar`)
         tetap bisa diketik — menyembunyikan pintu bukan penjagaan."""
     mati = Berjalan().lencana()["PINTU_MATI"]
-    for kunci in ("audit", "jasa", "kabar"):
+    for kunci in ("audit", "kabar"):
         assert kunci in mati, kunci
+    assert "jasa" not in mati  # 21 Okt: pintu pelanggan diminta kembali.
 
 
 # ═══════ Sub-menu "Riwayat Proses" — Penyosohan vs Penggilingan/Pengeringan/
@@ -555,38 +556,30 @@ def test_tombol_kirim_di_templat_app_ini_memakai_data_kirim():
 
 
 def test_tombol_tutup_jasa_sungguh_tergambar_dan_muatannya_sah():
-    """⚠ Cabang `boleh_tutup` DIRENDER, bukan cuma dibaca sebagai teks.
-
-    Pesanan yang baru lahir tak pernah boleh ditutup (aturannya benar), jadi
-    cabang ini tak pernah dilewati oleh percobaan lewat basis data — dan galat
-    Jinja di dalamnya baru akan muncul di gudang, pada pesanan pertama yang
-    memang sudah selesai.
-
-    Muatannya diperiksa sebagai JSON SUNGGUHAN dan dibandingkan dengan bentuk
-    yang rutenya terima (`JasaReq`): atribut yang kutipnya salah akan putus di
-    karakter pertama muatannya, dan yang terkirim jadi JSON tak lengkap.
-    """
-    import json
+    """Cabang penutupan harus merender ID pesanan dan konteks daftar tepat."""
     import re
-    import types
 
     from app.web.aksi_inventory import JasaReq
     from app.web.tampilan import templates
 
-    kartu = types.SimpleNamespace(
-        id=7, kode="JAS-2610-077", pelanggan="Pak Budi", fase="barang_jadi",
-        sisa=types.SimpleNamespace(gabah_kg=0, dryer_kg=0, silo_kg=0, pk_g1_kg=0,
-                                   pk_g2_kg=0, barang_jadi_kg=0, ada=False),
-        umur_hari=3, status="berjalan", boleh_tutup=True, sebab="")
-    h = templates.get_template("jasa.html").render(
-        request=None, akun=_akun("admin"), layar="jasa", MENUNGGU=0,
-        MODE_UJI=False, LIHAT_SEBAGAI=None, kembali=None, CSRF="x",
-        kartu=[kartu], FASE_JASA={}, tapis="berjalan", ton=0,
-        STATUS_PILIHAN=(("berjalan", "Berjalan"),))
-
-    assert "Tutup pesanan" in h
-    m = re.search(r"data-kirim='([^']*)'", h)
-    assert m, "tombol tutup tanpa data-kirim — ia akan diam saat ditekan"
-    muatan = json.loads(m.group(1))
-    # Bentuknya memang yang rutenya terima: `JasaReq(jasa=…)`.
-    assert JasaReq(**muatan).jasa == "7"
+    # 21 Oktober: tindakan kini per pesanan di detail pelanggan. Formulir
+    # operasional lama tetap dipakai; tautan harus membawa ID pesanan tepat.
+    from starlette.requests import Request
+    from html import unescape
+    from urllib.parse import parse_qs, urlsplit
+    request=Request({"type":"http","path":"/jasa/pelanggan/2","query_string":b"cari=Pak+Budi&status=berjalan&halaman=2",
+                     "scheme":"http","server":("localhost",80),"headers":[]})
+    d=dict(id=2,nama="Pak Budi",penerimaan=[],proses=[],pengiriman=[],retur=[],
+           kondisi=[],pk_kg=0,beras_kg=0,samping_kg=0,pekerjaan=0,
+           pesanan=[dict(id=7,kode="JAS-2610-077",status="berjalan",boleh_tutup=True,
+                         boleh_batal=False,sebab="",catatan="",digabung_ke_id=None,umur_hari=7,tanggal=None)])
+    h=templates.get_template("jasa_pelanggan_detail.html").render(
+        request=request,akun=_akun("admin"),layar="jasa",d=d,tab="ringkasan",
+        MENUNGGU=0,MODE_UJI=False,LIHAT_SEBAGAI=None,kembali=None,CSRF="x",
+        kg=lambda n:f"{n} kg",ke=lambda u:u,stok_href=lambda t:"/stok",masuk_href="/barang-masuk",kerja_href="/pekerjaan")
+    assert "Tutup pesanan" in h and "Umur pesanan 7 hari" in h
+    href=next(unescape(x) for x in re.findall(r'href="([^"]+)"',h) if 'buka=tutup_jasa' in x)
+    query=parse_qs(urlsplit(href).query)
+    assert query['nilai']==['7']
+    assert query['cari']==['Pak Budi'] and query['halaman']==['2']
+    assert JasaReq(jasa=query['nilai'][0]).jasa=="7"

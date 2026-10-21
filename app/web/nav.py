@@ -218,7 +218,7 @@ TAB = (
     # Android menggambar emoji sebagai kotak kosong, dan ikon yang jadi kotak
     # pada satu ponsel membuat pintunya tak bernama di situ. "◇" dipilih karena
     # belum dipakai pintu lain: barang yang dititipkan, bukan dimiliki.
-    ("jasa",       "/jasa",       "Jasa",
+    ("jasa",       "/jasa",       "Pesanan Jasa",
      "Barang titipan pelanggan: sisa & pengambilannya", MEJA, "◇"),
     # ── Riwayat Proses — keputusan pemilik 2 Oktober 2026, sub-menu 7
     #    Oktober 2026 ──

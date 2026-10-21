@@ -15,11 +15,12 @@
 {% if VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
 <form method="get" action="/pekerjaan" class="saring">
 <input type="hidden" name="tab" value="{{ tab }}">
-{% for key in ['kepemilikan','gudang','cari','pemasok'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
+{% for key in ['kepemilikan','gudang','cari','pemasok','pelanggan_id','kembali_jasa'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
 <label class="kerja-filter">Jenis pekerjaan<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for k,n,j in per_jenis %}<option value="{{ k }}"{{ ' selected' if jenis==k }}>{{ n }} · {{ j }}</option>{% endfor %}</select></label>
 <button class="btn btn--kecil" type="submit">Tampilkan</button>
 </form>
 </details>
+{% if pelanggan_saring %}<p class="bantu">Pelanggan: <strong>{{ pelanggan_saring }}</strong> · <a href="{{ href(pelanggan_id='') }}">Semua pelanggan</a></p>{% endif %}
 {% include '_kerja_cari.html' %}
 </header>
 {% if request.query_params.get('grup') or request.query_params.get('asal') or request.query_params.get('kategori') %}<p class="bantu">Saringan dari tautan lama aktif. <a href="{{ href(grup='',asal='',kategori='',jenis='') }}">Lihat semua pekerjaan</a>.</p>{% endif %}

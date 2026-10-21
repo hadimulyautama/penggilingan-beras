@@ -41,6 +41,19 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
     async with SessionLocal() as db:
         b = await svc.untuk(db, akun.user)
     k = bagi(b)
+    from app.web.stok_navigasi import pelanggan_diminta
+    pid=pelanggan_diminta(request)
+    pelanggan_saring=''
+    if pid:
+        from app.services.jasa_pelanggan import saring_kartu
+        async with SessionLocal() as db:
+            cocok=await saring_kartu(db,k.tindakan+k.berjalan+k.informasi,pid)
+            from app.models import Pelanggan
+            p=await db.get(Pelanggan,pid)
+            pelanggan_saring=p.nama_pelanggan if p else 'Pelanggan tidak ditemukan'
+        k.tindakan=[r for r in k.tindakan if r in cocok]
+        k.berjalan=[r for r in k.berjalan if r in cocok]
+        k.informasi=[r for r in k.informasi if r in cocok]
     tab = pilihan(request, 'tab', {'tindakan', 'berjalan'}, awal or 'tindakan')
     pemilik = pilihan(request, 'kepemilikan', {'jasa','pabrik'})
     gudang = pilihan(request, 'gudang', {'g1','g2'})
@@ -84,7 +97,7 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
         daftar=daftar,proses=[x for x in daftar if x in berjalan],
         informasi=[x for x in daftar if x not in berjalan],
         kelompok=[(key,nama,[x for x in daftar if jenis_kerja(x)==key]) for key,nama in JENIS_KERJA],
-        total_tindakan=total_tindakan,total_jalan=total_jalan,per_jenis=per_jenis,
+        total_tindakan=total_tindakan,total_jalan=total_jalan,per_jenis=per_jenis,pelanggan_saring=pelanggan_saring,
         href=lambda **p:tautan(request,'/pekerjaan',**p),alamat_detail_proses=detail,
         lama=svc._lama,PINTASAN=_pintasan_aksi(await view_untuk(akun.user)),
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''),
@@ -104,6 +117,17 @@ async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
             q = text('SELECT kode,id,jenis_kode FROM timbangan_transaksi WHERE kode IN :ids').bindparams(bindparam('ids',expanding=True))
             meta = {r.kode:dict(r._mapping) for r in (await db.execute(q,{'ids':ids})).all()}
         riwayat = await masuk.riwayat(db,g1=await _is_g1_operator(akun.user),g2=await _is_g2_operator(akun.user))
+        from app.web.stok_navigasi import pelanggan_diminta
+        pid=pelanggan_diminta(request)
+        pelanggan_saring=''
+        if pid:
+            from app.services.jasa_pelanggan import saring_kartu
+            from app.models import Jasa,Pelanggan
+            p=await db.get(Pelanggan,pid)
+            pelanggan_saring=p.nama_pelanggan if p else 'Pelanggan tidak ditemukan'
+            ids=set((await db.scalars(select(Jasa.id).where(Jasa.pelanggan_id==pid))).all())
+            pending=await saring_kartu(db,pending,pid)
+            riwayat=[t for t in riwayat if any(c['jasa_id'] in ids for c in t['catatan'])]
     status = pilihan(request,'status',{'belum','diterima'},'belum')
     jenis = pilihan(request,'jenis',dict(JENIS_BARANG))
     pemilik = pilihan(request,'kepemilikan',{'jasa','pabrik'})
@@ -127,7 +151,7 @@ async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
         return f'/barang-masuk/{tid}?'+urlencode({'kembali_kerja':konteks})
     return render(request, "barang_masuk.html",layar='barang_masuk',status=status,jenis=jenis,
         menunggu=pending,riwayat=riwayat[(halaman-1)*25:halaman*25],
-        total_belum=total_belum,total_diterima=total_diterima,jenis_barang=JENIS_BARANG,
+        total_belum=total_belum,total_diterima=total_diterima,jenis_barang=JENIS_BARANG,pelanggan_saring=pelanggan_saring,
         meta_tiket=meta,detail_tiket=detail,
         detail_penerimaan={x.kode:detail(meta[x.kode]['id']) for x in pending if x.kode in meta},halaman=halaman,halaman_akhir=max(1,(jumlah+24)//25),
         jumlah=jumlah,href=lambda **p:tautan(request,'/barang-masuk',**p),lama=svc._lama,

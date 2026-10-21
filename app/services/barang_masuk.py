@@ -36,7 +36,7 @@ async def tiket_riwayat(db, tid):
     return {**dict(r), 'berat_hpp_kg':None, 'sumber_berat':'lihat catatan penerimaan'} if r else None
 
 
-async def riwayat(db, *, g1, g2, tid=None):
+async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None):
     # Sumbernya sama dengan pemeriksaan tiket yang telah tertaut. Tidak
     # memakai saldo tersedia sebagai tanda diterima: barang yang sudah habis
     # diproses tetap memiliki catatan penerimaan.
@@ -50,6 +50,8 @@ async def riwayat(db, *, g1, g2, tid=None):
                       (ByproductStock, ByproductStock.source_id, 'broken')))
     for model, kolom, jenis in specs:
         q = select(model).where(kolom.is_not(None))
+        if jasa_ids is not None:
+            q=q.where(model.jasa_id.in_(jasa_ids))
         if tid is not None:
             q = q.where(kolom == tid)
         if jenis in ('beras', 'broken'):

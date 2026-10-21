@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block judul %}Pesanan Jasa{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=3">
+<header class="kerja-kepala"><h1>Pesanan Jasa</h1><p class="bantu">Satu pelanggan, seluruh pesanan dan barang titipannya.</p>
+<form class="saring jasa-cari-form" method="get" action="/jasa">
+<label class="jasa-cari">Cari pelanggan atau pesanan<input class="fld" type="search" name="cari" value="{{ cari }}"></label>
+<label class="jasa-cari">Status pesanan<select class="fld" name="status">{% for v,n in STATUS_PILIHAN %}<option value="{{ v }}"{{ ' selected' if tapis==v }}>{{ n }}</option>{% endfor %}</select></label>
+<button class="btn btn--kecil" type="submit">Tampilkan</button>
+</form></header>
+<p class="bantu">{{ jumlah }} pelanggan · saldo dibaca dari seluruh pesanan pelanggan, sesuai jenis barang dan lokasinya.</p>
+<div class="jasa-daftar">
+{% for d in kartu %}
+<a class="kartu jasa-pelanggan" href="/jasa/pelanggan/{{ d.id }}?{{ {'status':tapis,'cari':cari,'halaman':halaman}|urlencode }}">
+<div class="baris"><h2>{{ d.nama }}</h2><span class="lencana">Jasa</span></div>
+<p class="bantu">{{ d.penerimaan|length }} penerimaan · {{ d.pesanan|length }} pesanan · {{ d.pekerjaan }} perlu tindakan · {{ d.berjalan }} proses berjalan</p>
+<div class="jasa-angka">
+{% for label,n in [('PK tersedia',d.pk_kg),('Beras tersisa',d.beras_kg),('Hasil samping',d.samping_kg)] %}<div><small>{{ label }}</small><strong>{{ kg(n) }}</strong></div>{% endfor %}
+</div>
+{% if d.stok|rejectattr('final')|list %}<p class="bantu">Ada bobot atau hasil belum final. Periksa rincian.</p>{% endif %}
+<div class="jasa-kondisi">{% for n in d.kondisi %}<span class="lencana">{{ n }}</span>{% else %}<span class="bantu">Tidak ada saldo tercatat saat ini</span>{% endfor %}</div>
+<span class="jasa-buka">Detail pelanggan <span aria-hidden="true">›</span></span>
+</a>
+{% else %}<div class="kosong"><div><h2>Tidak ada pelanggan yang cocok</h2><p class="bantu">Ubah nama atau status pesanan. Pesanan baru tetap dibuat melalui alur Pos Timbang.</p></div></div>{% endfor %}
+</div>
+{% if akhir>1 %}<nav class="saring" aria-label="Halaman pelanggan">{% if halaman>1 %}<a class="btn btn--kecil" href="?{{ {'status':tapis,'cari':cari,'halaman':halaman-1}|urlencode }}">Sebelumnya</a>{% endif %}<span>{{ halaman }} / {{ akhir }}</span>{% if halaman<akhir %}<a class="btn btn--kecil" href="?{{ {'status':tapis,'cari':cari,'halaman':halaman+1}|urlencode }}">Berikutnya</a>{% endif %}</nav>{% endif %}
+{% endblock %}

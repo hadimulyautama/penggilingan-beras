@@ -178,9 +178,11 @@
    selalu terlihat — dan kaki ini catatan kaki, bukan pengumuman. #}
 {% if STOK_NAV %}{% include "_stok_navigasi.html" %}{% endif %}
 {% if STOK_NAV %}<div class="stok-isi">{% endif %}
+{% if JASA_KEMBALI %}<a class="btn btn--kecil" href="{{ JASA_KEMBALI }}" data-kembali-jasa="{{ JASA_KEMBALI }}">Kembali ke pelanggan jasa</a>{% endif %}
 {% block isi %}{% endblock %}
 {% if STOK_NAV %}</div>{% endif %}
 {% block kaki %}{% endblock %}
+{% if JASA_KEMBALI %}<script src="/static/konteks-jasa.js?v={{ VERSI }}" defer></script>{% endif %}
 </main>
 
 {# ── Laci menu ──

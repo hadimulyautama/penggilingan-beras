@@ -1,0 +1,17 @@
+.jasa-daftar{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.jasa-pelanggan{display:block;color:var(--tinta);text-decoration:none;min-width:0}
+.jasa-pelanggan h2{font-size:1.2rem;margin:0;overflow-wrap:anywhere}
+.jasa-angka{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.jasa-angka small,.jasa-angka strong{display:block}.jasa-angka small{color:var(--redup);font-size:.85rem}.jasa-angka strong{font-size:1.1rem;overflow-wrap:anywhere}
+.jasa-kondisi{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.jasa-buka{display:flex;justify-content:space-between;align-items:center;min-height:44px;font-weight:700}
+.jasa-cari{flex:1 1 220px}.jasa-tab .pil{min-height:44px}.jasa-catatan{border-bottom:1px solid var(--garis);padding:12px 0;overflow-wrap:anywhere}
+.jasa-tab{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.jasa-tab .pil{width:auto;display:flex;align-items:center;justify-content:center;margin:0}
+.jasa-catatan summary{display:flex;gap:12px;align-items:center;justify-content:space-between;cursor:pointer;min-height:48px}.jasa-catatan summary:after{content:'⌄'}.jasa-catatan[open] summary:after{content:'⌃'}.jasa-catatan small,.jasa-sumber small,.jasa-stok small{display:block;color:var(--redup)}
+.jasa-catatan__isi{padding-top:12px}.jasa-sumber{padding:0;list-style:none}.jasa-sumber li{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--garis);padding:10px 0}.jasa-sumber strong{white-space:nowrap}
+.jasa-hasil{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.jasa-hasil dd{margin:0;font-weight:700}.jasa-hasil dt{color:var(--redup)}
+.jasa-stok__kepala,.jasa-stok__baris{display:grid;grid-template-columns:2fr 1fr 1.2fr;gap:16px;align-items:start;padding:14px 0;border-bottom:1px solid var(--garis)}.jasa-stok__kepala{font-weight:700}.jasa-stok__baris>div{min-width:0;overflow-wrap:anywhere}
+@media(max-width:600px){.jasa-angka{gap:8px}.jasa-angka strong{font-size:1rem}.jasa-stok__kepala{display:none}.jasa-stok__baris{grid-template-columns:minmax(0,1fr) minmax(110px,.7fr);gap:8px 12px}.jasa-stok__baris>div:first-child{grid-column:1/-1}.jasa-stok__baris>div:last-child{text-align:right}.jasa-sumber li{flex-wrap:wrap}.jasa-sumber li>span{flex:1 1 190px}.jasa-sumber strong{white-space:normal}.jasa-catatan .saring .btn{flex:1 1 150px}}
+@media(max-width:600px){.jasa-tab{grid-template-columns:repeat(2,minmax(0,1fr))}.kerja-kepala .jasa-tab .pil{width:auto;flex-basis:auto}.jasa-catatan__isi .saring{display:flex;flex-wrap:wrap}.jasa-catatan__isi .saring .btn{width:auto;flex:1 1 140px}}
+
+.saring.jasa-operasi{display:flex;flex-wrap:wrap;gap:8px}.jasa-operasi .btn{width:auto;flex:1 1 150px}.saring.jasa-cari-form{grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;align-items:end}
+@media(max-width:600px){.saring.jasa-cari-form{grid-template-columns:minmax(0,1fr)}.jasa-operasi .btn{min-height:44px}}
