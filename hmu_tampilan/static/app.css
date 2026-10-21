@@ -923,9 +923,38 @@ body.terik .laci__logo--gelap { display: none; }
 .beranda-akses__item--berjalan .beranda-akses__ikon { background: linear-gradient(145deg,#e8f8f1,#d2f1e3); color: #21835c; }
 .beranda-akses__item--stok .beranda-akses__ikon { background: linear-gradient(145deg,#fff4df,#ffe8b6); color: #a96a17; }
 .beranda-akses__item--barang_keluar .beranda-akses__ikon { background: linear-gradient(145deg,#fff0eb,#ffdcd1); color: #c35c47; }
-.beranda-akses__item strong { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+/* "Pesanan Jasa" di Akses cepat Beranda (Tahap Beranda usulan, 21 Oktober
+   2026) — warna sendiri, sama pola dengan tiga varian di atas. "Laporan"
+   sengaja TANPA varian: warna bawaan `.beranda-akses__ikon` (biru) sudah
+   pas untuk ikon grafik, dan varian kedua yang kebetulan sama persis
+   warnanya cuma menambah aturan tanpa menambah beda yang terlihat. */
+.beranda-akses__item--jasa .beranda-akses__ikon { background: linear-gradient(145deg,#f3ecff,#e4d6ff); color: #7c4dcc; }
+/* Dibungkus balik 21 Oktober 2026, saat kartu dasar ini dipakai LANGSUNG
+   pertama kalinya (Akses cepat Beranda, desktop + ponsel) — sebelum ini
+   hanya dicapai lewat varian `--ringkas`, yang menimpa ellipsis dengan
+   bungkus teks biasa (`white-space:normal`). Bawaannya kini ikut pola yang
+   sama: label yang panjang MEMBUNGKUS, bukan dipotong "…" — satu pintu
+   dengan nama yang terpotong lebih buruk daripada pintu yang tingginya
+   sedikit lebih besar. */
+.beranda-akses__item strong {
+  display: block; font-size: 13px; white-space: normal; overflow-wrap: anywhere;
+}
 .beranda-akses__item small { display: block; margin-top: 3px; color: var(--redup); font-size: 10px; line-height: 1.3; }
 .beranda-akses__panah { color: var(--redup-2); font-size: 14px; }
+/* Tanggal + cakupan gudang, satu baris kecil di atas sapaan (Tahap Beranda
+   usulan, 21 Oktober 2026) — gantinya `.beranda-gudang-aktif` (warna sama,
+   `var(--redup)`, BUKAN putih: sejak `--ringkas`, sambutan tak lagi memakai
+   banner gelap — "sapaan dekoratif tidak perlu menghabiskan layar
+   operator"). Satu baris, bukan dua seperti mockup: `.beranda-sambut` wajib
+   28–62px tinggi (`tests/test_beranda_responsif.py`). */
+.beranda-eyebrow {
+  color: var(--redup); font: 600 11px/1.35 var(--teks);
+}
+/* 320px + cakupan "Gudang 2 · Penyosohan" (yang terpanjang) sempat membungkus
+   dua baris tepat di batas 62px (`tests/test_beranda_responsif.py`); 11px
+   tanpa letter-spacing muat satu baris, dan bila toh membungkus, dua baris
+   11px masih di bawah batas. */
+@media (max-width: 359px) { .beranda-eyebrow { font-size: 10.5px; } }
 .beranda-ringkasan { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px; }
 .beranda-ringkasan .petak { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .beranda-ringkasan .petak__sel {

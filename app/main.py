@@ -375,6 +375,12 @@ async def beranda(request: Request):
     view = getattr(request.state, "view", "tamu")
     o, jalan, petak = {}, svc.Berjalan(), []
     papan = None
+    # Pintu "Pengiriman" (Beranda usulan, Tahap Beranda, 21 Oktober 2026) —
+    # irisan `kerja.tindakan` yang sama persis dengan `/pekerjaan?grup=muat`
+    # (`svc.grup_baris`, sudah dipakai `layar_pekerjaan.py` untuk filter yang
+    # sama), BUKAN kueri baru: satu sumber, supaya angka Beranda tak pernah
+    # berselisih dari daftar yang dibuka saat kartunya ditekan.
+    pengiriman_n = 0
     try:
         async with SessionLocal() as db:
             # Angka Gudang 1 mahal dan tak dipakai view polesan. Operator
@@ -383,6 +389,9 @@ async def beranda(request: Request):
             if gudang1(view):
                 o = (await dashboard_data(db)).get("operasional", {}) or {}
             jalan = await svc.untuk(db, akun.user)
+            from app.services.kelompok_kerja import bagi
+            kerja = bagi(jalan)
+            pengiriman_n = sum(1 for x in kerja.tindakan if svc.grup_baris(x) == "muat")
             # Angka per gudang dihitung SEKALI untuk halaman ini: petak "Stok
             # PK" Admin dan papan di bawahnya membaca yang sama. Sampai 24
             # September 2026 petak Admin memetik petak ke-4 tiap gudang
@@ -415,8 +424,19 @@ async def beranda(request: Request):
     # kalimat palsu lewat tautan.
     _PESAN = {"sandi-diganti": "Kata sandi berhasil diganti."}
 
+    from app.services.beranda import sapaan_dan_tanggal
+    sapaan, tanggal_tampil = sapaan_dan_tanggal(akun.user.nama if akun.user else None)
+
     return render(
         request, "beranda.html",
+        sapaan=sapaan, tanggal_tampil=tanggal_tampil,
+        PENGIRIMAN=pengiriman_n,
+        # Cakupan "Semua gudang" & pintu "Pesanan Jasa" (Akses cepat) — dari
+        # SINI, bukan templat bersama membandingkan `VIEW in V_MEJA` sendiri.
+        # `beranda.html` dipakai lebih dari satu app; templat yang menebak
+        # peran adalah templat yang bisa menebak salah di app sebelah
+        # (`tests/test_paket.py::test_beranda_gudang_menyerahkan_pintu_keputusan_ke_app`).
+        semua_gudang=view in V_MEJA,
         # Petaknya disusun `app.web.layar` menurut view — Beranda tak lagi
         # punya satu bentuk yang dipakai bersama oleh empat peran.
         petak=petak,
