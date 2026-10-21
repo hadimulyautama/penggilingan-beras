@@ -180,10 +180,15 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
         pending = [x for x in bagi(b).masuk if x.kode==t['kode']]
         catatan = data[0]['catatan'] if data else []
         lokasi,proses,petugas = await masuk.rincian_lokasi(db,catatan)
+        timbang = await masuk.rincian_timbang(db,tid)
+        berat_diterima,keterangan_berat = masuk.bobot_diterima(catatan)
+        qc_penerimaan = await masuk.hasil_qc(db,catatan)
     kembali = konteks_aman(request.query_params.get('kembali_kerja')) or '/barang-masuk'
     proses = [(kode, url + ('&' if '?' in url else '?') + urlencode({'kembali_kerja':kembali})) for kode,url in proses]
     return render(request, "barang_masuk_detail.html",layar='barang_masuk',kembali=kembali,
         tiket=t,jenis=jenis,menunggu=pending,catatan=catatan,lokasi=lokasi,proses=proses,petugas=petugas,
+        timbang=timbang,berat_diterima=berat_diterima,keterangan_berat=keterangan_berat,
+        qc_penerimaan=qc_penerimaan,
         pemilik_penerimaan=' · '.join(dict.fromkeys(c['pemilik'] for c in catatan)),
         kepemilikan_penerimaan=data[0]['kepemilikan'] if data else '',
         lama=svc._lama,buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''),**b.lencana())

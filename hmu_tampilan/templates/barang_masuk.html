@@ -30,13 +30,14 @@
 {% if not menunggu %}<div class="kosong"><div><h2>Tidak ada tiket belum diterima</h2><p class="bantu">Tiket yang sudah dicatat ada di Diterima. Penempatan bahan yang sudah diterima ada di <a href="/pekerjaan">Pekerjaan</a>.</p></div></div>{% endif %}
 {% else %}
 <section class="masuk-daftar tabel-standar" aria-label="Penerimaan tercatat">
-{% if riwayat %}<div class="masuk-kepala" aria-hidden="true"><span>Nama / tiket</span><span>Status</span><span>Barang</span><span>Armada</span><span>Penerimaan</span><span></span></div>{% endif %}
+{% if riwayat %}<div class="masuk-kepala" aria-hidden="true"><span>Nama / tiket</span><span>Status</span><span>Barang</span><span>Armada</span><span>Bobot diterima</span><span>Penerimaan</span><span></span></div>{% endif %}
 {% for t in riwayat %}
 <a class="masuk-baris" data-cari="{{ (t.kode ~ ' ' ~ t.nama ~ ' ' ~ (t.nomor_polisi or ''))|lower }}" data-sup="{{ t.nama }}" href="{{ detail_tiket(t.id) }}">
 <span class="masuk-identitas"><strong>{{ t.nama }}</strong><small>{{ t.kode }}</small></span>
 <span class="masuk-pemilik"><span class="identitas-barang__label identitas-barang__label--{{ t.kepemilikan }}">{{ {'jasa':'Jasa','pabrik':'Milik pabrik','campuran':'Jasa & milik pabrik'}[t.kepemilikan] }}</span></span>
 <span class="masuk-jenis">{{ t.jenis_nama or t.jenis_kode }}</span>
 <span class="masuk-armada">{{ t.nomor_polisi or 'Plat belum tercatat' }}</span>
+<span class="masuk-bobot">{% if t.berat_diterima is defined and t.berat_diterima is not none %}<strong>{{ st.kg_rinci(t.berat_diterima) }} kg</strong>{% endif %}{% if t.keterangan_berat %}<small>{{ t.keterangan_berat }}</small>{% endif %}</span>
 <span class="masuk-penerimaan"><span>{{ t.catatan[0].waktu|jam('%d/%m/%Y · %H:%M') }}</span><small>{{ t.catatan|length }} catatan · {{ 'Ditolak' if t.catatan[0].status=='ditolak' else 'Diterima' }} · {{ t.status_tiket }}</small></span><span class="masuk-panah" aria-hidden="true">›</span>
 </a>
 {% else %}<div class="kosong"><div><h2>Belum ada penerimaan tercatat</h2><p class="bantu">Pilihan jenis dan kepemilikan tetap dapat diubah.</p></div></div>{% endfor %}

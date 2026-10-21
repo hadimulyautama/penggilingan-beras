@@ -3,17 +3,68 @@
 {% block isi %}
 <style>@import url('/static/operasional.css?v={{ VERSI }}&antrean-bahan=7');</style>
 {% import '_benda.html' as benda with context %}{% import '_stok.html' as st %}
-<h1>{{ tiket.kode }}</h1>
-<p><strong>{{ tiket.jenis_nama or tiket.jenis_kode }}</strong> · {{ tiket.nomor_polisi or 'Plat belum tercatat' }}</p>
-{% if pemilik_penerimaan %}<p>{{ "Titipan jasa · " if kepemilikan_penerimaan == "jasa" else "Campuran kepemilikan · " if kepemilikan_penerimaan == "campuran" else "" }}{{ pemilik_penerimaan }}</p>{% else %}<p>{{ 'Titipan jasa' if tiket.jasa else 'Milik pabrik' }} · {{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Pihak belum tercatat' }}</p>{% endif %}
-{% if tiket.status_tiket=='TERBUKA' %}<p class="bantu">Berat belum final · mengikuti pembaruan Timbangan.</p>{% endif %}
-<dl class="masuk-fakta"><div><dt>Pihak pada tiket</dt><dd>{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or "Belum tercatat" }}</dd></div><div><dt>Tiket timbang asal</dt><dd>{{ tiket.kode }} · {{ tiket.status_tiket }}</dd></div><div><dt>Berat tiket saat ini</dt><dd>{{ st.kg_rinci(tiket.berat_hpp_kg) }}{% if tiket.berat_hpp_kg is not none %} kg · {{ tiket.sumber_berat }}{% endif %}</dd></div><div><dt>Timbang pertama</dt><dd>{{ tiket.timbang1_waktu|jam('%d/%m/%Y · %H:%M') or 'Belum tercatat' }}</dd></div><div><dt>Sopir</dt><dd>{{ tiket.nama_sopir or 'Belum tercatat' }}</dd></div></dl>
+{% macro kg(v) -%}{% if v is not none %}{{ st.kg_rinci(v) }} kg{% else %}Belum tercatat{% endif %}{%- endmacro %}
+{% macro pemeriksaan(q) -%}
+<div class="terima-qc__meta"><strong>{{ 'Pemeriksaan ' ~ q.nomor if q.nomor else 'Catatan lama' }}</strong><span>{{ q.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu tidak tercatat' }} · {{ q.petugas }}</span></div>
+<table class="terima-nilai"><thead><tr><th scope="col">Parameter</th><th scope="col">Hasil QC</th></tr></thead><tbody>{% for label,nilai in q.hasil %}<tr><th scope="row">{{ label }}</th><td>{{ nilai }}</td></tr>{% endfor %}</tbody></table>
+{%- endmacro %}
+<div class="terima-detail">
+<header class="terima-kepala">
+  <div class="terima-kepala__atas"><span class="terima-jenis">{{ tiket.jenis_nama or {'gabah_basah':'Gabah basah','gabah_kering':'Gabah kering','pk':'PK','beras':'Beras','broken':'Broken'}.get(jenis,tiket.jenis_kode) }}</span><span class="identitas-barang__label identitas-barang__label--{{ kepemilikan_penerimaan or ('jasa' if tiket.jasa else 'pabrik') }}">{{ {'jasa':'Jasa','pabrik':'Milik pabrik','campuran':'Campuran'}.get(kepemilikan_penerimaan,'Jasa' if tiket.jasa else 'Milik pabrik') }}</span></div>
+  <h1>{{ tiket.kode }}</h1>
+  {% if kepemilikan_penerimaan in ('jasa','campuran') %}<p class="terima-pihak">{{ pemilik_penerimaan }}</p>{% else %}<p class="terima-pihak">{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Pihak belum tercatat' }}</p>{% endif %}
+</header>
+<dl class="terima-ringkas">
+ <div><dt>Bobot diterima</dt><dd>{{ kg(berat_diterima) if berat_diterima is not none else keterangan_berat if catatan else 'Belum diterima' }}</dd>{% if berat_diterima is not none and keterangan_berat %}<small>{{ keterangan_berat }}</small>{% endif %}</div>
+ <div><dt>Armada</dt><dd>{{ tiket.nomor_polisi or 'Belum tercatat' }}</dd><small>{{ tiket.nama_sopir or 'Sopir belum tercatat' }}</small></div>
+</dl>
+{% if tiket.status_tiket=='TERBUKA' %}<p class="terima-peringatan">Berat belum final · tiket masih terbuka dan mengikuti pembaruan Timbangan.</p>{% elif tiket.status_tiket=='DITUTUP_PAKSA' %}<p class="terima-peringatan">Tiket ditutup paksa. {{ timbang.tutup_paksa_alasan or 'Alasan tidak tercatat.' }}</p>{% endif %}
 {{ benda.blok('Belum diterima',menunggu,alamat=request.url.path,listview=true,tabel='bahan') }}
-{% if catatan %}<h2>Catatan penerimaan</h2><p class="bantu">Berat catatan mengikuti sumber penerimaan, bukan saldo tersedia saat ini.</p>
-<section class="masuk-daftar">{% for c in catatan %}<article class="masuk-catatan"><strong>{{ c.kode }}</strong><span>{{ st.kg_rinci(c.berat) }}{% if c.berat is not none %} kg{% endif %} · {{ c.sumber_berat }}</span><span>{{ c.status }} · {{ c.pemilik }}</span><small>{{ c.waktu|jam('%d/%m/%Y · %H:%M') }} · {{ petugas.get(c.petugas_id,'Pencatat belum diketahui') }}</small></article>{% endfor %}</section>
-<h2>Lokasi &amp; proses terkait</h2><ul>{% for l in lokasi %}<li>{{ l }}</li>{% else %}<li>Belum ada lokasi lanjutan tercatat.</li>{% endfor %}{% for kode,url in proses %}<li><a href="{{ url }}">{{ kode }}</a></li>{% endfor %}</ul>
-<a class="btn btn--kecil" href="/pekerjaan">Buka Pekerjaan</a>
+<div class="terima-susunan">
+<div class="terima-utama">
+{% if catatan %}
+<section class="terima-panel" aria-labelledby="terima-catatan">
+ <div class="terima-judul"><h2 id="terima-catatan">Catatan penerimaan</h2><span>{{ catatan|length }} catatan</span></div>
+ <p class="terima-bantu">Bobot penerimaan, bukan saldo stok saat ini.</p>
+ <table class="terima-catatan"><thead><tr><th scope="col">Catatan</th><th scope="col">Bobot</th><th scope="col">Status</th><th scope="col">Waktu / petugas</th></tr></thead><tbody>
+ {% for c in catatan %}<tr><th scope="row" class="terima-catatan__kode">{{ c.kode }}{% if kepemilikan_penerimaan=='campuran' %}<small>{{ c.pemilik }}</small>{% endif %}</th><td class="terima-catatan__bobot"><strong>{{ kg(c.berat) }}</strong><small>{{ 'Belum final' if c.sumber_berat in ['perkiraan','menunggu'] else c.sumber_berat }}</small></td><td class="terima-catatan__status">{{ c.status|replace('_',' ') }}</td><td class="terima-catatan__waktu">{{ c.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu belum tercatat' }}<small>{{ petugas.get(c.petugas_id,'Pencatat belum diketahui') }}</small></td></tr>{% endfor %}
+ </tbody></table>
+</section>
 {% elif not menunggu %}<p class="bantu">Tiket ini tidak sedang ditawarkan untuk penerimaan. Periksa status tiket dan catatan terkait.</p>{% endif %}
+<section class="terima-panel" aria-labelledby="terima-qc">
+ <div class="terima-judul"><h2 id="terima-qc">Hasil QC</h2><span>Mutu penerimaan</span></div>
+ {% for g in qc_penerimaan %}<div class="terima-qc">
+  <div class="terima-qc__kepala"><strong>{{ g.kode }}</strong><span>{{ g.status }}</span></div>
+  {% if g.putaran %}{{ pemeriksaan(g.putaran[-1]) }}{% if g.putaran|length>1 %}<details class="terima-lipat"><summary>Riwayat QC · {{ g.putaran|length-1 }} pemeriksaan sebelumnya</summary>{% for q in g.putaran[:-1]|reverse %}{{ pemeriksaan(q) }}{% endfor %}</details>{% endif %}
+  {% if g.url %}<a class="terima-tautan" href="{{ g.url }}">Buka riwayat QC <span aria-hidden="true">↗</span></a>{% endif %}
+  {% else %}<p class="terima-bantu">Belum diperiksa.</p>{% endif %}
+ </div>{% else %}<p class="terima-bantu">{{ 'Belum diperiksa.' if jenis in ['gabah_basah','gabah_kering','pk'] else 'Pencatatan QC penerimaan jenis barang ini belum tersedia.' }}</p>{% endfor %}
+</section>
+{% if timbang %}
+<section class="terima-panel" aria-labelledby="terima-timbang">
+ <div class="terima-judul"><h2 id="terima-timbang">Data timbang</h2><span>{{ tiket.status_tiket|replace('_',' ') }}</span></div>
+ <p class="terima-bantu">Angka asli Pos Timbang · {{ timbang.cara_timbang|replace('_',' ')|lower }}</p>
+ {% if timbang.cara_timbang=="PARTAI" %}<div class="terima-dua-timbang"><div><span>Total partai kecil</span><strong>{{ kg(timbang.netto_timbangan_kg) }}</strong></div><div><span>Penimbangan</span><strong>{{ (timbang.penimbangan|length) ~ " kali" if timbang.penimbangan else "Rincian belum tersedia" }}</strong></div></div>{% else %}
+ <div class="terima-dua-timbang">{% for n in [1,2] %}<div><span>Timbang {{ 'pertama' if n==1 else 'kedua' }}</span><strong>{{ kg(timbang['timbang' ~ n ~ '_kg']) }}</strong><small>{{ timbang['timbang' ~ n ~ '_waktu']|jam('%d/%m/%Y · %H:%M') or 'Waktu belum tercatat' }}</small><small>{{ timbang['petugas' ~ n] or 'Petugas tidak tercatat' }}</small></div>{% endfor %}</div>{% endif %}
+ <details class="terima-lipat"><summary>Rincian timbang lengkap</summary>
+ <dl class="terima-fakta"><div><dt>Pihak pada tiket</dt><dd>{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Belum tercatat' }}</dd></div><div><dt>Status transaksi</dt><dd>{{ timbang.status_transaksi }}</dd></div><div><dt>Bruto · bermuatan</dt><dd>{{ kg(timbang.berat_bermuatan_kg) }}</dd></div><div><dt>Tara · truk kosong</dt><dd>{{ kg(timbang.berat_kosong_kg) }}</dd></div><div><dt>Netto timbangan</dt><dd>{{ kg(timbang.netto_timbangan_kg) }}</dd></div><div><dt>Jumlah karung</dt><dd>{{ timbang.jumlah_karung }} karung</dd></div><div><dt>Total potongan tara</dt><dd>{{ kg(timbang.total_tara_kg) }}</dd></div><div><dt>Tara lain · termasuk total</dt><dd>{{ kg(timbang.tara_lain_kg) }}</dd></div><div><dt>Berat barang</dt><dd>{{ kg(timbang.berat_barang_kg) }}</dd></div><div><dt>Berat nota / acuan</dt><dd>{{ kg(timbang.berat_acuan_kg) if timbang.berat_acuan_kg else 'Tanpa acuan' }}</dd></div><div><dt>Berat tiket saat ini · dasar penerimaan</dt><dd>{{ kg(tiket.berat_hpp_kg) }}{% if tiket.berat_hpp_kg is not none %}<small>{{ tiket.sumber_berat }}</small>{% endif %}</dd></div><div><dt>Status kontrol</dt><dd>{{ timbang.status_kontrol|replace('_',' ') if timbang.status_kontrol else 'Belum tercatat' }}</dd></div>
+ {% if timbang.berat_acuan_kg %}<div><dt>Selisih</dt><dd>{{ kg(timbang.selisih_kg) }} · {{ timbang.selisih_persen }}%</dd></div><div><dt>Batas bawah / atas</dt><dd>{{ kg(timbang.batas_bawah_kg) }} / {{ kg(timbang.batas_atas_kg) }}</dd></div>{% endif %}</dl>
+ {% if tiket.sebab_bobot %}<p class="terima-bantu">{{ tiket.sebab_bobot }}</p>{% endif %}
+ {% if timbang.keterangan %}<p>{{ timbang.keterangan }}</p>{% endif %}
+ {% if timbang.catatan %}<p>{{ timbang.catatan }}</p>{% endif %}
+ {% if timbang.muatan %}<h3>Muatan &amp; dokumen</h3><ul class="terima-dokumen">{% for m in timbang.muatan %}<li><strong>{{ m.jenis_nama or m.jenis_kode }}{% for v in [m.kualitas,m.merek,m.kemasan] %}{% if v %} · {{ v }}{% endif %}{% endfor %}{% if m.ukuran_kg %} {{ m.ukuran_kg }} kg{% endif %}</strong><span>Nota {{ m.nomor_acuan or 'belum tercatat' }} · {{ kg(m.berat_acuan_kg) }}</span><small>{{ m.jumlah_karung }} karung · tara {{ kg(m.tara_per_karung_kg) }}/karung{% if m.catatan %} · {{ m.catatan }}{% endif %}</small></li>{% endfor %}</ul>{% endif %}
+ {% if timbang.penimbangan %}<h3>Rincian partai kecil</h3><ul class="terima-dokumen">{% for p in timbang.penimbangan %}<li><strong>Timbang {{ p.urutan }} · {{ kg(p.berat_kg) }}</strong><span>{{ p.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu belum tercatat' }} · {{ p.petugas or 'Petugas tidak tercatat' }}</span>{% if p.catatan %}<small>{{ p.catatan }}</small>{% endif %}</li>{% endfor %}</ul>{% endif %}
+ {% if timbang.cara_timbang=="PARTAI" and not timbang.penimbangan %}<p class="terima-bantu">Rincian setiap penimbangan belum tersedia pada catatan lama ini.</p>{% endif %}
+ </details>
+</section>
+{% endif %}
+</div>
+<aside class="terima-panel terima-lanjutan" aria-labelledby="terima-lokasi"><div class="terima-judul"><h2 id="terima-lokasi">Lokasi &amp; proses terkait</h2></div>
+<ul class="terima-lokasi">{% for l in lokasi %}<li>{{ l }}</li>{% else %}<li>Belum ada lokasi lanjutan tercatat.</li>{% endfor %}</ul>
+<ul class="terima-proses">{% for kode,url in proses %}<li><a href="{{ url }}"><span>{{ kode }}</span><span aria-hidden="true">↗</span></a></li>{% endfor %}</ul>
+<a class="btn" href="/pekerjaan">Buka Pekerjaan</a>
+</aside>
+</div></div>
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
 {% endblock %}
 {% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}{% endblock %}

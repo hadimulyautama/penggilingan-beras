@@ -130,6 +130,14 @@ async def test_penerimaan_lima_jenis_saldo_kepemilikan_tiket_dan_duplikat(pg,len
                 lokasi='Stok produk Gudang 2'
         assert 'TRX-391-'+kind not in (await c.get('/barang-masuk')).text
         riw=await c.get('/barang-masuk?status=diterima');assert 'TRX-391-'+kind in riw.text
+        from app.services.barang_masuk import riwayat
+        async with pg() as db:
+            tampak=(await riwayat(db,g1=True,g2=True,tid=tid))[0]
+            assert float(tampak['berat_diterima'])==float(berat)
+            assert tampak['keterangan_berat']==''
+            if jasa:
+                assert tampak['nama']=='Bu Sri'
+        assert 'Bobot diterima' in riw.text and 'masuk-bobot' in riw.text
         detail=await c.get(f'/barang-masuk/{tid}');assert detail.status_code==200,detail.text
         assert '9.800' in detail.text and 'TRX-391-'+kind in detail.text
         assert 'Catatan penerimaan' in detail.text
@@ -170,6 +178,12 @@ async def test_tiket_terbuka_tanpa_bobot_final_memakai_aturan_lama(pg,lengkap,ki
         # Gabah/PK lama menerima tanpa bobot. Beras/broken lama meminta bobot
         # tersedia; bukan kewajiban timbang akhir baru dari konsolidasi.
         assert r.status_code==(200 if kind in JENIS[:3] else 400),r.text
+        if kind in JENIS[:3]:
+            from app.services.barang_masuk import riwayat
+            async with pg() as db:
+                tampak=(await riwayat(db,g1=True,g2=True,tid=tid))[0]
+                assert tampak['berat_diterima'] is None
+                assert tampak['keterangan_berat']=='Belum diukur'
 
 @pytest.mark.parametrize('role,gudang,lihat',[
  ('superadmin',None,None),('admin',None,None),('operator','g1',None),('operator','g2',None),
@@ -221,7 +235,7 @@ async def test_pk_ditolak_tiket_ditutup_paksa_tetap_bisa_dibaca_tanpa_diterima_l
         assert r.status_code==200,r.text
         detail=await c.get(f'/barang-masuk/{tid}')
         assert detail.status_code==200,detail.text
-        assert 'ditolak' in detail.text and 'DITUTUP_PAKSA' in detail.text
+        assert 'ditolak' in detail.text and 'Tiket ditutup paksa.' in detail.text
         assert 'TRX-391-BERAS_PK' not in (await c.get('/barang-masuk')).text
         assert (await c.post('/api/actions/catat-pk-luar',json={'timbangan_transaksi_id':tid,'jenis_pk':'ks'})).status_code in (400,409)
 
@@ -253,8 +267,96 @@ async def test_pemilik_detail_mengikuti_catatan_bukan_tiket_yang_diedit(pg,lengk
         async with pg() as db:
             await db.execute(text('UPDATE timbangan_transaksi SET jasa=false,pelanggan_id=NULL,jasa_id=NULL WHERE id=:i'),{'i':tid});await db.commit()
         h=(await c.get(f'/barang-masuk/{tid}')).text
-        assert '<p>Titipan jasa · JAS-' in h and 'Bu Sri</p>' in h
+        assert 'identitas-barang__label--jasa' in h and 'JAS-' in h and 'Bu Sri</p>' in h
         assert 'tab=produk&amp;pemilik=jasa' in h
+
+
+async def test_detail_menampilkan_timbang_lengkap_dan_qc_batch_yang_tepat(pg,lengkap):
+    from app.penggilingan.gudang1.services.qc_gabah import catat_qc_gabah
+    tid=lengkap['tiket']['GABAH_KERING']
+    async with pg() as db:
+        aid=await db.scalar(text("INSERT INTO timbangan_akun (username,nama,role,password_hash,status) VALUES ('petugas396','Petugas Timbang Uji 396','PETUGAS','uji','aktif') RETURNING id"))
+        await db.execute(text("""UPDATE timbangan_transaksi SET timbang2_kg=2200,timbang2_waktu=timbang1_waktu,
+          timbang1_petugas_id=:a,timbang2_petugas_id=:a,berat_bermuatan_kg=12000,
+          berat_kosong_kg=2200,netto_timbangan_kg=9800,jumlah_karung=40,total_tara_kg=15,
+          tara_lain_kg=5,berat_barang_kg=9785,keterangan='Catatan timbang uji lengkap'
+          WHERE id=:t"""),{'a':aid,'t':tid})
+        await db.execute(text("""INSERT INTO timbangan_muatan (transaksi_id,urutan,jenis_kode,nomor_acuan,jumlah_karung,tara_per_karung_kg,berat_acuan_kg)
+          VALUES (:t,1,'GABAH_KERING','NOTA-UJI-396',40,0.25,9785)"""),{'t':tid})
+        await db.commit()
+    async with await _klien(pg,role='superadmin') as c:
+        c.headers['X-CSRF-Token']=cap_formulir(c)
+        r=await c.post('/api/actions/gabah-masuk',json={'timbangan_transaksi_id':tid,'tujuan':'tumpuk'})
+        assert r.status_code==200,r.text
+        async with pg() as db:
+            u=await db.scalar(select(User).where(User.nama=='Uji superadmin'))
+            b=await db.scalar(select(PurchaseBatch).where(PurchaseBatch.timbangan_transaksi_id==tid))
+            for a1,a2 in ((13,14),(14,15)):
+                await catat_qc_gabah(db,user=u,kode_batch=b.kode_batch,kadar_air_1=a1,kadar_air_2=a2,biji_hijau='sedikit',densiti='padat')
+            awal=await db.scalar(select(func.count()).select_from(ActivityLog))
+        h=(await c.get(f'/barang-masuk/{tid}')).text
+        for nilai in ('Hasil QC','Kadar air 1','Kadar air 2','13%','15%','2/5 pemeriksaan','Pemeriksaan 2',
+                      'Timbang pertama','Timbang kedua','12.000 kg','2.200 kg','9.800 kg','9.785 kg',
+                      'Total potongan tara','15 kg','Tara lain','5 kg','Petugas Timbang Uji 396',
+                      'NOTA-UJI-396','Catatan timbang uji lengkap'):
+            assert nilai in h,nilai
+        async with pg() as db:
+            assert await db.scalar(select(func.count()).select_from(ActivityLog))==awal
+            assert float((await db.get(PurchaseBatch,b.id)).berat_total_kg)==9785
+        # Riwayat dan tabel harus tetap dapat dibaca operator gudang asal.
+    async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g1']) as c:
+        assert 'Hasil QC' in (await c.get(f'/barang-masuk/{tid}')).text
+    async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g2']) as c:
+        assert (await c.get(f'/barang-masuk/{tid}')).status_code==403
+
+
+@pytest.mark.parametrize('lama',[False,True])
+async def test_qc_pk_penerimaan_membaca_riwayat_dan_tidak_menebak_pencatat_lama(pg,lengkap,lama):
+    from app.models import PkPurchaseQcLog,PkPurchaseVerification
+    from app.database import now_local
+    from app.services.barang_masuk import hasil_qc,riwayat
+    tid=lengkap['tiket']['BERAS_PK']
+    async with await _klien(pg,role='superadmin') as c:
+        c.headers['X-CSRF-Token']=cap_formulir(c)
+        r=await c.post('/api/actions/catat-pk-luar',json={'timbangan_transaksi_id':tid,'jenis_pk':'ks'})
+        assert r.status_code==200,r.text
+        async with pg() as db:
+            b=await db.scalar(select(PkPurchaseBatch).where(PkPurchaseBatch.timbangan_transaksi_id==tid))
+            u=await db.scalar(select(User).where(User.nama=='Uji superadmin'))
+            if lama:
+                db.add(PkPurchaseVerification(pk_purchase_batch_id=b.id,kadar_air=13,broken_persen=7,
+                    penyusutan_persen=5,verified_by=u.id,waktu_verifikasi=now_local()))
+            else:
+                for air in (13,14):
+                    db.add(PkPurchaseQcLog(pk_purchase_batch_id=b.id,kadar_air=air,broken_persen=7,
+                        susut_persen=5,waktu=now_local(),input_by=u.id))
+            await db.commit()
+            cs=(await riwayat(db,g1=True,g2=True,tid=tid))[0]['catatan']
+            q=(await hasil_qc(db,cs))[0]
+            assert len(q['putaran'])==(1 if lama else 2)
+            assert ('Broken','7%') in q['putaran'][0]['hasil']
+            if lama:
+                assert q['putaran'][0]['petugas']=='Tidak tercatat'
+                assert q['putaran'][0]['waktu'] is None
+                assert q['url'] is None
+            else:
+                assert q['putaran'][0]['petugas']=='Uji superadmin'
+                assert q['url'].endswith(b.kode_batch)
+        h=(await c.get(f'/barang-masuk/{tid}')).text
+        assert 'Hasil QC' in h and '7%' in h
+
+
+async def test_partai_lama_tanpa_tabel_rincian_tidak_gagal_atau_dikarang(pg,lengkap):
+    tid=lengkap['tiket']['GABAH_KERING']
+    async with pg() as db:
+        await db.execute(text("UPDATE timbangan_transaksi SET cara_timbang='PARTAI' WHERE id=:t"),{'t':tid})
+        await db.commit()
+    async with await _klien(pg,role='superadmin') as c:
+        r=await c.get(f'/barang-masuk/{tid}')
+        assert r.status_code==200
+        assert 'Total partai kecil' in r.text and '9.800 kg' in r.text
+        assert 'Rincian setiap penimbangan belum tersedia' in r.text
+        assert 'Timbang kedua' not in r.text
 
 
 @pytest.mark.parametrize('tujuan',['silo','silo:999999'])
