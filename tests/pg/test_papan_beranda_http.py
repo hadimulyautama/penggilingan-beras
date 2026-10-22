@@ -114,12 +114,17 @@ async def test_harga_yang_masih_baru_tak_masuk_perhatian(pg):
     belum diverifikasi, dan menyebutnya penyimpangan membuat blok ini selalu
     berisi — lalu diabaikan."""
     from app.database import now_local
-    from app.models import PurchaseBatch, Supplier, User, Warehouse
+    from app.models import PurchaseBatch, Silo, Supplier, User, Warehouse
 
     async with pg() as db:
         g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
-        db.add(g1)
+        # Papan superadmin membaca kedua gudang. Tanpa G2, pengujian lama
+        # diam-diam menguji kegagalan muat, bukan harga yang masih baru.
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
+        db.add_all([g1, g2])
         await db.flush()
+        db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id),
+                    Silo(nama_silo="Silo B", warehouse_id=g2.id)])
         u = User(nama="Op", role="operator", status="aktif", default_warehouse_id=g1.id)
         s = Supplier(nama_supplier="Pak Tani")
         db.add_all([u, s])
@@ -132,6 +137,7 @@ async def test_harga_yang_masih_baru_tak_masuk_perhatian(pg):
     c = await _klien(pg, role="superadmin")
     async with c:
         t = (await c.get("/")).text
+    assert "belum dapat dimuat" not in t
     assert "GB-BARU-01" not in t
     # Sama seperti di atas: "Peringatan pabrik" (bukan lagi "Perlu
     # perhatian") adalah nama blok papan sejak Beranda usulan — lihat
