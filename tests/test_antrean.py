@@ -247,7 +247,7 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
     from app.web.nav import TAB
 
     # Pintu gabungan mengalihkan ke Laporan; bukan template/reader kedua.
-    templat_pintu = {"barang_keluar": "pengiriman.html", "laporan_riwayat": "laporan.html"}
+    templat_pintu = {"barang_keluar": "pengiriman.html", "retur": "retur_daftar.html", "laporan_riwayat": "laporan.html"}
     berlaci = {templat_pintu.get(kunci, f"{kunci}.html")
                for kunci, *_ in TAB}
     akar = pathlib.Path(__file__).resolve().parents[1] / "app"

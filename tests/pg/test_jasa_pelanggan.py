@@ -205,8 +205,22 @@ async def test_retur_lama_tetap_pabrik_tanpa_menambah_titipan(pg,konteks):
         await db.execute(text("UPDATE timbangan_transaksi SET pelanggan_id=:p,status_tiket='SELESAI',timbang2_kg=6000,berat_barang_kg=3000,total_tara_kg=0 WHERE id=:t"),{'p':p.id,'t':tid})
         await db.commit()
         awal=await svc.pelanggan(db,p.id)
-    r=await c.post('/retur/terima',data=form(tid,sid,'terima'))
-    assert 'pesan=' in r.headers['location'],r.headers
+    # Fakta historis sebelum asal pengiriman diwajibkan. Jangan mengarang
+    # hubungan ke Jasa hanya karena pelanggan penerimaan kebetulan sama.
+    from app.models import CustomerReturn,CustomerReturnItem,FinishedGoodsStock
+    async with pg() as db:
+        now=now_local()
+        retur=CustomerReturn(kode='RET-J392-LAMA',timbangan_transaksi_id=tid,
+            kode_tiket='RTP-UJI',pelanggan_id=p.id,berat_tiket_kg=3000,
+            berat_rincian_kg=3000,selisih_kg=0,input_by=u.id,waktu=now)
+        db.add(retur);await db.flush()
+        stock=FinishedGoodsStock(product_sku_id=sid,source_type='retur',source_id=retur.id,
+            jumlah_karung=120,berat_total_kg=3000,waktu=now,input_by=u.id,
+            jasa_id=None,kemasan_mengurangi_stok=False)
+        db.add(stock);await db.flush()
+        db.add(CustomerReturnItem(customer_return_id=retur.id,product_sku_id=sid,
+            jumlah_karung=120,berat_total_kg=3000,jasa_id=None,finished_goods_stock_id=stock.id))
+        await db.commit()
     async with pg() as db:
         akhir=await svc.pelanggan(db,p.id)
         assert akhir['beras_kg']==awal['beras_kg']==1000 and akhir['samping_kg']==0

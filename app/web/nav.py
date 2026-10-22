@@ -196,8 +196,8 @@ TAB = (
     #
     # Pintunya padam untuk operator selepan lewat `PINTU_MATI`, sama seperti
     # Stok Produk: barang jadi berdiri di Gudang 2.
-    ("barang_keluar", "/barang-keluar", "Barang Keluar",
-     "Perintah muat, muatan, dan riwayatnya", None, "⇥"),
+    ("barang_keluar", "/barang-keluar", "Pengiriman",
+     "Barang keluar dan retur pelanggan", None, "truck"),
     ("retur", "/retur", "Barang Retur",
      "Penerimaan retur pelanggan dan pencatatan stok", MEJA, "↩"),
     # ── Jasa — keputusan pemilik 1 Oktober 2026 ──
@@ -379,7 +379,7 @@ JUDUL = {k: nama for k, _, nama, _, _, _ in TAB}
 
 # Kunci lama dipertahankan untuk judul dan pemakai lama. Hanya pintu sidebar
 # yang disatukan; rute dan gerbangnya tetap milik modul asal.
-MENU_TERSEMBUNYI = ("kabar", "laporan", "riwayat_sosoh", "riwayat_giling",
+MENU_TERSEMBUNYI = ("kabar", "retur", "laporan", "riwayat_sosoh", "riwayat_giling",
                     "riwayat_pengeringan", "riwayat_transfer", "riwayat_qc", "audit")
 
 

@@ -421,24 +421,41 @@ class Pengisi:
                           pelanggan_id=m['pelanggan'][0],no_polisi='AD 9292 UJ',catatan=AWALAN+'Gabah kering dijual langsung')
 
     async def retur(self):
-        from app.web import layar_retur
-        from app.web.security import butuh_akun
-        app=FastAPI(); app.include_router(layar_retur.router)
-        async with SessionLocal() as db: actor=await db.get(User,self.pelaku_id)
-        app.dependency_overrides[butuh_akun]=lambda: SimpleNamespace(user=actor)
-        for name, tahap, aksi, delta in [('belum-rincian','terbuka',None,0),('rincian-disimpan','terbuka','rincian',0),('menunggu-verifikasi','selesai',None,0),('diterima','selesai','terima',0),('selisih','selesai','terima',25)]:
+        # Semua penerimaan contoh mengikuti alur asal yang sama dengan aplikasi;
+        # selisih tidak lagi diloloskan hanya dengan catatan.
+        from app.services import retur_pengajuan, retur_penerimaan
+        pelanggan=self.state['master']['pelanggan'][0]
+        produk=self.state['produk'][2]
+        asal=await self.langkah('retur-asal:perintah',bk.buat_perintah,
+            pelanggan_id=pelanggan,no_polisi='AD 9199 UJ',
+            baris=[bk.BarisPerintah(tipe='finished_goods',jumlah_karung=40,**produk)])
+        rid,iid=asal['rec']['id'],asal['baris'][0]['id']
+        await self.langkah('retur-asal:muat',bk.muat_semua,rec_id=rid)
+        async with SessionLocal() as db:
+            from app.models import OutgoingItem
+            berat=float((await db.get(OutgoingItem,iid)).berat_kg)
+        tiket_keluar=await self.tiket('retur-asal-keluar','PENGIRIMAN',berat,
+            pelanggan=pelanggan,plate='AD 9199 UJ')
+        await self.langkah('retur-asal:verifikasi',bk.verifikasi,rec_id=rid,
+                           timbangan_transaksi_id=tiket_keluar['id'])
+        for name,tahap,n,delta in [('belum-rincian','terbuka',None,0),
+            ('rincian-disimpan','terbuka',5,0),('menunggu-verifikasi','selesai',None,0),
+            ('diterima','selesai',10,0),('selisih','selesai',10,25)]:
             key='retur-'+name
-            t=await self.tiket(key,'RETUR_PELANGGAN',250+delta,tahap=tahap,pelanggan=self.state['master']['pelanggan'][0])
-            if not aksi: continue
+            t=await self.tiket(key,'RETUR_PELANGGAN',250+delta,tahap=tahap,pelanggan=pelanggan)
+            if n is None: continue
             async def terima(db,user):
-                data=dict(timbangan_transaksi_id=str(t['id']),sku_id=str(self.state['produk'][2]['sku_id']),quality_id=str(self.state['produk'][2]['std_id']),jumlah_karung='10',catatan_item=AWALAN+'Kemasan sobek saat pengiriman',catatan=AWALAN+name,alasan_selisih=AWALAN+'Sebagian karung basah, ditimbang terpisah' if delta else '',aksi=aksi)
-                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
-                    r=await c.post('/retur/terima',data=data)
-                from urllib.parse import unquote
-                location=unquote(r.headers.get('location',''))
-                if r.status_code!=303 or 'gagal=' in location: raise ValueError(location or r.text[:300])
-                return {'tiket_id':t['id'],'aksi':aksi}
-            await self.langkah(key+':'+aksi,terima)
+                r=await retur_pengajuan.simpan(db,pengiriman_id=rid,tiket_id=t['id'],
+                    jumlah={iid:str(n)},pelaku_id=user.id,catatan=AWALAN+name,
+                    catatan_item={iid:AWALAN+'Kemasan diperiksa saat penerimaan'})
+                await retur_penerimaan.periksa_dan_terima(db,r.id)
+                if delta:
+                    r=await retur_pengajuan.simpan(db,pengiriman_id=rid,tiket_id=t['id'],
+                        pengajuan_id=r.id,jumlah={iid:'11'},pelaku_id=user.id,
+                        alasan=AWALAN+'Koreksi satu karung terlewat dari catatan bongkar')
+                    await retur_penerimaan.periksa_dan_terima(db,r.id,manual=True,pelaku=user)
+                return {'tiket_id':t['id'],'pengajuan_id':r.id}
+            await self.langkah(key+':pengajuan',terima)
 
 
 async def periksa_halaman(simpan_di=None):

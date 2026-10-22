@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block judul %}{{ kartu[0].rec.kode if detail else "Barang Keluar" }}{% endblock %}
 {% block isi %}
+<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
+{% set tab_pengiriman = 'keluar' %}{% if detail %}{% include "_pengiriman_tabs.html" %}{% endif %}
 
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
@@ -8,9 +10,15 @@
 {% if detail %}
 {% set k = kartu[0] %}
 {% include "_pengiriman_detail.html" %}
+{% if BOLEH_PERINTAH and k.rec.status == 'selesai' %}
+<section class="retur-asal__panel"><h2>Retur terkait</h2>
+<a class="btn" href="/barang-keluar/{{ k.rec.id }}/retur">Retur barang</a>
+{% for r in retur_terkait %}<p><a href="/retur/pengajuan/{{ r.id }}">Pengajuan retur #{{ r.id }}</a> · {{ (r.status_pemeriksaan or 'tertahan').replace('_',' ').title() }}</p>{% else %}<p>Belum ada retur terkait.</p>{% endfor %}</section>
+{% endif %}
 {% else %}
 <div class="keluar-halaman">
 {% include "_pengiriman_pembuka.html" %}
+{% include "_pengiriman_tabs.html" %}
 
 {% endif %}
 {% if BOLEH_PERINTAH and not detail %}

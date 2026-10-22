@@ -137,7 +137,7 @@
       <a href="/berjalan"><span aria-hidden="true">◷</span>Proses</a>
       {% endif %}
       <a href="/stok"><span aria-hidden="true">▦</span>Stok</a>
-      <a href="/barang-keluar"><span aria-hidden="true">⇥</span>Barang keluar</a>
+      <a href="/barang-keluar"><span aria-hidden="true">⇥</span>Pengiriman</a>
     </nav>
     <div class="desktop-chrome__tools">
       <span class="desktop-chrome__company">PT Hadi Mulya Utama</span>
@@ -344,7 +344,7 @@
              masing-masing. Prinsip yang sama sudah tertulis beberapa baris di
              atas untuk `peran_min`; ikon satu-satunya fakta per-pintu yang
              masih tercecer di sini. #}
-          <span class="pintu__ikon pintu__ikon--{{ kunci }}" aria-hidden="true">{% if ikon == 'chart-no-axes-combined' %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M8 3v3M8 10v3M8 17v3M2 21h20M14 3v3M14 10v3M14 17v3M20 3v3M20 10v3M20 17v3"/><path d="m2 17 6-7 6 3 8-10"/></svg>{% else %}{{ ikon or "⚙" }}{% endif %}</span>
+          <span class="pintu__ikon pintu__ikon--{{ kunci }}" aria-hidden="true">{% if ikon == 'truck' %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M3 17V6h10v11M13 9h4l4 4v4h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>{% elif ikon == 'chart-no-axes-combined' %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M8 3v3M8 10v3M8 17v3M2 21h20M14 3v3M14 10v3M14 17v3M20 3v3M20 10v3M20 17v3"/><path d="m2 17 6-7 6 3 8-10"/></svg>{% else %}{{ ikon or "⚙" }}{% endif %}</span>
           {# Keterangan satu baris tiap pintu DICABUT 28 September 2026, atas
              permintaan pemilik: "sidebar cukup nama halamannya saja",
              "deskripsi tambahan tidak perlu".

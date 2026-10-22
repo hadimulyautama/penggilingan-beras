@@ -130,6 +130,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             tiket_timbang = {t["id"]: dict(t) for t in rows}
         dasar_perintah = {r.id: (await svc.ringkasan_muat(db, r))["dasar"]
                           for r, _ in baris if transaksi_id is not None and r.status in OUT_HIDUP}
+        from sqlalchemy import select
+        from app.penggilingan.inventory.models import ReturRincian
+        retur_terkait = (await db.scalars(select(ReturRincian).where(
+            ReturRincian.outgoing_record_id == transaksi_id).order_by(ReturRincian.id.desc()))).all() if transaksi_id and boleh_perintah else []
         nama = await _nama_barang(db, baris)
         nama_orang = await _nama_orang(db, baris)
 
@@ -222,6 +226,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     return await render_laci(
         request, "pengiriman.html", layar="barang_keluar", kartu=kartu,
         detail=transaksi_id is not None,
+        retur_terkait=retur_terkait,
         pencarian=q, status_filter=status, sejak_filter=sejak,
         filter_query=urlencode({"q": q, "status": status, "sejak": sejak}),
         kartu_aktif=[k for k in kartu if k["rec"].status in OUT_HIDUP],

@@ -1918,6 +1918,11 @@ async def balik_verifikasi(db: AsyncSession, *, rec_id: int) -> str:
     """
     rec = await _kunci_untuk_balik(db, rec_id, keadaan=OUT_SELESAI,
                                    apa="verifikasinya")
+    from app.penggilingan.inventory.models import ReturRincian
+    if await db.scalar(select(ReturRincian.id).where(
+            ReturRincian.outgoing_record_id == rec.id,
+            ReturRincian.status_pemeriksaan != 'dibatalkan').limit(1)):
+        raise BarangKeluarError('Pengiriman memiliki retur terkait. Verifikasinya harus tetap selesai agar asal retur dan stok konsisten.')
     rec.status = OUT_DIMUAT
     rec.diverifikasi_oleh, rec.waktu_verifikasi = None, None
     ada_tiket = rec.timbangan_transaksi_id is not None

@@ -1027,6 +1027,8 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: b
         raise UndoError("Pemasukan PK sudah tidak ada.")
     if it.dibatalkan_pada is not None:
         raise UndoError("Pemasukan PK itu sudah dibatalkan sebelumnya.")
+    if it.sumber_tipe == 'retur':
+        raise UndoError('Pemasukan ini bagian dari retur dan tidak dapat dibatalkan terpisah dari penerimaannya. Periksa detail retur terkait.')
     # Pemasukan yang lahir dari TRANSFER G1 → G2 tak berdiri sendiri: yang
     # dibatalkan adalah pemindahannya, dan pemasukannya ikut (P-K-10:
     # transfer + pemasukan = satu pembatalan). "Batalkan input terakhir"

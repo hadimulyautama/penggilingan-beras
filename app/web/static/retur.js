@@ -15,16 +15,17 @@
     });
     const total = [...rows.querySelectorAll('[name="berat_kg"]')].reduce((s, e) => s + (parseFloat(e.value) || 0), 0);
     const diff = target - total;
-    const melewati = selesai && Math.abs(diff) > Math.max(2, target * .002);
     root.querySelector('#sum-weight').textContent = fmt(total);
     root.querySelector('#ticket-weight').textContent = selesai ? fmt(target) : 'menunggu timbang kedua';
     const box = root.querySelector('#weight-check');
-    box.classList.toggle('ok', selesai && !melewati);
-    box.classList.toggle('warn', melewati);
+    // Halaman tersimpan versi lama hanya dapat menyimpan rincian. Keputusan
+    // penerimaan memakai pemeriksaan server dari item pengiriman asal.
+    box.classList.remove('ok', 'warn');
+    root.querySelector('#submit-return').disabled = true;
     root.querySelector('#weight-difference').textContent = selesai ? 'Selisih ' + (diff > 0 ? '+' : '') + fmt(diff) + ' kg' : 'Belum masuk stok';
     const reason = root.querySelector('#reason-field');
-    reason.classList.toggle('show', melewati);
-    reason.querySelector('input').required = melewati;
+    reason.classList.remove('show');
+    reason.querySelector('input').required = false;
   };
   const bindRow = row => {
     row.querySelector('.jenis-select').addEventListener('change', e => {

@@ -1211,7 +1211,9 @@ async def _pk_breakdown(db: AsyncSession, proc_id: int) -> PkBreakdown:
     produced = await _produced_pk(db, proc_id)
     transferred = await _transferred_pk(db, proc_id)
     sold = await _sold_pk_langsung(db, proc_id)
-    return PkBreakdown(produced, transferred, max(produced - transferred - sold, 0.0))
+    from app.services.retur_penerimaan import berat_kembali
+    retur = await berat_kembali(db, tipe='pk_langsung', proses_id=proc_id)
+    return PkBreakdown(produced, transferred, max(produced + retur - transferred - sold, 0.0))
 
 
 async def alasan_koreksi_hasil_giling(db: AsyncSession, process_id: int) -> str | None:
@@ -2014,6 +2016,13 @@ async def pk_breakdown_banyak(db: AsyncSession, proc_ids) -> dict[int, PkBreakdo
         .group_by(OutgoingItem.milling_process_id)
     )).all())
 
+    from app.models import CustomerReturnItem
+    kembali = dict((await db.execute(
+        select(OutgoingItem.milling_process_id,
+               func.sum(CustomerReturnItem.berat_total_kg))
+        .join(CustomerReturnItem, CustomerReturnItem.outgoing_item_id == OutgoingItem.id)
+        .where(OutgoingItem.item_type == 'pk_langsung', OutgoingItem.milling_process_id.in_(ids))
+        .group_by(OutgoingItem.milling_process_id))).all())
     hasil: dict[int, PkBreakdown] = {}
     for pid in ids:
         # Angka TERVERIFIKASI menang atas progres operator — urutan yang sama
@@ -2024,7 +2033,7 @@ async def pk_breakdown_banyak(db: AsyncSession, proc_ids) -> dict[int, PkBreakdo
         dikirim = float(terkirim.get(pid, 0) or 0)
         dijual = float(terjual.get(pid, 0) or 0)
         hasil[pid] = PkBreakdown(
-            produced, dikirim, max(produced - dikirim - dijual, 0.0))
+            produced, dikirim, max(produced + float(kembali.get(pid, 0)) - dikirim - dijual, 0.0))
     return hasil
 
 

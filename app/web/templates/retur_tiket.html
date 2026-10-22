@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block judul %}Tiket {{ tiket.kode }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
+<div class="retur-asal"><a href="/retur">← Barang Retur</a>
+<section class="retur-asal__panel"><h1>Tiket {{ tiket.kode }}</h1>
+<p>{{ tiket.nama_pelanggan or 'Pelanggan tidak tersedia' }} · {{ tiket.nomor_polisi or 'Plat belum dicatat' }} · {{ tiket.nama_sopir or 'Sopir belum dicatat' }}</p>
+<p>{{ tiket.status_tiket }} · {{ tiket.status_transaksi }}</p>
+<dl><dt>Timbang pertama</dt><dd>{{ tiket.timbang1_kg if tiket.timbang1_kg is not none else 'Belum tersedia' }} kg · {{ tiket.timbang1_waktu|jam if tiket.timbang1_waktu else '—' }}</dd>
+<dt>Timbang kedua</dt><dd>{{ tiket.timbang2_kg if tiket.timbang2_kg is not none else 'Belum tersedia' }} kg · {{ tiket.timbang2_waktu|jam if tiket.timbang2_waktu else '—' }}</dd>
+<dt>Berat barang</dt><dd>{{ tiket.berat_barang_kg if tiket.berat_barang_kg is not none else 'Belum tersedia' }} kg</dd></dl>
+<p>Data saat ini dibaca dari Pos Timbang. Koreksi data timbang dilakukan di Pos Timbang sesuai kewenangan pengguna.</p>
+</section></div>
+{% endblock %}

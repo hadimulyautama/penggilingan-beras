@@ -79,14 +79,14 @@
           <button class="rt-btn add" type="button" id="add-item">＋ Tambah jenis barang</button>
 
           <div class="rt-weight-check" id="weight-check"><div><small>Selisih = bobot tiket − total rincian</small><strong><span id="sum-weight">0,00</span> kg dari <span id="ticket-weight">0,00</span> kg</strong></div><div class="rt-diff" id="weight-difference">Selisih 0,00 kg</div></div>
-          <p class="rt-subtle" style="margin:8px 2px 0">Jika selisih melewati batas timbang, tuliskan alasannya sebelum menerima barang.</p>
+          <p class="rt-subtle" style="margin:8px 2px 0">Penerimaan retur sekarang dimulai dari detail pengiriman asal. <a href="/barang-keluar?status=selesai">Buka riwayat pengiriman</a>. Alasan saja tidak dapat meloloskan selisih.</p>
 
           <div class="rt-form-grid">
             <label class="rt-field rt-reason" id="reason-field">Alasan selisih bobot<input name="alasan_selisih" maxlength="300" placeholder="Contoh: ada satu karung terbuka dan isi berkurang"></label>
             <label class="rt-field wide">Catatan penerimaan<input name="catatan" maxlength="500" placeholder="Kondisi barang atau keterangan lain (opsional)"></label>
           </div>
           <button type="submit" name="aksi" value="rincian" class="rt-btn rt-submit" id="save-details" {% if not tickets %}disabled{% endif %}>Simpan rincian sementara</button>
-          <button type="submit" name="aksi" value="terima" class="rt-btn primary rt-submit" id="submit-return" {% if not tickets %}disabled{% endif %}>✓ Verifikasi dan masukkan ke stok</button>
+          <button type="submit" name="aksi" value="terima" class="rt-btn primary rt-submit" id="submit-return" disabled>Gunakan detail pengiriman asal</button>
         </div>
       </section>
     </div>

@@ -1,0 +1,4 @@
+<nav class="pengiriman-tab" aria-label="Jenis pengiriman">
+  <a href="/barang-keluar" {% if tab_pengiriman != 'retur' %}aria-current="page"{% endif %}>Barang Keluar</a>
+  {% if BOLEH_PERINTAH|default(false) or tab_pengiriman == 'retur' %}<a href="/retur" {% if tab_pengiriman == 'retur' %}aria-current="page"{% endif %}>Barang Retur</a>{% endif %}
+</nav>

@@ -71,7 +71,9 @@ async def saldo_gabah_kering(db: AsyncSession, lot_id: int) -> float:
     lot = await db.get(GabahKeringLot, lot_id)
     if lot is None:
         return 0.0
+    from app.services.retur_penerimaan import berat_kembali
     return (float(lot.berat_timbang_kg)
+            + await berat_kembali(db, tipe='gabah_langsung', lot_id=lot_id)
             - await _dibongkar_kg(db, lot_id)
             - await _keluar_kg(db, lot_id))
 

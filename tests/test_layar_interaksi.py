@@ -980,11 +980,11 @@ def test_ikon_laci_bukan_emoji_dan_bukan_huruf_biasa():
 
     salah = []
     for t in TAB:
-        if t[5] == "chart-no-axes-combined":
+        if t[5] in ("chart-no-axes-combined", "truck"):
             # Simbol baru dirender sebagai SVG monokrom, bukan teks nama ikon.
-            assert t[0] == "laporan_riwayat"
+            assert t[0] == {"chart-no-axes-combined": "laporan_riwayat", "truck": "barang_keluar"}[t[5]]
             base = (AKAR / "hmu_tampilan/templates/base.html").read_text()
-            assert "ikon == 'chart-no-axes-combined'" in base
+            assert f"ikon == '{t[5]}'" in base
             assert 'stroke="currentColor"' in base
             continue
         for ch in (t[5] or ""):

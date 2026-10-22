@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block judul %}Retur barang · {{ asal.kode }}{% endblock %}
+{% block isi %}
+{% import "_stok.html" as st with context %}{% set kg=st.kg_rinci %}
+<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
+<div class="retur-asal">
+{% set tab_pengiriman = 'retur' %}{% include "_pengiriman_tabs.html" %}
+<a href="/barang-keluar/{{ asal.id }}">← Detail pengiriman {{ asal.kode }}</a>
+<h1>Retur barang</h1><p>{{ pelanggan_asal or 'Pelanggan belum tercatat' }} · {{ asal.kode }}</p>
+{% if rincian %}<p><a href="/retur/tiket/{{ rincian.timbangan_transaksi_id }}">Lihat tiket RTP terkait</a></p>{% endif %}
+{% if gagal %}<div class="retur-asal__pesan" role="alert">{{ gagal }}</div>{% endif %}
+{% if pesan %}<div class="retur-asal__pesan" role="status">{{ pesan }}</div>{% endif %}
+{% if rincian and rincian.hasil_pemeriksaan %}
+{% set hasil = rincian.hasil_pemeriksaan %}
+<section class="retur-asal__panel" aria-label="Hasil pemeriksaan">
+<h2>{{ 'Menunggu timbang kedua' if rincian.status_pemeriksaan == 'menunggu_timbang' else ('Menunggu verifikasi manual' if rincian.status_pemeriksaan == 'calon_manual' else rincian.status_pemeriksaan.replace('_', ' ').title()) }}</h2>
+<p>{{ hasil.alasan }}</p>
+<p>Berat rincian {% if hasil.get('berat_rincian_kg') is not none %}{{ kg(hasil.berat_rincian_kg|float) }} kg{% else %}belum tersedia{% endif %} · Bobot tiket {% if hasil.get('berat_tiket_kg') not in [none,'None'] %}{{ kg(hasil.berat_tiket_kg|float) }} kg{% else %}belum tersedia{% endif %}</p>
+<p>Selisih {% if hasil.get('selisih_kg') is not none %}{{ kg(hasil.selisih_kg|float) }} kg{% else %}belum tersedia{% endif %} · Toleransi {% if hasil.get('toleransi_kg') is not none %}±{{ kg(hasil.toleransi_kg|float) }} kg{% else %}belum tersedia{% endif %}</p>
+{% if rincian.customer_return_id %}<a class="btn" href="/retur/{{ rincian.customer_return_id }}">Lihat penerimaan retur</a>{% elif rincian.wajib_manual %}<p>Retur ini wajib diverifikasi manual setelah koreksi data tersimpan dan seluruh pemeriksaan memenuhi syarat.</p>{% endif %}
+</section>
+{% endif %}
+<form action="/barang-keluar/{{ asal.id }}/retur" method="post">
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+{% if rincian %}<input type="hidden" name="pengajuan_id" value="{{ rincian.id }}">{% endif %}
+<fieldset {% if terkunci %}disabled{% endif %} class="retur-asal__panel">
+<legend>Tiket dan rincian penerimaan</legend>
+<label for="tiket-retur">Tiket RTP wajib dipilih</label>
+<select class="retur-asal__tiket" name="tiket_id" id="tiket-retur" required>
+<option value="">Pilih tiket retur pelanggan ini</option>
+{% for t in tickets %}<option value="{{ t.id }}" {% if tiket_terpilih|string == t.id|string %}selected{% endif %}>{{ t.kode }} · {{ t.nomor_polisi or 'Plat belum dicatat' }} · {{ 'Menunggu timbang kedua' if t.status_tiket == 'TERBUKA' else 'Selesai ditimbang' }}</option>{% endfor %}
+</select>
+{% if not tickets and not terkunci %}<p role="status">Belum ada tiket RTP aktif yang tersedia untuk pelanggan ini. Buat tiket di Pos Timbang terlebih dahulu.</p>{% endif %}
+<h2>Barang yang benar-benar dikirim</h2>
+<p>Isi 0 untuk barang yang tidak dikembalikan. Pengajuan yang masih menunggu pemeriksaan ikut mengurangi sisa yang dapat diajukan.</p>
+{% for b in baris %}
+<div class="retur-asal__baris">
+<div class="retur-asal__nama"><strong>{{ b.nama }}</strong><small>{{ b.pemilik }}</small>
+{% if b.pilih_kemasan %}<label for="kemasan-{{ b.id }}">Jenis karung penerimaan (50 kg)</label><select id="kemasan-{{ b.id }}" name="kemasan_{{ b.id }}"><option value="">Pilih sesuai karung yang diterima</option>{% for m in kemasan_gabah %}<option value="{{ m.id }}" {% if b.kemasan_id == m.id %}selected{% endif %}>{{ m.nama }}</option>{% endfor %}</select><small>Jenis karung pengiriman lama tidak tercatat. Tanpa pilihan dan tara master yang sah, verifikasi ditahan.</small>{% endif %}
+<label for="catatan-item-{{ b.id }}">Catatan barang</label><input id="catatan-item-{{ b.id }}" name="catatan_item_{{ b.id }}" maxlength="200" value="{{ b.catatan }}"></div>
+<div><small>Dikirim</small>{{ kg(b.dikirim) }} {{ b.satuan }}{% if b.hitung_karung %}<small>{{ (b.karung_dikirim|string ~ ' karung') if b.karung_dikirim is not none else 'Karung asal belum tercatat' }}</small>{% endif %}</div>
+<div><small>Retur diterima sebelumnya</small>{{ kg(b.sebelumnya) }} {{ b.satuan }}{% if b.tertunda %}<small>Pengajuan lain: {{ kg(b.tertunda) }} {{ b.satuan }}</small>{% endif %}</div>
+<div><small>Sisa</small>{{ kg(b.sisa) }} {{ b.satuan }}</div>
+<label class="retur-asal__jumlah" for="retur-{{ b.id }}">Jumlah retur ({{ b.satuan }})
+<input type="hidden" name="item_id" value="{{ b.id }}">
+<input id="retur-{{ b.id }}" name="jumlah" type="number" value="{{ b.jumlah }}" min="0" max="{{ b.sisa }}" step="{{ '1' if b.satuan == 'karung' else '0.01' }}" inputmode="{{ 'numeric' if b.satuan == 'karung' else 'decimal' }}" required>
+{% if b.hitung_karung %}<span>Jumlah karung fisik yang kembali</span><input name="karung_{{ b.id }}" aria-label="Jumlah karung {{ b.nama }}" type="number" min="0" max="{{ b.sisa_karung }}" step="1" value="{{ b.jumlah_karung }}" inputmode="numeric" required>{% endif %}</label>
+</div>{% endfor %}
+<p><label for="catatan-retur">Catatan penerimaan</label><textarea id="catatan-retur" name="catatan" maxlength="500">{{ rincian.catatan or '' if rincian else '' }}</textarea></p>
+{% if rincian %}<p><label for="alasan-koreksi">Alasan koreksi data</label><textarea id="alasan-koreksi" name="alasan" maxlength="500" required></textarea></p>{% endif %}
+<p>Data timbang diubah melalui Pos Timbang sesuai hak akses. Menyimpan rincian saat tiket terbuka belum menambah stok. Tara digunakan sebagai toleransi pencocokan bobot, tanpa memotong berat rincian.</p>
+{% if not terkunci %}<div class="retur-asal__aksi"><button class="btn" type="submit">{{ 'Simpan koreksi rincian' if rincian else 'Simpan pengajuan retur' }}</button></div>{% endif %}
+</fieldset></form>
+{% if rincian and not terkunci %}
+<form action="/retur/pengajuan/{{ rincian.id }}/verifikasi" method="post">
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+<button class="btn" {% if not manual_siap %}disabled{% endif %}>Verifikasi manual</button>
+</form>{% endif %}
+{% if rincian and not terkunci %}<details class="retur-asal__panel"><summary>Batalkan pengajuan yang belum diterima</summary>
+<p>Pembatalan melepaskan jumlah yang diajukan, tanpa mengubah stok atau data timbang. Tiket tetap tercatat pada histori pengajuan ini.</p>
+<form action="/retur/pengajuan/{{ rincian.id }}/batalkan" method="post"><input type="hidden" name="_csrf" value="{{ CSRF }}">
+<label for="alasan-batal">Alasan pembatalan</label><textarea id="alasan-batal" name="alasan" maxlength="500" required></textarea><button class="btn">Batalkan pengajuan</button></form></details>{% endif %}
+{% if logs %}<section class="retur-asal__panel"><h2>Riwayat pemeriksaan dan koreksi</h2>
+{% for l in logs %}<details><summary>{{ l.waktu|jam }} · {{ l.aksi.replace('_',' ') }} · {{ aktor.get(l.pelaku_id, 'Sistem') }}</summary>
+{% if l.alasan %}<p>{{ l.alasan }}</p>{% endif %}
+{% for label, snapshot in [('Sebelum', l.sebelum), ('Sesudah', l.sesudah)] %}{% if snapshot %}<h3>{{ label }}</h3>
+{% if snapshot.muatan %}<ul>{% for m in snapshot.muatan %}<li>{{ nama_item.get(m.outgoing_item_id, 'Barang historis') }} · {{ m.jumlah_karung }} karung · {{ m.berat_kg }} kg{% if m.tara_toleransi_kg is defined and m.tara_toleransi_kg is not none %} · tara {{ m.tara_toleransi_kg }} kg/karung{% endif %}</li>{% endfor %}</ul>{% endif %}
+{% if snapshot.hasil %}<p>Timbang pertama {{ snapshot.hasil.timbang1_kg|default('—') }} kg · Timbang kedua {{ snapshot.hasil.timbang2_kg|default('—') }} kg · Bobot tiket {{ snapshot.hasil.berat_tiket_kg|default('—') }} kg</p><p>{{ snapshot.hasil.alasan }}</p>{% endif %}
+{% if snapshot.hasil and snapshot.hasil.koreksi_timbang %}<p>Koreksi Pos Timbang: {{ snapshot.hasil.koreksi_timbang.nama or 'Petugas tercatat di Pos Timbang' }} · {{ snapshot.hasil.koreksi_timbang.waktu }} · {{ snapshot.hasil.koreksi_timbang.alasan or '' }}</p>{% endif %}
+{% if snapshot.kode %}<p>Penerimaan {{ snapshot.kode }}</p>{% endif %}
+{% endif %}{% endfor %}</details>{% endfor %}</section>{% endif %}
+</div>
+{% endblock %}

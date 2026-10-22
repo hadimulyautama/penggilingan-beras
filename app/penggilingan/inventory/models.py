@@ -160,6 +160,27 @@ class ReturRincian(Base, TimestampMixin):
     timbangan_transaksi_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     muatan: Mapped[list] = mapped_column(JSON, nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # NULL hanya untuk histori sebelum hubungan asal diwajibkan. Hubungan
+    # lama tidak boleh ditebak dari nama pelanggan atau teks tiket.
+    outgoing_record_id: Mapped[int | None] = mapped_column(ForeignKey('outgoing_records.id'), index=True)
+    status_pemeriksaan: Mapped[str | None] = mapped_column(String(32))
+    wajib_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text('false'))
+    hasil_pemeriksaan: Mapped[dict | None] = mapped_column(JSON)
+    customer_return_id: Mapped[int | None] = mapped_column(ForeignKey('customer_returns.id'), unique=True)
+    catatan: Mapped[str | None] = mapped_column(String(500))
+
+
+class ReturPemeriksaanLog(Base):
+    """Cuplikan sebelum/sesudah; tidak menimpa audit koreksi sebelumnya."""
+    __tablename__ = 'retur_pemeriksaan_log'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retur_rincian_id: Mapped[int] = mapped_column(ForeignKey('retur_rincian.id'), nullable=False, index=True)
+    pelaku_id: Mapped[int | None] = mapped_column(ForeignKey('users.id'))
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    aksi: Mapped[str] = mapped_column(String(32), nullable=False)
+    alasan: Mapped[str | None] = mapped_column(String(500))
+    sebelum: Mapped[dict | None] = mapped_column(JSON)
+    sesudah: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
 class CustomerReturn(Base, TimestampMixin):
@@ -198,7 +219,7 @@ class CustomerReturnItem(Base, TimestampMixin):
     customer_return_id: Mapped[int] = mapped_column(
         ForeignKey("customer_returns.id", ondelete="CASCADE"), nullable=False
     )
-    product_sku_id: Mapped[int] = mapped_column(ForeignKey("product_skus.id"), nullable=False)
+    product_sku_id: Mapped[int | None] = mapped_column(ForeignKey("product_skus.id"))
     rice_quality_standard_id: Mapped[int | None] = mapped_column(
         ForeignKey("rice_quality_standards.id")
     )
@@ -209,6 +230,7 @@ class CustomerReturnItem(Base, TimestampMixin):
     finished_goods_stock_id: Mapped[int | None] = mapped_column(
         ForeignKey("finished_goods_stock.id")
     )
+    outgoing_item_id: Mapped[int | None] = mapped_column(ForeignKey('outgoing_items.id'), index=True)
 
 
 class ByproductStock(Base, TimestampMixin):

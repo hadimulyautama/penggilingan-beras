@@ -71,15 +71,13 @@ async def test_rincian_sebelum_timbang_kedua_dan_stok_tepat_sekali(pg, konteks):
             timbang2_kg=6000, berat_barang_kg=3000, jumlah_karung=100,total_tara_kg=0 WHERE id=:id'''), {'id':tid})
         await db.commit()
     r = await c.post('/retur/terima', data=form(tid, sid, 'terima'))
-    assert 'pesan=' in r.headers['location'], r.headers['location']
+    assert 'gagal=' in r.headers['location'], r.headers['location']
     r = await c.post('/retur/terima', data=form(tid, sid, 'terima'))
     assert 'gagal=' in r.headers['location']
     async with pg() as db:
         stocks = (await db.scalars(select(FinishedGoodsStock))).all()
-        assert len(stocks) == 1
-        assert stocks[0].jumlah_karung == 120
-        assert stocks[0].berat_total_kg == Decimal('3000')
-        assert stocks[0].kemasan_mengurangi_stok is False
+        # Endpoint lama tidak lagi boleh menerima stok tanpa asal.
+        assert not stocks
 
 
 async def test_rincian_terkunci_setelah_timbang_dan_api_bertoken(pg, konteks):
@@ -117,10 +115,10 @@ async def test_layar_retur_memuat_tiket_terbuka_dan_rincian(pg,konteks):
     await c.post('/retur/terima',data=form(tid,sid))
     r=await c.get('/retur')
     assert r.status_code == 200
-    assert 'Simpan rincian sementara' in r.text
+    assert 'Rincian lama belum terhubung' in r.text
     assert 'name="tara_per_karung_kg"' not in r.text
-    assert 'data-state="TERBUKA"' in r.text
-    assert 'data-items=' in r.text
+    assert 'RTP-UJI' in r.text
+    assert 'Buka riwayat pengiriman' in r.text
 
 
 async def test_rincian_beberapa_kemasan_dan_revisi_sebelum_timbang(pg,konteks):
@@ -236,11 +234,9 @@ async def test_terima_retur_setelah_timbang_tanpa_rincian_awal_atau_tara(pg,kont
     data=form(tid,sid,'terima')
     data.pop('tara_per_karung_kg')
     r=await c.post('/retur/terima',data=data)
-    assert 'pesan=' in r.headers['location']
+    assert 'gagal=' in r.headers['location']
     async with pg() as db:
-        stock=await db.scalar(select(FinishedGoodsStock))
-        assert stock.jumlah_karung==120
-        assert stock.berat_total_kg==Decimal('3000')
+        assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock)) == 0
 
 
 async def test_pilihan_retur_dari_master_meski_sku_belum_pernah_dibuat(pg,konteks):
@@ -261,8 +257,8 @@ async def test_pilihan_retur_dari_master_meski_sku_belum_pernah_dibuat(pg,kontek
         assert pilihan['merek']
     r=await c.get('/retur')
     assert r.status_code==200
-    assert 'name="jenis_barang"' in r.text and 'name="kemasan"' in r.text
-    assert 'name="brand_id"' in r.text and 'Pilih SKU' not in r.text
+    assert 'Buka riwayat pengiriman' in r.text
+    assert 'name="jenis_barang"' not in r.text  # Jenis baru diturunkan dari item asal.
     async with pg() as db:
         assert await db.scalar(select(func.count()).select_from(ProductSku))==sebelum
 
@@ -281,10 +277,9 @@ async def test_retur_jenis_kemasan_dan_merek_membuat_sku_saat_disimpan(pg,kontek
         brand=await db.scalar(select(Brand).where(Brand.aktif.is_(True)))
         quality=await db.scalar(select(RiceQualityStandard).where(RiceQualityStandard.aktif.is_(True)))
         bid,qid=brand.id,quality.id
-        await db.execute(text("UPDATE timbangan_transaksi SET status_tiket='SELESAI',timbang2_kg=6000,berat_barang_kg=:nominal WHERE id=:id"),{'id':tid,'nominal':nominal})
         await db.commit()
     r=await c.post('/retur/terima',data={
-        'timbangan_transaksi_id':str(tid),'aksi':'terima',
+        'timbangan_transaksi_id':str(tid),'aksi':'rincian',
         'jenis_barang':jenis,'kemasan':kemasan,
         'brand_id':str(bid) if jenis=='beras_putih' else '',
         'quality_id':str(qid) if jenis=='beras_putih' else '',
@@ -292,15 +287,15 @@ async def test_retur_jenis_kemasan_dan_merek_membuat_sku_saat_disimpan(pg,kontek
     })
     assert 'pesan=' in r.headers['location'],unquote(r.headers['location'])
     async with pg() as db:
-        stock=await db.scalar(select(FinishedGoodsStock))
-        sku=await db.get(ProductSku,stock.product_sku_id)
-        assert stock.berat_total_kg==Decimal(nominal)
+        rincian=await db.scalar(select(ReturRincian))
+        sku=await db.get(ProductSku,rincian.muatan[0]['sku_id'])
+        assert Decimal(rincian.muatan[0]['berat_kg'])==Decimal(nominal)
         assert sku.id!=sid and sku.kategori==jenis
         material=await db.get(PackagingMaterial,sku.packaging_material_id)
         size=await db.get(PackageSize,sku.package_size_id)
         assert f'{material.kode}:{size.ukuran_kg}'==kemasan
         assert sku.brand_id==(bid if jenis=='beras_putih' else None)
-        assert stock.kemasan_mengurangi_stok is False
+        assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock)) == 0
 
 
 @pytest.mark.parametrize('jenis,kemasan,brand',[
@@ -341,24 +336,15 @@ async def test_berat_retur_otomatis_dan_selisih_tiket_dikurangi_rincian(pg,konte
         'jumlah_karung':'120','catatan_item':''}
     if kiriman_berat is not None:
         data['berat_kg']=kiriman_berat
-    if selisih:
+    # Aturan baru menghapus jalan lolos hanya dengan alasan. Penghitungan
+    # dan penerimaan beridentitas asal diuji pada test_retur_pengajuan.
+    for alasan in ('', 'Isi beberapa karung tidak penuh'):
+        data['alasan_selisih']=alasan
         r=await c.post('/retur/terima',data=data)
         assert 'gagal=' in r.headers['location']
-        assert f'{selisih:+.2f}' in unquote(r.headers['location'])
-        data['alasan_selisih']='Isi beberapa karung tidak penuh'
-    r=await c.post('/retur/terima',data=data)
-    assert 'pesan=' in r.headers['location'],unquote(r.headers['location'])
     async with pg() as db:
-        receipt=await db.scalar(select(CustomerReturn))
-        stock=await db.scalar(select(FinishedGoodsStock))
-        assert receipt.berat_tiket_kg==Decimal(aktual)
-        assert receipt.berat_rincian_kg==3000
-        assert receipt.selisih_kg==selisih
-        _,_,_,recent=await layar_retur._siapkan(db)
-        assert recent[0]['selisih_kg']==selisih
-        assert stock.berat_total_kg==3000
-        assert stock.jumlah_karung==120
-        assert stock.kemasan_mengurangi_stok is False
+        assert await db.scalar(select(func.count()).select_from(CustomerReturn)) == 0
+        assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock)) == 0
 
 
 async def test_retur_diterima_tabel_dan_detail_lengkap(pg, konteks):
@@ -370,18 +356,23 @@ async def test_retur_diterima_tabel_dan_detail_lengkap(pg, konteks):
             timbang2_kg=6010,berat_barang_kg=2990,netto_timbangan_kg=2990,
             nama_sopir='Sopir Retur' WHERE id=:id"""), {'id': tid})
         await db.commit()
-    data = form(tid, sid, 'terima')
-    data.update(alasan_selisih='Isi karung berkurang',catatan='Kemasan diperiksa',
-                catatan_item='Karung terbuka')
-    hasil = await c.post('/retur/terima', data=data)
-    assert 'pesan=' in hasil.headers['location']
+    # Histori sebelum hubungan asal diwajibkan tetap harus terbaca. Fixture
+    # dibuat langsung sebagai fakta lama; endpoint baru wajib menolak asal kosong.
+    from app.database import now_local
+    from app.models import CustomerReturnItem
     async with pg() as db:
-        retur = await db.scalar(select(CustomerReturn))
-        rid, kode = retur.id, retur.kode
+        retur=CustomerReturn(kode='RET-HISTORI',timbangan_transaksi_id=tid,kode_tiket='RTP-UJI',
+            timbang1_kg=9000,timbang2_kg=6010,berat_tiket_kg=2990,
+            berat_rincian_kg=3000,selisih_kg=-10,alasan_selisih='Isi karung berkurang',
+            catatan='Kemasan diperiksa',input_by=1,waktu=now_local())
+        db.add(retur); await db.flush()
+        db.add(CustomerReturnItem(customer_return_id=retur.id,product_sku_id=sid,
+            jumlah_karung=120,berat_total_kg=3000,catatan='Karung terbuka'))
+        await db.commit()
+        rid,kode=retur.id,retur.kode
     daftar = await c.get('/retur')
     detail = await c.get(f'/retur/{rid}')
     assert daftar.status_code == detail.status_code == 200
-    assert 'class="tabel-standar"' in daftar.text
     assert f'href="/retur/{rid}"' in daftar.text
     for isi in [kode,'RTP-UJI','Sopir Retur','Penerima retur','Karung retur',
                 'Karung terbuka','Isi karung berkurang','Kemasan diperiksa','120']:

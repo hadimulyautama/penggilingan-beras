@@ -42,6 +42,7 @@ from app.web.layar_keluar import router as keluar_router
 from app.web.kemas_ulang import router as kemas_ulang_router
 from app.web.draf_keluar import router as draf_keluar_router
 from app.web.layar_retur import router as retur_router
+from app.web.layar_retur_asal import router as retur_asal_router
 from app.web.layar_produk import router as produk_router
 from app.web.layar_riwayat import router as riwayat_router
 from app.web.layar_sosoh import router as sosoh_router
@@ -78,13 +79,15 @@ async def lifespan(app: FastAPI):
     sched_task = asyncio.create_task(run_late_drying_scheduler())
     sinkron_task = asyncio.create_task(run_sinkron_bobot_poller())
     kledo_task = asyncio.create_task(run_kledo_scheduler())
+    from app.services.retur_pekerja import jalankan as jalankan_retur
+    retur_task = asyncio.create_task(jalankan_retur())
     log.info("Backend siap. Tanpa bot — pencatatan lewat Pos Produksi.")
     try:
         yield
     finally:
         # Hentikan task latar dengan membatalkan. Guard karena saat --reload
         # task bisa belum/selesai berjalan.
-        for task in (sched_task, sinkron_task, kledo_task):
+        for task in (sched_task, sinkron_task, kledo_task, retur_task):
             task.cancel()
             try:
                 await task
@@ -115,6 +118,7 @@ app.include_router(draf_keluar_router)
 app.include_router(kemas_ulang_router)
 app.include_router(keluar_router)
 app.include_router(retur_router)
+app.include_router(retur_asal_router)
 app.include_router(jasa_router)
 app.include_router(sosoh_router)
 app.include_router(riwayat_router)

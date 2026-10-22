@@ -66,12 +66,28 @@ async def _siapkan(db, sebelum: int | None = None):
 
 @router.get("/retur")
 async def halaman_retur(request: Request, akun=Depends(butuh_akun),
-                         sebelum: int | None = None):
+                         sebelum: int | None = None, sebelum_pengajuan: int | None = None):
     if not _boleh(akun):
         raise HTTPException(403, "Penerimaan retur hanya tersedia untuk Admin.")
     async with SessionLocal() as db:
         tickets, katalog, mutu, recent = await _siapkan(db, sebelum)
-    return await render_laci(request, "retur.html", layar="retur",
+        pengajuan = (await db.execute(text('''
+            SELECT r.id,r.status_pemeriksaan,r.customer_return_id,r.hasil_pemeriksaan,
+                   o.kode AS kode_pengiriman,o.id AS pengiriman_id,o.nama_pembeli,t.kode AS kode_tiket
+            FROM retur_rincian r JOIN outgoing_records o ON o.id=r.outgoing_record_id
+            LEFT JOIN timbangan_transaksi t ON t.id=r.timbangan_transaksi_id
+            WHERE r.customer_return_id IS NULL
+              AND (CAST(:sebelum AS INTEGER) IS NULL OR r.id<:sebelum)
+            ORDER BY r.id DESC LIMIT 51
+        '''), {'sebelum': sebelum_pengajuan})).mappings().all()
+        lama = (await db.execute(text('''SELECT r.id,t.kode AS kode_tiket
+            FROM retur_rincian r LEFT JOIN timbangan_transaksi t ON t.id=r.timbangan_transaksi_id
+            WHERE r.outgoing_record_id IS NULL AND NOT EXISTS
+              (SELECT 1 FROM customer_returns c WHERE c.timbangan_transaksi_id=r.timbangan_transaksi_id)
+            ORDER BY r.id DESC'''))).mappings().all()
+    return await render_laci(request, "retur_daftar.html", layar="barang_keluar",
+                              pengajuan=pengajuan[:50], lama=lama,
+                              pengajuan_berikut=pengajuan[49]['id'] if len(pengajuan)>50 else None,
                               tickets=tickets, katalog=katalog, mutu=mutu,
                               recent=recent[:50],
                               sebelum_berikut=recent[49]["id"] if len(recent) > 50 else None,
@@ -93,12 +109,13 @@ async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)
         penerima = await db.get(User, retur.input_by)
         gudang = await db.get(Warehouse, retur.warehouse_id) if retur.warehouse_id else None
         items = (await db.execute(text("""
-            SELECT i.*, s.kategori, m.nama AS kemasan, z.ukuran_kg,
+            SELECT i.*, COALESCE(s.kategori,o.item_type,'Barang lama') AS kategori, m.nama AS kemasan, z.ukuran_kg,
                    b.nama AS merek, q.kode AS mutu
             FROM customer_return_items i
-            JOIN product_skus s ON s.id=i.product_sku_id
-            JOIN packaging_materials m ON m.id=s.packaging_material_id
-            JOIN package_sizes z ON z.id=s.package_size_id
+            LEFT JOIN outgoing_items o ON o.id=i.outgoing_item_id
+            LEFT JOIN product_skus s ON s.id=i.product_sku_id
+            LEFT JOIN packaging_materials m ON m.id=s.packaging_material_id
+            LEFT JOIN package_sizes z ON z.id=s.package_size_id
             LEFT JOIN brands b ON b.id=s.brand_id
             LEFT JOIN rice_quality_standards q ON q.id=i.rice_quality_standard_id
             WHERE i.customer_return_id=:id ORDER BY i.id
@@ -116,10 +133,14 @@ async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)
                          for m in ((rincian.muatan or []) if rincian else [])}
         items = [dict(i, nama=nama_snapshot.get((i["product_sku_id"],
                                                i["rice_quality_standard_id"]))) for i in items]
-    return await render_laci(request, "retur_detail.html", layar="retur",
+        from app.services.jasa import nama_pemilik_banyak
+        pemilik = await nama_pemilik_banyak(db, {i['jasa_id'] for i in items if i['jasa_id']})
+        items = [dict(i, pemilik=pemilik.get(i['jasa_id'], 'Milik pabrik')) for i in items]
+    return await render_laci(request, "retur_detail.html", layar="barang_keluar",
                              retur=retur, items=items, tiket=tiket,
                              penerima=penerima.nama if penerima else "—",
-                             gudang=gudang.nama_gudang if gudang else "—")
+                             pengiriman_asal=rincian.outgoing_record_id if rincian else None,
+                             gudang=gudang.nama_gudang if gudang else ('Sesuai gudang asal per item' if rincian and rincian.outgoing_record_id else 'Gudang tidak tercatat'))
 
 
 @router.post("/retur/terima")
@@ -197,6 +218,8 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
             total = sum((row[3] for row in rows), Decimal('0'))
             rincian = await db.scalar(select(ReturRincian).where(
                 ReturRincian.timbangan_transaksi_id == ticket_id))
+            if rincian and rincian.outgoing_record_id:
+                raise ValueError('Rincian ini sudah terhubung dengan pengiriman. Gunakan detail pengajuan retur untuk koreksi.')
             if aksi == 'rincian':
                 if ticket['status_tiket'] != 'TERBUKA':
                     raise ValueError('Timbang sudah selesai. Rincian kemasan tidak dapat diubah lagi.')
@@ -212,56 +235,10 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
                     'Rincian tersimpan. Lanjutkan timbang truk kosong, lalu verifikasi penerimaan stok.'))
             if ticket['status_tiket'] != 'SELESAI':
                 raise ValueError('Selesaikan timbang truk kosong di Pos Timbang terlebih dahulu.')
-            ticket_weight = Decimal(str(ticket["berat_barang_kg"]))
-            difference = ticket_weight - total
-            threshold = max(Decimal("2"), ticket_weight * Decimal("0.002"))
-            if abs(difference) > threshold and not reason:
-                raise ValueError(f"Selisih {difference:+.2f} kg melewati batas {threshold:.2f} kg. Isi alasan selisih.")
-            if reason and len(reason) > 300:
-                raise ValueError("Alasan selisih maksimal 300 karakter.")
-
-            from app.models import Warehouse
-            warehouse = await db.scalar(select(Warehouse).where(
-                Warehouse.kode_fungsi == "g2", Warehouse.aktif.is_(True)))
-            now = now_local()
-            receipt = CustomerReturn(
-                kode="PENDING", timbangan_transaksi_id=ticket_id,
-                kode_tiket=ticket["kode"], pelanggan_id=ticket["pelanggan_id"],
-                nama_pelanggan=ticket["pelanggan"], nomor_polisi=ticket["nomor_polisi"],
-                timbang1_kg=ticket["timbang1_kg"], timbang2_kg=ticket["timbang2_kg"],
-                berat_tiket_kg=ticket_weight, berat_rincian_kg=total,
-                selisih_kg=difference, alasan_selisih=reason, catatan=note,
-                warehouse_id=warehouse.id if warehouse else None,
-                input_by=akun.user.id, waktu=now,
-            )
-            db.add(receipt)
-            await db.flush()
-            receipt.kode = f"RET-{now:%Y%m%d}-{receipt.id:04d}"
-            for sku_id, quality_id, count, weight, item_note, tara in rows:
-                item = CustomerReturnItem(
-                    customer_return_id=receipt.id, product_sku_id=sku_id,
-                    rice_quality_standard_id=quality_id, jumlah_karung=count,
-                    berat_total_kg=weight, jasa_id=None, catatan=item_note,
-                )
-                db.add(item)
-                await db.flush()
-                stock = FinishedGoodsStock(
-                    product_sku_id=sku_id, rice_quality_standard_id=quality_id,
-                    source_type="retur", source_id=receipt.id,
-                    jumlah_karung=count, berat_total_kg=weight,
-                    warehouse_id=receipt.warehouse_id, waktu=now,
-                    input_by=akun.user.id, jasa_id=None,
-                    kemasan_mengurangi_stok=False,
-                )
-                db.add(stock)
-                await db.flush()
-                item.finished_goods_stock_id = stock.id
-            await db.commit()
+            raise ValueError('Pengajuan retur baru harus dimulai dari detail riwayat pengiriman agar item asal dan kepemilikannya tervalidasi.')
         except ValueError as exc:
             await db.rollback()
             return redirect(_pesan_url("/retur", "gagal", str(exc)))
         except Exception:
             await db.rollback()
             raise
-    return redirect(_pesan_url("/retur", "pesan",
-                               f"Retur {receipt.kode} sudah masuk stok."))

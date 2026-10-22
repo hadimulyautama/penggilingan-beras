@@ -95,8 +95,10 @@ async def saldo_pk(db: AsyncSession, proc_id: int) -> float:
     dibaca sebagai kerusakan aplikasi, bukan sebagai selisih yang perlu
     ditelusuri — dan yang menelusurinya bukan operator.
     """
+    from app.services.retur_penerimaan import berat_kembali
     return (
         await _produced_pk(db, proc_id)
+        + await berat_kembali(db, tipe='pk_langsung', proses_id=proc_id)
         - await _transferred_pk(db, proc_id)
         - await _sold_pk_langsung(db, proc_id)
     )
