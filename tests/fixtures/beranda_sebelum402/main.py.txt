@@ -1,0 +1,123 @@
+async def beranda(request: Request):
+    """Pintu masuk webapp: keadaan pabrik hari ini + pintu ke halaman lain.
+
+    Angkanya diambil dari `dashboard_data` — bagian `operasional` saja, yang
+    murni jumlah dan tak memuat data uang, sehingga aman dilihat operator.
+    """
+    akun = await akun_opsional(request)
+    if akun is None:
+        return RedirectResponse("/masuk", status_code=303)
+
+    from app.services import berjalan as svc
+
+    # Benda yang berjalan diambil dari daftar yang SAMA dengan layar Sedang
+    # berjalan, bukan disusun ulang di sini. Beranda yang menghitung sendiri
+    # apa yang berjalan adalah Beranda yang cepat atau lambat menyebut angka
+    # yang berbeda dari layar sebelahnya — dan yang berbeda diam-diam justru
+    # tak akan ada yang menyadarinya.
+    from app.web.layar import MEJA as V_MEJA
+    from app.web.layar import gudang1, petak_beranda
+
+    view = getattr(request.state, "view", "tamu")
+    o, jalan, petak = {}, svc.Berjalan(), []
+    papan = None
+    # Pintu "Pengiriman" (Beranda usulan, Tahap Beranda, 21 Oktober 2026) —
+    # irisan `kerja.tindakan` yang sama persis dengan `/pekerjaan?grup=muat`
+    # (`svc.grup_baris`, sudah dipakai `layar_pekerjaan.py` untuk filter yang
+    # sama), BUKAN kueri baru: satu sumber, supaya angka Beranda tak pernah
+    # berselisih dari daftar yang dibuka saat kartunya ditekan.
+    pengiriman_n = 0
+    try:
+        async with SessionLocal() as db:
+            # Angka Gudang 1 mahal dan tak dipakai view polesan. Operator
+            # polesan yang menunggu kueri gudang sebelah membayar waktu untuk
+            # angka yang tak akan pernah tampil di layarnya.
+            if gudang1(view):
+                o = (await dashboard_data(db)).get("operasional", {}) or {}
+            jalan = await svc.untuk(db, akun.user)
+            from app.services.kelompok_kerja import bagi
+            kerja = bagi(jalan)
+            pengiriman_n = sum(1 for x in kerja.tindakan if svc.grup_baris(x) == "muat")
+            # Angka per gudang dihitung SEKALI untuk halaman ini: petak "Stok
+            # PK" Admin dan papan di bawahnya membaca yang sama. Sampai 24
+            # September 2026 petak Admin memetik petak ke-4 tiap gudang
+            # berdasarkan POSISI — dan petak ke-4 Gudang 2 adalah tumpukan,
+            # bukan stok (QA 24 Sep (c) butir 3).
+            angka = None
+            if view in V_MEJA:
+                from app.services import beranda as svc_beranda
+
+                angka = await svc_beranda.angka_gudang(db)
+            petak = await petak_beranda(db, view, o, angka=angka)
+            # ── Papan pemegang KEDUA gudang (celah ke-5, 24 Sep 2026) ──
+            #
+            # "Perlu perhatian", rincian keputusan, dan satu baris per gudang
+            # hanya ada di Beranda Meja sampai hari ini. Perhitungannya SAMA —
+            # `services.beranda` — supaya dua Beranda tak pernah menyebut angka
+            # berbeda tentang pabrik yang sama.
+            #
+            # Hanya untuk view meja, dan itu bukan soal izin melihat: operator
+            # sudah melihat gudangnya di petak teratas, dan penyimpangan gudang
+            # sebelah adalah kabar yang tak bisa ia tindaklanjuti.
+            if view in V_MEJA:
+                papan = await svc_beranda.papan(db, jalan.berjalan + jalan.transit,
+                                                jalan.meja, angka=angka)
+    except Exception:
+        log.exception("Keadaan pabrik gagal dimuat (beranda tetap tampil)")
+
+    # Hanya kunci yang dikenal yang jadi pesan — teks bebas dari URL tak
+    # pernah ditampilkan, supaya halaman ini tak bisa dipakai menitipkan
+    # kalimat palsu lewat tautan.
+    _PESAN = {"sandi-diganti": "Kata sandi berhasil diganti."}
+
+    from app.services.beranda import sapaan_dan_tanggal
+    sapaan, tanggal_tampil = sapaan_dan_tanggal(akun.user.nama if akun.user else None)
+
+    return render(
+        request, "beranda.html",
+        sapaan=sapaan, tanggal_tampil=tanggal_tampil,
+        PENGIRIMAN=pengiriman_n,
+        # Cakupan "Semua gudang" & pintu "Pesanan Jasa" (Akses cepat) — dari
+        # SINI, bukan templat bersama membandingkan `VIEW in V_MEJA` sendiri.
+        # `beranda.html` dipakai lebih dari satu app; templat yang menebak
+        # peran adalah templat yang bisa menebak salah di app sebelah
+        # (`tests/test_paket.py::test_beranda_gudang_menyerahkan_pintu_keputusan_ke_app`).
+        semua_gudang=view in V_MEJA,
+        # Petaknya disusun `app.web.layar` menurut view — Beranda tak lagi
+        # punya satu bentuk yang dipakai bersama oleh empat peran.
+        petak=petak,
+        berjalan=jalan.berjalan, transit=jalan.transit,
+        lama=svc._lama,
+        # Membuka lembar aksi DI LAYAR INI, bukan melemparkan orang ke
+        # antrean untuk menekan tombol yang tadi ia lihat di sini.
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
+        # Keempat angka laci + pintu yang padam, dari satu tempat: layar yang
+        # menyalin tiga kata kunci cepat atau lambat lupa yang keempat.
+        **jalan.lencana(),
+        # ── Pintu "Menunggu keputusan" (Tahap 2, beranda.html naik ke paket) ──
+        #
+        # Kerja meja berdiri sejajar kerja gudang, dan hanya untuk yang punya
+        # meja — gerbangnya `V_MEJA`, persis seperti dulu di templat. Di
+        # Operasi Gudang 2 bendera ini SELALU mati: layar Menunggu keputusan
+        # hidup di Meja Administrasi, jadi di sana pintunya akan jadi tautan
+        # mati ke rute yang tak ada.
+        blok_keputusan=view in V_MEJA,
+        # Pintu "Mutu & QC" — gerbang yang sama (kerja meja), tetapi padam saat
+        # pencatatan mutu dimatikan di Pengaturan: pintu yang isinya pasti nol
+        # mengajari orang mengabaikan pintu. Benderanya dari daftar yang sudah
+        # di tangan, bukan kueri kedua.
+        blok_mutu=view in V_MEJA and jalan.mutu_aktif,
+        # Blok "Perlu perhatian" & baris gudang: hanya bila papannya dihitung.
+        # `papan` bisa None karena kueri gagal (halaman ini sengaja tetap tampil
+        # tanpa angka), jadi bendanya dibaca dari satu tempat — bukan dari
+        # `view in V_MEJA` lagi, yang akan menggambar blok kosong saat gagal.
+        blok_perhatian=papan is not None,
+        perhatian=(papan.perhatian if papan else []),
+        gudang=(papan.gudang if papan else []),
+        rinci_keputusan=papan is not None,
+        n_permintaan=(papan.n_permintaan if papan else 0),
+        n_output=(papan.n_output if papan else 0),
+        n_mutu=(papan.n_mutu if papan else 0),
+        pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
+    )

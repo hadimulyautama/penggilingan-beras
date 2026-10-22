@@ -103,7 +103,11 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                 raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
             sebelum_berikut = None
         else:
-            aktif = (await svc.daftar(db, status=(status,) if status else OUT_HIDUP,
+            if status == OUT_PERINTAH:
+                aktif = await svc.menunggu_muat(db, akun.user, pencarian=q,
+                                               sejak=tanggal, pelanggan_jasa_id=pid)
+            else:
+                aktif = (await svc.daftar(db, status=(status,) if status else OUT_HIDUP,
                                       batas=500, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid)
                      if not status or status in OUT_HIDUP else [])
             riwayat = (await svc.daftar(db, status=(status,) if status else (OUT_SELESAI, OUT_BATAL),
@@ -256,7 +260,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         # Dua angka di kepala, dan keduanya PEKERJAAN — bukan jumlah kilogram.
         # Berapa ton yang keluar bulan ini ada di Laporan; yang dicari orang
         # saat membuka halaman ini berapa truk yang belum beres.
-        n_perintah=sum(1 for k in kartu if k["rec"].status == OUT_PERINTAH),
+        STATUS_SARING=status, n_perintah=sum(1 for k in kartu if k["rec"].status == OUT_PERINTAH),
         n_dimuat=sum(1 for k in kartu if k["rec"].status == OUT_DIMUAT),
     )
 

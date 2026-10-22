@@ -125,8 +125,10 @@ def test_beranda_tak_mengulang_pintu_yang_sudah_ada_di_laci():
     assert 'href="/pengaturan"' not in isi
     # Yang tersisa satu, dan ia tinggal karena membawa jumlah — pintu laci tak
     # memberi tahu berapa yang menunggu tanpa dibuka dulu.
-    assert '"/aksi"' in isi
-    assert "Antrian tunggu" in isi and "Catat pekerjaan" not in isi
+    html = _beranda(MENUNGGU=3, INFORMASI=2)
+    assert 'href="/aksi"' not in html
+    assert 'Status &amp; informasi' in html or 'Status & informasi' in html
+    assert 'informasi=1' in html
 
 
 def test_beranda_kosong_tetap_berkata_sesuatu():

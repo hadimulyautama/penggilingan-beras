@@ -16,7 +16,7 @@ def konteks_aman(nilai):
         u = urlsplit(nilai or '')
     except ValueError:
         return ''
-    return nilai if not u.netloc and not u.scheme and u.path in ('/barang-masuk', '/pekerjaan') else ''
+    return nilai if not u.netloc and not u.scheme and u.path in ('/barang-masuk', '/pekerjaan', '/kabar') else ''
 
 
 def saring_pemilik(daftar, pemilik):
@@ -74,6 +74,8 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
     if request.url.path=='/aksi' and 'tab' not in request.query_params and grup and not any(svc.grup_baris(x)==grup for x in tindakan) and any(svc.grup_baris(x)==grup for x in informasi):
         tab='berjalan'
     dasar = tindakan if tab == 'tindakan' else berjalan+informasi
+    if tab == 'berjalan' and request.query_params.get('informasi') == '1':
+        dasar = informasi
     if asal == 'mutu':
         from app.services.keputusan import golongan_mutu
         dasar = [x for x in dasar if golongan_mutu(x.aksi)]
@@ -200,3 +202,28 @@ async def alias_keputusan(request, akun, asal):
     scope = dict(request.scope)
     scope['query_string'] = urlencode(q).encode()
     return await halaman_pekerjaan(Request(scope),akun)
+
+
+@router.get('/pekerjaan/permintaan/{permintaan_id:int}')
+async def detail_permintaan(permintaan_id: int, request: Request,
+                           akun=Depends(butuh_akun)):
+    """Catatan permintaan saat ini; tidak menjalankan tindakan persetujuan.
+
+    Jalur baca ini juga tersedia setelah permintaan keluar dari antrean,
+    sehingga kabar historis tetap dapat membuka objek yang sama.
+    """
+    from app.models import PermintaanPk, MillingProcess
+    from app.web.api import _is_g1_operator, _is_g2_operator
+    from app.web.layar_kabar import kembali_aman
+    from app.web.tampilan import render_laci
+    if not (await _is_g1_operator(akun.user) or await _is_g2_operator(akun.user)):
+        raise HTTPException(403, 'Permintaan ini tidak tersedia dalam cakupan Anda.')
+    async with SessionLocal() as db:
+        p = await db.get(PermintaanPk, permintaan_id)
+        lot = await db.get(MillingProcess, p.milling_process_id) if p else None
+    if p is None or lot is None:
+        raise HTTPException(404, 'Catatan permintaan tidak ditemukan.')
+    kembali = (kembali_aman(request.query_params.get('kembali_kabar'))
+               if request.query_params.get('kembali_kabar') else '/pekerjaan')
+    return await render_laci(request, 'permintaan_detail.html', layar='pekerjaan',
+                             permintaan=p, lot=lot, kembali=kembali)

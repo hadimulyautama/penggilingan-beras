@@ -262,7 +262,7 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
             if m.group(1):                     # render_laci → ketiganya sekaligus
                 continue
             potongan = _panggilan(teks, m.end())
-            if "lencana(" in potongan:
+            if "lencana(" in potongan or "**lencana" in potongan:
                 continue
             hilang = [l for l in ("MENUNGGU", "BERJALAN", "KEPUTUSAN")
                       if l not in potongan]

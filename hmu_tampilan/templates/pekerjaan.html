@@ -7,15 +7,15 @@
 {% import '_kerja_navigasi.html' as nav with context %}
 <header class="kerja-kepala"><h1>Pekerjaan</h1>
 <nav class="saring kerja-tab" aria-label="Tab pekerjaan">
-<a class="pil{{ ' pil--on' if tab=='tindakan' }}" href="{{ href(tab='tindakan',asal='',kategori='',grup='') }}"{% if tab=='tindakan' %} aria-current="page"{% endif %}>Perlu tindakan <span class="pil__jml">{{ total_tindakan }}</span></a>
-<a class="pil{{ ' pil--on' if tab=='berjalan' }}" href="{{ href(tab='berjalan',asal='',kategori='',grup='') }}"{% if tab=='berjalan' %} aria-current="page"{% endif %}>Berjalan <span class="pil__jml">{{ total_jalan }}</span></a>
+<a class="pil{{ ' pil--on' if tab=='tindakan' }}" href="{{ href(tab='tindakan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='tindakan' %} aria-current="page"{% endif %}>Perlu tindakan <span class="pil__jml">{{ total_tindakan }}</span></a>
+<a class="pil{{ ' pil--on' if tab=='berjalan' }}" href="{{ href(tab='berjalan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='berjalan' %} aria-current="page"{% endif %}>Berjalan <span class="pil__jml">{{ total_jalan }}</span></a>
 </nav>
 <details class="kerja-saringan"><summary class="btn btn--kecil">Filter · {{ jenis or 'Semua jenis' }} · {{ {'jasa':'Jasa','pabrik':'Pabrik'}.get(request.query_params.get('kepemilikan'),'Semua pemilik') }} · {{ {'g1':'G1','g2':'G2'}.get(gudang,'Semua gudang') }}</summary>
 {{ milik.saring() }}
 {% if VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
 <form method="get" action="/pekerjaan" class="saring">
 <input type="hidden" name="tab" value="{{ tab }}">
-{% for key in ['kepemilikan','gudang','cari','pemasok','pelanggan_id','kembali_jasa'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
+{% for key in ['kepemilikan','gudang','cari','pemasok','pelanggan_id','kembali_jasa','informasi'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
 <label class="kerja-filter">Jenis pekerjaan<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for k,n,j in per_jenis %}<option value="{{ k }}"{{ ' selected' if jenis==k }}>{{ n }} · {{ j }}</option>{% endfor %}</select></label>
 <button class="btn btn--kecil" type="submit">Tampilkan</button>
 </form>
@@ -31,6 +31,7 @@
 {% endfor %}
 {% if not daftar %}<div class="kosong"><div><h2>Tidak ada pekerjaan perlu tindakan</h2><p class="bantu">Coba jenis atau gudang lain. Proses yang menunggu waktu ada di tab Berjalan.</p></div></div>{% endif %}
 {% else %}
+<p class="bantu">Catatan pada Status &amp; informasi tidak dihitung sebagai pekerjaan wajib. {% if request.query_params.get('informasi') == '1' %}<a href="{{ href(informasi='') }}">Lihat semua proses dan informasi</a>{% endif %}</p>
 {% include '_pekerjaan_berjalan.html' %}
 {{ benda.blok('Status & informasi',informasi,alamat=request.url.path,listview=true) }}
 {% if not daftar %}<div class="kosong"><div><h2>Tidak ada proses berjalan</h2><p class="bantu">Pekerjaan yang siap dimulai ada di Perlu tindakan.</p></div></div>{% endif %}

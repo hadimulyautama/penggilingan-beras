@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block judul %}Permintaan PK{% endblock %}
+{% block isi %}
+<section class="kartu">
+
+<h1>Permintaan PK · {{ lot.kode_proses }}</h1>
+<p>Status saat ini: <strong>{{ permintaan.status }}</strong></p>
+<dl><dt>Referensi permintaan</dt><dd>#{{ permintaan.id }}</dd><dt>Waktu permintaan</dt><dd>{{ permintaan.waktu_minta|jam }}</dd>
+<dt>Diminta</dt><dd>{{ permintaan.berat_minta_kg or '—' }} kg</dd><dt>Disetujui</dt><dd>{{ permintaan.berat_setuju_kg or '—' }} kg</dd><dt>Dikirim</dt><dd>{{ permintaan.berat_kirim_kg or '—' }} kg</dd><dt>Tujuan</dt><dd>{{ permintaan.tujuan or 'Belum ditentukan' }}</dd></dl>
+{% if permintaan.sebab %}<p>{{ permintaan.sebab }}</p>{% endif %}
+<a class="btn" href="/pekerjaan?kembali_kabar={{ kembali|urlencode }}">Buka Pekerjaan</a>
+
+<p>Membaca catatan tidak mengubah status permintaan.</p>
+<a class="btn" href="{{ kembali }}">Kembali</a>
+</section>
+{% endblock %}

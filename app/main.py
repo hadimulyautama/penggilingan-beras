@@ -375,49 +375,53 @@ async def beranda(request: Request):
     view = getattr(request.state, "view", "tamu")
     o, jalan, petak = {}, svc.Berjalan(), []
     papan = None
-    # Pintu "Pengiriman" (Beranda usulan, Tahap Beranda, 21 Oktober 2026) —
-    # irisan `kerja.tindakan` yang sama persis dengan `/pekerjaan?grup=muat`
-    # (`svc.grup_baris`, sudah dipakai `layar_pekerjaan.py` untuk filter yang
-    # sama), BUKAN kueri baru: satu sumber, supaya angka Beranda tak pernah
-    # berselisih dari daftar yang dibuka saat kartunya ditekan.
-    pengiriman_n = 0
+    # Sesi terpisah: kegagalan satu kueri tidak membatalkan pembacaan
+    # bagian lain, dan hasil gagal tidak boleh dianggap angka nol.
+    muat = dict(pekerjaan=False, ringkasan=False, pengiriman=False, perhatian=False)
+    pengiriman_n = None
+    masuk_n = informasi_n = None
     try:
         async with SessionLocal() as db:
-            # Angka Gudang 1 mahal dan tak dipakai view polesan. Operator
-            # polesan yang menunggu kueri gudang sebelah membayar waktu untuk
-            # angka yang tak akan pernah tampil di layarnya.
-            if gudang1(view):
-                o = (await dashboard_data(db)).get("operasional", {}) or {}
             jalan = await svc.untuk(db, akun.user)
             from app.services.kelompok_kerja import bagi
             kerja = bagi(jalan)
-            pengiriman_n = sum(1 for x in kerja.tindakan if svc.grup_baris(x) == "muat")
-            # Angka per gudang dihitung SEKALI untuk halaman ini: petak "Stok
-            # PK" Admin dan papan di bawahnya membaca yang sama. Sampai 24
-            # September 2026 petak Admin memetik petak ke-4 tiap gudang
-            # berdasarkan POSISI — dan petak ke-4 Gudang 2 adalah tumpukan,
-            # bukan stok (QA 24 Sep (c) butir 3).
-            angka = None
+            masuk_n, informasi_n = len(kerja.masuk), len(kerja.informasi)
+            muat['pekerjaan'] = True
+    except Exception:
+        log.exception("Beranda: pekerjaan gagal dimuat")
+    angka = None
+    try:
+        async with SessionLocal() as db:
+            if gudang1(view):
+                o = (await dashboard_data(db)).get("operasional", {}) or {}
             if view in V_MEJA:
                 from app.services import beranda as svc_beranda
-
                 angka = await svc_beranda.angka_gudang(db)
             petak = await petak_beranda(db, view, o, angka=angka)
-            # ── Papan pemegang KEDUA gudang (celah ke-5, 24 Sep 2026) ──
-            #
-            # "Perlu perhatian", rincian keputusan, dan satu baris per gudang
-            # hanya ada di Beranda Meja sampai hari ini. Perhitungannya SAMA —
-            # `services.beranda` — supaya dua Beranda tak pernah menyebut angka
-            # berbeda tentang pabrik yang sama.
-            #
-            # Hanya untuk view meja, dan itu bukan soal izin melihat: operator
-            # sudah melihat gudangnya di petak teratas, dan penyimpangan gudang
-            # sebelah adalah kabar yang tak bisa ia tindaklanjuti.
-            if view in V_MEJA:
+            muat['ringkasan'] = True
+    except Exception:
+        log.exception("Beranda: ringkasan gagal dimuat")
+    if view in V_MEJA and muat['pekerjaan'] and muat['ringkasan']:
+        try:
+            async with SessionLocal() as db:
                 papan = await svc_beranda.papan(db, jalan.berjalan + jalan.transit,
                                                 jalan.meja, angka=angka)
+                muat['perhatian'] = True
+        except Exception:
+            log.exception("Beranda: peringatan pabrik gagal dimuat")
+    try:
+        from app.services import barang_keluar as svc_keluar
+        async with SessionLocal() as db:
+            pengiriman_n = len(await svc_keluar.menunggu_muat(db, akun.user))
+            muat['pengiriman'] = True
     except Exception:
-        log.exception("Keadaan pabrik gagal dimuat (beranda tetap tampil)")
+        log.exception("Beranda: pengiriman gagal dimuat")
+    lencana = jalan.lencana()
+    if not muat['pekerjaan']:
+        for k in ('MENUNGGU','BERJALAN','BARANG_MASUK','PEKERJAAN','KEPUTUSAN','MUTU','PRODUK','KABAR'):
+            lencana[k] = None
+    # Hitungan Beranda mengikuti daftar tujuan, tanpa mengubah lencana global.
+    lencana['BARANG_MASUK'] = masuk_n
 
     # Hanya kunci yang dikenal yang jadi pesan — teks bebas dari URL tak
     # pernah ditampilkan, supaya halaman ini tak bisa dipakai menitipkan
@@ -430,7 +434,7 @@ async def beranda(request: Request):
     return render(
         request, "beranda.html",
         sapaan=sapaan, tanggal_tampil=tanggal_tampil,
-        PENGIRIMAN=pengiriman_n,
+        PENGIRIMAN=pengiriman_n, MUAT_BERANDA=muat, INFORMASI=informasi_n,
         # Cakupan "Semua gudang" & pintu "Pesanan Jasa" (Akses cepat) — dari
         # SINI, bukan templat bersama membandingkan `VIEW in V_MEJA` sendiri.
         # `beranda.html` dipakai lebih dari satu app; templat yang menebak
@@ -448,7 +452,7 @@ async def beranda(request: Request):
         nilai=request.query_params.get("nilai") or "",
         # Keempat angka laci + pintu yang padam, dari satu tempat: layar yang
         # menyalin tiga kata kunci cepat atau lambat lupa yang keempat.
-        **jalan.lencana(),
+        **lencana,
         # ── Pintu "Menunggu keputusan" (Tahap 2, beranda.html naik ke paket) ──
         #
         # Kerja meja berdiri sejajar kerja gudang, dan hanya untuk yang punya

@@ -9,6 +9,8 @@
   [("＋", n_perintah, "Menunggu dimuat"), ("↗", n_dimuat, "Menunggu verifikasi"), ("▦", kartu|length, "Transaksi tercatat")],
   ["Buat perintah", "Catat muatan", "Periksa selisih", "Verifikasi dan tutup"]) }}
 
+{% if STATUS_SARING == 'perintah' %}<p class="bantu" role="status">Filter: <strong>Menunggu muat</strong> · <a href="/barang-keluar">Lihat semua pengiriman</a></p>{% endif %}
+
 {# ── Barang Keluar — SATU TRUK SATU KARTU ──
    Permintaan pemilik 28 September 2026: "kita butuh satu halaman untuk
    transaksi barang keluar. 1 transaksi bisa beberapa macam barang yang

@@ -162,7 +162,7 @@ async def test_jenis_yang_belum_terdaftar_dianggap_milik_keduanya(pg, orang):
             assert [x.pesan for x in k] == ["kabar dari masa depan"], kunci
 
 
-async def test_yang_merah_didahulukan_meski_lebih_tua(pg, orang):
+async def test_urutan_tanggal_mendahului_prioritas(pg, orang):
     """Kabar yang menyebut ada barang dibukukan tanpa pernah diproduksi tak
     boleh terdorong ke bawah oleh tiga kabar kuning yang lahir sesudahnya."""
     from app.models import User
@@ -175,12 +175,12 @@ async def test_yang_merah_didahulukan_meski_lebih_tua(pg, orang):
 
     async with pg() as db:
         k = await daftar(db, await db.get(User, orang["admin"]))
-    assert k[0].pesan == "MERAH", [x.pesan for x in k]
+    assert k[-1].pesan == "MERAH", [x.pesan for x in k]
     # Di antara yang sederajat, yang terbaru lebih dulu.
-    assert [x.pesan for x in k[1:]] == ["kuning 2", "kuning 1"]
+    assert [x.pesan for x in k[:2]] == ["kuning 2", "kuning 1"]
 
 
-async def test_kabar_berumur_dan_berhenti_sendiri(pg, orang):
+async def test_histori_lama_tetap_tersedia(pg, orang):
     """Daftar yang harus dipencet supaya bersih akan menumpuk di layar orang
     yang bekerja dengan satu tangan, lalu berhenti dibuka."""
     from app.models import User
@@ -192,16 +192,15 @@ async def test_kabar_berumur_dan_berhenti_sendiri(pg, orang):
 
     async with pg() as db:
         u = await db.get(User, orang["admin"])
-        assert [x.pesan for x in await daftar(db, u)] == ["baru"]
-        assert await jumlah_baru(db, u) == 1, "yang kedaluwarsa masih menagih lencana"
+        assert [x.pesan for x in await daftar(db, u)] == ["baru", "lama"]
+        assert await jumlah_baru(db, u) == 2
 
 
-async def test_membuka_layarnya_menandai_terbaca_dan_lencananya_nol(pg, orang):
-    """DIBUKA = DIBACA. Tombol "tandai sudah dibaca" sengaja tak ada: ia ketukan
-    kedua untuk pekerjaan yang sudah selesai saat mata sampai ke barisnya.
+async def test_membuka_daftar_tidak_menandai_otomatis(pg, orang):
+    """Daftar menampilkan status tersimpan; hanya membuka catatan menandai baca.
 
-    Yang sudah dibaca TETAP tergambar sampai umurnya habis — ini riwayat tujuh
-    hari, bukan kotak masuk yang harus dikosongkan.
+    Perilaku diubah sesuai Usulan 23 Oktober 2026, supaya tab belum dibaca
+    tetap dapat dipakai dan status pengguna lain tidak ikut berubah.
     """
     import httpx
 
@@ -233,24 +232,17 @@ async def test_membuka_layarnya_menandai_terbaca_dan_lencananya_nol(pg, orang):
         r = await c.get("/kabar")
     assert r.status_code == 200, r.text[:400]
     assert "perlu persetujuan" in r.text
-    # Kepala layar menyebut berapa yang baru. Bunyinya berubah 28 September
-    # 2026: semula satu kalimat di dalam `.nota--hati` — yang ternyata grid dua
-    # kolom, jadi kalimatnya patah satu kata per baris di kolom ikon selebar
-    # 15px ("informasi di kartu pertama jelek sekali", pemilik, dengan fotonya).
-    # Kini bentuknya SAMA dengan kepala Stok dan Stok Produk. Yang dijaga tetap
-    # sama: angkanya tergambar, dan halaman menyebut kabar itu sudah ditandai
-    # terbaca.
     assert "Belum dibaca" in r.text, "kepala layar tak menyebut yang belum dibaca"
-    assert ">1<" in r.text, "halaman tak menyebut berapa yang baru"
-    assert "sudah ditandai terbaca" in r.text
+    assert "Belum dibaca (1)" in r.text
+    assert "Tandai semua dibaca" in r.text
 
     async with pg() as db:
         u = await db.get(User, orang["admin"])
-        assert await jumlah_baru(db, u) == 0, "lencana tak kembali nol"
-        # Dan barisnya TETAP ada, cuma tak lagi bertanda baru.
+        assert await jumlah_baru(db, u) == 1, "membuka daftar tidak menandai otomatis"
+        # Baris tetap belum dibaca setelah GET daftar.
         from app.services.kabar import daftar
         k = await daftar(db, u)
-        assert len(k) == 1 and not k[0].baru
+        assert len(k) == 1 and k[0].baru
 
 
 async def test_yang_sudah_selesai_tak_diputar_mundur_jadi_dibaca(pg, orang):
@@ -261,7 +253,7 @@ async def test_yang_sudah_selesai_tak_diputar_mundur_jadi_dibaca(pg, orang):
     from sqlalchemy import select, update
 
     from app.models import Notification, User
-    from app.services.kabar import tandai_terbaca
+    from app.services.kabar import tandai
 
     nid = await _tulis(pg, tipe="verifikasi_harga_gabah", untuk="admin",
                        pesan="harga belum diverifikasi")
@@ -271,7 +263,7 @@ async def test_yang_sudah_selesai_tak_diputar_mundur_jadi_dibaca(pg, orang):
         await db.commit()
 
     async with pg() as db:
-        assert await tandai_terbaca(db, [nid]) == 0
+        await tandai(db, await db.get(User, orang["admin"]), dibaca=True, id_=nid)
         assert (await db.execute(select(Notification.status).where(
             Notification.id == nid))).scalar_one() == "selesai"
     assert orang["admin"]
@@ -306,12 +298,12 @@ async def test_pintu_kabar_padam_di_laci_untuk_semua_peran(pg, orang):
             assert "kabar" in b.lencana()["PINTU_MATI"], nama
 
 
-async def test_kabar_verifikasi_sosoh_lama_tidak_menagih_admin(pg, orang):
-    """Sosoh selesai tidak memerlukan persetujuan Admin lagi."""
+async def test_histori_verifikasi_sosoh_lama_tetap_terbaca(pg, orang):
+    """Histori lama tersedia sebagai pemberitahuan, tanpa menghidupkan persetujuan."""
     from app.models import User
     from app.services.kabar import daftar, jumlah_baru
     await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin", pesan="lama")
     async with pg() as db:
         u = await db.get(User, orang["admin"])
-        assert await daftar(db, u) == []
-        assert await jumlah_baru(db, u) == 0
+        assert len(await daftar(db, u)) == 1
+        assert await jumlah_baru(db, u) == 1

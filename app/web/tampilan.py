@@ -154,6 +154,9 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     navigasi harus menyala di tab yang benar, dan satu pemanggil yang lupa
     mengirimnya berarti satu layar yang tabnya mati tanpa ada yang menyadari.
     """
+    if request.query_params.get("kembali_kabar"):
+        from app.web.layar_kabar import kembali_aman
+        konteks["kembali"] = kembali_aman(request.query_params.get("kembali_kabar"))
     konteks.setdefault("akun", getattr(request.state, "akun", None))
     konteks.setdefault("LIHAT_SEBAGAI", getattr(request.state, "lihat_sebagai", None))
     konteks.setdefault("PERAN_ASLI", getattr(request.state, "peran_asli", None))

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{# ── Beranda aplikasi GUDANG: Pos Produksi & Operasi Gudang 2 ──
+
+   Tahap 2, 23 September 2026. Kedua berkas ini beda 23 baris, dan seluruh
+   bedanya satu hal: Gudang 2 MEMBUANG pintu "Menunggu keputusan" karena kerja
+   meja hidup di Meja Administrasi. Tetapi pintu itu sudah bergerbang view
+   (`VIEW in V_MEJA`), dan Admin/Super Admin ADA di gerbang itu — jadi di
+   Gudang 2 ia akan jadi tautan mati ke rute yang tak ada. Membuang markupnya
+   memang benar; yang salah cuma caranya. Sekarang app-nya yang menyatakan:
+   `blok_keputusan`.
+
+   Beranda MEJA tidak memakai berkas ini: ia layar yang berbeda, bukan varian
+   (keputusan pemilik 12 September 2026 — lihat `_beranda.html`). Markup yang
+   berulang di antara keduanya ada di makro `_beranda.html`. #}
+{% block judul %}Beranda{% endblock %}
+{% block isi %}
+{% import "_benda.html" as benda with context %}
+{% import "_kepemilikan.html" as milik with context %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set berjalan = berjalan|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set transit = transit|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+
+{% import "_beranda.html" as br with context %}
+
+{% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
+
+{# ── Sapaan, tanggal, cakupan gudang (Beranda usulan, Tahap Beranda, 21
+   Oktober 2026) ── Nama depan saja, dan jam server (`now_local()`, zona
+   aplikasi) yang memutuskan "pagi/siang/sore/malam" — bukan jam klien, yang
+   bisa berbeda dari jam gudang sungguhan.
+
+   Tanggal & cakupan DIGABUNG satu baris kecil di atas sapaan, bukan dua
+   baris terpisah seperti mockup — uji `test_beranda_tema_dan_ukuran`
+   (`tampilan/tests/test_beranda_responsif.py`) mengunci tinggi
+   `.beranda-sambut` 28–62px (keputusan pemilik: "daftar pekerjaan harus
+   langsung terlihat" — operator berdiri di gudang, bukan duduk membaca
+   sambutan). Sambutan tetap milik mockup; tingginya yang menyesuaikan. #}
+<header class="beranda-sambut beranda-sambut--ringkas" aria-labelledby="judul-beranda">
+  <div class="beranda-sambut__kepala">
+    <div>
+      <div class="beranda-eyebrow">
+        {{ tanggal_tampil }} · {% if semua_gudang %}Semua gudang{% elif VIEW == "selepan" %}Gudang 1 · Selepan{% elif VIEW == "polesan" %}Gudang 2 · Penyosohan{% else %}Belum punya gudang{% endif %}
+      </div>
+      <h1 id="judul-beranda">{{ sapaan }}</h1>
+    </div>
+  </div>
+</header>
+
+{# Pekerjaan berisi didahulukan; kartu proses tetap satu sumber di _benda.
+   "Peringatan pabrik" tetap DI DALAM kolom (persis posisi lama "Perlu
+   perhatian"), bukan di atasnya: uji `test_beranda_tema_dan_ukuran`
+   (`tampilan/tests/test_beranda_responsif.py`) mengunci `.beranda-kolom`
+   (daftar pekerjaan) langsung terlihat, Y < 240/320px — menaruh blok ini DI
+   LUAR kolom menggeser kolom itu sendiri ke bawah setiap kali pabrik punya
+   penyimpangan untuk disebut. #}
+<div class="beranda-kolom beranda-kolom--pekerjaan{% if not berjalan and not transit %} beranda-kolom--kosong{% endif %}">
+<section class="beranda-tindaklanjut" aria-label="Perlu perhatian">
+  {% if blok_perhatian %}{{ br.blok_perhatian(perhatian|rejectattr("duplikat_proses")|list, judul="Peringatan pabrik") }}{% endif %}
+  <h2 class="lbl">Perlu perhatian</h2>
+  <div class="beranda-pekerjaan">
+    {# Alamat polos — `status=belum`/`tab=tindakan` sudah jadi bawaan kedua
+       rute (`layar_pekerjaan.py`) saat query-nya kosong; `?grup=muat`
+       TIDAK punya bawaan serupa, jadi pintu Pengiriman tetap eksplisit. #}
+    {% if BARANG_MASUK %}{{ br.pintu("/barang-masuk", "Barang Masuk", "Tiket timbang belum ditangani", br.ikon_antrean(), BARANG_MASUK, warna_ikon="hijau") }}{% endif %}
+    {% if PEKERJAAN %}{{ br.pintu("/pekerjaan", "Pekerjaan", "Perlu tindakan, QC dan keputusan", br.ikon_centang(), PEKERJAAN, warna_ikon="biru") }}{% endif %}
+    {% if PENGIRIMAN %}{{ br.pintu("/pekerjaan?tab=tindakan&grup=muat", "Pengiriman", "Barang keluar menunggu muat", br.ikon_truk(), PENGIRIMAN, warna_ikon="jingga") }}{% endif %}
+    {# "Antrian tunggu" (`/aksi`) — DIPERTAHANKAN, bukan peninggalan yang lupa
+       dibuang: ia satu-satunya tempat menyebut SELURUH `b.menunggu` (termasuk
+       kartu diam tanpa `aksi`, yang tak terhitung di manapun ketiga pintu di
+       atas), dan pintunya SENGAJA tak pernah ada di laci (`lencana()` selalu
+       memadamkan "aksi") — tanpa kartu ini, jumlahnya tak terlihat di mana
+       pun tanpa membuka dulu. `tests/test_beranda.py::
+       test_beranda_tak_mengulang_pintu_yang_sudah_ada_di_laci`. #}
+    {% if MENUNGGU %}{{ br.pintu("/aksi", "Antrian tunggu", "Buka daftar pekerjaan", br.ikon_antrean(), MENUNGGU, warna_ikon="hijau") }}{% endif %}
+  </div>
+  {% if not BARANG_MASUK and not PEKERJAAN and not PENGIRIMAN and not MENUNGGU %}
+    <p class="beranda-status-kosong">Semua sudah ditangani.</p>
+  {% endif %}
+</section>
+<section class="beranda-aktivitas" aria-label="Sedang berjalan">
+  {{ benda.blok("Sedang berjalan", berjalan, rapat=True, alamat="/", progres=True) }}
+  {{ benda.blok("Transit", transit, rapat=True, alamat="/", progres=True) }}
+  {% if berjalan or transit %}<a class="btn btn--kecil" href="/pekerjaan?tab=berjalan">Lihat semua proses aktif <span aria-hidden="true">→</span></a>
+  {% else %}<p class="beranda-status-kosong">Tidak ada mesin yang menyala.</p>{% endif %}
+</section>
+</div>
+
+{# ── Akses cepat (Tahap Beranda, 21 Oktober 2026) ── Tampil di desktop
+   MAUPUN ponsel (beda dari bilah pintasan lama yang `--ponsel`-saja):
+   Stok, Pesanan Jasa (gerbang MEJA — sama dengan pintu laci `jasa`),
+   Laporan & Riwayat. Mengantikan bilah pintasan ponsel lama; target lamanya
+   (Barang Masuk/Pekerjaan/Barang Keluar) kini selalu berupa kartu "Perlu
+   perhatian" di atas saat berisi, dan tetap terjangkau lewat laci. #}
+<section class="beranda-akses" aria-label="Akses cepat">
+  <div class="beranda-akses__judul"><strong>Akses cepat</strong></div>
+  <div class="beranda-akses__grid">
+    <a class="beranda-akses__item beranda-akses__item--stok" href="/stok">
+      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_gudang() }}</svg></span>
+      <span><strong>Stok</strong></span>
+      <span class="beranda-akses__panah" aria-hidden="true">›</span>
+    </a>
+    {% if semua_gudang %}
+    <a class="beranda-akses__item beranda-akses__item--jasa" href="/jasa">
+      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_jabat() }}</svg></span>
+      <span><strong>Pesanan Jasa</strong></span>
+      <span class="beranda-akses__panah" aria-hidden="true">›</span>
+    </a>
+    {% endif %}
+    <a class="beranda-akses__item beranda-akses__item--laporan" href="/laporan-riwayat">
+      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_laporan() }}</svg></span>
+      <span><strong>Laporan</strong></span>
+      <span class="beranda-akses__panah" aria-hidden="true">›</span>
+    </a>
+  </div>
+</section>
+
+<section class="beranda-ringkasan beranda-ringkasan--padat" aria-label="Ringkasan operasional">
+{% for blok in petak %}
+  {% set ns = namespace(href="", nama=blok.judul) %}
+  {% for g in gudang %}{% if blok.judul == g.nama ~ " — " ~ g.fungsi %}{% set ns.href = "/gudang/" ~ g.id %}{% endif %}{% endfor %}
+  {% if not ns.nama %}{% set ns.nama = "Gudang 1 — Selepan" if VIEW == "selepan" else ("Gudang 2 — Penyosohan" if VIEW == "polesan" else "Ringkasan gudang") %}{% endif %}
+  <section class="beranda-gudang-padat" aria-label="{{ ns.nama }}">
+    <h2>{% if ns.href %}<a href="{{ ns.href }}">{{ ns.nama }} <span aria-hidden="true">→</span></a>{% else %}{{ ns.nama }}{% endif %}</h2>
+    <dl>
+      {% for s in blok.sel %}<div{% if s.nada %} class="beranda-angka--{{ s.nada }}"{% endif %}>
+        <dt>{{ s.label }}</dt><dd>{{ s.nilai }}<small> {{ s.sat }}</small></dd>
+        {% if s.ket %}<p>{{ s.ket }}</p>{% endif %}
+      </div>{% endfor %}
+    </dl>
+  </section>
+{% else %}
+  <p class="kosong-tipis">Akun Anda belum ditetapkan gudangnya. Minta Super Admin menyetel gudang Anda.</p>
+{% endfor %}
+{# View admin memiliki petak gabungan, jadi pintu gudang tetap tersedia tanpa
+   mengulang angka stok yang sudah tertera pada ringkasan. #}
+{% if gudang and not petak|selectattr("judul")|list %}
+  <nav class="beranda-gudang-tautan" aria-label="Detail gudang">{% for g in gudang %}<a href="/gudang/{{ g.id }}">{{ g.nama }} — {{ g.fungsi }} →</a>{% endfor %}</nav>
+{% endif %}
+</section>
+
+{# Lembar aksinya dibuka DI SINI. Menekan "Perbarui kadar air" lalu mendarat
+   di layar lain berarti orang kehilangan tempatnya — dan yang ia tekan tadi
+   ada di layar ini, bukan di sana. #}
+<dialog class="lembar" id="lembar"></dialog>
+<div class="kabar" id="kabar" role="status"></div>
+
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">
+  {% if akun.sesi_pendek %}Perangkat gudang · tekan Ganti setelah selesai mencatat
+  {% else %}Perangkat pribadi · sesi bertahan sampai Anda menekan Keluar{% endif %}
+</div>
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endblock %}

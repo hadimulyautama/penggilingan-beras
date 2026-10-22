@@ -2020,3 +2020,16 @@ def gudang_perintah(items: list[OutgoingItem]) -> set[str]:
     di sana sampai seseorang menelepon.
     """
     return {GUDANG_ITEM[i.item_type] for i in items if i.item_type in GUDANG_ITEM}
+
+
+async def menunggu_muat(db, user, **saringan):
+    """Pembaca yang sama untuk pintu Beranda dan daftar menunggu muat.
+
+    Satu transaksi, bukan jumlah item atau kartu tindakan. Semua status
+    perintah, termasuk muat sebagian, tetap menunggu muat.
+    """
+    from app.web.api import _is_g2_operator
+    from app.peran import can_see_financials
+    if not (can_see_financials(user) or await _is_g2_operator(user)):
+        return []
+    return await daftar(db, status=(OUT_PERINTAH,), batas=None, **saringan)

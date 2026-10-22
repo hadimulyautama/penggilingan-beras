@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -147,3 +147,16 @@ class KodeUrut(Base):
     awalan: Mapped[str] = mapped_column(String(8), primary_key=True)
     tanggal: Mapped[date] = mapped_column(Date, primary_key=True)
     n: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class NotificationRead(Base):
+    """Status baca pribadi; status penyelesaian notifications tetap milik proses.
+
+    Tidak ada baris berarti memakai status historis bersama sebagai bawaan.
+    Penanda belum dibaca eksplisit dapat mengalahkan bawaan itu tanpa mengubah
+    histori atau menyalakan kembali pemicu operasional.
+    """
+    __tablename__ = "notification_reads"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id"), primary_key=True)
+    dibaca: Mapped[bool] = mapped_column(Boolean, nullable=False)

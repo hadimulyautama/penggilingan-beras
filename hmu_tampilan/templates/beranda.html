@@ -20,6 +20,8 @@
 {% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set transit = transit|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
 
 {% import "_beranda.html" as br with context %}
+{% set muat = MUAT_BERANDA|default({'pekerjaan':true,'ringkasan':true,'pengiriman':true,'perhatian':true}) %}
+{% macro gagal(teks) %}<div class="pesan pesan--hati" role="alert">{{ teks }} <a class="btn btn--kecil" href="/">Coba lagi</a></div>{% endmacro %}
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
@@ -62,17 +64,13 @@
        TIDAK punya bawaan serupa, jadi pintu Pengiriman tetap eksplisit. #}
     {% if BARANG_MASUK %}{{ br.pintu("/barang-masuk", "Barang Masuk", "Tiket timbang belum ditangani", br.ikon_antrean(), BARANG_MASUK, warna_ikon="hijau") }}{% endif %}
     {% if PEKERJAAN %}{{ br.pintu("/pekerjaan", "Pekerjaan", "Perlu tindakan, QC dan keputusan", br.ikon_centang(), PEKERJAAN, warna_ikon="biru") }}{% endif %}
-    {% if PENGIRIMAN %}{{ br.pintu("/pekerjaan?tab=tindakan&grup=muat", "Pengiriman", "Barang keluar menunggu muat", br.ikon_truk(), PENGIRIMAN, warna_ikon="jingga") }}{% endif %}
-    {# "Antrian tunggu" (`/aksi`) — DIPERTAHANKAN, bukan peninggalan yang lupa
-       dibuang: ia satu-satunya tempat menyebut SELURUH `b.menunggu` (termasuk
-       kartu diam tanpa `aksi`, yang tak terhitung di manapun ketiga pintu di
-       atas), dan pintunya SENGAJA tak pernah ada di laci (`lencana()` selalu
-       memadamkan "aksi") — tanpa kartu ini, jumlahnya tak terlihat di mana
-       pun tanpa membuka dulu. `tests/test_beranda.py::
-       test_beranda_tak_mengulang_pintu_yang_sudah_ada_di_laci`. #}
-    {% if MENUNGGU %}{{ br.pintu("/aksi", "Antrian tunggu", "Buka daftar pekerjaan", br.ikon_antrean(), MENUNGGU, warna_ikon="hijau") }}{% endif %}
+    {% if PENGIRIMAN %}{{ br.pintu("/barang-keluar?status=perintah", "Pengiriman", "Barang keluar menunggu muat", br.ikon_truk(), PENGIRIMAN, warna_ikon="jingga") }}{% endif %}
+    {% if INFORMASI %}{{ br.pintu("/pekerjaan?tab=berjalan&informasi=1", "Status & informasi", "Catatan tanpa tindakan, bukan pekerjaan wajib", br.ikon_antrean(), INFORMASI, warna_ikon="biru") }}{% endif %}
   </div>
-  {% if not BARANG_MASUK and not PEKERJAAN and not PENGIRIMAN and not MENUNGGU %}
+  {% if not muat.pekerjaan %}{{ gagal('Pekerjaan dan proses aktif belum dapat dimuat.') }}{% endif %}
+  {% if not muat.pengiriman %}{{ gagal('Data pengiriman belum dapat dimuat.') }}{% endif %}
+  {% if semua_gudang and not muat.perhatian %}{{ gagal('Peringatan pabrik belum dapat dimuat.') }}{% endif %}
+  {% if muat.pekerjaan and muat.pengiriman and (not semua_gudang or muat.perhatian) and not BARANG_MASUK and not PEKERJAAN and not PENGIRIMAN %}
     <p class="beranda-status-kosong">Semua sudah ditangani.</p>
   {% endif %}
 </section>
@@ -80,7 +78,8 @@
   {{ benda.blok("Sedang berjalan", berjalan, rapat=True, alamat="/", progres=True) }}
   {{ benda.blok("Transit", transit, rapat=True, alamat="/", progres=True) }}
   {% if berjalan or transit %}<a class="btn btn--kecil" href="/pekerjaan?tab=berjalan">Lihat semua proses aktif <span aria-hidden="true">→</span></a>
-  {% else %}<p class="beranda-status-kosong">Tidak ada mesin yang menyala.</p>{% endif %}
+  {% elif muat.pekerjaan %}<p class="beranda-status-kosong">Tidak ada mesin yang menyala.</p>
+  {% else %}{{ gagal('Status proses aktif belum dapat dimuat.') }}{% endif %}
 </section>
 </div>
 
@@ -114,6 +113,7 @@
 </section>
 
 <section class="beranda-ringkasan beranda-ringkasan--padat" aria-label="Ringkasan operasional">
+{% if not muat.ringkasan %}{{ gagal('Ringkasan operasional belum dapat dimuat.') }}{% else %}
 {% for blok in petak %}
   {% set ns = namespace(href="", nama=blok.judul) %}
   {% for g in gudang %}{% if blok.judul == g.nama ~ " — " ~ g.fungsi %}{% set ns.href = "/gudang/" ~ g.id %}{% endif %}{% endfor %}
@@ -130,6 +130,7 @@
 {% else %}
   <p class="kosong-tipis">Akun Anda belum ditetapkan gudangnya. Minta Super Admin menyetel gudang Anda.</p>
 {% endfor %}
+{% endif %}
 {# View admin memiliki petak gabungan, jadi pintu gudang tetap tersedia tanpa
    mengulang angka stok yang sudah tertera pada ringkasan. #}
 {% if gudang and not petak|selectattr("judul")|list %}

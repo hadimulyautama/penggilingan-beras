@@ -1,69 +1,59 @@
 {% extends "base.html" %}
 {% block judul %}Kabar{% endblock %}
 {% block isi %}
-
-{# ── Kabar — pembaca `notifications`, yang selama ini tak ada ──
-   Keputusan pemilik 26 September 2026. Aplikasi ini sudah lima tempat menulis
-   notifikasi dan tak satu pun layar membacanya; kalimat-kalimatnya ditulis
-   rapi lalu masuk lemari yang tak pernah dibuka.
-
-   DIBUKA = DIBACA. Tak ada tombol "tandai sudah dibaca": ia ketukan kedua
-   untuk pekerjaan yang sudah selesai saat mata sampai ke barisnya. Yang sudah
-   dibaca TETAP tergambar sampai umurnya habis — ini riwayat tujuh hari, bukan
-   kotak masuk yang harus dikosongkan.
-
-   Yang MENAGIH pekerjaan bukan layar ini, melainkan kartunya di Antrian tunggu
-   dan Menunggu keputusan. Karena itu tak ada satu tombol pun di sini. #}
-
-{% if not kabar %}
-  <div class="kosong">
-    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 5h16v14H4z"/><path d="M4 7l8 6 8-6"/></svg>
-    <div>
-      <h2>Tidak ada kabar</h2>
-      <p class="bantu">
-        Belum ada yang perlu Anda ketahui dalam {{ hari }} hari terakhir.
-        Pekerjaan yang menunggu tetap berdiri di Antrian tunggu.
-      </p>
-    </div>
+<link rel="stylesheet" href="/static/kabar-feed.css?v={{ VERSI }}">
+<section class="kb" data-sampai="{{ sampai }}" aria-labelledby="kb-judul">
+  <a href="/" class="kb-back">← Kembali ke Beranda</a>
+  <h1 id="kb-judul">Kabar</h1><p class="bantu">Pemberitahuan dan catatan terkait.</p>
+  <div class="kb-controls">
+    <nav class="kb-tabs" aria-label="Status baca">
+      <a href="{{ href_kabar(tab='', batas=30, sebelum=None) }}" {% if not tab %}aria-current="page"{% endif %}>Semua</a>
+      <a data-kabar-belum href="{{ href_kabar(tab='belum', batas=30, sebelum=None) }}" {% if tab %}aria-current="page"{% endif %}>Belum dibaca ({{ baru }})</a>
+    </nav>
+    <form method="get" action="/kabar" class="kb-kind">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <label for="kb-jenis">Jenis</label>
+      <select id="kb-jenis" name="jenis">
+        <option value="">Semua jenis</option>
+        {% for tipe in jenis_semua %}<option value="{{ tipe }}" {% if jenis == tipe %}selected{% endif %}>{{ tipe|replace('_',' ')|capitalize }}</option>{% endfor %}
+      </select><button type="submit">Terapkan</button>
+    </form>
   </div>
-{% else %}
-
-{# Kepala layar, bentuknya SAMA dengan Stok dan Stok Produk: satu angka besar
-   berikut keterangannya. Sebelumnya di sini dipakai `.nota--hati`, dan itu
-   keliru dua kali — ia untuk baris di DALAM kartu, dan ia grid dua kolom yang
-   kolom pertamanya selebar 15px untuk ikon. Teks polos yang ditaruh sebagai
-   anak pertama masuk ke kolom 15px itu, lalu patah satu kata per baris.
-   Difoto pemilik 28 September 2026: "informasi di kartu pertama jelek sekali". #}
-{% if baru %}
-  <div class="jumlah">
-    <span class="lbl">Belum dibaca</span>
-    <div class="jumlah__angka">{{ baru }}<small>kabar</small></div>
-    <div class="jumlah__ket">sudah ditandai terbaca ·
-      daftar {{ hari }} hari terakhir</div>
+  <div class="kb-summary"><span data-kabar-total>{{ baru }} kabar belum dibaca dalam cakupan Anda</span>
+    <form method="post" action="/kabar/status">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali" value="{{ konteks }}">
+      <input type="hidden" name="status" value="dibaca">
+      <button data-kabar-semua class="kb-link" {% if not baru %}disabled{% endif %}>Tandai semua dibaca</button>
+    </form>
   </div>
-{% endif %}
-
-<div class="grup daftar-standar">
-{% for k in kabar %}
-  {# Warnanya dari PRIORITASNYA, bukan dari usianya: merah berarti ada yang
-     dibukukan tanpa pernah diproduksi, dan itu tak boleh terlihat sama dengan
-     "penyosohan sudah selesai". #}
-  <div class="padat padat--diam
-              {%- if k.prioritas == 'merah' %} padat--bahaya
-              {%- elif k.prioritas == 'hijau' %} padat--aman{% endif %}">
-    <div class="padat__ringkas">
-      <div class="padat__atas">
-        <span class="padat__nama">{{ k.pesan }}</span>
+  {% for tanggal, baris in grup.items() %}
+  <h2 class="kb-day">{{ tanggal }}</h2>
+  <div class="kb-feed">
+    {% for k in baris %}<article class="kb-item" data-prioritas="{{ k.prioritas }}" data-unread="{{ 'true' if k.baru else 'false' }}">
+      <span class="kb-icon" aria-hidden="true">{% if k.prioritas == 'merah' %}!{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>{% endif %}</span>
+      <div class="kb-content">
+        <h3>{{ k.judul }}</h3>
+        <p class="kb-description">{{ k.pesan }}</p>
+        {% if k.referensi %}<p class="kb-meta">{{ k.referensi }}{% if k.lokasi %} · {{ k.lokasi }}{% endif %}</p>{% endif %}
+        <p class="kb-meta"><time datetime="{{ k.waktu.isoformat() }}">{{ k.waktu|jam }}</time></p>
+        <span class="kb-state">{% if k.baru %}● Belum dibaca{% else %}✓ Sudah dibaca{% endif %}</span>
       </div>
-      <div class="padat__umur">
-        {{- k.waktu | jam }}
-        {%- if k.baru %} · <b>baru</b>{% endif %}
+      <div class="kb-actions">
+        <form method="post" action="/kabar/{{ k.id }}/buka">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali" value="{{ konteks }}">
+          <button class="kb-link">Buka catatan →</button>
+        </form>
+        <form method="post" action="/kabar/status">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali" value="{{ konteks }}">
+          <input type="hidden" name="id" value="{{ k.id }}"><input type="hidden" name="status" value="{{ 'dibaca' if k.baru else 'belum' }}">
+          <button class="kb-link kb-read">Tandai {{ 'dibaca' if k.baru else 'belum dibaca' }}</button>
+        </form>
       </div>
-    </div>
+    </article>{% endfor %}
   </div>
-{% endfor %}
-</div>
-{% endif %}
+  {% else %}<div class="kb-empty"><h2>{{ 'Tidak ada kabar belum dibaca' if tab else 'Tidak ada kabar' }}</h2><p>Tidak ada kabar yang sesuai pilihan ini.</p></div>{% endfor %}
+  {% if lagi %}<a class="kb-more" href="{{ href_kabar(sebelum=berikut) }}">Kabar sebelumnya</a>{% endif %}
+  {% if sebelum %}<a class="kb-more" href="{{ href_kabar(sebelum=None) }}">Kembali ke kabar terbaru</a>{% endif %}
+  <p class="kb-origin">Membaca kabar tidak menyelesaikan pekerjaan. Catatan terkait menampilkan status saat ini.</p>
+</section>
 {% endblock %}

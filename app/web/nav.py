@@ -334,7 +334,7 @@ TAB = (
     # ditekan lebih dulu tiap pagi, dan pekerjaan hari itu terbaca belakangan.
     ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None, "▤"),
     ("kabar",      "/kabar",      "Kabar",
-     "Yang perlu Anda ketahui, 7 hari terakhir", None, "✉"),
+     "Pemberitahuan dan catatan terkait", None, "✉"),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
      MEJA, "↺"),
     # ── DIPINDAH KE BAWAH 29 September 2026 ──
@@ -379,7 +379,7 @@ JUDUL = {k: nama for k, _, nama, _, _, _ in TAB}
 
 # Kunci lama dipertahankan untuk judul dan pemakai lama. Hanya pintu sidebar
 # yang disatukan; rute dan gerbangnya tetap milik modul asal.
-MENU_TERSEMBUNYI = ("laporan", "riwayat_sosoh", "riwayat_giling",
+MENU_TERSEMBUNYI = ("kabar", "laporan", "riwayat_sosoh", "riwayat_giling",
                     "riwayat_pengeringan", "riwayat_transfer", "riwayat_qc", "audit")
 
 
