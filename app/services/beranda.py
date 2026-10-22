@@ -52,6 +52,27 @@ def _ribuan(n) -> str:
     return "{:,}".format(int(n or 0)).replace(",", ".")
 
 
+_HARI = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
+_BULAN = ("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli",
+          "Agustus", "September", "Oktober", "November", "Desember")
+
+
+def sapaan_dan_tanggal(nama: str | None) -> tuple[str, str]:
+    """("Selamat pagi, Wahid", "Rabu, 21 Oktober 2026") untuk sambutan Beranda.
+
+    Jam SERVER (`now_local()`, zona `settings.app_timezone`) yang memutuskan
+    pagi/siang/sore/malam — bukan jam peramban, yang bisa berbeda dari jam
+    gudang sungguhan bila jam perangkatnya sendiri salah setel.
+    """
+    kini = now_local()
+    sebutan = ("pagi" if kini.hour < 11 else "siang" if kini.hour < 15
+               else "sore" if kini.hour < 18 else "malam")
+    depan = (nama or "").strip().split(" ")[0] or "Anda"
+    tgl = kini.date()
+    tanggal = f"{_HARI[tgl.weekday()]}, {tgl.day} {_BULAN[tgl.month - 1]} {tgl.year}"
+    return f"Selamat {sebutan}, {depan}", tanggal
+
+
 def hitung_keputusan(meja: list) -> dict[str, int]:
     """Berapa keputusan per golongan. Menerima `Baris` maupun dict (JSON Meja)."""
     def aksi(x) -> str:

@@ -23,62 +23,95 @@
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
+{# ── Sapaan, tanggal, cakupan gudang (Beranda usulan, Tahap Beranda, 21
+   Oktober 2026) ── Nama depan saja, dan jam server (`now_local()`, zona
+   aplikasi) yang memutuskan "pagi/siang/sore/malam" — bukan jam klien, yang
+   bisa berbeda dari jam gudang sungguhan.
+
+   Tanggal & cakupan DIGABUNG satu baris kecil di atas sapaan, bukan dua
+   baris terpisah seperti mockup — uji `test_beranda_tema_dan_ukuran`
+   (`tampilan/tests/test_beranda_responsif.py`) mengunci tinggi
+   `.beranda-sambut` 28–62px (keputusan pemilik: "daftar pekerjaan harus
+   langsung terlihat" — operator berdiri di gudang, bukan duduk membaca
+   sambutan). Sambutan tetap milik mockup; tingginya yang menyesuaikan. #}
 <header class="beranda-sambut beranda-sambut--ringkas" aria-labelledby="judul-beranda">
-  <div class="beranda-sambut__kepala"><h1 id="judul-beranda">Pekerjaan hari ini</h1>{% if VIEW in ("selepan", "polesan") %}<span class="beranda-gudang-aktif">Gudang {{ "1 · Selepan" if VIEW == "selepan" else "2 · Penyosohan" }}</span>{% endif %}</div>
+  <div class="beranda-sambut__kepala">
+    <div>
+      <div class="beranda-eyebrow">
+        {{ tanggal_tampil }} · {% if semua_gudang %}Semua gudang{% elif VIEW == "selepan" %}Gudang 1 · Selepan{% elif VIEW == "polesan" %}Gudang 2 · Penyosohan{% else %}Belum punya gudang{% endif %}
+      </div>
+      <h1 id="judul-beranda">{{ sapaan }}</h1>
+    </div>
+  </div>
 </header>
 
-
-{# Pekerjaan berisi didahulukan; kartu proses tetap satu sumber di _benda. #}
+{# Pekerjaan berisi didahulukan; kartu proses tetap satu sumber di _benda.
+   "Peringatan pabrik" tetap DI DALAM kolom (persis posisi lama "Perlu
+   perhatian"), bukan di atasnya: uji `test_beranda_tema_dan_ukuran`
+   (`tampilan/tests/test_beranda_responsif.py`) mengunci `.beranda-kolom`
+   (daftar pekerjaan) langsung terlihat, Y < 240/320px — menaruh blok ini DI
+   LUAR kolom menggeser kolom itu sendiri ke bawah setiap kali pabrik punya
+   penyimpangan untuk disebut. #}
 <div class="beranda-kolom beranda-kolom--pekerjaan{% if not berjalan and not transit %} beranda-kolom--kosong{% endif %}">
-<section class="beranda-tindaklanjut" aria-label="Pekerjaan yang perlu ditindak">
-  {% if blok_perhatian %}{{ br.blok_perhatian(perhatian|rejectattr("duplikat_proses")|list) }}{% endif %}
-  <h2 class="lbl">Perlu ditindak</h2>
-  {% if BARANG_MASUK is defined and PEKERJAAN is defined %}
+<section class="beranda-tindaklanjut" aria-label="Perlu perhatian">
+  {% if blok_perhatian %}{{ br.blok_perhatian(perhatian|rejectattr("duplikat_proses")|list, judul="Peringatan pabrik") }}{% endif %}
+  <h2 class="lbl">Perlu perhatian</h2>
   <div class="beranda-pekerjaan">
-    {% if BARANG_MASUK %}{{ br.pintu("/barang-masuk", "Barang Masuk", "Tiket belum diterima", br.ikon_antrean(), BARANG_MASUK, warna_ikon="hijau") }}{% endif %}
+    {# Alamat polos — `status=belum`/`tab=tindakan` sudah jadi bawaan kedua
+       rute (`layar_pekerjaan.py`) saat query-nya kosong; `?grup=muat`
+       TIDAK punya bawaan serupa, jadi pintu Pengiriman tetap eksplisit. #}
+    {% if BARANG_MASUK %}{{ br.pintu("/barang-masuk", "Barang Masuk", "Tiket timbang belum ditangani", br.ikon_antrean(), BARANG_MASUK, warna_ikon="hijau") }}{% endif %}
     {% if PEKERJAAN %}{{ br.pintu("/pekerjaan", "Pekerjaan", "Perlu tindakan, QC dan keputusan", br.ikon_centang(), PEKERJAAN, warna_ikon="biru") }}{% endif %}
-  </div>
-  <div class="beranda-status-kosong">
-    {% if not BARANG_MASUK %}<span>Tidak ada penerimaan perlu tindakan</span>{% endif %}
-    {% if not PEKERJAAN %}<span>Tidak ada pekerjaan perlu tindakan</span>{% endif %}
-
-  </div>
-  {% else %}
-  <div class="beranda-pekerjaan">
+    {% if PENGIRIMAN %}{{ br.pintu("/pekerjaan?tab=tindakan&grup=muat", "Pengiriman", "Barang keluar menunggu muat", br.ikon_truk(), PENGIRIMAN, warna_ikon="jingga") }}{% endif %}
+    {# "Antrian tunggu" (`/aksi`) — DIPERTAHANKAN, bukan peninggalan yang lupa
+       dibuang: ia satu-satunya tempat menyebut SELURUH `b.menunggu` (termasuk
+       kartu diam tanpa `aksi`, yang tak terhitung di manapun ketiga pintu di
+       atas), dan pintunya SENGAJA tak pernah ada di laci (`lencana()` selalu
+       memadamkan "aksi") — tanpa kartu ini, jumlahnya tak terlihat di mana
+       pun tanpa membuka dulu. `tests/test_beranda.py::
+       test_beranda_tak_mengulang_pintu_yang_sudah_ada_di_laci`. #}
     {% if MENUNGGU %}{{ br.pintu("/aksi", "Antrian tunggu", "Buka daftar pekerjaan", br.ikon_antrean(), MENUNGGU, warna_ikon="hijau") }}{% endif %}
-    {% if blok_keputusan and KEPUTUSAN %}
-      {{ br.pintu("/keputusan", "Menunggu keputusan",
-        ((n_permintaan ~ " permintaan · " ~ n_output ~ " output" ~ ("" if blok_mutu else " · " ~ n_mutu ~ " mutu")) if rinci_keputusan else "Periksa dan putuskan"),
-        br.ikon_centang(), KEPUTUSAN, warna_ikon="biru") }}
-    {% endif %}
-    {% if blok_mutu and MUTU %}{{ br.pintu("/mutu", "Mutu & QC", "Catat pemeriksaan mutu", br.ikon_centang(), MUTU, warna_ikon="ungu") }}{% endif %}
   </div>
-  <div class="beranda-status-kosong">
-    {% if not MENUNGGU %}<span>Antrean kosong</span>{% endif %}
-    {% if blok_keputusan and not KEPUTUSAN %}<span>Tidak ada keputusan tertunda</span>{% endif %}
-    {% if blok_mutu and not MUTU %}<span>QC sudah tercatat</span>{% endif %}
-  </div>
+  {% if not BARANG_MASUK and not PEKERJAAN and not PENGIRIMAN and not MENUNGGU %}
+    <p class="beranda-status-kosong">Semua sudah ditangani.</p>
   {% endif %}
 </section>
-<section class="beranda-aktivitas" aria-label="Aktivitas">
+<section class="beranda-aktivitas" aria-label="Sedang berjalan">
   {{ benda.blok("Sedang berjalan", berjalan, rapat=True, alamat="/", progres=True) }}
   {{ benda.blok("Transit", transit, rapat=True, alamat="/", progres=True) }}
-  {% if not berjalan and not transit %}<p class="beranda-status-kosong">Tidak ada mesin yang menyala.</p>{% endif %}
+  {% if berjalan or transit %}<a class="btn btn--kecil" href="/pekerjaan?tab=berjalan">Lihat semua proses aktif <span aria-hidden="true">→</span></a>
+  {% else %}<p class="beranda-status-kosong">Tidak ada mesin yang menyala.</p>{% endif %}
 </section>
 </div>
 
-{# Ponsel hanya menawarkan tujuan yang belum menjadi kartu; desktop sudah
-   punya sidebar dan bilah cepat. Gerbang peran tetap mengikuti TAB. #}
-{% set pintas_beranda = {'barang_masuk': 'Barang Masuk', 'pekerjaan': 'Pekerjaan', 'aksi': 'Antrian tunggu', 'berjalan': 'Sedang berjalan', 'stok': 'Stok', 'barang_keluar': 'Barang keluar'} %}
-<nav class="beranda-akses beranda-akses--ringkas beranda-akses--ponsel" aria-label="Halaman operasional">
+{# ── Akses cepat (Tahap Beranda, 21 Oktober 2026) ── Tampil di desktop
+   MAUPUN ponsel (beda dari bilah pintasan lama yang `--ponsel`-saja):
+   Stok, Pesanan Jasa (gerbang MEJA — sama dengan pintu laci `jasa`),
+   Laporan & Riwayat. Mengantikan bilah pintasan ponsel lama; target lamanya
+   (Barang Masuk/Pekerjaan/Barang Keluar) kini selalu berupa kartu "Perlu
+   perhatian" di atas saat berisi, dan tetap terjangkau lewat laci. #}
+<section class="beranda-akses" aria-label="Akses cepat">
+  <div class="beranda-akses__judul"><strong>Akses cepat</strong></div>
   <div class="beranda-akses__grid">
-    {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
-      {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and not (kunci == 'aksi' and MENUNGGU) and not (kunci == 'barang_masuk' and BARANG_MASUK) and not (kunci == 'pekerjaan' and PEKERJAAN) %}
-        <a class="beranda-akses__item" href="{{ alamat }}"><strong>{{ pintas_beranda[kunci] }}</strong></a>
-      {% endif %}
-    {% endfor %}
+    <a class="beranda-akses__item beranda-akses__item--stok" href="/stok">
+      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_gudang() }}</svg></span>
+      <span><strong>Stok</strong></span>
+      <span class="beranda-akses__panah" aria-hidden="true">›</span>
+    </a>
+    {% if semua_gudang %}
+    <a class="beranda-akses__item beranda-akses__item--jasa" href="/jasa">
+      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_jabat() }}</svg></span>
+      <span><strong>Pesanan Jasa</strong></span>
+      <span class="beranda-akses__panah" aria-hidden="true">›</span>
+    </a>
+    {% endif %}
+    <a class="beranda-akses__item beranda-akses__item--laporan" href="/laporan-riwayat">
+      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_laporan() }}</svg></span>
+      <span><strong>Laporan</strong></span>
+      <span class="beranda-akses__panah" aria-hidden="true">›</span>
+    </a>
   </div>
-</nav>
+</section>
 
 <section class="beranda-ringkasan beranda-ringkasan--padat" aria-label="Ringkasan operasional">
 {% for blok in petak %}

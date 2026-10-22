@@ -93,7 +93,13 @@ async def test_operator_tak_melihat_papan(pg, pabrik):
     c = await _klien(pg, role="operator", gudang_id=pabrik["g1"])
     async with c:
         t = (await c.get("/")).text
-    assert "Perlu perhatian" not in t
+    # "Perlu perhatian" bukan lagi probe yang aman sejak Beranda usulan (21
+    # Oktober 2026): nama itu sekarang MILIK blok baru (Barang Masuk/
+    # Pekerjaan/Pengiriman) yang tampil untuk SEMUA peran, termasuk operator —
+    # bukan hanya blok papan admin-only ini. Blok papan sendiri berganti nama
+    # jadi "Peringatan pabrik" justru supaya kedua hal ini tak pernah lagi
+    # tertukar lewat satu kata kunci; itulah yang diuji di sini.
+    assert "Peringatan pabrik" not in t
     assert "GB-MENGGANTUNG-01" not in t
     assert 'href="/gudang/g2"' not in t, "operator ditawari gudang sebelah"
     # Yang tetap ada: petaknya sendiri. Halaman yang kosong terbaca sebagai
@@ -127,4 +133,7 @@ async def test_harga_yang_masih_baru_tak_masuk_perhatian(pg):
     async with c:
         t = (await c.get("/")).text
     assert "GB-BARU-01" not in t
-    assert "Perlu perhatian" not in t, "blok digambar padahal tak ada yang menyimpang"
+    # Sama seperti di atas: "Peringatan pabrik" (bukan lagi "Perlu
+    # perhatian") adalah nama blok papan sejak Beranda usulan — lihat
+    # komentar di test_operator_tak_melihat_papan.
+    assert "Peringatan pabrik" not in t, "blok digambar padahal tak ada yang menyimpang"
