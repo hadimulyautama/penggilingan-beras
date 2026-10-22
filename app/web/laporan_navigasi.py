@@ -56,8 +56,8 @@ async def siapkan(request: Request, konteks: dict):
     konteks["LAPORAN_NAV"] = {
         "aktif": aktif, "judul": judul[aktif], "jenis": jenis, "detail": detail,
         "tab": [{"kunci": k, "nama": n, "href": opsi[k][0][2]}
-                for k, n in [("laporan", "Laporan"), ("proses", "Proses"),
-                             ("qc", "QC"), ("audit", "Audit")] if opsi[k]],
+                for k, n in [("proses", "Proses"), ("qc", "QC"),
+                             ("laporan", "Laporan"), ("audit", "Audit")] if opsi[k]],
         "pilihan": opsi[aktif] if aktif in ("proses", "qc") else [],
     }
 
