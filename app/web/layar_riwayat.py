@@ -603,18 +603,42 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
     if not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
     from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
+    from app.services import berjalan, proses_aktif
+    from app.services.detail_pendinginan import lengkapi as lengkapi_pendinginan
+    from app.services.identitas_pekerjaan import lengkapi
+    from app.web.layar_berjalan import _alih_proses
+    from app.web.layar_pekerjaan import konteks_aman
     async with SessionLocal() as db:
+        lot = await db.get(DryingLot, lot_id)
+        if lot is None:
+            raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
+        if lot.waktu_selesai_pendinginan is None:
+            fase = "pengeringan" if lot.status == "proses" else "pendinginan"
+            return await _alih_proses(request, f"/proses-aktif/{fase}/{lot.kode_lot}")
         kartu, _ = await riwayat_pengeringan(db, batas=1, lot_id=lot_id)
-    if not kartu:
-        raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
-    from app.services.riwayat_jeda import riwayat_jeda
-    async with SessionLocal() as db:
-        jeda_riwayat = await riwayat_jeda(db, jenis="pengeringan", id_=lot_id, params=request.query_params)
+        if not kartu:
+            raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
+        pekerjaan = await berjalan.untuk(db, akun.user)
+        proses = next((x for x in pekerjaan.transit if x.kode == lot.kode_lot and x.fase == "dryer"), None)
+        if proses is None:
+            proses = berjalan.Baris(kode=lot.kode_lot, isi="Riwayat pendinginan", keadaan="selesai",
+                                    nilai=lot.kode_lot, fase="dryer", judul="Pendinginan")
+        await lengkapi(db, [proses])
+        detail = await proses_aktif.rincian(db, jenis="pendinginan", model=lot, kartu=proses, params=request.query_params)
+        await lengkapi_pendinginan(db, lot=lot, detail=detail, riwayat=kartu[0])
+    dasar = request.url.remove_query_params(["buka", "nilai"])
+    def halaman(parameter, nomor):
+        return str(dasar.include_query_params(**{parameter: nomor}))
     return await render_laci(
-        request, "riwayat_detail.html", jenis="pengeringan", k=kartu[0],
-        kembali="/riwayat-pengeringan", breadcrumb_detail=kartu[0].kode_lot,
-        layar="riwayat_pengeringan",
-        jeda_riwayat=jeda_riwayat,
+        request, "detail_pendinginan.html", d=detail, proses=proses, k=kartu[0],
+        tab_pengeringan=(request.query_params.get("tab_detail") if request.query_params.get("tab_detail") in
+                        {"ringkasan", "bahan", "pengukuran", "riwayat"} else
+                        "pengukuran" if request.query_params.get("halaman_ukur") else
+                        "riwayat" if request.query_params.get("halaman_dingin") or request.query_params.get("halaman_jeda") else "ringkasan"),
+        kembali=konteks_aman(request.query_params.get("kembali_kerja")) or "/riwayat-pengeringan",
+        dari_riwayat=True, breadcrumb_detail=lot.kode_lot, layar="riwayat_pengeringan",
+        alamat=request.url.path, halaman_proses=halaman, buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
     )
 
 

@@ -25,8 +25,13 @@ async def _alih_proses(request, tujuan):
     from app.web.layar_pekerjaan import konteks_aman
     from starlette.datastructures import URL
     kembali = konteks_aman(request.query_params.get("kembali_kerja"))
+    parameter = {nama: request.query_params[nama] for nama in
+                 ("tab_detail", "halaman_ukur", "halaman_dingin", "halaman_jeda", "halaman_hasil", "halaman_qc")
+                 if nama in request.query_params}
     if kembali:
-        tujuan = str(URL(tujuan).include_query_params(kembali_kerja=kembali))
+        parameter["kembali_kerja"] = kembali
+    if parameter:
+        tujuan = str(URL(tujuan).include_query_params(**parameter))
     # Penyegaran sesudah simpan memakai fetch. PINDAH sengaja mengabaikan
     # respons yang dialihkan, jadi 303 saja meninggalkan tindakan proses lama
     # di layar. Respons HTML ini dipasang seperti halaman biasa lalu membuka
@@ -89,11 +94,14 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
         await lengkapi(db, [kartu])
         detail = await proses_aktif.rincian(db, jenis=jenis, model=p, kartu=kartu,
                                            params=request.query_params)
+        if jenis == "pendinginan":
+            from app.services.detail_pendinginan import lengkapi as lengkapi_pendinginan
+            await lengkapi_pendinginan(db, lot=p, detail=detail)
     dasar = request.url.remove_query_params(["buka", "nilai"])
     def halaman(parameter, nomor):
         return str(dasar.include_query_params(**{parameter: nomor}))
     return await render_laci(
-        request, "detail_sosoh.html" if jenis == "sosoh" else "detail_giling.html" if jenis == "giling" else "detail_pengeringan.html", d=detail, proses=kartu,
+        request, "detail_sosoh.html" if jenis == "sosoh" else "detail_giling.html" if jenis == "giling" else "detail_pendinginan.html" if jenis == "pendinginan" else "detail_pengeringan.html", d=detail, proses=kartu,
         tab_pengeringan=(request.query_params.get("tab_detail") if request.query_params.get("tab_detail") in
                         {"ringkasan", "bahan", "pengukuran", "riwayat"} else
                         "pengukuran" if request.query_params.get("halaman_ukur") else

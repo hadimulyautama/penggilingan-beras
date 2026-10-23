@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% import "_benda.html" as benda with context %}
+{% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
+{% import "_kepemilikan.html" as milik with context %}
+{% import "_proses_visual.html" as visual with context %}
+{% block judul %}Detail Pendinginan{% endblock %}
+{% block isi %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_pengeringan.css?v=1');@import url('/static/detail_pendinginan.css?v=1');</style>
+{% macro tindakan(p, utama=false) %}
+{% set nilai_aksi = p[3] if p|length > 3 else proses.nilai %}
+<a class="pilihan__satu{{ ' pilihan__satu--utama' if utama }}" href="{{ benda.dasar_borang(alamat) }}buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}"><span class="pilihan__nama">{{ p[1] }}</span><span class="pilihan__ket">{{ p[2] }}</span></a>
+{% endmacro %}
+{% macro tab_link(id, label) %}<a class="btn btn--kecil" href="{{ request.url.remove_query_params(['buka','nilai']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ label }}</a>{% endmacro %}
+{% macro pantauan(id) %}
+<section class="riwayat-detail__card"><h2>Hasil pengeringan{{ ' sebelum pendinginan' if id == 'pengukuran' }}</h2>
+  <div class="pengeringan-bacaan"><div><span>Alat tes terakhir sebelum pendinginan</span><strong>{{ d.tes }}</strong><small>{{ d.tes_waktu }}{% if d.sampel %} · {{ d.sampel|length }} titik{% endif %}</small></div><div><span>Indikator mesin saat dimatikan</span><strong>{{ d.mesin }}</strong><small>{{ d.mesin_waktu }}</small></div></div>
+  {% if id == 'pengukuran' and d.sampel %}<dl class="pengeringan-sampel">{% for i, nilai in d.sampel %}<div><dt>Titik {{ i }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}</dl>{% endif %}
+  <dl class="pengeringan-baris"><div><dt>Target pengeringan</dt><dd>{{ d.statistik[2][1] }}</dd></div></dl>
+  {% if id == 'ringkasan' %}{{ tab_link('pengukuran','Lihat riwayat pengukuran') }}{% else %}<p class="bantu">Bacaan kadar air adalah riwayat pengeringan, bukan suhu atau persentase kemajuan pendinginan.</p>{% endif %}
+</section>
+{% endmacro %}
+<main class="riwayat-detail proses-detail pengeringan-detail pendinginan-detail" data-konteks="{{ milik.konteks(proses) }}" data-nilai="{{ proses.nilai or proses.kode }}">
+<a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ 'Riwayat Pengeringan' if dari_riwayat and not request.query_params.get('kembali_kerja') else 'Pekerjaan' }}</a>
+<header class="riwayat-detail__hero">
+  <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">{{ 'RIWAYAT PROSES' if dari_riwayat else 'PROSES AKTIF' }} · {% if dari_riwayat %}<span class="proses-jenis" data-proses="pengeringan">{{ visual.ikon('pengeringan') }}<span>Pengeringan</span></span>{% else %}{{ visual.penanda(proses) }}{% endif %}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>
+  <h1>{{ d.kode }}</h1>{{ milik.penanda(proses) }}
+  {% if d.jasa and not proses.pemilik_tampil %}<p>{{ d.pemilik }}</p>{% endif %}
+  <p>Gudang 1 · {{ d.dryer }} · {{ d.mode }}</p>
+  {% if d.jeda_mulai %}<p class="pengeringan-jeda">{{ d.jeda_sebab }} · Mulai jeda {{ d.jeda_mulai }}</p>{% elif proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
+  <span class="proses-detail__sementara">{{ d.lokasi }}</span>
+</header>
+<nav class="pengeringan-tabs" role="tablist" aria-label="Bagian detail pendinginan">
+{% for id, label in [('ringkasan','Ringkasan'),('bahan','Bahan'),('pengukuran','Pengukuran'),('riwayat','Riwayat')] %}<a id="tab-{{ id }}" role="tab" aria-controls="panel-{{ id }}" aria-selected="{{ 'true' if tab_pengeringan == id else 'false' }}" href="{{ request.url.remove_query_params(['buka','nilai']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ label }}</a>{% endfor %}
+</nav>
+<div id="panel-ringkasan" class="pengeringan-panel" role="tabpanel" aria-labelledby="tab-ringkasan" {% if tab_pengeringan != 'ringkasan' %}hidden{% endif %}>
+  <ol class="pengeringan-tahap" aria-label="Tahap proses, informasi saja">{% for tahap in ['Pengeringan','Pendinginan','Sudah dingin','Ke silo'] %}<li class="{{ 'aktif' if loop.index0 == d.tahap else 'lewat' if loop.index0 < d.tahap }}" {% if loop.index0 == d.tahap %}aria-current="step"{% endif %}>{{ tahap }}</li>{% endfor %}</ol>
+  <section class="proses-detail__statistik" id="ringkasan-proses" aria-label="Ringkasan pendinginan">{% for label, nilai in d.statistik_pendinginan %}<article class="riwayat-detail__card"><span>{{ label }}</span><strong>{{ nilai }}</strong></article>{% endfor %}</section>
+  <section class="riwayat-detail__card" id="tindakan-proses"><h2>Tindakan saat ini</h2>
+    <div class="pendinginan-kondisi"><strong>{{ 'Gabah sudah dipindahkan ke silo' if d.tahap == 3 else 'Sudah dingin, menunggu dipindah ke silo' if d.tahap == 2 else 'Gabah sedang didinginkan di ' ~ d.dryer }}</strong><p>{{ 'Tindakan pendinginan di dryer untuk lot ini sudah ditutup.' if d.tahap == 3 else 'Pernyataan dingin tidak memindahkan gabah secara otomatis.' if d.tahap == 2 else 'Nyatakan sudah dingin setelah memeriksa kondisi gabah.' }}</p></div>
+    <div class="proses-detail__aksi pilihan pengeringan-aksi-utama">{% for p in proses.pilihan %}{{ tindakan(p, loop.first) }}{% else %}<p class="bantu">Tidak ada tindakan dryer yang tersedia untuk lot ini.</p>{% endfor %}</div>
+  </section>
+  <div class="pengeringan-overview"><section class="riwayat-detail__card"><h2>Waktu pendinginan</h2><dl class="pengeringan-baris">{% for label, nilai in d.waktu_pendinginan %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}{% for label, nilai in d.fakta if label == 'Total jeda pengeringan' %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}</dl>{{ tab_link('riwayat','Lihat putaran & catatan') }}</section><div class="pengeringan-ringkas">
+    <section class="riwayat-detail__card"><h2>Mesin & bahan</h2><dl class="pengeringan-baris"><div><dt>Mesin pengering</dt><dd>{{ d.dryer }}</dd></div><div><dt>Mode pengeringan</dt><dd>{{ d.mode }}</dd></div><div><dt>Bahan</dt><dd>{{ d.batch_jumlah }} batch · {{ d.statistik[0][1] }}</dd></div></dl>{{ tab_link('bahan','Lihat asal bahan') }}</section>
+    {{ pantauan('ringkasan') }}
+  </div></div>
+</div>
+<div id="panel-bahan" class="pengeringan-panel" role="tabpanel" aria-labelledby="tab-bahan" {% if tab_pengeringan != 'bahan' %}hidden{% endif %}>
+  <section class="riwayat-detail__card" id="catatan-proses"><h2>Bahan dalam lot</h2><dl class="pengeringan-baris"><div><dt>Total bahan</dt><dd>{{ d.statistik[0][1] }}</dd></div><div><dt>Pemilik bahan</dt><dd>{{ d.pemilik }}</dd></div><div><dt>Lokasi gabah</dt><dd>{{ d.lokasi }}</dd></div></dl></section>
+  {% for bagian in d.bagian if bagian.parameter not in ['halaman_ukur','halaman_dingin'] %}{% include "_detail_pengeringan_bagian.html" %}{% endfor %}
+</div>
+<div id="panel-pengukuran" class="pengeringan-panel" role="tabpanel" aria-labelledby="tab-pengukuran" {% if tab_pengeringan != 'pengukuran' %}hidden{% endif %}>
+  {{ pantauan('pengukuran') }}<p class="bantu">Rata-rata memakai titik yang diisi pada satu pencatatan. Indikator mesin dicatat terpisah.</p>
+  {% for bagian in d.bagian if bagian.parameter == 'halaman_ukur' %}{% include "_detail_pengeringan_bagian.html" %}{% endfor %}
+</div>
+<div id="panel-riwayat" class="pengeringan-panel" role="tabpanel" aria-labelledby="tab-riwayat" {% if tab_pengeringan != 'riwayat' %}hidden{% endif %}>
+  <section class="riwayat-detail__card"><h2>Identitas & waktu proses</h2><dl class="riwayat-detail__facts"><div><dt>Kode lot</dt><dd>{{ d.kode }}</dd></div><div><dt>Pemilik bahan</dt><dd>{{ d.pemilik }}</dd></div>{% for label, nilai in d.fakta %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}<div><dt>Alat tes terakhir</dt><dd>{{ d.tes }}</dd></div><div><dt>Indikator mesin terbaru</dt><dd>{{ d.mesin }} · {{ d.mesin_waktu }}</dd></div><div><dt>Target</dt><dd>{{ d.statistik[2][1] }}</dd></div></dl></section>
+  {% if k %}<section class="riwayat-detail__card"><h2>Ringkasan riwayat pengeringan</h2><dl class="pengeringan-baris"><div><dt>Durasi pengeringan</dt><dd>{{ k.lama_kering or 'Belum dapat dihitung' }}</dd></div><div><dt>Durasi total</dt><dd>{{ k.lama_total or 'Belum dapat dihitung' }}</dd></div><div><dt>Catatan kadar air terakhir</dt><dd>{{ k.ka_terakhir or 'Belum diukur' }}</dd></div></dl></section>{% endif %}
+  <section class="riwayat-detail__card" id="putaran-pendinginan"><h2>Putaran pendinginan</h2>{% if not d.riwayat_putaran_lengkap %}<p class="bantu">Data lama: rincian putaran belum lengkap. Seluruh catatan yang tersedia tetap ditampilkan di bawah.</p>{% endif %}<div class="pendinginan-putaran">{% for p in d.putaran|reverse %}<article><h3>Putaran {{ p.nomor if p.nomor is not none else 'saat ini' }} · {{ 'Sedang didinginkan' if p.aktif else 'Selesai' }}</h3><dl class="pengeringan-baris"><div><dt>Mulai</dt><dd>{{ p.mulai }}</dd></div><div><dt>Dinyatakan dingin</dt><dd>{{ p.selesai }}</dd></div><div><dt>Lama</dt><dd>{{ p.lama }}</dd></div></dl></article>{% endfor %}</div></section>
+  {{ riwayat_jeda_blok(d.jeda_riwayat) }}{% if not d.jeda_riwayat.jumlah %}<section class="riwayat-detail__card" id="riwayat-jeda"><h2>Riwayat jeda proses</h2><p class="bantu">Belum ada jeda yang tercatat.</p></section>{% endif %}
+  {% for bagian in d.bagian if bagian.parameter == 'halaman_dingin' %}{% include "_detail_pengeringan_bagian.html" %}{% endfor %}
+</div>
+{% if d.laporan_tersedia %}<a class="btn btn--kecil pendinginan-laporan" href="/riwayat-pengeringan/{{ d.lot_id }}/laporan">↓ Lihat / bagikan laporan PDF</a>{% endif %}
+<p class="bantu">{{ d.lokasi }}{% if d.tahap == 3 %} · {{ d.pindah_waktu }}{% endif %}.</p>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+</main>
+<script src="/static/detail_pendinginan.js?v=1"></script>
+{% endblock %}
+{% block kaki %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endblock %}
