@@ -2,6 +2,7 @@
 from decimal import Decimal
 import pytest
 from sqlalchemy import select,func
+from sqlalchemy.orm import selectinload
 from tests.pg.test_pk_karung import dunia, batch_baru, pindah, habiskan, dunia_g1
 from app.models import User, PkGudang2Intake, PolishingSiloUsage, MillingProcess
 from app.penggilingan.gudang2 import service as g2, polishing as sosoh
@@ -50,7 +51,7 @@ async def test_review_pk_giling_sendiri_sampai_neraca_tetap_sama(pg,dunia_g1):
         usage=(await db.scalars(select(PolishingSiloUsage))).one()
         assert not usage.bobot_karung_dinamis
         assert await saldo_pk(db,proc.id)==2000
-        bersama = (await db.scalars(select(ProsesTerpadu).where(
+        bersama = (await db.scalars(select(ProsesTerpadu).options(selectinload(ProsesTerpadu.arus)).where(
             ProsesTerpadu.tabel_sumber == 'polishing_process'))).one()
         sebelum = dict(bersama.metadata_domain)
         arus = [(a.id, a.arah, a.berat_kg) for a in bersama.arus]
@@ -103,7 +104,7 @@ async def test_koreksi_w_final_sesudah_tutup_menjaga_snapshot_dan_hasil(pg, duni
         assert it.bobot_final
         usage = (await db.scalars(select(PolishingSiloUsage))).one()
         snapshot = usage.terpakai_lama_kg
-        proyeksi = (await db.scalars(select(ProsesTerpadu))).one()
+        proyeksi = (await db.scalars(select(ProsesTerpadu).options(selectinload(ProsesTerpadu.arus)))).one()
         hasil_lama = [(a.komoditas, a.berat_kg) for a in proyeksi.arus if a.arah == 'hasil']
         b.berat_total_kg = 10140
         await db.commit()
@@ -141,6 +142,6 @@ async def test_koreksi_w_dua_silo_mempertahankan_seluruh_bahan_proses(pg, dunia)
         b.sumber_berat = 'timbangan'
         await db.commit()
         await g2.resinkron_intake_g2(db)
-        proyeksi = (await db.scalars(select(ProsesTerpadu))).one()
+        proyeksi = (await db.scalars(select(ProsesTerpadu).options(selectinload(ProsesTerpadu.arus)))).one()
         assert sum(a.berat_kg for a in proyeksi.arus if a.arah == 'bahan') == 10140
         assert len([a for a in proyeksi.arus if a.arah == 'bahan']) == 2
