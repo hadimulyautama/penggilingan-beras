@@ -57,3 +57,11 @@ Log lengkap, perbandingan JSON, galeri dan hasil CI/deploy disimpan pada output/
 Chromium desktop dan emulasi ukuran ponsel sudah diuji. Safari, Firefox, perangkat fisik dan pembaca layar belum diuji. Tidak ada pengujian transaksi pada produksi. Tidak ada migrasi, formula, saldo, konfigurasi operasional, izin atau endpoint transaksi baru. Pembaruan dapat di-revert ke baseline e582626 tanpa pemulihan data; tidak ada perubahan skema/transaksi.
 
 Penanda Ringkasan untuk bobot belum diukur/belum final memakai flag dan nilai pembaca yang sama. Tidak mengubah saldo; kondisi ini diuji pada data lama aktif. Pemeriksaan integrasi final:805tes non-PG dan11tes baru lulus kembali pada paket431.
+
+## Penyelarasan cakupan portal pengiriman dan retur
+
+Uji tambahan menunjukkan proyeksi lama detail pelanggan menghitung pengiriman campuran dan retur ber-header pelanggan yang tidak sesuai kepemilikan item, padahal URL detailnya sudah ditolak oleh scope backend lama. Dalam fixture, Ringkasan portal menampilkan2pengiriman/3retur, sementara scope hanya mengizinkan1pengiriman/1retur.
+
+app/web/portal/presentation.py kini menyaring kedua koleksi pada salinan data portal memakai scope.ids(OutgoingRecord) dan scope.ids(CustomerReturn) yang sudah dipakai penjaga URL. Tidak mengubah pembaca pelanggan, saldo, transaksi, aturan kepemilikan atau tampilan Admin. Proyeksi menghitung jumlah setelah koleksi dibatasi izin. Pengujian memastikan item/kode nonmilik tidak ditampilkan di kelima tab, hitungan Ringkasan tepat, URL asing tetap404, dan Admin tetap dapat membaca fakta lengkap.
+
+Setelah penyelarasan:48tes PG pelanggan/portal/tab dan805tes non-PG lulus. Total tes baru menjadi12kasus (termasuk parameter). Log uji gagal sebelum perbaikan serta hasil setelahnya disimpan bersama laporan output. CI penuh dan deploy commit terakhir ditunggu sebelum pekerjaan dinyatakan selesai.
