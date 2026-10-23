@@ -534,6 +534,22 @@ _SQL_SINKRON = """
 """
 
 
+def _sql_bobot_batch(sql: str, tabel: str, **lain) -> str:
+    """Karung baru memakai bobot barang; gabah dan PK lama tetap aturan lama.
+
+    Surat jalan karung sudah mempunyai rumahnya sendiri (N × ukuran), jadi
+    memakainya juga sebagai W menghapus selisih kiriman yang justru ingin
+    dilihat. Ini hanya pembaca produksi; tidak mengubah tiket Pos Timbang.
+    """
+    if tabel == "pk_purchase_batches":
+        sql = sql.replace(SQL_BERAT_TIKET,
+            "(CASE WHEN b.jumlah_karung IS NOT NULL THEN " + SQL_REAL_TIKET + " ELSE " + SQL_BERAT_TIKET + " END)")
+        sql = sql.replace(SQL_SUMBER_BERAT,
+            "(CASE WHEN b.jumlah_karung IS NOT NULL THEN 'timbangan' ELSE " + SQL_SUMBER_BERAT + " END)")
+        sql = sql.replace("AND b.flag_unverified = true", "AND (b.flag_unverified = true OR b.jumlah_karung IS NOT NULL)")
+    return sql.format(tbl=tabel,**lain)
+
+
 async def sinkron_bobot_menunggu(db: AsyncSession) -> int:
     """Isi bobot semua batch (gabah & PK) yang 'menunggu' dari tiket timbang-nya.
     → jumlah baris terisi. Idempoten: yang sudah terisi tak disentuh."""
@@ -542,7 +558,7 @@ async def sinkron_bobot_menunggu(db: AsyncSession) -> int:
     tol = await toleransi_nota_persen(db)
     total = 0
     for tbl in ("purchase_batches", "pk_purchase_batches"):
-        res = await db.execute(text(_SQL_SINKRON.format(tbl=tbl)), {"tol_persen": tol})
+        res = await db.execute(text(_sql_bobot_batch(_SQL_SINKRON, tbl)), {"tol_persen": tol})
         total += res.rowcount or 0
     await db.commit()
     return total
@@ -644,10 +660,10 @@ async def sinkron_perkiraan(db: AsyncSession) -> int:
     tol = await toleransi_nota_persen(db)
     total = 0
     for tbl in ("purchase_batches", "pk_purchase_batches"):
-        res = await db.execute(text(_SQL_PERKIRAAN.format(tbl=tbl)),
+        res = await db.execute(text(_sql_bobot_batch(_SQL_PERKIRAAN, tbl)),
                                {"tol_persen": tol})
         total += res.rowcount or 0
-        res = await db.execute(text(_SQL_PERKIRAAN_TIKET.format(tbl=tbl)),
+        res = await db.execute(text(_sql_bobot_batch(_SQL_PERKIRAAN_TIKET, tbl)),
                                {"tol_persen": tol})
         total += res.rowcount or 0
     await db.commit()
@@ -719,7 +735,7 @@ async def resinkron_bobot_berubah(db: AsyncSession) -> int:
     # paling sering direvisi notanya, dan revisinya tak pernah sampai.
     for tbl, extra in (("purchase_batches", "AND b.status_batch <> 'digiling'"),
                        ("pk_purchase_batches", "")):
-        res = await db.execute(text(_SQL_RESINKRON.format(tbl=tbl, extra=extra)),
+        res = await db.execute(text(_sql_bobot_batch(_SQL_RESINKRON, tbl, extra=extra)),
                                     {"tol_persen": tol})
         total += res.rowcount or 0
     await db.commit()

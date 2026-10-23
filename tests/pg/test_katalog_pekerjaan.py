@@ -29,7 +29,7 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         menu=(await c.get('/api/actions/menu')).json()
         ada={a['id']:a for a in menu}
         katalog_ids={a['id'] for a in menu if not a.get('kartu')}
-        assert katalog_ids=={'beli_kemasan','transfer_pk','rekonsiliasi_timbang','auto_taut_keluar'}
+        assert katalog_ids=={'beli_kemasan','transfer_pk','rekonsiliasi_timbang','auto_taut_keluar','sesuaikan_stok_pk_lama'}
         for id_ in (('masukkan_beras_silo','tutup_jasa','batalkan_jasa') if role=='superadmin' else ('tutup_jasa','batalkan_jasa')):
             assert ada[id_]['kartu'] and ada[id_]['fields'] and ada[id_]['post']
         for path in ('/aksi-lain','/aksi-lain?buka=beli_kemasan&nilai=25'):

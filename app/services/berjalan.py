@@ -2926,7 +2926,7 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
     """
     from app.models import InternalTransfer, PkGudang2Intake
     from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import _sisa_tumpukan_intake
+    from app.penggilingan.gudang2.service import _sisa_tumpukan_intake, ringkasan_karung
 
     keluar: list[Baris] = []
     for it in (await db.execute(
@@ -2952,12 +2952,13 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
             )).scalar() if it.internal_transfer_id else None
             kode = kode_lot or f"intake {it.id}"
             judul, sumber = kode, "giling sendiri"
+        karung = await ringkasan_karung(db, it, sisa)
         # `_kg_tepat`, BUKAN `_kg`: angka ini diketik ulang operator sebagai
         # batas, dan pembulatan ke atas membuat layar menawarkan satu kilogram
         # yang tak ada lalu menolaknya.
         keluar.append(Baris(
             kode=kode, pemilik_ids=(it.jasa_id,),
-            isi=f"PK di tumpukan · {_kg_tepat(sisa) if sisa is not None else 'menunggu timbang'}",
+            isi=f"PK di tumpukan · {karung or (_kg_tepat(sisa) if sisa is not None else 'menunggu timbang')}",
             keadaan="menunggu dipindah ke silo — boleh sebagian",
             aksi="pindah_tumpukan_silo", nilai=str(it.id), fase="tumpuk",
             sejak=it.waktu_masuk, judul=judul, kelompok="tumpukan",

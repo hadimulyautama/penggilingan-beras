@@ -70,7 +70,11 @@
         {# Angka besarnya PERSEN BERAS — yang pemilik sebut pertama, dan yang
            sama dengan rendemen proses ini. Satu angka, satu arti: kartu yang
            angka besarnya kilogram menuntut pembacanya membagi sendiri. #}
-        {% if k.neraca.bisa_dihitung %}
+        {% if not k.bahan_pasti %}<p class="nota">{{ k.bahan_teks }} · bobot truk belum final. Susut dan rendemen belum dapat dipastikan.</p>{% endif %}
+      {% if k.neraca_tercatat %}
+      <p class="nota">Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan {{ kg(k.neraca_tercatat.bahan_kg) }} kg, susut {{ kg(k.neraca_tercatat.susut.kg) }} kg. Catatan penutupan tetap tersimpan.</p>
+      {% endif %}
+      {% if k.bahan_pasti and k.neraca.bisa_dihitung %}
           <span class="padat__nilai">{{ psn(k.rendemen) }}<small>beras</small></span>
         {% else %}
           <span class="padat__nilai padat__nilai--kosong">—</span>
@@ -88,7 +92,7 @@
         </div>
       {% endif %}
 
-      {% if k.neraca.bisa_dihitung %}
+      {% if k.bahan_pasti and k.neraca.bisa_dihitung %}
         {# ── BATANG NERACA: 100% bahan baku, tiga ruas ──
            Lebarnya langsung dari persennya, tanpa penormalan: kalau ketiganya
            tak berjumlah 100 itu BERARTI sesuatu, dan batang yang dipaksa penuh
@@ -104,7 +108,7 @@
           </div>
         {% endif %}
         <div class="padat__ket">
-          bahan baku {{ kg(k.neraca.bahan_kg) }} kg →
+          bahan baku {{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }} →
           keluar {{ kg(k.neraca.keluar_kg) }} kg
         </div>
       {% else %}
@@ -114,7 +118,7 @@
       {% endif %}
     </summary>
 
-    {% if k.neraca.timpang %}
+    {% if k.bahan_pasti and k.neraca.timpang %}
       {# MUSTAHIL SECARA FISIK, dan dikatakan apa adanya. Susut negatif selalu
          berarti salah catat — hasil dicatat ke proses yang keliru, atau satuan
          tertukar. Ia TIDAK dipangkas jadi 0%: yang dipangkas tak pernah
@@ -122,7 +126,7 @@
       <div class="nota nota--buruk" style="margin:10px 12px">
         <span aria-hidden="true">⚠</span>
         <span>Hasilnya <b>melebihi</b> bahan bakunya
-          ({{ kg(k.neraca.keluar_kg) }} kg dari {{ kg(k.neraca.bahan_kg) }} kg) —
+          ({{ kg(k.neraca.keluar_kg) }} kg dari {{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}) —
           selisih {{ kg(-k.neraca.susut.kg) }} kg. Ini tak mungkin terjadi di
           mesin; periksa catatan hasilnya, biasanya ada entri yang masuk ke
           proses yang keliru.</span>
@@ -133,7 +137,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 12px 10px">
         <a class="btn btn--kecil" href="/riwayat-sosoh/{{ k.id }}/laporan">Lihat / bagikan laporan PDF</a>
       </div>
-      {% if k.neraca.bisa_dihitung %}
+      {% if k.bahan_pasti and k.neraca.bisa_dihitung %}
         <div class="anak__kepala">Ke mana perginya bahan baku</div>
 
         {# BERAS lebih dulu, dan dibedakan dari rincian samping di bawahnya:
@@ -174,7 +178,7 @@
             <span class="nrc__titik" style="background:var(--redup-2)"></span>
             {{ k.neraca.susut.nama }}
           </span>
-          <span class="nrc__kg">{{ kg(k.neraca.susut.kg) }} kg</span>
+          <span class="nrc__kg">{{ kg(k.neraca.susut.kg) ~ " kg" if k.bahan_pasti else "Belum dapat dipastikan" }}</span>
           <span class="nrc__persen">{{ psn(k.neraca.susut.persen) }}</span>
         </div>
 
@@ -183,7 +187,7 @@
            salah catatan hasilnya, bukan halaman ini. #}
         <div class="nrc nrc--jumlah">
           <span class="nrc__nama">Jumlah</span>
-          <span class="nrc__kg">{{ kg(k.neraca.bahan_kg) }} kg</span>
+          <span class="nrc__kg">{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</span>
           <span class="nrc__persen">{{ psn(
             k.neraca.beras.persen + k.neraca.samping|sum(attribute="persen")
             + k.neraca.susut.persen) }}</span>
@@ -241,27 +245,27 @@
         <span class="riwayat-desktop-lot"><strong><a href="/riwayat-sosoh/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode }}</a></strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
         <span class="riwayat-desktop-owner">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
         <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
-        <span class="riwayat-desktop-number">{{ kg(k.neraca.bahan_kg) }} kg</span>
+        <span class="riwayat-desktop-number">{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</span>
         <span class="riwayat-desktop-number">{{ kg(k.neraca.beras.kg) }} kg</span>
         <span class="riwayat-desktop-number">{{ kg(k.neraca.samping|sum(attribute="kg")) }} kg</span>
-        <span class="riwayat-desktop-number">{{ kg(k.neraca.susut.kg) }} kg</span>
+        <span class="riwayat-desktop-number">{{ kg(k.neraca.susut.kg) ~ " kg" if k.bahan_pasti else "Belum dapat dipastikan" }}</span>
         <span>{{ psn(k.rendemen) }}</span>
         <span>{{ k.oleh }}</span>
       </summary>
       <div class="riwayat-desktop-detail">
         {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %}</span></div>{% endif %}
-        {% if k.neraca.timpang %}
-          <div class="nota nota--buruk"><span aria-hidden="true">⚠</span><span>Hasil melebihi bahan baku: {{ kg(k.neraca.keluar_kg) }} kg dari {{ kg(k.neraca.bahan_kg) }} kg. Periksa catatan hasilnya.</span></div>
+        {% if k.bahan_pasti and k.neraca.timpang %}
+          <div class="nota nota--buruk"><span aria-hidden="true">⚠</span><span>Hasil melebihi bahan baku: {{ kg(k.neraca.keluar_kg) }} kg dari {{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}. Periksa catatan hasilnya.</span></div>
         {% endif %}
         <a class="btn btn--kecil" href="/riwayat-sosoh/{{ k.id }}/laporan">Lihat / bagikan laporan PDF</a>
-        {% if k.neraca.bisa_dihitung %}
+        {% if k.bahan_pasti and k.neraca.bisa_dihitung %}
           <div class="anak__kepala">Neraca hasil · seluruh persen dari bahan PK</div>
           <div class="riwayat-desktop-batches">
             <div class="riwayat-desktop-batch"><strong>{{ k.neraca.beras.nama }}</strong><span>{{ kg(k.neraca.beras.kg) }} kg</span><small>{{ psn(k.neraca.beras.persen) }}</small></div>
             {% for b in k.beras %}<div class="riwayat-desktop-batch riwayat-desktop-batch--indent"><strong>{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><small>{{ psn(b.persen) }}</small></div>{% endfor %}
             {% for b in k.neraca.samping %}<div class="riwayat-desktop-batch"><strong>{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><small>{{ psn(b.persen) }}</small></div>{% endfor %}
-            <div class="riwayat-desktop-batch"><strong>{{ k.neraca.susut.nama }}</strong><span>{{ kg(k.neraca.susut.kg) }} kg</span><small>{{ psn(k.neraca.susut.persen) }}</small></div>
-            <div class="riwayat-desktop-batch"><strong>Jumlah</strong><span>{{ kg(k.neraca.bahan_kg) }} kg</span><small>{{ psn(k.neraca.beras.persen + k.neraca.samping|sum(attribute="persen") + k.neraca.susut.persen) }}</small></div>
+            <div class="riwayat-desktop-batch"><strong>{{ k.neraca.susut.nama }}</strong><span>{{ kg(k.neraca.susut.kg) ~ " kg" if k.bahan_pasti else "Belum dapat dipastikan" }}</span><small>{{ psn(k.neraca.susut.persen) }}</small></div>
+            <div class="riwayat-desktop-batch"><strong>Jumlah</strong><span>{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</span><small>{{ psn(k.neraca.beras.persen + k.neraca.samping|sum(attribute="persen") + k.neraca.susut.persen) }}</small></div>
           </div>
         {% else %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Bahan PK belum tercatat sehingga neraca belum dapat dihitung.</span></div>{% endif %}
         <h3>Bahan &amp; pemakaian silo</h3>

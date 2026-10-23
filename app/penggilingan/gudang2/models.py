@@ -7,10 +7,14 @@ Acuan: LOGIKA_SILO_GUDANG2.md.
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer,
-                        Numeric, String, text)
+                        Numeric, String, text, select, func, case)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
+
+from app.penggilingan.gudang2.karung import bobot_per_karung
 
 from app.database import Base, TimestampMixin
 from hmu_core import Armada
@@ -46,6 +50,8 @@ class PkPurchaseBatch(Base, TimestampMixin):
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     # Kosong = "menunggu bobot" (referensi bobot = tiket timbang; disinkron otomatis).
     berat_total_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    ukuran_karung_kg: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
     armada_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_kendaraan.id"))
     armada: Mapped[Armada | None] = relationship()
@@ -242,7 +248,38 @@ class PkTumpukanToSilo(Base, TimestampMixin):
         ForeignKey("pk_gudang2_intakes.id"), nullable=False
     )
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
-    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # Hanya hasil timbang/manual yang mengisi kolom kg. Baris karung
+    # menyimpan K saja supaya koreksi bobot truk tidak membekukan perkalian lama.
+    berat_timbang_kg: Mapped[Decimal | None] = mapped_column("berat_kg", Numeric(12, 3))
+    jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    pemakaian_silo_id: Mapped[int | None] = mapped_column(ForeignKey("polishing_silo_usage.id"))
+    selama_proses: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                               server_default=text("false"))
+    batch: Mapped["PkPurchaseBatch | None"] = relationship(
+        secondary="pk_gudang2_intakes",
+        primaryjoin="PkTumpukanToSilo.pk_gudang2_intake_id == PkGudang2Intake.id",
+        secondaryjoin="PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id",
+        viewonly=True, uselist=False, lazy="selectin")
+
+    @hybrid_property
+    def berat_kg(self):
+        if self.jumlah_karung is None:
+            return self.berat_timbang_kg
+        return bobot_per_karung(self.batch, jumlah=self.jumlah_karung)
+
+    @berat_kg.setter
+    def berat_kg(self, nilai):
+        self.berat_timbang_kg = nilai
+
+    @berat_kg.expression
+    def berat_kg(cls):
+        rasio = (select(bobot_per_karung(PkPurchaseBatch, jumlah=cls.jumlah_karung))
+                 .select_from(PkPurchaseBatch)
+                 .join(PkGudang2Intake, PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id)
+                 .where(PkGudang2Intake.id == cls.pk_gudang2_intake_id)
+                 .correlate(cls).scalar_subquery())
+        return case((cls.jumlah_karung.is_not(None), rasio),
+                    else_=cls.berat_timbang_kg)
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -251,6 +288,24 @@ class PkTumpukanToSilo(Base, TimestampMixin):
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
     #: Cermin bertanda, bukan dihapus (lihat `app/models/cermin.py`).
     dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PkPenyesuaianStok(Base):
+    """Koreksi eksplisit stok lama, tanpa mengganti bukti masuk atau laporan.
+
+    Tidak ada backfill jumlah karung. Angka bertanda ini berdiri pada tanggal
+    koreksinya, dengan sebab dan pencatatnya, supaya selisih lama tidak
+    diperlakukan seolah-olah sejak dahulu sudah tercatat dengan benar.
+    """
+    __tablename__ = "pk_penyesuaian_stok"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    intake_id: Mapped[int] = mapped_column(ForeignKey("pk_gudang2_intakes.id"), nullable=False)
+    selisih_kg: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    alasan: Mapped[str] = mapped_column(String(500), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
 
 class BrokenKeSilo(Base, TimestampMixin):
@@ -401,15 +456,74 @@ class PolishingSiloUsage(Base, TimestampMixin):
         ForeignKey("polishing_process.id"), nullable=False
     )
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
-    berat_awal_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    awal_tetap_kg: Mapped[Decimal] = mapped_column("berat_awal_kg", Numeric(12, 3), nullable=False)
     #: PK yang DITAMBAHKAN ke silo ini selama proses berjalan. Keputusan
     #: pemilik 12 September 2026: silo yang dipoles boleh diisi lagi, jadi
     #: terpakai = awal + masuk − akhir (bukan lagi awal − akhir). Dulu intake
     #: ke silo yang dipoles ditolak (P-K-11) supaya rumus lama tetap benar.
-    berat_masuk_kg: Mapped[float] = mapped_column(
-        Numeric(12, 2), nullable=False, default=0, server_default=text("0"))
+    masuk_tetap_kg: Mapped[Decimal] = mapped_column("berat_masuk_kg",
+        Numeric(12, 3), nullable=False, default=0, server_default=text("0"))
     berat_akhir_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
-    berat_terpakai_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    terpakai_lama_kg: Mapped[Decimal | None] = mapped_column("berat_terpakai_kg", Numeric(12, 3))
+    # Hanya pemakaian baru yang mempunyai sumber karung yang dinamis.
+    # Riwayat lama tetap membaca snapshot lamanya; migrasi tidak menafsirkan
+    # ulang laporan yang dahulu sudah diterbitkan.
+    bobot_karung_dinamis: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false"))
+    pemindahan_karung: Mapped[list["PkTumpukanToSilo"]] = relationship(
+        foreign_keys="PkTumpukanToSilo.pemakaian_silo_id", lazy="selectin")
+
+    def _jumlah_bobot_karung(self, selama):
+        return sum((m.berat_kg or Decimal(0) for m in self.pemindahan_karung
+                    if m.selama_proses == selama and m.dibatalkan_pada is None), Decimal(0))
+
+    @classmethod
+    def _jumlah_bobot_karung_sql(cls, selama):
+        return (select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
+                .where(PkTumpukanToSilo.pemakaian_silo_id == cls.id,
+                       PkTumpukanToSilo.selama_proses == selama,
+                       PkTumpukanToSilo.dibatalkan_pada.is_(None))
+                .correlate(cls).scalar_subquery())
+
+    @hybrid_property
+    def berat_awal_kg(self):
+        return Decimal(str(self.awal_tetap_kg or 0)) + self._jumlah_bobot_karung(False)
+
+    @berat_awal_kg.setter
+    def berat_awal_kg(self, nilai):
+        self.awal_tetap_kg = Decimal(str(nilai)) - self._jumlah_bobot_karung(False) if self.id is not None else nilai
+
+    @berat_awal_kg.expression
+    def berat_awal_kg(cls):
+        return cls.awal_tetap_kg + cls._jumlah_bobot_karung_sql(False)
+
+    @hybrid_property
+    def berat_masuk_kg(self):
+        return Decimal(str(self.masuk_tetap_kg or 0)) + self._jumlah_bobot_karung(True)
+
+    @berat_masuk_kg.setter
+    def berat_masuk_kg(self, nilai):
+        self.masuk_tetap_kg = Decimal(str(nilai)) - self._jumlah_bobot_karung(True) if self.id is not None else nilai
+
+    @berat_masuk_kg.expression
+    def berat_masuk_kg(cls):
+        return cls.masuk_tetap_kg + cls._jumlah_bobot_karung_sql(True)
+
+    @hybrid_property
+    def berat_terpakai_kg(self):
+        if self.bobot_karung_dinamis and self.berat_akhir_kg is not None:
+            return self.berat_awal_kg + self.berat_masuk_kg - Decimal(str(self.berat_akhir_kg))
+        return self.terpakai_lama_kg
+
+    @berat_terpakai_kg.setter
+    def berat_terpakai_kg(self, nilai):
+        self.terpakai_lama_kg = nilai
+
+    @berat_terpakai_kg.expression
+    def berat_terpakai_kg(cls):
+        return case((cls.bobot_karung_dinamis & cls.berat_akhir_kg.is_not(None),
+                     cls.berat_awal_kg + cls.berat_masuk_kg - cls.berat_akhir_kg),
+                    else_=cls.terpakai_lama_kg)
 
 
 class PolishingOutputLog(Base):

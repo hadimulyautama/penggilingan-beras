@@ -955,10 +955,10 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
     # Tanpanya pesanan yang SUDAH mengambil seluruh PK-nya di Gudang 2 tetap
     # terbaca "masih ada PK Gudang 2" selamanya — `boleh_ditutup()` menolak
     # penutupan atas barang yang justru sudah di tangan pemiliknya.
-    masuk_g2 = float((await db.execute(
-        select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0))
-        .where(PkGudang2Intake.jasa_id == jasa_id)
-    )).scalar_one())
+    masuk_g2 = await _bobot_masuk_pk_jasa(db, jasa_id)
+
+
+
     disosoh = float((await db.execute(
         select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0))
         .join(PolishingProcess,
@@ -1465,3 +1465,23 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
             baris_out.append(f"   {kode:<16}{_kg_nota(kg):>12}")
         baris_out.append(f"   {'Jumlah':<16}{_kg_nota(jum):>12}")
     return "\n".join(baris_out)
+
+
+async def _bobot_masuk_pk_jasa(db, jasa_id):
+    """Batch berkarung mengikuti W terkini, kg transfer dan bukti lama tetap.
+
+    Membaca snapshot intake untuk bahan yang dinamis menyisakan barang hantu
+    pada penutupan jasa meskipun lantai dan silo sudah menutup nol.
+    Penyesuaian lama ikut sebagai catatan tersendiri, bukan ubah bukti masuk.
+    """
+    from app.models import PkGudang2Intake, PkPurchaseBatch
+    from app.penggilingan.gudang2.models import PkPenyesuaianStok
+    baris = (await db.execute(select(PkGudang2Intake, PkPurchaseBatch)
+        .outerjoin(PkPurchaseBatch,PkPurchaseBatch.id == PkGudang2Intake.pk_purchase_batch_id)
+        .where(PkGudang2Intake.jasa_id == jasa_id))).all()
+    masuk = sum(float((b.berat_total_kg if b and b.jumlah_karung else i.berat_kg) or 0)
+                for i,b in baris)
+    penyesuaian = await db.scalar(select(func.coalesce(func.sum(PkPenyesuaianStok.selisih_kg),0))
+        .join(PkGudang2Intake,PkGudang2Intake.id == PkPenyesuaianStok.intake_id)
+        .where(PkGudang2Intake.jasa_id == jasa_id))
+    return masuk + float(penyesuaian)

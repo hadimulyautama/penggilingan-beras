@@ -27,6 +27,7 @@ from app.models import (
     PolishingOutputLog,
     PolishingProcess,
     PolishingSiloUsage,
+    PkTumpukanToSilo,
     Silo,
 )
 from app.services.activity_log import log_activity
@@ -65,6 +66,97 @@ def _arus_dari_komposisi(silo: Silo, komposisi: dict[str, float]) -> list[ArusPr
             referensi=f"{silo.nama_silo} · {jenis}", lokasi_id=silo.id,
         ))
     return hasil
+
+
+async def sinkron_bahan_karung(db, proses_id=None):
+    """Segarkan proyeksi lintas aplikasi dari sumber karung yang masih hidup.
+
+    Berlaku juga setelah intake final: koreksi W berikutnya tetap mengubah
+    bahan, sedangkan hasil dan snapshot penutupan tidak boleh ditulis ulang.
+    Proses tanpa sumber karung tidak disentuh, termasuk seluruh PK G1.
+    """
+    from hmu_core.proses_db import ProsesTerpadu
+    from sqlalchemy.orm import selectinload
+    from app.services.proses_bersama import perbarui_bahan_proses_bersama
+    from app.penggilingan.gudang2.karung import bobot_pemakaian
+    ids = select(PolishingSiloUsage.polishing_process_id).where(
+        PolishingSiloUsage.bobot_karung_dinamis.is_(True))
+    if proses_id is not None:
+        ids = ids.where(PolishingSiloUsage.polishing_process_id == proses_id)
+    for pid in (await db.scalars(ids.distinct())).all():
+        proc = await db.get(PolishingProcess, pid)
+        proyeksi = (await db.execute(select(ProsesTerpadu)
+            .options(selectinload(ProsesTerpadu.arus)).where(
+                ProsesTerpadu.aplikasi == "produksi",
+                ProsesTerpadu.tabel_sumber == "polishing_process",
+                ProsesTerpadu.id_sumber == str(pid)).with_for_update())).scalar_one_or_none()
+        if proyeksi is None:
+            continue
+        rows = (await db.execute(select(PolishingSiloUsage, Silo).join(Silo)
+            .where(PolishingSiloUsage.polishing_process_id == pid)
+            .order_by(PolishingSiloUsage.id))).all()
+        bobot = bobot_pemakaian([u for u, _ in rows])
+        dasar = [[u.id, str(u.berat_awal_kg), str(u.berat_masuk_kg),
+                  str(u.berat_akhir_kg), [[m.id, str(m.berat_kg),
+                  m.batch.sumber_berat if m.batch else None]
+                  for m in u.pemindahan_karung if m.dibatalkan_pada is None]] for u, _ in rows]
+        metadata = dict(proyeksi.metadata_domain or {})
+        if metadata.get("dasar_bobot_karung") == dasar:
+            continue
+        # Simpan angka yang pernah diterbitkan sebelum mengganti proyeksinya.
+        # Snapshot domain terpakai_lama_kg juga tetap utuh untuk kartu/PDF.
+        if proc.waktu_selesai is not None:
+            metadata.setdefault("catatan_penutupan", {
+                "bahan": [{"komoditas": a.komoditas, "berat_kg": str(a.berat_kg),
+                           "lokasi_id": a.lokasi_id} for a in proyeksi.arus if a.arah == "bahan"],
+                "berat_pk_terpakai_kg": sum(float(u.terpakai_lama_kg or 0) for u, _ in rows),
+                "rendemen_beras_persen": metadata.get("rendemen_beras_persen"),
+                "kepastian_bahan": metadata.get("kepastian_bahan"),
+            })
+        total_silo = {}
+        for u, silo in rows:
+            total_silo[silo.id] = total_silo.get(silo.id, 0) + float(u.berat_awal_kg) + float(u.berat_masuk_kg)
+        arus, komposisi = [], {}
+        for sid, total in total_silo.items():
+            silo = next(s for _, s in rows if s.id == sid)
+            rincian = await komposisi_bahan_silo(db, sid,
+                sampai=proc.waktu_selesai or input_time(None),
+                kecuali_proses_id=pid, target_kg=total)
+            komposisi[silo.nama_silo] = rincian
+            arus.extend(_arus_dari_komposisi(silo, rincian))
+        await perbarui_bahan_proses_bersama(db, tabel_sumber="polishing_process",
+            id_sumber=pid, bahan=tuple(arus))
+        metadata.update(dasar_bobot_karung=dasar, komposisi_bahan=komposisi,
+            kepastian_bahan=bobot.keadaan, bahan_belum_final=not bobot.pasti)
+        if proc.waktu_selesai is not None:
+            metadata["berat_pk_terpakai_kg"] = bobot.kg
+            hasil = await _output_map(db, pid)
+            metadata["rendemen_beras_persen"] = rendemen(
+                sum(hasil.get(j, 0) for j in GRADES), bobot.angka()) if bobot.pasti else None
+        proyeksi.metadata_domain = metadata
+    await db.flush()
+
+
+async def _ikat_sumber_karung(db, proc, silo, awal):
+    """Pisahkan sumber karung dinamis dari bahan tetap pada proses BARU.
+
+    Sisa ukur proses sebelumnya tetap kg. Satu pemindahan hanya diikat ke
+    proses pertama yang memakainya; koreksi W tidak boleh memindahkan kg
+    dari sisa ukur itu ke proses berikutnya dan menghitung koreksi dua kali.
+    """
+    sumber = list((await db.execute(select(PkTumpukanToSilo).where(
+        PkTumpukanToSilo.silo_id == silo.id,
+        PkTumpukanToSilo.jumlah_karung.is_not(None),
+        PkTumpukanToSilo.pemakaian_silo_id.is_(None),
+    ).with_for_update(of=PkTumpukanToSilo))).scalars().all())
+    dinamis = sum((m.berat_kg or Decimal(0) for m in sumber), Decimal(0))
+    usage = PolishingSiloUsage(
+        polishing_process_id=proc.id, silo_id=silo.id,
+        berat_awal_kg=Decimal(str(awal)) - dinamis,
+        bobot_karung_dinamis=bool(sumber), pemindahan_karung=sumber)
+    db.add(usage)
+    await db.flush()
+    return usage
 
 
 # ─────────────────────────── Mulai ───────────────────────────
@@ -159,9 +251,7 @@ async def mulai_penyosohan(
     for silo in silos:
         awal = await hitung_stok_silo(db, silo.id)
         total_awal += awal
-        db.add(PolishingSiloUsage(
-            polishing_process_id=proc.id, silo_id=silo.id, berat_awal_kg=awal,
-        ))
+        await _ikat_sumber_karung(db, proc, silo, awal)
     from app.services.proses_bersama import bentuk_proses, simpan_proses_bersama
     bahan_bersama_list = []
     rincian_bahan: dict[str, dict[str, float]] = {}
@@ -186,6 +276,7 @@ async def mulai_penyosohan(
         metadata_domain={"silo_ids": [s.id for s in silos],
                          "komposisi_bahan": rincian_bahan},
     )
+    await sinkron_bahan_karung(db, proc.id)
     await log_activity(
         db, table_name="polishing_process", record_id=proc.id, action="INSERT",
         changed_by=user.id,
@@ -350,9 +441,7 @@ async def tambah_silo_penyosohan(
     for silo in silos:
         awal = await hitung_stok_silo(db, silo.id)
         total_awal += awal
-        db.add(PolishingSiloUsage(
-            polishing_process_id=proc.id, silo_id=silo.id, berat_awal_kg=awal,
-        ))
+        await _ikat_sumber_karung(db, proc, silo, awal)
     semua_bahan = (await db.execute(
         select(PolishingSiloUsage, Silo)
         .join(Silo, Silo.id == PolishingSiloUsage.silo_id)
@@ -740,6 +829,9 @@ async def rendemen_proses(db: AsyncSession, proc_id: int) -> float | None:
         select(PolishingSiloUsage)
         .where(PolishingSiloUsage.polishing_process_id == proc_id)
     )).scalars().all()
+    from app.penggilingan.gudang2.karung import bobot_pemakaian
+    if not bobot_pemakaian(usages).pasti:
+        return None
     pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
     return rendemen(beras_dari_output(await _output_map(db, proc_id)), pk_terpakai)
 
@@ -923,6 +1015,7 @@ async def akhiri_penyosohan(db: AsyncSession, *, user, kode: str,
                                   saat=selesai_pada, user=user)
     except JedaError as e:
         raise Gudang2Error(str(e)) from e
+    await sinkron_bahan_karung(db, proc.id)
     proc.status = "selesai"
     proc.waktu_selesai = selesai_pada
     # Lewat `rendemen_proses`, bukan dihitung di sini: angka ini juga
@@ -955,6 +1048,7 @@ async def akhiri_penyosohan(db: AsyncSession, *, user, kode: str,
         metadata_tambahan={"rendemen_beras_persen": rendemen,
                            "berat_pk_terpakai_kg": pk_terpakai},
     )
+    await sinkron_bahan_karung(db, proc.id)
     await log_activity(
         db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
         changed_by=user.id, field_name="status", new_value="selesai",
@@ -1003,7 +1097,11 @@ async def laporan_penyosohan(db: AsyncSession, kode: str | None = None) -> str:
             for jenis in GRADES + BYPRODUCTS:
                 if jenis in outputs:
                     lines.append(f"   - {jenis}: {_kg(outputs[jenis])}")
-        if terpakai and beras:
+        from app.penggilingan.gudang2.karung import bobot_pemakaian
+        bobot = bobot_pemakaian(usages)
+        if not bobot.pasti:
+            lines.append(f"• Bahan: {bobot.teks()} · bobot truk belum final; rendemen belum dapat dipastikan.")
+        if bobot.pasti and terpakai and beras:
             lines.append(f"• Rendemen: {beras / terpakai * 100:.1f}% (beras {_kg(beras)} / PK {_kg(terpakai)})")
         return "\n".join(lines)
 
@@ -1184,6 +1282,9 @@ class KartuSosoh:
     beras: tuple[Bagian, ...]
     #: Spek yang dijalankan selama proses ini, urut kemunculannya.
     spek: tuple[str, ...]
+    neraca_tercatat: NeracaSosoh | None = None
+    bahan_pasti: bool = True
+    bahan_teks: str = ""
 
     @property
     def rendemen(self) -> float | None:
@@ -1194,7 +1295,7 @@ class KartuSosoh:
         satunya disentuh, dan yang berselisih di sini adalah angka yang menilai
         pekerjaan orang. Rendemen punya satu rumah (`rendemen()`).
         """
-        return rendemen(self.neraca.beras.kg, self.neraca.bahan_kg)
+        return rendemen(self.neraca.beras.kg, self.neraca.bahan_kg) if self.bahan_pasti else None
 
 
 async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
@@ -1329,6 +1430,10 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
         silo = tuple(silo)
         keluar = hasil.get(p.id, {})
         neraca = neraca_sosoh(sum(s.terpakai_kg for s in silo), keluar)
+        bahan_tercatat = sum(float(u.terpakai_lama_kg or 0) for u in pakai)
+        hitung_ulang = (any(u.bobot_karung_dinamis for u in pakai)
+                       and abs(bahan_tercatat - neraca.bahan_kg) > 0.001)
+        neraca_tercatat = neraca_sosoh(bahan_tercatat,keluar) if hitung_ulang else None
         # Beras dirinci per grade, urut `GRADES` — bukan urut abjad: pemilik
         # membacanya dari mutu tertinggi ke terendah, dan abjad menaruh
         # "beras_b" di puncak daftar mutu.
@@ -1337,6 +1442,8 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
             persen=((float(keluar[j]) / neraca.bahan_kg * 100)
                     if neraca.bahan_kg else None),
         ) for j in reversed(GRADES) if float(keluar.get(j, 0) or 0))
+        from app.penggilingan.gudang2.karung import bobot_pemakaian
+        bobot = bobot_pemakaian(pakai)
         kartu.append(KartuSosoh(
             id=p.id, kode=p.kode_proses, mulai=p.waktu_mulai,
             selesai=p.waktu_selesai,
@@ -1349,7 +1456,8 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
             pemilik=(f"{pemilik[p.jasa_id][0]} {pemilik[p.jasa_id][1]}".strip()
                      if p.jasa_id in pemilik else
                      f"pesanan #{p.jasa_id}" if p.jasa_id is not None else None),
-            silo=silo, neraca=neraca, beras=beras,
+            silo=silo, neraca=neraca, beras=beras, neraca_tercatat=neraca_tercatat,
             spek=tuple(spek_per.get(p.id, [])),
+            bahan_pasti=bobot.pasti, bahan_teks=bobot.teks(),
         ))
     return kartu, lagi
