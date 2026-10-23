@@ -91,18 +91,18 @@
       {% if d.qc_kosong %}<section class="riwayat-detail__card"><h2>QC hasil penyosohan</h2><p class="bantu">{{ d.qc_kosong }}</p></section>{% endif %}
     </div>
 
-    <aside class="proses-detail__samping" id="tindakan-proses" aria-label="Tindakan proses">
+    <aside class="proses-detail__samping" id="tindakan-proses" aria-label="{{ 'Status proses' if PORTAL_READ_ONLY else 'Tindakan proses' }}">
       <section class="riwayat-detail__card">
-        <h2>Tindakan proses</h2>
+        <h2>{{ 'Status proses' if PORTAL_READ_ONLY else 'Tindakan proses' }}</h2>
         <p class="bantu">{{ proses.keadaan|capitalize }}.</p>
-        <div class="proses-detail__aksi pilihan">
+        {% if not PORTAL_READ_ONLY %}<div class="proses-detail__aksi pilihan">
           {% for p in proses.pilihan %}
             {% set nilai_aksi = p[3] if p|length > 3 else proses.nilai %}
             <a class="pilihan__satu{{ ' pilihan__satu--utama' if loop.first }}" href="{{ benda.dasar_borang(alamat) }}buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}">
               <span class="pilihan__nama">{{ p[1] }}</span><span class="pilihan__ket">{{ p[2] }}</span>
             </a>
           {% else %}<p class="bantu">Belum ada tindakan yang tersedia pada keadaan ini.</p>{% endfor %}
-        </div>
+        </div>{% endif %}
       </section>
       <p class="bantu">Sesudah proses ditutup, halaman ini akan membuka detail riwayat prosesnya.</p>
     </aside>

@@ -220,6 +220,10 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
         # docstring `jasa_ids_per_pelanggan_dengan_hasil` untuk kenapa
         # keduanya wajib mengelompokkan dengan cara yang SAMA.
         jasa_per_pelanggan = await jasa.jasa_ids_per_pelanggan_dengan_hasil(db)
+        from app.web.portal.scope import is_customer_read
+        if is_customer_read(request):
+            pid=request.state.portal_scope.reader.pelanggan_id
+            jasa_per_pelanggan={pid:jasa_per_pelanggan[pid]} if pid in jasa_per_pelanggan else {}
         detail = request.url.path.endswith("/detail")
         if detail:
             if pelanggan_id not in jasa_per_pelanggan:
@@ -526,6 +530,9 @@ async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
         pelanggan_ids = await kms.pelanggan_ids_dengan_karung(db)
+        from app.web.portal.scope import is_customer_read
+        if is_customer_read(request):
+            pelanggan_ids=[pid for pid in pelanggan_ids if pid==request.state.portal_scope.reader.pelanggan_id]
         nama_pelanggan = {pid: n for pid, n in (await db.execute(
             select(Pelanggan.id, Pelanggan.nama_pelanggan)
             .where(Pelanggan.id.in_(pelanggan_ids or [0]))

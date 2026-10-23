@@ -1300,7 +1300,8 @@ class KartuSosoh:
 
 async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
                         sebelum: int | None = None,
-                        process_id: int | None = None) -> tuple[list[KartuSosoh], bool]:
+                        process_id: int | None = None,
+                        allowed_ids: frozenset[int] | None = None) -> tuple[list[KartuSosoh], bool]:
     """Kartu penyosohan SELESAI, terbaru lebih dulu. → (kartu, ada lanjutannya)
 
     Hanya yang selesai, dan itu keputusan pemilik ("kartu proses sosoh yang
@@ -1342,6 +1343,8 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
          .where(PolishingProcess.status == "selesai")
          .order_by(PolishingProcess.id.desc())
          .limit(batas + 1))
+    if allowed_ids is not None:
+        q = q.where(PolishingProcess.id.in_(allowed_ids))
     if process_id is not None:
         q = q.where(PolishingProcess.id == process_id)
     if sebelum:

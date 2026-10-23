@@ -59,6 +59,7 @@ async def log_activity(
     alasan: str | None = None,
     aksi: str | None = None,
     gudang: str | None = None,
+    pelanggan_ids: set[int] | None = None,
 ) -> None:
     """Catat satu entri audit. Tidak commit — ikut transaksi pemanggil.
 
@@ -78,8 +79,7 @@ async def log_activity(
     """
     if table_name in GUDANG_DINAMIS and gudang not in (G1, G2):
         raise ValueError("Gudang proses wajib disebut untuk catatan jeda.")
-    db.add(
-        ActivityLog(
+    entry = ActivityLog(
             table_name=table_name,
             record_id=record_id,
             action=action,
@@ -90,5 +90,10 @@ async def log_activity(
             alasan_perubahan=alasan,
             aksi=aksi,
             gudang=gudang if gudang is not None else GUDANG_TABEL.get(table_name),
-        )
     )
+    db.add(entry)
+    if pelanggan_ids:
+        from app.models.portal import PortalOwnershipEvent
+        await db.flush()
+        db.add_all([PortalOwnershipEvent(audit_id=entry.id, pelanggan_id=pid)
+                    for pid in sorted(pelanggan_ids)])

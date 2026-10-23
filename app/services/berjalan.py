@@ -3582,8 +3582,11 @@ async def _kartu_tiket_keluar_menganggur(db: AsyncSession) -> list[Baris]:
     return keluar
 
 
-async def untuk(db: AsyncSession, user: User) -> Berjalan:
+async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
     """Gabungkan sesuai peran — server yang memutuskan, bukan layar."""
+    from app.web.portal.security import CustomerReader
+    if isinstance(user, CustomerReader):
+        return await untuk_pelanggan(db, user.pelanggan_id, scope=read_scope)
     from app.peran import can_see_financials
 
     from app.web.api import _is_g1_operator, _is_g2_operator
@@ -3682,4 +3685,34 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
             "Lencana Kabar gagal dihitung (laci tetap tampil)")
     from app.services.identitas_pekerjaan import lengkapi
     await lengkapi(db, b.menunggu + b.berjalan + b.transit + b.meja)
+    return b
+
+
+async def untuk_pelanggan(db, pelanggan_id, *, scope=None):
+    """Read projection, without borrowing a staff role or action permissions."""
+    from app.services.jasa_pelanggan import saring_kartu
+    from app.models import Jasa
+    ids=set((await db.scalars(select(Jasa.id).where(Jasa.pelanggan_id==pelanggan_id))).all())
+    b = Berjalan()
+    sources = [await untuk_gudang1(db, boleh_qc=False), await untuk_gudang2(db)]
+    from app.services.identitas_pekerjaan import lengkapi
+    await lengkapi(db,[r for source in sources for name in ('menunggu','berjalan','transit','meja') for r in getattr(source,name)])
+    for name in ('menunggu', 'berjalan', 'transit', 'meja'):
+        rows = [r for source in sources for r in getattr(source, name)]
+        rows = await saring_kartu(db, rows, pelanggan_id)
+        safe = []
+        for row in rows:
+            if row.kepemilikan == 'campuran':
+                continue
+            owners=({row.jasa_id} | set(row.pemilik_ids or ())) - {None}
+            if owners and not owners <= ids:
+                continue
+            # Keep native action identifiers for classification/progress only.
+            # Read-only HTML removes the actual transaction controls.
+            if scope and row.kode not in scope.codes:
+                from sqlalchemy import text
+                own_ticket=await db.scalar(text('SELECT EXISTS(SELECT 1 FROM timbangan_transaksi WHERE kode=:kode AND pelanggan_id=:pid AND jasa=TRUE)'),{'kode':row.kode,'pid':pelanggan_id})
+                if not own_ticket:continue
+            safe.append(row)
+        setattr(b, name, safe)
     return b

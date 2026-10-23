@@ -422,6 +422,7 @@ async def pindah_kepemilikan_karung(
         action="UPDATE", changed_by=user.id, field_name="pelanggan_id",
         new_value=f"{jumlah_lembar} lembar → pelanggan",
         aksi="pindah_kepemilikan_karung",
+        pelanggan_ids={pelanggan_id},
     )
     await db.commit()
     return jumlah_lembar

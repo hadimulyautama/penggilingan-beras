@@ -1642,7 +1642,7 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .pk-detail__heading { min-width: 0; }
 .pk-detail__eyebrow { display: flex; align-items: center; gap: 9px; color: var(--redup); font-size: 12px; font-weight: 600; }
 .pk-detail__chip { display: inline-flex; align-items: center; min-height: 25px; padding: 0 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-.pk-detail__chip--jasa { color: #26734d; background: color-mix(in srgb, var(--aman) 20%, var(--panel)); }
+.pk-detail__chip--jasa { color: var(--pd-green); background: var(--pd-green-bg); }
 .pk-detail__chip--pabrik { color: var(--redup); background: var(--panel-2); }
 .pk-detail__dot { opacity: .55; }
 .pk-detail__hero h1 { margin: 10px 0 4px; color: var(--tinta); font-size: clamp(23px, 2.6vw, 32px); line-height: 1.18; overflow-wrap: anywhere; }
@@ -2214,7 +2214,7 @@ button.pilihan__satu {
 /* Angka yang MENILAI pekerjaan, bukan yang melaporkan isinya — rendemen.
    Warnanya mengikuti fase giling, sama dengan tepi kartunya, jadi mata
    menghubungkan keduanya tanpa perlu membaca labelnya dulu. */
-.fakta dd.sorot { color: var(--fase-giling); font-weight: 600; }
+.fakta dd.sorot { color: var(--pd-green); font-weight: 600; }
 
 /* Kepala daftar rincian batch. Ukuran barisnya sendiri sengaja TIDAK dikecilkan
    dari `.anak` bawaan: pernah dicoba 10,5px dan redup demi "ringkas", dan yang

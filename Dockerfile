@@ -20,6 +20,7 @@ COPY hmu_identitas ./hmu_identitas
 COPY hmu_tampilan ./hmu_tampilan
 COPY app ./app
 COPY migrations ./migrations
+COPY scripts/portal_pelanggan.py ./scripts/portal_pelanggan.py
 COPY alembic.ini .
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

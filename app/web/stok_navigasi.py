@@ -30,6 +30,9 @@ def alamat(jenis='bahan', pemilik='pabrik', *, pelanggan_id='', gudang=''):
 
 
 def pelanggan_diminta(request):
+    from app.web.portal.scope import is_customer_read
+    if is_customer_read(request):
+        return request.state.portal_scope.reader.pelanggan_id
     nilai = request.query_params.get('pelanggan_id', '')
     if not nilai:
         return None
@@ -82,7 +85,7 @@ async def siapkan(request, nama, konteks):
     view = getattr(request.state, 'view', 'tamu')
     pid = pelanggan_diminta(request) if pemilik == 'jasa' else None
     gudang = request.query_params.get('gudang', '')
-    if view not in MEJA or gudang not in {'g1', 'g2'}:
+    if (view not in MEJA and view!='pelanggan') or gudang not in {'g1', 'g2'}:
         gudang = ''
     pelanggan = []
     kelompok = []
@@ -168,5 +171,5 @@ async def siapkan(request, nama, konteks):
                for k, n in [('pabrik', 'Pabrik'), ('jasa', 'Titipan jasa')]],
         lokasi_pil=[dict(nama=n, kunci=k, href=href(lokasi=k))
                     for k, n in [('', 'Semua gudang'), ('g1', 'Gudang 1'), ('g2', 'Gudang 2')]]
-                   if view in MEJA else [],
+                   if view in MEJA or view=='pelanggan' else [],
     )

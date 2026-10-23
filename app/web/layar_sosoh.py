@@ -23,6 +23,8 @@ akhir — lalu dipakai menilai mesin.
 """
 from __future__ import annotations
 
+from app.web.portal.scope import is_customer_read
+
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -102,7 +104,8 @@ async def detail_proses_sosoh(kode_proses: str, request: Request,
 @router.get("/riwayat-sosoh/{process_id}")
 async def detail_riwayat_sosoh(process_id: int, request: Request,
                                akun=Depends(butuh_akun)):
-    await _pastikan_akses_sosoh(akun.user)
+    if not is_customer_read(request):
+        await _pastikan_akses_sosoh(akun.user)
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.gudang2.polishing import (
         _ALL_JENIS, alasan_koreksi_hasil, riwayat_sosoh,
@@ -194,6 +197,11 @@ async def pdf_riwayat_sosoh(process_id: int, request: Request,
                             unduh: int = 0, akun=Depends(butuh_akun)):
     """PDF proses sosoh selesai, siap dibuka, diunduh, atau dibagikan."""
     await _pastikan_akses_sosoh(akun.user)
+    return await laporan_sosoh_pdf(process_id, unduh)
+
+
+async def laporan_sosoh_pdf(process_id: int, unduh: int = 0):
+    """Shared PDF response; caller authorizes the process before invoking it."""
     from app.web.laporan_sosoh import ambil_data, buat_pdf
     data = await ambil_data(process_id)
     mode = "attachment" if unduh else "inline"

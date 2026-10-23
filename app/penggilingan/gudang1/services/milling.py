@@ -2134,7 +2134,8 @@ class KartuGiling:
 
 async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
                          sebelum: int | None = None,
-                         process_id: int | None = None
+                         process_id: int | None = None,
+                        allowed_ids: frozenset[int] | None = None
                          ) -> tuple[list[KartuGiling], bool]:
     """Kartu giling SELESAI, terbaru lebih dulu. → (kartu, ada lanjutannya)
 
@@ -2156,6 +2157,8 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
          .where(MillingProcess.status == "selesai")
          .order_by(MillingProcess.id.desc())
          .limit(batas + 1))
+    if allowed_ids is not None:
+        q = q.where(MillingProcess.id.in_(allowed_ids))
     if process_id is not None:
         q = q.where(MillingProcess.id == process_id)
     if sebelum:

@@ -1,4 +1,6 @@
 """Barang Masuk dan Pekerjaan: susunan baru atas layanan serta tindakan lama."""
+
+from app.web.portal.scope import is_customer_read
 from urllib.parse import urlencode, urlsplit
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, text, bindparam
@@ -39,7 +41,7 @@ def tautan(request, dasar, **nilai):
 async def siapkan_daftar_pekerjaan(request, user):
     """Daftar yang sama untuk isi pekerjaan dan angka pada tab katalog."""
     async with SessionLocal() as db:
-        b = await svc.untuk(db, user)
+        b = await svc.untuk(db, user, read_scope=getattr(request.state,'portal_scope',None))
     k = bagi(b)
     from app.web.stok_navigasi import pelanggan_diminta
     pid=pelanggan_diminta(request)
@@ -129,14 +131,17 @@ async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
     from app.web.api import _is_g1_operator, _is_g2_operator
     from app.services.kelompok_kerja import dapat_ditindak
     async with SessionLocal() as db:
-        b = await svc.untuk(db, akun.user)
+        b = await svc.untuk(db, akun.user, read_scope=getattr(request.state,'portal_scope',None))
         pending = bagi(b).masuk
         meta = {}
         if pending:
             ids = [x.kode for x in pending]
             q = text('SELECT kode,id,jenis_kode FROM timbangan_transaksi WHERE kode IN :ids').bindparams(bindparam('ids',expanding=True))
             meta = {r.kode:dict(r._mapping) for r in (await db.execute(q,{'ids':ids})).all()}
-        riwayat = await masuk.riwayat(db,g1=await _is_g1_operator(akun.user),g2=await _is_g2_operator(akun.user))
+        riwayat = await masuk.riwayat(db,
+            g1=True if is_customer_read(request) else await _is_g1_operator(akun.user),
+            g2=True if is_customer_read(request) else await _is_g2_operator(akun.user),
+            jasa_ids=request.state.portal_scope.jasa_ids if is_customer_read(request) else None)
         from app.web.stok_navigasi import pelanggan_diminta
         pid=pelanggan_diminta(request)
         pelanggan_saring=''
@@ -184,8 +189,9 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
     from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
     from app.web.api import _is_g1_operator,_is_g2_operator
     async with SessionLocal() as db:
-        g1,g2 = await _is_g1_operator(akun.user),await _is_g2_operator(akun.user)
-        data = await masuk.riwayat(db,g1=g1,g2=g2,tid=tid)
+        g1,g2 = (True,True) if is_customer_read(request) else (await _is_g1_operator(akun.user),await _is_g2_operator(akun.user))
+        data = await masuk.riwayat(db,g1=g1,g2=g2,tid=tid,
+            jasa_ids=request.state.portal_scope.jasa_ids if is_customer_read(request) else None)
         t = await ambil_tiket(db,tid)
         if t is None and data:
             t = await masuk.tiket_riwayat(db,tid)
@@ -194,9 +200,9 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
         jenis = masuk.jenis_tiket(t['jenis_kode'])
         from app.peran import can_see_financials
         boleh = g1 if jenis.startswith('gabah') else g2 if jenis!='lain' else can_see_financials(akun.user)
-        if not boleh:
+        if not is_customer_read(request) and not boleh:
             raise HTTPException(403,'Tiket ini berada di gudang lain.')
-        b = await svc.untuk(db,akun.user)
+        b = await svc.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
         pending = [x for x in bagi(b).masuk if x.kode==t['kode']]
         catatan = data[0]['catatan'] if data else []
         lokasi,proses,petugas = await masuk.rincian_lokasi(db,catatan)

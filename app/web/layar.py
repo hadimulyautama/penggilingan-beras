@@ -73,12 +73,12 @@ def boleh_lihat_gudang(view: str, gid: str) -> bool:
 
 def gudang1(view: str) -> bool:
     """Apakah view ini berurusan dengan Gudang 1 (selepan)."""
-    return view in (SUPER, ADMIN, SELEPAN)
+    return view == 'pelanggan' or view in (SUPER, ADMIN, SELEPAN)
 
 
 def gudang2(view: str) -> bool:
     """Apakah view ini berurusan dengan Gudang 2 (polesan)."""
-    return view in (SUPER, ADMIN, POLESAN)
+    return view == 'pelanggan' or view in (SUPER, ADMIN, POLESAN)
 
 
 async def view_untuk(user: User | None) -> str:
@@ -93,6 +93,9 @@ async def view_untuk(user: User | None) -> str:
     """
     if user is None:
         return TAMU
+    from app.web.portal.security import CustomerReader
+    if isinstance(user, CustomerReader):
+        return "pelanggan"
     if P.operator_saja(user.role):
         # Dipinjam dari katalog aksi supaya jawaban "operator gudang mana"
         # tak pernah berselisih antara menu aksi dan layar yang memuatnya.

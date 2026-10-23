@@ -18,7 +18,7 @@
   </header>
 
 {% macro retur_terkait_kartu() %}<section class="kirim-detail__bagian"><h2>Retur terkait</h2>
-{% if BOLEH_PERINTAH %}{% if k.rec.status == 'selesai' %}<a class="btn" href="/barang-keluar/{{ k.rec.id }}/retur">Retur barang</a>{% endif %}
+{% if BOLEH_PERINTAH or PORTAL_READ_ONLY %}{% if k.rec.status == 'selesai' %}<a class="btn" href="/barang-keluar/{{ k.rec.id }}/retur">Retur barang</a>{% endif %}
 {% for r in retur_terkait %}<p><a href="/retur/pengajuan/{{ r.id }}">Pengajuan retur #{{ r.id }}</a> · {{ (r.status_pemeriksaan or 'tertahan').replace('_',' ').title() }}</p><p>{{ 'Sudah diterima ke stok' if r.customer_return_id else 'Dibatalkan; stok tidak bertambah' if r.status_pemeriksaan=='dibatalkan' else 'Pengajuan tersimpan; belum diterima ke stok' }}{% if r.customer_return_id %} · <a href="/retur/{{ r.customer_return_id }}">Penerimaan retur</a>{% endif %}</p>{% else %}<p>Belum ada retur terkait.</p>{% endfor %}
 {% else %}<p>Penerimaan retur mengikuti kewenangan Admin.</p>{% endif %}</section>{% endmacro %}{{ dt.tabs('pengiriman') }}
 {{ dt.buka('ringkasan') }}<section class="kirim-detail__bagian"><h2>Tindakan saat ini</h2>  {% if k.rec.status == 'dimuat' %}

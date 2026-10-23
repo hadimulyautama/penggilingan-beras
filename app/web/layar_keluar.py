@@ -15,6 +15,8 @@ Transaksi selesai dan batal masuk tabel riwayat, dengan halaman detail sendiri.
 """
 from __future__ import annotations
 
+from app.web.portal.scope import is_customer_read
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.database import SessionLocal
@@ -62,7 +64,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     # Periksa izin positif, bukan hanya menolak view G1: operator tanpa
     # gudang juga tidak berhak membaca daftar maupun URL detail langsung.
     boleh_perintah = can_see_financials(akun.user)
-    if not (boleh_perintah or await _is_g2_operator(akun.user)):
+    if not is_customer_read(request) and not (boleh_perintah or await _is_g2_operator(akun.user)):
         raise HTTPException(403, "Pengiriman tersedia untuk Admin dan Operator Gudang 2. "
                             "Pilih gudang kerja melalui menu Kerja di gudang.")
     if request.query_params.get("buka") == "perintah_keluar":
@@ -88,28 +90,34 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     draf_saya = []
     from app.web.stok_navigasi import pelanggan_diminta
     pid=pelanggan_diminta(request)
+    from app.models import OutgoingRecord
+    customer_scope={'allowed_ids':request.state.portal_scope.ids(OutgoingRecord)} if is_customer_read(request) else {}
     async with SessionLocal() as db:
         if boleh_perintah and transaksi_id is None and not pid:
             from app.web.draf_keluar import daftar_draf
             draf_saya = await daftar_draf(db, akun.user)
         if transaksi_id is not None:
-            baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1)
+            baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1, **customer_scope)
             if not baris:
                 raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
             sebelum_berikut = None
         else:
-            if status == OUT_PERINTAH:
+            if status == OUT_PERINTAH and not is_customer_read(request):
                 aktif = await svc.menunggu_muat(db, akun.user, pencarian=q,
                                                sejak=tanggal, pelanggan_jasa_id=pid)
             else:
                 aktif = (await svc.daftar(db, status=(status,) if status else OUT_HIDUP,
-                                      batas=500, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid)
+                                      batas=500, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid, **customer_scope)
                      if not status or status in OUT_HIDUP else [])
             riwayat = (await svc.daftar(db, status=(status,) if status else (OUT_SELESAI, OUT_BATAL),
-                                        batas=51, sebelum_id=sebelum, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid)
+                                        batas=51, sebelum_id=sebelum, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid, **customer_scope)
                        if not status or status not in OUT_HIDUP else [])
             sebelum_berikut = riwayat[49][0].id if len(riwayat) > 50 else None
             baris = aktif + riwayat[:50]
+        if is_customer_read(request):
+            ids = request.state.portal_scope.jasa_ids
+            baris = [(r, items) for r, items in baris
+                     if items and all(i.jasa_id in ids for i in items)]
         # Data timbang ditampilkan bersama detail perintah, tanpa kueri per kartu.
         from sqlalchemy import bindparam, text
         ids = [r.timbangan_transaksi_id for r, _ in baris if r.timbangan_transaksi_id]
@@ -128,7 +136,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         from sqlalchemy import select
         from app.penggilingan.inventory.models import ReturRincian
         retur_terkait = (await db.scalars(select(ReturRincian).where(
-            ReturRincian.outgoing_record_id == transaksi_id).order_by(ReturRincian.id.desc()))).all() if transaksi_id and boleh_perintah else []
+            ReturRincian.outgoing_record_id == transaksi_id).order_by(ReturRincian.id.desc()))).all() if transaksi_id and (boleh_perintah or is_customer_read(request)) else []
         from app.services.jasa import nama_pemilik_banyak
         pemilik_item = await nama_pemilik_banyak(db, {it.jasa_id for _, items in baris for it in items if it.jasa_id})
         nama = await _nama_barang(db, baris)

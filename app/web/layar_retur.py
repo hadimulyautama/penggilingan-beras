@@ -1,6 +1,8 @@
 """Penerimaan barang retur: tiket timbang → rincian → stok Gudang 2."""
 from __future__ import annotations
 
+from app.web.portal.scope import is_customer_read
+
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
 
@@ -27,7 +29,7 @@ def _boleh(akun) -> bool:
     return can_see_financials(akun.user)
 
 
-async def _siapkan(db, sebelum: int | None = None):
+async def _siapkan(db, sebelum: int | None = None, *, scope=None):
     """Data layar: tiket retur belum dicatat, SKU valid, dan penerimaan terakhir."""
     tickets = (await db.execute(text("""
         SELECT t.id, t.kode, t.tanggal, t.pelanggan_id,
@@ -37,10 +39,11 @@ async def _siapkan(db, sebelum: int | None = None):
         FROM timbangan_transaksi t
         LEFT JOIN pelanggan p ON p.id = t.pelanggan_id
         LEFT JOIN customer_returns r ON r.timbangan_transaksi_id = t.id
-        WHERE t.arah = 'RETUR_MASUK' AND t.status_tiket IN ('TERBUKA', 'SELESAI')
+        WHERE (CAST(:pid AS INTEGER) IS NULL OR t.pelanggan_id=:pid)
+          AND t.arah = 'RETUR_MASUK' AND t.status_tiket IN ('TERBUKA', 'SELESAI')
           AND t.status_transaksi = 'AKTIF' AND r.id IS NULL
         ORDER BY t.tanggal DESC, t.id DESC LIMIT 60
-    """))).mappings().all()
+    """), {"pid":scope.reader.pelanggan_id if scope else None})).mappings().all()
 
     tickets = [dict(t) for t in tickets]
     rincian = (await db.scalars(select(ReturRincian).where(
@@ -58,33 +61,37 @@ async def _siapkan(db, sebelum: int | None = None):
                COUNT(i.id) AS jumlah_jenis
         FROM customer_returns r LEFT JOIN customer_return_items i
           ON i.customer_return_id = r.id
-        WHERE (CAST(:sebelum AS INTEGER) IS NULL OR r.id < :sebelum)
+        WHERE (CAST(:retids AS INTEGER[]) IS NULL OR r.id=ANY(CAST(:retids AS INTEGER[])))
+          AND (CAST(:sebelum AS INTEGER) IS NULL OR r.id < :sebelum)
         GROUP BY r.id ORDER BY r.id DESC LIMIT 51
-    """), {"sebelum": sebelum})).mappings().all()
+    """), {"sebelum": sebelum,"retids":list(scope.ids(CustomerReturn)) if scope else None})).mappings().all()
     return tickets, katalog, mutu, recent
 
 
 @router.get("/retur")
 async def halaman_retur(request: Request, akun=Depends(butuh_akun),
                          sebelum: int | None = None, sebelum_pengajuan: int | None = None):
-    if not _boleh(akun):
+    if not is_customer_read(request) and not _boleh(akun):
         raise HTTPException(403, "Penerimaan retur hanya tersedia untuk Admin.")
     async with SessionLocal() as db:
-        tickets, katalog, mutu, recent = await _siapkan(db, sebelum)
+        scope=request.state.portal_scope if is_customer_read(request) else None
+        tickets, katalog, mutu, recent = await _siapkan(db, sebelum, scope=scope)
         pengajuan = (await db.execute(text('''
             SELECT r.id,r.status_pemeriksaan,r.customer_return_id,r.hasil_pemeriksaan,
                    o.kode AS kode_pengiriman,o.id AS pengiriman_id,o.nama_pembeli,t.kode AS kode_tiket
             FROM retur_rincian r JOIN outgoing_records o ON o.id=r.outgoing_record_id
             LEFT JOIN timbangan_transaksi t ON t.id=r.timbangan_transaksi_id
-            WHERE r.customer_return_id IS NULL
+            WHERE (CAST(:outids AS INTEGER[]) IS NULL OR o.id=ANY(CAST(:outids AS INTEGER[])))
+              AND r.customer_return_id IS NULL
               AND (CAST(:sebelum AS INTEGER) IS NULL OR r.id<:sebelum)
             ORDER BY r.id DESC LIMIT 51
-        '''), {'sebelum': sebelum_pengajuan})).mappings().all()
+        '''), {'sebelum': sebelum_pengajuan,'outids':list(scope.resources['outgoing_records']) if scope else None})).mappings().all()
         lama = (await db.execute(text('''SELECT r.id,t.kode AS kode_tiket
             FROM retur_rincian r LEFT JOIN timbangan_transaksi t ON t.id=r.timbangan_transaksi_id
-            WHERE r.outgoing_record_id IS NULL AND NOT EXISTS
+            WHERE (CAST(:pid AS INTEGER) IS NULL OR t.pelanggan_id=:pid)
+              AND r.outgoing_record_id IS NULL AND NOT EXISTS
               (SELECT 1 FROM customer_returns c WHERE c.timbangan_transaksi_id=r.timbangan_transaksi_id)
-            ORDER BY r.id DESC'''))).mappings().all()
+            ORDER BY r.id DESC'''),{'pid':scope.reader.pelanggan_id if scope else None})).mappings().all()
     return await render_laci(request, "retur_daftar.html", layar="barang_keluar",
                               pengajuan=pengajuan[:50], lama=lama,
                               pengajuan_berikut=pengajuan[49]['id'] if len(pengajuan)>50 else None,
@@ -98,7 +105,7 @@ async def halaman_retur(request: Request, akun=Depends(butuh_akun),
 
 @router.get("/retur/{retur_id}")
 async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)):
-    if not _boleh(akun):
+    if not is_customer_read(request) and not _boleh(akun):
         raise HTTPException(403, "Penerimaan retur hanya tersedia untuk Admin.")
     from app.models import User, Warehouse
 

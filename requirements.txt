@@ -43,3 +43,6 @@ aiofiles==24.1.0
 
 # ── Utils ──
 python-dotenv==1.0.1
+
+# Read-only projection of shared production templates for the customer portal.
+beautifulsoup4==4.15.0

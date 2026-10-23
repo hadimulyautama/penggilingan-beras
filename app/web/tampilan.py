@@ -166,6 +166,10 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     navigasi harus menyala di tab yang benar, dan satu pemanggil yang lupa
     mengirimnya berarti satu layar yang tabnya mati tanpa ada yang menyadari.
     """
+    from app.web.portal.scope import is_customer_read
+    if is_customer_read(request):
+        from app.web.portal.presentation import render_customer
+        return render_customer(request, nama, status_code=status_code, **konteks)
     if request.query_params.get("kembali_kabar"):
         from app.web.layar_kabar import kembali_aman
         konteks["kembali"] = kembali_aman(request.query_params.get("kembali_kabar"))
@@ -220,6 +224,11 @@ async def render_laci(request: Request, nama: str, **konteks):
     memanggil ini di sana berarti menyusun ulang seluruh daftar dua kali
     hanya demi tiga angka.
     """
+    from app.web.portal.scope import is_customer_read
+    if is_customer_read(request):
+        from app.web.portal.presentation import prepare_context
+        await prepare_context(request, nama, konteks)
+        return render(request, nama, **konteks)
     from app.web.nav import lencana
 
     from app.web.stok_navigasi import siapkan

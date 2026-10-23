@@ -22,7 +22,8 @@ def kembali_aman(nilai):
 async def tampilkan(request, akun, *, transfer_id=None, permintaan_id=None):
     from app.web.api import _is_g1_operator, actions_menu
     from app.services.penghalang_koreksi import daftar
-    if not await _is_g1_operator(akun.user):
+    from app.web.portal.scope import is_customer_read
+    if not is_customer_read(request) and not await _is_g1_operator(akun.user):
         raise HTTPException(403,'Riwayat Transfer milik Admin ke atas dan operator Gudang 1.')
     async with SessionLocal() as db:
         t=await db.get(InternalTransfer,transfer_id) if transfer_id is not None else None
@@ -36,7 +37,8 @@ async def tampilkan(request, akun, *, transfer_id=None, permintaan_id=None):
         if p and p.internal_transfer_id:t=await db.get(InternalTransfer,p.internal_transfer_id)
         sumber=await db.get(MillingProcess,t.milling_process_id if t else p.milling_process_id)
         if sumber is None:raise HTTPException(404,'Proses penggilingan asal tidak ditemukan.')
-        d=await detail_transfer.rincian(db,catatan=t,permintaan=p,params=request.query_params)
+        d=await detail_transfer.rincian(db,catatan=t,permintaan=p,params=request.query_params,
+            read_scope=getattr(request.state,'portal_scope',None))
         p=d['permintaan']
         penghalang=await transfer.alasan_koreksi_transfer(db,t.id) if akun.is_admin and t else None
         catatan_penghalang=await daftar(db,'transfer',t.id) if penghalang else []

@@ -74,7 +74,7 @@ class Catatan:
 
 async def daftar(
     db: AsyncSession, *, rentang: str = "48j", kelompok: str = "semua",
-    cari: str = "", batas: int = 200,
+    cari: str = "", batas: int = 200, customer_predicate=None,
 ) -> tuple[list[Catatan], int]:
     """Catatan terbaru lebih dulu. Kembalikan (yang tampil, jumlah seluruhnya)."""
     kini = now_local()
@@ -84,6 +84,9 @@ async def daftar(
     # DICATAT, dan baris "undo" cuma menggandakan cerita yang sama dari sisi
     # lain — sementara akibatnya sudah terlihat pada catatan yang dibatalkan.
     q = q.where(ActivityLog.table_name != "undo")
+
+    if customer_predicate is not None:
+        q = q.where(customer_predicate)
 
     delta = next((d for k, _, d in RENTANG if k == rentang), BATAS_UBAH)
     if delta is not None:
@@ -109,9 +112,9 @@ async def daftar(
     # tiap pencatatan menambah satu baris — jadi biayanya naik terus tanpa
     # ada yang menyadarinya sampai layar audit berhenti bisa dibuka.
     # Temuan QA P-S-08.
-    semua = (await db.execute(
-        select(func.count(ActivityLog.id)).where(ActivityLog.table_name != "undo")
-    )).scalar_one()
+    total_query = select(func.count(ActivityLog.id)).where(ActivityLog.table_name != "undo")
+    if customer_predicate is not None:total_query=total_query.where(customer_predicate)
+    semua = (await db.execute(total_query)).scalar_one()
 
     # Nama hanya untuk pelaku yang benar-benar MUNCUL di halaman ini, bukan
     # seluruh isi tabel orang.

@@ -827,6 +827,7 @@ async def pindah_kepemilikan_barang_jadi(
         action="UPDATE", changed_by=user.id, field_name="jasa_id",
         new_value=f"{karung} karung ({berat_dipindah:.0f}kg) → pabrik",
         aksi="pindah_kepemilikan_produk",
+        pelanggan_ids=await _pelanggan_pemilik(db, jasa_id),
     )
     await db.commit()
     return berat_dipindah
@@ -895,6 +896,7 @@ async def pindah_kepemilikan_broken_curah(
         action="UPDATE", changed_by=user.id, field_name="jasa_id",
         new_value=f"{berat_kg:.0f}kg broken → pabrik",
         aksi="pindah_kepemilikan_produk",
+        pelanggan_ids=await _pelanggan_pemilik(db, jasa_id),
     )
     await db.commit()
     return float(berat_kg)
@@ -962,6 +964,7 @@ async def pindah_kepemilikan_bekatul_curah(
         action="UPDATE", changed_by=user.id, field_name="jasa_id",
         new_value=f"{berat_kg:.0f}kg bekatul → pabrik",
         aksi="pindah_kepemilikan_produk",
+        pelanggan_ids=await _pelanggan_pemilik(db, jasa_id),
     )
     await db.commit()
     return float(berat_kg)
@@ -1026,3 +1029,9 @@ async def laporan_stok_barang_jadi(db: AsyncSession) -> str:
 
 
 # `laporan_hpp_beras` DIBUANG 28 September 2026 — lihat catatan di atas.
+
+
+async def _pelanggan_pemilik(db, jasa_ids):
+    from app.models import Jasa
+    ids = jasa_ids if isinstance(jasa_ids, (list, tuple, set)) else [jasa_ids]
+    return set((await db.scalars(select(Jasa.pelanggan_id).where(Jasa.id.in_(ids)))).all())

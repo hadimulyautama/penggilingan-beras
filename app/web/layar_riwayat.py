@@ -9,6 +9,8 @@ sendiri tetapi berbagi gerbang (`_is_g1_operator`) dan bentuk kursor
 """
 from __future__ import annotations
 
+from app.web.portal.scope import is_customer_read
+
 from datetime import datetime
 from html import escape
 from io import BytesIO
@@ -81,7 +83,7 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
 async def detail_riwayat_giling(process_id: int, request: Request,
                                akun=Depends(butuh_akun)):
     from app.web.api import _is_g1_operator
-    if not await _is_g1_operator(akun.user):
+    if not is_customer_read(request) and not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
     from app.penggilingan.gudang1.services.milling import (
         alasan_koreksi_hasil_giling, riwayat_giling,
@@ -553,6 +555,11 @@ async def unduh_laporan_giling(process_id: int, unduh: int = 0,
     from app.web.api import _is_g1_operator
     if not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Laporan Penggilingan hanya untuk Admin ke atas dan operator Gudang 1.")
+    return await laporan_giling_pdf(process_id, unduh)
+
+
+async def laporan_giling_pdf(process_id: int, unduh: int = 0):
+    """Shared PDF response; caller authorizes the process before invoking it."""
     data = await _ambil_data_laporan_giling(process_id)
     pdf = _pdf_laporan_giling(data)
     return Response(content=pdf, media_type="application/pdf",
@@ -602,7 +609,7 @@ async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)
 async def detail_riwayat_pengeringan(lot_id: int, request: Request,
                                      akun=Depends(butuh_akun)):
     from app.web.api import _is_g1_operator
-    if not await _is_g1_operator(akun.user):
+    if not is_customer_read(request) and not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
     from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
     from app.services import berjalan, proses_aktif
@@ -789,6 +796,12 @@ async def unduh_laporan_pengeringan(lot_id: int, unduh: int = 0,
     if not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Laporan Pengeringan hanya untuk Admin ke atas dan operator Gudang 1.")
 
+    return await laporan_pengeringan_pdf(lot_id, unduh)
+
+
+async def laporan_pengeringan_pdf(lot_id: int, unduh: int = 0):
+    """Shared read composer; caller authorizes the lot before invoking it."""
+    from app.models import DryingLotBatch
     async with SessionLocal() as db:
         lot = await db.get(DryingLot, lot_id)
         if lot is None:
@@ -1011,7 +1024,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     from app.web.api import _is_g1_operator, _is_g2_operator
     boleh = await (_is_g1_operator(akun.user) if gudang == "g1"
                    else _is_g2_operator(akun.user))
-    if not boleh:
+    if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
 
     grouped: dict[str, dict] = {}
@@ -1042,6 +1055,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .outerjoin(User, User.id == PurchaseBatchQcSample.input_by)
                 .where(PurchaseBatch.kondisi_gabah == kondisi,
                        PurchaseBatch.dibatalkan_pada.is_(None),
+                       PurchaseBatch.id.in_(request.state.portal_scope.ids(PurchaseBatch)) if is_customer_read(request) else True,
                        PurchaseBatch.kode_batch == referensi if referensi is not None else True)
                 .order_by(PurchaseBatchQcSample.created_at.desc(),
                           PurchaseBatchQcSample.id.desc()).limit(None if referensi is not None else 200)
@@ -1064,6 +1078,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         elif jenis == "pk-luar":
             from app.models import PkPurchaseQcLog, User
             batch_terbaru = (select(PkPurchaseQcLog.pk_purchase_batch_id)
+                .where(PkPurchaseQcLog.pk_purchase_batch_id.in_(request.state.portal_scope.ids(PkPurchaseBatch)) if is_customer_read(request) else True)
                 .group_by(PkPurchaseQcLog.pk_purchase_batch_id)
                 .order_by(func.max(PkPurchaseQcLog.waktu).desc()).limit(200))
             hasil = (await db.execute(
@@ -1071,7 +1086,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .join(PkPurchaseQcLog, PkPurchaseQcLog.pk_purchase_batch_id == PkPurchaseBatch.id)
                 .outerjoin(Supplier, Supplier.id == PkPurchaseBatch.supplier_id)
                 .outerjoin(User, User.id == PkPurchaseQcLog.input_by)
-                .where(PkPurchaseBatch.kode_batch == referensi if referensi is not None else
+                .where(PkPurchaseBatch.id.in_(request.state.portal_scope.ids(PkPurchaseBatch)) if is_customer_read(request) else True,
+                       PkPurchaseBatch.kode_batch == referensi if referensi is not None else
                        PkPurchaseQcLog.pk_purchase_batch_id.in_(batch_terbaru))
                 .order_by(PkPurchaseQcLog.waktu.desc(), PkPurchaseQcLog.id.desc())
             )).all()
@@ -1095,13 +1111,15 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                        plat=batch.no_polisi_truk, qc_pk=qc)
         elif jenis == "pk-hasil-giling":
             proses_terbaru = (select(MillingQcLog.milling_process_id)
+                .where(MillingQcLog.milling_process_id.in_(request.state.portal_scope.ids(MillingProcess)) if is_customer_read(request) else True)
                 .group_by(MillingQcLog.milling_process_id)
                 .order_by(func.max(MillingQcLog.waktu).desc()).limit(200))
             hasil = (await db.execute(
                 select(MillingProcess, MillingQcLog, User.nama)
                 .join(MillingQcLog, MillingQcLog.milling_process_id == MillingProcess.id)
                 .outerjoin(User, User.id == MillingQcLog.input_by)
-                .where(MillingProcess.kode_proses == referensi if referensi is not None else
+                .where(MillingProcess.id.in_(request.state.portal_scope.ids(MillingProcess)) if is_customer_read(request) else True,
+                       MillingProcess.kode_proses == referensi if referensi is not None else
                        MillingQcLog.milling_process_id.in_(proses_terbaru))
                 .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
             )).all()

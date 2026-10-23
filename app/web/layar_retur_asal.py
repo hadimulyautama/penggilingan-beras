@@ -1,5 +1,7 @@
 """Retur dimulai dari item yang benar-benar dikirim, bukan katalog bebas."""
 from decimal import Decimal
+
+from app.web.portal.scope import is_customer_read
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -24,7 +26,8 @@ def wajib(akun):
 
 @router.get('/retur/tiket/{tiket_id}')
 async def tiket_retur(tiket_id: int, request: Request, akun=Depends(butuh_akun)):
-    wajib(akun)
+    if not is_customer_read(request):
+        wajib(akun)
     async with SessionLocal() as db:
         tiket = (await db.execute(text('''
             SELECT t.id,t.kode,t.status_tiket,t.status_transaksi,t.nomor_polisi,
@@ -44,7 +47,8 @@ async def tiket_retur(tiket_id: int, request: Request, akun=Depends(butuh_akun))
 @router.get('/retur/pengajuan/{pengajuan_id}')
 async def formulir(request: Request, pengiriman_id: int | None = None,
                    pengajuan_id: int | None = None, akun=Depends(butuh_akun)):
-    wajib(akun)
+    if not is_customer_read(request):
+        wajib(akun)
     from app.web.layar_keluar import _nama_barang
     from app.services.jasa import nama_pemilik_banyak
     async with SessionLocal() as db:

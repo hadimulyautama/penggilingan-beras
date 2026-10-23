@@ -559,7 +559,8 @@ class KartuTransfer:
 
 async def riwayat_transfer(db: AsyncSession, *, batas: int = 30,
                            sebelum: int | None = None,
-                           transfer_id: int | None = None
+                           transfer_id: int | None = None,
+                        allowed_ids: frozenset[int] | None = None
                            ) -> tuple[list[KartuTransfer], bool]:
     """Kartu transfer TERBARU dulu, dibatalkan atau tidak. → (kartu, lagi)
 
@@ -578,6 +579,8 @@ async def riwayat_transfer(db: AsyncSession, *, batas: int = 30,
     q = (select(InternalTransfer)
          .order_by(InternalTransfer.id.desc())
          .limit(batas + 1))
+    if allowed_ids is not None:
+        q = q.where(InternalTransfer.id.in_(allowed_ids))
     if transfer_id is not None:
         q = q.where(InternalTransfer.id == transfer_id)
     if sebelum:

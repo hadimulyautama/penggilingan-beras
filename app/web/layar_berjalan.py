@@ -7,6 +7,8 @@ benar dalam satu ketukan. Laporan memberi tahu; layar ini menyelesaikan.
 """
 from __future__ import annotations
 
+from app.web.portal.scope import is_customer_read
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -59,7 +61,7 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
     if jenis not in proses_aktif.JENIS:
         raise HTTPException(404, "Jenis proses tidak ditemukan.")
     boleh = await (_is_g2_operator(akun.user) if jenis == "sosoh" else _is_g1_operator(akun.user))
-    if not boleh:
+    if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Proses ini berada di gudang lain. Pilih gudang kerja yang sesuai.")
     model, kolom = ((PolishingProcess, PolishingProcess.kode_proses) if jenis == "sosoh"
                     else (MillingProcess, MillingProcess.kode_proses) if jenis == "giling"
@@ -83,7 +85,7 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
             daftar = await svc._kartu_penyosohan_g2(db, None, kode_proses=kode, lengkap=True)
         else:
             # Kartu yang sama dengan daftar, termasuk gerbang QC untuk operator.
-            b = await svc.untuk(db, akun.user)
+            b = await svc.untuk(db, akun.user, read_scope=getattr(request.state,'portal_scope',None))
             daftar = b.berjalan
         kartu = next((x for x in daftar if x.kode == kode and
                       (x.fase == "sosoh" if jenis == "sosoh" else

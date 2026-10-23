@@ -63,7 +63,7 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     # untuk Admin & Super Admin, dan justru dua view itulah yang mendapat
     # pilnya di /berjalan. Satu app, satu nama kontrak, dua jawaban (QA 24
     # September 2026 (c) butir 7).
-    saring = GUDANG if view in MEJA else ()
+    saring = GUDANG if view in MEJA or view=='pelanggan' else ()
     gudang = request.query_params.get("gudang") or ""
     if gudang not in {g for g, _, _ in saring}:
         gudang = ""                       # nilai karangan dari URL diabaikan
@@ -209,7 +209,7 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     from app.web.layar import GUDANG, MEJA, POLESAN, SUPER, gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
-    saring = GUDANG if view in MEJA else ()
+    saring = GUDANG if view in MEJA or view=='pelanggan' else ()
     gudang = request.query_params.get("gudang") or ""
     if gudang not in {g for g, _, _ in saring}:
         gudang = ""

@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block isi %}
+<h1>Laporan</h1><p class="bantu">Laporan proses dan nota pesanan milik Anda.</p>
+<nav class="portal-tabs">{% for k,n in [('pengeringan','Pengeringan'),('giling','Penggilingan'),('sosoh','Penyosohan'),('transfer','Transfer')] %}<a class="btn" href="/riwayat-{{ k }}">Riwayat {{ n }}</a>{% endfor %}<a class="btn" href="/audit">Transfer kepemilikan</a></nav>
+<section class="kartu"><h2>Laporan hasil proses</h2><table><thead><tr><th>Proses</th><th>Referensi</th><th>Detail</th><th>PDF</th></tr></thead><tbody>{% for r in reports %}<tr><td>{{ {'pengeringan':'Pengeringan','giling':'Penggilingan','sosoh':'Penyosohan'}[r.kind] }}</td><td>{{ r.code }}</td><td><a href="/riwayat-{{ r.kind }}/{{ r.id }}">Lihat detail</a></td><td><a href="/riwayat-{{ r.kind }}/{{ r.id }}/laporan">Baca PDF</a> · <a href="/riwayat-{{ r.kind }}/{{ r.id }}/laporan.pdf?unduh=1">Unduh PDF</a></td></tr>{% else %}<tr><td colspan="4">Belum ada laporan proses selesai.</td></tr>{% endfor %}</tbody></table></section>
+<section class="kartu"><h2>Nota pesanan</h2><div class="portal-list">{% for j in orders %}<article><a href="/jasa/{{ j.id }}/nota">{{ j.kode }}</a> · {{ j.status|title }}</article>{% else %}<p>Belum ada pesanan.</p>{% endfor %}</div></section>
+{% endblock %}

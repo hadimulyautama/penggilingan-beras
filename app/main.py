@@ -130,6 +130,10 @@ app.include_router(lihat_sebagai_router)
 app.include_router(internal_router)
 app.include_router(internal_kledo_router)
 app.include_router(auth_router)
+from app.web.portal.auth import router as portal_auth_router
+from app.web.portal.routes import router as portal_router
+app.include_router(portal_auth_router)
+app.include_router(portal_router)
 app.include_router(pengguna_router)
 #: Berkas statis: milik aplikasi (manifest.json) di depan, paket tampilan
 #: (app.css, aksi.js, pindah.js, ikon) di belakang. Aturan cache-nya — setahun
@@ -265,7 +269,14 @@ async def penjaga_csrf(request: Request, call_next):
             request._receive = _terima
         from app.web.security import baca_token, NAMA_COOKIE
         sesi = baca_token(request.cookies.get(NAMA_COOKIE))
-        diharapkan = _csrf.untuk_sesi(di_kuki or "", sesi, request.cookies.get("produksi_lihat", "")) if di_kuki else None
+        namespace = request.cookies.get("produksi_lihat", "")
+        if request.url.path.startswith('/pelanggan'):
+            from app.web.portal.security import COOKIE as portal_cookie, key as portal_key
+            from hmu_identitas.token import baca_token as baca_portal
+            portal = baca_portal(portal_key(), request.cookies.get(portal_cookie))
+            sesi = (portal['akun_id'], portal['versi']) if portal else None
+            namespace = 'portal-pelanggan'
+        diharapkan = _csrf.untuk_sesi(di_kuki or "", sesi, namespace) if di_kuki else None
         if not _csrf.cocok(diharapkan, dikirim):
             log.warning("Token CSRF tak cocok pada %s %s",
                         request.method, request.url.path)
@@ -300,6 +311,8 @@ async def wajib_ganti_sandi_dulu(request: Request, call_next):
     Admin — dan karenanya dipegang dua orang — tetap bisa dipakai bekerja
     tanpa batas. Temuan QA P-S-07.
     """
+    if request.url.path.startswith('/pelanggan'):
+        return await call_next(request)
     if request.method in ("GET", "HEAD", "OPTIONS"):
         return await call_next(request)
     if request.url.path in ("/ganti-sandi", "/keluar", "/keluar-semua"):

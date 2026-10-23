@@ -1,0 +1,21 @@
+/* Only the customer shell; data components and color tokens come from production. */
+body.portal-customer {display:block;min-height:100dvh;height:auto;overflow:auto;margin:0}
+.portal-sidebar {position:fixed;inset:0 auto 0 0;width:260px;display:flex;flex-direction:column;padding:20px 12px;background:var(--pd-sheet);border-right:1px solid var(--pd-line);z-index:40;overflow-y:auto}
+.portal-brand {display:block;padding:0 10px 14px}.portal-brand img{width:166px;height:48px;object-fit:contain;object-position:left center}
+.logo-light{display:none}body.terik .logo-light{display:block}body.terik .logo-dark{display:none}
+.portal-kicker{font-size:11px;letter-spacing:.13em;color:var(--pd-muted);padding:0 10px}
+.portal-sidebar nav{flex:1}.portal-account{padding:16px 10px 0;border-top:1px solid var(--pd-line)}.portal-account p{margin:4px 0 12px;color:var(--pd-muted)}
+.portal-workspace{margin-left:260px;min-width:0}.portal-topbar{min-height:70px;padding:12px 26px;display:flex;gap:16px;align-items:center;border-bottom:1px solid var(--pd-line);background:var(--pd-sheet);position:sticky;top:0;z-index:25}.portal-top-actions{margin-left:auto;display:flex;gap:8px}.portal-top-actions .btn{display:grid;place-items:center;width:44px;height:44px;padding:6px}
+.portal-menu{display:none}.portal-content.isi{width:auto;max-width:1600px;height:auto;overflow:visible;padding:28px 32px;margin:0 auto;min-width:0}.portal-content>:first-child{margin-top:0}
+.portal-content .production-table-scroll{max-width:100%;overflow-x:auto}.portal-content table{width:100%}.portal-content iframe{max-width:100%}.portal-content .readonly-value{display:block;padding:8px 0;color:var(--pd-ink)}
+.portal-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}.portal-tabs a{min-height:44px;padding:10px 14px}.portal-content .portal-list{display:grid;gap:12px}.portal-content .portal-list article{padding:16px;border:1px solid var(--pd-line);border-radius:12px;background:var(--pd-sheet)}
+.portal-content :focus-visible,.portal-sidebar :focus-visible,.portal-topbar :focus-visible{outline:3px solid var(--pd-blue);outline-offset:3px}
+.portal-skip{position:fixed;left:8px;top:-100px;z-index:100;padding:12px;background:var(--pd-sheet);color:var(--pd-ink)}.portal-skip:focus{top:8px}
+.portal-login{margin:0;min-height:100dvh;background:var(--pd-bg);color:var(--pd-ink);display:grid;place-items:center;padding:20px;font:16px/1.5 system-ui}.login-card{width:min(100%,420px);border:1px solid var(--pd-line);border-radius:18px;background:var(--pd-sheet);padding:32px}.login-card img{width:166px}.login-card form,.login-card label{display:grid;gap:8px}.login-card form{gap:18px}.login-card input,.login-card button{font:inherit;padding:12px;border:1px solid var(--pd-muted);border-radius:9px;background:var(--pd-sheet);color:var(--pd-ink)}.login-card button{background:var(--pd-green);color:var(--pd-sheet);cursor:pointer}.login-card [role=alert]{color:var(--pd-danger)}
+@media(max-width:900px){.portal-sidebar{transform:translateX(-100%);transition:transform .18s;width:min(290px,88vw)}.portal-workspace{margin-left:0}.portal-menu{display:flex;align-items:center;gap:8px;min-height:44px}.portal-topbar{padding:10px 14px;gap:8px}.portal-topbar>span{font-size:12px;max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.portal-content.isi{padding:20px 14px 36px}.portal-customer.sidebar-open .portal-sidebar{transform:none}.portal-shade:not([hidden]){position:fixed;inset:0;background:#0009;z-index:35}.portal-content h1{font-size:23px}.portal-content :is(input,select,button){min-height:44px}.portal-content .saring{flex-wrap:wrap}.portal-content .btn{white-space:normal}}
+@media(prefers-reduced-motion:reduce){.portal-sidebar{transition:none}}
+
+body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body.portal-customer .portal-topbar .btn{min-width:44px;max-width:none}
+
+
+.portal-login {height:auto;overflow:auto}.login-brand{display:flex;align-items:center;justify-content:space-between;gap:12px}.login-card .login-brand button{min-width:44px;min-height:44px;background:var(--pd-sheet);color:var(--pd-ink)}

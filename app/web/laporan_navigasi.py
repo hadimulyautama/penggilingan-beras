@@ -25,6 +25,9 @@ QC = (
 
 
 async def pilihan(akun):
+    from app.web.portal.security import CustomerReader
+    if isinstance(akun.user,CustomerReader):
+        return {"laporan":[("laporan","Laporan","/laporan",None)],"proses":list(PROSES),"qc":list(QC),"audit":[("audit","Transfer kepemilikan","/audit",None)]}
     # Gerbang yang sama dengan halaman lama, memakai peran/gudang efektif.
     from app.web.api import _is_g1_operator, _is_g2_operator
     izin = {"g1": await _is_g1_operator(akun.user),

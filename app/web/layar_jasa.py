@@ -12,6 +12,8 @@ memakan silo dan lantai, dan tak terbaca di mana pun. Halaman ini yang
 menutup lubang yang dibuat saringan itu.
 """
 from __future__ import annotations
+
+from app.web.portal.scope import is_customer_read
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -41,7 +43,7 @@ async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
         halaman=1
     async with SessionLocal() as db:
         data=await svc.daftar(db,cari=cari,status=tapis,halaman=halaman)
-        b=await berjalan.untuk(db,akun.user)
+        b=await berjalan.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
         k=bagi(b)
         for d in data['kartu']:
             cocok=await svc.saring_kartu(db,k.tindakan+k.masuk,d['id'])
@@ -68,7 +70,7 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
     from app.services import jasa_pelanggan as svc,berjalan
     from app.services.kelompok_kerja import bagi
     from urllib.parse import urlencode
-    if not can_see_financials(akun.user):
+    if not is_customer_read(request) and not can_see_financials(akun.user):
         raise HTTPException(403,'Layar Jasa milik Admin ke atas.')
     tab=request.query_params.get('tab','ringkasan')
     if tab not in {'ringkasan','penerimaan','proses','stok'}:
@@ -77,7 +79,7 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
         d=await svc.pelanggan(db,pelanggan_id)
         if d is None:
             raise HTTPException(404,'Pelanggan jasa tidak ditemukan.')
-        b=await berjalan.untuk(db,akun.user)
+        b=await berjalan.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
         k=bagi(b)
         cocok=await svc.saring_kartu(db,k.tindakan+k.berjalan+k.informasi+k.masuk,pelanggan_id)
         d['pekerjaan']=sum(x in k.tindakan for x in cocok)
@@ -112,7 +114,7 @@ async def nota(jasa_id: int, request: Request, akun=Depends(butuh_akun)):
     from app.peran import can_see_financials
     from app.services.jasa import JasaError, nota_jasa
 
-    if not can_see_financials(akun.user):
+    if not is_customer_read(request) and not can_see_financials(akun.user):
         raise HTTPException(403, "Layar Jasa milik Admin ke atas.")
     async with SessionLocal() as db:
         try:

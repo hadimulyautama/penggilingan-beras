@@ -20,7 +20,7 @@ def bobot(n):
     return kg_rinci(n) if n is not None else 'Belum tercatat'
 
 
-async def rincian(db, *, catatan=None, permintaan=None, params=None):
+async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=None):
     from app.penggilingan.gudang1.services.milling import pk_jenis
     from app.penggilingan.gudang2.service import label_tujuan
     from app.services.jasa import nama_pemilik_banyak
@@ -53,12 +53,13 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None):
             if getattr(permintaan,waktu):
                 langkah.append(dict(judul=label,waktu=_waktu(getattr(permintaan,waktu)),
                                     oleh=orang.get(getattr(permintaan,oleh),'Pencatat belum tercatat')))
-    count = await db.scalar(select(func.count()).select_from(InternalTransfer).where(InternalTransfer.milling_process_id==proc.id))
+    related_owner = InternalTransfer.id.in_(read_scope.ids(InternalTransfer)) if read_scope else True
+    count = await db.scalar(select(func.count()).select_from(InternalTransfer).where(InternalTransfer.milling_process_id==proc.id, related_owner))
     pages=max(1,ceil(count/20))
     try: page=min(pages,max(1,int(params.get('halaman_transfer','1'))))
     except (ValueError,TypeError): page=1
     terkait=[]
-    for row in (await db.scalars(select(InternalTransfer).where(InternalTransfer.milling_process_id==proc.id)
+    for row in (await db.scalars(select(InternalTransfer).where(InternalTransfer.milling_process_id==proc.id, related_owner)
                 .order_by(InternalTransfer.id.desc()).offset((page-1)*20).limit(20))).all():
         terkait.append(dict(id=row.id,kode=row.kode_transfer,berat=bobot(row.berat_kg),status=row.status,
                             waktu=_waktu(row.waktu),tujuan=await label_tujuan(db,row.lokasi_tujuan,row.silo_id)))
