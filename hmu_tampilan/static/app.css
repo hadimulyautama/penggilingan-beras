@@ -3583,3 +3583,21 @@ body :is(strong,b,.petak__nilai,.hasil__angka) { font-weight: 600; }
 body :is(.baris__nama,.tindakan__nama,.pilihan__nama,.anak__nama,.kartu__judul) { font-size: var(--tipe-isi); font-weight: 500; }
 body :is(.petak__nilai,.beranda-ringkasan .petak__nilai) { font-size: 27px; line-height: 1.3; font-weight: 600; letter-spacing: -1px; }
 body .beranda-sambut h1 { font-size: var(--tipe-judul); }
+
+/* Beranda: separate action overview from growing process lists. */
+.beranda-kolom.beranda-kolom--pekerjaan{grid-template-columns:minmax(0,1fr);gap:20px}
+.beranda-kolom--pekerjaan .beranda-pekerjaan{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));align-items:stretch}
+.beranda-aktivitas>[data-blok]{min-width:0}
+.beranda-aktivitas>[data-blok]>.grup{display:grid;grid-template-columns:minmax(0,1fr);align-items:start}
+.beranda-aktivitas .padat{min-width:0;width:100%;box-sizing:border-box}
+.beranda-aktivitas .padat>summary{min-width:0}
+.beranda-aktivitas .padat__atas{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;min-width:0}
+.beranda-aktivitas .padat__nama{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+.beranda-aktivitas .padat__nilai{flex:0 0 auto;margin-left:auto;white-space:nowrap}
+.beranda-aktivitas .padat__ket,.beranda-aktivitas .beranda-proses-status,.beranda-aktivitas .identitas-barang{min-width:0;overflow-wrap:anywhere}
+.beranda-aktivitas>.btn{align-self:flex-start;min-height:48px}
+@media(min-width:1000px){.beranda-aktivitas>[data-blok]>.grup{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+body .beranda-aktivitas .daftar-standar>.grup{gap:12px!important;padding:12px;align-items:stretch;background:var(--panel-2)}
+body .beranda-aktivitas .daftar-standar>.grup>.padat{border:1px solid var(--garis);border-radius:12px;background:var(--panel);overflow-wrap:anywhere}
+body .beranda-aktivitas .daftar-standar>.grup>.padat:last-child{border-bottom:1px solid var(--garis)}
