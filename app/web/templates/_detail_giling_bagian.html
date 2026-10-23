@@ -1,0 +1,22 @@
+<section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ (d.bagian.index(bagian) + 1) }}">
+  <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{% if bagian.kelompok_silo is defined %}{{ bagian.kelompok_silo|map(attribute="nama")|unique|list|length }} silo · {% endif %}{{ bagian.jumlah }} catatan</span></div>
+  {% if bagian.keterangan %}<p class="bantu">{{ bagian.keterangan }}</p>{% endif %}
+  {% if bagian.kelompok_silo is defined %}
+    {{ bahan_silo(bagian.kelompok_silo) }}
+  {% elif bagian.baris %}
+  <div class="tabel-standar proses-detail__tabel"><table class="tabel-standar" data-ponsel="rincian" aria-label="{{ bagian.judul }}">
+    <thead><tr>{% for label in bagian.kolom %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for baris in bagian.baris %}<tr>{% for nilai in baris %}{% if loop.first %}<th scope="row">{{ nilai }}</th>{% else %}<td data-label="{{ bagian.kolom[loop.index0] }}">{{ nilai }}</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="riwayat-detail__empty">Belum ada {{ bagian.judul|lower }} yang tercatat.</p>{% endif %}
+  {% if bagian.kelompok_silo is defined or bagian.judul == 'Sumber bahan per silo' %}
+  <div class="proses-detail__aksi pilihan giling-hasil-aksi">{% for p in proses.pilihan if p[0] in ['tambah_silo_giling','tutup_silo_giling'] %}{{ tindakan(p) }}{% endfor %}</div>
+  {% endif %}
+  {% if bagian.halaman_total > 1 %}
+  <nav class="proses-detail__halaman" aria-label="Halaman {{ bagian.judul }}">
+    {% if bagian.halaman > 1 %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman - 1) }}#{{ bagian.parameter }}">← Lebih baru</a>{% endif %}
+    <span>Halaman {{ bagian.halaman }} / {{ bagian.halaman_total }}</span>
+    {% if bagian.halaman < bagian.halaman_total %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman + 1) }}#{{ bagian.parameter }}">Lebih lama →</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
