@@ -117,3 +117,5 @@ Dua integrasi antarmuka dibuktikan di browser: tombol Hapus untuk titik tambahan
 
 Belum diuji: perangkat iOS/Android fisik, Safari/Firefox, pembaca layar, seluruh kombinasi data operasional atau pengoperasian mesin fisik. Semua transaksi uji memakai DB loopback dengan awalan uji_; tidak ada mutasi data operasional. Status deploy diverifikasi terpisah melalui hash/status Railway.
 
+
+Integrasi main terbaru (navigasi laporan/retur, tidak menyentuh layanan pengeringan) juga diperiksa:61 tes PostgreSQL lulus27,72detik;787 non-PG lulus6,22detik.
