@@ -1,0 +1,15 @@
+{# Penamaan khusus detail sosoh. Data, format dan tabel tetap dari macro bersama. #}
+{% from "_bahan_silo.html" import bahan_silo as tabel_bahan %}
+{% macro bahan_silo(kelompok) %}
+{% set tampil = namespace(kelompok=[]) %}
+{% for g in kelompok %}
+  {% set rincian = namespace(angka=[], ada_awal=false) %}
+  {% for label, nilai in g.angka|default([]) %}
+    {% if label in ['Awal', 'Bahan awal'] %}{% set rincian.ada_awal = true %}{% endif %}
+    {% set rincian.angka = rincian.angka + [('Bahan awal' if label == 'Awal' else label, nilai)] %}
+  {% endfor %}
+  {% if not rincian.ada_awal %}{% set rincian.angka = [('Bahan awal', 'Belum diketahui')] + rincian.angka %}{% endif %}
+  {% set tampil.kelompok = tampil.kelompok + [dict(g, angka=rincian.angka)] %}
+{% endfor %}
+{{ tabel_bahan(tampil.kelompok) }}
+{% endmacro %}

@@ -5,25 +5,25 @@
 {% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
 {% import "_kepemilikan.html" as milik with context %}
 {% import "_proses_visual.html" as visual with context %}
-{% from "_bahan_silo.html" import bahan_silo %}
+{% from "_bahan_silo_sosoh.html" import bahan_silo %}
 {% block judul %}Detail {{ d.judul }}{% endblock %}
 {% block isi %}
-<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_sosoh.css?v=1');</style>
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_sosoh.css?v=2');</style>
 <main class="riwayat-detail proses-detail sosoh-detail" data-konteks="{{ milik.konteks(proses) }}" data-nilai="{{ proses.nilai or proses.kode }}">
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke Pekerjaan</a>
   <header class="riwayat-detail__hero">
     <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">PROSES AKTIF · {{ visual.penanda(proses) }}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>
     <h1>{{ d.kode }}</h1>
     {{ milik.penanda(proses) }}
-    <p>{{ d.pemilik }}</p>
-    <p>{{ 'Gudang 2' if d.jenis == 'sosoh' else 'Gudang 1' }}</p>
+    <span class="sosoh-identitas__gudang">Gudang 2</span>
+    {% if d.jasa and not proses.pemilik_tampil %}<p>{{ d.pemilik }}</p>{% endif %}
     {% if proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
     <span class="proses-detail__sementara">Data berjalan · hasil dan durasi belum final</span>
   </header>
 
 {% macro tindakan(p, utama=false) %}
 {% set nilai_aksi = p[3] if p|length > 3 else proses.nilai %}
-<a class="pilihan__satu{{ ' pilihan__satu--utama' if utama }}" href="{{ benda.dasar_borang(alamat) }}buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}"><span class="pilihan__nama">{{ 'Catat hasil' if p[0] == 'hasil_penyosohan' else p[1] }}</span><span class="pilihan__ket">{{ p[2] }}</span></a>
+<a class="pilihan__satu{{ ' pilihan__satu--utama' if utama }}" href="{{ benda.dasar_borang(alamat) }}buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}"><span class="pilihan__nama">{{ 'Catat hasil' if p[0] == 'hasil_penyosohan' else p[1] }}</span><span class="pilihan__ket">{{ 'Isi total kumulatif per jenis sejak awal proses' if p[0] == 'hasil_penyosohan' else p[2] }}</span></a>
 {% endmacro %}
   <nav class="sosoh-tabs" aria-label="Bagian detail penyosohan" role="tablist">
     {% for id, label in [('ringkasan', 'Ringkasan'), ('bahan', 'Bahan & silo'), ('hasil', 'Hasil'), ('riwayat', 'Riwayat')] %}
@@ -89,27 +89,11 @@
         </section>
 {% endfor %}</div>
   <div id="panel-hasil" role="tabpanel" aria-labelledby="tab-hasil" class="sosoh-panel" {% if tab_sosoh != 'hasil' %}hidden{% endif %}>
-{% for bagian in d.bagian if bagian.judul == 'Hasil sosoh keluar' or bagian.parameter == 'halaman_hasil' %}        <section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ (d.bagian.index(bagian) + 1) }}">
-          <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{% if bagian.kelompok_silo is defined %}{{ bagian.kelompok_silo|map(attribute="nama")|unique|list|length }} silo · {{ bagian.jumlah }} catatan{% else %}{{ bagian.jumlah }} catatan{% endif %}</span></div>
-          {% if bagian.keterangan %}<p class="bantu">{{ bagian.keterangan }}</p>{% endif %}
-          {% if bagian.kelompok_silo is defined %}
-          {{ bahan_silo(bagian.kelompok_silo) }}
-          {% elif bagian.baris %}
-          <div class="tabel-standar proses-detail__tabel"><table class="tabel-standar" data-ponsel="rincian" aria-label="{{ bagian.judul }}">
-            <thead><tr>{% for label in bagian.kolom %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
-            <tbody>{% for baris in bagian.baris %}<tr>{% for nilai in baris %}{% if loop.first %}<th scope="row">{{ nilai }}</th>{% else %}<td data-label="{{ bagian.kolom[loop.index0] }}">{{ nilai }}</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
-          </table></div>
-          {% else %}<p class="riwayat-detail__empty">Belum ada {{ bagian.judul|lower }} yang tercatat.</p>{% endif %}
-          {% if bagian.halaman_total > 1 %}
-          <nav class="proses-detail__halaman" aria-label="Halaman {{ bagian.judul }}">
-            {% if bagian.halaman > 1 %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman - 1) }}#{{ bagian.parameter }}">← Lebih baru</a>{% endif %}
-            <span>Halaman {{ bagian.halaman }} / {{ bagian.halaman_total }}</span>
-            {% if bagian.halaman < bagian.halaman_total %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman + 1) }}#{{ bagian.parameter }}">Lebih lama →</a>{% endif %}
-          </nav>
-          {% endif %}
-        </section>
+<div class="proses-detail__aksi pilihan sosoh-catat-hasil">{% for p in proses.pilihan if p[0] == 'hasil_penyosohan' %}{{ tindakan(p, true) }}{% endfor %}</div>
+{% for bagian in d.bagian if bagian.judul == 'Hasil sosoh keluar' or bagian.parameter == 'halaman_hasil' %}
+    {% include "_hasil_sosoh_detail.html" %}
 {% endfor %}{% if not d.bagian|selectattr('judul', 'equalto', 'Hasil sosoh keluar')|list %}<section class="riwayat-detail__card"><h2>Hasil sosoh keluar</h2><p>Belum ada hasil yang tercatat.</p></section>{% endif %}
-<div class="proses-detail__aksi pilihan">{% for p in proses.pilihan if p[0] == 'hasil_penyosohan' %}{{ tindakan(p, true) }}{% endfor %}</div>
+
 {% if d.qc_kosong %}<section class="riwayat-detail__card" id="kualitas-proses"><h2>QC hasil penyosohan</h2><p class="bantu">{{ d.qc_kosong }}</p></section>{% endif %}</div>
   <div id="panel-riwayat" role="tabpanel" aria-labelledby="tab-riwayat" class="sosoh-panel" {% if tab_sosoh != 'riwayat' %}hidden{% endif %}>
       <section class="riwayat-detail__card" id="identitas-proses">
