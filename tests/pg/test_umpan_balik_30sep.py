@@ -121,28 +121,19 @@ async def test_kotak_berat_kosong_memindahkan_seluruh_sisanya(pg, g2):
     assert await _sisa(pg, g2["intake"]) <= 0.001
 
 
-async def test_borang_menawarkan_kotak_berat_yang_boleh_kosong(pg, g2):
-    """Kemampuannya sudah lama ada di layanan ("`berat` None = pindah semua");
-    yang tak pernah ada cuma TAWARANNYA di layar. Kemampuan yang tak
-    ditawarkan sama saja dengan kemampuan yang tak ada.
-
-    Dibaca dari SUMBER spesifikasinya: medan yang `wajib` akan dihadang
-    peramban sebelum satu permintaan pun dikirim, jadi uji lewat HTTP tak
-    pernah menyentuh keadaan ini.
+async def test_borang_menawarkan_kotak_berat_yang_boleh_kosong(monkeypatch):
+    """Baca katalog nyata, bukan potongan 2.200 karakter yang terputus ketika
+    medan karung ditambahkan. PK lama masih boleh memindahkan seluruh kg,
+    sementara PK baru menawarkan seluruh karung tanpa ketik bobot nominal.
     """
-    import inspect
-
-    from app.web import api
-
-    sumber = inspect.getsource(api)
-    i = sumber.index('"id": "pindah_tumpukan_silo"')
-    potong = sumber[i:i + 2200]
-    assert '"name": "berat_kg"' in potong, "medan beratnya hilang dari borang"
-    kotak = potong[potong.index('"name": "berat_kg"'):]
-    assert '"wajib": True' not in kotak[:300], \
-        "kotak beratnya masih wajib — 'seluruh sisanya' tak bisa dipilih"
-    assert "KOSONGKAN" in potong, \
-        "tawarannya tak tertulis di mana pun yang dibaca operator"
+    from tests.test_gudang2_operator import _menu_g2
+    menu = await _menu_g2(monkeypatch)
+    aksi = next(a for a in menu if a["id"] == "pindah_tumpukan_silo")
+    medan = {f["name"]: f for f in aksi["fields"]}
+    assert medan["berat_kg"]["type"] == "number"
+    assert not medan["berat_kg"].get("wajib")
+    assert "jumlah_karung" in medan
+    assert "kosong" in aksi["hint"].lower()
 
 
 async def test_berat_jauh_di_atas_sisa_tetap_ditolak(pg, g2):

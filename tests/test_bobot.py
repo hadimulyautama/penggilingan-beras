@@ -222,5 +222,5 @@ def test_timbang_kedua_sementara_menimpa_tebakan_tara():
     assert "berat_perkiraan_kg" not in sql, "perkiraan dari tara tak ditimpa"
     assert "IS DISTINCT FROM" in sql, "idempoten tiap tiga menit"
     sumber = kode_saja(t.sinkron_perkiraan)
-    assert sumber.index("_SQL_PERKIRAAN.format") < sumber.index("_SQL_PERKIRAAN_TIKET.format"), \
+    assert sumber.index("_sql_bobot_batch(_SQL_PERKIRAAN, tbl)") < sumber.index("_sql_bobot_batch(_SQL_PERKIRAAN_TIKET, tbl)"), \
         "angka timbangan hari ini menang atas tebakan tara"

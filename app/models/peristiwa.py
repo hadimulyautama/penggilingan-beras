@@ -245,7 +245,8 @@ class ProyeksiPindahTumpukanSilo(Base):
     intake_peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
-    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
+    jumlah_karung: Mapped[int | None] = mapped_column(Integer)
     ke_proses: Mapped[str | None] = mapped_column(String(20))
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

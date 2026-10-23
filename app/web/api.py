@@ -14,7 +14,7 @@ formulirnya.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from typing import Annotated
@@ -860,11 +860,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         actions += [
             {"id": "pindah_tumpukan_silo", "label": "📤 Pindah tumpukan ke silo",
              "post": "/api/actions/pindah-tumpukan-silo",
-             "hint": "Boleh sebagian — sisanya tetap di tumpukan. KOSONGKAN kotak "
-                     "beratnya untuk memindahkan SELURUH sisa tumpukan; tak perlu "
-                     "mengetik ulang angka dari layar. Silo yang sedang dipoles "
-                     "boleh diisi lagi; yang ditambahkan ikut dihitung sebagai "
-                     "bahan proses itu.",
+             "hint": "PK beli luar berkarung: isi jumlah karung; kosong berarti seluruh karung utuh. "
+                     "Untuk karung dibongkar sebagian atau bobot yang sungguh ditimbang, pilih hasil timbang dan isi kg. "
+                     "Batch lama dan PK giling sendiri tetap memakai kg.",
              "fields": [
                  {"name": "tumpukan", "label": "PK di tumpukan", "type": "remote",
                   "source": "/api/actions/tumpukan-sisa",
@@ -874,22 +872,15 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "remote",
                   "source": "/api/actions/silo-g2", "induk": "tumpukan",
                   "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
-                 # ⭐ BOLEH DIKOSONGKAN = SELURUH SISANYA, dan itu yang
-                 # menghapus seluruh kelas masalahnya, bukan menggesernya satu
-                 # desimal. Pemindahan terakhir adalah satu-satunya yang
-                 # menuntut operator mengetik angka PERSIS dari layar — dan
-                 # angka di layar selalu hasil pembulatan. Yang tak perlu
-                 # diketik tak bisa salah ketik.
-                 #
-                 # Layanannya memang sudah menerima `berat=None` sejak lama
-                 # ("`berat` None = pindah semua"); yang tak pernah ada cuma
-                 # tawarannya di layar.
-                 # ⚠ Keterangannya di `hint` aksi, BUKAN di medan ini:
-                 # `aksi.js` tak mengenal keterangan per-medan, dan kunci yang
-                 # tak dikenalnya hilang tanpa jejak — tawaran yang tak pernah
-                 # terbaca sama saja dengan tawaran yang tak ada.
-                 {"name": "berat_kg", "label": "Berat yang dipindah (kg)",
-                  "type": "number"},
+                 # Operator menghitung karung. Kg hanya pintu eksplisit untuk
+                 # hasil timbang / bagian karung, atau batch lama tanpa N;
+                 # membiarkannya sebagai satu-satunya medan melahirkan lagi
+                 # perkalian nominal di kepala dan selisih di sisa terakhir.
+                 {"name": "jumlah_karung", "label": "Jumlah karung yang dipindah", "type": "number"},
+                 {"name": "hasil_timbang", "label": "Cara mencatat kg", "type": "select", "bawaan": "karung", "options": [
+                     ["karung", "Karung utuh (atau batch lama tanpa jumlah karung)"],
+                     ["ya", "Hasil timbang / karung dibongkar sebagian (kg tetap)"]]},
+                 {"name": "berat_kg", "label": "Kg hasil timbang / bagian karung / batch lama", "type": "number"},
              ]},
             # Broken (patah hasil sosoh) punya silonya SENDIRI (keputusan
             # pemilik 6 Oktober 2026), supaya ia bisa disosoh ulang sebagai
@@ -1211,6 +1202,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Tidak ada tiket timbang PK yang aktif."},
                  {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
                   "options": JENIS_PK},
+                 {"name": "jumlah_karung", "label": "Jumlah karung separtai (surat jalan, boleh kosong)", "type": "number"},
+                 {"name": "ukuran_karung_kg", "label": "Ukuran nominal karung (kg, surat jalan)", "type": "number"},
                  # ── Mutu TIDAK lagi di sini (keputusan pemilik 5 Oktober 2026,
                  #    membatalkan penyatuan hari yang sama) ──
                  #
@@ -1364,6 +1357,16 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # sendiri — termasuk operator, yang justru paling sering salah ketik.
     actions += aksi_undo.spesifikasi(boleh=g1 or g2 or fin)
 
+    if fin:
+        actions.append({"id": "sesuaikan_stok_pk_lama", "label": "Penyesuaian stok PK beli luar lama",
+            "post": "/api/actions/sesuaikan-stok-pk-lama",
+            "hint": "Khusus batch lama tanpa jumlah karung. Isi selisih bertanda, tanggal dan alasan; bukti masuk serta laporan lama tetap tersimpan.",
+            "fields": [
+                {"name": "intake_id", "label": "Tumpukan PK lama", "type": "remote", "source": "/api/actions/pk-lama-penyesuaian"},
+                {"name": "selisih_kg", "label": "Selisih kg (+ menambah, − mengurangi)", "type": "number"},
+                {"name": "tanggal", "label": "Tanggal penyesuaian", "type": "date"},
+                {"name": "alasan", "label": "Alasan dan dasar koreksi", "type": "text"}]})
+
     _lengkapi_formulir_jeda(actions)
 
     # Tandai gudang tiap aksi → dipakai layar Catat memisah tab G1/G2 (admin/staff).
@@ -1477,6 +1480,7 @@ _GRUP_AKSI = {
     # Pembelian & pencocokan.
     "beli_kemasan": "Stok & kemasan",
     "rekonsiliasi_timbang": "Pencocokan data",
+    "sesuaikan_stok_pk_lama": "Pencocokan data",
     "auto_taut_keluar": "Pencocokan data",
     "qc_gabah_basah": "Pembelian & pencocokan",
     "qc_gabah_kering": "Pembelian & pencocokan",
@@ -1573,6 +1577,7 @@ URUT_GRUP = [
 # harga & QC gabah/giling = G1; PK luar (catat/kualitas/harga) = G2; transfer PK
 # berasal dari proses G1 → G1.
 _ACTION_WH = {
+    "sesuaikan_stok_pk_lama": "g2",
     # Gudang 1 (Selepan)
     "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
     "qc_gabah_basah": "g1", "qc_gabah_kering": "g1", "qc_gabah_tutup": "g1",
@@ -3476,6 +3481,8 @@ class CatatPkLuarReq(BaseModel):
     # Pilih TIKET TIMBANG PK aktif — supplier/bobot/nopol dari timbang.
     timbangan_transaksi_id: int
     jenis_pk: str
+    jumlah_karung: int | None = Field(default=None, gt=0)
+    ukuran_karung_kg: float | None = Field(default=None, gt=0)
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
 
@@ -3645,7 +3652,8 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
         try:
             r = await create_pk_purchase_dari_timbang(
                 db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
-                jenis_pk=req.jenis_pk,
+                jenis_pk=req.jenis_pk, jumlah_karung=req.jumlah_karung,
+                ukuran_karung_kg=req.ukuran_karung_kg,
                 kunci_kiriman=(req.kunci_kiriman or "")[:120] or None,
             )
         except Gudang2Error as e:
@@ -3683,6 +3691,9 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
            "luar yang menunggu dimasukkan\".")
     pesan = (f"✓ PK luar *{r.batch.kode_batch}* tercatat — {r.supplier_nama}{baru}, "
              f"{jl} {bstr}, truk {nopol}.{ekor}")
+    from app.penggilingan.gudang2.karung import peringatan_karung, selisih_kiriman
+    catatan = [selisih_kiriman(r.batch,r.supplier_nama), peringatan_karung(r.batch)]
+    pesan += " " + " ".join(c for c in catatan if c)
     return {"ok": True, "pesan": pesan}
 
 
@@ -4235,8 +4246,7 @@ async def tumpukan_sisa(user: User = Depends(pengguna_aksi)) -> list[dict]:
     from app.services.berjalan import _kartu_tumpukan_g2
     async with SessionLocal() as db:
         kartu = await _kartu_tumpukan_g2(db)
-    return [{"value": b.nilai, "label": f"{b.judul} · {b.kode} · sisa {b.utama[0]} kg"}
-            for b in kartu]
+    return [{"value": b.nilai, "label": f"{b.judul} · {b.kode} · {b.isi}"} for b in kartu]
 
 
 @router.get("/actions/sosoh-berjalan")
@@ -4532,6 +4542,8 @@ class PindahTumpukanSiloReq(BaseModel):
     #: Kosong = SELURUH sisa tumpukan. Bukan kelalaian: satu-satunya angka
     #: yang sulit diketik benar adalah sisa terakhir, dan yang tak perlu
     #: diketik tak bisa salah ketik.
+    jumlah_karung: int | None = Field(default=None, gt=0)
+    hasil_timbang: str = ""
     berat_kg: float | None = None
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
@@ -4586,16 +4598,23 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
         try:
             r = await pindah_tumpukan_ke_silo(
                 db, user=u, intake_id=int(req.tumpukan), nama_silo=req.silo.strip(),
+                jumlah_karung=req.jumlah_karung, hasil_timbang=req.hasil_timbang == "ya",
                 berat=(None if req.berat_kg is None else float(req.berat_kg)),
                 kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
             raise _err(e, "Gagal memindahkan PK dari tumpukan.")
-    sisa = (f"sisa di tumpukan {r.sisa_tumpukan_intake:g} kg"
-            if r.sisa_tumpukan_intake > 0 else "tumpukan itu habis")
+    from app.penggilingan.gudang2.karung import teks_kg
+    angka = "bobot belum diketahui" if r.berat_kg is None else teks_kg(r.berat_kg)
+    if not r.bobot_final and r.berat_kg is not None:
+        angka = "± " + angka + " (bobot truk belum final)"
+    jumlah = f"{r.jumlah_karung} karung ~ " if r.jumlah_karung is not None else ""
+    sisa = ("bobot sisa belum diketahui" if r.sisa_tumpukan_intake is None
+            else "sisa " + teks_kg(r.sisa_tumpukan_intake))
+    if r.sisa_karung is not None:
+        sisa = f"sisa {r.sisa_karung} karung ~ " + sisa.removeprefix("sisa ")
     ekor = f" — ikut dihitung di {r.ke_proses}" if r.ke_proses else ""
-    return {"ok": True,
-            "pesan": f"✓ *{r.kode_pindah}* · {r.berat_kg:g} kg ke {r.nama_silo} "
-                     f"({sisa}){ekor}."}
+    return {"ok": True, "pesan": f"✓ {r.kode_pindah} · {jumlah}{angka} ke {r.nama_silo} ({sisa}){ekor}."}
+
 
 
 class PindahBrokenSiloReq(BaseModel):
@@ -5147,3 +5166,35 @@ async def act_masukkan_beras_silo(req: MasukkanBerasSiloReq,
 
 # ─────────────────────────── Halaman aksi ───────────────────────────
 
+
+
+class PenyesuaianPkLamaReq(BaseModel):
+    intake_id: int
+    selisih_kg: Annotated[float, Field(allow_inf_nan=False)]
+    tanggal: date
+    alasan: str = Field(min_length=1,max_length=500)
+
+
+@router.get("/actions/pk-lama-penyesuaian")
+async def pk_lama_penyesuaian(user: User = Depends(pengguna_aksi)):
+    _require(can_see_financials(user))
+    from sqlalchemy import select
+    from app.models import PkGudang2Intake, PkPurchaseBatch
+    async with SessionLocal() as db:
+        rows = (await db.execute(select(PkGudang2Intake.id,PkPurchaseBatch.kode_batch)
+            .join(PkPurchaseBatch,PkPurchaseBatch.id == PkGudang2Intake.pk_purchase_batch_id)
+            .where(PkGudang2Intake.tujuan == "ditumpuk",PkPurchaseBatch.jumlah_karung.is_(None))
+            .order_by(PkGudang2Intake.id))).all()
+    return [{"value":str(i),"label":kode} for i,kode in rows]
+
+
+@router.post("/actions/sesuaikan-stok-pk-lama")
+async def act_sesuaikan_stok_pk_lama(req: PenyesuaianPkLamaReq,user: User = Depends(pengguna_aksi)):
+    _require(can_see_financials(user))
+    from app.penggilingan.gudang2.service import sesuaikan_stok_pk_lama, Gudang2Error
+    async with SessionLocal() as db:
+        try:
+            row = await sesuaikan_stok_pk_lama(db,user=user,**req.model_dump())
+        except Gudang2Error as e:
+            raise _err(e,"Gagal menyesuaikan stok PK lama.")
+    return {"ok":True,"pesan":f"Penyesuaian stok tanggal {row.tanggal}: {row.selisih_kg:+} kg. Alasan: {row.alasan}. Laporan lama tetap tersimpan."}

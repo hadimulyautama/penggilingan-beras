@@ -83,6 +83,7 @@ _UNDOABLE = {
 BATAS_UNDO = timedelta(hours=48)
 
 _TABLE_LABEL = {
+    "pk_penyesuaian_stok": "penyesuaian stok PK lama",
     # Bisa dibatalkan
     "drying_lots": "lot pengeringan",
     "drying_moisture_logs": "catatan kadar air",
@@ -1093,12 +1094,14 @@ async def _undo_pindah_tumpukan(db: AsyncSession, move_id: int) -> str:
         from app.services import peristiwa as buku
 
         await buku.batalkan(db, jenis_lawan=PK_TUMPUKAN_KE_SILO_DIBATALKAN, peristiwa_id=m.peristiwa_id,
-                            pelaku_id=None, muatan={"kode_pindah": m.kode_pindah, "berat_kg": float(m.berat_kg),
+                            pelaku_id=None, muatan={"kode_pindah": m.kode_pindah, "berat_kg": None if m.berat_kg is None else float(m.berat_kg),
+                                                    "jumlah_karung": m.jumlah_karung,
                                                     "alasan": "Dibatalkan lewat Batalkan input terakhir"})
-    kode, kg = m.kode_pindah, float(m.berat_kg)
+    kode, kg = m.kode_pindah, None if m.berat_kg is None else float(m.berat_kg)
     from app.database import now_local as _now
     m.dibatalkan_pada = _now()   # cermin bertanda, bukan dihapus
-    return f"✓ Dibatalkan: pemindahan {kode} ({kg:,.0f} kg) — PK kembali ke tumpukan.".replace(",", ".")
+    angka = f"{m.jumlah_karung} karung" if m.jumlah_karung is not None else f"{kg:,.0f} kg"
+    return f"✓ Dibatalkan: pemindahan {kode} ({angka}) — PK kembali ke tumpukan.".replace(",", ".")
 
 
 async def _tolak_bila_pk_sudah_dipakai(db: AsyncSession, it: PkGudang2Intake, lok: str) -> None:

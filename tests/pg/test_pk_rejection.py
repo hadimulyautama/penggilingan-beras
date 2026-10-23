@@ -283,7 +283,8 @@ async def test_medan_mutu_dicabut_dari_borang_catat_pk_luar():
     larangan = {"kadar_air", "broken", "penyusutan", "butir_kuning", "gabah",
                "merang", "catatan_lab"}
     assert not (medan & larangan), medan & larangan
-    assert medan == {"timbangan_transaksi_id", "jenis_pk", "kunci_kiriman"}
+    assert medan == {"timbangan_transaksi_id", "jenis_pk", "kunci_kiriman",
+                     "jumlah_karung", "ukuran_karung_kg"}
 
 
 async def test_rute_tolak_wajib_admin_dan_alasan(pg, admin, pemasok):

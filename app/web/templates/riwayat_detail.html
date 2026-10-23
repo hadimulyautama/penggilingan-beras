@@ -137,21 +137,23 @@
         <div><dt>Selesai</dt><dd>{{ k.selesai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
         <div><dt>Durasi</dt><dd>{{ k.lama or "—" }}</dd></div>
         <div><dt>Dijalankan oleh</dt><dd>{{ k.oleh or "—" }}</dd></div>
-        <div><dt>Total bahan baku</dt><dd>{{ kg(k.neraca.bahan_kg) }} kg</dd></div>
+        <div><dt>Total bahan baku</dt><dd>{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</dd></div>
         <div><dt>Rendemen beras</dt><dd>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</dd></div>
         {% if k.spek %}<div><dt>Spek</dt><dd>{{ k.spek|join(", ") }}</dd></div>{% endif %}
         {% if k.jasa %}<div><dt>ID jasa</dt><dd>{{ k.kode_jasa or "belum tercatat" }}</dd></div>{% endif %}
       </dl>
     </section>
     <section class="riwayat-detail__card">
+      {% if not k.bahan_pasti %}<p class="nota">{{ k.bahan_teks }} · bobot truk belum final. Susut dan rendemen belum dapat dipastikan.</p>{% endif %}
+      {% if k.neraca_tercatat %}<p class="nota">Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan {{ kg(k.neraca_tercatat.bahan_kg) }} kg, susut {{ kg(k.neraca_tercatat.susut.kg) }} kg. Catatan penutupan tetap tersimpan.</p>{% endif %}
       <h2>Neraca hasil</h2>
-      {% if k.neraca.timpang %}<p class="riwayat-detail__warning">Hasil melebihi bahan baku ({{ kg(k.neraca.keluar_kg) }} kg keluar dari {{ kg(k.neraca.bahan_kg) }} kg). Periksa catatan hasil.</p>{% endif %}
-      {% if k.neraca.bisa_dihitung %}<div class="riwayat-detail__table tabel-standar"><div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Persentase bahan</span></div>
+      {% if k.bahan_pasti and k.neraca.timpang %}<p class="riwayat-detail__warning">Hasil melebihi bahan baku ({{ kg(k.neraca.keluar_kg) }} kg keluar dari {{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}). Periksa catatan hasil.</p>{% endif %}
+      {% if k.bahan_pasti and k.neraca.bisa_dihitung %}<div class="riwayat-detail__table tabel-standar"><div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Persentase bahan</span></div>
         <div class="riwayat-detail__table-row"><strong>{{ k.neraca.beras.nama }}</strong><span>{{ kg(k.neraca.beras.kg) }} kg</span><span>{{ "%.1f"|format(k.neraca.beras.persen)|replace(".", ",") }}%</span></div>
         {% for b in k.beras %}<div class="riwayat-detail__table-row"><strong class="riwayat-detail__indent">{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
         {% for b in k.neraca.samping %}<div class="riwayat-detail__table-row"><strong>{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
-        <div class="riwayat-detail__table-row"><strong>{{ k.neraca.susut.nama }}</strong><span>{{ kg(k.neraca.susut.kg) }} kg</span><span>{{ "%.1f"|format(k.neraca.susut.persen)|replace(".", ",") if k.neraca.susut.persen is not none else "—" }}%</span></div>
-        <div class="riwayat-detail__table-row riwayat-detail__table-row--total"><strong>Total bahan</strong><span>{{ kg(k.neraca.bahan_kg) }} kg</span><span>100%</span></div>
+        <div class="riwayat-detail__table-row"><strong>{{ k.neraca.susut.nama }}</strong><span>{{ kg(k.neraca.susut.kg) ~ " kg" if k.bahan_pasti else "Belum dapat dipastikan" }}</span><span>{{ "%.1f"|format(k.neraca.susut.persen)|replace(".", ",") if k.neraca.susut.persen is not none else "—" }}%</span></div>
+        <div class="riwayat-detail__table-row riwayat-detail__table-row--total"><strong>Total bahan</strong><span>{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</span><span>100%</span></div>
       </div>{% else %}<p class="riwayat-detail__empty">Bahan baku belum tercatat sehingga neraca belum dapat dihitung.</p>{% endif %}
     </section>
     <section class="riwayat-detail__card">

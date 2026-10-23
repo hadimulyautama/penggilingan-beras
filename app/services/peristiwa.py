@@ -224,7 +224,7 @@ async def _pk_tumpukan_ke_silo(db: AsyncSession, e: Peristiwa) -> None:
     e.proyeksi = ProyeksiPindahTumpukanSilo(
         peristiwa_id=e.id, kode_pindah=m["kode_pindah"], intake_id=m["intake_id"],
         intake_peristiwa_id=m.get("intake_peristiwa_id"), silo_id=m["silo_id"],
-        berat_kg=m["berat_kg"], ke_proses=m.get("ke_proses"),
+        berat_kg=m["berat_kg"], jumlah_karung=m.get("jumlah_karung"), ke_proses=m.get("ke_proses"),
         tanggal=date.fromisoformat(m["tanggal"]), waktu=datetime.fromisoformat(m["waktu"]),
         pelaku_id=e.pelaku_id, status=TERCATAT, move_id=m.get("move_id"),
     )

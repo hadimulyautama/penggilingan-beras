@@ -358,8 +358,14 @@ async def ambil_data(process_id: int) -> dict:
                 })
 
         outputs = (await output_sosoh_banyak(db, [proc.id])).get(proc.id, {})
+        from app.penggilingan.gudang2.karung import bobot_pemakaian
+        bobot = bobot_pemakaian([u for u, _, _ in usages])
         total_input = sum(_angka(x["used"]) for x in per_silo_sources)
         neraca = neraca_sosoh(total_input, outputs)
+        bahan_tercatat = sum(_angka(u.terpakai_lama_kg) for u, _, _ in usages)
+        neraca_tercatat = (neraca_sosoh(bahan_tercatat, outputs)
+            if any(u.bobot_karung_dinamis for u, _, _ in usages)
+            and abs(bahan_tercatat - total_input) > 0.001 else None)
         from app.web.pdf_proses import jeda_laporan
         jeda = await jeda_laporan(db, jenis='penyosohan', id_=proc.id, mulai=proc.waktu_mulai, selesai=proc.waktu_selesai)
         operator = await db.get(User, proc.created_by)
@@ -371,7 +377,7 @@ async def ambil_data(process_id: int) -> dict:
             "drying_lots": drying_lots, "drying_moisture": drying_moisture,
             "milling_yields": milling_yields, "milling_qc": milling_qc,
             "external_qc": external_qc, "outputs": outputs,
-            "balance": neraca, "jeda": jeda, "input_complete": all(x["used"] is not None for x in per_silo_sources),
+            "balance": neraca, "neraca_tercatat": neraca_tercatat, "jeda": jeda, "bobot_bahan": bobot, "input_complete": bobot.pasti and all(x["used"] is not None for x in per_silo_sources),
         }
 
 
@@ -454,6 +460,9 @@ def buat_pdf(data: dict) -> bytes:
     yield_rate = (balance.beras.kg / balance.bahan_kg * 100) if balance.bahan_kg and complete else None
     story = [p("Laporan Penyosohan", "SosohTitle"),
              p(f"{proc.kode_proses} · Dicetak {stamp(datetime.now(ZoneInfo(settings.app_timezone)))}", "SosohSub")]
+    tercatat = data.get("neraca_tercatat")
+    if tercatat:
+        story.append(p(f"Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan {kg(tercatat.bahan_kg)}, susut {kg(tercatat.susut.kg)}. Catatan penutupan tetap tersimpan.", "SosohNote"))
     story.append(grid([
         ["Ringkasan proses", "Nilai"],
         ["Pemilik bahan", data["owner"]],
@@ -476,7 +485,7 @@ def buat_pdf(data: dict) -> bytes:
              ["Total bahan baku", kg(balance.bahan_kg) if complete else 'Belum dapat dipastikan', '100%' if complete else '—']]
     story.append(grid(rows, [66 * mm, 50 * mm, 44 * mm]))
     if not data.get('input_complete', True):
-        story.append(p('Peringatan: sisa sebagian pemakaian silo belum dicatat. Neraca belum dapat dipastikan.', 'SosohNote'))
+        story.append(p('Peringatan: bobot truk belum final atau sisa pemakaian silo belum dicatat. Neraca belum dapat dipastikan.', 'SosohNote'))
 
     groups = []
     for silo in data['silos']:

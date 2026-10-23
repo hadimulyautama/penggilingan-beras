@@ -703,6 +703,10 @@ class LotPkG2:
     #: Batch gabah sumber proses giling sendiri, untuk ditampilkan pada
     #: halaman detail stok Gudang 2.
     bahan: list[tuple[str, str, str]] = field(default_factory=list)
+    ringkasan_karung: str | None = None
+    selisih_kiriman: str | None = None
+    peringatan_karung: str | None = None
+    jumlah_karung: int | None = None
 
 
 async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
@@ -759,12 +763,15 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     # Sudah berapa yang dipindah ke silo per pemasukan — SATU kueri terkelompok,
     # bukan `_sisa_tumpukan_intake` dipanggil bergilir (itu sendiri 1+ kueri
     # per pemasukan, lewat `db.get` plus sum).
-    dipindah = dict((await db.execute(
-        select(PkTumpukanToSilo.pk_gudang2_intake_id,
-              func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
+    from app.penggilingan.gudang2.service import sisa_tumpukan_banyak
+    from app.penggilingan.gudang2.karung import selisih_kiriman, peringatan_karung, teks_sisa_karung
+    saldo = await sisa_tumpukan_banyak(db, intakes)
+    karung_dipindah = dict((await db.execute(select(PkTumpukanToSilo.pk_gudang2_intake_id,
+        func.coalesce(func.sum(PkTumpukanToSilo.jumlah_karung), 0))
         .where(PkTumpukanToSilo.pk_gudang2_intake_id.in_(ids))
-        .group_by(PkTumpukanToSilo.pk_gudang2_intake_id)
-    )).all())
+        .group_by(PkTumpukanToSilo.pk_gudang2_intake_id))).all())
+    batches_karung = {b.id: b for b in (await db.execute(select(PkPurchaseBatch).where(
+        PkPurchaseBatch.id.in_([i.pk_purchase_batch_id for i in intakes if i.pk_purchase_batch_id])))).scalars().all()}
 
     # ── Asal & mutu PK beli luar — satu kueri untuk SELURUH batch sekaligus ──
     batch_ids = [i.pk_purchase_batch_id for i in intakes if i.pk_purchase_batch_id]
@@ -846,7 +853,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
         for i in sorted(grup, key=lambda x: (x.waktu_masuk, x.id)):
             if sisa_ambil <= 0:
                 break
-            sisa_sesudah_pindah = float(i.berat_kg or 0) - float(dipindah.get(i.id, 0))
+            sisa_sesudah_pindah = float(saldo.get(i.id) or 0)
             if sisa_sesudah_pindah <= 0:
                 continue
             ambil = min(sisa_sesudah_pindah, sisa_ambil)
@@ -855,17 +862,20 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
 
     keluar: list[LotPkG2] = []
     for i in intakes:
-        if i.berat_kg is None:
+        batch = batches_karung.get(i.pk_purchase_batch_id)
+        awal_kg = batch.berat_total_kg if batch and batch.jumlah_karung else i.berat_kg
+        if batch and batch.jumlah_karung and saldo.get(i.id) is not None and saldo[i.id] <= 0:
+            continue
+        if awal_kg is None:
             # Truk belum ditimbang kedua (P6-02) — belum punya angka sama
             # sekali, bukan nol. Tetap didaftar: barangnya sudah ada di
             # lantai, dan layar yang menyembunyikannya membuat orang
             # mengira tak ada apa-apa untuk dipindahkan.
             sisa, bobot_final, berat_awal = 0.0, False, 0.0
         else:
-            berat_awal = float(i.berat_kg)
-            sisa = (berat_awal - float(dipindah.get(i.id, 0))
-                    - float(diambil_fifo.get(i.id, 0)))
-            bobot_final = True
+            berat_awal = float(awal_kg)
+            sisa = float(saldo.get(i.id) or 0) - float(diambil_fifo.get(i.id, 0))
+            bobot_final = (batch.sumber_berat != "perkiraan") if batch and batch.jumlah_karung else i.bobot_final
             # Kartu tampil dengan kg bulat. Sisa <= 0,5 kg akan terbaca "0 kg"
             # dan membuat operator mengira stok kosong tetapi kartunya masih ada.
             if sisa <= 0.5:
@@ -897,6 +907,10 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             kelas_kualitas=_kelas_kualitas(nilai_kualitas),
             intake_id=i.id, qc_kode=kode_batch if i.pk_purchase_batch_id and not i.internal_transfer_id else None,
             berat_awal=berat_awal, kelas=kelas, bahan=bahan,
+            jumlah_karung=batch.jumlah_karung if batch else None,
+            ringkasan_karung=teks_sisa_karung(batch, None if awal_kg is None else sisa, batch.jumlah_karung - int(karung_dipindah.get(i.id,0))) if batch and batch.jumlah_karung else None,
+            selisih_kiriman=selisih_kiriman(batch, nama or "Pemasok") if batch and batch.jumlah_karung else None,
+            peringatan_karung=peringatan_karung(batch) if batch and batch.jumlah_karung else None,
         ))
     return keluar
 

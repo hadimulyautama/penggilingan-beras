@@ -299,7 +299,7 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         params_detail["gudang_filter"] = gudang_filter
     detail_href = "/stok/pk/detail?" + urlencode(params_detail)
     return await render_laci(
-        request, "stok_pk_jasa.html" if jasa_saja else "stok.html",
+        request, "stok_pk_karung.html" if gudang == "g2" and kartu.jumlah_karung else ("stok_pk_jasa.html" if jasa_saja else "stok.html"),
         layar="stok_pk_jasa" if jasa_saja else "stok",
         detail=True, detail_gudang=gudang, detail_kartu=kartu,
         riwayat_qc=riwayat_qc,

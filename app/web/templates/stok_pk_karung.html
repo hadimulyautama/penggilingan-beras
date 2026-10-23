@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block judul %}PK beli luar · {{ detail_kartu.kode }}{% endblock %}
+{% block isi %}
+{% set t = detail_kartu %}
+<main class="pk-detail">
+  <a class="pk-detail__back" href="{{ kembali }}">← Kembali ke stok</a>
+  <header class="pk-detail__hero"><div class="pk-detail__heading">
+    <h1>{{ t.kode }}</h1><p>{{ t.pemilik or "Pabrik" }} · {{ t.tanggal }}</p>
+    <p>{{ t.ringkasan_karung }}</p>
+  </div></header>
+  <section class="pk-detail__panel">
+    <h2>Surat jalan dan timbang</h2>
+    <p>{{ t.selisih_kiriman or "Bobot truk belum final; selisih kiriman belum dapat ditetapkan." }}</p>
+    {% if t.peringatan_karung %}<p class="pk-detail__notice">{{ t.peringatan_karung }}</p>{% endif %}
+    <p>Nol berarti seluruh karung telah dipindahkan; keraguan bobot timbangan tetap ±5 kg.</p>
+  </section>
+  {% if boleh_pindah_tumpukan %}
+  <section class="pk-detail__actions"><a class="btn" href="{{ detail_href }}&amp;buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">Masukkan ke silo</a></section>
+  {% endif %}
+  {% if mutu_aktif %}
+    {% from "_penilaian_pk.html" import penilaian_pk with context %}
+    <section class="pk-detail__panel"><h2>Penilaian kualitas PK</h2>{{ penilaian_pk(riwayat_qc.penilaian) }}</section>
+    {% include "_stok_pk_qc.html" %}
+  {% endif %}
+  {% if boleh_ubah and mutu_aktif and t.qc_kode %}
+  <a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=qc_pk_luar&amp;nilai={{ t.qc_kode|urlencode }}">Catat QC</a>
+  {% endif %}
+</main>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+{% block kaki %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endblock %}
