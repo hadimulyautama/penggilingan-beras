@@ -556,8 +556,6 @@ async def halaman_aksi_lain(request: Request):
     untuk pekerjaan yang sudah punya pintu, dan membuat antrean berhenti
     berarti apa yang ia namai.
     """
-    from app.web.nav import lencana
-
     from app.web.layar import POLESAN, SELEPAN
 
     akun = await akun_opsional(request)
@@ -572,7 +570,8 @@ async def halaman_aksi_lain(request: Request):
     if getattr(request.state, "view", "") in (SELEPAN, POLESAN):
         return RedirectResponse("/aksi" + ("?" + request.url.query if request.url.query else ""), status_code=303)
     from urllib.parse import urlencode
-    from app.web.layar_pekerjaan import konteks_aman
+    from app.web.layar_pekerjaan import konteks_aman, siapkan_daftar_pekerjaan, daftar_tab_pekerjaan, pilihan
+    from app.services.kelompok_kerja import JENIS_KERJA
     from app.web.katalog_navigasi import tujuan_duplikat
 
     kembali = konteks_aman(request.query_params.get("kembali")) or "/pekerjaan"
@@ -591,12 +590,19 @@ async def halaman_aksi_lain(request: Request):
         konteks_tab.pop(k, None)
     tab_tindakan = '/pekerjaan?' + urlencode({**konteks_tab, 'tab': 'tindakan'})
     tab_berjalan = '/pekerjaan?' + urlencode({**konteks_tab, 'tab': 'berjalan'})
+    permintaan_tab = Request({**request.scope, 'query_string': urlencode(konteks_tab).encode()})
+    b, kelompok, _ = await siapkan_daftar_pekerjaan(permintaan_tab, akun.user)
+    _, _, _, total_tindakan, total_jalan = daftar_tab_pekerjaan(
+        kelompok, pilihan(permintaan_tab, 'kepemilikan', {'jasa', 'pabrik'}),
+        pilihan(permintaan_tab, 'gudang', {'g1', 'g2'}),
+        pilihan(permintaan_tab, 'jenis', dict(JENIS_KERJA)))
     return render(request, "aksi_lain.html", layar="pekerjaan", kembali=kembali,
                   tab_tindakan=tab_tindakan, tab_berjalan=tab_berjalan,
+                  total_tindakan=total_tindakan, total_jalan=total_jalan,
                   breadcrumb_induk={"alamat": kembali, "nama": "Pekerjaan"},
                   petunjuk=petunjuk, asal_tindakan=asal, nama_asal=nama,
                   buka="" if petunjuk else buka, nilai=nilai,
-                  **await lencana(akun.user))
+                  **b.lencana())
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

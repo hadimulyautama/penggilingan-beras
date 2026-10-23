@@ -25,6 +25,7 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         katalog=await c.get(unescape(masuk[1]))
         assert katalog.status_code==200
         assert '← Kembali ke Pekerjaan' not in katalog.text
+        assert re.findall(r'class="pil__jml">(\d+)</span>', katalog.text) == re.findall(r'class="pil__jml">(\d+)</span>', tabs)
         tujuan=re.search(r'href="([^"]+)"[^>]*><span class="kerja-tab__nama">Berjalan</span>',katalog.text)
         assert parse_qs(urlsplit(unescape(tujuan[1])).query)==parse_qs(query)
         menu=(await c.get('/api/actions/menu')).json()

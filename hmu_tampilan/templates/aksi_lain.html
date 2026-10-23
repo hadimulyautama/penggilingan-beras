@@ -4,7 +4,7 @@
 
 <header class="kerja-kepala"><h1>Pekerjaan</h1>
 {% from '_pekerjaan_tab.html' import tab_pekerjaan with context %}
-{{ tab_pekerjaan('lain', tab_tindakan, tab_berjalan, request.url.path ~ '?' ~ (request.query_params|urlencode)) }}
+{{ tab_pekerjaan('lain', tab_tindakan, tab_berjalan, request.url.path ~ '?' ~ (request.query_params|urlencode), total_tindakan, total_jalan) }}
 </header>
 {% include "_kata_aksi_lain.html" %}
 {% if petunjuk %}<div class="kartu" role="status"><p>{{ petunjuk }}</p><a class="btn" href="{{ asal_tindakan }}">{{ nama_asal }}</a></div>{% endif %}
