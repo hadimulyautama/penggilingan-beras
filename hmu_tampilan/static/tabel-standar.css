@@ -224,3 +224,6 @@ body table.tabel-standar[data-ponsel="rincian"] :is(th, td) {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* Hindari badge bertingkat pada kolom Layanan pekerjaan packing. */
+.antrian-tabel__kepemilikan .identitas-barang { margin:0; }
