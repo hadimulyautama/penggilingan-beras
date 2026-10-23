@@ -1,0 +1,176 @@
+"""Lima tab memindahkan penyajian; saldo, transaksi dan batas pelanggan tetap."""
+import json
+import os
+from pathlib import Path
+from urllib.parse import urlencode
+
+import pytest
+from bs4 import BeautifulSoup
+from sqlalchemy import select, text
+
+from tests.pg.test_stok_produk_jasa import sosoh_jasa  # noqa: F401
+from tests.pg.test_konsolidasi_stok import stok_lengkap  # noqa: F401
+from tests.pg.test_stok_pk_g1_polesan import _klien
+from tests.pg.test_riwayat_qc_detail import qc  # noqa: F401
+from tests.pg.test_portal_pelanggan import portal, client as portal_client  # noqa: F401
+
+pytestmark = pytest.mark.asyncio
+TAB = ('ringkasan','penerimaan','proses','stok','pengambilan')
+
+
+def bukti(nama, isi):
+    folder=os.environ.get('BUKTI_JASA')
+    if folder:
+        p=Path(folder);p.mkdir(parents=True,exist_ok=True)
+        (p/nama).write_text(isi)
+
+
+async def cuplik(pg):
+    tabel=('jasa','purchase_batches','pk_purchase_batches','drying_lots',
+        'milling_process','polishing_process','polishing_silo_usage','polishing_output_logs',
+        'finished_goods_stock','byproduct_stock','outgoing_records','outgoing_items',
+        'customer_returns','customer_return_items','pk_gudang2_intakes','internal_transfers',
+        'activity_logs','peristiwa')
+    async with pg() as db:
+        return {t:await db.scalar(text(f"SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY id),'[]'::jsonb)::text FROM {t} x")) for t in tabel}
+
+
+async def test_lima_tab_skenario_campuran_saldo_dan_sumber_tidak_berubah(pg,pemakai):
+    from tests.pg.skenario_jasa_pelanggan import buat
+    from app.services import jasa_pelanggan as svc
+    data=await buat(pg,pemakai)
+    pid=data['pelanggan_id']
+    async with await _klien(pg,role='superadmin') as c:
+        async with pg() as db:awal=await svc.pelanggan(db,pid)
+        sebelum=await cuplik(pg)
+        asal={'status':'dibatalkan','cari':'Catur campuran','halaman':'2'}
+        for tab in TAB:
+            r=await c.get(f'/jasa/pelanggan/{pid}?'+urlencode(dict(tab=tab,**asal)))
+            assert r.status_code==200,r.text[:1000]
+            s=BeautifulSoup(r.text,'html.parser')
+            links=s.select('.jasa-detail-tab a')
+            assert len(links)==5 and len(s.select('.jasa-detail-tab a[aria-current=page]'))==1
+            assert all('cari=Catur' in a['href'] and 'halaman=2' in a['href'] for a in links)
+            if tab=='ringkasan':
+                assert [n.get_text(strip=True) for n in s.select('.jasa-detail-angka strong')]==['2.000 kg','4.500 kg','3.200 kg']
+                assert 'Pesanan & nota' in r.text
+                assert s.find(id='pesanan-'+str(data['jasa_ids'][0]))
+                assert not s.select('details.jasa-catatan ul')  # Item pengiriman dipindah ke tab khusus.
+            elif tab=='proses':
+                assert all(str(n) in r.text.replace('.','') for n in (2500,3500,4000))
+            elif tab=='stok':
+                assert 'Rincian asal' in r.text and 'bukan tambahan saldo' in r.text
+            elif tab=='pengambilan':
+                for pengiriman in awal['pengiriman']:
+                    assert pengiriman['kode'] in r.text
+                    assert all(svc.kg_rinci(x['kg']) in r.text for x in pengiriman['item'])
+            bukti('campuran-'+tab+'.html',r.text)
+        for jid in data['jasa_ids']:
+            assert (await c.get(f'/jasa/{jid}/nota')).status_code==200
+            old=await c.get(f'/jasa/{jid}')
+            assert old.status_code==303 and f'#pesanan-{jid}' in old.headers['location']
+        async with pg() as db:akhir=await svc.pelanggan(db,pid)
+        assert awal==akhir
+        assert sebelum==await cuplik(pg)
+        saldo={k:akhir[k] for k in ('pk_kg','beras_kg','samping_kg')}
+        pol=next(p for p in akhir['proses'] if p['jenis']=='sosoh')
+        assert pol['hasil']['bahan']==10000 and sum(pol['hasil']['jenis'].values())==9700
+        assert pol['hasil']['susut']==300
+        bukti('campuran-perbandingan.json',json.dumps({'saldo_sebelum':{k:awal[k] for k in saldo},'saldo_sesudah':saldo,'sumber':pol['sumber'],'hasil':pol['hasil'],'pesanan_sebelum':awal['pesanan'],'pesanan_sesudah':akhir['pesanan'],'database_tetap':True},default=str,indent=2))
+        if os.environ.get('BUKTI_JASA'):
+            bukti('sesi.json',json.dumps({'pid':pid,'cookies':{x.name:x.value for x in c.cookies.jar}}))
+
+
+@pytest.mark.parametrize('role,gudang,status',[('admin',None,200),('superadmin',None,200),('operator','g1',403),('operator','g2',403)])
+async def test_tab_baru_mengikuti_gerbang_backend_lama(pg,stok_lengkap,role,gudang,status):
+    async with await _klien(pg,role=role,gudang_id=stok_lengkap['gudang'].get(gudang)) as c:
+        for tab in TAB:
+            r=await c.get(f'/jasa/pelanggan/{stok_lengkap["pelanggan_id"]}?tab={tab}')
+            assert r.status_code==status
+
+
+async def test_tab_portal_baca_saja_tidak_membocorkan_pelanggan_lain(pg,portal):
+    pid=portal.owners[0].id
+    async with portal_client(portal.accounts[0]) as c:
+        for tab in TAB:
+            r=await c.get(f'/pelanggan/jasa/pelanggan/{pid}?tab={tab}')
+            assert r.status_code==200,r.text[:500]
+            assert 'Rahasia Pelanggan B' not in r.text and 'LOT-RAHASIA-B' not in r.text
+            s=BeautifulSoup(r.text,'html.parser')
+            assert len(s.select('.jasa-detail-tab a'))==5
+            assert not s.select('dialog,[data-kirim],[data-post]')
+            assert 'Tutup pesanan' not in r.text and 'Batalkan pesanan' not in r.text
+            assert not any('buka=' in a['href'] for a in s.select('a[href]'))
+            assert all(a['href'].startswith(('/pelanggan','#')) for a in s.select('a[href]'))
+            bukti('portal-'+tab+'.html',r.text)
+            assert (await c.get(f'/pelanggan/jasa/pelanggan/{portal.owners[1].id}?tab={tab}')).status_code==404
+
+
+@pytest.mark.parametrize('keadaan',['tanpa-saldo','belum-diterima','lama-aktif','historis'])
+async def test_lima_tab_data_kosong_lama_dan_bobot_belum_diketahui(pg,stok_lengkap,keadaan):
+    from app.models import Pelanggan,Jasa,PurchaseBatch,PolishingProcess
+    from app.database import now_local
+    from app.services import jasa_pelanggan as svc
+    from tests.pg.test_tiket_antrean_produksi import _tiket
+    pid=stok_lengkap['pelanggan_id']
+    async with pg() as db:
+        if keadaan in ('tanpa-saldo','belum-diterima'):
+            asli=await db.get(Pelanggan,pid)
+            # Nama sama persis sengaja dipakai: identitas tetap dibatasi ID.
+            p=Pelanggan(nama_pelanggan=asli.nama_pelanggan);db.add(p);await db.flush();pid=p.id
+            if keadaan=='tanpa-saldo':db.add(Jasa(kode='JAS-LIMA-KOSONG',pelanggan_id=pid,status='berjalan'))
+            else:
+                tid=await _tiket(db,'TRX-LIMA-BELUM','GABAH_KERING')
+                await db.execute(text("UPDATE timbangan_transaksi SET jasa=TRUE,pelanggan_id=:p,status_tiket='TERBUKA' WHERE id=:t"),{'p':pid,'t':tid})
+        elif keadaan=='lama-aktif':
+            db.add(PurchaseBatch(kode_batch='GB-LIMA-LAMA',jasa_id=stok_lengkap['jasa_id'],kondisi_gabah='kering',status_batch='baru',berat_total_kg=None,sumber_berat='timbangan',tanggal_pembelian=now_local().date(),waktu_pembelian=now_local(),input_by=stok_lengkap['user']))
+            pol=await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses==stok_lengkap['kode_jasa']))
+            pol.status='proses';pol.waktu_selesai=None
+        else:
+            for n,status in enumerate(('selesai','dibatalkan','digabung')):
+                db.add(Jasa(kode=f'JAS-LIMA-HIST-{n}',pelanggan_id=pid,status=status,digabung_ke_id=stok_lengkap['jasa_id'] if status=='digabung' else None))
+        await db.commit()
+        awal=await svc.pelanggan(db,pid)
+        if keadaan in ('tanpa-saldo','belum-diterima'):
+            assert awal['pk_kg']==awal['beras_kg']==awal['samping_kg']==0
+        if keadaan=='lama-aktif':assert any(s['kg'] is None and not s['final'] for s in awal['stok'])
+    async with await _klien(pg,role='admin') as c:
+        sebelum=await cuplik(pg)
+        for tab in TAB:
+            r=await c.get(f'/jasa/pelanggan/{pid}?tab={tab}')
+            assert r.status_code==200 and len(BeautifulSoup(r.text,'html.parser').select('.jasa-detail-tab a'))==5
+            if keadaan=='lama-aktif' and tab=='stok':assert 'Belum diukur' in r.text
+            if keadaan=='historis' and tab=='ringkasan':
+                for kata in ('Selesai','Dibatalkan','Digabung','pesanan rujukan'):assert kata in r.text
+            bukti(keadaan+'-'+tab+'.html',r.text)
+        assert await cuplik(pg)==sebelum
+        async with pg() as db:assert await svc.pelanggan(db,pid)==awal
+
+
+async def test_satu_tiket_banyak_catatan_pesanan_tetap_terbaca(pg,stok_lengkap):
+    from app.models import Jasa,FinishedGoodsStock
+    from app.database import now_local
+    from app.services import jasa_pelanggan as svc
+    from tests.pg.test_tiket_antrean_produksi import _tiket
+    from tests.pg.test_stok_produk_jasa import _packing
+    await _packing(pg,stok_lengkap,kode_pol=stok_lengkap['kode_jasa'],karung=1)
+    pid=stok_lengkap['pelanggan_id']
+    async with pg() as db:
+        ref=await db.scalar(select(FinishedGoodsStock).where(FinishedGoodsStock.jasa_id==stok_lengkap['jasa_id']))
+        kedua=Jasa(kode='JAS-LIMA-CATATAN-2',pelanggan_id=pid,status='berjalan');db.add(kedua);await db.flush()
+        tid=await _tiket(db,'TRX-LIMA-BANYAK','BERAS_MASUK')
+        await db.execute(text('UPDATE timbangan_transaksi SET jasa=TRUE,pelanggan_id=:p,jasa_id=:j WHERE id=:t'),{'p':pid,'j':stok_lengkap['jasa_id'],'t':tid})
+        for jid,jumlah in [(stok_lengkap['jasa_id'],8),(kedua.id,12)]:
+            db.add(FinishedGoodsStock(product_sku_id=ref.product_sku_id,rice_quality_standard_id=ref.rice_quality_standard_id,source_type='timbangan',source_id=tid,jumlah_karung=jumlah,berat_total_kg=jumlah*25,warehouse_id=ref.warehouse_id,waktu=now_local(),input_by=stok_lengkap['user'],jasa_id=jid))
+        await db.commit()
+        awal=await svc.pelanggan(db,pid)
+        tiket=next(t for t in awal['penerimaan'] if t['id']==tid)
+        assert len(tiket['catatan'])==2
+        assert sorted(float(x['berat']) for x in tiket['catatan'])==[200,300]
+    async with await _klien(pg,role='admin') as c:
+        sebelum=await cuplik(pg)
+        r=await c.get(f'/jasa/pelanggan/{pid}?tab=penerimaan')
+        assert r.status_code==200 and 'TRX-LIMA-BANYAK' in r.text
+        assert '200 kg' in r.text and '300 kg' in r.text
+        assert await cuplik(pg)==sebelum
+        async with pg() as db:assert await svc.pelanggan(db,pid)==awal
