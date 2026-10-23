@@ -150,10 +150,9 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     proses_broken = next(a for a in broken_silo["fields"] if a["name"] == "proses")
     assert "belum ada stok broken yang tersedia" in proses_broken["kosong"].lower()
     assert all(f.get("type") != "tombol_aksi" for f in broken_silo["fields"])
-    # `masukkan_beras_silo` (8 Oktober 2026) sebangun — belum punya kartu
-    # tersendiri, tetap digambar di katalog "Catat pekerjaan lain".
+    # Spesifikasi beras tetap dikirim untuk kartu Stok, tanpa pintasan katalog.
     beras_silo = next(a for a in menu if a["id"] == "masukkan_beras_silo")
-    assert not beras_silo.get("kartu") and beras_silo["wh"] == "g2"
+    assert beras_silo.get("kartu") and beras_silo["wh"] == "g2"
     sebab = next(a for a in menu if a["id"] == "hentikan_penyosohan")["fields"][1]
     # Pilihan mengikuti proses terpilih dan setelan terbaru dari server.
     assert sebab["source"] == "/api/actions/sebab-jeda"

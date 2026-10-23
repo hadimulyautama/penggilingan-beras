@@ -546,6 +546,7 @@ async def halaman_aksi(request: Request):
     return await halaman_pekerjaan(request,akun)
 
 
+@app.get("/pekerjaan/catat-lain", response_class=HTMLResponse)
 @app.get("/aksi-lain", response_class=HTMLResponse)
 async def halaman_aksi_lain(request: Request):
     """Katalog aksi lengkap — yang tak berwujud benda di gudang.
@@ -569,10 +570,25 @@ async def halaman_aksi_lain(request: Request):
     # seluruh pekerjaannya memang ada di antrean, jadi ke sanalah orangnya
     # diantar.
     if getattr(request.state, "view", "") in (SELEPAN, POLESAN):
-        return RedirectResponse("/aksi", status_code=303)
-    return render(request, "aksi_lain.html", layar="aksi_lain",
-                  buka=request.query_params.get("buka") or "",
-                  nilai=request.query_params.get("nilai") or "",
+        return RedirectResponse("/aksi" + ("?" + request.url.query if request.url.query else ""), status_code=303)
+    from urllib.parse import urlencode
+    from app.web.layar_pekerjaan import konteks_aman
+    from app.web.katalog_navigasi import tujuan_duplikat
+
+    kembali = konteks_aman(request.query_params.get("kembali")) or "/pekerjaan"
+    if not kembali.startswith("/pekerjaan?") and kembali != "/pekerjaan":
+        kembali = "/pekerjaan"
+    buka = request.query_params.get("buka") or ""
+    nilai = request.query_params.get("nilai") or ""
+    tujuan, petunjuk, asal, nama = await tujuan_duplikat(buka, nilai, request.query_params)
+    if tujuan:
+        return RedirectResponse(tujuan, status_code=303)
+    if request.url.path == "/aksi-lain":
+        return RedirectResponse("/pekerjaan/catat-lain?" + urlencode(dict(request.query_params)), status_code=303)
+    return render(request, "aksi_lain.html", layar="pekerjaan", kembali=kembali,
+                  breadcrumb_induk={"alamat": kembali, "nama": "Pekerjaan"},
+                  petunjuk=petunjuk, asal_tindakan=asal, nama_asal=nama,
+                  buka="" if petunjuk else buka, nilai=nilai,
                   **await lencana(akun.user))
 
 

@@ -165,6 +165,7 @@
   <div class="desktop-chrome__crumbrow">
     <nav class="desktop-breadcrumb" aria-label="Breadcrumb">
       <a href="/">Beranda</a>
+      {% if breadcrumb_induk %}<span aria-hidden="true">›</span><a href="{{ breadcrumb_induk.alamat }}">{{ breadcrumb_induk.nama }}</a>{% endif %}
       {% if layar != 'beranda' %}<span aria-hidden="true">›</span><span>{{ self.judul()|striptags|trim }}</span>{% endif %}
       {% if breadcrumb_detail %}<span aria-hidden="true">›</span><strong>{{ breadcrumb_detail }}</strong>{% endif %}
     </nav>

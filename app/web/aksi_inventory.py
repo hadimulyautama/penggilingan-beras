@@ -1948,8 +1948,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              ]},
             {"id": "beli_kemasan", "label": "🛒 Beli karung",
              "post": "/api/actions/beli-kemasan",
-             "hint": "Harga per lembar dipakai menghitung HPP kemasan "
-                     "(rata-rata tertimbang) — isi bila diketahui.",
+             "hint": "Catat jumlah lembar karung yang masuk gudang.",
              "fields": [
                  {"name": "karung", "label": "Jenis & ukuran karung", "type": "remote",
                   "source": "/api/actions/kemasan-jenis"},

@@ -5,7 +5,9 @@
 {% import '_benda.html' as benda with context %}
 {% import '_kepemilikan.html' as milik with context %}
 {% import '_kerja_navigasi.html' as nav with context %}
-<header class="kerja-kepala"><h1>Pekerjaan</h1>
+<header class="kerja-kepala"><div class="pekerjaan-judul"><h1>Pekerjaan</h1>
+{% if VIEW in V_MEJA %}<a class="btn btn--utama" href="/pekerjaan/catat-lain?{{ {'kembali': href()}|urlencode }}">Catat pekerjaan lain</a>{% endif %}</div>
+<style>.pekerjaan-judul{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.pekerjaan-judul h1{margin:0}@media(max-width:560px){.pekerjaan-judul .btn{width:100%;justify-content:center}}</style>
 <nav class="saring kerja-tab" aria-label="Tab pekerjaan">
 <a class="pil{{ ' pil--on' if tab=='tindakan' }}" href="{{ href(tab='tindakan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='tindakan' %} aria-current="page"{% endif %}>Perlu tindakan <span class="pil__jml">{{ total_tindakan }}</span></a>
 <a class="pil{{ ' pil--on' if tab=='berjalan' }}" href="{{ href(tab='berjalan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='berjalan' %} aria-current="page"{% endif %}>Berjalan <span class="pil__jml">{{ total_jalan }}</span></a>
@@ -38,7 +40,7 @@
 {% endif %}
 {% if not MUTU_AKTIF and VIEW in V_MEJA %}<p class="bantu">Pencatatan mutu dimatikan di Pengaturan. Tugas QC tidak ditagih.</p>{% endif %}
 {% if PINTASAN %}<div class="saring">{% set dasar=benda.dasar_borang(request.url.path) %}{% for id,nama in PINTASAN %}<a class="btn btn--kecil" href="{{ dasar }}buka={{ id }}">{{ nama }}</a>{% endfor %}</div>{% endif %}
-{% if VIEW in V_MEJA %}<a class="btn btn--kecil" href="/aksi-lain">Catat pekerjaan lain</a>{% endif %}
+
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
 {% endblock %}
 {% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}{% endblock %}
