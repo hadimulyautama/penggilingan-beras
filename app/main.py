@@ -134,6 +134,8 @@ from app.web.portal.auth import router as portal_auth_router
 from app.web.portal.routes import router as portal_router
 app.include_router(portal_auth_router)
 app.include_router(portal_router)
+from app.web.portal.admin import router as portal_admin_router
+app.include_router(portal_admin_router)
 app.include_router(pengguna_router)
 #: Berkas statis: milik aplikasi (manifest.json) di depan, paket tampilan
 #: (app.css, aksi.js, pindah.js, ikon) di belakang. Aturan cache-nya — setahun

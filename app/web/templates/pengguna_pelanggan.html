@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block judul %}Kelola pengguna · Pelanggan{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/akun-pelanggan.css?v={{ VERSI }}">
+<section class="kelola-portal">
+<a class="btn" href="/pengaturan">← Pengaturan</a>
+<header><h1>Kelola pengguna</h1><p>Akun pelanggan untuk membaca barang, pekerjaan, dan laporan miliknya.</p></header>
+{% set pengguna_pelanggan = true %}{% include '_pengguna_jenis.html' %}
+{% if pesan_err %}<div class="nota nota--buruk" role="alert">{{ pesan_err }}</div>{% endif %}
+{% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
+<p class="bantu">Peran Pelanggan hanya dapat masuk ke <a href="/pelanggan/masuk" target="_blank" rel="noopener">portal pelanggan</a>. Login dan akses internal operator/admin tidak diberikan.</p>
+{% if chosen %}{% set a,p = chosen %}
+<section class="kartu"><h2>Ubah akun pelanggan</h2>
+<dl><dt>Pelanggan</dt><dd>{{ p.nama_pelanggan }}</dd><dt>Kontak Kledo</dt><dd>#{{ p.kledo_contact_id or 'Belum terhubung' }}</dd><dt>Peran</dt><dd>Pelanggan</dd></dl>
+<p class="bantu">Pelanggan terikat tetap pada akun ini. Untuk mengganti pemilik akses, nonaktifkan akun dan buat akun baru setelah memilih kontak yang benar.</p>
+<form method="post" action="/pengguna/pelanggan/{{ a.id }}" class="grup">
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+<label>Username<input class="fld" name="username" value="{{ a.username }}" minlength="3" maxlength="80" pattern="[A-Za-z0-9_-]+" autocomplete="off" autocapitalize="none" required></label>
+<label>Kata sandi baru<input class="fld" name="sandi" type="password" minlength="6" maxlength="512" autocomplete="new-password"></label>
+<label>Konfirmasi kata sandi baru<input class="fld" name="konfirmasi" type="password" minlength="6" maxlength="512" autocomplete="new-password"></label>
+<p class="bantu">Kosongkan kedua kolom sandi untuk mempertahankan sandi saat ini. Minimal 6 karakter, mengikuti aturan PadiFlow.</p>
+<div class="pilihan"><button class="tbl" type="submit">Simpan perubahan</button><a class="btn" href="/pengguna/pelanggan">Kembali ke daftar</a></div>
+</form></section>
+{% else %}
+<section class="kartu"><h2>Buat akun pelanggan</h2>
+<form method="get" action="/pengguna/pelanggan" class="kelola-portal__cari">
+<label for="kontak-cari">Cari kontak Kledo</label><div class="pilihan"><input class="fld" id="kontak-cari" name="q" value="{{ q }}" maxlength="100" placeholder="Nama, nomor kontak Kledo, atau telepon"><button class="btn" type="submit">Cari kontak</button>{% if q %}<a href="/pengguna/pelanggan" class="btn">Reset</a>{% endif %}</div>
+</form>
+<p class="bantu">Hanya pelanggan aktif dengan tautan Kledo yang jelas yang dapat dipilih. Kontak belum ada? <a href="/pengaturan/kledo">Perbarui kontak Kledo</a>.</p>
+{% if contacts %}
+<form method="post" action="/pengguna/pelanggan/buat" class="grup">
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+<label>Peran<input class="fld" value="Pelanggan" readonly></label>
+<label>Pelanggan dari kontak Kledo<select class="fld" name="kontak" required><option value="">Pilih pelanggan</option>{% for p in contacts %}<option value="{{ p.kledo_contact_id }}:{{ p.id }}">{{ p.nama_pelanggan }} · Kledo #{{ p.kledo_contact_id }}{% if p.no_telfon %} · {{ p.no_telfon }}{% endif %}</option>{% endfor %}</select></label>
+<label>Username<input class="fld" name="username" minlength="3" maxlength="80" pattern="[A-Za-z0-9_-]+" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required><small>3–80 huruf/angka, tanda hubung, atau garis bawah.</small></label>
+<div class="kelola-portal__sandi">
+<label>Kata sandi<input class="fld" type="password" name="sandi" minlength="6" maxlength="512" autocomplete="new-password" required></label>
+<label>Konfirmasi kata sandi<input class="fld" type="password" name="konfirmasi" minlength="6" maxlength="512" autocomplete="new-password" required></label>
+</div>
+<p class="bantu">Minimal 6 karakter, mengikuti aturan PadiFlow. Sampaikan kredensial kepada pelanggan melalui jalur privat.</p>
+<button class="tbl" type="submit">Buat akun pelanggan</button>
+</form>
+{% else %}<p>Tidak ada kontak yang cocok. Coba pencarian lain atau perbarui kontak Kledo.</p>{% endif %}
+<nav class="pilihan" aria-label="Halaman kontak">{% if previous %}<a class="btn" href="{{ previous }}">Kontak sebelumnya</a>{% endif %}<span class="bantu">{{ total }} kontak · halaman {{ page_no }}</span>{% if following %}<a class="btn" href="{{ following }}">Kontak berikutnya</a>{% endif %}</nav>
+</section>
+{% endif %}
+<section class="kartu"><h2>Akun pelanggan</h2>
+<form method="get" action="/pengguna/pelanggan" class="kelola-portal__cari"><label for="cari-akun">Cari akun pelanggan</label><div class="pilihan"><input class="fld" id="cari-akun" name="cari_akun" value="{{ account_search }}" maxlength="100" placeholder="Nama pelanggan atau username"><button type="submit" class="btn">Cari akun</button>{% if account_search %}<a class="btn" href="/pengguna/pelanggan">Reset</a>{% endif %}</div></form>
+<div class="tabel-standar__scroll"><table class="tabel-standar" data-ponsel="ringkas" role="table"><thead><tr><th>Pelanggan</th><th>Username</th><th>Peran</th><th>Status</th><th>Kelola</th></tr></thead><tbody>
+{% for a,p in accounts %}<tr role="row"><td data-sel="utama" role="cell"><strong>{{ p.nama_pelanggan }}</strong><small class="tabel-standar__sekunder">Kontak Kledo #{{ p.kledo_contact_id or 'Belum terhubung' }}</small></td><td data-sel="subjek" role="cell">{{ a.username }}</td><td data-sel="meta" role="cell">Pelanggan</td><td data-sel="status" role="cell">{{ 'Aktif' if a.active else 'Nonaktif' }}{% if p.status!='aktif' or p.deleted_at %}<small>Kontak pelanggan tidak aktif</small>{% endif %}</td><td data-sel="kelola" role="cell"><div class="pilihan"><a class="btn" href="/pengguna/pelanggan/{{ a.id }}">Ubah akun / sandi</a><form method="post" action="/pengguna/pelanggan/{{ a.id }}/status"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="aktif" value="{{ '0' if a.active else '1' }}"><button class="btn" type="submit">{{ 'Nonaktifkan' if a.active else 'Aktifkan' }}</button></form></div></td></tr>
+{% else %}<tr><td colspan="5">{{ 'Tidak ada akun yang cocok.' if account_search else 'Belum ada akun pelanggan.' }}</td></tr>{% endfor %}
+</tbody></table></div>
+<nav class="pilihan" aria-label="Halaman akun">{% if account_previous %}<a class="btn" href="{{ account_previous }}">Akun sebelumnya</a>{% endif %}<span class="bantu">{{ account_total }} akun · halaman {{ account_page }}</span>{% if account_following %}<a class="btn" href="{{ account_following }}">Akun berikutnya</a>{% endif %}</nav></section>
+</section>
+{% endblock %}

@@ -76,7 +76,7 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
     if tab not in {'ringkasan','penerimaan','proses','stok','pengambilan'}:
         raise HTTPException(422,'Tab pelanggan tidak dikenal.')
     async with SessionLocal() as db:
-        d=await svc.pelanggan(db,pelanggan_id)
+        d=await svc.pelanggan(db,pelanggan_id,read_scope=getattr(request.state,'portal_scope',None))
         if d is None:
             raise HTTPException(404,'Pelanggan jasa tidak ditemukan.')
         b=await berjalan.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))

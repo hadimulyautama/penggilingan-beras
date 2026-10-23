@@ -206,6 +206,22 @@ async def test_http_formulir_dan_pengajuan_dari_detail_asal(pg, asal):
         assert daftar.status_code == 200 and 'OUT-UJI-RETUR' in daftar.text
         asal_html = await c.get(f'/barang-keluar/{asal["oid"]}')
         assert asal_html.status_code == 200 and 'Retur barang' in asal_html.text
+    # Jalur HTTP dari pengiriman asal menyimpan relasi otomatis, sampai stok
+    # diterima; tidak ada langkah penautan manual atau pencocokan nama/bobot.
+    async with pg() as db:
+        pengajuan = await db.scalar(select(ReturRincian))
+        assert pengajuan.outgoing_record_id == asal['oid']
+        assert pengajuan.muatan[0]['outgoing_item_id'] == asal['iid']
+    await selesai(pg, asal)
+    penerimaan = await terima(pg, pengajuan.id)
+    assert penerimaan is not None
+    async with pg() as db:
+        kembali = await db.scalar(select(CustomerReturnItem).where(
+            CustomerReturnItem.customer_return_id == penerimaan.id))
+        assert kembali.outgoing_item_id == asal['iid']
+        sumber = await db.get(OutgoingItem, kembali.outgoing_item_id)
+        assert sumber.outgoing_record_id == asal['oid']
+        assert (await db.get(ReturRincian, pengajuan.id)).customer_return_id == penerimaan.id
 
 
 @pytest.mark.parametrize('gudang_kerja', ['g1', 'g2'])

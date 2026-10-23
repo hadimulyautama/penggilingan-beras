@@ -39,7 +39,7 @@ Detail pelanggan hanya menyajikan relasi dan rincian yang diberikan pembaca lama
 
 Lima tab memakai navigasi tautan native/SPA dengan aria-current. Parameter tambahan pengambilan hanya menata bagian halaman; gerbang backend, pembaca pelanggan dan seluruh layanan transaksi tidak diubah. Ringkasan menempatkan saldo terpisah, kondisi bersamaan, tindakan, perkembangan pelanggan dan Pesanan & nota. Rincian pengambilan/retur pindah ke tab khusus. Stok internal dapat membuka rincian asal yang sudah disediakan pembaca; rincian tambahan ini tidak memperluas proyeksi portal lama. Portal tetap menyaring tautan tindakan melalui read_only dan boleh_tutup/boleh_batal tetap false.
 
-Perubahan komponen dibuat pada sumber tampilan, paket dinaikkan ke 431, dan disinkronkan dengan scripts/sinkron.py. Snapshot rilis sumber terisolasi /tmp/tampilan-rilis-jasa-detail berbasis paket 430 main terbaru (termasuk Beranda yang masuk bersamaan) dipakai agar working tree sumber yang berisi pekerjaan lain tidak ikut tersalin. Hanya template detail, CSS khusus detail dan versi/manifest yang berubah; perubahan sumber target tersedia di repo tampilan. Folder vendor tidak diedit langsung.
+Perubahan komponen dibuat pada sumber tampilan, paket dinaikkan ke 433, dan disinkronkan dengan scripts/sinkron.py. Snapshot rilis sumber terisolasi /tmp/tampilan-rilis-jasa-detail berbasis paket 430 main terbaru (termasuk Beranda yang masuk bersamaan) dipakai agar working tree sumber yang berisi pekerjaan lain tidak ikut tersalin. Hanya template detail, CSS khusus detail dan versi/manifest yang berubah; perubahan sumber target tersedia di repo tampilan. Folder vendor tidak diedit langsung.
 
 ## Bukti pemeriksaan
 
@@ -48,7 +48,7 @@ Perubahan komponen dibuat pada sumber tampilan, paket dinaikkan ke 431, dan disi
 - 11 tes baru mencakup lima tab, saldo/snapshot 18 tabel tetap, proses campuran, kontak bernama sama, data lama/unknown, tiket belum diterima, pesanan historis, peran dan portal.
 - Skenario sama sebelum/sesudah: PK2000 kg, beras4500 kg, hasil samping3200 kg; sumber2500+3500+4000=10000 kg; hasil9700 kg dan selisih300 kg. Status pesanan dan snapshot transaksi identik setelah semua tab/nota dibuka. Tidak menjumlah lintas tahap.
 - Browser 320/390/768/1440/1920:5 tab, keyboard, refresh, konteks daftar, tidak overflow.8 navigasi SPA tanpa POST; Pengambilan barang membuka formulir Pengiriman lama dengan pelanggan yang benar. Tidak menambah formulir baru.
-- 60 tangkapan penuh:5 tab×desktop/ponsel×6kondisi(campuran, kosong, belum diterima, lama aktif, historis, portal). Seluruh details dibuka; teknik membuka area gulir untuk tangkapan tidak masuk CSS aplikasi.
+- 80 tangkapan penuh:5 tab×desktop/ponsel×8kondisi(campuran, kosong, belum diterima, lama aktif, historis, portal, retur tertaut internal, retur tertaut portal). Seluruh details dibuka; teknik membuka area gulir untuk tangkapan tidak masuk CSS aplikasi.
 
 Log lengkap, perbandingan JSON, galeri dan hasil CI/deploy disimpan pada output/detail-pelanggan-jasa di checkout utama; hasil CI/deploy ditambahkan setelah selesai.
 
@@ -65,3 +65,13 @@ Uji tambahan menunjukkan proyeksi lama detail pelanggan menghitung pengiriman ca
 app/web/portal/presentation.py kini menyaring kedua koleksi pada salinan data portal memakai scope.ids(OutgoingRecord) dan scope.ids(CustomerReturn) yang sudah dipakai penjaga URL. Tidak mengubah pembaca pelanggan, saldo, transaksi, aturan kepemilikan atau tampilan Admin. Proyeksi menghitung jumlah setelah koleksi dibatasi izin. Pengujian memastikan item/kode nonmilik tidak ditampilkan di kelima tab, hitungan Ringkasan tepat, URL asing tetap404, dan Admin tetap dapat membaca fakta lengkap.
 
 Setelah penyelarasan:48tes PG pelanggan/portal/tab dan805tes non-PG lulus. Total tes baru menjadi12kasus (termasuk parameter). Log uji gagal sebelum perbaikan serta hasil setelahnya disimpan bersama laporan output. CI penuh dan deploy commit terakhir ditunggu sebelum pekerjaan dinyatakan selesai.
+
+## Asal retur otomatis
+
+Alur lama sudah menyimpan pengiriman asal pada ReturRincian.outgoing_record_id dan item asal pada muatan pengajuan; retur_penerimaan.periksa_dan_terima otomatis menyimpan CustomerReturnItem.outgoing_item_id saat penerimaan. Tidak diperlukan penautan manual. Tes HTTP dari /barang-keluar/{id}/retur kini memeriksa hubungan ini mulai pengajuan hingga penerimaan sah melalui layanan lama.
+
+Pembaca detail sebelumnya selalu menulis Pengeluaran asal belum tertaut, termasuk ketika relasinya ada. _pengiriman kini membaca relasi FK nyata dalam satu query tambahan untuk seluruh retur dan menyediakan tautan pengiriman asal. Label lama hanya dipakai ketika relasi memang tidak tersedia. Tidak menebak dari nama, waktu, atau bobot. Proyeksi portal menyaring tautan asal dengan scope OutgoingRecord yang sama; asal pengiriman campuran yang tidak dapat dibuka portal tidak dibocorkan. Admin tetap melihat fakta lengkap. Ini hanya pengayaan metadata baca; rumus, stok, transaksi dan layanan penerimaan tidak diubah.
+
+Tes akhir sebelum integrasi main:49 tes pelanggan/portal/tab,44 tes pengajuan retur dan tab (termasuk alur HTTP asal sampai penerimaan), serta805 tes non-PG lulus.13 kasus tes tab mencakup asal nyata, data lama tanpa relasi, dan asal campuran di luar cakupan portal.
+
+Setelah integrasi main terbaru dan sinkronisasi paket433:81tes PG tab/pelanggan/portal/pengajuan retur dan807tes non-PG lulus. Pembaruan Beranda dan pengelolaan akun portal dari main dipertahankan.

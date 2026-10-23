@@ -263,7 +263,7 @@
    layar Menunggu keputusan membuka lembarnya SENDIRI — menekan "Verifikasi
    harga" lalu mendarat di layar lain berarti orang kehilangan tempatnya
    setiap kali ia menyelesaikan satu baris. #}
-{% macro blok(judul, daftar, rapat=False, alamat="/aksi", listview=False, tabel=False, progres=False) -%}
+{% macro blok(judul, daftar, rapat=False, alamat="/aksi", listview=False, tabel=False, progres=False, aksi_utama=False) -%}
   {% if daftar %}
   {% set kelas = "padat" if rapat else "benda" %}
   {% set dasar = dasar_borang(alamat) %}
@@ -292,7 +292,29 @@
            kartu lalu membuka lembar melayang lalu memilih dari daftar
            tarik-turun adalah tiga ketukan dan satu layar yang menutupi baris
            yang sedang dikerjakan — untuk satu keputusan: gabah ini mau ke mana. #}
-        {% if b.tombol %}
+        {% if aksi_utama and (b.pilihan or b.tombol or b.aksi) %}
+          <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} beranda-kartu-aksi"{{ tanda(b) }}>
+            <div class="beranda-kartu-aksi__isi">{{ padat(b, progres) }}</div>
+            {% if b.tombol %}
+              {% set aktif = b.tombol|rejectattr('mati')|list %}
+              {% set utama = (aktif|selectattr('utama')|first)|default(aktif|first)|default(none) %}
+              {% if utama %}<button type="button" class="btn btn--utama beranda-kartu-aksi__utama" data-post="{{ utama.post }}" data-kirim='{{ utama.data|tojson }}'>{{ utama.nama }}</button>{% endif %}
+              {% if b.tombol|length > (1 if utama else 0) %}<details class="beranda-kartu-aksi__lain"><summary>Aksi lainnya</summary><div class="pilihan">
+              {% for t in b.tombol if t != utama %}<button type="button" class="pilihan__satu{% if t.mati %} pilihan__satu--mati{% endif %}" {% if t.mati %}disabled aria-disabled="true"{% endif %} data-post="{{ t.post }}" data-kirim='{{ t.data|tojson }}'><span class="pilihan__nama">{{ t.nama }}</span><span class="pilihan__ket">{{ t.mati or t.ket }}</span></button>{% endfor %}
+              </div></details>{% endif %}
+            {% elif b.pilihan %}
+              {% set utama = b.pilihan[0] %}
+              {% set nl = utama[3] if utama|length > 3 else b.nilai %}
+              <a class="btn btn--utama beranda-kartu-aksi__utama" href="{{ dasar }}buka={{ utama[0] }}{% if nl %}&amp;nilai={{ nl|urlencode }}{% endif %}">{{ utama[1] }}</a>
+              {% if b.pilihan|length > 1 %}<details class="beranda-kartu-aksi__lain"><summary>Aksi lainnya</summary><div class="pilihan">
+                {% for p in b.pilihan[1:] %}{% set nl = p[3] if p|length > 3 else b.nilai %}<a class="pilihan__satu" href="{{ dasar }}buka={{ p[0] }}{% if nl %}&amp;nilai={{ nl|urlencode }}{% endif %}"><span class="pilihan__nama">{{ p[1] }}</span><span class="pilihan__ket">{{ p[2] }}</span></a>{% endfor %}
+              </div></details>{% endif %}
+            {% else %}
+              <a class="btn btn--utama beranda-kartu-aksi__utama" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">{{ {'mulai_giling':'Mulai giling','mulai_pengeringan':'Mulai pengeringan','mulai_sosoh':'Mulai penyosohan','hasil_giling':'Perbarui hasil giling','hasil_sosoh':'Catat hasil penyosohan','kadar_air':'Perbarui kadar air','selesai_pendinginan':'Nyatakan sudah dingin','catat_packing':'Catat packing','lanjutkan_proses':'Lanjutkan proses'}.get(b.aksi, 'Buka pekerjaan') }}</a>
+            {% endif %}
+            {{ tautan_penerimaan(b) }}
+          </div>
+        {% elif b.tombol %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% elif rapat or listview %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
