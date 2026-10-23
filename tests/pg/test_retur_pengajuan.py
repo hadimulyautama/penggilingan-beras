@@ -481,6 +481,7 @@ async def test_layar_menunggu_koreksi_manual_dan_diterima(pg, asal):
         simpan_html('pengajuan', await c.get(f'/barang-keluar/{asal["oid"]}/retur'))
         r = await simpan(pg, asal, 9)
         simpan_html('menunggu', await c.get(f'/retur/pengajuan/{r.id}'))
+        simpan_html('daftar-pengajuan', await c.get('/retur'))
         await selesai(pg, asal, 250)
         assert await terima(pg, r.id) is None
         tertahan = await c.get(f'/retur/pengajuan/{r.id}')

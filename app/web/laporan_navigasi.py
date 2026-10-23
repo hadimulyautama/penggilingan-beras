@@ -7,6 +7,8 @@ from fastapi.responses import RedirectResponse
 from app.web.security import butuh_akun
 
 router = APIRouter(tags=["laporan"])
+TAB = (("proses", "Proses"), ("qc", "QC"),
+       ("laporan", "Laporan"), ("audit", "Audit"))
 PROSES = (
     ("pengeringan", "Pengeringan", "/riwayat-pengeringan", "g1"),
     ("giling", "Penggilingan", "/riwayat-giling", "g1"),
@@ -56,17 +58,18 @@ async def siapkan(request: Request, konteks: dict):
     konteks["LAPORAN_NAV"] = {
         "aktif": aktif, "judul": judul[aktif], "jenis": jenis, "detail": detail,
         "tab": [{"kunci": k, "nama": n, "href": opsi[k][0][2]}
-                for k, n in [("proses", "Proses"), ("qc", "QC"),
-                             ("laporan", "Laporan"), ("audit", "Audit")] if opsi[k]],
+                for k, n in TAB if opsi[k]],
         "pilihan": opsi[aktif] if aktif in ("proses", "qc") else [],
     }
 
 
 @router.get("/laporan-riwayat")
-async def masuk(request: Request, tab: str = "laporan", jenis: str = "",
+async def masuk(request: Request, tab: str | None = None, jenis: str = "",
                 akun=Depends(butuh_akun)):
     """Pintu baru; URL lama tetap menjadi halaman sumber dan penjaga izin."""
     opsi = await pilihan(akun)
+    if tab is None:
+        tab = next(k for k, _ in TAB if opsi[k])
     if tab not in opsi: raise HTTPException(404, "Bagian tidak ditemukan.")
     if not opsi[tab]: raise HTTPException(403, "Bagian ini tidak tersedia untuk peran Anda.")
     tujuan = next((x[2] for x in opsi[tab] if x[0] == jenis), None)
