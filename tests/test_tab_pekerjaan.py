@@ -41,6 +41,7 @@ async def test_katalog_meneruskan_jumlah_tab(monkeypatch, query):
                        'path': '/pekerjaan/catat-lain', 'headers': [],
                        'query_string': urlencode({'kembali': '/pekerjaan?'+urlencode(query)}).encode()})
     context = await main.halaman_aksi_lain(request)
+    assert context['kembali'] == ''
     *_, tindakan, jalan = daftar_tab_pekerjaan(kelompok, query.get('kepemilikan', ''),
                                                query.get('gudang', ''), query.get('jenis', ''))
     assert (context['total_tindakan'], context['total_jalan']) == (tindakan, jalan)

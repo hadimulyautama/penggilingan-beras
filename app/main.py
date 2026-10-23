@@ -598,7 +598,7 @@ async def halaman_aksi_lain(request: Request):
         kelompok, pilihan(permintaan_tab, 'kepemilikan', {'jasa', 'pabrik'}),
         pilihan(permintaan_tab, 'gudang', {'g1', 'g2'}),
         pilihan(permintaan_tab, 'jenis', dict(JENIS_KERJA)))
-    return render(request, "aksi_lain.html", layar="pekerjaan", kembali=kembali,
+    return render(request, "aksi_lain.html", layar="pekerjaan", kembali="",
                   tab_tindakan=tab_tindakan, tab_berjalan=tab_berjalan,
                   total_tindakan=total_tindakan, total_jalan=total_jalan,
                   breadcrumb_induk={"alamat": kembali, "nama": "Pekerjaan"},
