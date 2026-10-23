@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block judul %}Kelola pengguna · Pelanggan{% endblock %}
 {% block isi %}
-<link rel="stylesheet" href="/static/akun-pelanggan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/akun-pelanggan.css?v={{ VERSI }}-kontak1">
 <section class="kelola-portal">
 <a class="btn" href="/pengaturan">← Pengaturan</a>
 <header><h1>Kelola pengguna</h1><p>Akun pelanggan untuk membaca barang, pekerjaan, dan laporan miliknya.</p></header>
@@ -54,5 +54,5 @@
 </tbody></table></div>
 <nav class="pilihan" aria-label="Halaman akun">{% if account_previous %}<a class="btn" href="{{ account_previous }}">Akun sebelumnya</a>{% endif %}<span class="bantu">{{ account_total }} akun · halaman {{ account_page }}</span>{% if account_following %}<a class="btn" href="{{ account_following }}">Akun berikutnya</a>{% endif %}</nav></section>
 </section>
-<script src="/static/akun-pelanggan.js?v={{ VERSI }}" defer></script>
+<script src="/static/akun-pelanggan.js?v={{ VERSI }}-kontak1" defer></script>
 {% endblock %}
