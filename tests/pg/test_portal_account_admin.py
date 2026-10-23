@@ -129,3 +129,20 @@ async def test_csrf_duplicate_contact_and_duplicate_username_are_guarded(pg,peop
         async with pg() as db:
             db.add(Pelanggan(nama_pelanggan='Kontak ambigu',kledo_contact_id=602,status='aktif'));await db.commit()
         assert (await create(c,form(p[1].id,602,'another-account'))).status_code==422
+
+
+async def test_account_search_pagination_and_detail_outside_first_page(pg,people):
+    sid,p=people
+    async with pg() as db:
+        password_hash=security.hash_sandi('pagination-pass')
+        rows=[PortalAccount(pelanggan_id=p[0].id,username=f'page-user-{i:02}',password_hash=password_hash,active=True,token_version=1) for i in range(25)]
+        db.add_all(rows);await db.commit();last=rows[-1].id
+    async with _klien(await _token(pg,sid)) as c:
+        r=await c.get('/pengguna/pelanggan');soup=BeautifulSoup(r.text,'html.parser')
+        assert len(soup.select('tbody tr'))==20 and 'page-user-24' not in soup.tbody.get_text()
+        r=await c.get('/pengguna/pelanggan?halaman_akun=2');assert 'page-user-24' in r.text
+        r=await c.get('/pengguna/pelanggan?cari_akun=page-user-24');soup=BeautifulSoup(r.text,'html.parser')
+        assert len(soup.select('tbody tr'))==1 and 'page-user-24' in soup.tbody.get_text()
+        r=await c.get(f'/pengguna/pelanggan/{last}');assert r.status_code==200
+        assert BeautifulSoup(r.text,'html.parser').select_one('[name=username]')['value']=='page-user-24'
+        assert (await c.get('/pengguna/pelanggan?halaman=9999999999999999999999999&halaman_akun=999999999999999999999')).status_code==200

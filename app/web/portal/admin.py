@@ -23,6 +23,9 @@ async def page(request,*,message='',error='',selected=None,status=200):
     q=request.query_params.get('q','').strip()[:100]
     try:page_no=max(1,int(request.query_params.get('halaman','1')))
     except ValueError:page_no=1
+    try:account_page=max(1,int(request.query_params.get('halaman_akun','1')))
+    except ValueError:account_page=1
+    account_search=request.query_params.get('cari_akun','').strip()[:100]
     size=20
     valid=(Pelanggan.status=='aktif',Pelanggan.deleted_at.is_(None),Pelanggan.kledo_contact_id>0)
     unique_contacts=select(Pelanggan.kledo_contact_id).where(*valid).group_by(Pelanggan.kledo_contact_id).having(func.count()==1)
@@ -33,15 +36,27 @@ async def page(request,*,message='',error='',selected=None,status=200):
                          Pelanggan.kledo_contact_id==int(q) if q.isdecimal() and len(q)<18 else False))
     async with SessionLocal() as db:
         total=await db.scalar(select(func.count()).select_from(Pelanggan).where(*terms))
+        page_no=min(page_no,max(1,(total+size-1)//size))
         contacts=(await db.scalars(select(Pelanggan).where(*terms).order_by(Pelanggan.nama_pelanggan,Pelanggan.id)
             .offset((page_no-1)*size).limit(size))).all()
         # Customer list is separate from staff users; never join users.role.
-        rows=(await db.execute(select(PortalAccount,Pelanggan).join(Pelanggan,Pelanggan.id==PortalAccount.pelanggan_id)
-            .order_by(PortalAccount.username))).all()
-        chosen=next(((a,p) for a,p in rows if a.id==selected),None)
+        account_terms=[]
+        if account_search:
+            account_terms.append(or_(PortalAccount.username.icontains(account_search,autoescape=True),
+                                     Pelanggan.nama_pelanggan.icontains(account_search,autoescape=True)))
+        account_query=select(PortalAccount,Pelanggan).join(Pelanggan,Pelanggan.id==PortalAccount.pelanggan_id)
+        account_total=await db.scalar(select(func.count()).select_from(PortalAccount)
+            .join(Pelanggan,Pelanggan.id==PortalAccount.pelanggan_id).where(*account_terms))
+        account_page=min(account_page,max(1,(account_total+size-1)//size))
+        rows=(await db.execute(account_query.where(*account_terms).order_by(PortalAccount.username)
+            .offset((account_page-1)*size).limit(size))).all()
+        chosen=(await db.execute(account_query.where(PortalAccount.id==selected))).first() if selected is not None else None
         if selected is not None and chosen is None:raise HTTPException(404,'Akun pelanggan tidak ditemukan.')
     return render(request,'pengguna_pelanggan.html',layar='pengaturan',kembali='/pengaturan',
         contacts=contacts,accounts=rows,chosen=chosen,q=q,page_no=page_no,total=total,
+        account_total=account_total,account_search=account_search,account_page=account_page,
+        account_previous='?'+urlencode({'cari_akun':account_search,'halaman_akun':account_page-1}) if account_page>1 else '',
+        account_following='?'+urlencode({'cari_akun':account_search,'halaman_akun':account_page+1}) if account_page*size<account_total else '',
         previous='?'+urlencode({'q':q,'halaman':page_no-1}) if page_no>1 else '',
         following='?'+urlencode({'q':q,'halaman':page_no+1}) if page_no*size<total else '',
         pesan_ok=message,pesan_err=error,status_code=status)

@@ -45,9 +45,11 @@
 </section>
 {% endif %}
 <section class="kartu"><h2>Akun pelanggan</h2>
+<form method="get" action="/pengguna/pelanggan" class="kelola-portal__cari"><label for="cari-akun">Cari akun pelanggan</label><div class="pilihan"><input class="fld" id="cari-akun" name="cari_akun" value="{{ account_search }}" maxlength="100" placeholder="Nama pelanggan atau username"><button type="submit" class="btn">Cari akun</button>{% if account_search %}<a class="btn" href="/pengguna/pelanggan">Reset</a>{% endif %}</div></form>
 <div class="tabel-standar__scroll"><table class="tabel-standar" data-ponsel="ringkas" role="table"><thead><tr><th>Pelanggan</th><th>Username</th><th>Peran</th><th>Status</th><th>Kelola</th></tr></thead><tbody>
 {% for a,p in accounts %}<tr role="row"><td data-sel="utama" role="cell"><strong>{{ p.nama_pelanggan }}</strong><small class="tabel-standar__sekunder">Kontak Kledo #{{ p.kledo_contact_id or 'Belum terhubung' }}</small></td><td data-sel="subjek" role="cell">{{ a.username }}</td><td data-sel="meta" role="cell">Pelanggan</td><td data-sel="status" role="cell">{{ 'Aktif' if a.active else 'Nonaktif' }}{% if p.status!='aktif' or p.deleted_at %}<small>Kontak pelanggan tidak aktif</small>{% endif %}</td><td data-sel="kelola" role="cell"><div class="pilihan"><a class="btn" href="/pengguna/pelanggan/{{ a.id }}">Ubah akun / sandi</a><form method="post" action="/pengguna/pelanggan/{{ a.id }}/status"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="aktif" value="{{ '0' if a.active else '1' }}"><button class="btn" type="submit">{{ 'Nonaktifkan' if a.active else 'Aktifkan' }}</button></form></div></td></tr>
-{% else %}<tr><td colspan="5">Belum ada akun pelanggan.</td></tr>{% endfor %}
-</tbody></table></div></section>
+{% else %}<tr><td colspan="5">{{ 'Tidak ada akun yang cocok.' if account_search else 'Belum ada akun pelanggan.' }}</td></tr>{% endfor %}
+</tbody></table></div>
+<nav class="pilihan" aria-label="Halaman akun">{% if account_previous %}<a class="btn" href="{{ account_previous }}">Akun sebelumnya</a>{% endif %}<span class="bantu">{{ account_total }} akun · halaman {{ account_page }}</span>{% if account_following %}<a class="btn" href="{{ account_following }}">Akun berikutnya</a>{% endif %}</nav></section>
 </section>
 {% endblock %}

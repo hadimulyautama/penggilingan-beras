@@ -170,6 +170,7 @@ Kontak diperiksa ulang dan dikunci saat simpan. Gunakan tautan **Perbarui kontak
 Kledo** bila kontak baru belum tersinkron. Pengelolaan ini tidak membuat atau
 mengubah kontak di Kledo.
 
+Daftar kontak dan akun memiliki pencarian serta paginasi masing-masing (20 baris per halaman).
 Super Admin dapat mengubah username/kata sandi dan aktif/nonaktif akun. Sesi
 lama dicabut melalui `token_version`. Tautan pelanggan tidak dapat diganti pada
 akun yang ada; nonaktifkan akun lama dan buat akun baru bila ikatan awal salah.
