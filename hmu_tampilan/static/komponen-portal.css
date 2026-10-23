@@ -12,7 +12,7 @@
 }
 body.terik, #portal-hmu[data-theme=light] {
   --pd-bg: #f5f5ef; --pd-sheet: #fff; --pd-ink: #202832;
-  --pd-muted: #596777; --pd-line: #dce3d8; --pd-soft: #e9eef3;
+  --pd-muted: #596777; --pd-line: #dce3d8; --pd-soft: #eaf0e7;
   --pd-green: #336e42; --pd-green-bg: #edf4eb;
   --pd-blue: #3275d6; --pd-blue-bg: #e6eeff;
   --pd-amber: #805714; --pd-amber-bg: #fff2d7;
@@ -31,6 +31,7 @@ body.padiflow-ui {
   --kertas: var(--pd-bg); --kertas-2: var(--pd-soft); --kertas-3: var(--pd-soft); --putih: var(--pd-sheet);
   --kulit-kartu: var(--pd-sheet); --kulit-banner: var(--pd-sheet); --kulit-samping: var(--pd-sheet);
   --kulit-batas: var(--pd-line); --kulit-pemisah: var(--pd-line); --kulit-redup: var(--pd-muted);
+  --kulit-langkah: var(--pd-soft); --kulit-langkah-teks: var(--pd-ink);
   --kulit-pilih: var(--pd-soft); --teks: var(--pd-font); --judul: var(--pd-font); --mono: var(--pd-font);
   --tabel-body-size: 13px; --tabel-header-size: 11px; --tabel-header-weight: 500; --tabel-kode-weight: 500;
   font: 400 14px/1.55 var(--pd-font); color: var(--pd-ink); background: var(--pd-bg);
@@ -66,14 +67,14 @@ body.padiflow-ui :is(.pintu__nama,.pintu__isi) { font: inherit; }
 body.padiflow-ui .pintu__isi { flex: 1; }
 body.padiflow-ui :is(.pintu,.bawah__isi>a):hover { background: var(--pd-soft); }
 body.padiflow-ui :is(.pintu--kini,.bawah__isi>a.aktif) {
-  background: var(--pd-soft); color: var(--pd-ink); box-shadow: inset 3px 0 #566575; font-weight: 600;
+  background: var(--pd-soft); color: var(--pd-ink); box-shadow: inset 3px 0 var(--pd-green); font-weight: 600;
 }
 body.padiflow-ui :is(.pintu__ikon,.bawah__ikon) {
   display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 9px;
-  color: var(--pd-blue); background: var(--pd-blue-bg); box-shadow: none; font-size: 15px;
+  color: var(--nav-icon-color,var(--pd-blue)); background: var(--nav-icon-bg,var(--pd-blue-bg)); box-shadow: none; font-size: 15px;
 }
 body.padiflow-ui :is(.pintu__ikon,.bawah__ikon) svg { width: 16px; height: 16px; stroke: currentColor; }
-body.padiflow-ui :is(.pintu--kini .pintu__ikon,.bawah__isi>a.aktif svg) { color: var(--pd-blue); stroke: currentColor; box-shadow: none; }
+body.padiflow-ui :is(.pintu--kini .pintu__ikon,.bawah__isi>a.aktif svg) { color: var(--nav-icon-color,var(--pd-blue)); stroke: currentColor; box-shadow: none; }
 body.padiflow-ui :is(.pintu__jml,.bawah__tanda) { position: static; transform: none; margin-left: auto; flex: 0 0 auto; min-width: 20px; height: auto; padding: 2px 7px; font: 500 11px/1.5 var(--pd-font); border: 0; border-radius: 6px; color: var(--pd-muted); background: var(--pd-soft); }
 body.padiflow-ui :is(.laci__identitas,.bawah__akun) { display: block; flex-shrink: 0; border-top: 1px solid var(--pd-line); padding: 14px 9px 4px; margin-top: auto; }
 body.padiflow-ui :is(.laci__identitas .bar__nama,.bawah__nama) { color: var(--pd-ink); font: 500 16px/1.5 var(--pd-font); overflow-wrap: anywhere; }
@@ -187,7 +188,7 @@ body.padiflow-ui .pd-shortcuts a:focus-visible { outline: 2px solid var(--pd-blu
 #portal-hmu .nav-label { font-weight: 600; }
 #portal-hmu nav button { font: 400 14px/1.55 var(--pd-font); }
 #portal-hmu nav button[aria-current=page] { font-weight: 600; }
-#portal-hmu .nav-icon { color: var(--pd-blue); background: var(--pd-blue-bg); }
+#portal-hmu .nav-icon { color: var(--nav-icon-color,var(--pd-blue)); background: var(--nav-icon-bg,var(--pd-blue-bg)); }
 #portal-hmu .account { font: 500 16px/1.5 var(--pd-font); }
 #portal-hmu .account strong { font-weight: 500; }
 #portal-hmu .account small { font: 400 13px/1.55 var(--pd-font); }
@@ -232,3 +233,103 @@ body.padiflow-ui .penerimaan-detail h1 { font: 600 25px/1.25 var(--pd-font); }
 body.padiflow-ui .penerimaan-detail h2 { font: 600 16px/1.4 var(--pd-font); }
 body.padiflow-ui .penerimaan-tabs a { font: 400 14px/1.4 var(--pd-font); border-radius: 9px; }
 body.padiflow-ui .penerimaan-tabs a[aria-selected=true] { background: var(--pd-soft); border-color: var(--pd-line); font-weight: 600; }
+
+/* Ikon sidebar berwarna menurut fungsi, terpisah dari palet aplikasi. */
+:root {
+  --nav-blue:#a9c8ff; --nav-blue-bg:#263b59;
+  --nav-green:#8fd8b2; --nav-green-bg:#234638;
+  --nav-amber:#edc57d; --nav-amber-bg:#483a23;
+  --nav-coral:#f0b09f; --nav-coral-bg:#4d302b;
+  --nav-purple:#c8acef; --nav-purple-bg:#3c2d51;
+  --nav-teal:#8ed1db; --nav-teal-bg:#234047;
+  --nav-slate:#c0cbd8; --nav-slate-bg:#34414d;
+  --nav-rose:#edabc3; --nav-rose-bg:#4b2c3d;
+}
+body.terik, #portal-hmu[data-theme=light] {
+  --nav-blue:#3265ad; --nav-blue-bg:#e8effc;
+  --nav-green:#277154; --nav-green-bg:#e4f3ea;
+  --nav-amber:#8a5b15; --nav-amber-bg:#fff0d8;
+  --nav-coral:#a64c39; --nav-coral-bg:#fbe9e2;
+  --nav-purple:#7651b0; --nav-purple-bg:#f0e8fb;
+  --nav-teal:#206f7a; --nav-teal-bg:#e1f1f2;
+  --nav-slate:#596777; --nav-slate-bg:#e9eef3;
+  --nav-rose:#a44569; --nav-rose-bg:#f8e6ee;
+}
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--beranda,
+#portal-hmu nav button[data-go="Ringkasan"] .nav-icon { --nav-icon-color:var(--nav-blue); --nav-icon-bg:var(--nav-blue-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--barang_masuk,
+#portal-hmu nav button[data-go="Barang Masuk"] .nav-icon { --nav-icon-color:var(--nav-green); --nav-icon-bg:var(--nav-green-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--pekerjaan,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--aksi,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--stok,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--stok_produk,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--stok_karung,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--berjalan,
+#portal-hmu nav button[data-go="Pekerjaan Saya"] .nav-icon,
+#portal-hmu nav button[data-go="Stok Saya"] .nav-icon { --nav-icon-color:var(--nav-amber); --nav-icon-bg:var(--nav-amber-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--barang_keluar,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--retur,
+#portal-hmu nav button[data-go="Pengiriman & Retur"] .nav-icon { --nav-icon-color:var(--nav-coral); --nav-icon-bg:var(--nav-coral-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--jasa { --nav-icon-color:var(--nav-purple); --nav-icon-bg:var(--nav-purple-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--laporan_riwayat,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--laporan,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--riwayat_giling,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--riwayat_sosoh,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--riwayat_transfer,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--riwayat_pengeringan,
+#portal-hmu nav button[data-go="Riwayat Barang"] .nav-icon,
+#portal-hmu nav button[data-go="Laporan"] .nav-icon { --nav-icon-color:var(--nav-purple); --nav-icon-bg:var(--nav-purple-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--riwayat_qc,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--mutu,
+#portal-hmu nav button[data-go="Riwayat QC"] .nav-icon { --nav-icon-color:var(--nav-teal); --nav-icon-bg:var(--nav-teal-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--kabar,
+#portal-hmu nav button[data-go="Berita & Notifikasi"] .nav-icon { --nav-icon-color:var(--nav-rose); --nav-icon-bg:var(--nav-rose-bg); }
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--pengaturan,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--pengguna,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--audit,
+body.padiflow-ui:not(.pd-timbang) .pintu__ikon--aksi_lain { --nav-icon-color:var(--nav-slate); --nav-icon-bg:var(--nav-slate-bg); }
+#portal-hmu nav button[aria-current=page] {box-shadow:inset 3px 0 var(--pd-green)}
+
+/* Satu palet tombol PadiFlow, termasuk alias komponen lama. */
+body.padiflow-ui:not(.pd-timbang), #portal-hmu[data-theme] .canonical-body {
+  --tombol-pucat:var(--pd-sheet); --tombol-pucat-teks:var(--pd-ink);
+  --tombol-hover:var(--pd-soft); --tombol-tekan:var(--pd-soft);
+  --tombol-batas:var(--pd-line); --tombol-fokus:var(--pd-green);
+}
+body.padiflow-ui:not(.pd-timbang) :is(.btn,.pil,.acuan-tombol),
+#portal-hmu :is(.canonical-body .btn,.canonical-body .pil,.action) {
+  background:var(--tombol-pucat,var(--pd-sheet)) !important;
+  color:var(--tombol-pucat-teks,var(--pd-ink)) !important;
+  border-color:var(--tombol-batas,var(--pd-line)) !important;
+}
+body.padiflow-ui:not(.pd-timbang) :is(.btn--utama,.pilihan__satu--utama,.rt-btn.primary,.tbl:not(.halus):not(.bahaya)),
+#portal-hmu .canonical-body :is(.btn--utama,.pilihan__satu--utama,.rt-btn.primary,.tbl:not(.halus):not(.bahaya)) {
+  --tombol-pucat:var(--pd-green); --tombol-pucat-teks:var(--pd-sheet);
+  --tombol-hover:var(--pd-green); --tombol-tekan:var(--pd-green);
+  --tombol-batas:var(--pd-green);
+  background:var(--pd-green) !important; color:var(--pd-sheet) !important;
+  border-color:var(--pd-green) !important;
+}
+body.padiflow-ui:not(.pd-timbang) :is(.pil--on,.pil--kini,.pil.aktif,.pil[aria-current=page],.pil[aria-pressed=true]),
+#portal-hmu :is(.canonical-body .pil--on,.canonical-body .pil--kini,.canonical-body .pil.aktif,.canonical-body .pil[aria-current=page],.tabs button[aria-pressed=true],.tabs button.active) {
+  --tombol-pucat:var(--pd-soft); --tombol-pucat-teks:var(--pd-green);
+  background:var(--pd-soft) !important; color:var(--pd-green) !important;
+}
+body.padiflow-ui:not(.pd-timbang) :is(.btn--bahaya,.btn--hapus,.btn--danger,.tbl.bahaya),
+#portal-hmu .canonical-body :is(.btn--bahaya,.btn--hapus,.btn--danger,.tbl.bahaya) {
+  --tombol-pucat:var(--pd-danger-bg); --tombol-pucat-teks:var(--pd-danger);
+  --tombol-hover:var(--pd-danger-bg); --tombol-tekan:var(--pd-danger-bg);
+  --tombol-batas:var(--pd-danger);
+  background:var(--pd-danger-bg) !important; color:var(--pd-danger) !important;
+  border-color:var(--pd-danger) !important;
+}
+body.padiflow-ui:not(.pd-timbang) .kb-link, #portal-hmu .kb-link {
+  --tombol-pucat:transparent; --tombol-pucat-teks:var(--pd-green);
+  color:var(--pd-green) !important; background:transparent !important;
+}
+body.padiflow-ui:not(.pd-timbang) :is(button,a,input,select,textarea):focus-visible,
+#portal-hmu :is(button,a,input,select,textarea):focus-visible {outline-color:var(--pd-green)}
+
+body.padiflow-ui:not(.pd-timbang) .kb, #portal-hmu[data-theme] .canonical-body .kb {
+  --kb-tautan:var(--pd-green); --kb-aktif:var(--pd-soft); --kb-ikon:var(--pd-green-bg);
+}
