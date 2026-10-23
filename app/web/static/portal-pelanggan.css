@@ -1,5 +1,7 @@
 /* Only the customer shell; data components and color tokens come from production. */
-body.portal-customer {display:block;min-height:100dvh;height:auto;overflow:auto;margin:0}
+/* Staff scrolls its .isi pane; the customer portal scrolls the document. */
+html.portal-document {height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:auto}
+body.portal-customer {display:block;min-height:100dvh;height:auto;overflow:visible;overscroll-behavior-y:auto;margin:0}
 .portal-sidebar {position:fixed;inset:0 auto 0 0;width:260px;display:flex;flex-direction:column;padding:20px 12px;background:var(--pd-sheet);border-right:1px solid var(--pd-line);z-index:40;overflow-y:auto}
 .portal-brand {display:block;padding:0 10px 14px}.portal-brand img{width:166px;height:48px;object-fit:contain;object-position:left center}
 .logo-light{display:none}body.terik .logo-light{display:block}body.terik .logo-dark{display:none}
@@ -18,4 +20,4 @@ body.portal-customer {display:block;min-height:100dvh;height:auto;overflow:auto;
 body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body.portal-customer .portal-topbar .btn{min-width:44px;max-width:none}
 
 
-.portal-login {height:auto;overflow:auto}.login-brand{display:flex;align-items:center;justify-content:space-between;gap:12px}.login-card .login-brand button{min-width:44px;min-height:44px;background:var(--pd-sheet);color:var(--pd-ink)}
+.portal-login {height:auto;overflow:visible;overscroll-behavior-y:auto}.login-brand{display:flex;align-items:center;justify-content:space-between;gap:12px}.login-card .login-brand button{min-width:44px;min-height:44px;background:var(--pd-sheet);color:var(--pd-ink)}
