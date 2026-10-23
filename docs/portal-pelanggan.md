@@ -106,9 +106,15 @@ Daftar dan seluruh isi arsip dibaca melalui `pg_restore` di server. Snapshot
 Railway tidak tersedia pada paket saat ini; cadangan ini satu volume dengan DB,
 sehingga merupakan perlindungan migrasi logis, bukan pemulihan kehilangan volume.
 
-Pemulihan aplikasi: kembalikan deployment sebelumnya
-`0a2753c8-740d-4f24-a5d7-2413f7437f98` atau revert commit rilis dan push main.
-Tabel portal yang aditif boleh tetap ada. Jangan downgrade berisi atau restore
+Baseline sebelum rilis: deployment `0a2753c8-740d-4f24-a5d7-2413f7437f98`
+(commit `589abd0`). **Jangan langsung menjalankan image lama itu setelah 0110**:
+entrypoint Alembic-nya belum mengenali revisi baru. Cabang pemulihan kompatibel
+`pemulihan/portal-pelanggan-0110` (commit `141de0a`) mempertahankan aplikasi
+baseline, file migrasi 0110, dan deklarasi tiga model portal tanpa router
+pelanggan. `alembic check`, impor aplikasi dan `alembic upgrade head` diuji
+terhadap skema 0110. Bila perlu, buat commit pemulihan baru ke main dari
+perbedaan cabang tersebut setelah memeriksa perubahan produksi yang masuk
+sesudah rilis. Tabel portal tetap ada. Jangan downgrade berisi atau restore
 seluruh database bersama setelah transaksi operasional baru tercatat. Pemulihan
 DB hanya dilakukan jika diperlukan, dengan menilai transaksi setelah cadangan.
 
@@ -123,3 +129,9 @@ Pemeriksaan tambahan: 2.193 regresi lokal lulus, 21 uji keamanan/presentasi
 lanjutan lulus, 248 tampilan dan tab GET desktop/ponsel lulus, 124 pemeriksaan
 kontras lulus. Uji cookie TLS proxy tambahan juga lulus. CI rilis memeriksa
 seluruh suite terhadap database PostgreSQL kosong sebelum promosi.
+
+
+Pemeriksaan kontras diperluas ke 120 keadaan panel detail yang dipilih melalui
+tab; tidak ada temuan pada ambang yang diperiksa. Cookie sesi/CSRF portal
+memakai Secure pada Railway meskipun koneksi internal ASGI berupa HTTP setelah
+TLS berakhir di proxy.
