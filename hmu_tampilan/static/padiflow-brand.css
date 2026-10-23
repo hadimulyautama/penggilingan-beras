@@ -1,2 +1,21 @@
 /* Dua warna PadiFlow; bentuk yang sama tetap terbaca pada latar gelap. */
 body.padiflow-ui .laci__logo--gelap {filter:brightness(2.5) saturate(.65)}
+
+/* Padding komponen bersama menimpa area aman bawaan laci iPhone.
+   Tombol absolut perlu jarak sendiri dari status bar. */
+@media (max-width:899px) {
+  body.padiflow-ui .laci__isi {
+    padding-top: calc(20px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  body.padiflow-ui .laci__isi .pd-close {
+    top: calc(20px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Setelah pita mode uji dihapus, .isi menjadi anak pertama. Aturan lama
+   memberi padding 15px, padahal margin header desktop mengurangi 30px. */
+@media (min-width:900px) {
+  body.padiflow-ui .bingkai > .isi:first-child { padding-top: 30px; }
+  body.padiflow-ui .desktop-chrome__top { padding-top: 20px; padding-bottom: 20px; }
+}
