@@ -104,9 +104,13 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
     def detail(x):
         a = alamat_detail(x)
         return a+'?'+urlencode({'kembali_kerja':konteks}) if a else ''
+    # Hanya kartu tindakan permintaan yang memang disediakan bagi pembaca ini.
+    detail_transfer_pk = [dict(id=x.nilai,kode=x.kode,href='/permintaan-pk/'+x.nilai+'?'+urlencode({'kembali_kerja':konteks}))
+                          for x in daftar if x.fase=='pindah_pk' and (x.nilai or '').isdigit()
+                          and x.aksi in ('acc_permintaan_pk','kirim_permintaan_pk','tutup_permintaan_pk')]
     from app.main import _pintasan_aksi
     from app.web.layar import view_untuk
-    return render(request, "pekerjaan.html",layar='pekerjaan',tab=tab,jenis=jenis,
+    konteks_tampilan = dict(detail_transfer_pk=detail_transfer_pk,layar='pekerjaan',tab=tab,jenis=jenis,
         daftar=daftar,proses=[x for x in daftar if x in berjalan],
         informasi=[x for x in daftar if x not in berjalan],
         kelompok=[(key,nama,[x for x in daftar if jenis_kerja(x)==key]) for key,nama in JENIS_KERJA],
@@ -114,7 +118,10 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
         href=lambda **p:tautan(request,'/pekerjaan',**p),alamat_detail_proses=detail,
         lama=svc._lama,PINTASAN=_pintasan_aksi(await view_untuk(akun.user)),
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''),
-        gudang=gudang,nama_saring=sorted({x.judul for x in daftar if x.judul}),**b.lencana())
+        gudang=gudang,nama_saring=sorted({x.judul for x in daftar if x.judul}))
+    if detail_transfer_pk:
+        return render(request, "pekerjaan_dengan_transfer.html", **konteks_tampilan, **b.lencana())
+    return render(request, "pekerjaan.html", **konteks_tampilan, **b.lencana())
 
 
 @router.get('/barang-masuk')

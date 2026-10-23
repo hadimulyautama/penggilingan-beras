@@ -122,6 +122,8 @@ app.include_router(retur_asal_router)
 app.include_router(jasa_router)
 app.include_router(sosoh_router)
 app.include_router(riwayat_router)
+from app.web.layar_transfer import router as transfer_detail_router
+app.include_router(transfer_detail_router)
 app.include_router(kabar_router)
 app.include_router(stok_router)
 app.include_router(lihat_sebagai_router)
