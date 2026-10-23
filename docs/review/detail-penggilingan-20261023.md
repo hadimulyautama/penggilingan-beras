@@ -36,8 +36,8 @@ Berkas: `app/services/proses_aktif.py`, `app/web/layar_berjalan.py`, `app/web/te
 
 ### Bukti pengujian 23 Oktober 2026
 
-- PostgreSQL lokal terisolasi: **1.277 lulus dalam 475,55 detik**, seluruh `tests/pg`, termasuk enam kasus baru detail giling.
-- Non-PostgreSQL: **774 lulus dalam 8,85 detik**, `pytest -o addopts='' -q tests --ignore=tests/pg`.
+- PostgreSQL lokal terisolasi: awal 1.277 lulus; setelah integrasi main PK karung **1.310 lulus dalam 516,05 detik**, seluruh `tests/pg`, termasuk enam kasus baru detail giling. Delta main susulan pada formulir PK karung diperiksa lagi: **78 pengujian terarah lulus dalam 31,78 detik**, mencakup detail giling, proses lain, QC, sisa/konfirmasi, jeda dan seluruh tes formulir karung baru.
+- Non-PostgreSQL: **787 lulus dalam 6,71 detik**, `pytest -o addopts='' -q tests --ignore=tests/pg`.
 - Pemeriksaan terarah awal: 62 lulus; enam kasus baru juga lulus terpisah. `git diff --check` bersih.
 - DB uji bernama `uji_giling_detail` dan `uji_giling_browser`, loopback port 55449; aplikasi browser pada port 8059. Tidak memakai data operasional.
 - Browser Chromium: 60 kombinasi (3 peran × 5 lebar 320/390/768/1440/1920 × 4 tab), tanpa overflow horizontal. Keyboard Home/ArrowRight, navigasi instan berulang, sembilan fragmen lama dan kembali/konteks diperiksa. Lebar tab desktop 1.067,84 px dan ponsel 358 px, tinggi selalu 49 px pada semua tab/pagination.
