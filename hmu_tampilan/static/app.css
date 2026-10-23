@@ -3545,3 +3545,13 @@ body .isi .terima-judul h2{font-size:16px;margin:0;line-height:1.35}
 .isi:has([data-saring-kerja]) :is([data-cari],[data-blok])[hidden], .kerja-cari [hidden] { display:none !important; }
 
 .kerja-tab--tiga{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* Pada HP, jumlah diberi baris sendiri agar nama tab tetap utuh. */
+.kerja-tab .pil{min-width:0;text-align:center;gap:4px}
+.kerja-tab__nama{min-width:0;overflow-wrap:anywhere}
+@media(max-width:560px){
+ .kerja-tab--tiga{gap:6px}
+ .kerja-tab--tiga .pil{flex-direction:column;min-height:84px;padding:8px 5px;border-radius:16px;letter-spacing:0;line-height:1.35}
+ .kerja-tab--tiga .kerja-tab__nama{display:flex;align-items:center;justify-content:center;min-height:2.7em}
+ .kerja-tab--tiga .pil__jml{margin-left:0;line-height:1.2}
+}

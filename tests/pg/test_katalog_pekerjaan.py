@@ -17,15 +17,16 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         assert r.status_code==200
         import re
         from html import unescape
-        masuk=re.search(r'href="([^"]+)"[^>]*>Pekerjaan lain</a>',r.text)
+        masuk=re.search(r'href="([^"]+)"[^>]*><span class="kerja-tab__nama">Pekerjaan lain</span></a>',r.text)
         assert masuk and '/pekerjaan/catat-lain?' in masuk[1]
         assert not re.search(r'<a[^>]*href="/aksi-lain"',r.text)
         tabs=re.search(r'aria-label="Tab pekerjaan">(.*?)</nav>',r.text,re.S)[1]
         assert tabs.count('<a ')==3
         katalog=await c.get(unescape(masuk[1]))
         assert katalog.status_code==200
-        back=re.search(r'href="([^"]+)"[^>]*>← Kembali ke Pekerjaan</a>',katalog.text)
-        assert parse_qs(urlsplit(unescape(back[1])).query)==parse_qs(query)
+        assert '← Kembali ke Pekerjaan' not in katalog.text
+        tujuan=re.search(r'href="([^"]+)"[^>]*><span class="kerja-tab__nama">Berjalan</span>',katalog.text)
+        assert parse_qs(urlsplit(unescape(tujuan[1])).query)==parse_qs(query)
         menu=(await c.get('/api/actions/menu')).json()
         ada={a['id']:a for a in menu}
         katalog_ids={a['id'] for a in menu if not a.get('kartu')}
@@ -41,7 +42,7 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
             kosong=await c.get('/pekerjaan/catat-lain?buka='+id_+'&nilai=tidak-sah')
             assert kosong.status_code==200 and 'data-buka=""' in kosong.text
             assert 'Konteks' in kosong.text
-        assert (await c.get('/pekerjaan/catat-lain?kembali=https://evil.example')).text.find('href="/pekerjaan"')>=0
+        assert 'href="/pekerjaan?tab=tindakan"' in (await c.get('/pekerjaan/catat-lain?kembali=https://evil.example')).text
 
 
 async def test_duplikat_menuju_konteks_asli(pg, pabrik, sosoh_jasa):

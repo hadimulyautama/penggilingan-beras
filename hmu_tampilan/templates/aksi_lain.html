@@ -2,7 +2,6 @@
 {% block judul %}Catat pekerjaan lain{% endblock %}
 {% block isi %}
 
-<a class="btn btn--kecil" href="{{ kembali }}">← Kembali ke Pekerjaan</a>
 <header class="kerja-kepala"><h1>Pekerjaan</h1>
 {% from '_pekerjaan_tab.html' import tab_pekerjaan with context %}
 {{ tab_pekerjaan('lain', tab_tindakan, tab_berjalan, request.url.path ~ '?' ~ (request.query_params|urlencode)) }}
