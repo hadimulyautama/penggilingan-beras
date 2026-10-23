@@ -83,35 +83,6 @@
 </section>
 </div>
 
-{# ── Akses cepat (Tahap Beranda, 21 Oktober 2026) ── Tampil di desktop
-   MAUPUN ponsel (beda dari bilah pintasan lama yang `--ponsel`-saja):
-   Stok, Pesanan Jasa (gerbang MEJA — sama dengan pintu laci `jasa`),
-   Laporan & Riwayat. Mengantikan bilah pintasan ponsel lama; target lamanya
-   (Barang Masuk/Pekerjaan/Barang Keluar) kini selalu berupa kartu "Perlu
-   perhatian" di atas saat berisi, dan tetap terjangkau lewat laci. #}
-<section class="beranda-akses" aria-label="Akses cepat">
-  <div class="beranda-akses__judul"><strong>Akses cepat</strong></div>
-  <div class="beranda-akses__grid">
-    <a class="beranda-akses__item beranda-akses__item--stok" href="/stok">
-      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_gudang() }}</svg></span>
-      <span><strong>Stok</strong></span>
-      <span class="beranda-akses__panah" aria-hidden="true">›</span>
-    </a>
-    {% if semua_gudang %}
-    <a class="beranda-akses__item beranda-akses__item--jasa" href="/jasa">
-      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_jabat() }}</svg></span>
-      <span><strong>Pesanan Jasa</strong></span>
-      <span class="beranda-akses__panah" aria-hidden="true">›</span>
-    </a>
-    {% endif %}
-    <a class="beranda-akses__item beranda-akses__item--laporan" href="/laporan-riwayat">
-      <span class="beranda-akses__ikon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ br.ikon_laporan() }}</svg></span>
-      <span><strong>Laporan</strong></span>
-      <span class="beranda-akses__panah" aria-hidden="true">›</span>
-    </a>
-  </div>
-</section>
-
 <link rel="stylesheet" href="/static/beranda-alur.css?v={{ VERSI }}">
 <section class="beranda-ringkasan beranda-ringkasan--padat{{ ' beranda-ringkasan--alur' if alur_gudang is defined and alur_gudang is not none }}" aria-label="Ringkasan operasional">
 {% if not muat.ringkasan %}{{ gagal('Ringkasan operasional belum dapat dimuat.') }}{% elif alur_gudang is defined and alur_gudang is not none %}
