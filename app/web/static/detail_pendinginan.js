@@ -37,4 +37,3 @@
   else window.addEventListener('hashchange', dariHash);
   dariHash();
 })();
-

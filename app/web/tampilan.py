@@ -57,6 +57,18 @@ VERSI = hmu_tampilan.VERSI
 hmu_tampilan.pasang_jinja(templates, app_nama="Pos Produksi", pwa_nama="Pos Produksi",
                           mode_uji=settings.mode_uji, zona=settings.app_timezone)
 
+# Jinja menerima dict/daftar pasangan; QueryParams Starlette bukan dict.
+# Normalisasi tipe itu saja agar tautan konteks Pekerjaan tetap dapat dirender.
+from jinja2.filters import do_urlencode
+from starlette.datastructures import QueryParams
+
+
+def _urlencode_query(nilai):
+    return do_urlencode(nilai.multi_items() if isinstance(nilai, QueryParams) else nilai)
+
+
+templates.env.filters["urlencode"] = _urlencode_query
+
 from app.web.layar import MEJA, NAMA_VIEW, POLESAN, SELEPAN, SUPER  # noqa: E402
 from app.web.nav import JUDUL, TAB, MENU_TERSEMBUNYI   # noqa: E402
 
