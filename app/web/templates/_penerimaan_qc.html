@@ -1,0 +1,9 @@
+<section class="terima-panel" aria-labelledby="terima-qc">
+ <div class="terima-judul"><h2 id="terima-qc">Hasil QC</h2><span>Mutu penerimaan</span></div>
+ {% for g in qc_penerimaan %}<div class="terima-qc">
+  <div class="terima-qc__kepala"><strong>{{ g.kode }}</strong><span>{{ g.status }}</span></div>
+  {% if g.putaran %}{{ pemeriksaan(g.putaran[-1]) }}{% if g.putaran|length>1 %}<details class="terima-lipat"><summary>Riwayat QC · {{ g.putaran|length-1 }} pemeriksaan sebelumnya</summary>{% for q in g.putaran[:-1]|reverse %}{{ pemeriksaan(q) }}{% endfor %}</details>{% endif %}
+  {% if g.url %}<a class="terima-tautan" href="{{ g.url }}">Buka riwayat QC <span aria-hidden="true">↗</span></a>{% endif %}
+  {% else %}<p class="terima-bantu">Belum diperiksa.</p>{% endif %}
+ </div>{% else %}<p class="terima-bantu">{{ 'Belum diperiksa.' if jenis in ['gabah_basah','gabah_kering','pk'] else 'Pencatatan QC penerimaan jenis barang ini belum tersedia.' }}</p>{% endfor %}
+</section>

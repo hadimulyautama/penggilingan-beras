@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block judul %}Detail penerimaan{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/operasional.css?v={{ VERSI }}&antrean-bahan=7">
+<link rel="stylesheet" href="/static/detail_penerimaan.css?v={{ VERSI }}">
+{% import '_benda.html' as benda with context %}{% import '_stok.html' as st %}
+{% macro kg(v) -%}{% if v is defined and v is not none %}{{ st.kg_rinci(v) }} kg{% else %}Belum tercatat{% endif %}{%- endmacro %}
+{% macro pemeriksaan(q) -%}
+<div class="terima-qc__meta"><strong>{{ 'Pemeriksaan ' ~ q.nomor if q.nomor else 'Catatan lama' }}</strong><span>{{ q.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu tidak tercatat' }} · {{ q.petugas }}</span></div>
+<table class="terima-nilai"><thead><tr><th scope="col">Parameter</th><th scope="col">Hasil QC</th></tr></thead><tbody>{% for label,nilai in q.hasil %}<tr><th scope="row">{{ label }}</th><td>{{ nilai }}</td></tr>{% endfor %}</tbody></table>
+{%- endmacro %}
+
+{% set diterima = catatan|rejectattr('status','equalto','ditolak')|list %}
+{% set nama_jenis = tiket.jenis_nama or {'gabah_basah':'Gabah basah','gabah_kering':'Gabah kering','pk':'PK','beras':'Beras','broken':'Broken'}.get(jenis,tiket.jenis_kode) %}
+{% set nama_gudang = 'Gudang 1' if jenis in ['gabah_basah','gabah_kering'] else 'Gudang 2' if jenis in ['pk','beras','broken'] else 'Gudang belum diketahui' %}
+<div class="penerimaan-detail" data-penerimaan-tab>
+<a class="penerimaan-kembali" href="{{ kembali }}">← Kembali ke Barang Masuk</a>
+<header class="penerimaan-kepala">
+ <div class="penerimaan-kepala__atas"><span>Barang Masuk · {{ nama_gudang }}</span><span class="penerimaan-status">{{ 'Diterima' if diterima else 'Ditolak' if catatan else 'Belum diterima' }}</span></div>
+ <h1>{{ nama_jenis }}</h1><p>{{ tiket.kode }}</p><p>Pihak pada tiket: {{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Pihak belum tercatat' }}</p>{% if catatan %}<p>Pemilik catatan: {{ pemilik_penerimaan }}</p>{% endif %}
+ <div class="penerimaan-bobot"><span>{{ 'Bobot diterima' if catatan else 'Bobot tiket saat ini' }}</span><strong>{{ kg(berat_diterima) if berat_diterima is not none else keterangan_berat if catatan else kg(tiket.berat_hpp_kg) }}</strong><small>{{ 'Bobot penerimaan, bukan saldo stok saat ini.' if catatan else 'Belum diterima · bobot tiket belum menjadi catatan stok.' }}</small>
+ {% if catatan %}<small>Sumber bobot: {{ catatan|map(attribute='sumber_berat')|unique|join(' · ') }}</small>{% endif %}
+ {% if catatan and keterangan_berat %}<small>{{ keterangan_berat }}</small>{% elif not catatan %}<small>Sumber bobot: {{ tiket.sumber_berat or 'Belum diketahui' }}</small>{% endif %}</div>
+ <div class="penerimaan-pemilik"><span class="identitas-barang__label identitas-barang__label--{{ kepemilikan_penerimaan or ('jasa' if tiket.jasa else 'pabrik') }}">{{ {'jasa':'Jasa','pabrik':'Milik pabrik','campuran':'Campuran'}.get(kepemilikan_penerimaan,'Jasa' if tiket.jasa else 'Milik pabrik') }}</span>{% if not catatan %}<span>Pemilik penerimaan mengikuti data dan pemeriksaan formulir.</span>{% endif %}</div>
+</header>
+{% if tiket.status_tiket=='TERBUKA' %}<p class="terima-peringatan">Berat belum final · tiket masih terbuka dan mengikuti pembaruan Timbangan.</p>{% elif tiket.status_tiket=='DITUTUP_PAKSA' %}<p class="terima-peringatan">Tiket ditutup paksa. {{ timbang.tutup_paksa_alasan or 'Alasan tidak tercatat.' }}</p>{% endif %}
+<nav class="penerimaan-tabs" role="tablist" aria-label="Bagian detail penerimaan">{% for key,label in [('ringkasan','Ringkasan'),('tiket','Tiket & bobot'),('qc','QC'),('riwayat','Lokasi & riwayat')] %}<a id="terima-tab-{{ key }}" href="{{ tab_href(key) }}" role="tab" aria-selected="{{ 'true' if tab_detail == key else 'false' }}" aria-controls="terima-panel-{{ key }}" tabindex="{{ 0 if tab_detail == key else -1 }}">{{ label }}</a>{% endfor %}</nav>
+<section id="terima-panel-ringkasan" role="tabpanel" aria-labelledby="terima-tab-ringkasan"{% if tab_detail != 'ringkasan' %} hidden{% endif %}>
+ <section class="terima-panel penerimaan-tindakan"><div class="terima-judul"><h2>Tindakan saat ini</h2></div>
+ {% include '_penerimaan_tindakan.html' %}
+ {% if not menunggu %}<p class="terima-bantu">{{ 'Penerimaan telah tercatat. Penempatan dan pekerjaan lanjutan melalui Pekerjaan atau sumber terkait.' if diterima else 'Tiket ini tidak sedang ditawarkan untuk penerimaan. Periksa status tiket dan catatan terkait.' }}</p><a class="btn" href="/pekerjaan">Buka Pekerjaan</a>{% endif %}</section>
+ <section class="terima-panel"><div class="terima-judul"><h2>Penerimaan</h2></div><dl class="terima-fakta">
+ <div><dt>Tiket</dt><dd>{{ tiket.kode }}</dd></div><div><dt>Status tiket</dt><dd>{{ tiket.status_tiket|replace('_',' ') }}</dd></div>
+ <div><dt>Catatan penerimaan</dt><dd>{{ catatan|length }} catatan</dd></div><div><dt>Sumber bobot</dt><dd>{{ catatan|map(attribute='sumber_berat')|unique|join(' · ') if catatan else tiket.sumber_berat or 'Belum diketahui' }}</dd></div>
+ <div><dt>Armada</dt><dd>{{ 'Partai kecil' if timbang and timbang.cara_timbang=='PARTAI' else tiket.nomor_polisi or 'Belum tercatat' }}</dd></div><div><dt>Sopir</dt><dd>{{ tiket.nama_sopir or 'Sopir belum tercatat' }}</dd></div>
+ </dl><a class="terima-tautan" href="{{ tab_href('tiket') }}">Lihat tiket & bobot →</a></section>
+ <div class="penerimaan-dua"><section class="terima-panel"><div class="terima-judul"><h2>Lokasi & proses</h2></div><ul class="terima-lokasi">{% for l in lokasi %}<li>{{ l }}</li>{% else %}<li>Belum ada lokasi lanjutan tercatat.</li>{% endfor %}</ul><a class="terima-tautan" href="{{ tab_href('riwayat') }}">Lihat lokasi & riwayat →</a></section>
+ <section class="terima-panel"><div class="terima-judul"><h2>Mutu penerimaan</h2></div>{% for g in qc_penerimaan %}<p class="terima-bantu">{{ g.kode }} · {{ g.status }}</p>{% else %}<p class="terima-bantu">{{ 'Belum diperiksa.' if jenis in ['gabah_basah','gabah_kering','pk'] else 'Pencatatan QC penerimaan jenis barang ini belum tersedia.' }}</p>{% endfor %}<a class="terima-tautan" href="{{ tab_href('qc') }}">Lihat hasil QC →</a></section></div>
+</section>
+<section id="terima-panel-tiket" role="tabpanel" aria-labelledby="terima-tab-tiket"{% if tab_detail != 'tiket' %} hidden{% endif %}>
+ <section class="terima-panel"><div class="terima-judul"><h2>Identitas tiket</h2></div><dl class="terima-fakta">{% for label,v in [('Kode tiket',tiket.kode),('Jenis',nama_jenis),('Arah',tiket.arah),('Cara timbang',timbang.cara_timbang if timbang else none),('Status tiket',tiket.status_tiket),('Pihak pada tiket',tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama),('Nomor polisi',tiket.nomor_polisi),('Sopir',tiket.nama_sopir)] %}<div><dt>{{ label }}</dt><dd>{{ v if v is not none and v != '' else 'Belum tercatat' }}</dd></div>{% endfor %}</dl></section>
+ {% include '_penerimaan_timbang.html' %}
+ {% if not timbang %}<section class="terima-panel"><h2>Data timbang</h2><p class="terima-bantu">Rincian timbang belum tersedia pada catatan ini.</p></section>{% endif %}
+ <section class="terima-panel"><div class="terima-judul"><h2>Bobot penerimaan</h2></div><dl class="terima-fakta"><div><dt>Total diterima</dt><dd>{{ kg(berat_diterima) if berat_diterima is not none else keterangan_berat if catatan else 'Belum diterima' }}</dd></div></dl><p class="terima-bantu">Total berasal dari catatan penerimaan yang sah. Catatan ditolak tidak dihitung; ini bukan saldo stok sekarang.</p></section>
+</section>
+<section id="terima-panel-qc" role="tabpanel" aria-labelledby="terima-tab-qc"{% if tab_detail != 'qc' %} hidden{% endif %}>{% include '_penerimaan_qc.html' %}</section>
+<section id="terima-panel-riwayat" role="tabpanel" aria-labelledby="terima-tab-riwayat"{% if tab_detail != 'riwayat' %} hidden{% endif %}>
+ {% include '_penerimaan_catatan.html' %}{% include '_penerimaan_lokasi.html' %}
+ <section class="terima-panel"><div class="terima-judul"><h2>Jejak penerimaan</h2></div><dl class="terima-fakta"><div><dt>Pihak pada tiket</dt><dd>{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Belum tercatat' }}</dd></div><div><dt>Pemilik catatan</dt><dd>{{ pemilik_penerimaan or 'Belum ada catatan penerimaan' }}</dd></div></dl><p class="terima-bantu">Waktu dan pencatat setiap penerimaan tercantum pada catatan sumber di atas. Riwayat tetap tersedia setelah bahan diproses atau dipindahkan.</p></section>
+</section>
+</div>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+{% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}<script src="/static/detail_penerimaan.js?v={{ VERSI }}" defer></script>{% endblock %}
