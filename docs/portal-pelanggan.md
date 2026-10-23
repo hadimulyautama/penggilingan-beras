@@ -90,7 +90,7 @@ Catatan di atas merupakan verifikasi lokal sebelum rilis produksi.
 
 Integrasi disusun di atas commit produksi `43a166d934dc189cf9c6b7b94451b9f9c8ed9576`,
 bukan mengganti produksi dengan checkout portal yang lebih lama. Komponen tampilan
-rilis ini v426; detail/tab produksi terbaru dipertahankan. Berkas provisioning
+rilis ini v427; detail/tab produksi terbaru dipertahankan. Berkas provisioning
 akun ikut dimasukkan ke image agar akun dapat diaktifkan melalui SSH interaktif.
 
 Pra-migrasi: skema produksi `0109_pk_penyesuaian_stok`. Migrasi `0110` hanya
@@ -109,7 +109,7 @@ sehingga merupakan perlindungan migrasi logis, bukan pemulihan kehilangan volume
 Baseline sebelum rilis: deployment `0a2753c8-740d-4f24-a5d7-2413f7437f98`
 (commit `589abd0`). **Jangan langsung menjalankan image lama itu setelah 0110**:
 entrypoint Alembic-nya belum mengenali revisi baru. Cabang pemulihan kompatibel
-`pemulihan/portal-pelanggan-0110` (commit `141de0a`) mempertahankan aplikasi
+`pemulihan/portal-pelanggan-0110` (commit `1be8999`) mempertahankan aplikasi
 baseline, file migrasi 0110, dan deklarasi tiga model portal tanpa router
 pelanggan. `alembic check`, impor aplikasi dan `alembic upgrade head` diuji
 terhadap skema 0110. Bila perlu, buat commit pemulihan baru ke main dari
@@ -135,3 +135,7 @@ Pemeriksaan kontras diperluas ke 120 keadaan panel detail yang dipilih melalui
 tab; tidak ada temuan pada ambang yang diperiksa. Cookie sesi/CSRF portal
 memakai Secure pada Railway meskipun koneksi internal ASGI berupa HTTP setelah
 TLS berakhir di proxy.
+
+Pembaruan lanjutan `74cc0be` (infografis Beranda, v426) juga dipertahankan; paket
+portal memakai v427 untuk mencegah cache aset lama. Cabang pemulihan ikut
+mempertahankan perubahan Beranda ini.
