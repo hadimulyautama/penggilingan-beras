@@ -3601,3 +3601,18 @@ body .beranda-sambut h1 { font-size: var(--tipe-judul); }
 body .beranda-aktivitas .daftar-standar>.grup{gap:12px!important;padding:12px;align-items:stretch;background:var(--panel-2)}
 body .beranda-aktivitas .daftar-standar>.grup>.padat{border:1px solid var(--garis);border-radius:12px;background:var(--panel);overflow-wrap:anywhere}
 body .beranda-aktivitas .daftar-standar>.grup>.padat:last-child{border-bottom:1px solid var(--garis)}
+
+/* Primary operation is visible; secondary operations expand in place. */
+body .beranda-aktivitas .daftar-standar>.grup>.beranda-kartu-aksi{display:flex;flex-direction:column;gap:12px;padding:14px;cursor:default;align-items:stretch}
+.beranda-kartu-aksi__isi{display:grid;gap:6px;min-width:0}
+.beranda-kartu-aksi__utama{width:100%;min-height:48px;white-space:normal;overflow-wrap:anywhere;text-align:center;justify-content:center;margin-top:auto}
+.beranda-kartu-aksi__lain{min-width:0}
+.beranda-kartu-aksi__lain>summary{min-height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--aksi);font-size:13px;list-style:none;gap:8px}
+.beranda-kartu-aksi__lain>summary:after{content:'⌄'}
+.beranda-kartu-aksi__lain[open]>summary:after{content:'⌃'}
+.beranda-kartu-aksi__lain>summary::-webkit-details-marker{display:none}
+.beranda-kartu-aksi__lain .pilihan{margin:0;padding:8px 0 0;border:0;box-shadow:none;background:transparent}
+.beranda-kartu-aksi__lain .pilihan__satu{white-space:normal;overflow-wrap:anywhere;min-height:48px}
+
+.beranda-aktivitas .beranda-kartu-aksi>.beranda-kartu-aksi__isi{flex:0 0 auto;width:100%;align-content:start}
+.beranda-kartu-aksi__lain{width:100%}
