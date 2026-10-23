@@ -1774,10 +1774,33 @@ async def _catat_pindah(
 TOLERANSI_PINDAH_KG = 1.0
 
 
+async def acuan_karung_surat_jalan(db, batch, jumlah):
+    """Bobot produksi untuk surat jalan yang baru dilengkapi, tanpa menulis.
+
+    Batch yang dahulu memakai nota harus mengambil W dari barang/netto tiket,
+    sama seperti penerimaan berkarung baru. Pratinjau dan simpan membaca jalur
+    yang sama agar nota nominal tidak menyamar sebagai bobot truk yang pasti.
+    """
+    from types import SimpleNamespace
+    berat, sumber, perkiraan = batch.berat_total_kg, batch.sumber_berat, batch.berat_perkiraan_kg
+    if batch.timbangan_transaksi_id:
+        tiket = await ambil_tiket(db, batch.timbangan_transaksi_id)
+        if tiket is None:
+            raise Gudang2Error("Tiket timbang batch tidak tersedia. Periksa penerimaannya dulu.")
+        tiket = dict(tiket)
+        real = next((v for v in (tiket.get("berat_barang_kg"), tiket.get("netto_timbangan_kg"))
+                     if v is not None and float(v) > 0), None)
+        tiket["berat_hpp_kg"], tiket["sumber_berat"] = real, "timbangan"
+        berat, sumber, perkiraan = await bobot_awal_dari_tiket(db, tiket)
+    return SimpleNamespace(jumlah_karung=jumlah, berat_total_kg=berat,
+                           sumber_berat=sumber, berat_perkiraan_kg=perkiraan)
+
+
 async def pindah_tumpukan_ke_silo(
     db: AsyncSession, *, user: User, intake_id: int, nama_silo: str | None,
     berat: float | None = None, tanggal=None, jam=None, kunci_kiriman: str | None = None,
     jumlah_karung: int | None = None, hasil_timbang: bool = False, commit: bool = True,
+    jumlah_karung_partai: int | None = None, ukuran_karung_kg: float | None = None,
 ) -> PindahResult:
     """Pindah PK dari tumpukan ke silo. HANYA operator Gudang 2 (admin fallback).
 
@@ -1822,6 +1845,35 @@ async def pindah_tumpukan_ke_silo(
     if berat is not None and (not Decimal(str(berat)).is_finite() or berat <= 0):
         raise Gudang2Error("Kg hasil timbang harus lebih dari nol.")
     batch = await db.get(PkPurchaseBatch, intake.pk_purchase_batch_id) if intake.pk_purchase_batch_id else None
+    if jumlah_karung_partai is not None:
+        if hasil_timbang or berat is not None:
+            raise Gudang2Error("Lengkapi surat jalan untuk pemindahan karung utuh; kg khusus dicatat terpisah.")
+        if batch is None:
+            raise Gudang2Error("PK giling sendiri tetap dicatat dalam kg.")
+        n = jumlah_karung_partai
+        if isinstance(n, bool) or n <= 0 or int(n) != n:
+            raise Gudang2Error("Jumlah karung separtai harus bilangan bulat lebih dari nol.")
+        if batch.jumlah_karung and batch.jumlah_karung != n:
+            raise Gudang2Error("Jumlah karung separtai sudah tercatat. Muat ulang formulir.")
+        if not batch.jumlah_karung:
+            # Melengkapi surat jalan sebelum pemindahan pertama berbeda dari
+            # mengubah riwayat kg lama menjadi karung. Yang terakhir dilarang:
+            # laporan lama tetap utuh dan memakai penyesuaian bertanggal.
+            ada = await db.scalar(select(PkTumpukanToSilo.id).where(
+                PkTumpukanToSilo.pk_gudang2_intake_id == intake.id).limit(1))
+            if ada is not None:
+                raise Gudang2Error("Batch sudah mempunyai pemindahan kg lama. Gunakan kg agar riwayat lama tetap utuh.")
+            if ukuran_karung_kg is not None and (not Decimal(str(ukuran_karung_kg)).is_finite() or ukuran_karung_kg <= 0):
+                raise Gudang2Error("Ukuran nominal karung harus lebih dari nol.")
+            acuan = await acuan_karung_surat_jalan(db, batch, int(n))
+            batch.jumlah_karung, batch.ukuran_karung_kg = int(n), ukuran_karung_kg
+            batch.berat_total_kg, batch.sumber_berat = acuan.berat_total_kg, acuan.sumber_berat
+            batch.berat_perkiraan_kg = acuan.berat_perkiraan_kg
+            intake.berat_kg, intake.bobot_final = acuan.berat_total_kg, dari_batch(acuan).pasti
+            await log_activity(db, table_name="pk_purchase_batches", record_id=batch.id,
+                action="UPDATE", changed_by=user.id, field_name="jumlah_karung",
+                old_value="belum tercatat", new_value=str(n),
+                alasan="Surat jalan dilengkapi operator sebelum pemindahan pertama; kg lama tidak ditafsirkan ulang.")
     if batch is not None and batch.jumlah_karung and not hasil_timbang:
         if berat is not None:
             raise Gudang2Error("Pilih jumlah karung, atau tandai kg sebagai hasil timbang / karung dibongkar sebagian.")
