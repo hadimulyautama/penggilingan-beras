@@ -83,14 +83,14 @@ kontras teks di bawah ambang yang diuji. Sidebar, pencarian, filter gudang,
 unduh/bagikan PDF dan status baca notifikasi diuji lewat interaksi browser.
 Bukti tampilan tersimpan di `output/portal-production-validation/`.
 Ponsel diuji melalui viewport Chromium; belum diuji pada perangkat fisik.
-Tidak ada deploy atau migrasi ke database produksi dalam pekerjaan ini.
+Catatan di atas merupakan verifikasi lokal sebelum rilis produksi.
 
 
 ## Rilis produksi 23 Oktober 2026
 
 Integrasi disusun di atas commit produksi `43a166d934dc189cf9c6b7b94451b9f9c8ed9576`,
 bukan mengganti produksi dengan checkout portal yang lebih lama. Komponen tampilan
-rilis ini v425; detail/tab produksi terbaru dipertahankan. Berkas provisioning
+rilis ini v426; detail/tab produksi terbaru dipertahankan. Berkas provisioning
 akun ikut dimasukkan ke image agar akun dapat diaktifkan melalui SSH interaktif.
 
 Pra-migrasi: skema produksi `0109_pk_penyesuaian_stok`. Migrasi `0110` hanya
@@ -107,10 +107,19 @@ Railway tidak tersedia pada paket saat ini; cadangan ini satu volume dengan DB,
 sehingga merupakan perlindungan migrasi logis, bukan pemulihan kehilangan volume.
 
 Pemulihan aplikasi: kembalikan deployment sebelumnya
-`8f5b00a1-4c29-4e45-bc19-76e681732856` atau revert commit rilis dan push main.
+`0a2753c8-740d-4f24-a5d7-2413f7437f98` atau revert commit rilis dan push main.
 Tabel portal yang aditif boleh tetap ada. Jangan downgrade berisi atau restore
 seluruh database bersama setelah transaksi operasional baru tercatat. Pemulihan
 DB hanya dilakukan jika diperlukan, dengan menilai transaksi setelah cadangan.
 
 Tidak membuat akun contoh atau menautkan akun ke pelanggan sungguhan secara
 sembarang. Aktivasi akun memerlukan identitas master pelanggan terverifikasi.
+
+
+Pembaruan produksi yang datang selama verifikasi (`589abd0`, penghapusan akses
+cepat Beranda) digabungkan tanpa mengubah kode portal yang diuji. Baseline
+rollback terakhir adalah deployment commit tersebut, bukan baseline awal.
+Pemeriksaan tambahan: 2.193 regresi lokal lulus, 21 uji keamanan/presentasi
+lanjutan lulus, 248 tampilan dan tab GET desktop/ponsel lulus, 124 pemeriksaan
+kontras lulus. Uji cookie TLS proxy tambahan juga lulus. CI rilis memeriksa
+seluruh suite terhadap database PostgreSQL kosong sebelum promosi.
