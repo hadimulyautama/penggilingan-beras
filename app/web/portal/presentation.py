@@ -121,6 +121,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
         d['pengiriman']=[r for r in d['pengiriman'] if r['id'] in scope.ids(OutgoingRecord)]
         retur_diizinkan={f'/retur/{ident}' for ident in scope.ids(CustomerReturn)}
         d['retur']=[r for r in d['retur'] if r.get('href') in retur_diizinkan]
+        for r in d['retur']:
+            r['asal']=[a for a in r.get('asal',[]) if a['id'] in scope.ids(OutgoingRecord)]
         d['proses']=[r for r in d['proses'] if r['kode'] in scope.codes]
         for t in d['penerimaan']:
             if t.get('proses'):t['proses']=[(code,href) for code,href in t['proses'] if code in scope.codes]
