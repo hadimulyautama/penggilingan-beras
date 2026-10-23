@@ -225,6 +225,10 @@ async def test_gagal_simpan_tidak_ditampilkan_berhasil(pg, orang, monkeypatch):
 @pytest.mark.parametrize('peran', ['operator','admin','superadmin'])
 async def test_kabar_dengan_sesi_tiap_peran(pg, peran):
     from tests.pg.test_riwayat_giling import _klien as klien_peran
+    from app.services.seed import seed_master
+    # Operator harus benar-benar memiliki gudang aktif, bukan profil tanpa
+    # gudang akibat pencarian nama pada master yang belum dibuat.
+    await seed_master()
     await _tulis(pg, tipe='uji', untuk=None, pesan='lintas peran')
     async with await klien_peran(pg, peran=peran, gudang='Gudang 1') as c:
         assert (await c.get('/kabar')).status_code == 200

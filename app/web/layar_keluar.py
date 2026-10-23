@@ -57,21 +57,16 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         raise HTTPException(422, "Tanggal pencarian tidak valid.")
     from app.peran import can_see_financials
     from fastapi.responses import RedirectResponse
-    if request.query_params.get("buka") == "perintah_keluar":
-        return RedirectResponse("/barang-keluar/baru", 303)
-    from app.web.layar import SELEPAN
-
-    view = getattr(request.state, "view", "tamu")
-    # Operator selepan tak punya urusan di sini — barang jadi berdiri di Gudang
-    # 2, dan PK yang dijual keluar diperintah Admin. Pintunya sudah tak
-    # ditawarkan lewat `PINTU_MATI`, tetapi pintu yang disembunyikan bukan
-    # penjagaan: alamatnya bisa diketik.
-    if view == SELEPAN and not can_see_financials(akun.user):
-        raise HTTPException(403, "Layar ini milik Gudang 2 & Admin.")
-
     from app.web.api import _is_g1_operator, _is_g2_operator
 
+    # Periksa izin positif, bukan hanya menolak view G1: operator tanpa
+    # gudang juga tidak berhak membaca daftar maupun URL detail langsung.
     boleh_perintah = can_see_financials(akun.user)
+    if not (boleh_perintah or await _is_g2_operator(akun.user)):
+        raise HTTPException(403, "Pengiriman tersedia untuk Admin dan Operator Gudang 2. "
+                            "Pilih gudang kerja melalui menu Kerja di gudang.")
+    if request.query_params.get("buka") == "perintah_keluar":
+        return RedirectResponse("/barang-keluar/baru", 303)
     # ── Tombol MUAT hanya untuk yang bukan Admin, dan ini keputusan sadar ──
     #
     # `_is_g2_operator` sengaja menjawab True untuk Admin ("Admin selalu

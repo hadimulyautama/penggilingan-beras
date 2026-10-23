@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from sqlalchemy import func, select, literal
 from sqlalchemy.ext.asyncio import AsyncSession
+from hmu_identitas import peran as P
 
 from app.database import now_local
 from app.models import Notification, User
@@ -72,10 +73,9 @@ async def keranjang(user: User) -> tuple[str, str | None]:
         return OPERATOR, "g2"
     if await _is_g1_operator(user):
         return OPERATOR, "g1"
-    # Operator tanpa gudang (belum ditautkan): perannya sudah benar, gudangnya
-    # belum diketahui. Diberi semuanya — lihat catatan tentang kabar yang
-    # hilang di docstring modul.
-    return OPERATOR, None
+    # Belum ada gudang kerja yang sah: jangan memakai None (cakupan semua
+    # gudang). Pilihan gudang resmi tetap dibaca oleh akun_opsional.
+    return OPERATOR, P.TANPA
 
 
 def _dibaca():
@@ -86,6 +86,9 @@ def _dibaca():
 async def _cakupan(user):
     from sqlalchemy import or_
     peran, gudang = await keranjang(user)
+    if gudang == P.TANPA:
+        # Satu pagar untuk daftar, badge, histori, buka, dan status pribadi.
+        return [literal(False)]
     syarat = [or_(Notification.target_role == peran, Notification.target_role.is_(None))]
     terlarang = [t for t, g in TIPE_GUDANG.items() if gudang and g != gudang]
     if terlarang:
