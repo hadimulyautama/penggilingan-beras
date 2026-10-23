@@ -58,6 +58,8 @@ async def test_retur_tab_manual_snapshot_dan_get_tidak_menerima(pg,asal):
         r=await simpan(pg,asal,9)
         html=await potret(c,f'/retur/pengajuan/{r.id}','retur-menunggu')
         assert 'Menunggu timbang kedua' in html.text
+        assert f'<h1>Pengajuan retur #{r.id}</h1>' in html.text
+        assert 'None kg' not in html.text
         async with pg() as db:
             assert await db.scalar(select(func.count()).select_from(CustomerReturn))==0
         await selesai(pg,asal)
@@ -68,7 +70,9 @@ async def test_retur_tab_manual_snapshot_dan_get_tidak_menerima(pg,asal):
         assert await terima(pg,r.id) is None
         await potret(c,f'/retur/pengajuan/{r.id}','retur-perlu-koreksi')
         await simpan(pg,asal,10,pengajuan_id=r.id,alasan='Satu karung tertinggal dari rincian.')
-        await potret(c,f'/retur/pengajuan/{r.id}','retur-siap-manual')
+        manual=await potret(c,f'/retur/pengajuan/{r.id}','retur-siap-manual')
+        assert '0,1 kg/karung' in manual.text
+        assert '9000.000 kg' not in manual.text
         token=(await c.get('/api/sesi-formulir')).json()['token']
         response=await c.post(f'/retur/pengajuan/{r.id}/verifikasi',data={'_csrf':token})
         assert response.status_code==303
@@ -107,6 +111,7 @@ async def test_batas_tara_snapshot_dan_tiket_sekarang_terpisah(pg,asal):
             await db.commit()
         html=await potret(c,f'/retur/{receipt.id}','retur-snapshot-tiket-berubah')
         assert '251' in html.text and '261' in html.text
+        assert html.text.index('Data timbang saat penerimaan') < html.text.index('Data tiket saat ini')
         async with pg() as db:
             assert (await db.get(CustomerReturn,receipt.id)).berat_tiket_kg==251
             assert await db.scalar(select(func.sum(FinishedGoodsStock.berat_total_kg)))==250

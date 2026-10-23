@@ -1,8 +1,9 @@
 {% import '_detail_kirim_tabs.html' as dt with context %}
 {% set angka = st.kg_rinci %}
-<link rel="stylesheet" href="/static/detail_kirim_retur.css?v=1">
+<link rel="stylesheet" href="/static/detail_kirim_retur.css?v=2">
 <article class="kirim-detail" data-detail-tab>
-    <a class="kirim-detail__kembali" href="{{ dt.kembali('/barang-keluar?' ~ filter_query) }}">← Kembali ke Pengiriman</a>
+{% include "_pengiriman_tabs.html" %}
+    <a class="detail-kirim-kembali" href="{{ dt.kembali('/barang-keluar?' ~ filter_query) }}">← Kembali ke Pengiriman</a>
   <header class="kirim-detail__kepala">
 
     <div class="kirim-detail__judul">

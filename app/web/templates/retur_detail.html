@@ -2,13 +2,15 @@
 {% import '_detail_kirim_tabs.html' as dt with context %}
 {% import '_stok.html' as st with context %}{% set kg=st.kg %}
 {% block judul %}Detail retur {{ retur.kode }}{% endblock %}
-{% block isi %}<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/detail_kirim_retur.css?v=1');</style>
-<div class="riwayat-detail" data-detail-tab><a class="riwayat-detail__back" href="{{ dt.kembali('/retur') }}">← Kembali ke Barang Retur</a>
-{% if pengiriman_asal %}<p><a href="/barang-keluar/{{ pengiriman_asal }}">Pengiriman asal</a></p>{% endif %}
+{% block isi %}<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}"><style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/detail_kirim_retur.css?v=2');</style>
+<div class="riwayat-detail" data-detail-tab>
+{% set tab_pengiriman='retur' %}{% include "_pengiriman_tabs.html" %}
+<a class="detail-kirim-kembali" href="{{ dt.kembali('/retur') }}">← Kembali ke Barang Retur</a>
   <header class="kirim-detail__kepala">
     <h1>{{ retur.kode }}</h1>
+    {% if pengiriman_asal %}<p><a href="/barang-keluar/{{ pengiriman_asal }}">Pengiriman asal</a></p>{% endif %}
     <span class="tabel-standar__status tabel-standar__status--selesai">Sudah diterima ke stok</span>
-    <dl class="riwayat-detail__facts">
+    <dl class="detail-kirim-identitas">
       <div><dt>Pelanggan</dt><dd>{{ retur.nama_pelanggan or 'Pelanggan tidak tercatat' }}</dd></div>
       <div><dt>Nomor polisi</dt><dd>{{ retur.nomor_polisi or '—' }}</dd></div>
       <div><dt>Diterima pada</dt><dd>{{ retur.waktu|jam }}</dd></div>
@@ -35,7 +37,7 @@
   </section>
 </div>{{ dt.buka('tiket') }}  <section class="riwayat-detail__card">
     <h2>Pencocokan berat penerimaan</h2>
-    <dl class="riwayat-detail__facts">
+    <dl class="detail-kirim-fakta">
       <div><dt>Berat menurut tiket saat diterima</dt><dd>{{ kg(retur.berat_tiket_kg) }} kg</dd></div>
       <div><dt>Total rincian masuk stok</dt><dd>{{ kg(retur.berat_rincian_kg) }} kg</dd></div>
       <div><dt>Selisih tiket − rincian</dt><dd>{{ '+' if retur.selisih_kg>0 else '' }}{{ kg(retur.selisih_kg) }} kg</dd></div>
@@ -44,11 +46,16 @@
     <h3>Catatan penerimaan</h3><p>{{ retur.catatan or 'Tidak ada catatan.' }}</p>
   </section>
   <section class="riwayat-detail__card">
-    <h2>Tiket timbang terkait · {{ retur.kode_tiket }}</h2>
-    <dl class="riwayat-detail__facts">
+    <h2>Data timbang saat penerimaan</h2>
+    <dl class="detail-kirim-fakta">
       <div><dt>Berat truk bermuatan saat diterima</dt><dd>{{ kg(retur.timbang1_kg) ~ ' kg' if retur.timbang1_kg is not none else '—' }}</dd></div>
       <div><dt>Berat truk kosong saat diterima</dt><dd>{{ kg(retur.timbang2_kg) ~ ' kg' if retur.timbang2_kg is not none else '—' }}</dd></div>
-      {% if tiket %}
+      <div><dt>Bobot barang saat diterima</dt><dd>{{ dt.angka(retur.berat_tiket_kg) }}</dd></div>
+    </dl>
+  </section>
+  <section class="riwayat-detail__card">
+    <h2>Data tiket saat ini · {{ tiket.kode if tiket else retur.kode_tiket }}</h2>
+    {% if tiket %}<dl class="detail-kirim-fakta">
       <div><dt>Status tiket sekarang</dt><dd>{{ tiket.status_tiket }} · {{ tiket.status_transaksi }}</dd></div>
       <div><dt>Nomor polisi di tiket</dt><dd>{{ tiket.nomor_polisi or '—' }}</dd></div>
       <div><dt>Nama sopir</dt><dd>{{ tiket.nama_sopir or '—' }}</dd></div>
@@ -56,8 +63,7 @@
       <div><dt>Timbang kosong</dt><dd>{{ kg(tiket.timbang2_kg) ~ ' kg' if tiket.timbang2_kg is not none else '—' }}{% if tiket.timbang2_waktu %} · {{ tiket.timbang2_waktu|jam }}{% endif %}</dd></div>
       <div><dt>Netto timbang</dt><dd>{{ kg(tiket.netto_timbangan_kg) ~ ' kg' if tiket.netto_timbangan_kg is not none else '—' }}</dd></div>
       <div><dt>Berat barang di tiket</dt><dd>{{ kg(tiket.berat_barang_kg) ~ ' kg' if tiket.berat_barang_kg is not none else '—' }}</dd></div>
-      {% endif %}
-    </dl>
+    </dl>{% endif %}
     {% if not tiket %}<p class="bantu">Tiket tidak dapat ditemukan. Data timbang saat penerimaan tetap tersimpan di atas.</p>{% endif %}
   </section>
 </div>{{ dt.buka('riwayat') }}<section class="riwayat-detail__card"><h2>Identitas penerimaan</h2><dl class="detail-kirim-fakta"><div><dt>Kode</dt><dd>{{ retur.kode }}</dd></div><div><dt>Penerima</dt><dd>{{ penerima }}</dd></div><div><dt>Waktu</dt><dd>{{ retur.waktu|jam }}</dd></div><div><dt>Gudang</dt><dd>{{ gudang }}</dd></div><div><dt>Catatan</dt><dd>{{ retur.catatan or 'Tidak ada catatan' }}</dd></div></dl>{% if pengajuan_id %}<a class="btn" href="/retur/pengajuan/{{ pengajuan_id }}?tab_detail=riwayat">Riwayat pemeriksaan, koreksi dan bukti Pos Timbang</a>{% else %}<p>Pengajuan asal belum tercatat pada data lama ini.</p>{% endif %}</section></div></div><script src="/static/detail_kirim_retur.js?v=1" defer></script>{% endblock %}
