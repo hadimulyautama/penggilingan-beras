@@ -211,7 +211,8 @@
     <span>{{ visual.judul(b, (b.judul or b.kode)|replace(" menunggu dipacking", "")) }}</span>
   </span>
   <span class="antrian-tabel__sel" data-label="Kode proses">{{ b.kode }}</span>
-  <span class="antrian-tabel__sel antrian-tabel__status antrian-tabel__status--{{ 'jasa' if b.jasa_id is not none else 'pabrik' }}" data-label="Layanan">
+  {# Sel hanya pembungkus; penanda kepemilikan di dalam sudah punya badge. #}
+  <span class="antrian-tabel__sel antrian-tabel__kepemilikan" data-label="Layanan">
     {{ milik.penanda(b) }}
   </span>
   <span class="antrian-tabel__sel antrian-tabel__berat" data-label="Berat siap packing">
