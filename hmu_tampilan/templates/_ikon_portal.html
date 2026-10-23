@@ -15,5 +15,7 @@
 'berjalan':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 'mutu':'<path d="M9 3h6M10 3v7l-6 9a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M8 15h8"/>'
 } %}
-<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ paths.get(nama, paths['laporan_riwayat'])|safe }}</svg>
+{% set aliases = {'⌂':'beranda','↙':'barang_masuk','≡':'pekerjaan','▦':'stok','truck':'barang_keluar','chart-no-axes-combined':'laporan_riwayat','⚙':'pengaturan','◇':'jasa','✉':'kabar','✎':'aksi'} %}
+{% set pilihan = aliases.get(nama, nama) %}
+{% if pilihan in paths %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ paths[pilihan]|safe }}</svg>{% else %}{{ nama }}{% endif %}
 {%- endmacro %}
