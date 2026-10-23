@@ -129,6 +129,8 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         from app.penggilingan.inventory.models import ReturRincian
         retur_terkait = (await db.scalars(select(ReturRincian).where(
             ReturRincian.outgoing_record_id == transaksi_id).order_by(ReturRincian.id.desc()))).all() if transaksi_id and boleh_perintah else []
+        from app.services.jasa import nama_pemilik_banyak
+        pemilik_item = await nama_pemilik_banyak(db, {it.jasa_id for _, items in baris for it in items if it.jasa_id})
         nama = await _nama_barang(db, baris)
         nama_orang = await _nama_orang(db, baris)
 
@@ -140,6 +142,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             dimuat = float(it.berat_kg or 0)
             isi.append({
                 "nama": nama.get(it.id, "?"),
+                "pemilik": pemilik_item.get(it.jasa_id, "Milik pabrik"),
                 "kunci": f"{rec.id}|{it.id}|{dasar_perintah.get(rec.id, '')}",
                 "perintah": perintah,
                 "dimuat": dimuat,

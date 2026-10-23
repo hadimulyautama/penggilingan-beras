@@ -9,12 +9,7 @@
 {% import "_operasional.html" as op with context %}
 {% if detail %}
 {% set k = kartu[0] %}
-{% include "_pengiriman_detail.html" %}
-{% if BOLEH_PERINTAH and k.rec.status == 'selesai' %}
-<section class="retur-asal__panel"><h2>Retur terkait</h2>
-<a class="btn" href="/barang-keluar/{{ k.rec.id }}/retur">Retur barang</a>
-{% for r in retur_terkait %}<p><a href="/retur/pengajuan/{{ r.id }}">Pengajuan retur #{{ r.id }}</a> · {{ (r.status_pemeriksaan or 'tertahan').replace('_',' ').title() }}</p>{% else %}<p>Belum ada retur terkait.</p>{% endfor %}</section>
-{% endif %}
+{% include "_pengiriman_detail_tab.html" %}
 {% else %}
 <div class="keluar-halaman">
 {% include "_pengiriman_pembuka.html" %}

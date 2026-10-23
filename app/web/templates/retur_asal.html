@@ -1,15 +1,17 @@
 {% extends "base.html" %}
+{% import '_detail_kirim_tabs.html' as dt with context %}
+{% import '_stok.html' as st with context %}{% set kg=st.kg_rinci %}
 {% block judul %}Retur barang · {{ asal.kode }}{% endblock %}
 {% block isi %}
-{% import "_stok.html" as st with context %}{% set kg=st.kg_rinci %}
-<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
-<div class="retur-asal">
+<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/detail_kirim_retur.css?v=1">
+<div class="retur-asal" data-detail-tab>
 {% set tab_pengiriman = 'retur' %}{% include "_pengiriman_tabs.html" %}
 <a href="/barang-keluar/{{ asal.id }}">← Detail pengiriman {{ asal.kode }}</a>
-<h1>Retur barang</h1><p>{{ pelanggan_asal or 'Pelanggan belum tercatat' }} · {{ asal.kode }}</p>
-{% if rincian %}<p><a href="/retur/tiket/{{ rincian.timbangan_transaksi_id }}">Lihat tiket RTP terkait</a></p>{% endif %}
+<header class="kirim-detail__kepala"><p>Retur barang · {{ 'Pengajuan #' ~ rincian.id if rincian else 'Pengajuan baru' }}</p><h1>{{ asal.kode }}</h1><p>{{ pelanggan_asal or 'Pelanggan belum tercatat' }} · {{ asal.no_polisi or 'Nomor polisi belum tercatat' }}</p><p>{{ 'Sudah diterima ke stok' if rincian and rincian.customer_return_id else 'Pengajuan dibatalkan; stok tidak bertambah' if rincian and rincian.status_pemeriksaan=='dibatalkan' else 'Pengajuan tersimpan; belum diterima ke stok' if rincian else 'Belum ada pengajuan tersimpan' }}</p></header>
 {% if gagal %}<div class="retur-asal__pesan" role="alert">{{ gagal }}</div>{% endif %}
 {% if pesan %}<div class="retur-asal__pesan" role="status">{{ pesan }}</div>{% endif %}
+{{ dt.tabs() }}
+{{ dt.buka('ringkasan') }}
 {% if rincian and rincian.hasil_pemeriksaan %}
 {% set hasil = rincian.hasil_pemeriksaan %}
 <section class="retur-asal__panel" aria-label="Hasil pemeriksaan">
@@ -20,7 +22,24 @@
 {% if rincian.customer_return_id %}<a class="btn" href="/retur/{{ rincian.customer_return_id }}">Lihat penerimaan retur</a>{% elif rincian.wajib_manual %}<p>Retur ini wajib diverifikasi manual setelah koreksi data tersimpan dan seluruh pemeriksaan memenuhi syarat.</p>{% endif %}
 </section>
 {% endif %}
-<form action="/barang-keluar/{{ asal.id }}/retur" method="post">
+<section class="retur-asal__panel"><h2>Tindakan saat ini</h2>
+{% if not terkunci %}{{ dt.taut('barang','Koreksi rincian' if rincian else 'Isi barang & pilih tiket') }}{% endif %}
+{% if terkunci %}<p>Catatan terkunci. Rincian historis tetap dapat dilihat.</p>{% endif %}
+{% if rincian and not terkunci %}
+<form action="/retur/pengajuan/{{ rincian.id }}/verifikasi" method="post">
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+<button class="btn" {% if not manual_siap %}disabled{% endif %}>Verifikasi manual</button>
+</form>{% endif %}
+{% if rincian and not terkunci %}<details class="retur-asal__panel"><summary>Batalkan pengajuan yang belum diterima</summary>
+<p>Pembatalan melepaskan jumlah yang diajukan, tanpa mengubah stok atau data timbang. Tiket tetap tercatat pada histori pengajuan ini.</p>
+<form action="/retur/pengajuan/{{ rincian.id }}/batalkan" method="post"><input type="hidden" name="_csrf" value="{{ CSRF }}">
+<label for="alasan-batal">Alasan pembatalan</label><textarea id="alasan-batal" name="alasan" maxlength="500" required></textarea><button class="btn">Batalkan pengajuan</button></form></details>{% endif %}
+</section>
+{% set hasil_ringkas=rincian.hasil_pemeriksaan if rincian and rincian.hasil_pemeriksaan else {} %}<div class="detail-kirim-stat"><div><span>Berat rincian</span><strong>{{ kg(hasil_ringkas.berat_rincian_kg|float) ~ ' kg' if hasil_ringkas.get('berat_rincian_kg') not in [none,'None'] else 'Belum tersedia' }}</strong></div><div><span>Bobot tiket</span><strong>{{ kg(hasil_ringkas.berat_tiket_kg|float) ~ ' kg' if hasil_ringkas.get('berat_tiket_kg') not in [none,'None'] else 'Belum tersedia' }}</strong></div><div><span>Status stok</span><strong>{{ 'Sudah diterima' if rincian and rincian.customer_return_id else 'Belum bertambah' }}</strong></div></div>
+<section class="retur-asal__panel"><h2>Pengiriman asal</h2><p>{{ asal.kode }} · {{ pelanggan_asal or 'Pelanggan belum tercatat' }}</p><a class="btn btn--kecil" href="/barang-keluar/{{ asal.id }}">Buka pengiriman asal</a></section>
+<div class="detail-kirim-grid"><section class="retur-asal__panel"><h2>Pencocokan bobot</h2>{% include '_retur_perbandingan.html' %}{{ dt.taut('tiket','Lihat tiket & bobot') }}</section><section class="retur-asal__panel"><h2>Penerimaan stok</h2>{% if rincian and rincian.customer_return_id %}<p>Sudah diterima. Berat dan gudang mengikuti catatan penerimaan per barang.</p><a class="btn" href="/retur/{{ rincian.customer_return_id }}">Lihat penerimaan retur</a>{% else %}<p>Belum ada stok ditambahkan oleh pengajuan ini. Menyimpan pengajuan berbeda dari menerima stok.</p>{% endif %}</section></div></div>
+{{ dt.buka('barang') }}
+<form id="form-pengajuan-retur" action="/barang-keluar/{{ asal.id }}/retur" method="post">
 <input type="hidden" name="_csrf" value="{{ CSRF }}">
 {% if rincian %}<input type="hidden" name="pengajuan_id" value="{{ rincian.id }}">{% endif %}
 <fieldset {% if terkunci %}disabled{% endif %} class="retur-asal__panel">
@@ -51,15 +70,10 @@
 <p>Data timbang diubah melalui Pos Timbang sesuai hak akses. Menyimpan rincian saat tiket terbuka belum menambah stok. Tara digunakan sebagai toleransi pencocokan bobot, tanpa memotong berat rincian.</p>
 {% if not terkunci %}<div class="retur-asal__aksi"><button class="btn" type="submit">{{ 'Simpan koreksi rincian' if rincian else 'Simpan pengajuan retur' }}</button></div>{% endif %}
 </fieldset></form>
-{% if rincian and not terkunci %}
-<form action="/retur/pengajuan/{{ rincian.id }}/verifikasi" method="post">
-<input type="hidden" name="_csrf" value="{{ CSRF }}">
-<button class="btn" {% if not manual_siap %}disabled{% endif %}>Verifikasi manual</button>
-</form>{% endif %}
-{% if rincian and not terkunci %}<details class="retur-asal__panel"><summary>Batalkan pengajuan yang belum diterima</summary>
-<p>Pembatalan melepaskan jumlah yang diajukan, tanpa mengubah stok atau data timbang. Tiket tetap tercatat pada histori pengajuan ini.</p>
-<form action="/retur/pengajuan/{{ rincian.id }}/batalkan" method="post"><input type="hidden" name="_csrf" value="{{ CSRF }}">
-<label for="alasan-batal">Alasan pembatalan</label><textarea id="alasan-batal" name="alasan" maxlength="500" required></textarea><button class="btn">Batalkan pengajuan</button></form></details>{% endif %}
+</div>
+{{ dt.buka('tiket') }}<section class="retur-asal__panel"><h2>Tiket retur</h2>{% include '_retur_tiket_fakta.html' %}</section><section class="retur-asal__panel"><h2>Pencocokan bobot</h2>{% include '_retur_perbandingan.html' %}</section></div>
+{{ dt.buka('riwayat') }}
+<section class="retur-asal__panel"><h2>Identitas pengajuan</h2><dl class="detail-kirim-fakta"><div><dt>Pengajuan</dt><dd>{{ '#' ~ rincian.id if rincian else 'Belum tersimpan' }}</dd></div><div><dt>Pengaju</dt><dd>{{ pengaju or 'Belum tercatat' }}</dd></div><div><dt>Waktu pengajuan</dt><dd>{{ rincian.created_at|jam if rincian else 'Belum tersimpan' }}</dd></div><div><dt>Pengiriman asal</dt><dd>{{ asal.kode }}</dd></div><div><dt>Catatan</dt><dd>{{ rincian.catatan or 'Tidak ada catatan' if rincian else 'Belum tersimpan' }}</dd></div><div><dt>Status stok</dt><dd>{{ 'Sudah diterima' if rincian and rincian.customer_return_id else 'Belum bertambah' }}</dd></div></dl>{% if rincian and rincian.customer_return_id %}<a href="/retur/{{ rincian.customer_return_id }}?tab_detail=riwayat">Identitas penerimaan dan gudang</a>{% endif %}</section>
 {% if logs %}<section class="retur-asal__panel"><h2>Riwayat pemeriksaan dan koreksi</h2>
 {% for l in logs %}<details><summary>{{ l.waktu|jam }} · {{ l.aksi.replace('_',' ') }} · {{ aktor.get(l.pelaku_id, 'Sistem') }}</summary>
 {% if l.alasan %}<p>{{ l.alasan }}</p>{% endif %}
@@ -68,6 +82,6 @@
 {% if snapshot.hasil %}<p>Timbang pertama {{ snapshot.hasil.timbang1_kg|default('—') }} kg · Timbang kedua {{ snapshot.hasil.timbang2_kg|default('—') }} kg · Bobot tiket {{ snapshot.hasil.berat_tiket_kg|default('—') }} kg</p><p>{{ snapshot.hasil.alasan }}</p>{% endif %}
 {% if snapshot.hasil and snapshot.hasil.koreksi_timbang %}<p>Koreksi Pos Timbang: {{ snapshot.hasil.koreksi_timbang.nama or 'Petugas tercatat di Pos Timbang' }} · {{ snapshot.hasil.koreksi_timbang.waktu }} · {{ snapshot.hasil.koreksi_timbang.alasan or '' }}</p>{% endif %}
 {% if snapshot.kode %}<p>Penerimaan {{ snapshot.kode }}</p>{% endif %}
-{% endif %}{% endfor %}</details>{% endfor %}</section>{% endif %}
-</div>
+{% endif %}{% endfor %}</details>{% endfor %}</section>{% endif %}{% if not logs %}<section class="retur-asal__panel"><h2>Riwayat pemeriksaan</h2><p>Belum ada catatan pemeriksaan.</p></section>{% endif %}</div></div>
+<script src="/static/detail_kirim_retur.js?v=1" defer></script>
 {% endblock %}

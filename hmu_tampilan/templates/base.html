@@ -219,14 +219,6 @@
         <img class="laci__logo laci__logo--terik" src="/static/padiflow-logo-terang.png?v={{ VERSI }}" alt="PadiFlow">
         <img class="laci__logo laci__logo--gelap" src="/static/padiflow-logo-gelap.png?v={{ VERSI }}" alt="PadiFlow">
       </div>
-      <div class="laci__identitas">
-        <div class="bar__isi">
-          <div class="bar__nama">{{ akun.nama }}</div>
-          <div class="bar__sub">
-            {{ NAMA_VIEW.get(VIEW, akun.peran) }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
-          </div>
-        </div>
-      </div>
     </div>
     <div class="laci__daftar">
       {# `PINTU_MATI` — pintu yang tak ditawarkan pada permintaan INI, apa pun
@@ -447,6 +439,14 @@
     </div>
     {% block laci_kaki %}
     {% endblock %}
+    <div class="laci__identitas">
+      <div class="bar__isi">
+        <div class="bar__nama">{{ akun.nama }}</div>
+        <div class="bar__sub">
+          {{ NAMA_VIEW.get(VIEW, akun.peran) }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
+        </div>
+      </div>
+    </div>
   </nav>
   <div class="laci__ukur" role="separator" tabindex="0"
        aria-orientation="vertical" aria-label="Ubah lebar sidebar"

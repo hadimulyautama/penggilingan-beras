@@ -802,10 +802,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
   padding: 4px 6px 14px;
   border-bottom: 1px solid var(--garis-2);
   margin-bottom: 10px;
-  /* Kepala dan kaki TIDAK ikut menyusut saat daftarnya panjang: nama orang
-     yang memakai aplikasi dan tombol Keluar adalah dua hal yang harus selalu
-     terlihat — yang satu supaya ia tahu sedang masuk sebagai siapa, yang satu
-     supaya ia bisa keluar tanpa menggulir. */
+  /* Logo tetap utuh saat daftar menu panjang; hanya daftarnya yang menggulir. */
   flex-shrink: 0;
 }
 .laci__merek {
@@ -818,7 +815,14 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .laci__logo--terik { display: none; }
 body.terik .laci__logo--terik { display: block; }
 body.terik .laci__logo--gelap { display: none; }
-.laci__identitas { display: flex; align-items: center; gap: 11px; min-width: 0; }
+/* Identitas di kaki sidebar tetap terlihat saat menu digulir. */
+.laci__identitas {
+  display: flex; align-items: center; gap: 11px; min-width: 0;
+  flex-shrink: 0; margin-top: 10px; padding: 14px 9px 4px;
+  border-top: 1px solid var(--garis-2);
+}
+.laci__identitas .bar__isi { min-width: 0; }
+.laci__identitas .bar__nama, .laci__identitas .bar__sub { overflow-wrap: anywhere; }
 
 /* ── Daftar pintu: SATU-SATUNYA bagian laci yang menggulir ──
    Laporan pemilik 28 September 2026, dengan fotonya: laci tak bisa digulir,
