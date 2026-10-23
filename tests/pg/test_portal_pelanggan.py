@@ -260,8 +260,10 @@ async def test_shipping_uses_item_ownership_and_rejects_mixed_headers(pg,portal)
     async with client(portal.accounts[0]) as c:
         assert (await c.get('/pelanggan/barang-keluar/'+str(records[0].id))).status_code==200
         for r in records[1:]:assert (await c.get('/pelanggan/barang-keluar/'+str(r.id))).status_code==404
-        page=await c.get('/pelanggan/barang-keluar')
-        assert 'OUT-PORTAL-0' in page.text and 'OUT-PORTAL-1' not in page.text and 'OUT-PORTAL-2' not in page.text
+        for path in ['/pelanggan/barang-keluar','/pelanggan/ringkasan?tab=pengambilan']:
+            page=await c.get(path)
+            assert page.status_code==200
+            assert 'OUT-PORTAL-0' in page.text and 'OUT-PORTAL-1' not in page.text and 'OUT-PORTAL-2' not in page.text
 
 
 async def test_native_transfer_related_history_is_scoped_before_pagination(pg,portal):
@@ -276,3 +278,18 @@ async def test_native_transfer_related_history_is_scoped_before_pagination(pg,po
             assert r.status_code==200
             assert 'TRF-FOREIGN-SAME-LOT' not in r.text
             assert not BeautifulSoup(r.text,'html.parser').select('[data-post],dialog')
+
+
+async def test_customer_summary_returns_follow_item_ownership_not_header(pg,portal):
+    from app.models import CustomerReturn,CustomerReturnItem
+    async with pg() as db:
+        for n,owners in enumerate([[portal.orders[0].id],[portal.orders[1].id],[portal.orders[0].id,portal.orders[1].id]]):
+            row=CustomerReturn(kode='RET-SCOPE-'+str(n),timbangan_transaksi_id=900+n,kode_tiket='TRX-RET-'+str(n),
+                pelanggan_id=portal.owners[0].id,berat_tiket_kg=20,berat_rincian_kg=20,selisih_kg=0,input_by=1,waktu=now_local())
+            db.add(row);await db.flush()
+            for jid in owners:db.add(CustomerReturnItem(customer_return_id=row.id,jasa_id=jid,jumlah_karung=1,berat_total_kg=10))
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        r=await c.get('/pelanggan/ringkasan?tab=pengambilan')
+        assert r.status_code==200 and 'RET-SCOPE-0' in r.text
+        assert 'RET-SCOPE-1' not in r.text and 'RET-SCOPE-2' not in r.text

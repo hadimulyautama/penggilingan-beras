@@ -69,7 +69,7 @@ async def daftar(db, *, cari='', status='', halaman=1):
     return dict(kartu=kartu,jumlah=jumlah,halaman=halaman,akhir=akhir)
 
 
-async def pelanggan(db, pid, *, rinci=True, pk=None):
+async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None):
     p = await db.get(Pelanggan,pid)
     orders = list((await db.scalars(select(Jasa).where(Jasa.pelanggan_id==pid)
                                   .order_by(Jasa.id.desc()))).all())
@@ -177,7 +177,7 @@ async def pelanggan(db, pid, *, rinci=True, pk=None):
             r['boleh_batal'] = j.status=='berjalan' and not await pernah_ada_barang(db,j.id)
         for r in d['proses']:
             await _sumber_proses(db,r,ids)
-        await _pengiriman(db,d,ids)
+        await _pengiriman(db,d,ids,read_scope=read_scope)
     if d['pk_kg']>0:
         d['kondisi'].append('PK tersisa')
     if d['beras_kg']>0 or d['samping_kg']>0:
@@ -267,17 +267,19 @@ async def _sumber_sosoh(db,r,ids):
         susut=bahan-sum(hasil.values()) if final and hasil else None,final=final)
 
 
-async def _pengiriman(db,d,ids):
+async def _pengiriman(db,d,ids,*,read_scope=None):
     from app.penggilingan.inventory.models import CustomerReturn,CustomerReturnItem
     rows=(await db.execute(select(OutgoingRecord,OutgoingItem).join(OutgoingItem,OutgoingItem.outgoing_record_id==OutgoingRecord.id)
-          .where(OutgoingItem.jasa_id.in_(ids)).order_by(OutgoingRecord.id.desc(),OutgoingItem.id))).all()
+          .where(OutgoingItem.jasa_id.in_(ids),
+                 OutgoingRecord.id.in_(read_scope.ids(OutgoingRecord)) if read_scope is not None else True).order_by(OutgoingRecord.id.desc(),OutgoingItem.id))).all()
     grouped={}
     for o,i in rows:
         g=grouped.setdefault(o.id,dict(id=o.id,kode=o.kode,status=o.status,href=f'/barang-keluar/{o.id}',item=[]))
         g['item'].append(dict(jenis=i.item_type,kg=i.berat_kg,pesanan_id=i.jasa_id))
     d['pengiriman']=list(grouped.values())
     rs=(await db.scalars(select(CustomerReturn).join(CustomerReturnItem,CustomerReturnItem.customer_return_id==CustomerReturn.id)
-        .where(or_(CustomerReturnItem.jasa_id.in_(ids),CustomerReturn.pelanggan_id==d['id']))
+        .where(or_(CustomerReturnItem.jasa_id.in_(ids),CustomerReturn.pelanggan_id==d['id']),
+               CustomerReturn.id.in_(read_scope.ids(CustomerReturn)) if read_scope is not None else True)
         .distinct().order_by(CustomerReturn.id.desc()))).all()
     for x in rs:
         pemilik=set((await db.scalars(select(CustomerReturnItem.jasa_id).where(CustomerReturnItem.customer_return_id==x.id))).all())
