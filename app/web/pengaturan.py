@@ -484,9 +484,11 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         from app.services.setelan import sebab_jeda, target_kadar_air
         target_global = await target_kadar_air(db)
         sebab = await sebab_jeda(db)
+        from app.services.alur_beranda import peta_tungku
+        tungku = await peta_tungku(db)
         mesin = [{"id": d.id, "nama": d.nama, "kapasitas": float(d.kapasitas_kg or 0),
                   "target": float(d.target_kadar_air) if d.target_kadar_air is not None else target_global,
-                  "status": d.status} for d in await dryers_g1(db)]
+                  "status": d.status, "tungku": tungku.get(d.id, "")} for d in await dryers_g1(db)]
         silo = [{"id": s.id, "nama_silo": s.nama_silo,
                  "nama_tampil": (s.nama_silo[5:].strip()
                                  if s.nama_silo.lower().startswith("silo ")
@@ -589,6 +591,7 @@ async def tambah_dryer(
 async def edit_dryer(
     request: Request, dryer_id: int = Form(...), nama: str = Form(...),
     kapasitas_kg: str = Form(...), target_kadar_air: str = Form(...),
+    tungku: str | None = Form(None),
     akun: ProduksiAkun = Depends(butuh_super),
 ):
     from app.models import Dryer
@@ -606,6 +609,10 @@ async def edit_dryer(
         return redirect("/pengaturan/alat?err=kapasitas")
     if not 5 <= target <= 30:
         return redirect("/pengaturan/alat?err_teks=" + quote("Target kadar air harus antara 5% dan 30%."))
+    if tungku is None and 'tungku' in await request.form():
+        tungku = ''
+    if tungku is not None and len(' '.join(tungku.split())) > 50:
+        return redirect("/pengaturan/alat?err_teks=" + quote("Nama tungku maksimal 50 karakter."))
     async with SessionLocal() as db:
         d = await db.get(Dryer, dryer_id)
         daftar = await dryers_g1(db)
@@ -614,6 +621,9 @@ async def edit_dryer(
         if any(x.id != d.id and x.nama.casefold() == nama.casefold() for x in daftar):
             return redirect("/pengaturan/alat?err=kembar")
         d.nama, d.kapasitas_kg, d.target_kadar_air = nama, kapasitas, target
+        if tungku is not None:
+            from app.services.alur_beranda import simpan_tungku
+            await simpan_tungku(db, d.id, tungku, user=akun.user)
         await db.commit()
     return redirect("/pengaturan/alat?pesan=alat-diubah")
 

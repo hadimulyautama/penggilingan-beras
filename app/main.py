@@ -380,6 +380,7 @@ async def beranda(request: Request):
 
     view = getattr(request.state, "view", "tamu")
     o, jalan, petak = {}, svc.Berjalan(), []
+    alur_gudang = None
     papan = None
     # Sesi terpisah: kegagalan satu kueri tidak membatalkan pembacaan
     # bagian lain, dan hasil gagal tidak boleh dianggap angka nol.
@@ -404,6 +405,8 @@ async def beranda(request: Request):
                 from app.services import beranda as svc_beranda
                 angka = await svc_beranda.angka_gudang(db)
             petak = await petak_beranda(db, view, o, angka=angka)
+            from app.services.alur_beranda import bangun as bangun_alur
+            alur_gudang = await bangun_alur(db, view, o)
             muat['ringkasan'] = True
     except Exception:
         log.exception("Beranda: ringkasan gagal dimuat")
@@ -449,7 +452,7 @@ async def beranda(request: Request):
         semua_gudang=view in V_MEJA,
         # Petaknya disusun `app.web.layar` menurut view — Beranda tak lagi
         # punya satu bentuk yang dipakai bersama oleh empat peran.
-        petak=petak,
+        petak=petak, alur_gudang=alur_gudang,
         berjalan=jalan.berjalan, transit=jalan.transit,
         lama=svc._lama,
         # Membuka lembar aksi DI LAYAR INI, bukan melemparkan orang ke

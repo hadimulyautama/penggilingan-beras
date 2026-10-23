@@ -37,6 +37,9 @@
               <input class="fld" id="dryer_kapasitas_{{ d.id }}" name="kapasitas_kg" type="text" inputmode="decimal" value="{{ '%g'|format(d.kapasitas) }}" required>
               <label class="lbl" for="dryer_target_{{ d.id }}">Target kadar air (%)</label>
               <input class="fld" id="dryer_target_{{ d.id }}" name="target_kadar_air" type="text" inputmode="decimal" value="{{ '%g'|format(d.target) }}" required>
+              <label class="lbl" for="dryer_tungku_{{ d.id }}">Nama tungku</label>
+              <input class="fld" id="dryer_tungku_{{ d.id }}" name="tungku" value="{{ d.tungku|default('') }}" maxlength="50" placeholder="Contoh: Tungku Utara">
+              <p class="bantu">Gunakan nama yang sama untuk dryer yang tersambung ke tungku bersama. Kosongkan bila belum dipetakan.</p>
               <button class="btn btn--utama" type="submit">Simpan perubahan</button>
             </form>
           </details>

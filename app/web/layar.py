@@ -183,7 +183,7 @@ async def _petak_g2(db) -> list[dict]:
     from app.database import now_local
     from app.penggilingan.gudang2.models import PkPurchaseBatch, PolishingProcess
     from app.penggilingan.gudang2.service import (
-        get_g2_silo, hitung_stok_silo, hitung_stok_tumpukan)
+        _g2_warehouse_id, hitung_stok_silo, hitung_stok_tumpukan)
 
     hari = now_local().date()
     pk_kg, pk_n = (await db.execute(
@@ -198,9 +198,12 @@ async def _petak_g2(db) -> list[dict]:
     )).scalar() or 0
 
     isi: list[float] = []
-    for huruf in ("A", "B"):
-        silo = await get_g2_silo(db, huruf)
-        isi.append(float(await hitung_stok_silo(db, silo.id)) if silo else 0.0)
+    from app.models import Silo
+    silos = (await db.execute(select(Silo).where(
+        Silo.warehouse_id == await _g2_warehouse_id(db), Silo.aktif.is_(True))
+        .order_by(Silo.nama_silo))).scalars().all()
+    for silo in silos:
+        isi.append(float(await hitung_stok_silo(db, silo.id)))
     terisi = sum(1 for v in isi if v > 0)
     tump = float(await hitung_stok_tumpukan(db))
     maks = float(settings.g2_tumpukan_maks_kg or 0)
@@ -210,7 +213,7 @@ async def _petak_g2(db) -> list[dict]:
         _sel("Penyosohan", sosoh, sat=" proses",
              ket="berjalan" if sosoh else "tak ada",
              nada="hati" if sosoh else ""),
-        _sel("Silo terisi", terisi, sat=" / 2",
+        _sel("Silo terisi", terisi, sat=f" / {len(silos)}",
              ket=f"{_ribuan(sum(isi))} kg", nada="aman" if terisi else ""),
         _sel("Tumpukan PK", _ribuan(tump), sat=" kg",
              ket=(f"maks {int(maks / 1000)} ton" if maks else ""),

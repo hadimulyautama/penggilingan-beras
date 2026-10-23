@@ -104,7 +104,8 @@ async def test_operator_tak_melihat_papan(pg, pabrik):
     assert 'href="/gudang/g2"' not in t, "operator ditawari gudang sebelah"
     # Yang tetap ada: petaknya sendiri. Halaman yang kosong terbaca sebagai
     # aplikasi rusak, bukan sebagai peran yang lebih sempit.
-    assert 'class="beranda-gudang-padat"' in t
+    # Desain alat menggantikan petak angka lama; batas gudang tetap sama.
+    assert 'data-alur-gudang="g1"' in t
     assert "Gudang 1 — Selepan" in t
     assert "Gabah masuk" in t
 

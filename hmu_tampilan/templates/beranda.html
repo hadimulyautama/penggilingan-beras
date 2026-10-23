@@ -112,8 +112,12 @@
   </div>
 </section>
 
-<section class="beranda-ringkasan beranda-ringkasan--padat" aria-label="Ringkasan operasional">
-{% if not muat.ringkasan %}{{ gagal('Ringkasan operasional belum dapat dimuat.') }}{% else %}
+<link rel="stylesheet" href="/static/beranda-alur.css?v={{ VERSI }}">
+<section class="beranda-ringkasan beranda-ringkasan--padat{{ ' beranda-ringkasan--alur' if alur_gudang is defined and alur_gudang is not none }}" aria-label="Ringkasan operasional">
+{% if not muat.ringkasan %}{{ gagal('Ringkasan operasional belum dapat dimuat.') }}{% elif alur_gudang is defined and alur_gudang is not none %}
+{% include '_beranda_alur.html' %}
+{% if not alur_gudang %}<p class="kosong-tipis">Akun Anda belum ditetapkan gudangnya.</p>{% endif %}
+{% else %}
 {% for blok in petak %}
   {% set ns = namespace(href="", nama=blok.judul) %}
   {% for g in gudang %}{% if blok.judul == g.nama ~ " — " ~ g.fungsi %}{% set ns.href = "/gudang/" ~ g.id %}{% endif %}{% endfor %}
@@ -133,7 +137,7 @@
 {% endif %}
 {# View admin memiliki petak gabungan, jadi pintu gudang tetap tersedia tanpa
    mengulang angka stok yang sudah tertera pada ringkasan. #}
-{% if gudang and not petak|selectattr("judul")|list %}
+{% if (alur_gudang is not defined or alur_gudang is none) and gudang and not petak|selectattr("judul")|list %}
   <nav class="beranda-gudang-tautan" aria-label="Detail gudang">{% for g in gudang %}<a href="/gudang/{{ g.id }}">{{ g.nama }} — {{ g.fungsi }} →</a>{% endfor %}</nav>
 {% endif %}
 </section>
