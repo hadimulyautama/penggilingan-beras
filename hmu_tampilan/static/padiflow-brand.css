@@ -1,0 +1,2 @@
+/* Dua warna PadiFlow; bentuk yang sama tetap terbaca pada latar gelap. */
+body.padiflow-ui .laci__logo--gelap {filter:brightness(2.5) saturate(.65)}
