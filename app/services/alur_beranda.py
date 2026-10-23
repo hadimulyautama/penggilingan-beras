@@ -103,10 +103,12 @@ async def daftar_silo(db, gid):
     return out
 
 
-async def bangun(db, view, operasional):
+async def bangun(db, view, operasional, *, hanya=None):
     from app.web.layar import GUDANG, boleh_lihat_gudang, _petak_g1, _petak_g2
     out = []
     for gid, nama, fungsi in GUDANG:
+        if hanya is not None and gid != hanya:
+            continue
         if not boleh_lihat_gudang(view, gid):
             continue
         silos = await daftar_silo(db, gid)

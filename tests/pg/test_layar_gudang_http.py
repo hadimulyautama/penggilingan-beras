@@ -75,8 +75,11 @@ async def test_super_membuka_kedua_gudang(pg, dua_gudang):
             # Tombol kembali, bukan laci: halaman ini punya induk.
             assert 'class="bar__balik"' in r.text
             assert 'id="buka-laci"' not in r.text
-            # Petak digambar (angkanya boleh nol; yang dijaga ADA selnya).
-            assert "petak__sel" in r.text
+            # Detail memakai komponen alur yang sama dengan Beranda.
+            assert f'data-alur-gudang="{gid}"' in r.text
+            assert 'petak__sel' not in r.text
+            assert 'data-alur-gudang="'+('g2' if gid=='g1' else 'g1')+'"' not in r.text
+            assert f'aria-label="Lihat {nama}"' not in r.text
 
 
 async def test_operator_polesan_ditolak_di_gudang_sebelah(pg, dua_gudang):

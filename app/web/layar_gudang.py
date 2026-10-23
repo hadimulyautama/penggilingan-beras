@@ -45,6 +45,7 @@ async def halaman_gudang(request: Request, gid: str, akun=Depends(butuh_akun)):
     if not boleh_lihat_gudang(view, gid):
         raise AksesDitolak(f"{NAMA_GUDANG[gid]} bukan gudang Anda.")
 
+    operasional = {}
     async with SessionLocal() as db:
         # Kartunya dari daftar yang SAMA dengan layar Sedang berjalan, bukan
         # disusun ulang di sini. Halaman yang menghitung sendiri apa yang
@@ -55,10 +56,13 @@ async def halaman_gudang(request: Request, gid: str, akun=Depends(butuh_akun)):
             from app.services.dashboard import dashboard_data
 
             b = await svc.untuk_gudang1(db)
-            petak = _petak_g1((await dashboard_data(db)).get("operasional", {}) or {})
+            operasional = (await dashboard_data(db)).get("operasional", {}) or {}
+            petak = _petak_g1(operasional)
         else:
             b = await svc.untuk_gudang2(db)
             petak = await _petak_g2(db)
+        from app.services.alur_beranda import bangun as bangun_alur
+        alur_gudang = await bangun_alur(db, view, operasional, hanya=gid)
         from app.services.identitas_pekerjaan import lengkapi
         await lengkapi(db, b.menunggu + b.berjalan + b.transit + b.meja)
         # Lencana bilah atas tetap milik ORANG yang membaca, bukan gudang yang
@@ -70,7 +74,8 @@ async def halaman_gudang(request: Request, gid: str, akun=Depends(butuh_akun)):
         request, "gudang.html", layar="gudang", kembali="/",
         JUDUL={**JUDUL, "gudang": NAMA_GUDANG[gid]},
         gid=gid, nama_gudang=NAMA_GUDANG[gid], fungsi=FUNGSI_GUDANG[gid],
-        petak=petak, berjalan=b.berjalan, transit=b.transit, lama=svc._lama,
+        petak=petak, alur_gudang=alur_gudang, detail_gudang=True,
+        berjalan=b.berjalan, transit=b.transit, lama=svc._lama,
         # Pos Produksi MEMPUNYAI rute aksinya, jadi tombol di kartu benar-benar
         # bisa ditekan dari sini — beda dengan Meja, yang menggambar kartu yang
         # sama tanpa memuat `aksi.js`.

@@ -19,9 +19,16 @@
 {% import "_benda.html" as benda with context %}
 {% import "_beranda.html" as br with context %}
 
-{# Petaknya lewat makro: markup sel petak sempat hidup di TIGA berkas, dan sel
-   yang disalin adalah sel yang cepat atau lambat beda tinggi barisnya. #}
+{# Beranda dan detail memakai komponen serta sumber saldo alat yang sama.
+   Makro petak dipertahankan hanya untuk pemanggil paket lama. #}
+{% if alur_gudang is defined %}
+<link rel="stylesheet" href="/static/beranda-alur.css?v={{ VERSI }}">
+<section class="gudang-ringkasan-alur" aria-label="Ringkasan {{ nama_gudang }}">
+{% include "_beranda_alur.html" %}
+</section>
+{% else %}
 {{ br.petak_rata(petak, judul=nama_gudang ~ " — " ~ fungsi) }}
+{% endif %}
 
 {{ benda.blok("Sedang berjalan", berjalan, alamat="/gudang/" ~ gid) }}
 {{ benda.blok("Transit", transit, alamat="/gudang/" ~ gid) }}

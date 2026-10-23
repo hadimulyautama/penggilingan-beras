@@ -18,3 +18,5 @@
 .beranda-ringkasan--alur{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}.beranda-ringkasan--alur>.pesan{grid-column:1/-1}.beranda-ringkasan--alur:has(>.alur-gudang:only-child){grid-template-columns:minmax(0,1fr)}
 @media(max-width:850px){.beranda-ringkasan--alur{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:380px){.alur-gudang__kepala{padding:16px}.alur-masuk{padding:0 16px 18px}.alur-pengering,.alur-penyimpanan{padding:16px}.alur-kelompok--bersama{grid-template-columns:60px minmax(0,1fr);gap:10px}.alur-tungku__badan{width:50px}.alur-dryers{grid-template-columns:repeat(auto-fit,minmax(70px,1fr))}.alur-tahap{margin-inline:10px}.alur-tahap strong,.alur-tahap small{font-size:max(11px,.7rem)}.alur-penyimpanan{gap:12px}.alur-stok{padding-left:12px}.alur-silos{grid-template-columns:repeat(auto-fit,minmax(58px,1fr))}.alur-gudang__kaki{padding-inline:16px}}
+
+.gudang-ringkasan-alur{width:100%;max-width:960px;margin-inline:auto}.gudang-ringkasan-alur .alur-kelompok{max-width:720px;margin-inline:auto}

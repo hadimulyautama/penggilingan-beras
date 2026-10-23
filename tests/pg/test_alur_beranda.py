@@ -137,3 +137,24 @@ async def test_form_pemetaan_tungku_superadmin_saja(pg, pengeringan):
         async with pg() as db:assert did not in await svc.peta_tungku(db)
     async with await _klien(pg,peran='operator',gudang='Gudang 1') as c:
         assert (await c.get('/pengaturan/alat')).status_code==403
+
+
+async def test_detail_gudang_memakai_alat_yang_sama_dengan_beranda(pg, pengeringan):
+    import re
+    async with await _klien(pg,peran='superadmin') as c:
+        home=await c.get('/')
+        ids_home=set(re.findall(r'data-dryer-id="(\d+)"',home.text))
+        for gid in ['g1','g2']:
+            detail=await c.get('/gudang/'+gid)
+            assert detail.status_code==200
+            assert f'data-alur-gudang="{gid}"' in detail.text
+            assert f'data-alur-gudang="'+('g2' if gid=='g1' else 'g1')+'"' not in detail.text
+            assert 'petak__sel' not in detail.text
+            assert 'alur-tahap' in detail.text
+            if gid=='g1':
+                assert set(re.findall(r'data-dryer-id="(\d+)"',detail.text))==ids_home
+                assert 'alur-dryer alur-alat--terisi' in detail.text
+                assert 'Mengeringkan' in detail.text
+            else:
+                assert 'data-dryer-id=' not in detail.text
+            Path('/tmp/hmu-detail-'+gid+'.html').write_text(detail.text)
