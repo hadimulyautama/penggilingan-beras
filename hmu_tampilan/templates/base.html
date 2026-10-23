@@ -6,7 +6,6 @@
    Titik penyesuaian yang SAH — dan hanya ini:
      global  APP_NAMA   nama aplikasi (judul bawaan & <title>)
      global  PWA_NAMA   nama ikon di layar utama iOS
-     global  MODE_UJI   pita "MODE UJI"     (produksi)
      global  MOCKUP     pita "MOCKUP"       (gudang2/meja masa mockup; kini false)
      global  TAB / TAB_KUNCI / JUDUL / NAMA_VIEW   isi laci & judul layar (data)
      blok    judul, kepala_ekstra, pita, isi, kaki, laci_kaki
@@ -82,7 +81,6 @@
 <div class="bingkai">
 {% block pita %}
 {% if VIEW in ('selepan', 'polesan') %}<div class="pita-samar" role="status">GUDANG {{ '1 · SELEPAN' if VIEW == 'selepan' else '2 · PENYOSOHAN' }} · {{ akun.nama }}</div>{% endif %}
-{% if MODE_UJI %}<div class="pita-uji">MODE UJI · DATA BOLEH DIHAPUS</div>{% endif %}
 {% if MOCKUP %}<div class="pita-uji">MOCKUP · DATA CONTOH, BUKAN DATA PABRIK</div>{% endif %}
 {# Jalan pulangnya ikut di pita, bukan disembunyikan di Pengaturan:
    yang sedang menyamar sebagai operator mungkin tak lagi melihat menu
