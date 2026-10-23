@@ -136,6 +136,27 @@ async def rincian(db, *, jenis, model, kartu, params):
             DryingMoistureLog.drying_lot_id == model.id,
             DryingMoistureLog.kadar_air_tes_manual.is_not(None)
         ).order_by(DryingMoistureLog.waktu_update.desc(), DryingMoistureLog.id.desc()).limit(1))
+        # Metadata tampilan saja: bacaan/waktu tiap alat tidak saling menggantikan.
+        from app.penggilingan.gudang1.services.drying import _latest_log, peringatan_kadar_air
+        from app.services.setelan import target_kadar_air
+        mesin = await db.scalar(select(DryingMoistureLog).where(
+            DryingMoistureLog.drying_lot_id == model.id,
+            DryingMoistureLog.kadar_air_indikator.is_not(None)
+        ).order_by(DryingMoistureLog.waktu_update.desc(), DryingMoistureLog.id.desc()).limit(1))
+        d.update(jeda_mulai=_waktu(macet.mulai) if macet and jenis == "pengeringan" else None,
+                 jeda_sebab=macet.sebab if macet and jenis == "pengeringan" else None,
+                 dryer=dryer.nama if dryer else "Belum tercatat", mode=model.mode_dryer or "Belum tercatat",
+                 batch_jumlah=len(batches), tahap=1 if jenis == "pendinginan" else 0,
+                 tes=_persen(log.kadar_air_tes_manual) if log else "Belum diukur",
+                 tes_waktu=_waktu(log.waktu_update) if log else "Belum diukur",
+                 sampel=[(i, _persen(getattr(log, f"kadar_air_tes_{i}"))) for i in range(1, 5)
+                         if log and getattr(log, f"kadar_air_tes_{i}") is not None],
+                 mesin=_persen(mesin.kadar_air_indikator) if mesin else "Belum diukur",
+                 mesin_waktu=_waktu(mesin.waktu_update) if mesin else "Belum diukur",
+                 peringatan=peringatan_kadar_air(await _latest_log(db, model.id)))
+        if jenis == "pendinginan":
+            d["status"] = "Pendinginan"
+        target = float(model.target_kadar_air) if model.target_kadar_air is not None else await target_kadar_air(db)
         d["fakta"] += [("Mesin pengering", dryer.nama if dryer else "Belum tercatat"),
                        ("Mode dryer", model.mode_dryer or "Belum tercatat"),
                        ("Berat bahan", bobot.teks()),
@@ -143,14 +164,14 @@ async def rincian(db, *, jenis, model, kartu, params):
                        ("Selesai pengeringan", _waktu(model.waktu_selesai_pengeringan))]
         d["statistik"] = [("Bahan dalam lot", bobot.teks()),
                           ("Kadar air terakhir · alat tes", _persen(log.kadar_air_tes_manual) if log else "Belum diukur"),
-                          ("Target kadar air", next((v for k, v in kartu.fakta if k == "Target"), _persen(model.target_kadar_air)))]
+                          ("Target kadar air", next((v for k, v in kartu.fakta if k == "Target"), _persen(target)))]
         d["bagian"].append(await _bahan_gabah(db, batches))
         d["bagian"].append(await _log(
             db, DryingMoistureLog, DryingMoistureLog.drying_lot_id, model.id,
             DryingMoistureLog.waktu_update, DryingMoistureLog.input_by,
-            "Riwayat pengukuran kadar air", ["Waktu", "Alat tes rata-rata", "Empat sampel alat tes", "Indikator mesin", "Pencatat"],
+            "Riwayat pengukuran kadar air", ["Waktu", "Alat tes rata-rata", "Titik 1", "Titik 2", "Titik 3", "Titik 4", "Indikator mesin", "Pencatat"],
             lambda r, nama: [_waktu(r.waktu_update), _persen(r.kadar_air_tes_manual),
-                            " · ".join(_persen(getattr(r, f"kadar_air_tes_{i}")) for i in range(1, 5)),
+                            *[_persen(getattr(r, f"kadar_air_tes_{i}")) for i in range(1, 5)],
                             _persen(r.kadar_air_indikator), nama], params, "halaman_ukur"))
         d["bagian"].append(await _log(
             db, DryingCoolingLog, DryingCoolingLog.drying_lot_id, model.id,

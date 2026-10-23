@@ -1,0 +1,84 @@
+/* Hanya detail pengeringan dan pendinginan; perhitungan dari layanan lama. */
+.pengeringan-detail{width:100%;min-width:0;box-sizing:border-box;align-content:start}
+.pengeringan-detail [hidden]{display:none!important}
+body .isi .pengeringan-detail .riwayat-detail__hero{padding:16px 20px;border:1px solid var(--kulit-batas);border-radius:16px;background:var(--panel-2);color:var(--tinta)}
+body .isi .pengeringan-detail .riwayat-detail__hero p{color:var(--kulit-redup);margin:6px 0}
+body .isi .pengeringan-detail .riwayat-detail__hero .riwayat-detail__eyebrow{color:var(--kulit-redup)}
+body .isi .pengeringan-detail .riwayat-detail__hero .riwayat-status--pabrik{color:var(--tinta);background:var(--panel-2)}
+.pengeringan-detail .proses-detail__sementara{display:block;margin-top:6px;color:var(--kulit-redup)}
+.pengeringan-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;min-height:44px;gap:6px}
+.pengeringan-tabs a{display:flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;min-height:44px;padding:9px 4px;border:1px solid var(--kulit-batas);border-radius:9px;background:var(--kulit-kartu);color:var(--kulit-redup);font-size:.85rem;white-space:nowrap;text-decoration:none}
+.pengeringan-tabs a[aria-selected=true]{color:var(--aman);background:var(--panel-2);border-color:var(--aman);font-weight:700}
+.pengeringan-panel,.pengeringan-ringkas{display:grid;min-width:0;gap:16px}
+.pengeringan-overview{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.pengeringan-detail .riwayat-detail__card{margin:0}
+.pengeringan-detail .riwayat-detail__facts{margin-bottom:14px}
+.pengeringan-aksi-utama{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}
+.pengeringan-hasil-aksi{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pengeringan-hasil-aksi:empty{display:none}
+.pengeringan-pengelolaan{margin-top:14px;border-top:1px solid var(--kulit-batas)}
+.pengeringan-pengelolaan summary{display:flex;align-items:center;min-height:48px;cursor:pointer;font-size:.85rem;font-weight:650}
+.pengeringan-pengelolaan summary:before{content:'＋';margin-right:8px}
+.pengeringan-pengelolaan[open] summary:before{content:'−'}
+.pengeringan-detail .pilihan__satu--utama{--tombol-pucat:#4b7043;--tombol-pucat-teks:#fff;--tombol-batas:#4b7043;--tombol-hover:#3e6037;--tombol-tekan:#35532e}
+.pengeringan-detail .pengeringan-nilai{font-size:1rem}
+.pengeringan-detail .pengeringan-jeda{font-weight:650}
+.pengeringan-detail #catatan-proses{margin:0}
+@media(max-width:700px){
+ body .isi .pengeringan-detail .riwayat-detail__hero{padding:12px 14px}
+ body .isi .pengeringan-detail .riwayat-detail__hero h1{margin:7px 0;font-size:1.25rem}
+ .pengeringan-detail .proses-detail__sementara{font-size:.72rem}
+ .pengeringan-tabs{gap:4px}
+ .pengeringan-tabs a{font-size:.76rem;padding:10px 2px}
+ .pengeringan-panel,.pengeringan-ringkas,.pengeringan-overview{gap:12px}
+ .pengeringan-overview,.pengeringan-aksi-utama,.pengeringan-hasil-aksi{grid-template-columns:minmax(0,1fr)}
+}
+/* Ringkasan mengikuti baris label/nilai mockup; rincian lengkap tetap di tabnya. */
+.pengeringan-overview .riwayat-detail__facts{grid-template-columns:minmax(0,1fr)}
+.pengeringan-overview .riwayat-detail__facts > div{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.pengeringan-overview .riwayat-detail__facts dd{text-align:right;max-width:60%;overflow-wrap:anywhere}
+
+/* Penyajian ringkas; formulir dan macro bersama tetap utuh. */
+.pengeringan-detail #tindakan-proses{padding:16px}
+.pengeringan-detail #tindakan-proses h2{margin:0 0 8px}
+.pengeringan-detail #tindakan-proses>.bantu{margin:0}
+.pengeringan-detail .proses-detail__aksi{padding:0;gap:8px}
+.pengeringan-detail .proses-detail__aksi .pilihan__satu{padding:9px 12px;min-height:44px}
+.pengeringan-detail .pilihan__nama{font-size:.84rem}
+.pengeringan-detail .pilihan__ket{font-size:.76rem;line-height:1.4}
+.pengeringan-detail .pengeringan-pengelolaan{margin-top:12px}
+.pengeringan-detail .pengeringan-pengelolaan summary{min-height:44px}
+.pengeringan-detail .jeda-riwayat{margin:0}
+.pengeringan-detail .jeda-riwayat>h2{font-size:1rem;margin:0 0 8px}
+.pengeringan-detail .jeda-riwayat>.bantu{margin:0 0 12px}
+.pengeringan-detail .jeda-riwayat__daftar{gap:12px}
+.pengeringan-detail .jeda-riwayat__catatan{padding:16px}
+.pengeringan-detail .jeda-riwayat__catatan h3{font-size:.9rem;margin:0 0 6px}
+.pengeringan-detail .jeda-riwayat__catatan p{font-size:.8rem;margin:0 0 10px}
+.pengeringan-detail .jeda-riwayat__catatan dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.pengeringan-detail .jeda-riwayat__catatan dl div{margin:0;min-width:0}
+.pengeringan-detail .jeda-riwayat__catatan dt{font-size:.72rem}
+.pengeringan-detail .jeda-riwayat__catatan dd{font-size:.83rem;line-height:1.45}
+@media(max-width:700px){.pengeringan-detail .jeda-riwayat__catatan dl{grid-template-columns:minmax(0,1fr)}}
+
+.pengeringan-tahap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:0;list-style:none;gap:6px;margin:0;font-size:.75rem;color:var(--kulit-redup)}
+.pengeringan-tahap li{padding:9px 5px;text-align:center;border-bottom:3px solid var(--kulit-batas);overflow-wrap:anywhere}
+.pengeringan-tahap .aktif{color:var(--aman);border-color:var(--aman);font-weight:700}
+.pengeringan-tahap .lewat{border-color:var(--aman)}
+.pengeringan-bacaan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.pengeringan-bacaan>div{display:grid;gap:5px;padding:12px;background:var(--panel-2);border-radius:10px;min-width:0}
+.pengeringan-bacaan span,.pengeringan-bacaan small{font-size:.74rem;color:var(--kulit-redup)}
+.pengeringan-bacaan strong{font-size:1.45rem}
+.pengeringan-sampel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}
+.pengeringan-sampel>div{padding:8px;border:1px solid var(--kulit-batas);border-radius:8px;min-width:0}
+.pengeringan-sampel dt{font-size:.7rem;color:var(--kulit-redup)}
+.pengeringan-sampel dd{margin:4px 0 0;font-size:.82rem}
+.pengeringan-baris{margin:12px 0 16px}
+.pengeringan-baris>div{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--kulit-batas);font-size:.8rem}
+.pengeringan-baris dt{color:var(--kulit-redup)}
+.pengeringan-baris dd{margin:0;text-align:right;max-width:60%;overflow-wrap:anywhere}
+.pengeringan-detail .riwayat-detail__card>h2{font-size:1rem;margin:0 0 12px}
+.pengeringan-detail .proses-detail__kemajuan{margin-bottom:14px}
+@media(max-width:700px){.pengeringan-bacaan{gap:8px}.pengeringan-bacaan>div{padding:10px}.pengeringan-bacaan strong{font-size:1.25rem}.pengeringan-sampel{gap:5px}.pengeringan-sampel>div{padding:6px}.pengeringan-tahap{font-size:.66rem;gap:3px}}
+
+.pengeringan-titik{display:flex;gap:8px;align-items:center;min-width:0}.pengeringan-titik input{flex:1;min-width:0}.pengeringan-titik .btn{flex:none;min-height:44px}
