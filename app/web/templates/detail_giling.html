@@ -7,7 +7,7 @@
 {% from "_bahan_silo_giling.html" import bahan_silo %}
 {% block judul %}Detail Penggilingan{% endblock %}
 {% block isi %}
-<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_giling.css?v=1');</style>
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_giling.css?v=2');</style>
 {% macro tindakan(p, utama=false) %}
 {% set nilai_aksi = p[3] if p|length > 3 else proses.nilai %}
 <a class="pilihan__satu{{ ' pilihan__satu--utama' if utama }}" href="{{ benda.dasar_borang(alamat) }}buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}"><span class="pilihan__nama">{{ p[1] }}</span><span class="pilihan__ket">{{ p[2] }}</span></a>

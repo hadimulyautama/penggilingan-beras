@@ -6,9 +6,9 @@ body .isi .giling-detail .riwayat-detail__hero p{color:var(--kulit-redup);margin
 body .isi .giling-detail .riwayat-detail__hero .riwayat-detail__eyebrow{color:var(--kulit-redup)}
 body .isi .giling-detail .riwayat-detail__hero .riwayat-status--pabrik{color:var(--tinta);background:var(--panel-2)}
 .giling-detail .proses-detail__sementara{display:block;margin-top:6px;color:var(--kulit-redup)}
-.giling-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;min-height:49px;border-bottom:1px solid var(--kulit-batas);gap:4px}
-.giling-tabs a{display:flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;min-height:48px;padding:10px 4px;border-bottom:3px solid transparent;color:var(--kulit-redup);font-size:.85rem;white-space:nowrap;text-decoration:none}
-.giling-tabs a[aria-selected=true]{color:var(--aman);background:var(--panel-2);border-bottom-color:var(--aman);font-weight:700}
+.giling-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;min-height:44px;gap:6px}
+.giling-tabs a{display:flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;min-height:44px;padding:9px 4px;border:1px solid var(--kulit-batas);border-radius:9px;background:var(--kulit-kartu);color:var(--kulit-redup);font-size:.85rem;white-space:nowrap;text-decoration:none}
+.giling-tabs a[aria-selected=true]{color:var(--aman);background:var(--panel-2);border-color:var(--aman);font-weight:700}
 .giling-panel,.giling-ringkas{display:grid;min-width:0;gap:16px}
 .giling-overview{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
 .giling-detail .riwayat-detail__card{margin:0}
@@ -28,7 +28,7 @@ body .isi .giling-detail .riwayat-detail__hero .riwayat-status--pabrik{color:var
  body .isi .giling-detail .riwayat-detail__hero{padding:12px 14px}
  body .isi .giling-detail .riwayat-detail__hero h1{margin:7px 0;font-size:1.25rem}
  .giling-detail .proses-detail__sementara{font-size:.72rem}
- .giling-tabs{gap:0}
+ .giling-tabs{gap:4px}
  .giling-tabs a{font-size:.76rem;padding:10px 2px}
  .giling-panel,.giling-ringkas,.giling-overview{gap:12px}
  .giling-overview,.giling-aksi-utama,.giling-hasil-aksi{grid-template-columns:minmax(0,1fr)}
@@ -37,3 +37,26 @@ body .isi .giling-detail .riwayat-detail__hero .riwayat-status--pabrik{color:var
 .giling-overview .riwayat-detail__facts{grid-template-columns:minmax(0,1fr)}
 .giling-overview .riwayat-detail__facts > div{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
 .giling-overview .riwayat-detail__facts dd{text-align:right;max-width:60%;overflow-wrap:anywhere}
+
+/* Pemolesan khusus giling; formulir dan macro bersama tetap utuh. */
+.giling-detail #tindakan-proses{padding:16px}
+.giling-detail #tindakan-proses h2{margin:0 0 8px}
+.giling-detail #tindakan-proses>.bantu{margin:0}
+.giling-detail .proses-detail__aksi{padding:0;gap:8px}
+.giling-detail .proses-detail__aksi .pilihan__satu{padding:9px 12px;min-height:44px}
+.giling-detail .pilihan__nama{font-size:.84rem}
+.giling-detail .pilihan__ket{font-size:.76rem;line-height:1.4}
+.giling-detail .giling-pengelolaan{margin-top:12px}
+.giling-detail .giling-pengelolaan summary{min-height:44px}
+.giling-detail .jeda-riwayat{margin:0}
+.giling-detail .jeda-riwayat>h2{font-size:1rem;margin:0 0 8px}
+.giling-detail .jeda-riwayat>.bantu{margin:0 0 12px}
+.giling-detail .jeda-riwayat__daftar{gap:12px}
+.giling-detail .jeda-riwayat__catatan{padding:16px}
+.giling-detail .jeda-riwayat__catatan h3{font-size:.9rem;margin:0 0 6px}
+.giling-detail .jeda-riwayat__catatan p{font-size:.8rem;margin:0 0 10px}
+.giling-detail .jeda-riwayat__catatan dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.giling-detail .jeda-riwayat__catatan dl div{margin:0;min-width:0}
+.giling-detail .jeda-riwayat__catatan dt{font-size:.72rem}
+.giling-detail .jeda-riwayat__catatan dd{font-size:.83rem;line-height:1.45}
+@media(max-width:700px){.giling-detail .jeda-riwayat__catatan dl{grid-template-columns:minmax(0,1fr)}}
