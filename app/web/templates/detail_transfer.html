@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% import '_benda.html' as benda with context %}
+{% import '_proses_visual.html' as visual with context %}
+{% import '_stok.html' as st with context %}
+{% set kg=st.kg_rinci %}
+{% block judul %}Detail transfer PK{% endblock %}
+{% block isi %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_transfer.css?v=1');</style>
+{% macro link_tab(id,nama) %}<a class="btn btn--kecil" href="{{ detail_url.remove_query_params(['buka','nilai','buka_koreksi']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ nama }}</a>{% endmacro %}
+{% macro fakta(rows) %}<dl class="transfer-fakta">{% for label,nilai in rows %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}</dl>{% endmacro %}
+{% macro bobot_alur() %}<div class="transfer-bobot">{% for label,nilai in d.berat %}<div><span>{{ label }}</span><strong>{{ nilai }}</strong></div>{% endfor %}</div>{% endmacro %}
+{% macro rute() %}<div class="transfer-rute"><div><strong>Gudang 1</strong><small>PK hasil penggilingan</small></div><span aria-hidden="true">→</span><div><strong>Gudang 2</strong><small>{{ d.tujuan }}</small></div></div>{% endmacro %}
+{% macro tindakan_sekarang(id_bagian="tindakan-proses") %}
+<section class="riwayat-detail__card" id="{{ id_bagian }}">
+  <h2>Tindakan saat ini</h2>
+  {% if d.catatan and d.catatan.status=='dibatalkan' %}<p class="riwayat-detail__warning">Transfer ini dibatalkan. Bobot catatan ini tidak dihitung sebagai transfer aktif.</p>
+  {% elif d.permintaan and d.permintaan.status=='diminta' %}<p>Admin menetapkan tujuan dan bobot. Persetujuan belum memindahkan stok.</p>
+  {% elif d.permintaan and d.permintaan.status=='disetujui' %}<p>Gudang 1 mencatat berat yang benar-benar dimuat. Boleh kurang dari persetujuan, tidak boleh lebih.</p>
+  {% elif d.permintaan and d.permintaan.status=='dikirim' %}<p>PK sudah berpindah ke Gudang 2 dan dapat dipakai sesuai aturan lama. Admin menutup permintaan; bobot dimuat tetap tersimpan.</p>
+  {% elif d.permintaan and d.permintaan.status in ['ditolak','gugur'] %}<p>Permintaan {{ d.status_permintaan|lower }}. {{ d.permintaan.sebab or 'Sebab belum tercatat.' }}</p>
+  {% else %}<p>Transfer tercatat. Koreksi mengikuti pemeriksaan pemakaian dan perpindahan lanjutan.</p>{% endif %}
+  {% if penghalang_koreksi %}<p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>{% if catatan_penghalang %}{{ link_tab('riwayat','Lihat catatan penghalang') }}{% endif %}{% endif %}
+  <div class="pilihan transfer-aksi">
+    {% for id,nama,nilai_aksi in tindakan %}<a class="pilihan__satu{{ ' pilihan__satu--utama' if loop.first }}" href="{{ detail_url.remove_query_params(['buka','nilai','buka_koreksi']).include_query_params(buka=id,nilai=nilai_aksi) }}"><span class="pilihan__nama">{{ nama }}</span><span class="pilihan__ket">Permintaan PK #{{ d.permintaan.id }}</span></a>{% endfor %}
+    {% if boleh_koreksi and not penghalang_koreksi %}<a class="pilihan__satu{{ ' pilihan__satu--utama' if not tindakan }}" href="{{ detail_url.remove_query_params(['buka','nilai','buka_koreksi']).include_query_params(tab_detail='riwayat',buka_koreksi='1') }}#koreksi-transfer"><span class="pilihan__nama">Koreksi berat transfer</span><span class="pilihan__ket">Catatan asal tetap tersimpan</span></a>{% endif %}
+  </div>
+  {% if not tindakan and not boleh_koreksi %}<p class="bantu">Tidak ada tindakan yang tersedia untuk status dan akses ini.</p>{% endif %}
+</section>
+{% endmacro %}
+<main class="riwayat-detail proses-detail transfer-detail" data-nilai="{{ d.permintaan.id if d.permintaan else d.catatan.id }}">
+  <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ 'Pekerjaan' if kembali.startswith('/pekerjaan') else 'Stok' if kembali.startswith('/stok') else 'Kabar' if kembali.startswith('/kabar') else 'Riwayat Transfer' }}</a>
+
+  <header class="riwayat-detail__hero">
+    <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">{{ visual.ikon('transfer') }} TRANSFER PK · GUDANG 1 → GUDANG 2</span><span class="riwayat-status {{ 'riwayat-status--wait' if not d.catatan or d.catatan.status=='dibatalkan' else 'riwayat-status--done' }}">{{ d.status_catatan }}</span></div>
+    <h1>{{ d.kode }}</h1><span class="riwayat-status riwayat-status--pabrik">{{ 'Titipan jasa' if d.jasa else 'Milik pabrik' }}</span>
+    <p>{% if d.jasa %}{{ d.pemilik }} · {% endif %}Sumber {{ d.proses.kode_proses }}</p>
+    <p>{% if d.permintaan %}Permintaan PK #{{ d.permintaan.id }} · Status permintaan: <strong>{{ d.status_permintaan }}</strong>{% else %}Tidak ada permintaan tertaut pada catatan ini{% endif %}</p>
+    <span class="proses-detail__sementara">{{ 'Stok sudah berpindah; penutupan Admin tidak memindahkannya lagi.' if d.catatan and d.catatan.status=='terkirim' else 'Bobot catatan historis dibedakan dari transfer aktif yang memengaruhi saldo.' if d.catatan else 'Transfer belum tercatat; stok belum berpindah.' }}</span>
+  </header>
+  <nav class="transfer-tabs" role="tablist" aria-label="Bagian detail transfer PK">
+  {% for id,nama in [('ringkasan','Ringkasan'),('bahan','Bahan & tujuan'),('permintaan','Permintaan'),('riwayat','Riwayat')] %}<a id="tab-{{ id }}" role="tab" aria-controls="panel-{{ id }}" aria-selected="{{ 'true' if tab_transfer==id else 'false' }}" href="{{ detail_url.remove_query_params(['buka','nilai','buka_koreksi']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ nama }}</a>{% endfor %}
+  </nav>
+  <div class="transfer-panel" id="panel-ringkasan" role="tabpanel" aria-labelledby="tab-ringkasan" {% if tab_transfer!='ringkasan' %}hidden{% endif %}>
+    {% if d.permintaan %}<div class="transfer-tahap" aria-label="Tahap permintaan PK">{% for nama in ['Minta · G2','Setujui · Admin','Kirim · G1','Tutup · Admin'] %}<span {% if loop.index0==d.tahap and d.permintaan.status not in ['ditolak','gugur'] %}aria-current="step"{% endif %}>{{ nama }}</span>{% endfor %}</div>{% else %}<p class="bantu">Tanpa rantai permintaan tertaut.</p>{% endif %}
+    <section class="proses-detail__statistik" aria-label="Ringkasan transfer PK">{% for label,nilai in d.statistik %}<article class="riwayat-detail__card"><span>{{ label }}</span><strong>{{ nilai }}</strong></article>{% endfor %}</section>
+    {{ tindakan_sekarang() }}
+    <section class="riwayat-detail__card"><h2>Gudang asal & tujuan</h2>{{ rute() }}</section>
+    {% if d.permintaan %}<section class="riwayat-detail__card"><h2>Bobot dalam alur permintaan</h2>{{ bobot_alur() }}{{ link_tab('permintaan','Lihat rincian permintaan') }}</section>{% endif %}
+    <div class="transfer-overview"><section class="riwayat-detail__card"><h2>Sumber PK</h2>{{ fakta([('Proses asal',d.proses.kode_proses),('Pemilik',d.pemilik),('PK tersisa di G1',d.saldo)]) }}{{ link_tab('bahan','Lihat bahan & tujuan') }}</section><section class="riwayat-detail__card"><h2>Catatan transfer</h2>{{ fakta([('Catatan yang dibuka',d.catatan.kode_transfer if d.catatan else 'Belum terbentuk'),('Status catatan',d.status_catatan),('Transfer aktif seluruh lot',d.aktif)]) }}{{ link_tab('riwayat','Lihat riwayat & koreksi') }}</section></div>
+  </div>
+  <div class="transfer-panel" id="panel-bahan" role="tabpanel" aria-labelledby="tab-bahan" {% if tab_transfer!='bahan' %}hidden{% endif %}>
+    <section class="riwayat-detail__card"><h2>Sumber dan saldo PK</h2>{{ fakta([('Sumber PK',d.proses.kode_proses),('Pemilik',d.pemilik),('Jenis PK dari asal bahan',d.jenis_pk or 'Belum diketahui')]+d.komponen) }}<p class="bantu">Saldo saat ini memakai seluruh catatan yang relevan. Bobot transfer historis yang sedang dibuka tidak dijumlahkan lagi.</p><a class="btn btn--kecil" href="{{ d.sumber_href }}">Lihat proses penggilingan asal</a></section>
+    <section class="riwayat-detail__card"><h2>Tujuan transfer</h2>{{ rute() }}{{ fakta([('Lokasi tujuan',d.tujuan),('Pemilik bahan',d.pemilik)]) }}<p class="bantu">Tujuan mengikuti master lokasi, kapasitas dan kepemilikan yang diperiksa oleh layanan transfer.</p></section>
+  </div>
+  <div class="transfer-panel" id="panel-permintaan" role="tabpanel" aria-labelledby="tab-permintaan" {% if tab_transfer!='permintaan' %}hidden{% endif %}>
+    <section class="riwayat-detail__card"><h2>Rincian permintaan PK</h2>
+      {% if d.permintaan %}{{ fakta([('Permintaan','PK #' ~ d.permintaan.id),('Peminta',d.peminta),('Waktu meminta',d.permintaan.waktu_minta|jam('%d/%m/%Y %H:%M') or 'Belum tercatat'),('Status permintaan',d.status_permintaan),('Tujuan yang ditetapkan',d.tujuan)]) }}{{ bobot_alur() }}
+        {% if d.selisih is not none %}{{ fakta([('Selisih final terhadap muatan',d.selisih)]) }}{% endif %}
+        {% if d.permintaan.sebab %}<p><strong>Sebab / catatan:</strong> {{ d.permintaan.sebab }}</p>{% endif %}
+        <p class="bantu">Bobot dimuat tetap disimpan meskipun bobot final berbeda. Keempat angka tidak dijumlahkan sebagai stok.</p>
+      {% else %}<p>Tidak ada permintaan operator yang tertaut pada catatan ini. Transfer langsung tidak memerlukan rantai permintaan.</p>{% endif %}
+    </section>{{ tindakan_sekarang("tindakan-permintaan") }}
+  </div>
+  <div class="transfer-panel" id="panel-riwayat" role="tabpanel" aria-labelledby="tab-riwayat" {% if tab_transfer!='riwayat' %}hidden{% endif %}>
+    <section class="riwayat-detail__card"><h2>Identitas transfer</h2>{{ fakta([('Kode transfer',d.catatan.kode_transfer if d.catatan else 'Belum terbentuk'),('Waktu transfer',d.catatan.waktu|jam('%d/%m/%Y %H:%M') if d.catatan else 'Belum dikirim'),('Pencatat transfer',d.pencatat),('Proses penggilingan asal',d.proses.kode_proses),('Pemilik bahan',d.pemilik),('Asal','Gudang 1'),('Tujuan',d.tujuan),('Jenis PK',d.jenis_pk or 'Belum diketahui'),('Berat transfer ini',d.statistik[0][1]),('Status transfer',d.status_catatan),('Jalur','Permintaan PK #' ~ d.permintaan.id if d.permintaan else 'Tanpa permintaan tertaut')]) }}</section>
+    <section class="riwayat-detail__card"><h2>Catatan transfer & koreksi</h2>
+      {% if d.pembatalan %}<p class="riwayat-detail__warning">Dibatalkan {{ d.pembatalan.waktu }} · {{ d.pembatalan.oleh or 'Pencatat belum tercatat' }}<br>{{ d.pembatalan.alasan }}</p>{% endif %}
+      <p class="bantu">Catatan berikut berasal dari proses yang sama. Hubungan asal–pengganti yang tidak tersimpan tidak ditentukan dari kemiripan waktu atau bobot.</p>
+      {% for t in d.terkait %}<article class="transfer-catatan"><h3><a href="{{ '/riwayat-transfer/' ~ t.id }}{% if konteks_kembali %}?{{ {'kembali_kerja':konteks_kembali}|urlencode }}{% endif %}">{{ t.kode }}</a>{% if d.catatan and t.id==d.catatan.id %} · Catatan yang dibuka{% endif %}</h3><p>{{ t.berat }} · {{ 'Dibatalkan' if t.status=='dibatalkan' else 'Terkirim' }}</p><small>{{ t.waktu }} · {{ t.tujuan }}</small></article>{% else %}<p class="bantu">Belum ada catatan transfer.</p>{% endfor %}
+      {% if d.halaman_total>1 %}<nav class="transfer-paginasi" aria-label="Halaman catatan transfer">{% if d.halaman>1 %}<a class="btn btn--kecil" href="{{ detail_url.include_query_params(tab_detail='riwayat',halaman_transfer=d.halaman-1) }}#panel-riwayat">← Lebih baru</a>{% endif %}<span>Halaman {{ d.halaman }} / {{ d.halaman_total }}</span>{% if d.halaman<d.halaman_total %}<a class="btn btn--kecil" href="{{ detail_url.include_query_params(tab_detail='riwayat',halaman_transfer=d.halaman+1) }}#panel-riwayat">Lebih lama →</a>{% endif %}</nav>{% endif %}
+    </section>
+    <section class="riwayat-detail__card"><h2>Jejak tahapan</h2>{% for l in d.langkah %}<article class="transfer-catatan"><h3>{{ l.judul }}</h3><p>{{ l.waktu }} · {{ l.oleh }}</p></article>{% else %}<p class="bantu">Tidak ada rantai permintaan tertaut.</p>{% endfor %}
+      <h3>Audit pencatatan</h3>{% for l in d.audit %}<article class="transfer-catatan"><h3>{{ l.aksi|replace('_',' ') }}</h3><small>{{ l.waktu }} · {{ l.oleh }}</small>{% if l.ringkas %}<p>{{ l.ringkas }}</p>{% endif %}{% if l.alasan %}<p>Alasan: {{ l.alasan }}</p>{% endif %}</article>{% else %}<p class="bantu">Jejak audit terperinci belum tersedia pada catatan ini.</p>{% endfor %}
+    </section>
+    <div id="koreksi-transfer">{% include '_transfer_koreksi.html' %}</div>
+  </div>
+</main>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+<script src="/static/detail_transfer.js?v=1" defer></script>
+{% endblock %}

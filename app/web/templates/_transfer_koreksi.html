@@ -1,0 +1,32 @@
+    {% set isian_koreksi = isian_koreksi|default({}) %}
+    {% if boleh_koreksi %}
+      {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi transfer tersimpan.{% if pengganti %} Transfer pengganti tercatat sebagai <a href="/riwayat-transfer/{{ pengganti_id }}">{{ pengganti }}</a>.{% else %} Transfer lama dibatalkan; berat akhir transfer 0 kg.{% endif %}</p>{% endif %}
+      {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
+      {% if penghalang_koreksi %}
+        <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+        {% include '_penghalang_koreksi.html' %}
+        {% if isian_koreksi %}<details open><summary>Isian yang belum tersimpan</summary>{% for nama, nilai in isian_koreksi.items() %}<label>{{ 'Alasan koreksi' if nama == 'alasan' else (nama_hasil(nama.removeprefix('hasil_')) if jenis == 'sosoh' else ('PK hasil giling' if jenis == 'giling' else 'Berat transfer')) }}<textarea readonly>{{ nilai }}</textarea></label>{% endfor %}</details>{% endif %}
+      {% else %}
+        <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi or request.query_params.get('buka_koreksi')=='1' %}open{% endif %}>
+          <summary><h2>Koreksi berat transfer</h2></summary>
+          <p class="riwayat-koreksi__info">Koreksi membatalkan transfer lama, lalu mencatat transfer pengganti dengan tujuan yang sama. Koreksi hanya bisa dilakukan sebelum PK dipakai untuk penyosohan atau dipindahkan dari tumpukan ke silo.</p>
+          <form method="post" action="{{ detail_url.remove_query_params(['buka','nilai','buka_koreksi']).replace(path='/riwayat-transfer/' ~ d.catatan.id ~ '/koreksi').include_query_params(tab_detail='riwayat') }}" class="riwayat-koreksi__form">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            <input type="hidden" name="kembali_kerja" value="{{ konteks_kembali }}">
+            {% if gagal_koreksi %}<p role="alert">{{ gagal_koreksi }} Isian Anda dipertahankan.</p>{% endif %}
+            <label class="riwayat-koreksi__field">
+              <span>Berat transfer</span>
+              <input type="hidden" name="dasar_transfer" value="{{ '%.2f'|format(hasil_awal or 0) }}">
+              <span class="riwayat-koreksi__input"><input type="number" name="hasil_transfer" min="0" step="0.01" value="{{ isian_koreksi.get('hasil_transfer', '%.2f'|format(hasil_awal or 0)) }}" required><small>kg</small></span>
+            </label>
+            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi">{{ isian_koreksi.get('alasan', '') }}</textarea></label>
+            {% if gagal_koreksi %}
+            <p>Nilai terbaru: {% if jenis == 'sosoh' %}{% for j, v in hasil_awal.items() %}{{ nama_hasil(j) }} {{ v }} kg; {% endfor %}{% else %}{{ hasil_awal }} kg{% endif %}. Bandingkan dengan angka yang Anda ketik.</p>
+            <input type="hidden" name="wajib_periksa" value="1">
+            <label><input type="checkbox" name="periksa_ulang" value="ya" required> Saya sudah memeriksa nilai terbaru dan koreksi ini.</label>
+            {% endif %}
+            <button class="btn btn--utama" type="submit">Simpan koreksi</button>
+          </form>
+        </details>
+      {% endif %}
+    {% endif %}

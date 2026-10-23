@@ -1,0 +1,35 @@
+
+  .riwayat-koreksi{padding:0;overflow:hidden}
+  .riwayat-koreksi>summary{cursor:pointer;list-style:none;padding:18px 20px;color:var(--tinta)}
+  .riwayat-koreksi>summary::-webkit-details-marker{display:none}
+  .riwayat-koreksi>summary h2{margin:0}
+  .riwayat-koreksi__info{margin:0;padding:0 20px 14px;color:var(--kulit-redup);font-size:.92rem;line-height:1.55}
+  .riwayat-koreksi__form{display:grid;gap:6px;padding:0 20px 20px}
+  .riwayat-koreksi__field{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-top:1px solid var(--kulit-pemisah);color:var(--tinta)}
+  .riwayat-koreksi__input{display:flex;align-items:center;gap:7px;flex:0 0 150px}
+  .riwayat-koreksi__input input,.riwayat-koreksi__alasan textarea{width:100%;min-width:0;padding:10px 11px;border:1px solid var(--kulit-batas);border-radius:10px;background:var(--kulit-kartu);color:var(--tinta);font:inherit}
+  .riwayat-koreksi__input small{color:var(--kulit-redup)}
+  .riwayat-koreksi__alasan{display:grid;gap:7px;font-weight:700;color:var(--tinta)}
+  .riwayat-koreksi__alasan textarea{min-height:84px;resize:vertical}
+  .riwayat-status a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+  @media(max-width:700px){.riwayat-koreksi__input{flex-basis:122px}.riwayat-koreksi__field{font-size:.9rem}}
+.transfer-detail{width:100%;min-width:0;box-sizing:border-box;align-content:start}.transfer-detail [hidden]{display:none!important}
+body .isi .transfer-detail .riwayat-detail__hero{padding:16px 20px;border:1px solid var(--kulit-batas);border-radius:16px;background:var(--panel-2);color:var(--tinta)}
+.transfer-detail .riwayat-detail__hero p{color:var(--kulit-redup);margin:6px 0}.transfer-detail .riwayat-detail__card{margin:0}
+.transfer-detail .proses-detail__label .riwayat-detail__eyebrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.transfer-detail .riwayat-detail__eyebrow svg{width:16px;height:16px}
+.transfer-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:6px}
+.transfer-tabs a{display:flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:44px;padding:9px 6px;border:1px solid var(--kulit-batas);border-radius:9px;background:var(--kulit-kartu);color:var(--kulit-redup);font-size:.85rem;text-align:center;text-decoration:none}
+.transfer-tabs a[aria-selected=true]{color:var(--aman);background:var(--panel-2);border-color:var(--aman);font-weight:700}
+.transfer-panel{display:grid;min-width:0;gap:16px}.transfer-overview{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.transfer-tahap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.transfer-tahap span{text-align:center;border:1px solid var(--kulit-batas);border-radius:6px;font-size:.7rem;color:var(--kulit-redup);padding:8px 2px;overflow-wrap:anywhere}.transfer-tahap [aria-current]{border-color:var(--aman);background:var(--panel-2);font-weight:700;color:var(--aman)}
+.transfer-fakta{margin:14px 0}.transfer-fakta>div{display:flex;justify-content:space-between;align-items:start;gap:16px;padding:12px 0;border-top:1px solid var(--kulit-batas);font-size:.82rem}.transfer-fakta dt{color:var(--kulit-redup);min-width:0}.transfer-fakta dd{margin:0;text-align:right;max-width:65%;overflow-wrap:anywhere}
+.transfer-bobot{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}.transfer-bobot>div{display:grid;gap:7px;padding:12px;border:1px solid var(--kulit-batas);border-radius:10px;min-width:0}.transfer-bobot span{font-size:.75rem;color:var(--kulit-redup)}.transfer-bobot strong{font-size:1.1rem;overflow-wrap:anywhere}
+.transfer-aksi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}.transfer-aksi:empty{display:none}.transfer-aksi:has(>:only-child){grid-template-columns:1fr}
+.transfer-rute{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;margin:14px 0}.transfer-rute>div{padding:14px;background:var(--panel-2);border-radius:10px;min-width:0;overflow-wrap:anywhere}.transfer-rute small{display:block;margin-top:5px;color:var(--kulit-redup)}
+.transfer-catatan{padding:12px 0;border-top:1px solid var(--kulit-batas);overflow-wrap:anywhere}.transfer-catatan h3{margin:0;font-size:.9rem}.transfer-catatan p{margin:6px 0}.transfer-catatan small{color:var(--kulit-redup)}.transfer-paginasi{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+@media(min-width:600px){.transfer-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}.transfer-bobot{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:700px){.transfer-panel{gap:12px}.transfer-overview{grid-template-columns:minmax(0,1fr)}.transfer-aksi{grid-template-columns:minmax(0,1fr)}body .isi .transfer-detail .riwayat-detail__hero{padding:15px 16px}.transfer-detail .proses-detail__statistik{grid-template-columns:minmax(0,1fr)}}
+
+.transfer-bobot>div{background:var(--panel-2);border-color:transparent}.transfer-aksi .pilihan__satu--utama{background:var(--aman);border-color:var(--aman);color:#fff}.transfer-aksi .pilihan__satu--utama .pilihan__ket{color:#ffffffde}.transfer-detail .riwayat-detail__card>p{font-size:.82rem;line-height:1.6}.transfer-detail .proses-detail__statistik .riwayat-detail__card{min-height:44px;box-sizing:border-box}.transfer-rute>div{background:transparent;padding:8px 0}.transfer-rute small{font-size:.76rem}.transfer-detail .proses-detail__sementara{display:block;font-size:.78rem;color:var(--kulit-redup);margin-top:6px}
+
+.transfer-detail .riwayat-status--pabrik{display:inline-flex;align-items:center;padding:3px 7px;border:1px solid var(--kulit-batas);border-radius:6px;background:var(--panel-2);color:var(--tinta)}.transfer-aksi .pilihan__satu--utama{--tombol-pucat:#4b7043;--tombol-pucat-teks:#fff;--tombol-batas:#4b7043;--tombol-hover:#3e6037;--tombol-tekan:#35532e}

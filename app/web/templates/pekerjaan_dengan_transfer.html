@@ -1,0 +1,20 @@
+{% extends 'pekerjaan.html' %}
+{% block isi %}
+{{ super() }}
+<nav id="detail-transfer-pekerjaan" aria-label="Rincian transfer PK" class="pilihan">
+{% for t in detail_transfer_pk %}<a class="btn btn--kecil transfer-detail-link" data-permintaan="{{ t.id }}" href="{{ t.href }}">Detail transfer · {{ t.kode }} · Permintaan #{{ t.id }}</a>{% endfor %}
+</nav>
+<style>.transfer-detail-link{white-space:normal;overflow-wrap:anywhere;justify-self:start}</style>
+<script>
+(function () {
+  var daftar=document.getElementById('detail-transfer-pekerjaan');
+  if(!daftar)return;
+  Array.from(daftar.querySelectorAll('[data-permintaan]')).forEach(function(a){
+    var id=a.dataset.permintaan;
+    var kartu=document.querySelector('.benda--pindah_pk[data-nilai="'+id+'"],.padat--pindah_pk[data-nilai="'+id+'"]');
+    if(kartu){if(kartu.tagName==='DETAILS')kartu.appendChild(a);else kartu.insertAdjacentElement('afterend',a);}
+  });
+  if(!daftar.children.length)daftar.remove();
+})();
+</script>
+{% endblock %}

@@ -943,32 +943,8 @@ async def halaman_riwayat_transfer(request: Request, akun=Depends(butuh_akun)):
 @router.get("/riwayat-transfer/{transfer_id}")
 async def detail_riwayat_transfer(transfer_id: int, request: Request,
                                   akun=Depends(butuh_akun)):
-    from app.web.api import _is_g1_operator
-    if not await _is_g1_operator(akun.user):
-        raise HTTPException(403, "Riwayat Transfer milik Admin ke atas dan operator Gudang 1.")
-    from app.services.transfer import alasan_koreksi_transfer, riwayat_transfer
-    async with SessionLocal() as db:
-        kartu, _ = await riwayat_transfer(db, batas=1, transfer_id=transfer_id)
-    if not kartu:
-        raise HTTPException(404, "Riwayat transfer tidak ditemukan.")
-    async with SessionLocal() as db:
-        penghalang = (await alasan_koreksi_transfer(db, transfer_id)
-                      if akun.is_admin else None)
-    from app.services.penghalang_koreksi import daftar
-    async with SessionLocal() as db:
-        catatan_penghalang = await daftar(db, "transfer", transfer_id) if akun.is_admin and penghalang else []
-    return await render_laci(
-        request, "riwayat_detail.html", jenis="transfer", k=kartu[0],
-        catatan_penghalang=catatan_penghalang,
-        kembali="/riwayat-transfer", breadcrumb_detail=kartu[0].kode,
-        layar="riwayat_transfer", boleh_koreksi=akun.is_admin,
-        hasil_awal=kartu[0].berat_kg, penghalang_koreksi=penghalang,
-        hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
-        gagal_koreksi=getattr(request.state, "koreksi_gagal", None) or request.query_params.get("koreksi_gagal"),
-        isian_koreksi=getattr(request.state, "koreksi_form", {}),
-        pengganti=request.query_params.get("pengganti"),
-        pengganti_id=request.query_params.get("pengganti_id"),
-    )
+    from app.web.layar_transfer import tampilkan
+    return await tampilkan(request, akun, transfer_id=transfer_id)
 
 
 @router.post("/riwayat-transfer/{transfer_id}/koreksi")
@@ -978,6 +954,7 @@ async def koreksi_riwayat_transfer(transfer_id: int, request: Request,
         raise HTTPException(403, "Koreksi hasil transfer hanya untuk Admin ke atas.")
     from app.services.transfer import TransferError, koreksi_hasil_transfer
     form = await request.form()
+    request.state.kembali_koreksi = form.get('kembali_kerja')
     if form.get("wajib_periksa") and form.get("periksa_ulang") != "ya":
         return await _gagal_koreksi(request, akun, detail_riwayat_transfer, transfer_id, form, "Periksa nilai terbaru dan centang pemeriksaan ulang terlebih dahulu.")
     try:
@@ -997,7 +974,11 @@ async def koreksi_riwayat_transfer(transfer_id: int, request: Request,
             await db.rollback()
             pesan = exc.args[0] if exc.args else "Koreksi hasil tidak dapat disimpan."
             return await _gagal_koreksi(request, akun, detail_riwayat_transfer, transfer_id, form, pesan)
-    params = {"koreksi": "berhasil"}
+    params = {"koreksi": "berhasil", "tab_detail": "riwayat"}
+    from app.web.layar_transfer import kembali_aman
+    konteks = kembali_aman(form.get("kembali_kerja"))
+    if konteks:
+        params["kembali_kerja"] = konteks
     if pengganti is not None:
         params["pengganti"] = pengganti.kode_transfer
         params["pengganti_id"] = pengganti.id
