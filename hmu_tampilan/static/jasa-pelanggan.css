@@ -63,3 +63,5 @@
  .jasa-detail .jasa-sumber li{flex-wrap:wrap}.jasa-detail .jasa-sumber li>span{flex:1 1 180px}.jasa-detail .jasa-sumber strong{white-space:normal}
  .jasa-asal li{grid-template-columns:minmax(0,1fr)}
 }
+
+.jasa-detail .jasa-peringatan{border:1px solid var(--garis);border-radius:10px;background:var(--panel-2);padding:12px 16px;margin:0 0 16px;font-size:.86rem;line-height:1.65;color:var(--tinta)}

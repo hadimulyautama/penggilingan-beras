@@ -55,3 +55,5 @@ Log lengkap, perbandingan JSON, galeri dan hasil CI/deploy disimpan pada output/
 ## Batas verifikasi
 
 Chromium desktop dan emulasi ukuran ponsel sudah diuji. Safari, Firefox, perangkat fisik dan pembaca layar belum diuji. Tidak ada pengujian transaksi pada produksi. Tidak ada migrasi, formula, saldo, konfigurasi operasional, izin atau endpoint transaksi baru. Pembaruan dapat di-revert ke baseline e582626 tanpa pemulihan data; tidak ada perubahan skema/transaksi.
+
+Penanda Ringkasan untuk bobot belum diukur/belum final memakai flag dan nilai pembaca yang sama. Tidak mengubah saldo; kondisi ini diuji pada data lama aktif. Pemeriksaan integrasi final:805tes non-PG dan11tes baru lulus kembali pada paket431.

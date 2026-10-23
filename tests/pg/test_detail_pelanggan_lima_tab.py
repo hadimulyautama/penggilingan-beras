@@ -140,6 +140,7 @@ async def test_lima_tab_data_kosong_lama_dan_bobot_belum_diketahui(pg,stok_lengk
             r=await c.get(f'/jasa/pelanggan/{pid}?tab={tab}')
             assert r.status_code==200 and len(BeautifulSoup(r.text,'html.parser').select('.jasa-detail-tab a'))==5
             if keadaan=='lama-aktif' and tab=='stok':assert 'Belum diukur' in r.text
+            if keadaan=='lama-aktif' and tab=='ringkasan':assert 'Sebagian bobot belum diukur' in r.text
             if keadaan=='historis' and tab=='ringkasan':
                 for kata in ('Selesai','Dibatalkan','Digabung','pesanan rujukan'):assert kata in r.text
             bukti(keadaan+'-'+tab+'.html',r.text)
