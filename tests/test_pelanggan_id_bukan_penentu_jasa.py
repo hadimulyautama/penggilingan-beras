@@ -32,6 +32,11 @@ AKAR = pathlib.Path(__file__).resolve().parents[1] / "app"
 #: `pelanggan_id` secara langsung — masing-masing dengan alasannya sendiri,
 #: BUKAN sebagai penentu "ini jasa atau bukan":
 _KECUALI = {
+    # Bounds-checking two account/contact identifiers, not classifying a
+    # weighbridge ticket as jasa. The broad regex also sees kledo_id's None
+    # check on this line; keep the exception exact and leave ticket guards intact.
+    ("services/portal_accounts.py", "contact",
+     'if not 0 < pelanggan_id < 2**31 or (kledo_id is not None and not 0 < kledo_id < 2**63):'),
     # Definisi kanonik: kaki kompatibilitas tiket lama, bukan pemanggil.
     ("penggilingan/gudang1/services/timbang_link.py", "adalah_jasa",
      'return bool(t.get("jasa")) or t.get("pelanggan_id") is not None \\'),

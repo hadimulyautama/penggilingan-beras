@@ -132,7 +132,7 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
 
 @router.get("/pengguna")
 async def halaman_pengguna(request: Request, _=Depends(butuh_super)):
-    return render(request, "pengguna.html", **await _muat())
+    return render(request, "pengguna_kelola.html", **await _muat())
 
 
 @router.post("/pengguna/buat")
@@ -144,16 +144,16 @@ async def buat_akun(
 ):
     uname = username.strip().lower()
     if not uname or " " in uname or len(uname) < 3:
-        return render(request, "pengguna.html",
+        return render(request, "pengguna_kelola.html",
                       **await _muat(pesan_err="Nama pengguna minimal 3 huruf, tanpa spasi."))
     sandi = sandi_acak()
     async with SessionLocal() as db:
         orang = await db.get(User, user_id)
         if orang is None:
-            return render(request, "pengguna.html",
+            return render(request, "pengguna_kelola.html",
                           **await _muat(pesan_err="Orang itu tidak ada di daftar pengguna."))
         if _terlalu_tinggi(pelaku, orang.role):
-            return render(request, "pengguna.html", **await _muat(
+            return render(request, "pengguna_kelola.html", **await _muat(
                 pesan_err=("Orang itu berperan lebih tinggi daripada Anda — "
                            "loginnya hanya bisa dibuat oleh peran yang sama "
                            "atau di atasnya.")))
@@ -161,7 +161,7 @@ async def buat_akun(
             select(ProduksiAkun).where(ProduksiAkun.username == uname)
         )).scalars().first()
         if bentrok is not None:
-            return render(request, "pengguna.html",
+            return render(request, "pengguna_kelola.html",
                           **await _muat(pesan_err=f"Nama pengguna '{uname}' sudah dipakai."))
         akun = ProduksiAkun(
             user_id=orang.id, username=uname, password_hash=hash_sandi(sandi),
@@ -179,7 +179,7 @@ async def buat_akun(
     # Sandi awal ditampilkan sebagai blok tersendiri, bukan diselipkan dalam
     # kalimat: ini satu-satunya kesempatan membacanya, dan yang membacanya
     # sedang berdiri di depan orangnya.
-    return render(request, "pengguna.html", **await _muat(
+    return render(request, "pengguna_kelola.html", **await _muat(
         sandi_awal={"nama": nama, "username": uname, "sandi": sandi,
                     "judul": "Akun dibuat"}))
 
@@ -191,9 +191,9 @@ async def reset_sandi(request: Request, akun_id: int = Form(...),
     async with SessionLocal() as db:
         akun = await db.get(ProduksiAkun, akun_id)
         if akun is None:
-            return render(request, "pengguna.html", **await _muat(pesan_err="Akun tidak ditemukan."))
+            return render(request, "pengguna_kelola.html", **await _muat(pesan_err="Akun tidak ditemukan."))
         if _terlalu_tinggi(pelaku, akun.peran):
-            return render(request, "pengguna.html", **await _muat(
+            return render(request, "pengguna_kelola.html", **await _muat(
                 pesan_err=("Akun itu berperan lebih tinggi daripada Anda — "
                            "sandinya tak bisa Anda setel ulang.")))
         akun.password_hash = hash_sandi(sandi)
@@ -205,7 +205,7 @@ async def reset_sandi(request: Request, akun_id: int = Form(...),
         uname, nama = akun.username, akun.nama
         await _catat(db, akun.id, "reset sandi", f"{nama} ({uname})", pelaku)
         await db.commit()
-    return render(request, "pengguna.html", **await _muat(
+    return render(request, "pengguna_kelola.html", **await _muat(
         sandi_awal={"nama": nama, "username": uname, "sandi": sandi,
                     "judul": "Sandi disetel ulang"}))
 
@@ -227,9 +227,9 @@ async def ubah_status(request: Request, akun_id: int = Form(...),
     async with SessionLocal() as db:
         akun = await db.get(ProduksiAkun, akun_id)
         if akun is None:
-            return render(request, "pengguna.html", **await _muat(pesan_err="Akun tidak ditemukan."))
+            return render(request, "pengguna_kelola.html", **await _muat(pesan_err="Akun tidak ditemukan."))
         if _terlalu_tinggi(pelaku, akun.peran):
-            return render(request, "pengguna.html", **await _muat(
+            return render(request, "pengguna_kelola.html", **await _muat(
                 pesan_err=("Akun itu berperan lebih tinggi daripada Anda — "
                            "statusnya tak bisa Anda ubah.")))
         aktifkan = akun.status != "aktif"
@@ -240,14 +240,14 @@ async def ubah_status(request: Request, akun_id: int = Form(...),
             # Super Admin aktif terakhir ditolak di sana.
             await identitas.nonaktifkan(db, akun.user_id, aktif=aktifkan)
         except identitas.Tolak as e:
-            return render(request, "pengguna.html", **await _muat(pesan_err=e.pesan))
+            return render(request, "pengguna_kelola.html", **await _muat(pesan_err=e.pesan))
         await db.refresh(akun)
         pesan = (f"Akun '{akun.username}' sekarang {akun.status} — "
                  "berlaku juga di Kantor dan Timbangan.")
         await _catat(db, akun.id, f"status → {akun.status}", akun.username,
                      pelaku, "termasuk users.status")
         await db.commit()
-    return render(request, "pengguna.html", **await _muat(pesan_ok=pesan))
+    return render(request, "pengguna_kelola.html", **await _muat(pesan_ok=pesan))
 
 
 @router.post("/pengguna/mode")
@@ -256,16 +256,16 @@ async def ubah_mode(
     _=Depends(butuh_super),
 ):
     if mode not in _MODE:
-        return render(request, "pengguna.html", **await _muat(pesan_err="Jenis perangkat tidak dikenal."))
+        return render(request, "pengguna_kelola.html", **await _muat(pesan_err="Jenis perangkat tidak dikenal."))
     async with SessionLocal() as db:
         akun = await db.get(ProduksiAkun, akun_id)
         if akun is None:
-            return render(request, "pengguna.html", **await _muat(pesan_err="Akun tidak ditemukan."))
+            return render(request, "pengguna_kelola.html", **await _muat(pesan_err="Akun tidak ditemukan."))
         akun.mode_perangkat = mode
         pesan = (f"Perangkat '{akun.username}' disetel ke "
                  f"{'milik gudang (sesi pendek)' if mode == 'bersama' else 'milik sendiri (sesi panjang)'}.")
         await db.commit()
-    return render(request, "pengguna.html", **await _muat(pesan_ok=pesan))
+    return render(request, "pengguna_kelola.html", **await _muat(pesan_ok=pesan))
 
 
 
@@ -293,10 +293,10 @@ async def orang_baru(
 
     nama = " ".join(nama.split())
     if len(nama) < 3:
-        return render(request, "pengguna.html",
+        return render(request, "pengguna_kelola.html",
                       **await _muat(pesan_err="Nama minimal 3 huruf."))
     if peran not in {p[0] for p in PERAN}:
-        return render(request, "pengguna.html",
+        return render(request, "pengguna_kelola.html",
                       **await _muat(pesan_err="Peran tidak dikenal."))
     # Langit-langit yang sama seperti saat MENGUBAH peran. Ditulis di kedua
     # tempat karena keduanya jalan masuk yang berbeda: yang dijaga cuma satu
@@ -304,7 +304,7 @@ async def orang_baru(
     # lebih tinggi lalu masuk sebagai dia adalah jalan memutar yang sama
     # panjangnya dengan satu ketukan.
     if P.terlalu_tinggi(akun.peran, peran):
-        return render(request, "pengguna.html",
+        return render(request, "pengguna_kelola.html",
                       **await _muat(pesan_err=_ERR_UBAH["terlalu-tinggi"]))
 
     async with SessionLocal() as db:
@@ -316,7 +316,7 @@ async def orang_baru(
             select(User).where(User.nama == nama, User.status != "nonaktif")
         )).scalars().first()
         if kembar is not None:
-            return render(request, "pengguna.html", **await _muat(
+            return render(request, "pengguna_kelola.html", **await _muat(
                 pesan_err=f"'{nama}' sudah terdaftar sebagai "
                           f"{kembar.role}. Bila ini orang lain, bedakan namanya."))
         try:
@@ -326,9 +326,9 @@ async def orang_baru(
                 telegram_id=None, no_hp=None, lewat_sandi=True,
             )
         except UserAdminError as e:
-            return render(request, "pengguna.html",
+            return render(request, "pengguna_kelola.html",
                           **await _muat(pesan_err=str(e.args[0] if e.args else e)))
-    return render(request, "pengguna.html", **await _muat(pesan_ok=pesan))
+    return render(request, "pengguna_kelola.html", **await _muat(pesan_ok=pesan))
 
 
 # ─────────────────────── Ubah satu akun ───────────────────────
@@ -347,7 +347,7 @@ async def halaman_ubah(request: Request, akun_id: int, _=Depends(butuh_super)):
             .where(ProduksiAkun.id == akun_id)
         )).scalars().first()
         if a is None:
-            return render(request, "pengguna.html",
+            return render(request, "pengguna_kelola.html",
                           **await _muat(pesan_err="Akun tidak ditemukan."))
         jml_admin = await _jumlah_admin(db)
     return render(request, "pengguna_ubah.html", a=a, PERAN=PERAN, _MODE=_MODE,

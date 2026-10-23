@@ -1,0 +1,4 @@
+<nav class="pilihan" aria-label="Jenis pengguna" style="margin-bottom:20px">
+<a class="btn" href="/pengguna" {% if not pengguna_pelanggan %}aria-current="page"{% endif %}>Pengguna staf</a>
+{% if akun.is_super %}<a class="btn" href="/pengguna/pelanggan" {% if pengguna_pelanggan %}aria-current="page"{% endif %}>Pelanggan</a>{% endif %}
+</nav>
