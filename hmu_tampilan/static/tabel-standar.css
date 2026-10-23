@@ -6,8 +6,8 @@
   --tabel-padding-y: 9px;
   --tabel-header-size: .7rem;
   --tabel-body-size: .82rem;
-  --tabel-header-weight: 750;
-  --tabel-kode-weight: 700;
+  --tabel-header-weight: 500;
+  --tabel-kode-weight: 600;
 }
 body :is(.tabel-standar,.daftar-standar,.antrian-listview--tabel,.stok-tabel,.stok-produk-tabel,.qc-history-values,.riwayat-detail__table,.riwayat-desktop-list) {
   --tabel-bg: var(--panel);
@@ -77,9 +77,9 @@ body table.tabel-standar.qc-history-values th { white-space:normal; }
 body table.tabel-standar[data-ponsel="qc"] { table-layout:fixed; }
 body table.tabel-standar[data-ponsel="qc"] :is(th,td) { white-space:normal; overflow-wrap:anywhere; }
 body table.tabel-standar .tabel-standar__kode { white-space:nowrap; }
-body .tabel-standar .tabel-standar__angka { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+body .tabel-standar .tabel-standar__angka { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .tabel-standar__sekunder { display:block; margin-top:3px; color:var(--tabel-redup); font-size:.73rem; font-weight:450; }
-.tabel-standar__status { display:inline-flex; align-items:center; padding:5px 8px; border-radius:999px; background:var(--panel-2); color:var(--tabel-redup); font-size:.7rem; font-weight:700; white-space:nowrap; }
+.tabel-standar__status { display:inline-flex; align-items:center; padding:5px 8px; border-radius:999px; background:var(--panel-2); color:var(--tabel-redup); font-size:.7rem; font-weight:600; white-space:nowrap; }
 .tabel-standar__status--selesai { background:color-mix(in srgb,var(--aman) 17%,var(--kulit-kartu)); color:var(--aman); }
 .tabel-standar__status--batal { background:color-mix(in srgb,#c84545 16%,var(--kulit-kartu)); color:#b42323; }
 body table.tabel-standar tr[data-detail-keluar] { cursor:pointer; }
@@ -101,7 +101,7 @@ body .tabel-standar.riwayat-desktop-list { border-radius:var(--tabel-radius); }
 body .tabel-standar .riwayat-desktop-head { border-radius:var(--tabel-radius) var(--tabel-radius) 0 0; }
 body table.tabel-standar thead th:first-child { border-top-left-radius:var(--tabel-radius); }
 body table.tabel-standar thead th:last-child { border-top-right-radius:var(--tabel-radius); }
-body .tabel-standar :is(.tabel-standar__status,.riwayat-status,.antrian-tabel__status,.stok-status) { display:inline-flex; align-items:center; padding:5px 8px; border-radius:999px; font-size:.7rem; font-weight:700; white-space:nowrap; }
+body .tabel-standar :is(.tabel-standar__status,.riwayat-status,.antrian-tabel__status,.stok-status) { display:inline-flex; align-items:center; padding:5px 8px; border-radius:999px; font-size:.7rem; font-weight:600; white-space:nowrap; }
 body .tabel-standar :is(.tabel-standar__status--selesai,.riwayat-status--done,.riwayat-status--jasa,.antrian-tabel__status--jasa,.stok-status--jasa) { background:color-mix(in srgb,var(--aman) 17%,var(--kulit-kartu)); color:var(--aman); }
 body .tabel-standar :is(.tabel-standar__status--batal,.riwayat-status--cancel) { background:color-mix(in srgb,#c84545 16%,var(--kulit-kartu)); color:#b42323; }
 
