@@ -3,7 +3,7 @@
 {% block isi %}
 {% from "_penilaian_pk.html" import penilaian_pk with context %}
 <link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/qc-detail.css?v={{ VERSI }}&qc=1">
+<link rel="stylesheet" href="/static/qc-detail.css?v={{ VERSI }}&qc=2">
 {% macro waktu(r) %}{{ r.waktu|jam('%d/%m/%Y · %H:%M') if r.waktu else 'Waktu tidak tercatat' }}{% endmacro %}
 {% macro hasil_asli(r) %}<dl class="qc-fields">{% for label, value in r.detail %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>{% endfor %}</dl>{% endmacro %}
 <div class="riwayat-detail qc-detail">
