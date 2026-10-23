@@ -1,0 +1,39 @@
+/* Hanya detail aktif penggilingan. Komponen/rumus QC tetap dari paket bersama. */
+.giling-detail{width:100%;min-width:0;box-sizing:border-box;align-content:start}
+.giling-detail [hidden]{display:none!important}
+body .isi .giling-detail .riwayat-detail__hero{padding:16px 20px;border:1px solid var(--kulit-batas);border-radius:16px;background:var(--panel-2);color:var(--tinta)}
+body .isi .giling-detail .riwayat-detail__hero p{color:var(--kulit-redup);margin:6px 0}
+body .isi .giling-detail .riwayat-detail__hero .riwayat-detail__eyebrow{color:var(--kulit-redup)}
+body .isi .giling-detail .riwayat-detail__hero .riwayat-status--pabrik{color:var(--tinta);background:var(--panel-2)}
+.giling-detail .proses-detail__sementara{display:block;margin-top:6px;color:var(--kulit-redup)}
+.giling-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;min-height:49px;border-bottom:1px solid var(--kulit-batas);gap:4px}
+.giling-tabs a{display:flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;min-height:48px;padding:10px 4px;border-bottom:3px solid transparent;color:var(--kulit-redup);font-size:.85rem;white-space:nowrap;text-decoration:none}
+.giling-tabs a[aria-selected=true]{color:var(--aman);background:var(--panel-2);border-bottom-color:var(--aman);font-weight:700}
+.giling-panel,.giling-ringkas{display:grid;min-width:0;gap:16px}
+.giling-overview{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.giling-detail .riwayat-detail__card{margin:0}
+.giling-detail .riwayat-detail__facts{margin-bottom:14px}
+.giling-aksi-utama{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}
+.giling-hasil-aksi{grid-template-columns:repeat(2,minmax(0,1fr))}
+.giling-hasil-aksi:empty{display:none}
+.giling-pengelolaan{margin-top:14px;border-top:1px solid var(--kulit-batas)}
+.giling-pengelolaan summary{display:flex;align-items:center;min-height:48px;cursor:pointer;font-size:.85rem;font-weight:650}
+.giling-pengelolaan summary:before{content:'＋';margin-right:8px}
+.giling-pengelolaan[open] summary:before{content:'−'}
+.giling-detail .pilihan__satu--utama{--tombol-pucat:#4b7043;--tombol-pucat-teks:#fff;--tombol-batas:#4b7043;--tombol-hover:#3e6037;--tombol-tekan:#35532e}
+.giling-detail .giling-nilai{font-size:1rem}
+.giling-detail .giling-jeda{font-weight:650}
+.giling-detail #catatan-proses{margin:0}
+@media(max-width:700px){
+ body .isi .giling-detail .riwayat-detail__hero{padding:12px 14px}
+ body .isi .giling-detail .riwayat-detail__hero h1{margin:7px 0;font-size:1.25rem}
+ .giling-detail .proses-detail__sementara{font-size:.72rem}
+ .giling-tabs{gap:0}
+ .giling-tabs a{font-size:.76rem;padding:10px 2px}
+ .giling-panel,.giling-ringkas,.giling-overview{gap:12px}
+ .giling-overview,.giling-aksi-utama,.giling-hasil-aksi{grid-template-columns:minmax(0,1fr)}
+}
+/* Ringkasan mengikuti baris label/nilai mockup; rincian lengkap tetap di tabnya. */
+.giling-overview .riwayat-detail__facts{grid-template-columns:minmax(0,1fr)}
+.giling-overview .riwayat-detail__facts > div{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.giling-overview .riwayat-detail__facts dd{text-align:right;max-width:60%;overflow-wrap:anywhere}

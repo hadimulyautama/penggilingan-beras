@@ -159,6 +159,8 @@ async def rincian(db, *, jenis, model, kartu, params):
             lambda r, nama: [_waktu(r.waktu), r.catatan or "Pendinginan dicatat", nama],
             params, "halaman_dingin"))
     elif jenis == "giling":
+        d["jeda_mulai"] = _waktu(macet.mulai) if macet else None
+        d["jeda_sebab"] = macet.sebab if macet else None
         from app.penggilingan.gudang1.services.milling import _latest_progress
         hasil = await _latest_progress(db, model.id)
         bahan = model.berat_gabah_masuk_kg
@@ -197,6 +199,11 @@ async def rincian(db, *, jenis, model, kartu, params):
                 b = await db.get(PurchaseBatch, model.purchase_batch_id)
                 batches = [b] if b else []
         from app.services.bahan_silo import sumber_giling_banyak
+        from app.penggilingan.gudang1.services.milling import pk_jenis
+        d["silo_nama"] = list(dict.fromkeys(r[0] for r in rows))
+        d["silo_aktif"] = list(dict.fromkeys(nama for s, nama in sumber if s.berat_akhir_kg is None)) if sumber else None
+        d["jenis_pk"] = await pk_jenis(db, model) or "Belum diketahui"
+        d["fakta"] += [("Silo", " + ".join(d["silo_nama"])), ("Jenis PK dari sumber", d["jenis_pk"])]
         kelompok = (await sumber_giling_banyak(db, [model.id])).get(model.id, [])
         if kelompok:
             bagian = _bagian("Bahan & pemakaian silo", [], [])
