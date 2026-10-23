@@ -1,0 +1,37 @@
+<section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ (d.bagian.index(bagian) + 1) }}">
+  <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{{ bagian.jumlah }} {{ 'jenis hasil' if bagian.judul == 'Hasil sosoh keluar' else 'catatan' }}</span></div>
+  {% if bagian.keterangan %}<p class="bantu">{{ bagian.keterangan }}</p>{% endif %}
+  {% if bagian.judul == 'Hasil sosoh keluar' %}
+  <div class="sosoh-hasil">
+    {% for baris in bagian.baris %}
+    {% set label, pemisah, spek = baris[0].partition(' · ') %}
+    <article class="sosoh-hasil__jenis">
+      <div class="sosoh-hasil__total"><h3>{{ label|replace('_', ' ')|title }}</h3><strong>{{ baris[1] }}</strong></div>
+      {% if pemisah %}<details class="sosoh-hasil__spek"><summary>Spesifikasi tercatat</summary><p>{{ spek }}</p></details>
+      {% else %}<p class="bantu">Spesifikasi belum diisi.</p>{% endif %}
+      {% if baris[2] != '—' %}<p class="bantu">{{ baris[2] }}</p>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% elif bagian.baris %}
+  <div class="sosoh-log"><table aria-label="{{ bagian.judul }}">
+    <thead><tr>{% for label in bagian.kolom %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for baris in bagian.baris %}
+      <tr>
+        <th scope="row" class="sosoh-log__waktu">{{ baris[0] }}</th>
+        <td class="sosoh-log__jenis">{{ baris[1] }}</td>
+        <td class="sosoh-log__spek"><span class="sosoh-log__label">Spek: </span>{{ baris[2] }}</td>
+        <td class="sosoh-log__delta"><span class="sosoh-log__label">Pertambahan: </span><strong>{{ baris[3] }}</strong></td>
+        <td class="sosoh-log__pencatat"><span class="sosoh-log__label">Pencatat: </span>{{ baris[4] }}</td>
+      </tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="riwayat-detail__empty">Belum ada {{ bagian.judul|lower }} yang tercatat.</p>{% endif %}
+  {% if bagian.halaman_total > 1 %}
+  <nav class="proses-detail__halaman" aria-label="Halaman {{ bagian.judul }}">
+    {% if bagian.halaman > 1 %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman - 1) }}#{{ bagian.parameter }}">← Lebih baru</a>{% endif %}
+    <span>Halaman {{ bagian.halaman }} / {{ bagian.halaman_total }}</span>
+    {% if bagian.halaman < bagian.halaman_total %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman + 1) }}#{{ bagian.parameter }}">Lebih lama →</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
