@@ -91,7 +91,8 @@
     if (event.key === 'Tab') { close(); return; }
     if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !list.hidden && rows.length) {
       event.preventDefault();
-      highlight((active + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length);
+      highlight(active < 0 ? (event.key === 'ArrowDown' ? 0 : rows.length - 1)
+        : (active + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length);
     }
     if (event.key === 'Enter' && !list.hidden && rows.length) {
       event.preventDefault();
