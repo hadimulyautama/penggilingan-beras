@@ -292,11 +292,15 @@ async def penjaga_csrf(request: Request, call_next):
     # Terbitkan sekali per peramban, lalu biarkan. Token yang diganti tiap
     # permintaan membuat dua tab yang terbuka bersamaan saling membatalkan.
     if not request.cookies.get(_csrf.NAMA_COOKIE):
+        secure_csrf = request.url.scheme == "https"
+        if request.url.path.startswith('/pelanggan'):
+            from app.web.portal.security import secure_cookie
+            secure_csrf = secure_cookie(request)
         nilai = getattr(request.state, "csrf", None) or _csrf.terbitkan_baru()
         balasan.set_cookie(
             _csrf.NAMA_COOKIE, nilai, max_age=365 * 24 * 3600,
             httponly=False,   # dibaca skrip halaman untuk permintaan JSON
-            samesite="lax", secure=request.url.scheme == "https", path="/",
+            samesite="lax", secure=secure_csrf, path="/",
         )
     return balasan
 

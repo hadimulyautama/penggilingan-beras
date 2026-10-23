@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import hashlib
 import hmac
+import os
 from fastapi import HTTPException, Request
 from sqlalchemy import select
 from app.database import SessionLocal
@@ -11,6 +12,12 @@ from app.web.security import _kunci
 
 COOKIE = 'pelanggan_sesi'
 SESSION_SECONDS = 12 * 3600
+
+
+def secure_cookie(request):
+    # Railway terminates TLS before the application connection; production
+    # sessions must remain Secure even when the ASGI scheme is internal HTTP.
+    return request.url.scheme == 'https' or bool(os.environ.get('RAILWAY_ENVIRONMENT_ID'))
 
 
 def key():

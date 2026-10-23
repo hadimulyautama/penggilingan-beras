@@ -7,7 +7,7 @@ from app.models.portal import PortalAccount
 from app.web import csrf, gerbang_masuk
 from app.web.security import HASH_TIRUAN, cek_sandi_async
 from app.web.tampilan import templates
-from .security import COOKIE, SESSION_SECONDS, issue, key, require_customer
+from .security import COOKIE, SESSION_SECONDS, issue, key, require_customer, secure_cookie
 from hmu_identitas.token import baca_token
 from hmu_tampilan import VERSI
 
@@ -50,9 +50,9 @@ async def login(request:Request, username:str=Form(...,min_length=1,max_length=8
     gerbang_masuk.catat_berhasil(limiter,ip)
     response=RedirectResponse('/pelanggan',303)
     response.set_cookie(COOKIE,value,max_age=SESSION_SECONDS,httponly=True,
-                        secure=request.url.scheme=='https',samesite='lax',path='/pelanggan')
+                        secure=secure_cookie(request),samesite='lax',path='/pelanggan')
     response.set_cookie(csrf.NAMA_COOKIE,csrf.terbitkan_baru(),httponly=False,
-                        secure=request.url.scheme=='https',samesite='lax',path='/')
+                        secure=secure_cookie(request),samesite='lax',path='/')
     return response
 
 
@@ -61,5 +61,5 @@ async def logout(request:Request, reader=Depends(require_customer)):
     response=RedirectResponse('/pelanggan/masuk',303)
     response.delete_cookie(COOKIE,path='/pelanggan')
     response.set_cookie(csrf.NAMA_COOKIE,csrf.terbitkan_baru(),httponly=False,
-                        secure=request.url.scheme=='https',samesite='lax',path='/')
+                        secure=secure_cookie(request),samesite='lax',path='/')
     return response

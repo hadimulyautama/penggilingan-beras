@@ -43,3 +43,13 @@ def test_native_absolute_same_origin_tab_and_pagination_reads_survive():
     assert soup.select_one('[role=tab]')['href']=='/pelanggan/riwayat-transfer/2?tab_detail=bahan#panel-bahan'
     assert len(soup.select('a[href]'))==1
     assert soup.form['action']=='/pelanggan/pekerjaan'
+
+
+def test_customer_cookies_are_secure_behind_railway_tls_termination(monkeypatch):
+    from starlette.requests import Request
+    from app.web.portal.security import secure_cookie
+    request=Request({'type':'http','scheme':'http','server':('portal.example',80),'path':'/pelanggan','headers':[]})
+    monkeypatch.delenv('RAILWAY_ENVIRONMENT_ID',raising=False)
+    assert not secure_cookie(request)
+    monkeypatch.setenv('RAILWAY_ENVIRONMENT_ID','test-platform-marker')
+    assert secure_cookie(request)
