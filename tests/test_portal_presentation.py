@@ -32,3 +32,14 @@ def test_closed_read_navigation():
     for value in ['https://evil.example/riwayat-giling','//evil.example/x','/pengguna','/api/aksi','/stok?buka=ambil_jasa']:
         assert portal_url(value) is None
     assert portal_url('/riwayat-qc/gabah-basah/GB-1')=='/pelanggan/riwayat-qc/gabah-basah/GB-1'
+
+
+def test_native_absolute_same_origin_tab_and_pagination_reads_survive():
+    html='''<a role="tab" href="https://portal.example/riwayat-transfer/2?tab_detail=bahan#panel-bahan">Bahan</a>
+    <a href="https://other.example/riwayat-transfer/2">External</a>
+    <a href="https://portal.example/riwayat-transfer/2?buka=koreksi">Koreksi</a>
+    <form method="get" action="https://portal.example/pekerjaan"><button>Cari</button></form>'''
+    soup=BeautifulSoup(read_only(html,'/riwayat-transfer/2',origin='https://portal.example/'),'html.parser')
+    assert soup.select_one('[role=tab]')['href']=='/pelanggan/riwayat-transfer/2?tab_detail=bahan#panel-bahan'
+    assert len(soup.select('a[href]'))==1
+    assert soup.form['action']=='/pelanggan/pekerjaan'

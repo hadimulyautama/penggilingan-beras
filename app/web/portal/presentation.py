@@ -5,7 +5,7 @@ are never mutated. Native data, tables, process detail and PDFs remain shared.
 """
 import copy
 import re
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 from fastapi.responses import HTMLResponse
 from jinja2 import ChoiceLoader, DictLoader
@@ -14,7 +14,17 @@ from .auth import csrf_context
 from .navigation import MENU, portal_url, active_menu
 
 
-def read_only(html, base):
+def read_only(html, base, *, origin=None):
+    def destination(value):
+        parsed=urlsplit(urljoin(base,value))
+        if parsed.netloc or parsed.scheme:
+            trusted=urlsplit(origin or '')
+            if not trusted.netloc or (parsed.scheme,parsed.netloc)!=(trusted.scheme,trusted.netloc):
+                return None
+            value=urlunsplit(('', '', parsed.path, parsed.query, parsed.fragment))
+        else:
+            value=urlunsplit(('', '', parsed.path, parsed.query, parsed.fragment))
+        return portal_url(value)
     s=BeautifulSoup(html,'html.parser')
     for el in s.select('dialog,form.stok-nav__filter,.produk-aksi,.saring-kepemilikan,[data-post],[data-kirim]'):
         el.decompose()
@@ -24,7 +34,7 @@ def read_only(html, base):
     for form in list(s.find_all('form')):
         action=urlsplit(form.get('action') or base).path
         if form.get('method','get').lower()=='get':
-            target=portal_url(urljoin(base,form.get('action') or base))
+            target=destination(form.get('action') or base)
             if not target:form.decompose();continue
             form['action']=target
             for field in form.select('[name=pelanggan_id],[name=kepemilikan],[name=pemilik],[name=kembali_jasa]'):field.decompose()
@@ -53,7 +63,7 @@ def read_only(html, base):
         href=a['href']
         if a.get_text(strip=True)=='Semua pelanggan':a.decompose();continue
         if href.startswith('#'):continue
-        target=portal_url(urljoin(base,href))
+        target=destination(href)
         if not target:
             # Keep factual labels even where the staff destination is not a read.
             if a.get('class') and any(c in a['class'] for c in ('btn','pil','tbl')):a.decompose()
@@ -68,7 +78,7 @@ def read_only(html, base):
         if not table.find_parent(class_='production-table-scroll'):
             table.wrap(s.new_tag('div',attrs={'class':'production-table-scroll','tabindex':'0'}))
     for frame in s.find_all('iframe',src=True):
-        target=portal_url(frame['src'])
+        target=destination(frame['src'])
         if target:frame['src']=target
         else:frame.decompose()
     # Let the safe portal script preserve native PDF share/download behavior.
@@ -115,7 +125,7 @@ def render_customer(request, name, *, status_code=200, **ctx):
     # Native stock-navigation computes visible groups from these already scoped rows.
     body=env.get_template(name).render(**ctx)
     path=request.url.path+('?' +request.url.query if request.url.query else '')
-    content=read_only(body,path)
+    content=read_only(body,path,origin=str(request.base_url))
     return shell(request,content,status_code=status_code,title=ctx.get('breadcrumb_detail') or 'Portal pelanggan')
 
 
