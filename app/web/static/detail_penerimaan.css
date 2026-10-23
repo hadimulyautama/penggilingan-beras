@@ -96,3 +96,9 @@
 /* Spesifikasi portal dimuat sesudah CSS layar; ukuran kepala detail tetap lokal. */
 body.padiflow-ui .penerimaan-detail .penerimaan-kepala {padding:20px}
 @container(max-width:570px){body.padiflow-ui .penerimaan-detail .penerimaan-kepala{padding:16px}}
+
+/* Kode, nama dan label panjang memakai seluruh lebar pada layar kecil. */
+@container(max-width:570px) {
+ .penerimaan-detail .terima-fakta>.terima-fakta--panjang {grid-column:1/-1}
+ .penerimaan-detail .terima-dua-timbang {grid-template-columns:minmax(0,1fr)}
+}

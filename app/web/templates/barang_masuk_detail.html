@@ -2,9 +2,11 @@
 {% block judul %}Detail penerimaan{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/operasional.css?v={{ VERSI }}&antrean-bahan=7">
-<link rel="stylesheet" href="/static/detail_penerimaan.css?v={{ VERSI }}&rapi=2">
+<link rel="stylesheet" href="/static/detail_penerimaan.css?v={{ VERSI }}&rapi=3">
 {% import '_benda.html' as benda with context %}{% import '_stok.html' as st %}
 {% macro kg(v) -%}{% if v is defined and v is not none %}{{ st.kg_rinci(v) }} kg{% else %}Belum tercatat{% endif %}{%- endmacro %}
+{# Label presentasi saja; kode asli tetap dipakai layanan dan formulir. #}
+{% macro label_tiket(v) -%}{{ {'DUA_KALI':'Dua kali','SEKALI':'Sekali','PARTAI':'Partai kecil','MASUK':'Masuk','KELUAR':'Keluar','RETUR_MASUK':'Retur masuk','TERBUKA':'Terbuka','SELESAI':'Selesai','DITUTUP_PAKSA':'Ditutup paksa','AKTIF':'Aktif','DIBATALKAN':'Dibatalkan','BATAL':'Batal'}.get(v,v) if v is not none and v != '' else 'Belum tercatat' }}{%- endmacro %}
 {% macro pemeriksaan(q) -%}
 <div class="terima-qc__meta"><strong>{{ 'Pemeriksaan ' ~ q.nomor if q.nomor else 'Catatan lama' }}</strong><span>{{ q.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu tidak tercatat' }} · {{ q.petugas }}</span></div>
 <table class="terima-nilai"><thead><tr><th scope="col">Parameter</th><th scope="col">Hasil QC</th></tr></thead><tbody>{% for label,nilai in q.hasil %}<tr><th scope="row">{{ label }}</th><td>{{ nilai }}</td></tr>{% endfor %}</tbody></table>
@@ -30,15 +32,15 @@
  {% include '_penerimaan_tindakan.html' %}
  {% if not menunggu %}<p class="terima-bantu">{{ 'Penerimaan telah tercatat. Penempatan dan pekerjaan lanjutan melalui Pekerjaan atau sumber terkait.' if diterima else 'Tiket ini tidak sedang ditawarkan untuk penerimaan. Periksa status tiket dan catatan terkait.' }}</p><a class="btn" href="/pekerjaan">Buka Pekerjaan</a>{% endif %}</section>
  <section class="terima-panel"><div class="terima-judul"><h2>Penerimaan</h2></div><dl class="terima-fakta">
- <div><dt>Tiket</dt><dd>{{ tiket.kode }}</dd></div><div><dt>Status tiket</dt><dd>{{ tiket.status_tiket|replace('_',' ') }}</dd></div>
- <div><dt>Catatan penerimaan</dt><dd>{{ catatan|length }} catatan</dd></div><div><dt>Sumber bobot</dt><dd>{{ catatan|map(attribute='sumber_berat')|unique|join(' · ') if catatan else tiket.sumber_berat or 'Belum diketahui' }}</dd></div>
- <div><dt>Armada</dt><dd>{{ 'Partai kecil' if timbang and timbang.cara_timbang=='PARTAI' else tiket.nomor_polisi or 'Belum tercatat' }}</dd></div><div><dt>Sopir</dt><dd>{{ tiket.nama_sopir or 'Sopir belum tercatat' }}</dd></div>
+ <div class="terima-fakta--panjang"><dt>Tiket</dt><dd>{{ tiket.kode }}</dd></div><div><dt>Status tiket</dt><dd>{{ label_tiket(tiket.status_tiket) }}</dd></div>
+ <div><dt>Catatan penerimaan</dt><dd>{{ catatan|length }} catatan</dd></div><div class="terima-fakta--panjang"><dt>Sumber bobot</dt><dd>{{ catatan|map(attribute='sumber_berat')|unique|join(' · ') if catatan else tiket.sumber_berat or 'Belum diketahui' }}</dd></div>
+ <div><dt>Armada</dt><dd>{{ 'Partai kecil' if timbang and timbang.cara_timbang=='PARTAI' else tiket.nomor_polisi or 'Belum tercatat' }}</dd></div><div class="terima-fakta--panjang"><dt>Sopir</dt><dd>{{ tiket.nama_sopir or 'Sopir belum tercatat' }}</dd></div>
  </dl><a class="terima-tautan" href="{{ tab_href('tiket') }}">Lihat tiket & bobot →</a></section>
  <div class="penerimaan-dua"><section class="terima-panel"><div class="terima-judul"><h2>Lokasi & proses</h2></div><ul class="terima-lokasi">{% for l in lokasi %}<li>{{ l }}</li>{% else %}<li>Belum ada lokasi lanjutan tercatat.</li>{% endfor %}</ul><a class="terima-tautan" href="{{ tab_href('riwayat') }}">Lihat lokasi & riwayat →</a></section>
  <section class="terima-panel"><div class="terima-judul"><h2>Mutu penerimaan</h2></div>{% for g in qc_penerimaan %}<p class="terima-bantu">{{ g.kode }} · {{ g.status }}</p>{% else %}<p class="terima-bantu">{{ 'Belum diperiksa.' if jenis in ['gabah_basah','gabah_kering','pk'] else 'Pencatatan QC penerimaan jenis barang ini belum tersedia.' }}</p>{% endfor %}<a class="terima-tautan" href="{{ tab_href('qc') }}">Lihat hasil QC →</a></section></div>
 </section>
 <section id="terima-panel-tiket" role="tabpanel" aria-labelledby="terima-tab-tiket"{% if tab_detail != 'tiket' %} hidden{% endif %}>
- <section class="terima-panel"><div class="terima-judul"><h2>Identitas tiket</h2></div><dl class="terima-fakta">{% for label,v in [('Kode tiket',tiket.kode),('Jenis',nama_jenis),('Arah',tiket.arah),('Cara timbang',timbang.cara_timbang if timbang else none),('Status tiket',tiket.status_tiket),('Pihak pada tiket',tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama),('Nomor polisi',tiket.nomor_polisi),('Sopir',tiket.nama_sopir)] %}<div><dt>{{ label }}</dt><dd>{{ v if v is not none and v != '' else 'Belum tercatat' }}</dd></div>{% endfor %}</dl></section>
+ <section class="terima-panel"><div class="terima-judul"><h2>Identitas tiket</h2></div><dl class="terima-fakta">{% for label,v in [('Kode tiket',tiket.kode),('Jenis',nama_jenis),('Arah',tiket.arah),('Cara timbang',timbang.cara_timbang if timbang else none),('Status tiket',tiket.status_tiket),('Pihak pada tiket',tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama),('Nomor polisi',tiket.nomor_polisi),('Sopir',tiket.nama_sopir)] %}<div{% if label in ['Kode tiket','Pihak pada tiket','Sopir'] %} class="terima-fakta--panjang"{% endif %}><dt>{{ label }}</dt><dd>{{ label_tiket(v) if label in ['Arah','Cara timbang','Status tiket'] else v if v is not none and v != '' else 'Belum tercatat' }}</dd></div>{% endfor %}</dl></section>
  {% include '_penerimaan_timbang.html' %}
  {% if not timbang %}<section class="terima-panel"><h2>Data timbang</h2><p class="terima-bantu">Rincian timbang belum tersedia pada catatan ini.</p></section>{% endif %}
  <section class="terima-panel"><div class="terima-judul"><h2>Bobot penerimaan</h2></div><dl class="terima-fakta"><div><dt>Total diterima</dt><dd>{{ kg(berat_diterima) if berat_diterima is not none else keterangan_berat if catatan else 'Belum diterima' }}</dd></div></dl><p class="terima-bantu">Total berasal dari catatan penerimaan yang sah. Catatan ditolak tidak dihitung; ini bukan saldo stok sekarang.</p></section>
@@ -46,7 +48,7 @@
 <section id="terima-panel-qc" role="tabpanel" aria-labelledby="terima-tab-qc"{% if tab_detail != 'qc' %} hidden{% endif %}>{% include '_penerimaan_qc.html' %}</section>
 <section id="terima-panel-riwayat" role="tabpanel" aria-labelledby="terima-tab-riwayat"{% if tab_detail != 'riwayat' %} hidden{% endif %}>
  {% include '_penerimaan_catatan.html' %}{% include '_penerimaan_lokasi.html' %}
- <section class="terima-panel"><div class="terima-judul"><h2>Jejak penerimaan</h2></div><dl class="terima-fakta"><div><dt>Pihak pada tiket</dt><dd>{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Belum tercatat' }}</dd></div><div><dt>Pemilik catatan</dt><dd>{{ pemilik_penerimaan or 'Belum ada catatan penerimaan' }}</dd></div></dl><p class="terima-bantu">Waktu dan pencatat setiap penerimaan tercantum pada catatan sumber di atas. Riwayat tetap tersedia setelah bahan diproses atau dipindahkan.</p></section>
+ <section class="terima-panel"><div class="terima-judul"><h2>Jejak penerimaan</h2></div><dl class="terima-fakta"><div class="terima-fakta--panjang"><dt>Pihak pada tiket</dt><dd>{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Belum tercatat' }}</dd></div><div class="terima-fakta--panjang"><dt>Pemilik catatan</dt><dd>{{ pemilik_penerimaan or 'Belum ada catatan penerimaan' }}</dd></div></dl><p class="terima-bantu">Waktu dan pencatat setiap penerimaan tercantum pada catatan sumber di atas. Riwayat tetap tersedia setelah bahan diproses atau dipindahkan.</p></section>
 </section>
 </div>
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
