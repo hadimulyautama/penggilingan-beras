@@ -39,7 +39,7 @@ Detail pelanggan hanya menyajikan relasi dan rincian yang diberikan pembaca lama
 
 Lima tab memakai navigasi tautan native/SPA dengan aria-current. Parameter tambahan pengambilan hanya menata bagian halaman; gerbang backend, pembaca pelanggan dan seluruh layanan transaksi tidak diubah. Ringkasan menempatkan saldo terpisah, kondisi bersamaan, tindakan, perkembangan pelanggan dan Pesanan & nota. Rincian pengambilan/retur pindah ke tab khusus. Stok internal dapat membuka rincian asal yang sudah disediakan pembaca; rincian tambahan ini tidak memperluas proyeksi portal lama. Portal tetap menyaring tautan tindakan melalui read_only dan boleh_tutup/boleh_batal tetap false.
 
-Perubahan komponen dibuat pada sumber tampilan, paket dinaikkan ke 428, dan disinkronkan dengan scripts/sinkron.py. Snapshot rilis sumber terisolasi /tmp/tampilan-rilis-jasa-detail berbasis paket 427 yang sudah dirilis dipakai agar working tree sumber yang berisi pekerjaan lain tidak ikut tersalin. Hanya template detail, CSS khusus detail dan versi/manifest yang berubah; perubahan sumber target tersedia di repo tampilan. Folder vendor tidak diedit langsung.
+Perubahan komponen dibuat pada sumber tampilan, paket dinaikkan ke 431, dan disinkronkan dengan scripts/sinkron.py. Snapshot rilis sumber terisolasi /tmp/tampilan-rilis-jasa-detail berbasis paket 430 main terbaru (termasuk Beranda yang masuk bersamaan) dipakai agar working tree sumber yang berisi pekerjaan lain tidak ikut tersalin. Hanya template detail, CSS khusus detail dan versi/manifest yang berubah; perubahan sumber target tersedia di repo tampilan. Folder vendor tidak diedit langsung.
 
 ## Bukti pemeriksaan
 

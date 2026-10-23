@@ -22,3 +22,33 @@
 .gudang-ringkasan-alur{width:100%;max-width:960px;margin-inline:auto}.gudang-ringkasan-alur .alur-kelompok{max-width:720px;margin-inline:auto}
 
 .alur-alat>summary{cursor:pointer}
+
+/* Common rows keep the two warehouse panels aligned without fixed heights. */
+.beranda-ringkasan--alur{align-items:stretch}
+.alur-gudang{display:flex;flex-direction:column}
+.alur-mesin{border-top:1px solid var(--garis);display:grid;min-width:0;align-content:end;flex:1}
+.alur-mesin .alur-pengering,.alur-mesin .alur-penyimpanan{border-top:0;padding:20px;min-width:0}
+.alur-mesin .alur-penyimpanan{display:block}
+.alur-mesin .alur-silo-area{min-width:0}
+.alur-mesin .alur-kelompok{align-items:start}
+.alur-mesin .alur-silo{height:125px;margin-top:0}
+.alur-mesin .alur-alat__visual>strong{min-height:2.8em;display:flex;align-items:center;justify-content:center;line-height:1.4}
+.alur-mesin .alur-alat__visual{gap:6px}
+.alur-stok{border-left:0;border-top:1px solid var(--garis);padding:18px 20px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px;align-content:start}
+.alur-stok h3,.alur-stok>strong,.alur-stok p{grid-column:1}
+.alur-stok>strong{margin:8px 0}
+.alur-stok>a{grid-column:2;grid-row:1/4;align-self:center;white-space:nowrap}
+@media(min-width:851px){
+ .beranda-ringkasan--alur{grid-template-rows:auto auto auto auto auto}
+ .beranda-ringkasan--alur>.alur-gudang{display:grid;grid-template-rows:subgrid;grid-row:span 5}
+ .beranda-ringkasan--alur .alur-mesin{align-items:end}
+}
+@media(min-width:1200px){
+ .beranda-ringkasan--alur .alur-mesin{align-items:start}
+ .beranda-ringkasan--alur .alur-mesin:has(+.alur-stok):has(.alur-pengering){align-content:start}
+ .beranda-ringkasan--alur:has(.alur-mesin--ringkas) .alur-mesin{align-content:start}
+ .beranda-ringkasan--alur .alur-mesin--ringkas{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+ .beranda-ringkasan--alur .alur-mesin--ringkas .alur-penyimpanan{padding-left:16px;border-left:1px solid var(--garis)}
+ .beranda-ringkasan--alur .alur-mesin--ringkas .alur-pengering{padding-right:16px}
+}
+@media(max-width:380px){.alur-mesin .alur-pengering,.alur-mesin .alur-penyimpanan{padding:16px}.alur-stok{padding:16px;column-gap:10px}}
