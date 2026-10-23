@@ -2,7 +2,7 @@
 {% block judul %}{{ kartu[0].rec.kode if detail else "Barang Keluar" }}{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
-{% set tab_pengiriman = 'keluar' %}{% if detail %}{% include "_pengiriman_tabs.html" %}{% endif %}
+{% set tab_pengiriman = 'keluar' %}
 
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}

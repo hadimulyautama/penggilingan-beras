@@ -3,3 +3,9 @@
 {% macro buka(id) %}<div role="tabpanel" id="panel-{{ id }}" aria-labelledby="tab-{{ id }}" {% if pilihan()!=id %}hidden{% endif %}>{% endmacro %}
 {% macro taut(id,nama) %}<a class="btn btn--kecil" href="{{ request.url.remove_query_params(['buka','nilai']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ nama }}</a>{% endmacro %}
 {% macro kembali(bawaan) %}{% set asal=request.query_params.get('kembali_kerja',request.query_params.get('kembali','')) %}{{ asal if asal.partition('?')[0] in ['/pekerjaan','/barang-keluar','/retur','/stok','/riwayat','/laporan','/jasa'] else bawaan }}{% endmacro %}
+
+{# Format baca saja untuk angka JSON historis. Tara mempertahankan empat desimal
+   penyimpanan; nilai kosong tidak diberi satuan dan tidak diubah menjadi nol. #}
+{% macro angka(nilai, satuan='kg') -%}
+{% set n=none if nilai is undefined else nilai|float(none) %}{% if n is none %}Belum tersedia{% else %}{% if satuan=='kg/karung' %}{{ ('{:,.4f}'.format(n).rstrip('0').rstrip('.')).replace(',', '_').replace('.', ',').replace('_', '.') }}{% else %}{% import '_stok.html' as st %}{{ st.kg_rinci(n) }}{% endif %} {{ satuan }}{% endif %}
+{%- endmacro %}

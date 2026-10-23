@@ -3,11 +3,11 @@
 {% import '_stok.html' as st with context %}{% set kg=st.kg_rinci %}
 {% block judul %}Retur barang · {{ asal.kode }}{% endblock %}
 {% block isi %}
-<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/detail_kirim_retur.css?v=1">
+<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/detail_kirim_retur.css?v=2">
 <div class="retur-asal" data-detail-tab>
 {% set tab_pengiriman = 'retur' %}{% include "_pengiriman_tabs.html" %}
-<a href="/barang-keluar/{{ asal.id }}">← Detail pengiriman {{ asal.kode }}</a>
-<header class="kirim-detail__kepala"><p>Retur barang · {{ 'Pengajuan #' ~ rincian.id if rincian else 'Pengajuan baru' }}</p><h1>{{ asal.kode }}</h1><p>{{ pelanggan_asal or 'Pelanggan belum tercatat' }} · {{ asal.no_polisi or 'Nomor polisi belum tercatat' }}</p><p>{{ 'Sudah diterima ke stok' if rincian and rincian.customer_return_id else 'Pengajuan dibatalkan; stok tidak bertambah' if rincian and rincian.status_pemeriksaan=='dibatalkan' else 'Pengajuan tersimpan; belum diterima ke stok' if rincian else 'Belum ada pengajuan tersimpan' }}</p></header>
+<a class="detail-kirim-kembali" href="/barang-keluar/{{ asal.id }}">← Detail pengiriman {{ asal.kode }}</a>
+<header class="kirim-detail__kepala"><p>Retur pelanggan</p><h1>{{ 'Pengajuan retur #' ~ rincian.id if rincian else 'Pengajuan retur baru' }}</h1><p>Pengiriman asal {{ asal.kode }}</p><p>{{ pelanggan_asal or 'Pelanggan belum tercatat' }} · {{ asal.no_polisi or 'Nomor polisi belum tercatat' }}</p><p>{{ 'Sudah diterima ke stok' if rincian and rincian.customer_return_id else 'Pengajuan dibatalkan; stok tidak bertambah' if rincian and rincian.status_pemeriksaan=='dibatalkan' else 'Pengajuan tersimpan; belum diterima ke stok' if rincian else 'Belum ada pengajuan tersimpan' }}</p></header>
 {% if gagal %}<div class="retur-asal__pesan" role="alert">{{ gagal }}</div>{% endif %}
 {% if pesan %}<div class="retur-asal__pesan" role="status">{{ pesan }}</div>{% endif %}
 {{ dt.tabs() }}
@@ -78,8 +78,8 @@
 {% for l in logs %}<details><summary>{{ l.waktu|jam }} · {{ l.aksi.replace('_',' ') }} · {{ aktor.get(l.pelaku_id, 'Sistem') }}</summary>
 {% if l.alasan %}<p>{{ l.alasan }}</p>{% endif %}
 {% for label, snapshot in [('Sebelum', l.sebelum), ('Sesudah', l.sesudah)] %}{% if snapshot %}<h3>{{ label }}</h3>
-{% if snapshot.muatan %}<ul>{% for m in snapshot.muatan %}<li>{{ nama_item.get(m.outgoing_item_id, 'Barang historis') }} · {{ m.jumlah_karung }} karung · {{ m.berat_kg }} kg{% if m.tara_toleransi_kg is defined and m.tara_toleransi_kg is not none %} · tara {{ m.tara_toleransi_kg }} kg/karung{% endif %}</li>{% endfor %}</ul>{% endif %}
-{% if snapshot.hasil %}<p>Timbang pertama {{ snapshot.hasil.timbang1_kg|default('—') }} kg · Timbang kedua {{ snapshot.hasil.timbang2_kg|default('—') }} kg · Bobot tiket {{ snapshot.hasil.berat_tiket_kg|default('—') }} kg</p><p>{{ snapshot.hasil.alasan }}</p>{% endif %}
+{% if snapshot.muatan %}<ul>{% for m in snapshot.muatan %}<li>{{ nama_item.get(m.outgoing_item_id, 'Barang historis') }} · {{ dt.angka(m.jumlah_karung, 'karung') }} · {{ dt.angka(m.berat_kg) }}{% if m.tara_toleransi_kg is defined and m.tara_toleransi_kg is not none %} · tara {{ dt.angka(m.tara_toleransi_kg, 'kg/karung') }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+{% if snapshot.hasil %}<p>Timbang pertama {{ dt.angka(snapshot.hasil.get('timbang1_kg')) }} · Timbang kedua {{ dt.angka(snapshot.hasil.get('timbang2_kg')) }} · Bobot tiket {{ dt.angka(snapshot.hasil.get('berat_tiket_kg')) }}</p><p>{{ snapshot.hasil.alasan }}</p>{% endif %}
 {% if snapshot.hasil and snapshot.hasil.koreksi_timbang %}<p>Koreksi Pos Timbang: {{ snapshot.hasil.koreksi_timbang.nama or 'Petugas tercatat di Pos Timbang' }} · {{ snapshot.hasil.koreksi_timbang.waktu }} · {{ snapshot.hasil.koreksi_timbang.alasan or '' }}</p>{% endif %}
 {% if snapshot.kode %}<p>Penerimaan {{ snapshot.kode }}</p>{% endif %}
 {% endif %}{% endfor %}</details>{% endfor %}</section>{% endif %}{% if not logs %}<section class="retur-asal__panel"><h2>Riwayat pemeriksaan</h2><p>Belum ada catatan pemeriksaan.</p></section>{% endif %}</div></div>

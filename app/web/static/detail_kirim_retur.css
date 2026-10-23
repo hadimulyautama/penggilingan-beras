@@ -42,3 +42,17 @@
 .riwayat-detail[data-detail-tab]{display:block}
 [data-detail-tab]>.kirim-detail__kepala{margin-top:18px}
 @container(min-width:571px){[data-detail-tab] #panel-ringkasan>.retur-asal__panel:has(>form){display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}[data-detail-tab] #panel-ringkasan>.retur-asal__panel:has(>form)>h2{grid-column:1/-1;margin:0}[data-detail-tab] #panel-ringkasan>.retur-asal__panel>form{margin:0}[data-detail-tab] #panel-ringkasan>.retur-asal__panel>details{margin:0}[data-detail-tab] #panel-ringkasan>.retur-asal__panel>details[open]{grid-column:1/-1}}
+/* Kepala dan fakta memakai irama yang sama pada pengajuan maupun penerimaan. */
+[data-detail-tab]>.pengiriman-tab{margin-bottom:12px}
+.detail-kirim-kembali{display:flex;align-items:center;min-height:38px;font-size:.88rem;color:var(--kulit-redup);text-decoration:underline;text-underline-offset:3px}
+[data-detail-tab]>.kirim-detail__kepala{margin-top:12px}
+[data-detail-tab] .kirim-detail__kepala h1{margin:8px 0;font-size:clamp(1.4rem,2vw,1.8rem);line-height:1.25}
+.detail-kirim-identitas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 20px;margin:16px 0 0}
+.detail-kirim-identitas>div{min-width:0}
+.detail-kirim-identitas dt{font-size:.82rem;color:var(--kulit-redup)}
+.detail-kirim-identitas dd{margin:4px 0 0;font-size:.9rem;color:var(--tinta)}
+[data-detail-tab] .detail-kirim-fakta dt{font-size:.88rem;line-height:1.5}
+[data-detail-tab] .detail-kirim-fakta dd{font-size:.9rem;line-height:1.5}
+@container(max-width:570px){.detail-kirim-identitas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+[data-detail-tab] .riwayat-detail__card{padding:20px;border-radius:14px;box-shadow:none}
+@container(max-width:570px){[data-detail-tab] .riwayat-detail__card{padding:14px}}
