@@ -73,3 +73,5 @@ Alur lama sudah menyimpan pengiriman asal pada ReturRincian.outgoing_record_id d
 Pembaca detail sebelumnya selalu menulis Pengeluaran asal belum tertaut, termasuk ketika relasinya ada. _pengiriman kini membaca relasi FK nyata dalam satu query tambahan untuk seluruh retur dan menyediakan tautan pengiriman asal. Label lama hanya dipakai ketika relasi memang tidak tersedia. Tidak menebak dari nama, waktu, atau bobot. Proyeksi portal menyaring tautan asal dengan scope OutgoingRecord yang sama; asal pengiriman campuran yang tidak dapat dibuka portal tidak dibocorkan. Admin tetap melihat fakta lengkap. Ini hanya pengayaan metadata baca; rumus, stok, transaksi dan layanan penerimaan tidak diubah.
 
 Tes akhir sebelum integrasi main:49 tes pelanggan/portal/tab,44 tes pengajuan retur dan tab (termasuk alur HTTP asal sampai penerimaan), serta805 tes non-PG lulus.13 kasus tes tab mencakup asal nyata, data lama tanpa relasi, dan asal campuran di luar cakupan portal.
+
+Setelah integrasi main terbaru dan sinkronisasi paket433:81tes PG tab/pelanggan/portal/pengajuan retur dan807tes non-PG lulus. Pembaruan Beranda dan pengelolaan akun portal dari main dipertahankan.
