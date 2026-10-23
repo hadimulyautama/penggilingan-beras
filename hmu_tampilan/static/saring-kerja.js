@@ -27,6 +27,9 @@
         var u=new URL(a.href,location.href);
         if(u.origin!==location.origin)return;
         if(daftar.includes(u.pathname))konteks(u);
+        if(u.pathname==='/pekerjaan/catat-lain'){
+          u.searchParams.set('kembali',location.pathname+location.search);
+        }
         var kembali=u.searchParams.get('kembali_kerja');
         if(kembali){
           var asal=new URL(kembali,location.href);
