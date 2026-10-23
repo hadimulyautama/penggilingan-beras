@@ -881,7 +881,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "jumlah_karung", "label": "Jumlah karung yang dipindah ke silo", "type": "number"},
                  {"name": "bobot_pemindahan", "label": "Pilih tumpukan untuk melihat bobot per karung dan totalnya.",
                   "type": "pratinjau", "source": "/api/actions/pratinjau-pk-karung",
-                  "acuan": ["tumpukan", "jumlah_karung_partai", "ukuran_karung_kg", "jumlah_karung", "hasil_timbang", "berat_kg"]},
+                  "acuan": ["tumpukan", "jumlah_karung_partai", "ukuran_karung_kg", "jumlah_karung", "hasil_timbang", "berat_kg"], "bersihkan": {"tumpukan": ["jumlah_karung_partai", "ukuran_karung_kg"]}},
                  {"name": "hasil_timbang", "label": "Yang dipindahkan", "rincian": "Khusus bahan lepas / sebagian karung", "type": "select", "bawaan": "karung", "options": [
                      ["karung", "Karung utuh — kg dihitung otomatis"],
                      ["ya", "Bahan lepas / sebagian karung — kg sudah diketahui"]]},

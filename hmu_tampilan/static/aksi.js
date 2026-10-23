@@ -597,10 +597,19 @@
     // Nomor urut dan identitas borang mencegah jawaban lama menimpa pilihan
     // baru saat jaringan lambat atau operator cepat mengganti tumpukan.
     var urutanPratinjau = 0, waktuPratinjau, kunciPratinjau = "";
-    function perbaruiPratinjau() {
+    function perbaruiPratinjau(e) {
       var borang = lembar.querySelector(".lembar__isi");
       var daftar = (a.fields || []).filter(function (f) { return f.type === "pratinjau"; });
       if (!daftar.length) return;
+      // Surat jalan yang diketik untuk satu sumber tidak boleh terbawa ke
+      // partai lain: N yang salah menggeser seluruh bobot partai berikutnya.
+      daftar.forEach(function (f) {
+        var nama = e && e.target && e.target.dataset.name;
+        ((f.bersihkan || {})[nama] || []).forEach(function (medan) {
+          var el = $("f_" + medan);
+          if (el) el.value = "";
+        });
+      });
       var kunci = daftar.map(function (f) {
         return f.source + "?" + (f.acuan || []).map(function (nama) {
           return encodeURIComponent(nama) + "=" + encodeURIComponent(nilaiMedan(nama));
