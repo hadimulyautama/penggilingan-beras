@@ -17,7 +17,9 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
     async with await _klien(pg,peran=role,gudang=gudang) as c:
         r=await c.get('/laporan-riwayat')
         assert r.status_code==200
-        assert r.url.path=='/laporan'
+        assert r.url.path==('/riwayat-sosoh' if gudang=='Gudang 2' else '/riwayat-pengeringan')
+        tabs=r.text.split('aria-label="Bagian Laporan dan Riwayat"')[1].split('</nav>')[0]
+        assert 'aria-current="page">Proses</a>' in tabs.split('</a>')[0] + '</a>'
         assert 'Bagian Laporan dan Riwayat' in r.text
         sidebar=r.text.split('aria-label="Navigasi utama"')[1]
         assert sidebar.count('>Laporan &amp; Riwayat<')==1
