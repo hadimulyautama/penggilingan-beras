@@ -75,8 +75,12 @@
   {% endif %}
 </section>
 <section class="beranda-aktivitas" aria-label="Sedang berjalan">
-  {{ benda.blok("Sedang berjalan", berjalan, rapat=True, alamat="/", progres=True) }}
-  {{ benda.blok("Transit", transit, rapat=True, alamat="/", progres=True) }}
+  {% set pratinjau_berjalan = berjalan[:4] %}
+  {% set pratinjau_transit = transit[:4 - pratinjau_berjalan|length] %}
+  {% set jumlah_proses = berjalan|length + transit|length %}
+  {{ benda.blok("Sedang berjalan", pratinjau_berjalan, rapat=True, alamat="/", progres=True) }}
+  {{ benda.blok("Transit", pratinjau_transit, rapat=True, alamat="/", progres=True) }}
+  {% if jumlah_proses > 4 %}<p class="beranda-status-kosong">Menampilkan 4 dari {{ jumlah_proses }} proses aktif.</p>{% endif %}
   {% if berjalan or transit %}<a class="btn btn--kecil" href="/pekerjaan?tab=berjalan">Lihat semua proses aktif <span aria-hidden="true">→</span></a>
   {% elif muat.pekerjaan %}<p class="beranda-status-kosong">Tidak ada mesin yang menyala.</p>
   {% else %}{{ gagal('Status proses aktif belum dapat dimuat.') }}{% endif %}
