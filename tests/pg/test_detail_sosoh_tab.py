@@ -33,6 +33,18 @@ async def test_tab_konteks_hasil_penuh_dan_jeda(pg, gudang2, peran):
             assert f'aria-labelledby="tab-{tab}" class="sosoh-panel" >' in r.text
             assert '220 kg' in r.text and 'Selisih sementara' in r.text
             assert 'Hasil sosoh keluar' in r.text and 'SPEK-22' in r.text
+            hero = r.text.split('<header class="riwayat-detail__hero">', 1)[1].split('</header>', 1)[0]
+            assert hero.count('Milik pabrik') == 1
+            assert 'Gudang 2' in hero
+            assert re.search(r'<dt>Bahan awal</dt>\s*<dd>9\.800 kg</dd>', r.text)
+            hasil_panel = r.text.split('id="panel-hasil"', 1)[1].split('id="panel-riwayat"', 1)[0]
+            assert hasil_panel.index('sosoh-catat-hasil') < hasil_panel.index('<h2>Hasil sosoh keluar')
+            assert hasil_panel.index('<h2>Hasil sosoh keluar') < hasil_panel.index('<h2>Riwayat pencatatan')
+            assert '<h3>Medium</h3>' in hasil_panel
+            assert not re.search(r'<h3>[^<]*SPEK-', hasil_panel)
+            assert '<summary>Spesifikasi tercatat</summary>' in hasil_panel
+            for i in range(1, 23):
+                assert f'SPEK-{i}' in hasil_panel
             assert 'MOCKUP' not in r.text and 'Peran contoh' not in r.text
             ids = re.findall(r'\bid="([^"]+)"', r.text)
             assert len(ids) == len(set(ids)), 'ID rincian harus unik di semua panel'
