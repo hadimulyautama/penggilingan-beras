@@ -12,6 +12,7 @@
   {% for tahap in g.langkah %}<a class="alur-tahap__satu" href="{{ tahap.href }}"><span class="alur-tahap__nomor" aria-hidden="true">{{ loop.index }}</span><strong>{{ tahap.nama }}</strong><small>{{ tahap.ket }}</small></a>{% endfor %}
   </nav>{% endif %}
   <div class="alur-masuk"><span>{{ g.masuk.label }} <small>hari ini</small></span><strong>{{ g.masuk.nilai }}<small>{{ g.masuk.sat }}</small></strong><p>{{ g.masuk.ket }}</p></div>
+  <div class="alur-mesin{{ ' alur-mesin--ringkas' if g.id == 'g1' and g.dryer_total == 1 and g.silos|length <= 2 }}">
   {% if g.id == 'g1' %}
   <section class="alur-pengering" aria-label="Mesin pengering {{ g.nama }}"><header class="alur-bagian"><h3>Dryer / pengering</h3><span>{{ g.dryer_total }} alat · {{ g.dryer_terisi }} terisi</span></header>
     {% for kelompok in g.dryers %}
@@ -31,8 +32,9 @@
       {% for s in g.silos %}<{{ 'details' if interaktif else 'div' }} class="alur-alat" data-silo-id="{{ s.id }}"><{{ 'summary' if interaktif else 'div' }} class="alur-alat__visual">{{ bentuk_silo(s.terisi) }}<strong>{{ s.nama }}</strong><span class="alur-isi{{ ' alur-isi--ada' if s.terisi }}">{{ 'Terisi' if s.terisi else 'Kosong' }}</span></{{ 'summary' if interaktif else 'div' }}>{% if interaktif %}<div class="alur-alat__rincian"><p>{{ s.bobot }}</p><a href="/pekerjaan?tab=berjalan&amp;gudang={{ g.id }}&amp;jenis={{ 'giling' if g.id=='g1' else 'sosoh' }}">Lihat pekerjaan →</a></div>{% endif %}</{{ 'details' if interaktif else 'div' }}>{% else %}<p class="alur-catatan">Belum ada silo aktif terdaftar.</p>{% endfor %}
       </div>
     </section>
-    <section class="alur-stok"><h3>{{ g.stok.label }}</h3><strong>{{ g.stok.nilai }}<small>{{ g.stok.sat }}</small></strong><p>{{ g.stok.ket }}</p><a href="/stok?gudang={{ g.id }}">Lihat stok →</a></section>
   </div>
+  </div>
+    <section class="alur-stok"><h3>{{ g.stok.label }}</h3><strong>{{ g.stok.nilai }}<small>{{ g.stok.sat }}</small></strong><p>{{ g.stok.ket }}</p><a href="/stok?gudang={{ g.id }}">Lihat stok →</a></section>
   <footer class="alur-gudang__kaki">Warna isi 80% adalah ilustrasi status terisi. {% if interaktif %}Buka alat untuk melihat bobot tercatat.{% else %}Lihat detail gudang untuk rincian alat.{% endif %}</footer>
 </section>
 {% endfor %}
