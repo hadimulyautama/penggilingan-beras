@@ -19,7 +19,7 @@
 <meta name="formulir-sesi" content="{{ CSRF }}">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block judul %}{{ APP_NAMA }}{% endblock %} · PT Hadi Mulya Utama</title>
-<meta name="theme-color" content="#203f70">
+<meta name="theme-color" content="{{ '#f5f5ef' if TERIK else '#111914' }}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 {# `black`, BUKAN `black-translucent` — kali ini diukur, bukan ditebak.
 
