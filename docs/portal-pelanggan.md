@@ -106,8 +106,8 @@ Daftar dan seluruh isi arsip dibaca melalui `pg_restore` di server. Snapshot
 Railway tidak tersedia pada paket saat ini; cadangan ini satu volume dengan DB,
 sehingga merupakan perlindungan migrasi logis, bukan pemulihan kehilangan volume.
 
-Baseline sebelum rilis: deployment `0a2753c8-740d-4f24-a5d7-2413f7437f98`
-(commit `589abd0`). **Jangan langsung menjalankan image lama itu setelah 0110**:
+Baseline sebelum rilis: deployment `10e31e2b-d890-4b9a-a7fa-61c366457206`
+(commit `74cc0be`). **Jangan langsung menjalankan image lama itu setelah 0110**:
 entrypoint Alembic-nya belum mengenali revisi baru. Cabang pemulihan kompatibel
 `pemulihan/portal-pelanggan-0110` (commit `1be8999`) mempertahankan aplikasi
 baseline, file migrasi 0110, dan deklarasi tiga model portal tanpa router
@@ -139,3 +139,17 @@ TLS berakhir di proxy.
 Pembaruan lanjutan `74cc0be` (infografis Beranda, v426) juga dipertahankan; paket
 portal memakai v427 untuk mencegah cache aset lama. Cabang pemulihan ikut
 mempertahankan perubahan Beranda ini.
+
+
+CI kandidat aplikasi `7926c25` lulus seluruh tahapan:
+https://github.com/hadimulyautama/penggilingan-beras/actions/runs/39971056458
+Perubahan setelah kandidat itu hanya penggabungan pembaruan Beranda yang sudah
+terbit, nomor aset v427, manifest dan catatan rilis; kode aplikasi, Dockerfile,
+dependensi dan migrasi identik. Penjaga paket dan tampilan/PDF terkait lulus
+ulang setelah penggabungan.
+
+Cadangan terakhir tepat sebelum promosi:
+`/var/lib/postgresql/data/portal-backups/sebelum-0110-final-20261023.dump`,
+4.467.340 byte, izin 0600, SHA-256
+`1a9f1380a86310a6c21f08b133d88b666c021f8f9fe035a9b8735d887c4cdde5`.
+Seluruh arsip diverifikasi dengan `pg_restore --file=/dev/null` di server.
