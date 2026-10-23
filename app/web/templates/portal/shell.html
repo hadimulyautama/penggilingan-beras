@@ -1,5 +1,5 @@
 {% from '_ikon_portal.html' import ikon_portal %}
-<!doctype html><html lang="id"><head>
+<!doctype html><html lang="id" class="portal-document"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="formulir-sesi" content="{{ CSRF }}"><meta name="robots" content="noindex,nofollow">
 <title>{{ title }} · PadiFlow</title>
@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/tabel-standar.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/padiflow-brand.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-scroll1">
 <script src="/static/portal-pelanggan.js?v={{ VERSI }}" defer></script>
 </head><body class="padiflow-ui portal-customer {{ 'terik' if light }}">
 <a class="portal-skip" href="#isi-pelanggan">Lewati ke isi</a>
@@ -23,5 +23,5 @@
 <main class="isi portal-content" id="isi-pelanggan" tabindex="-1">{{ content }}</main></div>
 <!-- Native page styles are loaded above this final shared theme contract. -->
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-scroll1">
 </body></html>
