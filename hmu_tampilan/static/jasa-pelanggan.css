@@ -15,3 +15,53 @@
 
 .saring.jasa-operasi{display:flex;flex-wrap:wrap;gap:8px}.jasa-operasi .btn{width:auto;flex:1 1 150px}.saring.jasa-cari-form{grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;align-items:end}
 @media(max-width:600px){.saring.jasa-cari-form{grid-template-columns:minmax(0,1fr)}.jasa-operasi .btn{min-height:44px}}
+
+/* Detail pelanggan: penyajian saja; daftar dan pembaca saldo tidak berubah. */
+.jasa-detail{width:100%;max-width:1180px;min-width:0;margin-inline:auto;container-type:inline-size}
+.jasa-detail *{box-sizing:border-box}
+.jasa-kembali{display:inline-flex;align-items:center;min-height:40px;margin-bottom:10px;color:var(--redup);font-size:.9rem;text-underline-offset:3px}
+.jasa-kepala{background:var(--panel-2);border:1px solid var(--garis);padding:20px;border-radius:16px;overflow-wrap:anywhere}
+.jasa-kepala__atas{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:.8rem;color:var(--redup)}
+.jasa-detail .jasa-kepala h1{font-size:1.65rem;line-height:1.3;margin:12px 0 8px}
+.jasa-detail .jasa-kepala p{font-size:.86rem;line-height:1.6;color:var(--redup);margin:5px 0 0}
+.jasa-detail-tab{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:18px 0}
+.jasa-detail-tab a{display:flex;align-items:center;justify-content:center;min-height:48px;border:1px solid var(--garis);border-radius:9px;background:var(--panel);padding:10px 8px;color:var(--tinta);font-size:.88rem;text-align:center;text-decoration:none;overflow-wrap:anywhere}
+.jasa-detail-tab a[aria-current=page]{background:var(--panel-2);border-color:#73946e;color:var(--tinta);font-weight:650}
+.jasa-detail .kartu{padding:18px;margin:0 0 16px;min-width:0;overflow-wrap:anywhere;border:1px solid var(--garis);border-radius:14px;background:var(--panel)}
+.jasa-detail .kartu h2{font-size:1.05rem;line-height:1.4;margin:0 0 12px;padding:0}
+.jasa-detail .bantu{font-size:.86rem;line-height:1.65;margin:10px 0;color:var(--redup)}
+.jasa-detail .jasa-kondisi{margin:12px 0}
+.jasa-detail-angka{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.jasa-detail-angka>div{background:var(--panel);border:1px solid var(--garis);border-radius:10px;padding:14px;min-width:0;overflow-wrap:anywhere}
+.jasa-detail-angka span{font-size:.82rem;color:var(--redup)}
+.jasa-detail-angka strong{display:block;font-size:1.35rem;margin-top:7px;font-variant-numeric:tabular-nums}
+.jasa-detail .jasa-operasi{padding:0;margin:12px 0;gap:10px}
+.jasa-detail .jasa-operasi .btn{min-height:44px;white-space:normal;text-align:center;justify-content:center}
+.jasa-detail .jasa-utama{--tombol-pucat:#4b7043;--tombol-pucat-teks:#fff;--tombol-batas:#4b7043}
+.jasa-pintasan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.jasa-pintasan a{display:block;border:1px solid var(--garis);border-radius:10px;padding:16px;color:var(--tinta);text-decoration:none;min-width:0}
+.jasa-pintasan small{display:block;color:var(--redup);font-size:.82rem;line-height:1.6;margin-top:5px}
+.jasa-pasang{margin:0}.jasa-pasang>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--garis);font-size:.88rem}
+.jasa-pasang dt{color:var(--redup)}.jasa-pasang dd{margin:0;text-align:right;font-weight:600}
+.jasa-tautan{display:inline-flex;align-items:center;min-height:44px;font-size:.88rem;color:var(--tinta);text-underline-offset:3px}
+.jasa-detail .jasa-catatan{font-size:.9rem;padding:14px 0}
+.jasa-detail .jasa-catatan summary>span:first-child{min-width:0}
+.jasa-detail .jasa-catatan .lencana{flex-shrink:0;max-width:55%;white-space:normal;text-align:center}
+.jasa-detail .jasa-catatan .baris{gap:8px;flex-wrap:wrap}
+.jasa-detail .jasa-stok__baris{font-size:.9rem}
+.jasa-asal{grid-column:1/-1;border-top:1px solid var(--garis);margin-top:4px;padding-top:6px}
+.jasa-asal summary{min-height:44px;align-content:center;cursor:pointer;font-size:.88rem;color:var(--redup)}
+.jasa-asal ul{padding:0;list-style:none;margin:0}.jasa-asal li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:10px 0;border-bottom:1px solid var(--garis)}
+.jasa-asal small{grid-column:1/-1;color:var(--redup)}
+.jasa-detail :focus-visible{outline:3px solid #73946e;outline-offset:3px}
+@container(max-width:570px){
+ .jasa-kepala{padding:16px}.jasa-detail .jasa-kepala h1{font-size:1.4rem}
+ .jasa-detail-tab{grid-template-columns:repeat(2,minmax(0,1fr));margin:14px 0}.jasa-detail-tab a{font-size:.84rem}.jasa-detail-tab a:last-child{grid-column:1/-1}
+ .jasa-detail .kartu{padding:16px}.jasa-detail-angka{grid-template-columns:minmax(0,1fr);gap:8px}.jasa-detail-angka>div{display:flex;align-items:center;justify-content:space-between;gap:12px}.jasa-detail-angka strong{font-size:1.25rem;margin:0;text-align:right}
+ .jasa-pintasan{grid-template-columns:minmax(0,1fr)}
+ .jasa-detail .jasa-operasi .btn{flex:1 1 130px}
+ .jasa-detail .jasa-sumber li{flex-wrap:wrap}.jasa-detail .jasa-sumber li>span{flex:1 1 180px}.jasa-detail .jasa-sumber strong{white-space:normal}
+ .jasa-asal li{grid-template-columns:minmax(0,1fr)}
+}
+
+.jasa-detail .jasa-peringatan{border:1px solid var(--garis);border-radius:10px;background:var(--panel-2);padding:12px 16px;margin:0 0 16px;font-size:.86rem;line-height:1.65;color:var(--tinta)}
