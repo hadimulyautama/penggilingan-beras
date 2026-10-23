@@ -2,8 +2,9 @@
 {% set angka = st.kg_rinci %}
 <link rel="stylesheet" href="/static/detail_kirim_retur.css?v=1">
 <article class="kirim-detail" data-detail-tab>
+    <a class="kirim-detail__kembali" href="{{ dt.kembali('/barang-keluar?' ~ filter_query) }}">← Kembali ke Pengiriman</a>
   <header class="kirim-detail__kepala">
-    <a class="kirim-detail__kembali" href="/barang-keluar">← Barang Keluar</a>
+
     <div class="kirim-detail__judul">
       <div><p class="kirim-detail__label">Perintah barang keluar</p><h1 id="judul-perintah">{{ k.rec.kode }}</h1></div>
       <div class="kirim-detail__penanda"><span class="kirim-detail__status">{{ k.keadaan }}</span><span>{{ 'Jasa' if k.jasa else 'Milik pabrik' }}</span></div>

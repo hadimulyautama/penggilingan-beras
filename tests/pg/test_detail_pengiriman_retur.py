@@ -29,6 +29,10 @@ async def test_pengiriman_semua_tab_tanpa_perubahan_stok(pg,gudang):
     r=await _perintah(pg,gudang,karung=100)
     async with await _klien(pg,gudang['adm'],'detail_kirim_admin') as c:
         await potret(c,f'/barang-keluar/{r.rec.id}','pengiriman-perintah')
+        kembali=await c.get(f'/barang-keluar/{r.rec.id}',params={'kembali_kerja':'/pekerjaan?tab=tindakan&jenis=muat'})
+        assert 'href="/pekerjaan?tab=tindakan&amp;jenis=muat"' in kembali.text
+        luar=await c.get(f'/barang-keluar/{r.rec.id}',params={'kembali_kerja':'https://contoh.invalid'})
+        assert 'href="https://contoh.invalid"' not in luar.text
         assert await _stok(pg,gudang)==10000
         async with pg() as db:
             await bk.muat_semua(db,user=await db.get(User,gudang['op']),rec_id=r.rec.id)
@@ -89,3 +93,34 @@ async def test_batal_tab_tetap_terkunci_tanpa_stok(pg,asal):
         async with pg() as db:
             assert await db.scalar(select(func.count()).select_from(CustomerReturn))==0
             assert (await db.get(ReturRincian,r.id)).status_pemeriksaan=='dibatalkan'
+
+async def test_batas_tara_snapshot_dan_tiket_sekarang_terpisah(pg,asal):
+    from sqlalchemy import text
+    await selesai(pg,asal,251) # 10 karung × tara .10: batas inklusif +1.
+    r=await simpan(pg,asal,10)
+    receipt=await terima(pg,r.id)
+    assert receipt and receipt.berat_rincian_kg==250 and receipt.berat_tiket_kg==251
+    async with await _klien(pg,asal['uid'],'detail_retur_otomatis') as c:
+        await potret(c,f'/retur/{receipt.id}','retur-otomatis')
+        async with pg() as db:
+            await db.execute(text('UPDATE timbangan_transaksi SET berat_barang_kg=261 WHERE id=:id'),{'id':asal['tiket'][0]})
+            await db.commit()
+        html=await potret(c,f'/retur/{receipt.id}','retur-snapshot-tiket-berubah')
+        assert '251' in html.text and '261' in html.text
+        async with pg() as db:
+            assert (await db.get(CustomerReturn,receipt.id)).berat_tiket_kg==251
+            assert await db.scalar(select(func.sum(FinishedGoodsStock.berat_total_kg)))==250
+
+async def test_tara_tidak_sah_tertahan_dan_tampil(pg,asal):
+    from app.models import KemasanTara
+    from sqlalchemy import delete
+    await selesai(pg,asal)
+    async with pg() as db:
+        await db.execute(delete(KemasanTara));await db.commit()
+    r=await simpan(pg,asal,10)
+    assert await terima(pg,r.id) is None
+    async with await _klien(pg,asal['uid'],'detail_retur_tara') as c:
+        html=await potret(c,f'/retur/pengajuan/{r.id}','retur-tara-belum-sah')
+        assert 'tara kemasan belum lengkap atau tidak sah' in html.text
+        async with pg() as db:
+            assert await db.scalar(select(func.count()).select_from(CustomerReturn))==0

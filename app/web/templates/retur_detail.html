@@ -3,7 +3,7 @@
 {% import '_stok.html' as st with context %}{% set kg=st.kg %}
 {% block judul %}Detail retur {{ retur.kode }}{% endblock %}
 {% block isi %}<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/detail_kirim_retur.css?v=1');</style>
-<div class="riwayat-detail" data-detail-tab><a class="riwayat-detail__back" href="/retur">← Kembali ke Barang Retur</a>
+<div class="riwayat-detail" data-detail-tab><a class="riwayat-detail__back" href="{{ dt.kembali('/retur') }}">← Kembali ke Barang Retur</a>
 {% if pengiriman_asal %}<p><a href="/barang-keluar/{{ pengiriman_asal }}">Pengiriman asal</a></p>{% endif %}
   <header class="kirim-detail__kepala">
     <h1>{{ retur.kode }}</h1>
@@ -18,7 +18,7 @@
   </header>
 {{ dt.tabs() }}{{ dt.buka('ringkasan') }}<section class="riwayat-detail__card"><h2>Tindakan saat ini</h2><p>Sudah diterima ke stok. Catatan terkunci; penerimaan tidak dicatat ulang saat halaman dibuka.</p>{% if pengajuan_id %}<a class="btn btn--kecil" href="/retur/pengajuan/{{ pengajuan_id }}">Lihat pengajuan dan pemeriksaan</a>{% endif %}</section>
 <div class="detail-kirim-stat"><div><span>Berat rincian masuk stok</span><strong>{{ kg(retur.berat_rincian_kg) }} kg</strong></div><div><span>Bobot tiket saat diterima</span><strong>{{ kg(retur.berat_tiket_kg) }} kg</strong></div><div><span>Status stok</span><strong>Sudah diterima</strong></div></div>
-<div class="detail-kirim-grid"><section class="riwayat-detail__card"><h2>Pengiriman asal</h2>{% if pengiriman_asal %}<a class="btn" href="/barang-keluar/{{ pengiriman_asal }}">Buka pengiriman asal</a>{% else %}<p>Hubungan pengiriman asal belum tercatat pada data lama ini.</p>{% endif %}<p>{{ retur.nama_pelanggan or 'Pelanggan tidak tercatat' }}</p></section><section class="riwayat-detail__card"><h2>Pencocokan bobot</h2><p>Selisih tiket − rincian: {{ kg(retur.selisih_kg) }} kg</p><p>Tara hanya toleransi pencocokan; berat rincian masuk stok tidak dipotong tara.</p>{{ dt.taut('tiket','Lihat tiket & bobot') }}</section></div></div>
+<div class="detail-kirim-grid"><section class="riwayat-detail__card"><h2>Pengiriman asal</h2>{% if pengiriman_asal %}<a class="btn" href="/barang-keluar/{{ pengiriman_asal }}">Buka pengiriman asal</a>{% else %}<p>Hubungan pengiriman asal belum tercatat pada data lama ini.</p>{% endif %}<p>{{ retur.nama_pelanggan or 'Pelanggan tidak tercatat' }}</p></section><section class="riwayat-detail__card"><h2>Pencocokan bobot</h2><p>Selisih tiket − rincian: {{ '+' if retur.selisih_kg>0 else '' }}{{ kg(retur.selisih_kg) }} kg</p><p>Tara hanya toleransi pencocokan; berat rincian masuk stok tidak dipotong tara.</p>{{ dt.taut('tiket','Lihat tiket & bobot') }}</section></div></div>
 {{ dt.buka('barang') }}  <section class="riwayat-detail__card">
     <h2>Rincian barang yang diterima</h2>
     <div class="tabel-standar__scroll">
@@ -38,7 +38,7 @@
     <dl class="riwayat-detail__facts">
       <div><dt>Berat menurut tiket saat diterima</dt><dd>{{ kg(retur.berat_tiket_kg) }} kg</dd></div>
       <div><dt>Total rincian masuk stok</dt><dd>{{ kg(retur.berat_rincian_kg) }} kg</dd></div>
-      <div><dt>Selisih tiket − rincian</dt><dd>{{ kg(retur.selisih_kg) }} kg</dd></div>
+      <div><dt>Selisih tiket − rincian</dt><dd>{{ '+' if retur.selisih_kg>0 else '' }}{{ kg(retur.selisih_kg) }} kg</dd></div>
       <div><dt>Alasan selisih</dt><dd>{{ retur.alasan_selisih or '—' }}</dd></div>
     </dl>
     <h3>Catatan penerimaan</h3><p>{{ retur.catatan or 'Tidak ada catatan.' }}</p>
