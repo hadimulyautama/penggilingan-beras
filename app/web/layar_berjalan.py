@@ -93,7 +93,11 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
     def halaman(parameter, nomor):
         return str(dasar.include_query_params(**{parameter: nomor}))
     return await render_laci(
-        request, "proses_aktif_detail.html", d=detail, proses=kartu,
+        request, "detail_sosoh.html" if jenis == "sosoh" else "proses_aktif_detail.html", d=detail, proses=kartu,
+        tab_sosoh=(request.query_params.get("tab_detail") if request.query_params.get("tab_detail") in
+                   {"ringkasan", "bahan", "hasil", "riwayat"} else
+                   "hasil" if request.query_params.get("halaman_hasil") else
+                   "riwayat" if request.query_params.get("halaman_jeda") else "ringkasan"),
         layar="pekerjaan", breadcrumb_detail=kode,
         kembali=konteks_aman(request.query_params.get("kembali_kerja")) or "/pekerjaan?tab=berjalan",
         alamat=request.url.path, halaman_proses=halaman,
