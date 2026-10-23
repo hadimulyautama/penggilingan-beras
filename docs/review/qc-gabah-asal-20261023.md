@@ -33,7 +33,7 @@ Sakelar fitur Mutu & QC tetap dipatuhi. Pengguna mengikuti izin halaman asal, te
 - _detail_pengeringan_bagian.html, _detail_giling_bagian.html dan riwayat_detail.html: penempatan komponen.
 - stok_pk_dengan_qc_asal.html: memperluas template stok lama; rincian QC dipindah ke grid setelah daftar batch melalui skrip lokal sekali-render, tanpa pendengar global. Tanpa JavaScript, kartu tetap terbaca di bawah rincian stok. Tidak menyunting paket vendored.
 - tests/pg/test_qc_gabah_asal.py: lima skenario integrasi baru.
-- Dua assertion tes navigasi lama diperbarui mengikuti perubahan main 894b463 (tab Pekerjaan bersama dan penghapusan tombol kembali berulang). Tidak ada perubahan implementasi navigasi pada pekerjaan ini.
+- Tiga assertion tes navigasi lama diperbarui mengikuti perubahan main 894b463 dan f22c150 (tab Pekerjaan bersama, penghapusan tombol kembali berulang, dan pemindahan penyaring gudang ke helper yang dipakai bersama). Tidak ada perubahan implementasi navigasi pada pekerjaan ini.
 
 ## Pemeriksaan
 

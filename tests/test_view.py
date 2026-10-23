@@ -261,7 +261,8 @@ def test_penyaring_gudang_sama_di_stok_dan_di_berjalan():
     assert 'GUDANG if view in MEJA else ()' in kode
     src=inspect.getsource(layar_pekerjaan.halaman_pekerjaan)
     assert "pilihan(request, 'gudang', {'g1','g2'})" in src
-    assert 'x.gudang == gudang' in src
+    assert 'daftar_tab_pekerjaan(' in src
+    assert 'x.gudang == gudang' in inspect.getsource(layar_pekerjaan.daftar_tab_pekerjaan)
     for nama in ('pekerjaan.html','barang_masuk.html'):
         t=(Path(__file__).resolve().parents[1]/'hmu_tampilan/templates'/nama).read_text()
         assert 'if VIEW in V_MEJA' in t and 'filter_gudang' in t
