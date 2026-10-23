@@ -1,3 +1,4 @@
+{% from "_ikon_portal.html" import ikon_portal %}
 {# ── base.html milik paket hmu_tampilan ──
    Kerangka SEMUA layar: produksi, gudang2, meja. Tidak disalin ke repo
    aplikasi; dipasang lewat pemuat Jinja berlapis (hmu_tampilan.pasang_jinja).
@@ -71,11 +72,12 @@
    isinya dan memanggil PINDAH sebelum </body> sempat terbaca. #}
 <script src="/static/pindah.js?v={{ VERSI }}"></script>
 {% block kepala_ekstra %}{% endblock %}
+<link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
 </head>
 {# Mode terik disimpan per PERANGKAT di kuki, bukan per akun: satu orang
    memakai ponselnya sendiri di dalam gudang dan perangkat gudang di luar, dan
    yang menentukan bukan siapa dia melainkan di mana layarnya berada. #}
-<body class="{{ 'terik' if TERIK }}">
+<body class="padiflow-ui {{ 'terik' if TERIK }}">
 <div class="bingkai">
 {% block pita %}
 {% if VIEW in ('selepan', 'polesan') %}<div class="pita-samar" role="status">GUDANG {{ '1 · SELEPAN' if VIEW == 'selepan' else '2 · PENYOSOHAN' }} · {{ akun.nama }}</div>{% endif %}
@@ -99,20 +101,18 @@
 <main class="isi">
 {% if akun %}
 <header class="bar" aria-label="Navigasi aplikasi">
-  {# Tombol kembali menang atas menu: kalau halaman ini punya induk, yang
-     dicari orang lebih dulu adalah jalan pulang, bukan daftar tujuan lain. #}
-  {% if kembali %}
-    <a class="bar__balik" href="{{ kembali }}" aria-label="Kembali">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-    </a>
-  {% elif layar in TAB_KUNCI %}
+  {# Menu selalu terjangkau, termasuk pada halaman detail. #}
     <button class="bar__menu" type="button" id="buka-laci" aria-label="Buka menu"
             aria-controls="laci" aria-expanded="false">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2.1" stroke-linecap="round">
         <path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
+  {% if kembali %}
+    <a class="bar__balik" href="{{ kembali }}" aria-label="Kembali">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
   {% endif %}
   <span class="bar__merek" aria-label="{{ 'PT Hadi Mulya Utama' if layar == 'beranda' else self.judul()|striptags|trim }}">
     {{ 'PT Hadi Mulya Utama' if layar == 'beranda' else self.judul()|striptags|trim }}
@@ -219,6 +219,8 @@
         <img class="laci__logo laci__logo--terik" src="/static/padiflow-logo-terang.png?v={{ VERSI }}" alt="PadiFlow">
         <img class="laci__logo laci__logo--gelap" src="/static/padiflow-logo-gelap.png?v={{ VERSI }}" alt="PadiFlow">
       </div>
+      <span class="pd-app-name">{{ APP_NAMA }}</span>
+      <button type="button" class="pd-close" aria-label="Tutup menu">×</button>
     </div>
     <div class="laci__daftar">
       {# `PINTU_MATI` — pintu yang tak ditawarkan pada permintaan INI, apa pun
@@ -337,7 +339,7 @@
              masing-masing. Prinsip yang sama sudah tertulis beberapa baris di
              atas untuk `peran_min`; ikon satu-satunya fakta per-pintu yang
              masih tercecer di sini. #}
-          <span class="pintu__ikon pintu__ikon--{{ kunci }}" aria-hidden="true">{% if ikon == 'truck' %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M3 17V6h10v11M13 9h4l4 4v4h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>{% elif ikon == 'chart-no-axes-combined' %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M8 3v3M8 10v3M8 17v3M2 21h20M14 3v3M14 10v3M14 17v3M20 3v3M20 10v3M20 17v3"/><path d="m2 17 6-7 6 3 8-10"/></svg>{% else %}{{ ikon or "⚙" }}{% endif %}</span>
+          <span class="pintu__ikon pintu__ikon--{{ kunci }}" aria-hidden="true">{{ ikon_portal(kunci) }}</span>
           {# Keterangan satu baris tiap pintu DICABUT 28 September 2026, atas
              permintaan pemilik: "sidebar cukup nama halamannya saja",
              "deskripsi tambahan tidak perlu".
@@ -473,6 +475,8 @@
     tombol.setAttribute("aria-expanded", ya ? "true" : "false");
   }
   tombol.addEventListener("click", function () { buka(laci.hidden); });
+  var tutup = laci.querySelector(".pd-close");
+  if (tutup) tutup.addEventListener("click", function () { buka(false); tombol.focus(); });
   /* Menekan di luar panel menutupnya — yang membuka laci untuk melihat
      isinya harus bisa keluar tanpa mencari tombol tutup. */
   laci.addEventListener("click", function (e) { if (e.target === laci) buka(false); });

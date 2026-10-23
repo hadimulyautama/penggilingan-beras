@@ -17,6 +17,7 @@ var NAMA = 'hmu-' + VERSI;
 
 var RANGKA = [
   '/static/app.css?v=' + VERSI,
+  '/static/komponen-portal.css?v=' + VERSI,
   '/static/aksi.js?v=' + VERSI,
   '/static/pindah.js?v=' + VERSI,
   '/static/ikon-180.png?v=' + VERSI,
