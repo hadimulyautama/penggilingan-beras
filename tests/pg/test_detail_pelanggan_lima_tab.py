@@ -186,12 +186,25 @@ async def test_portal_ringkasan_dan_tab_tidak_memuat_pengiriman_retur_di_luar_sc
         for n,owners in enumerate(([portal.orders[0].id],[portal.orders[1].id],[portal.orders[0].id,portal.orders[1].id])):
             o=OutgoingRecord(kode=f'OUT-LIMA-PRIV-{n}',pelanggan_id=portal.owners[0].id,tanggal=now_local().date(),waktu=now_local(),input_by=1,status='selesai')
             db.add(o);await db.flush();kiriman.append(o)
-            for jid in owners:db.add(OutgoingItem(outgoing_record_id=o.id,item_type='byproduct',jasa_id=jid,berat_kg=10))
+            out_items={}
+            for jid in owners:
+                item=OutgoingItem(outgoing_record_id=o.id,item_type='byproduct',jasa_id=jid,berat_kg=10)
+                db.add(item);await db.flush();out_items[jid]=item.id
             tid=await _tiket(db,f'RTP-LIMA-{n}','BERAS_MASUK')
             r=CustomerReturn(kode=f'RET-LIMA-PRIV-{n}',timbangan_transaksi_id=tid,kode_tiket=f'RTP-LIMA-{n}',pelanggan_id=portal.owners[0].id,berat_tiket_kg=10,berat_rincian_kg=10,selisih_kg=0,input_by=1,waktu=now_local())
             db.add(r);await db.flush();retur.append(r)
-            for jid in owners:db.add(CustomerReturnItem(customer_return_id=r.id,jasa_id=jid,jumlah_karung=0,berat_total_kg=10))
+            for jid in owners:db.add(CustomerReturnItem(customer_return_id=r.id,jasa_id=jid,jumlah_karung=0,berat_total_kg=10,outgoing_item_id=out_items[jid]))
         await db.commit()
+        tid=await _tiket(db,'RTP-LIMA-LAMA','BERAS_MASUK')
+        lama=CustomerReturn(kode='RET-LIMA-LAMA-PABRIK',timbangan_transaksi_id=tid,kode_tiket='RTP-LIMA-LAMA',pelanggan_id=portal.owners[0].id,berat_tiket_kg=10,berat_rincian_kg=10,selisih_kg=0,input_by=1,waktu=now_local())
+        db.add(lama);await db.flush();retur.append(lama)
+        db.add(CustomerReturnItem(customer_return_id=lama.id,jasa_id=None,jumlah_karung=0,berat_total_kg=10));await db.commit()
+        from app.services import jasa_pelanggan as svc
+        data=await svc.pelanggan(db,portal.owners[0].id)
+        for n in range(3):
+            row=next(r for r in data['retur'] if r['id']==retur[n].id)
+            assert row['asal']==[{'id':kiriman[n].id,'kode':kiriman[n].kode,'href':f'/barang-keluar/{kiriman[n].id}'}]
+            assert 'belum tertaut' not in row['status']
     async with portal_client(portal.accounts[0]) as c:
         for tab in TAB:
             r=await c.get(f'/pelanggan/jasa/pelanggan/{portal.owners[0].id}?tab={tab}')
@@ -202,9 +215,40 @@ async def test_portal_ringkasan_dan_tab_tidak_memuat_pengiriman_retur_di_luar_sc
                 pairs={d.dt.get_text(strip=True):d.dd.get_text(strip=True) for d in s.select('.jasa-pasang>div')}
                 assert pairs=={'Pengambilan / pengiriman':'1 catatan','Retur terkait':'1 penerimaan retur'}
             if tab=='pengambilan':assert kiriman[0].kode in r.text and retur[0].kode in r.text
+            bukti('retur-tertaut-portal-'+tab+'.html',r.text)
         for row in kiriman[1:]:assert (await c.get(f'/pelanggan/barang-keluar/{row.id}')).status_code==404
         for row in retur[1:]:assert (await c.get(f'/pelanggan/retur/{row.id}')).status_code==404
     # Tampilan internal Admin tetap memiliki seluruh fakta yang dibaca layanan.
     async with await _klien(pg,role='admin') as c:
-        r=await c.get(f'/jasa/pelanggan/{portal.owners[0].id}?tab=pengambilan')
-        assert r.status_code==200 and all(x.kode in r.text for x in retur)
+        for tab in TAB:
+            r=await c.get(f'/jasa/pelanggan/{portal.owners[0].id}?tab={tab}')
+            assert r.status_code==200
+            if tab=='pengambilan':assert all(x.kode in r.text for x in retur) and 'Pengeluaran asal belum tertaut' in r.text
+            bukti('retur-tertaut-'+tab+'.html',r.text)
+
+
+async def test_asal_retur_portal_tidak_membuka_pengiriman_campuran(pg,portal):
+    from app.models import OutgoingRecord,OutgoingItem,CustomerReturn,CustomerReturnItem
+    from app.database import now_local
+    from app.services import jasa_pelanggan as svc
+    from tests.pg.test_tiket_antrean_produksi import _tiket
+    pid=portal.owners[0].id
+    async with pg() as db:
+        o=OutgoingRecord(kode='OUT-ASAL-TERBATAS',pelanggan_id=pid,tanggal=now_local().date(),waktu=now_local(),input_by=1,status='selesai')
+        db.add(o);await db.flush()
+        own=OutgoingItem(outgoing_record_id=o.id,item_type='byproduct',jasa_id=portal.orders[0].id,berat_kg=10)
+        other=OutgoingItem(outgoing_record_id=o.id,item_type='byproduct',jasa_id=portal.orders[1].id,berat_kg=10)
+        db.add_all([own,other]);await db.flush()
+        tid=await _tiket(db,'RTP-ASAL-TERBATAS','BERAS_MASUK')
+        r=CustomerReturn(kode='RET-ASAL-MILIK',timbangan_transaksi_id=tid,kode_tiket='RTP-ASAL-TERBATAS',pelanggan_id=pid,berat_tiket_kg=10,berat_rincian_kg=10,selisih_kg=0,input_by=1,waktu=now_local())
+        db.add(r);await db.flush()
+        db.add(CustomerReturnItem(customer_return_id=r.id,jasa_id=portal.orders[0].id,jumlah_karung=0,berat_total_kg=10,outgoing_item_id=own.id));await db.commit()
+        d=await svc.pelanggan(db,pid)
+        assert next(x for x in d['retur'] if x['id']==r.id)['asal'][0]['id']==o.id
+    async with portal_client(portal.accounts[0]) as c:
+        page=await c.get(f'/pelanggan/jasa/pelanggan/{pid}?tab=pengambilan')
+        assert page.status_code==200 and r.kode in page.text and o.kode not in page.text
+        assert (await c.get(f'/pelanggan/barang-keluar/{o.id}')).status_code==404
+    async with await _klien(pg,role='admin') as c:
+        page=await c.get(f'/jasa/pelanggan/{pid}?tab=pengambilan')
+        assert page.status_code==200 and o.kode in page.text and 'Pengiriman asal:' in page.text

@@ -9,6 +9,7 @@ tak ada yang tahu ada yang hilang.
 from __future__ import annotations
 
 import inspect
+from html import unescape
 import pathlib
 import types
 
@@ -74,7 +75,7 @@ def test_beranda_menyebut_giling_dan_silo_bukan_pengeringan_saja():
 def test_kartu_beranda_bisa_dikerjakan_dari_situ():
     """Ringkas bukan berarti tak bisa dikerjakan. Kartu yang cuma bisa dilihat
     memaksa orang membuka layar lain untuk menekan tombol yang sama."""
-    html = _beranda(berjalan=[_giling()], transit=[_silo()])
+    html = unescape(_beranda(berjalan=[_giling()], transit=[_silo()]))
     # Lembarnya dibuka DI BERANDA. Menekan "Perbarui hasil giling" lalu
     # mendarat di Antrian tunggu berarti orang kehilangan tempatnya — dan
     # yang ia tekan tadi ada di layar ini, bukan di sana.
@@ -256,3 +257,33 @@ def test_keputusan_berisi_tetap_memuat_jumlah_dan_rincian():
     assert kartu and 'QC dan keputusan' in kartu.group(1)
     assert re.search(r'lencana[^>]*>5</span>',kartu.group(1))
     assert 'href="/keputusan"' not in html and 'href="/mutu"' not in html
+
+
+def test_aksi_utama_beranda_mengikuti_proses_dan_nilai_per_aksi():
+    kartu = _giling()
+    kartu.nilai = 'giling:GLG-01'
+    kartu.pilihan = [
+        ('lanjutkan_proses', 'Lanjutkan giling', 'Mesin berjalan lagi', 'giling:GLG-01'),
+        ('hasil_giling', 'Catat hasil', 'Catat hasil saat jeda', 'GLG-01'),
+    ]
+    html = unescape(_beranda(berjalan=[kartu], transit=[_silo()]))
+    import re
+    links = re.findall(r'<a class="btn btn--utama beranda-kartu-aksi__utama" href="([^"]+)">([^<]+)</a>', html)
+    assert links == [('/?buka=lanjutkan_proses&nilai=giling%3AGLG-01', 'Lanjutkan giling'),
+                     ('/?buka=mulai_giling&nilai=A', 'Mulai giling')]
+    assert 'href="/?buka=hasil_giling&nilai=GLG-01"' in html
+    assert html.count('class="beranda-kartu-aksi__lain"') == 1
+
+
+def test_aksi_utama_tidak_memilih_tujuan_yang_dilarang():
+    from app.services.berjalan import Tombol
+    kartu = _giling()
+    kartu.pilihan = []
+    kartu.tombol = [Tombol('Dryer penuh', 'Tidak tersedia', '/uji/dryer', {'id': 1}, utama=True, mati='Sedang terisi'),
+                    Tombol('Masukkan silo', 'Siap dipakai', '/uji/silo', {'id': 2})]
+    html = _beranda(berjalan=[kartu])
+    assert 'class="btn btn--utama beranda-kartu-aksi__utama" data-post="/uji/silo"' in html
+    assert 'disabled aria-disabled="true" data-post="/uji/dryer"' in html
+    kartu.tombol[1].mati = 'Sedang terisi'
+    html = _beranda(berjalan=[kartu])
+    assert 'class="btn btn--utama beranda-kartu-aksi__utama"' not in html

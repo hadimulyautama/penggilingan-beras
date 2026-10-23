@@ -281,7 +281,20 @@ async def _pengiriman(db,d,ids,*,read_scope=None):
         .where(or_(CustomerReturnItem.jasa_id.in_(ids),CustomerReturn.pelanggan_id==d['id']),
                CustomerReturn.id.in_(read_scope.ids(CustomerReturn)) if read_scope is not None else True)
         .distinct().order_by(CustomerReturn.id.desc()))).all()
+    # Relasi item adalah bukti asal; nama pelanggan/tanggal/bobot bukan.
+    # Dibaca sekaligus agar banyak retur tidak menambah satu query per asal.
+    asal_per_retur={}
+    if rs:
+        asal_rows=(await db.execute(select(CustomerReturnItem.customer_return_id,
+            OutgoingRecord.id,OutgoingRecord.kode)
+            .join(OutgoingItem,OutgoingItem.id==CustomerReturnItem.outgoing_item_id)
+            .join(OutgoingRecord,OutgoingRecord.id==OutgoingItem.outgoing_record_id)
+            .where(CustomerReturnItem.customer_return_id.in_([x.id for x in rs]))
+            .distinct().order_by(CustomerReturnItem.customer_return_id,OutgoingRecord.id))).all()
+        for rid,oid,kode_asal in asal_rows:
+            asal_per_retur.setdefault(rid,[]).append(dict(id=oid,kode=kode_asal,href=f'/barang-keluar/{oid}'))
     for x in rs:
         pemilik=set((await db.scalars(select(CustomerReturnItem.jasa_id).where(CustomerReturnItem.customer_return_id==x.id))).all())
         status='Milik pabrik' if pemilik=={None} else 'Titipan jasa' if pemilik<=set(ids) else 'Kepemilikan per item'
-        d['retur'].append(dict(kode=x.kode,href=f'/retur/{x.id}',status='Retur · '+status+' · Pengeluaran asal belum tertaut'))
+        d['retur'].append(dict(id=x.id,kode=x.kode,href=f'/retur/{x.id}',asal=asal_per_retur.get(x.id,[]),
+            status='Retur · '+status+('' if asal_per_retur.get(x.id) else ' · Pengeluaran asal belum tertaut')))
