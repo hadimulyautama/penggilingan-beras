@@ -1,19 +1,40 @@
 {% extends "base.html" %}
 {% block judul %}Pengiriman · Barang Retur{% endblock %}
 {% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
 <link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
-<div class="retur-asal"><h1>Pengiriman</h1><p>Barang keluar dan retur pelanggan.</p>
+<div class="keluar-halaman">
+<header class="keluar-kepala"><h1>Pengiriman</h1>
+<p>Barang keluar dan retur pelanggan.</p>
+<details><summary>Bantuan alur retur</summary><p>Buka pengiriman yang sudah keluar → ajukan retur → timbang dan periksa barang → terima ke stok.</p></details></header>
 {% set tab_pengiriman = 'retur' %}{% include "_pengiriman_tabs.html" %}
 {% if pesan %}<p role="status">{{ pesan }}</p>{% endif %}{% if gagal %}<p role="alert">{{ gagal }}</p>{% endif %}
-<section class="retur-asal__panel"><h2>Pengajuan retur</h2>
+<section><h2>Pengajuan retur</h2>
 <p>Buat retur dari detail pengiriman yang sudah keluar. Setiap penerimaan memiliki tiket dan pemeriksaan sendiri.</p>
 <a class="btn" href="/barang-keluar?status=selesai#judul-riwayat-keluar">Buka riwayat pengiriman</a>
 {% for r in pengajuan %}<article class="retur-asal__baris"><div class="retur-asal__nama"><a href="/retur/pengajuan/{{ r.id }}"><strong>Retur · {{ r.kode_pengiriman }}</strong></a><small>{{ r.nama_pembeli or 'Pelanggan' }} · {{ r.kode_tiket or 'Tiket tidak tersedia' }}</small></div><div>{{ 'Menunggu timbang kedua' if r.status_pemeriksaan == 'menunggu_timbang' else (r.status_pemeriksaan or 'tertahan').replace('_',' ').title() }}</div><div>Belum masuk stok</div></article>{% else %}<p>Tidak ada pengajuan retur menunggu pemeriksaan.</p>{% endfor %}
 {% if pengajuan_berikut %}<a class="btn" href="/retur?sebelum_pengajuan={{ pengajuan_berikut }}">Pengajuan sebelumnya</a>{% endif %}
 </section>
-{% if lama %}<section class="retur-asal__panel"><h2>Rincian lama belum terhubung</h2><p>Hubungan pengiriman tidak ditebak. Periksa tiket dan pilih pengiriman asal yang terbukti sebelum mengajukan penerimaan.</p>{% for r in lama %}<p>{{ r.kode_tiket or 'Tiket tidak tersedia' }} · belum masuk stok</p>{% endfor %}</section>{% endif %}
-<section class="retur-asal__panel"><h2>Riwayat penerimaan retur</h2>
-{% for r in recent %}<p><a href="/retur/{{ r.id }}">{{ r.kode }}</a> · {{ r.nama_pelanggan or 'Pelanggan tidak tercatat' }} · {{ r.kode_tiket }} · {{ r.berat_rincian_kg }} kg · {{ r.waktu|jam }}</p>{% else %}<p>Belum ada penerimaan retur.</p>{% endfor %}
+{% if lama %}<section><h2>Rincian lama belum terhubung</h2><p>Hubungan pengiriman tidak ditebak. Periksa tiket dan pilih pengiriman asal yang terbukti sebelum mengajukan penerimaan.</p>{% for r in lama %}<p>{{ r.kode_tiket or 'Tiket tidak tersedia' }} · belum masuk stok</p>{% endfor %}</section>{% endif %}
+<section><h2>Riwayat penerimaan retur</h2>
+{% if recent %}
+    <div class="tabel-standar__scroll">
+      <table class="tabel-standar" data-ponsel="ringkas" role="table">
+        <thead><tr><th>Penerimaan / tanggal</th><th>Pelanggan</th><th>Nomor polisi</th><th>Tiket timbang</th><th class="tabel-standar__angka">Berat diterima</th><th class="tabel-standar__angka">Selisih</th></tr></thead>
+        <tbody>{% for r in recent %}
+          <tr role="row">
+            <td data-sel="utama" role="cell"><a class="tabel-standar__kode" href="/retur/{{ r.id }}">{{ r.kode }}</a><small class="tabel-standar__sekunder" data-hanya-desktop>{{ r.waktu|jam }}</small></td>
+            <td data-sel="subjek" role="cell">{{ r.nama_pelanggan or "Pelanggan tidak tercatat" }}</td>
+            <td data-sel="meta" role="cell">{{ r.nomor_polisi or "—" }}<span data-hanya-ponsel> · {{ r.waktu|jam('%d/%m/%Y') }}</span></td>
+            <td data-sel="tambahan" role="cell">{{ r.kode_tiket }}</td>
+            <td data-sel="angka" role="cell" class="tabel-standar__angka">{{ kg(r.berat_rincian_kg) }} kg<small class="tabel-standar__sekunder">{{ r.jumlah_jenis }} jenis barang</small></td>
+            <td data-sel="tambahan" role="cell" class="tabel-standar__angka">{{ kg(r.selisih_kg) }} kg</td>
+          </tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+{% else %}<p class="bantu">Belum ada penerimaan retur.</p>{% endif %}
 {% if sebelum_berikut %}<a class="btn" href="/retur?sebelum={{ sebelum_berikut }}">Penerimaan sebelumnya</a>{% endif %}
 </section></div>
 {% endblock %}
