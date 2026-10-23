@@ -585,7 +585,14 @@ async def halaman_aksi_lain(request: Request):
         return RedirectResponse(tujuan, status_code=303)
     if request.url.path == "/aksi-lain":
         return RedirectResponse("/pekerjaan/catat-lain?" + urlencode(dict(request.query_params)), status_code=303)
+    from urllib.parse import parse_qsl, urlsplit
+    konteks_tab = dict(parse_qsl(urlsplit(kembali).query))
+    for k in ('buka', 'nilai', 'halaman', 'asal', 'kategori', 'grup', 'informasi'):
+        konteks_tab.pop(k, None)
+    tab_tindakan = '/pekerjaan?' + urlencode({**konteks_tab, 'tab': 'tindakan'})
+    tab_berjalan = '/pekerjaan?' + urlencode({**konteks_tab, 'tab': 'berjalan'})
     return render(request, "aksi_lain.html", layar="pekerjaan", kembali=kembali,
+                  tab_tindakan=tab_tindakan, tab_berjalan=tab_berjalan,
                   breadcrumb_induk={"alamat": kembali, "nama": "Pekerjaan"},
                   petunjuk=petunjuk, asal_tindakan=asal, nama_asal=nama,
                   buka="" if petunjuk else buka, nilai=nilai,
