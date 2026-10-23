@@ -153,3 +153,30 @@ Cadangan terakhir tepat sebelum promosi:
 4.467.340 byte, izin 0600, SHA-256
 `1a9f1380a86310a6c21f08b133d88b666c021f8f9fe035a9b8735d887c4cdde5`.
 Seluruh arsip diverifikasi dengan `pg_restore --file=/dev/null` di server.
+
+
+## Kelola akun melalui Pengaturan
+
+Super Admin membuka **Pengaturan → Kelola pengguna → Pelanggan**
+(`/pengguna/pelanggan`). Pilih pelanggan dari kontak Kledo yang sudah
+tersinkron, lalu tentukan username dan kata sandi beserta konfirmasinya.
+Peran tetap **Pelanggan**. Username tidak boleh berbenturan dengan akun
+produksi yang sudah ada. Pembuatan akun tidak menulis `users` atau
+`produksi_akun`, sehingga kredensial ini hanya berlaku pada portal pelanggan.
+
+Pemilihan memakai pasangan ID master pelanggan dan ID kontak Kledo, bukan
+nama; kontak aktif yang belum tertaut atau tertaut ambigu tidak bisa dipilih.
+Kontak diperiksa ulang dan dikunci saat simpan. Gunakan tautan **Perbarui kontak
+Kledo** bila kontak baru belum tersinkron. Pengelolaan ini tidak membuat atau
+mengubah kontak di Kledo.
+
+Super Admin dapat mengubah username/kata sandi dan aktif/nonaktif akun. Sesi
+lama dicabut melalui `token_version`. Tautan pelanggan tidak dapat diganti pada
+akun yang ada; nonaktifkan akun lama dan buat akun baru bila ikatan awal salah.
+Kata sandi tidak ditampilkan kembali, disimpan di audit, atau dikirim melalui
+URL. Audit tindakan akun tersimpan dalam transaksi yang sama. Akun staf dan
+portal tetap memakai tabel, cookie, dan kunci tanda tangan yang terpisah.
+
+Rute GET/POST pengelolaan wajib Super Admin tanpa pengecualian Admin darurat.
+Berlaku juga saat sistem belum memiliki Super Admin aktif. Tidak ada migrasi
+baru untuk halaman pengelolaan ini; memakai tabel portal dari migrasi 0110.
