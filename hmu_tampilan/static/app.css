@@ -3543,3 +3543,5 @@ body .isi .terima-judul h2{font-size:16px;margin:0;line-height:1.35}
 
 /* Penyaring halaman baru: display kartu responsif tidak boleh mengalahkan hidden. */
 .isi:has([data-saring-kerja]) :is([data-cari],[data-blok])[hidden], .kerja-cari [hidden] { display:none !important; }
+
+.kerja-tab--tiga{grid-template-columns:repeat(3,minmax(0,1fr))}

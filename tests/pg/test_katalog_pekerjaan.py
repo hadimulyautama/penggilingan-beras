@@ -17,11 +17,11 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         assert r.status_code==200
         import re
         from html import unescape
-        masuk=re.search(r'href="([^"]+)"[^>]*>Catat pekerjaan lain</a>',r.text)
+        masuk=re.search(r'href="([^"]+)"[^>]*>Pekerjaan lain</a>',r.text)
         assert masuk and '/pekerjaan/catat-lain?' in masuk[1]
         assert not re.search(r'<a[^>]*href="/aksi-lain"',r.text)
         tabs=re.search(r'aria-label="Tab pekerjaan">(.*?)</nav>',r.text,re.S)[1]
-        assert tabs.count('<a ')==2
+        assert tabs.count('<a ')==3
         katalog=await c.get(unescape(masuk[1]))
         assert katalog.status_code==200
         back=re.search(r'href="([^"]+)"[^>]*>← Kembali ke Pekerjaan</a>',katalog.text)
