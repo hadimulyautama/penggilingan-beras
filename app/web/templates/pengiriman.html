@@ -11,13 +11,14 @@
 {% set k = kartu[0] %}
 {% include "_pengiriman_detail_tab.html" %}
 {% else %}
-<div class="keluar-halaman">
-{% include "_pengiriman_pembuka.html" %}
+<link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
+<div class="keluar-halaman keluar-ringkas">
+{% include "_pengiriman_pembuka_interaktif.html" %}
 {% include "_pengiriman_tabs.html" %}
 
 {% endif %}
 {% if BOLEH_PERINTAH and not detail %}
-<div class="ubah-hasil" style="margin-bottom:18px">
+<div class="ubah-hasil keluar-ringkas__tindakan">
   <a class="btn" href="/barang-keluar/baru" data-utuh>Buat perintah barang keluar</a>
 
   <a class="btn" href="/barang-keluar?buka=ambil_jasa">Pengambilan barang jasa</a>
@@ -25,13 +26,16 @@
 </div>
 {% endif %}
 
-{% if BOLEH_PERINTAH and not detail %}{% include "_daftar_draf_keluar.html" %}{% endif %}
+{% if not detail %}{% include "_pengiriman_bantuan.html" %}{% endif %}
+{% if BOLEH_PERINTAH and not detail and draf_saya %}{% include "_daftar_draf_keluar.html" %}{% endif %}
 {% if not detail %}
-{% set daftar_keluar = kartu_aktif %}{% include "_pengiriman_daftar.html" %}
+<section class="keluar-ringkas__bagian" aria-labelledby="judul-aktif-keluar">
+<h2 id="judul-aktif-keluar">Pengiriman berjalan</h2>
+{% if kartu_aktif %}{% set daftar_keluar = kartu_aktif %}{% include "_pengiriman_daftar.html" %}{% else %}<div class="keluar-ringkas__kosong"><strong>Belum ada pengiriman berjalan</strong><p>Perintah yang menunggu pengeluaran atau verifikasi akan tampil di sini.</p></div>{% endif %}
+</section>
 {% endif %}
 {% if not detail %}
-{% if not kartu_aktif %}<p class="bantu">Tidak ada pengiriman yang sedang berjalan.</p>{% endif %}
-<section aria-labelledby="judul-riwayat-keluar" style="margin-top:28px">
+<section aria-labelledby="judul-riwayat-keluar" class="keluar-ringkas__bagian">
   <h2 id="judul-riwayat-keluar">Riwayat Barang Keluar</h2>
   <p class="bantu">Perintah selesai dan dibatalkan. Pilih baris untuk melihat rincian dan tiket timbang terkait.</p>
   {% if riwayat %}
@@ -67,6 +71,7 @@
 {% endblock %}
 
 {% block kaki %}
+{% if not detail %}<script src="/static/bantuan_pengiriman.js?v={{ VERSI }}" defer></script>{% endif %}
 <script src="/static/daftar-keluar.js?v={{ VERSI }}" defer></script>
 {% if BOLEH_PERINTAH or BOLEH_MUAT %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer
