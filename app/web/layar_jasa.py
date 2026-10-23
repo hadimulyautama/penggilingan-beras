@@ -73,7 +73,7 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
     if not is_customer_read(request) and not can_see_financials(akun.user):
         raise HTTPException(403,'Layar Jasa milik Admin ke atas.')
     tab=request.query_params.get('tab','ringkasan')
-    if tab not in {'ringkasan','penerimaan','proses','stok'}:
+    if tab not in {'ringkasan','penerimaan','proses','stok','pengambilan'}:
         raise HTTPException(422,'Tab pelanggan tidak dikenal.')
     async with SessionLocal() as db:
         d=await svc.pelanggan(db,pelanggan_id)
