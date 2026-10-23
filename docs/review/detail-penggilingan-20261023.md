@@ -116,3 +116,7 @@ Tangkapan menampilkan data uji aktif sebelum penyelesaian, seluruh details dibuk
 
 Belum diverifikasi: perangkat Android/iOS fisik, Safari/Firefox, pembaca layar, kombinasi seluruh data produksi dan transaksi langsung produksi. Deployment diverifikasi melalui status Railway serta hash commit; tidak menguji transaksi pada lingkungan operasional. Data warisan yang sejak awal tidak memisahkan tambahan per pemakaian tetap bertuliskan “Tidak dipisahkan”; tidak direkonstruksi menjadi angka baru.
 
+
+### Pemolesan tiga poin
+
+Tab diubah menjadi kotak membulat berbatas seperti mockup, kartu tindakan dipadatkan tanpa membuang petunjuk, dan teks/jarak riwayat jeda diseragamkan. Semua override dibatasi `.giling-detail`; macro bersama dan layanan tidak berubah. CSS cache versi2. Tes: 30 PostgreSQL halaman/jeda, 787 non-PG lulus. Browser mengulang koreksi kumulatif/klik ganda, hentikan/kondisi/hasil saat jeda/lanjutkan, QC wajib dan sembilan fragmen lama. Semua tab/pagination desktop/ponsel berukuran tetap dan tanpa overflow/potongan container; tangkapan `output/detail-giling/polish/` seluruh rincian terbuka.
