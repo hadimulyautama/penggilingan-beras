@@ -8,7 +8,7 @@
 {% from "_bahan_silo_sosoh.html" import bahan_silo %}
 {% block judul %}Detail {{ d.judul }}{% endblock %}
 {% block isi %}
-<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_sosoh.css?v=2');</style>
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_sosoh.css?v=3');</style>
 <main class="riwayat-detail proses-detail sosoh-detail" data-konteks="{{ milik.konteks(proses) }}" data-nilai="{{ proses.nilai or proses.kode }}">
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke Pekerjaan</a>
   <header class="riwayat-detail__hero">
@@ -68,7 +68,7 @@
     {% if proses.catatan %}<p class="riwayat-detail__warning">{{ proses.catatan }}</p>{% endif %}
   </div>
   <div id="panel-bahan" role="tabpanel" aria-labelledby="tab-bahan" class="sosoh-panel" {% if tab_sosoh != 'bahan' %}hidden{% endif %}>
-<p class="bantu">Pemilik bahan: {{ d.pemilik }}. Asal lot adalah rincian sumber, bukan tambahan untuk dijumlahkan lagi.</p><div id="catatan-proses"></div>{% for bagian in d.bagian if bagian.judul != 'Hasil sosoh keluar' and bagian.parameter != 'halaman_hasil' %}        <section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ (d.bagian.index(bagian) + 1) }}">
+<p class="bantu" id="catatan-proses">Pemilik bahan: {{ d.pemilik }}. Asal lot adalah rincian sumber, bukan tambahan untuk dijumlahkan lagi.</p>{% for bagian in d.bagian if bagian.judul != 'Hasil sosoh keluar' and bagian.parameter != 'halaman_hasil' %}        <section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ (d.bagian.index(bagian) + 1) }}">
           <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{% if bagian.kelompok_silo is defined %}{{ bagian.kelompok_silo|map(attribute="nama")|unique|list|length }} silo · {{ bagian.jumlah }} catatan{% else %}{{ bagian.jumlah }} catatan{% endif %}</span></div>
           {% if bagian.keterangan %}<p class="bantu">{{ bagian.keterangan }}</p>{% endif %}
           {% if bagian.kelompok_silo is defined %}

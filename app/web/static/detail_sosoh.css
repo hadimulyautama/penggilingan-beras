@@ -6,12 +6,13 @@ body .isi .sosoh-detail .riwayat-detail__hero{padding:16px 20px;border:1px solid
 body .isi .sosoh-detail .riwayat-detail__hero p{color:var(--kulit-redup);margin:6px 0}
 body .isi .sosoh-detail .riwayat-detail__hero .riwayat-detail__eyebrow{color:var(--kulit-redup)}
 body .isi .sosoh-detail .riwayat-detail__hero .riwayat-status--pabrik{color:var(--tinta);background:var(--panel-2)}
-.sosoh-detail .sosoh-identitas__gudang{display:inline-block;font-size:.8rem;color:var(--kulit-redup);margin-left:10px}
+.sosoh-detail .sosoh-identitas__gudang{display:inline-block;font-size:.8rem;color:var(--kulit-redup);margin-left:0}
 .sosoh-detail .proses-detail__sementara{display:block;margin-top:6px;color:var(--kulit-redup)}
 .sosoh-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;min-width:0;min-height:48px;align-self:start;flex-shrink:0;border-bottom:1px solid var(--kulit-batas);gap:4px}
 .sosoh-tabs a{display:flex;align-items:center;justify-content:center;text-align:center;min-height:48px;box-sizing:border-box;white-space:nowrap;padding:10px 6px;color:var(--kulit-redup);text-decoration:none;font-size:.85rem;border-bottom:3px solid transparent}
 .sosoh-tabs a[aria-selected=true]{color:var(--aman);border-bottom-color:var(--aman);font-weight:700;background:var(--panel-2)}
 .sosoh-panel{display:grid;gap:16px;min-width:0}
+#panel-bahan > .bantu{margin:0}
 .sosoh-overview{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start}
 .sosoh-aksi-utama{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}
 .sosoh-pengelolaan{margin-top:14px;border-top:1px solid var(--kulit-batas)}
