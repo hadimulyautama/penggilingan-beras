@@ -4,12 +4,13 @@
 {% macro bentuk_dryer(d) -%}
 <span class="alur-dryer{{ ' alur-alat--terisi' if d.terisi }}" aria-hidden="true"><span class="alur-dryer__tabung"><span class="alur-alat__isi"></span><span class="alur-dryer__panel"></span></span><span class="alur-dryer__dasar"></span></span>
 {%- endmacro %}
+{% set interaktif = detail_gudang|default(false) %}
 {% for g in alur_gudang %}
 <section class="alur-gudang" aria-label="{{ g.nama }} — {{ g.fungsi }}" data-alur-gudang="{{ g.id }}">
   <header class="alur-gudang__kepala"><div class="alur-gudang__identitas"><span class="alur-gudang__kode">{{ g.id|upper }}</span><div><h2>{{ g.fungsi }}</h2><p>{{ g.nama }}</p></div></div>{% if not detail_gudang|default(false) %}<a class="alur-gudang__buka" href="/gudang/{{ g.id }}" aria-label="Lihat {{ g.nama }}">↗</a>{% endif %}</header>
-  <nav class="alur-tahap" aria-label="Alur produksi {{ g.nama }}" style="--tahap:{{ g.langkah|length }}">
+  {% if interaktif %}<nav class="alur-tahap" aria-label="Alur produksi {{ g.nama }}" style="--tahap:{{ g.langkah|length }}">
   {% for tahap in g.langkah %}<a class="alur-tahap__satu" href="{{ tahap.href }}"><span class="alur-tahap__nomor" aria-hidden="true">{{ loop.index }}</span><strong>{{ tahap.nama }}</strong><small>{{ tahap.ket }}</small></a>{% endfor %}
-  </nav>
+  </nav>{% endif %}
   <div class="alur-masuk"><span>{{ g.masuk.label }} <small>hari ini</small></span><strong>{{ g.masuk.nilai }}<small>{{ g.masuk.sat }}</small></strong><p>{{ g.masuk.ket }}</p></div>
   {% if g.id == 'g1' %}
   <section class="alur-pengering" aria-label="Mesin pengering {{ g.nama }}"><header class="alur-bagian"><h3>Dryer / pengering</h3><span>{{ g.dryer_total }} alat · {{ g.dryer_terisi }} terisi</span></header>
@@ -17,7 +18,7 @@
     <div class="alur-kelompok{{ ' alur-kelompok--bersama' if kelompok.nama }}">
       {% if kelompok.nama %}<div class="alur-tungku"><span class="alur-tungku__cerobong" aria-hidden="true"></span><span class="alur-tungku__badan" aria-hidden="true"><span></span></span><strong>{{ kelompok.nama }}</strong><small>{{ kelompok.dryers|length }} dryer tersambung</small></div>{% endif %}
       <div class="alur-dryers">
-      {% for d in kelompok.dryers %}<details class="alur-alat alur-alat--{{ d.mode }}" data-dryer-id="{{ d.id }}"><summary>{{ bentuk_dryer(d) }}<strong>{{ d.nama }}</strong><span class="alur-isi{{ ' alur-isi--ada' if d.terisi }}">{{ 'Terisi' if d.terisi else 'Kosong' }}</span><small>{{ d.proses }}</small>{% if d.kondisi_alat != 'aktif' %}<small class="alur-alat__nonaktif">{{ d.kondisi_alat }}</small>{% endif %}</summary><div class="alur-alat__rincian"><p>{{ d.bobot }}</p>{% if d.kode %}<p>{{ d.kode }}</p>{% endif %}<p>Kapasitas {{ '{:,.0f}'.format(d.kapasitas).replace(',', '.') }} kg</p><a href="{{ d.href }}">Lihat pekerjaan →</a></div></details>{% endfor %}
+      {% for d in kelompok.dryers %}<{{ 'details' if interaktif else 'div' }} class="alur-alat alur-alat--{{ d.mode }}" data-dryer-id="{{ d.id }}"><{{ 'summary' if interaktif else 'div' }} class="alur-alat__visual">{{ bentuk_dryer(d) }}<strong>{{ d.nama }}</strong><span class="alur-isi{{ ' alur-isi--ada' if d.terisi }}">{{ 'Terisi' if d.terisi else 'Kosong' }}</span><small>{{ d.proses }}</small>{% if d.kondisi_alat != 'aktif' %}<small class="alur-alat__nonaktif">{{ d.kondisi_alat }}</small>{% endif %}</{{ 'summary' if interaktif else 'div' }}>{% if interaktif %}<div class="alur-alat__rincian"><p>{{ d.bobot }}</p>{% if d.kode %}<p>{{ d.kode }}</p>{% endif %}<p>Kapasitas {{ '{:,.0f}'.format(d.kapasitas).replace(',', '.') }} kg</p><a href="{{ d.href }}">Lihat pekerjaan →</a></div>{% endif %}</{{ 'details' if interaktif else 'div' }}>{% endfor %}
       </div>
     </div>
     {% if not kelompok.nama %}<p class="alur-catatan">Hubungan tungku belum dipetakan di Pengaturan Alat.</p>{% endif %}
@@ -27,11 +28,11 @@
   <div class="alur-penyimpanan{{ ' alur-penyimpanan--banyak' if g.silos|length > 2 }}">
     <section class="alur-silo-area" aria-label="Silo {{ g.nama }}"><header class="alur-bagian"><h3>Silo terisi</h3><span>{{ g.terisi }} / {{ g.silos|length }}</span></header>
       <div class="alur-silos" style="--jumlah-silo:{{ g.silos|length or 1 }}">
-      {% for s in g.silos %}<details class="alur-alat" data-silo-id="{{ s.id }}"><summary>{{ bentuk_silo(s.terisi) }}<strong>{{ s.nama }}</strong><span class="alur-isi{{ ' alur-isi--ada' if s.terisi }}">{{ 'Terisi' if s.terisi else 'Kosong' }}</span></summary><div class="alur-alat__rincian"><p>{{ s.bobot }}</p><a href="/pekerjaan?tab=berjalan&amp;gudang={{ g.id }}&amp;jenis={{ 'giling' if g.id=='g1' else 'sosoh' }}">Lihat pekerjaan →</a></div></details>{% else %}<p class="alur-catatan">Belum ada silo aktif terdaftar.</p>{% endfor %}
+      {% for s in g.silos %}<{{ 'details' if interaktif else 'div' }} class="alur-alat" data-silo-id="{{ s.id }}"><{{ 'summary' if interaktif else 'div' }} class="alur-alat__visual">{{ bentuk_silo(s.terisi) }}<strong>{{ s.nama }}</strong><span class="alur-isi{{ ' alur-isi--ada' if s.terisi }}">{{ 'Terisi' if s.terisi else 'Kosong' }}</span></{{ 'summary' if interaktif else 'div' }}>{% if interaktif %}<div class="alur-alat__rincian"><p>{{ s.bobot }}</p><a href="/pekerjaan?tab=berjalan&amp;gudang={{ g.id }}&amp;jenis={{ 'giling' if g.id=='g1' else 'sosoh' }}">Lihat pekerjaan →</a></div>{% endif %}</{{ 'details' if interaktif else 'div' }}>{% else %}<p class="alur-catatan">Belum ada silo aktif terdaftar.</p>{% endfor %}
       </div>
     </section>
     <section class="alur-stok"><h3>{{ g.stok.label }}</h3><strong>{{ g.stok.nilai }}<small>{{ g.stok.sat }}</small></strong><p>{{ g.stok.ket }}</p><a href="/stok?gudang={{ g.id }}">Lihat stok →</a></section>
   </div>
-  <footer class="alur-gudang__kaki">Warna isi 80% adalah ilustrasi status terisi. Buka alat untuk melihat bobot tercatat.</footer>
+  <footer class="alur-gudang__kaki">Warna isi 80% adalah ilustrasi status terisi. {% if interaktif %}Buka alat untuk melihat bobot tercatat.{% else %}Lihat detail gudang untuk rincian alat.{% endif %}</footer>
 </section>
 {% endfor %}
