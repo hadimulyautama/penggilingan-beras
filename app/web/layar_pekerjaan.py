@@ -36,10 +36,10 @@ def tautan(request, dasar, **nilai):
     return dasar + '?' + urlencode({k:v for k,v in q.items() if v})
 
 
-@router.get('/pekerjaan')
-async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=None):
+async def siapkan_daftar_pekerjaan(request, user):
+    """Daftar yang sama untuk isi pekerjaan dan angka pada tab katalog."""
     async with SessionLocal() as db:
-        b = await svc.untuk(db, akun.user)
+        b = await svc.untuk(db, user)
     k = bagi(b)
     from app.web.stok_navigasi import pelanggan_diminta
     pid=pelanggan_diminta(request)
@@ -54,6 +54,22 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
         k.tindakan=[r for r in k.tindakan if r in cocok]
         k.berjalan=[r for r in k.berjalan if r in cocok]
         k.informasi=[r for r in k.informasi if r in cocok]
+    return b, k, pelanggan_saring
+
+
+def daftar_tab_pekerjaan(k, pemilik, gudang, jenis):
+    def pilih(xs):
+        xs = saring_pemilik(xs, pemilik)
+        return [x for x in xs if not gudang or x.gudang == gudang]
+    tindakan, berjalan, informasi = map(pilih, (k.tindakan, k.berjalan, k.informasi))
+    total_tindakan = sum(not jenis or jenis_kerja(x) == jenis for x in tindakan)
+    total_jalan = sum(not jenis or jenis_kerja(x) == jenis for x in berjalan + informasi)
+    return tindakan, berjalan, informasi, total_tindakan, total_jalan
+
+
+@router.get('/pekerjaan')
+async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=None):
+    b, k, pelanggan_saring = await siapkan_daftar_pekerjaan(request, akun.user)
     tab = pilihan(request, 'tab', {'tindakan', 'berjalan'}, awal or 'tindakan')
     pemilik = pilihan(request, 'kepemilikan', {'jasa','pabrik'})
     gudang = pilihan(request, 'gudang', {'g1','g2'})
@@ -65,12 +81,7 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
         grup = 'packing'
     kategori = pilihan(request,'kategori',dict(svc.GRUP_KEPUTUSAN))
     asal = request.query_params.get('asal','')
-    def pilih(xs):
-        xs = saring_pemilik(xs, pemilik)
-        return [x for x in xs if not gudang or x.gudang == gudang]
-    tindakan, berjalan, informasi = map(pilih, (k.tindakan,k.berjalan,k.informasi))
-    total_tindakan = sum(not jenis or jenis_kerja(x)==jenis for x in tindakan)
-    total_jalan = sum(not jenis or jenis_kerja(x)==jenis for x in berjalan+informasi)
+    tindakan, berjalan, informasi, total_tindakan, total_jalan = daftar_tab_pekerjaan(k, pemilik, gudang, jenis)
     if request.url.path=='/aksi' and 'tab' not in request.query_params and grup and not any(svc.grup_baris(x)==grup for x in tindakan) and any(svc.grup_baris(x)==grup for x in informasi):
         tab='berjalan'
     dasar = tindakan if tab == 'tindakan' else berjalan+informasi
