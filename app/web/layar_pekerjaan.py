@@ -205,7 +205,12 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
         qc_penerimaan = await masuk.hasil_qc(db,catatan)
     kembali = konteks_aman(request.query_params.get('kembali_kerja')) or '/barang-masuk'
     proses = [(kode, url + ('&' if '?' in url else '?') + urlencode({'kembali_kerja':kembali})) for kode,url in proses]
-    return render(request, "barang_masuk_detail.html",layar='barang_masuk',kembali=kembali,
+    # Tab hanya memilih penyajian. Parameter pembuka formulir dan konteks asal
+    # tetap dibawa agar refresh/tautan lama tidak kehilangan tujuan.
+    tab_detail = pilihan(request, 'tab_detail', ('ringkasan','tiket','qc','riwayat'), 'ringkasan')
+    def tab_href(tab):
+        return request.url.path + '?' + urlencode({**dict(request.query_params), 'tab_detail':tab})
+    return render(request, "barang_masuk_detail.html",tab_detail=tab_detail,tab_href=tab_href,layar='barang_masuk',kembali=kembali,
         tiket=t,jenis=jenis,menunggu=pending,catatan=catatan,lokasi=lokasi,proses=proses,petugas=petugas,
         timbang=timbang,berat_diterima=berat_diterima,keterangan_berat=keterangan_berat,
         qc_penerimaan=qc_penerimaan,

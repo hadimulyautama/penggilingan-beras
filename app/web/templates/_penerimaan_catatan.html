@@ -1,0 +1,9 @@
+{% if catatan %}
+<section class="terima-panel" aria-labelledby="terima-catatan">
+ <div class="terima-judul"><h2 id="terima-catatan">Catatan penerimaan</h2><span>{{ catatan|length }} catatan</span></div>
+ <p class="terima-bantu">Bobot penerimaan, bukan saldo stok saat ini.</p>
+ <table class="terima-catatan"><thead><tr><th scope="col">Catatan</th><th scope="col">Bobot</th><th scope="col">Status</th><th scope="col">Waktu / petugas</th></tr></thead><tbody>
+ {% for c in catatan %}<tr><th scope="row" class="terima-catatan__kode">{{ c.kode }}{% if kepemilikan_penerimaan=='campuran' %}<small>{{ c.pemilik }}</small>{% endif %}</th><td class="terima-catatan__bobot"><strong>{{ kg(c.berat) }}</strong><small>{{ 'Belum final' if c.sumber_berat in ['perkiraan','menunggu'] else c.sumber_berat }}</small></td><td class="terima-catatan__status">{{ c.status|replace('_',' ') }}</td><td class="terima-catatan__waktu">{{ c.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu belum tercatat' }}<small>{{ petugas.get(c.petugas_id,'Pencatat belum diketahui') }}</small></td></tr>{% endfor %}
+ </tbody></table>
+</section>
+{% elif not menunggu %}<p class="bantu">Tiket ini tidak sedang ditawarkan untuk penerimaan. Periksa status tiket dan catatan terkait.</p>{% endif %}

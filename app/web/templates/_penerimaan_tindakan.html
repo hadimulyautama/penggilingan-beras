@@ -1,0 +1,12 @@
+{# Daftar tindakan tetap berasal dari Baris/Tombol layanan lama. Tidak ada
+   penentuan tujuan/izin baru di sini; handler, payload dan formulir sama. #}
+{% set dasar = benda.dasar_borang(request.url.path) %}
+{% for b in menunggu %}
+<div class="penerimaan-aksi">
+ {% if b.tombol %}<div class="pilihan">{% for t in b.tombol %}<button type="button" class="pilihan__satu{% if t.utama and not t.mati %} pilihan__satu--utama{% endif %}{% if t.mati %} pilihan__satu--mati{% endif %}"{% if t.mati %} disabled aria-disabled="true"{% endif %} data-post="{{ t.post }}" data-kirim='{{ t.data|tojson }}'><span class="pilihan__nama">{{ t.nama }}</span><span class="pilihan__ket">{{ t.mati or t.ket }}</span></button>{% endfor %}</div>
+ {% elif b.pilihan %}<div class="pilihan">{% for p in b.pilihan %}{% set id,nama,ket = p[0],p[1],p[2] %}{% set nl = p[3] if p|length>3 else b.nilai %}<a class="pilihan__satu{% if loop.first %} pilihan__satu--utama{% endif %}" href="{{ dasar }}buka={{ id }}{% if nl %}&nilai={{ nl|urlencode }}{% endif %}"><span class="pilihan__nama">{{ nama }}</span><span class="pilihan__ket">{{ 'Jenis PK dan karung surat jalan; QC dicatat terpisah.' if id=='catat_pk_luar' else ket }}</span></a>{% endfor %}</div>
+ {% elif b.aksi %}<a class="btn" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">Buka penerimaan</a>
+ {% else %}<p class="terima-bantu">{{ b.keadaan or b.isi }}</p>{% endif %}
+ <details class="terima-lipat"><summary>Keterangan penerimaan</summary>{{ benda.penuh(b,ringkas=True) }}{{ benda.penuh_anak(b) }}</details>
+</div>
+{% endfor %}

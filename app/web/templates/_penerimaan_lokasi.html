@@ -1,0 +1,5 @@
+<section class="terima-panel terima-lanjutan" aria-labelledby="terima-lokasi"><div class="terima-judul"><h2 id="terima-lokasi">Lokasi &amp; proses terkait</h2></div>
+<ul class="terima-lokasi">{% for l in lokasi %}<li>{{ l }}</li>{% else %}<li>Belum ada lokasi lanjutan tercatat.</li>{% endfor %}</ul>
+<ul class="terima-proses">{% for kode,url in proses %}<li><a href="{{ url }}"><span>{{ kode }}</span><span aria-hidden="true">↗</span></a></li>{% endfor %}</ul>
+<a class="btn" href="/pekerjaan">Buka Pekerjaan</a>
+</section>
