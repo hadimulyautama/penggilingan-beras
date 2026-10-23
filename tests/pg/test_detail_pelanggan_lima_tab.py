@@ -175,3 +175,36 @@ async def test_satu_tiket_banyak_catatan_pesanan_tetap_terbaca(pg,stok_lengkap):
         assert '200 kg' in r.text and '300 kg' in r.text
         assert await cuplik(pg)==sebelum
         async with pg() as db:assert await svc.pelanggan(db,pid)==awal
+
+
+async def test_portal_ringkasan_dan_tab_tidak_memuat_pengiriman_retur_di_luar_scope(pg,portal):
+    from app.models import OutgoingRecord,OutgoingItem,CustomerReturn,CustomerReturnItem
+    from app.database import now_local
+    from tests.pg.test_tiket_antrean_produksi import _tiket
+    async with pg() as db:
+        kiriman=[];retur=[]
+        for n,owners in enumerate(([portal.orders[0].id],[portal.orders[1].id],[portal.orders[0].id,portal.orders[1].id])):
+            o=OutgoingRecord(kode=f'OUT-LIMA-PRIV-{n}',pelanggan_id=portal.owners[0].id,tanggal=now_local().date(),waktu=now_local(),input_by=1,status='selesai')
+            db.add(o);await db.flush();kiriman.append(o)
+            for jid in owners:db.add(OutgoingItem(outgoing_record_id=o.id,item_type='byproduct',jasa_id=jid,berat_kg=10))
+            tid=await _tiket(db,f'RTP-LIMA-{n}','BERAS_MASUK')
+            r=CustomerReturn(kode=f'RET-LIMA-PRIV-{n}',timbangan_transaksi_id=tid,kode_tiket=f'RTP-LIMA-{n}',pelanggan_id=portal.owners[0].id,berat_tiket_kg=10,berat_rincian_kg=10,selisih_kg=0,input_by=1,waktu=now_local())
+            db.add(r);await db.flush();retur.append(r)
+            for jid in owners:db.add(CustomerReturnItem(customer_return_id=r.id,jasa_id=jid,jumlah_karung=0,berat_total_kg=10))
+        await db.commit()
+    async with portal_client(portal.accounts[0]) as c:
+        for tab in TAB:
+            r=await c.get(f'/pelanggan/jasa/pelanggan/{portal.owners[0].id}?tab={tab}')
+            assert r.status_code==200
+            for code in [o.kode for o in kiriman[1:]]+[x.kode for x in retur[1:]]:assert code not in r.text
+            if tab=='ringkasan':
+                s=BeautifulSoup(r.text,'html.parser')
+                pairs={d.dt.get_text(strip=True):d.dd.get_text(strip=True) for d in s.select('.jasa-pasang>div')}
+                assert pairs=={'Pengambilan / pengiriman':'1 catatan','Retur terkait':'1 penerimaan retur'}
+            if tab=='pengambilan':assert kiriman[0].kode in r.text and retur[0].kode in r.text
+        for row in kiriman[1:]:assert (await c.get(f'/pelanggan/barang-keluar/{row.id}')).status_code==404
+        for row in retur[1:]:assert (await c.get(f'/pelanggan/retur/{row.id}')).status_code==404
+    # Tampilan internal Admin tetap memiliki seluruh fakta yang dibaca layanan.
+    async with await _klien(pg,role='admin') as c:
+        r=await c.get(f'/jasa/pelanggan/{portal.owners[0].id}?tab=pengambilan')
+        assert r.status_code==200 and all(x.kode in r.text for x in retur)

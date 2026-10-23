@@ -114,6 +114,13 @@ def render_customer(request, name, *, status_code=200, **ctx):
         ctx['PORTAL_READ_ONLY']=True
     if name=='jasa_pelanggan_detail.html':
         d=copy.deepcopy(ctx['d']);ctx['d']=d
+        # Ringkasan dan tab pengambilan wajib memakai cakupan yang sama
+        # dengan detail native. Header pelanggan tidak mengesahkan item
+        # milik pihak lain atau catatan campuran yang ditolak own_outgoing.
+        from app.models import OutgoingRecord,CustomerReturn
+        d['pengiriman']=[r for r in d['pengiriman'] if r['id'] in scope.ids(OutgoingRecord)]
+        retur_diizinkan={f'/retur/{ident}' for ident in scope.ids(CustomerReturn)}
+        d['retur']=[r for r in d['retur'] if r.get('href') in retur_diizinkan]
         d['proses']=[r for r in d['proses'] if r['kode'] in scope.codes]
         for t in d['penerimaan']:
             if t.get('proses'):t['proses']=[(code,href) for code,href in t['proses'] if code in scope.codes]
