@@ -95,10 +95,26 @@ async def formulir(request: Request, pengiriman_id: int | None = None,
             ReturPemeriksaanLog.id.desc()))).all() if pengajuan_id else []
         aktor_ids = {l.pelaku_id for l in logs if l.pelaku_id}
         aktor = dict((await db.execute(select(User.id, User.nama).where(User.id.in_(aktor_ids)))).all()) if aktor_ids else {}
+        # Pembacaan tambahan hanya untuk tab; tidak menjalankan pemeriksaan/penerimaan.
+        pengaju = await db.get(User, rincian.input_by) if rincian else None
+        tiket_id_detail = rincian.timbangan_transaksi_id if rincian else request.query_params.get('tiket')
+        try:
+            tiket_id_detail = int(tiket_id_detail) if tiket_id_detail else None
+        except (TypeError, ValueError):
+            tiket_id_detail = None
+        tiket_detail = (await db.execute(text('''
+            SELECT t.kode,t.status_tiket,t.status_transaksi,t.nomor_polisi,t.nama_sopir,
+                   t.timbang1_kg,t.timbang2_kg,t.timbang1_waktu,t.timbang2_waktu,
+                   t.netto_timbangan_kg,t.berat_barang_kg,p.nama_pelanggan
+            FROM timbangan_transaksi t LEFT JOIN pelanggan p ON p.id=t.pelanggan_id
+            WHERE t.id=:id AND t.arah='RETUR_MASUK'
+              AND (t.pelanggan_id=:pid OR :tertaut)
+        '''), {'id':tiket_id_detail,'pid':asal.pelanggan_id,'tertaut':bool(rincian)})).mappings().first()
         manual_siap = bool(rincian and rincian.status_pemeriksaan == 'calon_manual'
                            and await _koreksi_terbukti(db, rincian))
     return await render_laci(request, 'retur_asal.html', layar='barang_keluar',
-        asal=asal, rincian=rincian, baris=baris, tickets=tickets, logs=logs, aktor=aktor,
+        asal=asal, rincian=rincian, baris=baris, tiket_detail=tiket_detail,
+        pengaju=pengaju.nama if pengaju else None, tickets=tickets, logs=logs, aktor=aktor,
         nama_item=nama, kemasan_gabah=kemasan_gabah, manual_siap=manual_siap,
         pelanggan_asal=pelanggan_asal,
         gagal=request.query_params.get('gagal'), pesan=request.query_params.get('pesan'),

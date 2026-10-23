@@ -1,0 +1,32 @@
+/* Hanya detail; daftar Pengiriman dan formulir tindakan generik tetap memakai paket tampilan. */
+[data-detail-tab]{container-type:inline-size;max-width:1180px;margin-inline:auto;min-width:0}
+[data-detail-tab] [hidden]{display:none!important}
+.detail-kirim-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:20px 0;align-items:stretch}
+.detail-kirim-tabs a{display:flex;align-items:center;justify-content:center;min-height:48px;padding:10px 8px;box-sizing:border-box;text-align:center;overflow-wrap:anywhere;border:1px solid var(--kulit-batas);border-radius:10px;background:var(--kulit-kartu);color:var(--tinta);text-decoration:none;font-size:.9rem;line-height:1.35}
+.detail-kirim-tabs a[aria-selected=true]{background:var(--panel-2);border-color:var(--aman);color:var(--aman);font-weight:700}
+.detail-kirim-tabs a:focus-visible,[data-detail-tab] .btn:focus-visible{outline:2px solid var(--aman);outline-offset:3px}
+.detail-kirim-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.detail-kirim-grid>section{min-width:0;margin-top:0}
+[data-detail-tab] h1,[data-detail-tab] p,[data-detail-tab] dd,[data-detail-tab] a,[data-detail-tab] strong,[data-detail-tab] small{overflow-wrap:anywhere}
+[data-detail-tab] .retur-asal__panel{background:var(--kulit-kartu);border-color:var(--kulit-batas);border-radius:14px}
+[data-detail-tab] .retur-asal__baris{grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));align-items:start}
+[data-detail-tab] .retur-asal__jumlah{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr);max-width:480px;gap:6px}
+[data-detail-tab] .retur-asal__nama{min-width:0}
+[data-detail-tab] input,[data-detail-tab] select,[data-detail-tab] textarea{min-width:0;max-width:100%}
+[data-detail-tab] .retur-asal__nama input{width:100%}
+[data-detail-tab] .kirim-detail__kepala{background:var(--panel-2);border:1px solid var(--kulit-batas);border-radius:18px;padding:24px}
+.detail-kirim-stat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+.detail-kirim-stat>div{border:1px solid var(--kulit-batas);border-radius:12px;background:var(--kulit-kartu);padding:18px;min-width:0}
+.detail-kirim-stat span{display:block;color:var(--kulit-redup);font-size:.85rem}
+.detail-kirim-stat strong{display:block;margin-top:8px;font-size:1.3rem}
+.detail-kirim-fakta{margin:12px 0}
+.detail-kirim-fakta>div{display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--kulit-pemisah);padding:12px 0}
+.detail-kirim-fakta dt{color:var(--kulit-redup)}
+.detail-kirim-fakta dd{margin:0;text-align:right;max-width:62%}
+[data-detail-tab] button[type=submit]{min-height:44px}
+@container(max-width:570px){.detail-kirim-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-kirim-grid{grid-template-columns:minmax(0,1fr)}.detail-kirim-stat{grid-template-columns:minmax(0,1fr);gap:8px}.detail-kirim-stat>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px}.detail-kirim-stat strong{margin:0;font-size:1rem}[data-detail-tab] .retur-asal__baris{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}[data-detail-tab] .retur-asal__nama,[data-detail-tab] .retur-asal__jumlah{grid-column:1/-1}[data-detail-tab] .kirim-detail__kepala{padding:20px}.detail-kirim-fakta>div{gap:10px}}
+.detail-kirim-sr{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+[data-detail-tab] .kirim-detail__bagian{margin-bottom:18px}
+[data-detail-tab] .kirim-detail__total>div{padding:18px;border:1px solid var(--kulit-batas);border-radius:12px;background:var(--kulit-kartu)}
+[data-detail-tab] .kirim-detail__tabel tbody th small{display:block;margin-top:6px}
+@container(max-width:570px){[data-detail-tab] .kirim-detail__total{grid-template-columns:minmax(0,1fr)}[data-detail-tab] .kirim-detail__total>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px}[data-detail-tab] .kirim-detail__total dd{font-size:1rem;margin:0}[data-detail-tab] .kirim-detail__jejak time{white-space:normal}}

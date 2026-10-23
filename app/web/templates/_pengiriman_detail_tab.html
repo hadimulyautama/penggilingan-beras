@@ -1,0 +1,104 @@
+{% import '_detail_kirim_tabs.html' as dt with context %}
+{% set angka = st.kg_rinci %}
+<link rel="stylesheet" href="/static/detail_kirim_retur.css?v=1">
+<article class="kirim-detail" data-detail-tab>
+  <header class="kirim-detail__kepala">
+    <a class="kirim-detail__kembali" href="/barang-keluar">← Barang Keluar</a>
+    <div class="kirim-detail__judul">
+      <div><p class="kirim-detail__label">Perintah barang keluar</p><h1 id="judul-perintah">{{ k.rec.kode }}</h1></div>
+      <div class="kirim-detail__penanda"><span class="kirim-detail__status">{{ k.keadaan }}</span><span>{{ 'Jasa' if k.jasa else 'Milik pabrik' }}</span></div>
+    </div>
+    <dl class="kirim-detail__identitas">
+      <div><dt>{{ 'Pemilik' if k.jasa else 'Pelanggan' }}</dt><dd>{{ k.rec.nama_pembeli or 'Belum dicatat' }}</dd></div>
+      <div><dt>Nomor polisi</dt><dd>{{ k.rec.no_polisi or 'Belum dipilih' }}</dd></div>
+      {% if k.rec.nama_ekspedisi %}<div><dt>Ekspedisi</dt><dd>{{ k.rec.nama_ekspedisi }}</dd></div>{% endif %}
+    </dl>
+  </header>
+
+{% macro retur_terkait_kartu() %}<section class="kirim-detail__bagian"><h2>Retur terkait</h2>
+{% if BOLEH_PERINTAH %}{% if k.rec.status == 'selesai' %}<a class="btn" href="/barang-keluar/{{ k.rec.id }}/retur">Retur barang</a>{% endif %}
+{% for r in retur_terkait %}<p><a href="/retur/pengajuan/{{ r.id }}">Pengajuan retur #{{ r.id }}</a> · {{ (r.status_pemeriksaan or 'tertahan').replace('_',' ').title() }}</p><p>{{ 'Sudah diterima ke stok' if r.customer_return_id else 'Dibatalkan; stok tidak bertambah' if r.status_pemeriksaan=='dibatalkan' else 'Pengajuan tersimpan; belum diterima ke stok' }}{% if r.customer_return_id %} · <a href="/retur/{{ r.customer_return_id }}">Penerimaan retur</a>{% endif %}</p>{% else %}<p>Belum ada retur terkait.</p>{% endfor %}
+{% else %}<p>Penerimaan retur mengikuti kewenangan Admin.</p>{% endif %}</section>{% endmacro %}{{ dt.tabs('pengiriman') }}
+{{ dt.buka('ringkasan') }}<section class="kirim-detail__bagian"><h2>Tindakan saat ini</h2>  {% if k.rec.status == 'dimuat' %}
+  <section class="keluar-periksa{{ ' keluar-periksa--selisih' if k.selisih_timbang is not none and k.selisih_timbang|abs > (k.batas_selisih|default(100)) }}" aria-label="Pemeriksaan sebelum verifikasi">
+    <strong>Periksa sebelum verifikasi</strong>
+    {% if k.tiket_timbang %}<p>{{ k.tiket_timbang.kode }} · {{ k.rec.no_polisi or 'Plat belum dicatat' }}</p>
+    <p>Aktual {{ angka(k.total_dimuat) }} kg · Timbang setelah tara {{ (angka(k.tiket_timbang.berat_barang_kg) ~ ' kg') if k.tiket_timbang.berat_barang_kg is not none else 'belum tersedia' }}.</p>
+    {% if k.selisih_timbang is not none %}<p><strong>Selisih {{ angka(k.selisih_timbang|abs) }} kg {{ 'lebih banyak' if k.selisih_timbang > 0 else 'lebih sedikit' }}.</strong> {% if k.selisih_timbang|abs > (k.batas_selisih|default(100)) %}Di luar batas. Periksa tiket dan muatan; alasan selisih wajib saat verifikasi.{% else %}Bandingkan tiket dan muatan aktual sebelum menutup.{% endif %}</p>{% else %}<p>Selesaikan timbang kedua sebelum verifikasi.</p>{% endif %}
+    {% else %}<p>Tiket armada belum dipilih. Periksa armada sebelum menutup pengiriman.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if k.cepat and k.rec.status == "perintah" %}<p class="bantu">Alur cepat · di bawah 200 kg. Admin mengonfirmasi jumlah aktual dan penyerahan; tiket timbang tidak wajib.</p>{% endif %}
+  {% if k.tombol %}<nav class="kirim-detail__aksi" aria-label="Tindakan perintah">
+    {% for buka, nilai, label, utama in k.tombol if buka != 'tambah_barang_keluar' %}
+    <a class="btn{{ '' if utama else ' btn--kecil' }}" href="/barang-keluar/{{ k.rec.id }}?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </nav>{% endif %}
+
+{% if not k.tombol %}<p>Tidak ada tindakan tersedia untuk status dan akses ini.</p>{% endif %}</section>  <dl class="kirim-detail__total" aria-label="Ringkasan muatan">
+    <div><dt>Total perintah</dt><dd>{{ angka(k.total_perintah) }} <small>kg</small></dd></div>
+    <div><dt>{{ 'Jumlah aktual' if k.cepat else 'Dimuat aktual' }}</dt><dd>{{ angka(k.total_dimuat) }} <small>kg</small></dd></div>
+    <div><dt>Sisa perintah</dt><dd>{{ angka(k.total_sisa) }} <small>kg</small></dd></div>
+  </dl>
+
+<section class="kirim-detail__bagian"><h2>Identitas pengiriman</h2><dl class="kirim-detail__fakta"><div><dt>Pelanggan / pemilik</dt><dd>{{ k.rec.nama_pembeli or 'Belum tercatat' }}</dd></div><div><dt>Nomor polisi</dt><dd>{{ k.rec.no_polisi or 'Belum dipilih' }}</dd></div><div><dt>Ekspedisi</dt><dd>{{ k.rec.nama_ekspedisi or 'Belum tercatat' }}</dd></div><div><dt>Kepemilikan</dt><dd>{{ 'Titipan jasa' if k.jasa else 'Milik pabrik' }}</dd></div></dl></section>
+<div class="detail-kirim-grid"><section class="kirim-detail__bagian"><h2>Muatan & tiket</h2><p>{{ k.isi|length }} jenis barang · {{ angka(k.total_dimuat) }} kg</p><p>{{ k.tiket_timbang.kode if k.tiket_timbang else 'Tiket belum tersedia' }}</p>{{ dt.taut('barang','Lihat barang') }} {{ dt.taut('tiket','Lihat tiket & bobot') }}</section>{{ retur_terkait_kartu() }}</div></div>
+{{ dt.buka('barang') }}  <section class="kirim-detail__bagian" aria-labelledby="judul-isi-muatan">
+    <div class="kirim-detail__baris-judul"><h2 id="judul-isi-muatan">Isi muatan</h2><span>{{ k.isi|length }} jenis barang</span></div>
+    <div class="tabel-standar__scroll">
+      <table class="kirim-detail__tabel">
+        <caption class="detail-kirim-sr">Perintah dan muatan aktual per barang</caption>
+        <thead><tr><th scope="col">Barang</th><th scope="col">Perintah</th><th scope="col">{{ 'Jumlah aktual' if k.cepat else 'Dimuat aktual' }}</th><th scope="col">Sisa perintah</th></tr></thead>
+        <tbody>{% for b in k.isi %}<tr>
+          <th scope="row"><span class="kirim-detail__nomor">{{ loop.index }}.</span> {{ b.nama }}<small>{{ b.pemilik }}</small>
+            {% if k.boleh_ubah %}<div class="kirim-detail__item-aksi">
+              <a class="btn btn--kecil" href="/barang-keluar/{{ k.rec.id }}?buka=ubah_item_perintah&nilai={{ b.kunci|urlencode }}">Ubah jumlah</a>
+              {% if not b.dimuat and k.isi|length > 1 %}<a class="btn btn--kecil" href="/barang-keluar/{{ k.rec.id }}?buka=hapus_item_perintah&nilai={{ b.kunci|urlencode }}">Hapus item</a>{% endif %}
+            </div>{% endif %}</th>
+          <td><span class="kirim-detail__label-ponsel">Perintah</span><strong>{{ angka(b.perintah) }} <small>kg</small></strong>{% if b.berkarung and b.karung_perintah is not none %}<small>{{ b.karung_perintah }} karung</small>{% endif %}</td>
+          <td><span class="kirim-detail__label-ponsel">{{ 'Jumlah aktual' if k.cepat else 'Dimuat aktual' }}</span><strong>{{ angka(b.dimuat) }} <small>kg</small></strong>{% if b.berkarung and b.karung_dimuat is not none %}<small>{{ b.karung_dimuat }} karung</small>{% endif %}</td>
+          <td><span class="kirim-detail__label-ponsel">Sisa</span><strong>{{ angka(b.sisa_perintah) }} <small>kg</small></strong></td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% for buka, nilai, label, utama in k.tombol if buka == 'tambah_barang_keluar' %}
+    <div class="kirim-detail__tambah"><a class="btn" href="/barang-keluar/{{ k.rec.id }}?buka={{ buka }}&nilai={{ nilai|urlencode }}">+ Tambah item</a></div>
+    {% endfor %}
+    {% if k.rec.catatan_perintah %}<p class="kirim-detail__catatan"><strong>Catatan perintah:</strong> {{ k.rec.catatan_perintah }}</p>{% endif %}
+    {% if k.rec.sebab_batal %}<div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>{% endif %}
+    {% if k.rec.sebab_selisih %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Sebab selisih timbang — {{ k.rec.sebab_selisih }}</span></div>{% endif %}
+  </section>
+
+</div>
+{{ dt.buka('tiket') }}    <section class="kirim-detail__bagian" aria-labelledby="judul-timbang-pengiriman">
+      <h2 id="judul-timbang-pengiriman">Tiket timbang</h2>
+      {% if k.tiket_timbang %}
+        {% set t = k.tiket_timbang %}
+        <p class="kirim-detail__tiket">{{ t.kode }} <span>· {{ 'Selesai' if t.status_tiket == 'SELESAI' else ('Masih terbuka' if t.status_tiket == 'TERBUKA' else t.status_tiket|replace('_', ' ')|title) }}</span></p>
+        {% if t.status_tiket == 'TERBUKA' %}<p class="kirim-detail__catatan">{{ 'Tiket bersifat opsional untuk alur cepat di bawah 200 kg.' if k.cepat and k.rec.status == 'perintah' else 'Selesaikan timbang kedua di Pos Timbang sebelum verifikasi.' }}</p>{% endif %}
+        <dl class="kirim-detail__fakta">
+          <div><dt>Berat barang</dt><dd>{{ angka(t.berat_barang_kg) ~ ' kg' if t.berat_barang_kg is not none else 'Belum tersedia' }}</dd></div>
+          <div><dt>Selisih dari muatan aktual</dt><dd>{% if k.selisih_timbang is none %}Belum tersedia{% elif k.selisih_timbang|abs < 0.0005 %}Sama{% else %}{{ angka(k.selisih_timbang|abs) }} kg {{ 'lebih banyak' if k.selisih_timbang > 0 else 'lebih sedikit' }}{% endif %}</dd></div>
+        </dl>
+        <details class="kirim-detail__rincian"><summary>Rincian penimbangan</summary>
+          <dl class="kirim-detail__fakta">
+            <div><dt>Nama sopir</dt><dd>{{ t.nama_sopir or 'Belum dicatat' }}</dd></div>
+            <div><dt>Berat truk kosong</dt><dd>{{ angka(t.timbang1_kg) ~ ' kg' if t.timbang1_kg is not none else 'Belum ditimbang' }}{% if t.timbang1_waktu %}<small>{{ t.timbang1_waktu|jam('%d/%m/%Y %H:%M') }}</small>{% endif %}</dd></div>
+            <div><dt>Berat truk bermuatan</dt><dd>{{ angka(t.timbang2_kg) ~ ' kg' if t.timbang2_kg is not none else 'Belum ditimbang' }}{% if t.timbang2_waktu %}<small>{{ t.timbang2_waktu|jam('%d/%m/%Y %H:%M') }}</small>{% endif %}</dd></div>
+            <div><dt>Netto timbang</dt><dd>{{ angka(t.netto_timbangan_kg) ~ ' kg' if t.netto_timbangan_kg is not none else 'Belum tersedia' }}</dd></div>
+            <div><dt>Tara kemasan</dt><dd>{{ angka(t.total_tara_kg) ~ ' kg' if t.total_tara_kg is not none else 'Belum tersedia' }}</dd></div>
+          </dl>
+        </details>
+      {% elif k.rec.timbangan_transaksi_id %}<p>Tiket timbang #{{ k.rec.timbangan_transaksi_id }} tidak ditemukan.</p>
+      {% else %}<p class="kirim-detail__catatan">{{ 'Ditutup tanpa tiket timbang terkait.' if k.rec.status == 'selesai' else ('Tiket timbang tidak wajib untuk alur cepat di bawah 200 kg.' if k.cepat else 'Tiket armada belum dipilih.') }}</p>{% endif %}
+    </section>
+</div>
+{{ dt.buka('riwayat') }}    <section class="kirim-detail__bagian" aria-labelledby="judul-jejak-pengiriman">
+      <h2 id="judul-jejak-pengiriman">Riwayat petugas</h2>
+      <ol class="kirim-detail__jejak">{% for label, waktu, nama in k.jejak %}
+        <li><strong>{{ label }}</strong><span>{{ nama or 'Petugas tidak tercatat' }}</span><time>{{ waktu|jam('%d/%m/%Y %H:%M') }}</time></li>
+      {% else %}<li>Riwayat petugas belum tercatat.</li>{% endfor %}</ol>
+    </section>
+{{ retur_terkait_kartu() }}</div></article>
+<script src="/static/detail_kirim_retur.js?v=1" defer></script>

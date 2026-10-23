@@ -138,6 +138,7 @@ async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)
         items = [dict(i, pemilik=pemilik.get(i['jasa_id'], 'Milik pabrik')) for i in items]
     return await render_laci(request, "retur_detail.html", layar="barang_keluar",
                              retur=retur, items=items, tiket=tiket,
+                             pengajuan_id=rincian.id if rincian else None,
                              penerima=penerima.nama if penerima else "—",
                              pengiriman_asal=rincian.outgoing_record_id if rincian else None,
                              gudang=gudang.nama_gudang if gudang else ('Sesuai gudang asal per item' if rincian and rincian.outgoing_record_id else 'Gudang tidak tercatat'))
