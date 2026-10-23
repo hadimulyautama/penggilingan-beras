@@ -372,6 +372,10 @@
        * sebab pengumpul di bawah membaca `[data-name]`; `data-teks` menyimpan
        * tulisannya untuk kalimat konfirmasi, yang harus berbunyi "Silo A ·
        * Silo B", bukan "A,B". */
+      if (f.type === "pratinjau") {
+        return '<p class="nota" id="p_' + esc(f.name) +
+          '" role="status" aria-live="polite">' + esc(f.label) + '</p>';
+      }
       if (f.type === "remote_banyak") {
         return '<label class="lbl">' + esc(f.label) + "</label>" +
           '<div class="centangan" id="b_' + esc(f.name) + '">' +
@@ -405,11 +409,12 @@
       if (f.type === "select") {
         var opts = (f.options.length && f.options[0][0] === "")
           ? f.options : [["", "— pilih —"]].concat(f.options);
-        return l + '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) + '"' +
+        var pilihan = l + '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) + '"' +
           (f.optional ? "" : ' data-wajib="1"') + ' data-label="' + esc(f.label) + '">' +
           opts.map(function (o) {
             return '<option value="' + esc(o[0]) + '"' + (f.bawaan === o[0] ? ' selected' : '') + '>' + esc(o[1]) + "</option>";
           }).join("") + "</select>";
+        return f.rincian ? '<details><summary>' + esc(f.rincian) + "</summary>" + pilihan + "</details>" : pilihan;
       }
       if (f.type === "remote") {
         // `optional` ada karena sebagian pilihan memang tak berlaku untuk
@@ -587,6 +592,64 @@
     lembar.oninput = lembar.onchange = function () { lembar._berubah = true; };
     bukaLembar(lembar);
     document.body.style.overflow = "hidden";
+
+    // Angka turunan tetap dijawab server yang memiliki sumber bobotnya.
+    // Nomor urut dan identitas borang mencegah jawaban lama menimpa pilihan
+    // baru saat jaringan lambat atau operator cepat mengganti tumpukan.
+    var urutanPratinjau = 0, waktuPratinjau, kunciPratinjau = "";
+    function perbaruiPratinjau() {
+      var borang = lembar.querySelector(".lembar__isi");
+      var daftar = (a.fields || []).filter(function (f) { return f.type === "pratinjau"; });
+      if (!daftar.length) return;
+      var kunci = daftar.map(function (f) {
+        return f.source + "?" + (f.acuan || []).map(function (nama) {
+          return encodeURIComponent(nama) + "=" + encodeURIComponent(nilaiMedan(nama));
+        }).join("&");
+      }).join("|");
+      if (kunci === kunciPratinjau) return;
+      kunciPratinjau = kunci;
+      var urutan = ++urutanPratinjau;
+      clearTimeout(waktuPratinjau);
+      daftar.forEach(function (f) {
+        var kotak = $("p_" + f.name);
+        if (kotak) kotak.textContent = "Menghitung bobot…";
+      });
+      waktuPratinjau = setTimeout(function () {
+        daftar.forEach(function (f) {
+          var url = f.source + "?" + (f.acuan || []).map(function (nama) {
+            return encodeURIComponent(nama) + "=" + encodeURIComponent(nilaiMedan(nama));
+          }).join("&");
+          ambil(url).then(function (hasil) {
+            if (!hasil || urutan !== urutanPratinjau || !lembar.open ||
+                lembar.querySelector(".lembar__isi") !== borang) return;
+            var kotak = $("p_" + f.name);
+            if (kotak) kotak.textContent = hasil.teks;
+            (f.acuan || []).forEach(function (nama) {
+              var el = $("f_" + nama);
+              if (!el || !el.dataset.angka) return;
+              var nonaktif = (hasil.nonaktif || []).indexOf(nama) >= 0;
+              el.disabled = nonaktif;
+              el.dataset.pratinjauNonaktif = nonaktif ? "1" : "";
+              el.hidden = nonaktif;
+              var label = lembar.querySelector('label[for="f_' + nama + '"]');
+              if (label) label.hidden = nonaktif;
+            });
+          }).catch(function () {
+            if (urutan !== urutanPratinjau || lembar.querySelector(".lembar__isi") !== borang) return;
+            var kotak = $("p_" + f.name);
+            if (kotak) kotak.textContent = "Bobot belum dapat dimuat. Periksa jaringan; bobot diperiksa kembali saat menyimpan.";
+          });
+        });
+      }, 150);
+    }
+    if (lembar._pratinjau) {
+      lembar.removeEventListener("input", lembar._pratinjau);
+      lembar.removeEventListener("change", lembar._pratinjau);
+    }
+    lembar._pratinjau = perbaruiPratinjau;
+    lembar.addEventListener("input", perbaruiPratinjau);
+    lembar.addEventListener("change", perbaruiPratinjau);
+    perbaruiPratinjau();
 
     /* Nilai sebuah medan, apa pun bentuknya di layar: pilihan biasa, atau
        isian TERKUNCI yang menyimpan kodenya di kolom tersembunyi (kartu yang
@@ -1055,6 +1118,7 @@
             kotak.textContent = cocok.label;
             if (cocok.berat_kg != null) { kotak.dataset.beratKg = String(cocok.berat_kg); }
             perbaruiMaksimalKemas();
+            perbaruiPratinjau();
             return;
           }
           if ((f.name === "sumber_stok" && sumberBaris) ||
@@ -1150,6 +1214,7 @@
           if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = "Simpan"; }
         }
         perbaruiMaksimalKemas();
+        perbaruiPratinjau();
         perbaruiKonteksMuat();
         ambilAcuanJeda();
         aturWaktuJeda();
@@ -1282,6 +1347,7 @@
     function muatan() {
       var isi = {};
       Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
+        if (el.dataset.pratinjauNonaktif === "1") return;
         var v = el.value;
         /* Dikirim sebagai DAFTAR, bahkan bila cuma satu yang tercentang:
            server yang menerima kadang daftar kadang teks harus menebak, dan
