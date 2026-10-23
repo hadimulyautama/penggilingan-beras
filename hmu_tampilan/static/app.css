@@ -3616,3 +3616,13 @@ body .beranda-aktivitas .daftar-standar>.grup>.beranda-kartu-aksi{display:flex;f
 
 .beranda-aktivitas .beranda-kartu-aksi>.beranda-kartu-aksi__isi{flex:0 0 auto;width:100%;align-content:start}
 .beranda-kartu-aksi__lain{width:100%}
+
+/* Running work: explicit detail links and directly available operations. */
+body .isi .proses-aktif-list--aksi>.proses-aktif-list__head,body .isi .proses-aktif-list--aksi>.proses-aktif-list__row{grid-template-columns:minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.2fr) 72px}
+body .isi .proses-aktif-list--aksi>.proses-aktif-list__row{align-items:start;cursor:default;background:var(--panel)}
+.proses-aktif-list__aksi{grid-column:1/-1;display:grid;gap:4px;width:100%;max-width:480px;min-width:0}
+.proses-aktif-list__aksi .beranda-kartu-aksi__utama{margin:0}
+.proses-aktif-list__aksi .pilihan{width:100%;box-sizing:border-box}
+body .isi .proses-aktif-list__detail{min-height:44px;display:flex;align-items:center;overflow-wrap:anywhere}
+body .isi .proses-aktif-list__aksi .pilihan__nama,body .isi .proses-aktif-list__aksi .pilihan__ket{display:block}
+@media(max-width:850px){body .isi .proses-aktif-list--aksi>.proses-aktif-list__head{display:none}body .isi .proses-aktif-list--aksi>.proses-aktif-list__row{grid-template-columns:minmax(0,1fr);gap:12px}body .isi .proses-aktif-list--aksi>.proses-aktif-list__row>*{grid-column:1;grid-row:auto}.proses-aktif-list__aksi{max-width:none}body .isi .proses-aktif-list__detail.btn{justify-self:start;min-height:44px}}
