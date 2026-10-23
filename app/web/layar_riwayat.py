@@ -1029,6 +1029,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
 
     grouped: dict[str, dict] = {}
     penilaian = None
+    qc_detail = {}
 
     def tambah(ref: str, waktu, nomor: int | None, detail: list[tuple[str, str]],
                *, asal: str | None = None, plat: str | None = None, qc_pk=None):
@@ -1062,6 +1063,20 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             )).all()
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _, _ in hasil})
+            if referensi and hasil:
+                batch, header, *_ = hasil[0]
+                # Nilai parent diperbarui layanan catat_qc_gabah dari seluruh
+                # bacaan/sak, bukan menghitung ulang angka berformat di layar.
+                qc_detail = dict(gudang="Gudang 1", titipan=bool(batch.jasa_id),
+                    sumber=f"/barang-masuk/{batch.timbangan_transaksi_id}" if batch.timbangan_transaksi_id else None,
+                    air=batch.kadar_air_awal_persen, lamur=header.jumlah_sak_lamur,
+                    ditutup=header.ditutup_pada, penutup=None, alasan=None)
+                if header.ditutup_pada:
+                    from app.models import ActivityLog
+                    qc_detail['penutup'] = await db.scalar(select(User.nama).where(User.id == header.ditutup_by))
+                    qc_detail['alasan'] = await db.scalar(select(ActivityLog.alasan_perubahan).where(
+                        ActivityLog.table_name == 'purchase_batch_qc', ActivityLog.record_id == header.id,
+                        ActivityLog.field_name == 'ditutup_pada').order_by(ActivityLog.id.desc()).limit(1))
             for batch, _qc, sample, nama_supplier, pencatat in hasil:
                 fields = [("Kadar air", f"{sample.kadar_air_1}% dan {sample.kadar_air_2}%"),
                           ("Biji hijau", sample.biji_hijau.replace("_", " ")),
@@ -1093,6 +1108,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             )).all()
             if referensi:
                 penilaian = penilaian_dari_log(qc for _, qc, _, _ in hasil)
+                if hasil:
+                    batch = hasil[0][0]
+                    qc_detail = dict(gudang="Gudang 2", titipan=bool(batch.jasa_id),
+                        sumber=f"/barang-masuk/{batch.timbangan_transaksi_id}" if batch.timbangan_transaksi_id else None)
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _ in hasil})
             putaran_per_batch = {}
@@ -1125,6 +1144,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             )).all()
             if referensi:
                 penilaian = penilaian_dari_log(qc for _, qc, _ in hasil)
+                if hasil:
+                    process = hasil[0][0]
+                    qc_detail = dict(gudang="Gudang 1", titipan=bool(process.jasa_id),
+                        sumber=f"/proses-aktif/giling/{process.kode_proses}" if process.status != 'selesai' else f"/riwayat-giling/{process.id}")
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _, _ in hasil})
             proses_ids = {p.id for p, _, _ in hasil}
@@ -1195,9 +1218,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     if referensi is not None:
         if not rows:
             raise HTTPException(404, "Catatan QC untuk batch atau proses ini tidak ditemukan.")
+        from app.web.detail_qc import konteks
         return await render_laci(request, "riwayat_qc_detail.html", judul=judul,
                                  k=rows[0], jenis=jenis, penilaian=penilaian,
-                                 kembali=f"/riwayat-qc/{jenis}")
+                                 qc_detail=qc_detail, **konteks(request, jenis, rows[0]))
 
     return await render_laci(request, "riwayat_qc.html", judul=judul,
                              rows=rows, catatan_kosong=catatan_kosong,

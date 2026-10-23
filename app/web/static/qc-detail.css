@@ -1,0 +1,27 @@
+/* Khusus detail QC; tidak mengubah tabel Stok atau detail proses bersama. */
+.qc-detail{display:block;width:100%;max-width:1180px;min-width:0;container-type:inline-size}
+.qc-detail *{box-sizing:border-box}.qc-detail [hidden]{display:none!important}
+.qc-detail .riwayat-detail__back{margin-bottom:16px;min-height:40px;align-content:center;font-weight:400;font-size:.9rem}
+.qc-detail .riwayat-detail__card{border:1px solid var(--garis);border-radius:14px;background:var(--panel);padding:20px;margin-bottom:16px;box-shadow:none;min-width:0;overflow-wrap:anywhere}
+body.padiflow-ui .qc-detail header.qc-hero{background:var(--panel-2);padding:22px}
+.qc-topline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.8rem;color:var(--redup)}
+.qc-detail h1{font-size:1.65rem;line-height:1.3;margin:12px 0 8px;overflow-wrap:anywhere}
+.qc-detail h2{font-size:1.08rem;margin:0 0 16px}.qc-detail h3{font-size:1rem;margin:16px 0 10px}
+.qc-detail p{font-size:.87rem;line-height:1.65;color:var(--redup);margin:12px 0}
+.qc-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:18px 0}
+.qc-tabs a{display:flex;align-items:center;justify-content:center;min-height:48px;padding:10px;border:1px solid var(--garis);border-radius:9px;color:var(--tinta);background:var(--panel);text-decoration:none;text-align:center;font-size:.88rem}
+.qc-tabs a[aria-current=page]{background:var(--panel-2);border-color:#73946e;font-weight:650}
+.qc-fields{margin:12px 0;min-width:0}.qc-fields>div{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.3fr);gap:12px;border-top:1px solid var(--garis);padding:11px 0;font-size:.88rem;line-height:1.6}.qc-fields dt{color:var(--redup)}.qc-fields dd{margin:0;text-align:right;overflow-wrap:anywhere;white-space:pre-wrap}
+.qc-columns{display:block}
+.qc-score{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.qc-score strong{color:var(--aman);font-size:2.3rem;line-height:1.2;font-variant-numeric:tabular-nums}.qc-score span{font-size:.9rem;color:var(--redup)}
+.qc-components{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.qc-components>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:12px 0;border-top:1px solid var(--garis);font-size:.87rem}.qc-components small{grid-column:1/-1;font-size:.78rem;color:var(--redup);line-height:1.6}
+.qc-actions{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}.qc-actions .btn{flex:1 1 180px;min-height:44px;white-space:normal;text-align:center;justify-content:center}.qc-primary{--tombol-pucat:#4b7043;--tombol-pucat-teks:#fff;--tombol-batas:#4b7043}
+.qc-notice,.qc-note{padding:14px;border:1px solid var(--garis);border-radius:10px;background:var(--panel-2);font-size:.88rem;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+.qc-picker{display:flex;align-items:end;gap:12px}.qc-picker label{flex:1;min-width:0;display:grid;gap:8px;font-size:.88rem}.qc-picker select{width:100%;min-width:0;max-width:100%}.qc-picker .btn{min-height:44px}
+.qc-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0}.qc-pager .btn{min-height:44px;white-space:normal;text-align:center;font-size:.85rem}.qc-pager [aria-disabled=true]{opacity:.45;cursor:default}.qc-pager>span:not(.btn){white-space:nowrap;font-size:.88rem}
+.qc-detail .qc-history-round{border:0;padding:0;margin:0}.qc-detail .qc-history-round__head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.9rem}.qc-history-round__head time{font-size:.82rem;color:var(--redup)}
+.qc-detail .penilaian-pk{min-width:0}.qc-detail .penilaian-pk__rumus{overflow-wrap:anywhere;white-space:normal}.qc-detail .penilaian-pk__rumus p{color:var(--tinta)}
+.qc-detail :focus-visible{outline:3px solid #73946e;outline-offset:3px}
+@container(max-width:570px){.qc-detail .riwayat-detail__card{padding:16px}.qc-detail h1{font-size:1.4rem}.qc-tabs{grid-template-columns:repeat(2,minmax(0,1fr));margin:14px 0}.qc-columns{grid-template-columns:minmax(0,1fr);gap:0}.qc-columns>.riwayat-detail__card{height:auto}.qc-fields>div{grid-template-columns:minmax(0,1fr);gap:5px}.qc-fields dd{text-align:left}.qc-hero .qc-fields>div{grid-template-columns:minmax(95px,.65fr) minmax(0,1.35fr)}.qc-hero .qc-fields dd{text-align:right}.qc-score strong{font-size:2rem}.qc-picker{align-items:stretch;flex-direction:column}.qc-pager .btn{flex:1}.qc-components{grid-template-columns:minmax(0,1fr)}.qc-detail .penilaian-pk__aturan{grid-template-columns:minmax(0,1fr)}.qc-detail .penilaian-pk__ringkasan{flex-wrap:wrap}.qc-detail .penilaian-pk__rumus p{line-height:1.8}}
+
+.qc-score>div{display:grid;gap:6px}.qc-score small{font-size:.82rem;color:var(--redup)}
