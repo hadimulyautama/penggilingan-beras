@@ -1455,20 +1455,19 @@ GRUP_LAIN = "Lain-lain"
 _GRUP_AKSI = {
     # Yang BENAR-BENAR digambar di katalog: aksi yang tak punya kartu, jadi
     # katalog satu-satunya pintunya. Yang berkartu ada di daftar di bawah.
-    "transfer_pk": "Gudang 2 · penyosohan",
+    "transfer_pk": "Pemindahan bahan",
     # Yang keluar dari pabrik, dan yang bukan beras putih.
     #
     # `kirim_bekatul`, `kirim_barang_jadi` dan `jual_pk` DIBUANG 28 September
     # 2026 (keputusan pemilik): barang keluar kini berperintah, dan pintu kedua
     # tanpa perintah membuat rantainya sukarela.
-    # Masukkan beras ke silo tersedia dari kartu stok dan katalog umum.
-    # Keputusan pemilik 8 Oktober 2026.
+    # Masukkan beras ke silo dibuka dari Stok; spesifikasinya tetap dikirim.
     "masukkan_beras_silo": "Hasil samping & barang jadi",
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",
     "ubah_item_perintah": "Barang keluar", "hapus_item_perintah": "Barang keluar",
     "batal_perintah_keluar": "Barang keluar",
-    # Tutup/batalkan pesanan jasa belum memiliki tombol kartu khusus.
+    # Tutup/batalkan dibuka dari detail Pesanan Jasa, bukan katalog umum.
     "tutup_jasa": "Jasa (titipan pelanggan)",
     "batalkan_jasa": "Jasa (titipan pelanggan)",
     "verifikasi_keluar": "Barang keluar", "keluar_cepat": "Barang keluar",
@@ -1476,8 +1475,9 @@ _GRUP_AKSI = {
     "muat_barang": "Barang keluar",
     "selesai_muat": "Barang keluar",
     # Pembelian & pencocokan.
-    "beli_kemasan": "Pembelian & pencocokan",
-    "rekonsiliasi_timbang": "Pembelian & pencocokan",
+    "beli_kemasan": "Stok & kemasan",
+    "rekonsiliasi_timbang": "Pencocokan data",
+    "auto_taut_keluar": "Pencocokan data",
     "qc_gabah_basah": "Pembelian & pencocokan",
     "qc_gabah_kering": "Pembelian & pencocokan",
 }
@@ -1506,6 +1506,8 @@ _GRUP_AKSI = {
 # Aksinya TETAP dikirim di menu: lembar kartu dibangun dari spesifikasi yang
 # sama. Yang berubah cuma `a["kartu"]`, dan katalog melewatkannya.
 for _a in (
+    # Spesifikasi tetap dikirim untuk Stok dan detail Pesanan Jasa.
+    "masukkan_beras_silo", "tutup_jasa", "batalkan_jasa",
     # Gudang 1
     "gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
     "selesai_pengeringan", "selesai_pendinginan", "mulai_pendinginan_ulang", "pindah_silo", "ubah_target",
@@ -1563,8 +1565,7 @@ for _a in (
 #: Urutan kelompok di layar — yang paling sering dipakai lebih dulu. Yang
 #: sudah punya kartu tak ada di sini: ia tak digambar di katalog sama sekali.
 URUT_GRUP = [
-    "Gudang 2 · penyosohan", "PK dari luar", "Hasil samping & barang jadi",
-    "Pembelian & pencocokan", GRUP_LAIN,
+    "Stok & kemasan", "Pemindahan bahan", "Pencocokan data", GRUP_LAIN,
 ]
 
 

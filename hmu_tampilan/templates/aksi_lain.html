@@ -2,19 +2,16 @@
 {% block judul %}Catat pekerjaan lain{% endblock %}
 {% block isi %}
 
-{# ── Katalog, bukan antrean ──
-   Yang di sini adalah aksi yang tak berwujud benda di gudang: beli karung,
-   barang keluar, harga, QC, pembatalan. Ia tak pernah muncul sendiri di
-   Antrian tunggu karena memang tak ada bendanya yang bisa ditekan — dan
-   menaruhnya menggantung di bawah antrean membuat antrean berhenti berarti
-   apa yang ia namai. #}
-{# Paragrafnya sendiri milik APP, bukan paket: yang disebut di dalamnya adalah
-   layar yang benar-benar ADA di app itu — Gudang 2 tak punya /keputusan, jadi
-   kalimat Meja di sana akan berisi tautan mati. Inilah satu-satunya yang dulu
-   membedakan tiga salinan berkas ini; sekarang cuma paragraf itu yang tinggal
-   per app, tujuh baris, bukan dua puluh enam. #}
+<a class="btn btn--kecil" href="{{ kembali }}">← Kembali ke Pekerjaan</a>
+<p class="bantu">Pekerjaan → Catat pekerjaan lain</p>
 {% include "_kata_aksi_lain.html" %}
-
+{% if petunjuk %}<div class="kartu" role="status"><p>{{ petunjuk }}</p><a class="btn" href="{{ asal_tindakan }}">{{ nama_asal }}</a></div>{% endif %}
+<style>
+#layar{display:grid;gap:20px;align-items:start;margin-top:24px}
+#layar>div>.lbl{display:block;margin-bottom:12px;font-size:16px}
+#layar .tindakan{min-height:76px;text-align:left}
+@media(min-width:1000px){ #layar{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
 <div id="layar"><div class="bantu" style="padding:20px 0;text-align:center">Memuat…</div></div>
 
 <dialog class="lembar" id="lembar"></dialog>

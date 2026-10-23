@@ -49,7 +49,8 @@ def test_katalog_punya_alamatnya_sendiri():
     html = (AKAR / "hmu_tampilan/templates/aksi_lain.html").read_text()
     assert 'id="layar"' in html and "aksi.js" in html
     kata = (AKAR / "app/web/templates/_kata_aksi_lain.html").read_text()
-    assert 'href="/aksi"' in kata and 'href="/berjalan"' in kata
+    assert "Stok dan Pesanan Jasa" in kata
+    assert "Kembali ke Pekerjaan" in html
 
 
 def test_antrean_kosong_menunjuk_ke_mana_lagi():

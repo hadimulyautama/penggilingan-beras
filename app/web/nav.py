@@ -379,7 +379,7 @@ JUDUL = {k: nama for k, _, nama, _, _, _ in TAB}
 
 # Kunci lama dipertahankan untuk judul dan pemakai lama. Hanya pintu sidebar
 # yang disatukan; rute dan gerbangnya tetap milik modul asal.
-MENU_TERSEMBUNYI = ("kabar", "retur", "laporan", "riwayat_sosoh", "riwayat_giling",
+MENU_TERSEMBUNYI = ("aksi_lain", "kabar", "retur", "laporan", "riwayat_sosoh", "riwayat_giling",
                     "riwayat_pengeringan", "riwayat_transfer", "riwayat_qc", "audit")
 
 
