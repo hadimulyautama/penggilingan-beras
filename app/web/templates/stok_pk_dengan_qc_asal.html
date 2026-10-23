@@ -1,0 +1,17 @@
+{% extends template_stok_lama %}
+{% block isi %}
+{{ super() }}
+{% if qc_gabah_asal is not none %}
+<div class="qc-gabah-stok">{% include '_qc_gabah_asal.html' %}</div>
+<script>
+(function () {
+  // Paket stok tetap dipakai utuh; rincian asal ditempatkan setelah batch.
+  // Berjalan sekali per render (termasuk PINDAH), tanpa pendengar global.
+  var asal = document.querySelector('.qc-gabah-stok');
+  var bahan = document.querySelector('.pk-detail__grid');
+  if (asal && bahan) { bahan.appendChild(asal.firstElementChild); asal.remove(); }
+})();
+</script>
+{% endif %}
+<style>.qc-gabah-stok{width:100%;max-width:1160px;margin:0 auto 34px}.qc-gabah-stok>.qc-gabah-asal,.pk-detail__grid>.qc-gabah-asal{margin-top:0}.pk-detail__grid>.qc-gabah-asal{grid-column:1/-1}</style>
+{% endblock %}

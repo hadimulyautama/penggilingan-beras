@@ -1,0 +1,23 @@
+{% if qc_gabah_asal is defined and qc_gabah_asal is not none %}
+<section class="riwayat-detail__card pk-detail__panel qc-gabah-asal" aria-label="QC gabah asal">
+  <h2>QC gabah asal</h2>
+  <p class="bantu">Catatan saat penerimaan gabah per batch asal. Berbeda dari pengukuran pengeringan dan QC PK hasil giling; nilai antarbatch tidak digabung.</p>
+  {% for batch in qc_gabah_asal %}
+  <details open class="qc-gabah-asal__batch"><summary><strong>{{ batch.kode }}</strong> · Gabah {{ batch.kondisi }}</summary>
+    {% for q in batch.catatan %}
+    <article class="qc-gabah-asal__catatan">
+      <h3>{{ 'QC ' ~ q.nomor if q.nomor is not none else 'QC data lama · rincian sampel belum tersedia' }}</h3>
+      <p class="bantu">{{ q.waktu|jam('%d/%m/%Y %H:%M') or 'Waktu belum tercatat' }} · {{ q.pencatat }}</p>
+      <dl class="qc-gabah-asal__nilai">
+        <div><dt>Kadar air · bacaan 1</dt><dd>{{ q.air1 }}</dd></div><div><dt>Kadar air · bacaan 2</dt><dd>{{ q.air2 }}</dd></div>
+        <div><dt>Lamur</dt><dd>{{ q.lamur }}</dd></div><div><dt>Biji hijau</dt><dd>{{ q.hijau }}</dd></div><div><dt>Densiti</dt><dd>{{ q.densiti }}</dd></div>
+      </dl>
+    </article>
+    {% else %}<p class="bantu">QC gabah belum tercatat untuk batch ini.</p>{% endfor %}
+  </details>
+  {% else %}<p class="bantu">Sumber batch gabah belum tersedia. QC gabah asal belum dapat ditelusuri.</p>{% endfor %}
+</section>
+<style>
+.qc-gabah-asal{margin-top:16px}.qc-gabah-asal__batch{margin-top:16px;border-top:1px solid var(--garis,#dce2e8);padding-top:12px}.qc-gabah-asal__batch summary{cursor:pointer;overflow-wrap:anywhere}.qc-gabah-asal__catatan{padding:12px 0}.qc-gabah-asal__catatan h3{font-size:1rem;margin:0}.qc-gabah-asal__nilai{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.qc-gabah-asal__nilai div{min-width:0}.qc-gabah-asal__nilai dt{font-size:.8rem;color:var(--redup,#596a7b)}.qc-gabah-asal__nilai dd{margin:4px 0 0;overflow-wrap:anywhere}@media(max-width:480px){.qc-gabah-asal__nilai{grid-template-columns:1fr}}
+</style>
+{% endif %}

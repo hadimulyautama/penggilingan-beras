@@ -96,11 +96,13 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     from app.services.riwayat_jeda import riwayat_jeda
     async with SessionLocal() as db:
         jeda_riwayat = await riwayat_jeda(db, jenis="giling", id_=process_id, params=request.query_params)
+        from app.services.qc_gabah_asal import dari_giling
+        qc_gabah_asal = await dari_giling(db, await db.get(MillingProcess, process_id))
     from app.services.penghalang_koreksi import daftar
     async with SessionLocal() as db:
         catatan_penghalang = await daftar(db, "giling", process_id) if akun.is_admin and penghalang else []
     return await render_laci(
-        request, "riwayat_detail.html", jenis="giling", k=kartu[0],
+        request, "riwayat_detail.html", jenis="giling", k=kartu[0], qc_gabah_asal=qc_gabah_asal,
         catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-giling", breadcrumb_detail=kartu[0].kode,
         layar="riwayat_giling", boleh_koreksi=akun.is_admin,

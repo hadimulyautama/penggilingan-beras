@@ -278,6 +278,9 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
 
         if kartu is None:
             raise HTTPException(404, "Stok PK tidak ditemukan atau sudah habis.")
+        from app.services.qc_gabah_asal import dari_pk
+        qc_gabah_asal = await dari_pk(db, kode=kartu.kode if gudang == "g1" else None,
+                                     intake_id=kartu.intake_id if gudang == "g2" else None)
         mutu_aktif = await fitur_mutu(db)
         riwayat_qc = (await svc.riwayat_qc_pk(
             db, kode=kartu.kode if gudang == "g1" else None,
@@ -298,8 +301,10 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         kembali += "?gudang=" + gudang_filter
         params_detail["gudang_filter"] = gudang_filter
     detail_href = "/stok/pk/detail?" + urlencode(params_detail)
+    template_stok_lama = "stok_pk_karung.html" if gudang == "g2" and kartu.jumlah_karung else ("stok_pk_jasa.html" if jasa_saja else "stok.html")
     return await render_laci(
-        request, "stok_pk_karung.html" if gudang == "g2" and kartu.jumlah_karung else ("stok_pk_jasa.html" if jasa_saja else "stok.html"),
+        request, "stok_pk_dengan_qc_asal.html", template_stok_lama=template_stok_lama,
+        qc_gabah_asal=qc_gabah_asal,
         layar="stok_pk_jasa" if jasa_saja else "stok",
         detail=True, detail_gudang=gudang, detail_kartu=kartu,
         riwayat_qc=riwayat_qc,
