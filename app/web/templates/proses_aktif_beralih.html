@@ -4,4 +4,4 @@
 <section class="kosong"><div><h1>Proses sudah diperbarui</h1><p class="bantu">Membuka tahap atau riwayat terbaru dari proses ini.</p><a class="btn btn--utama" href="{{ tujuan }}">Buka halaman terbaru</a></div></section>
 <div class="kabar" id="kabar" role="status"></div>
 {% endblock %}
-{% block kaki %}<script>window.location.replace({{ tujuan|tojson }});</script>{% endblock %}
+{% block kaki %}<script>window.location.replace({{ tujuan|tojson }} + window.location.hash);</script>{% endblock %}

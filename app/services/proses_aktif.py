@@ -112,7 +112,8 @@ async def rincian(db, *, jenis, model, kartu, params):
     from app.penggilingan.gudang1.services.jeda import tertahan_detik, jeda_terbuka
     tertahan = await tertahan_detik(db, jeda_jenis, model.id)
     macet = await jeda_terbuka(db, jeda_jenis, model.id)
-    durasi = max(0, (now_local() - awal_fase).total_seconds()) if awal_fase else 0
+    akhir_fase = model.waktu_selesai_pendinginan if jenis == "pendinginan" else None
+    durasi = max(0, ((akhir_fase or now_local()) - awal_fase).total_seconds()) if awal_fase else 0
     efektif = max(0, durasi - (0 if jenis == "pendinginan" else tertahan))
     d = dict(jenis=jenis, judul=JENIS[jenis], kode=kartu.kode, proses=kartu,
              pemilik=pemilik.get(model.jasa_id, "Pemilik belum tercatat") if model.jasa_id else "Milik pabrik",

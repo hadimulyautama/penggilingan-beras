@@ -1,0 +1,6 @@
+/* Pendinginan memakai sistem desain detail; posisi tindakan mengikuti mockup. */
+.pendinginan-detail .pendinginan-kondisi{padding:14px;background:var(--panel-2);border-radius:10px;margin:12px 0}
+.pendinginan-kondisi strong{font-size:.9rem}.pendinginan-kondisi p{font-size:.8rem;margin:6px 0 0;color:var(--kulit-redup)}
+.pendinginan-putaran{display:grid;gap:12px}.pendinginan-putaran article{padding:12px;border:1px solid var(--kulit-batas);border-radius:10px}
+.pendinginan-putaran h3{margin:0;font-size:.87rem}.pendinginan-putaran .pengeringan-baris{margin-bottom:0}
+.pendinginan-laporan{justify-self:start}.pendinginan-detail .pengeringan-aksi-utama:has(>.pilihan__satu:only-child){grid-template-columns:minmax(0,1fr)}
