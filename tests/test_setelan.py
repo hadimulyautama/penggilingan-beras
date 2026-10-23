@@ -50,7 +50,9 @@ def test_katalog_punya_alamatnya_sendiri():
     assert 'id="layar"' in html and "aksi.js" in html
     kata = (AKAR / "app/web/templates/_kata_aksi_lain.html").read_text()
     assert "Stok dan Pesanan Jasa" in kata
-    assert "Kembali ke Pekerjaan" in html
+    # Main sudah memakai tab Pekerjaan bersama; tombol kembali berulang dihapus.
+    assert "tab_pekerjaan('lain'" in html
+    assert "Kembali ke Pekerjaan" not in html
 
 
 def test_antrean_kosong_menunjuk_ke_mana_lagi():

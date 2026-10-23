@@ -146,7 +146,7 @@ async def rincian(db, *, jenis, model, kartu, params):
         ).order_by(DryingMoistureLog.waktu_update.desc(), DryingMoistureLog.id.desc()).limit(1))
         d.update(jeda_mulai=_waktu(macet.mulai) if macet and jenis == "pengeringan" else None,
                  jeda_sebab=macet.sebab if macet and jenis == "pengeringan" else None,
-                 dryer=dryer.nama if dryer else "Belum tercatat", mode=model.mode_dryer or "Belum tercatat",
+                 dryer=dryer.nama if dryer else "Belum tercatat", mode=model.mode_dryer or "Mode dryer belum tercatat",
                  batch_jumlah=len(batches), tahap=1 if jenis == "pendinginan" else 0,
                  tes=_persen(log.kadar_air_tes_manual) if log else "Belum diukur",
                  tes_waktu=_waktu(log.waktu_update) if log else "Belum diukur",
@@ -295,9 +295,12 @@ async def _bahan_gabah(db, batches):
         select(Supplier).where(Supplier.id.in_({b.supplier_id for b in batches if b.supplier_id})))).all()}
     owners = await nama_pemilik_banyak(db, [b.jasa_id for b in batches])
     tickets = await svc._metadata_tiket(db, [b.timbangan_transaksi_id for b in batches])
-    return _bagian("Asal bahan gabah", ["Kode batch", "Pemasok / pemilik", "Kondisi / berat batch", "Tiket timbang", "Masuk / kendaraan"],
+    from app.services.qc_gabah_asal import dari_batches as qc_asal
+    bagian = _bagian("Asal bahan gabah", ["Kode batch", "Pemasok / pemilik", "Kondisi / berat batch", "Tiket timbang", "Masuk / kendaraan"],
                    [[b.kode_batch, owners.get(b.jasa_id, "Pemilik belum tercatat") if b.jasa_id else suppliers.get(b.supplier_id, "Pemasok belum tercatat"),
                      f"{b.kondisi_gabah} · {dari_batch(b).teks()}",
                      tickets.get(b.timbangan_transaksi_id, {}).get("kode") or "Tidak tertaut tiket",
                      f"{_waktu(b.waktu_pembelian)} · {b.no_polisi_truk or tickets.get(b.timbangan_transaksi_id, {}).get('nomor_polisi') or 'Nopol belum tercatat'}"] for b in batches],
                    keterangan="Berat ini adalah berat batch asal, bukan pembagian sisa per batch di dalam silo.")
+    bagian["qc_gabah_asal"] = await qc_asal(db, batches)
+    return bagian

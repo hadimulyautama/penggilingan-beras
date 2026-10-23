@@ -74,7 +74,7 @@ async def test_informasi_tetap_bisa_ditemukan(pg,gudang,monkeypatch):
         h=await c.get('/');r=await c.get('/pekerjaan?tab=berjalan&informasi=1')
         assert 'href="/aksi"' not in h.text and 'informasi=1' in h.text
         assert 'INFO-UNIK' in r.text and 'TR' in r.text
-        assert 'Perlu tindakan' in r.text and '>Berjalan ' in r.text
+        assert 'Perlu tindakan' in r.text and 'class="kerja-tab__nama">Berjalan</span>' in r.text
 
 async def test_proses_hari_lalu_tetap_aktif_saat_ringkasan_gagal(pg,pengeringan,monkeypatch):
     from app import main

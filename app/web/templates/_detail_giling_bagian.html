@@ -20,3 +20,5 @@
   </nav>
   {% endif %}
 </section>
+
+{% if bagian.qc_gabah_asal is defined %}{% with qc_gabah_asal=bagian.qc_gabah_asal %}{% include "_qc_gabah_asal.html" %}{% endwith %}{% endif %}
