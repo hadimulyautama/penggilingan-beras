@@ -55,7 +55,7 @@ async def test_super_creates_portal_only_identity_and_never_echoes_password(pg,p
         assert 'portal12345' not in str(logs[0].new_value) and 'scrypt$' not in str(logs[0].new_value)
 
 
-@pytest.mark.parametrize('bad',['unlinked','inactive','wrong_kledo','huge','short','confirm','staff_username'])
+@pytest.mark.parametrize('bad',['unlinked','inactive','wrong_kledo','huge','short','confirm','staff_username','oversized'])
 async def test_invalid_contact_and_credentials_are_not_saved(pg,people,bad):
     sid,p=people;data=form(p[0].id,601)
     if bad=='unlinked':data['kontak']=f'604:{p[2].id}'
@@ -65,6 +65,7 @@ async def test_invalid_contact_and_credentials_are_not_saved(pg,people,bad):
     if bad=='short':data.update(sandi='123',konfirmasi='123')
     if bad=='confirm':data['konfirmasi']='does-not-match'
     if bad=='staff_username':data['username']='bos'
+    if bad=='oversized':data.update(sandi='secret-not-for-response-'*30,konfirmasi='secret-not-for-response-'*30)
     async with _klien(await _token(pg,sid)) as c:
         r=await create(c,data);assert r.status_code==422,(bad,r.text[:100])
         assert data['sandi'] not in r.text or data['sandi']=='123'

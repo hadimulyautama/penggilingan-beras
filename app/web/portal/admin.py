@@ -67,9 +67,11 @@ async def index(request:Request,actor=Depends(super_only)):
     return await page(request,message={'dibuat':'Akun pelanggan berhasil dibuat.','diubah':'Perubahan akun tersimpan.','status':'Status akun tersimpan.'}.get(request.query_params.get('ok'),''))
 
 
+# Password length is validated in the service. FastAPI's default validation
+# response includes the rejected input, which must never echo a password.
 @router.post('/buat')
 async def create(request:Request,kontak:str=Form(...),username:str=Form(...,max_length=80),
-                 sandi:str=Form(...,max_length=512),konfirmasi:str=Form(...,max_length=512),actor=Depends(super_only)):
+                 sandi:str=Form(...),konfirmasi:str=Form(...),actor=Depends(super_only)):
     try:
         try:kledo_id,pelanggan_id=map(int,kontak.split(':'))
         except (ValueError,TypeError):raise ValueError('Pilih pelanggan dari kontak Kledo.')
@@ -89,7 +91,7 @@ async def detail(request:Request,account_id:int=Path(...,ge=1,le=2**31-1),actor=
 
 @router.post('/{account_id}')
 async def edit(request:Request,account_id:int=Path(...,ge=1,le=2**31-1),username:str=Form(...,max_length=80),
-               sandi:str=Form('',max_length=512),konfirmasi:str=Form('',max_length=512),actor=Depends(super_only)):
+               sandi:str=Form(''),konfirmasi:str=Form(''),actor=Depends(super_only)):
     try:
         async with SessionLocal() as db:
             await service.edit(db,actor=actor,account_id=account_id,name=username,password=sandi,confirmation=konfirmasi)
