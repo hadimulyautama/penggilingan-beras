@@ -1,3 +1,12 @@
 .kelola-portal{max-width:1100px;min-width:0}.kelola-portal header{margin:20px 0}.kelola-portal .kartu{margin-top:20px}.kelola-portal .grup{display:grid;gap:16px}.kelola-portal label{display:grid;gap:6px;min-width:0}.kelola-portal .fld{width:100%;min-width:0;box-sizing:border-box}.kelola-portal__sandi{display:grid;grid-template-columns:1fr 1fr;gap:16px}.kelola-portal__cari{display:grid;gap:8px}.kelola-portal__cari input{flex:1;min-width:180px}.kelola-portal nav{margin-top:16px}.kelola-portal .pilihan{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.kelola-portal .tabel-standar td{vertical-align:top}.kelola-portal dd{margin:0 0 10px}.kelola-portal [aria-current=page]{border-color:var(--pd-green);background:var(--pd-green-bg);color:var(--pd-ink)}@media(max-width:600px){.kelola-portal__sandi{grid-template-columns:1fr}.kelola-portal .btn,.kelola-portal .tbl,.kelola-portal input,.kelola-portal select{min-height:44px}.kelola-portal .grup>button{width:100%}}
 
 @media(max-width:900px){body .kelola-portal table[data-ponsel] [data-sel="kelola"]{display:block;grid-column:1 / -1;grid-row:4;margin-top:8px}}
+
+.kontak-pilih{position:relative;display:grid;gap:6px;min-width:0}
+.kontak-pilih__field{position:relative;min-width:0}
+.kontak-pilih__hasil{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;max-height:280px;overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--pd-line);border-radius:9px;background:var(--pd-sheet);box-shadow:0 8px 24px #0002}
+.kontak-pilih__hasil[hidden]{display:none}
+.kelola-portal .kontak-pilih__hasil button{display:grid;gap:3px;width:100%;min-height:56px;text-align:left;border:0;border-bottom:1px solid var(--pd-line);border-radius:0;padding:12px;background:var(--pd-sheet);color:var(--pd-ink);font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.kelola-portal .kontak-pilih__hasil button:last-child{border-bottom:0}
+.kelola-portal .kontak-pilih__hasil button:is(:hover,[aria-selected=true]){background:var(--pd-soft);color:var(--pd-ink)}
+.kontak-pilih__hasil small{color:var(--pd-muted)}

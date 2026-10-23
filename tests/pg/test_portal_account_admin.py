@@ -40,8 +40,10 @@ async def test_super_creates_portal_only_identity_and_never_echoes_password(pg,p
     async with _klien(await _token(pg,sid)) as c:
         r=await c.get('/pengguna');assert '/pengguna/pelanggan' in r.text
         r=await c.get('/pengguna/pelanggan');assert r.status_code==200
-        soup=BeautifulSoup(r.text,'html.parser');options=soup.select('[name=kontak] option')
-        assert {x.get('value') for x in options}=={'','601:'+str(customers[0].id),'602:'+str(customers[1].id)}
+        soup=BeautifulSoup(r.text,'html.parser')
+        assert soup.select_one('[role=combobox]') and not soup.select('[name=kontak] option')
+        result=await c.get('/pengguna/pelanggan/kontak')
+        assert {x['value'] for x in result.json()['items']}=={'601:'+str(customers[0].id),'602:'+str(customers[1].id)}
         r=await create(c,{**form(customers[1].id,602),'peran':'superadmin'})
         assert r.status_code==303 and 'portal12345' not in r.text
         page=await c.get(r.headers['location']);assert 'pelanggan-uji' in page.text and 'portal12345' not in page.text
@@ -77,7 +79,7 @@ async def test_admin_denied_even_when_no_superadmin_exists(pg,people):
     async with pg() as db:
         a=await db.get(ProduksiAkun,sid);u=await db.get(User,a.user_id);u.role='admin';await db.commit()
     async with _klien(await _token(pg,sid)) as c:
-        for path in ['/pengguna/pelanggan','/pengguna/pelanggan/1']:
+        for path in ['/pengguna/pelanggan','/pengguna/pelanggan/kontak?q=Kontak','/pengguna/pelanggan/1']:
             assert (await c.get(path)).status_code==403
         assert (await create(c,form(p[0].id,601))).status_code==403
         for path in ['/pengguna/pelanggan/1','/pengguna/pelanggan/1/status']:
@@ -94,7 +96,7 @@ async def test_customer_login_cannot_login_as_staff_or_manage_accounts(pg,people
         r=await c.get('/pelanggan/masuk');token=BeautifulSoup(r.text,'html.parser').select_one('[name=_csrf]')['value']
         r=await c.post('/pelanggan/masuk',data={'username':'pelanggan-uji','sandi':'portal12345','_csrf':token});assert r.status_code==303
         assert (await c.get('/pelanggan')).status_code==200
-        for path in ['/pengguna','/pengguna/pelanggan','/api/actions','/pengaturan']:
+        for path in ['/pengguna','/pengguna/pelanggan','/pengguna/pelanggan/kontak?q=Kontak','/api/actions','/pengaturan']:
             r=await c.get(path);assert r.status_code in (303,401,403,404)
         # Even with a valid staff-CSRF cap for an anonymous session, no staff identity is granted.
         r=await c.post('/pengguna/pelanggan/buat',data={**form(p[1].id,602,'attack'),'_csrf':cap_formulir(c)})
@@ -147,3 +149,41 @@ async def test_account_search_pagination_and_detail_outside_first_page(pg,people
         r=await c.get(f'/pengguna/pelanggan/{last}');assert r.status_code==200
         assert BeautifulSoup(r.text,'html.parser').select_one('[name=username]')['value']=='page-user-24'
         assert (await c.get('/pengguna/pelanggan?halaman=9999999999999999999999999&halaman_akun=999999999999999999999')).status_code==200
+
+
+async def test_contact_typeahead_finds_names_beyond_first_page_and_escapes_wildcards(pg,people):
+    sid,p=people
+    async with pg() as db:
+        rows=[Pelanggan(nama_pelanggan=f'Awal {i:03}',kledo_contact_id=800+i,status='aktif') for i in range(35)]
+        last=Pelanggan(nama_pelanggan='Zulfan Jaya 100%_Beras',kledo_contact_id=9999,status='aktif',no_telfon='08123498765')
+        db.add_all([*rows,last]);await db.commit()
+    async with _klien(await _token(pg,sid)) as c:
+        r=await c.get('/pengguna/pelanggan/kontak')
+        assert r.status_code==200 and r.headers['cache-control']=='no-store'
+        assert len(r.json()['items'])==20 and r.json()['more'] is True
+        assert last.nama_pelanggan not in r.text
+        for query in ['zUlFaN','Jaya','9999','3498765','100%_']:
+            r=await c.get('/pengguna/pelanggan/kontak',params={'q':query})
+            assert [x['value'] for x in r.json()['items']]==[f'9999:{last.id}']
+        for query in ['not-a-customer','9999999999999999999999999999999999']:
+            assert (await c.get('/pengguna/pelanggan/kontak',params={'q':query})).json()['items']==[]
+        # Creation uses the selected IDs, independent of alphabetical position.
+        assert (await create(c,form(last.id,9999,'akun-urutan-jauh'))).status_code==303
+    async with pg() as db:
+        assert (await db.scalar(select(PortalAccount))).pelanggan_id==last.id
+
+
+async def test_failed_create_keeps_verified_contact_and_username_but_not_password(pg,people):
+    sid,p=people
+    async with _klien(await _token(pg,sid)) as c:
+        data=form(p[1].id,602,'nama-dipertahankan');data['konfirmasi']='different-password'
+        r=await create(c,data);assert r.status_code==422
+        soup=BeautifulSoup(r.text,'html.parser')
+        assert soup.select_one('[name=kontak]')['value']==f'602:{p[1].id}'
+        assert soup.select_one('[role=combobox]')['value']=='Kontak Sama · Kledo #602'
+        assert soup.select_one('[name=username]')['value']=='nama-dipertahankan'
+        assert all(not x.get('value') for x in soup.select('input[type=password]'))
+        assert data['sandi'] not in r.text and data['konfirmasi'] not in r.text
+        # Invalid or stale pairs must not be reinstated as a selection.
+        r=await create(c,{**data,'kontak':f'601:{p[1].id}'})
+        assert BeautifulSoup(r.text,'html.parser').select_one('[name=kontak]')['value']==''

@@ -23,16 +23,20 @@
 </form></section>
 {% else %}
 <section class="kartu"><h2>Buat akun pelanggan</h2>
-<form method="get" action="/pengguna/pelanggan" class="kelola-portal__cari">
-<label for="kontak-cari">Cari kontak Kledo</label><div class="pilihan"><input class="fld" id="kontak-cari" name="q" value="{{ q }}" maxlength="100" placeholder="Nama, nomor kontak Kledo, atau telepon"><button class="btn" type="submit">Cari kontak</button>{% if q %}<a href="/pengguna/pelanggan" class="btn">Reset</a>{% endif %}</div>
-</form>
-<p class="bantu">Hanya pelanggan aktif dengan tautan Kledo yang jelas yang dapat dipilih. Kontak belum ada? <a href="/pengaturan/kledo">Perbarui kontak Kledo</a>.</p>
-{% if contacts %}
-<form method="post" action="/pengguna/pelanggan/buat" class="grup">
+<p class="bantu">Ketik nama pelanggan, lalu pilih hasil dari kontak Kledo yang sudah tersinkron. Kontak belum ada? <a href="/pengaturan/kledo">Perbarui kontak Kledo</a>.</p>
+<form method="post" action="/pengguna/pelanggan/buat" class="grup" data-buat-pelanggan>
 <input type="hidden" name="_csrf" value="{{ CSRF }}">
 <label>Peran<input class="fld" value="Pelanggan" readonly></label>
-<label>Pelanggan dari kontak Kledo<select class="fld" name="kontak" required><option value="">Pilih pelanggan</option>{% for p in contacts %}<option value="{{ p.kledo_contact_id }}:{{ p.id }}">{{ p.nama_pelanggan }} · Kledo #{{ p.kledo_contact_id }}{% if p.no_telfon %} · {{ p.no_telfon }}{% endif %}</option>{% endfor %}</select></label>
-<label>Username<input class="fld" name="username" minlength="3" maxlength="80" pattern="[A-Za-z0-9_-]+" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required><small>3–80 huruf/angka, tanda hubung, atau garis bawah.</small></label>
+<div class="kontak-pilih" data-kontak-pilih>
+<label for="kontak-nama">Pelanggan dari kontak Kledo</label>
+<input type="hidden" name="kontak" value="{{ selected_contact.value if selected_contact else '' }}">
+<div class="kontak-pilih__field"><input class="fld" id="kontak-nama" type="text" role="combobox" aria-autocomplete="list" aria-controls="kontak-hasil" aria-expanded="false" aria-describedby="kontak-petunjuk kontak-status" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="100" placeholder="Ketik nama pelanggan…" value="{{ selected_contact.label if selected_contact else '' }}" required>
+<div class="kontak-pilih__hasil" id="kontak-hasil" role="listbox" aria-label="Kontak Kledo" hidden></div></div>
+<small class="bantu" id="kontak-petunjuk">Cari seluruh kontak tanpa berpindah halaman. Pilih nama dari hasil pencarian.</small>
+<small class="bantu" id="kontak-status" role="status" aria-live="polite">{{ 'Pelanggan terpilih.' if selected_contact else '' }}</small>
+</div>
+<noscript><p role="alert">Aktifkan JavaScript untuk mencari dan memilih pelanggan.</p></noscript>
+<label>Username<input class="fld" name="username" value="{{ username }}" minlength="3" maxlength="80" pattern="[A-Za-z0-9_-]+" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required><small>3–80 huruf/angka, tanda hubung, atau garis bawah.</small></label>
 <div class="kelola-portal__sandi">
 <label>Kata sandi<input class="fld" type="password" name="sandi" minlength="6" maxlength="512" autocomplete="new-password" required></label>
 <label>Konfirmasi kata sandi<input class="fld" type="password" name="konfirmasi" minlength="6" maxlength="512" autocomplete="new-password" required></label>
@@ -40,8 +44,6 @@
 <p class="bantu">Minimal 6 karakter, mengikuti aturan PadiFlow. Sampaikan kredensial kepada pelanggan melalui jalur privat.</p>
 <button class="tbl" type="submit">Buat akun pelanggan</button>
 </form>
-{% else %}<p>Tidak ada kontak yang cocok. Coba pencarian lain atau perbarui kontak Kledo.</p>{% endif %}
-<nav class="pilihan" aria-label="Halaman kontak">{% if previous %}<a class="btn" href="{{ previous }}">Kontak sebelumnya</a>{% endif %}<span class="bantu">{{ total }} kontak · halaman {{ page_no }}</span>{% if following %}<a class="btn" href="{{ following }}">Kontak berikutnya</a>{% endif %}</nav>
 </section>
 {% endif %}
 <section class="kartu"><h2>Akun pelanggan</h2>
@@ -52,4 +54,5 @@
 </tbody></table></div>
 <nav class="pilihan" aria-label="Halaman akun">{% if account_previous %}<a class="btn" href="{{ account_previous }}">Akun sebelumnya</a>{% endif %}<span class="bantu">{{ account_total }} akun · halaman {{ account_page }}</span>{% if account_following %}<a class="btn" href="{{ account_following }}">Akun berikutnya</a>{% endif %}</nav></section>
 </section>
+<script src="/static/akun-pelanggan.js?v={{ VERSI }}" defer></script>
 {% endblock %}

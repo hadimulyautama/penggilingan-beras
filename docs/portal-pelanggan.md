@@ -170,7 +170,15 @@ Kontak diperiksa ulang dan dikunci saat simpan. Gunakan tautan **Perbarui kontak
 Kledo** bila kontak baru belum tersinkron. Pengelolaan ini tidak membuat atau
 mengubah kontak di Kledo.
 
-Daftar kontak dan akun memiliki pencarian serta paginasi masing-masing (20 baris per halaman).
+Field **Pelanggan dari kontak Kledo** mencari seluruh kontak saat nama diketik,
+tanpa berpindah halaman. Hasil juga dapat dicari lewat nomor kontak atau telepon;
+20 kecocokan ditampilkan sekaligus dengan petunjuk mempersempit pencarian.
+Klik nama atau pilih dengan tombol panah dan Enter. Identitas tersimpan hanya
+setelah hasil dipilih; mengubah teks membatalkan pilihan sebelumnya. Endpoint
+pencarian wajib Super Admin dan menggunakan `Cache-Control: no-store`.
+Jika penyimpanan ditolak, pelanggan yang masih valid dan username tetap terisi,
+sedangkan kata sandi harus diketik ulang. Daftar akun memiliki pencarian dan
+paginasi tersendiri (20 baris per halaman).
 Super Admin dapat mengubah username/kata sandi dan aktif/nonaktif akun. Sesi
 lama dicabut melalui `token_version`. Tautan pelanggan tidak dapat diganti pada
 akun yang ada; nonaktifkan akun lama dan buat akun baru bila ikatan awal salah.
