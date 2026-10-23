@@ -1,0 +1,32 @@
+<details class="bantuan-kirim" data-bantuan-kirim open>
+  <summary><span><strong>Alur pengiriman</strong><small>Pilih tahap untuk melihat yang perlu dikerjakan.</small></span><span aria-hidden="true">⌄</span></summary>
+  <div class="bantuan-kirim__isi">
+    <div class="bantuan-kirim__tahap" role="tablist" aria-label="Tahap pengiriman">
+    {% for nomor,nama,pelaku in [(1,'Perintah','Admin'),(2,'Muat','Operator gudang'),(3,'Verifikasi','Admin')] %}
+      <button type="button" id="panduan-tahap-{{ nomor }}" role="tab" aria-selected="{{ 'true' if nomor == 1 else 'false' }}" aria-controls="panduan-panel-{{ nomor }}" tabindex="{{ 0 if nomor == 1 else -1 }}"><span>{{ nomor }}</span><span><strong>{{ nama }}</strong><small>{{ pelaku }}</small></span></button>
+    {% endfor %}
+    </div>
+    <section class="bantuan-kirim__panel" id="panduan-panel-1" role="tabpanel" aria-labelledby="panduan-tahap-1" tabindex="0">
+      <p class="bantuan-kirim__label">Tahap 1 dari 3 · Admin</p><h2>Tentukan barang yang akan dikirim</h2>
+      <ul><li>Pilih pelanggan, barang, dan jumlah perintah.</li><li>Tautkan armada saat tersedia; tiket dapat menyusul pada alur biasa.</li><li>Menyimpan perintah belum mengurangi stok.</li></ul>
+      {% if BOLEH_PERINTAH %}<a class="btn" href="/barang-keluar/baru" data-utuh>Buat perintah barang keluar</a>{% endif %}
+    </section>
+    <section class="bantuan-kirim__panel" id="panduan-panel-2" role="tabpanel" aria-labelledby="panduan-tahap-2" tabindex="0" hidden>
+      <p class="bantuan-kirim__label">Tahap 2 dari 3 · Operator gudang</p><h2>Catat jumlah yang benar-benar dimuat</h2>
+      <ul><li>Buka perintah yang menjadi tugas gudang Anda.</li><li>Catat jumlah aktual per barang, lalu selesaikan muat.</li><li>Stok berkurang sesuai muatan yang sudah dicatat.</li></ul>
+      <a class="btn" href="/barang-keluar?status=perintah">Lihat yang menunggu dimuat</a>
+    </section>
+    <section class="bantuan-kirim__panel" id="panduan-panel-3" role="tabpanel" aria-labelledby="panduan-tahap-3" tabindex="0" hidden>
+      <p class="bantuan-kirim__label">Tahap 3 dari 3 · Admin</p><h2>Periksa bobot, lalu tutup pengiriman</h2>
+      <ul><li>Bandingkan muatan aktual dengan tiket dan hasil timbang.</li><li>Periksa selisih dan isi sebab jika diwajibkan.</li><li>Verifikasi dan tutup; stok tidak dikurangi untuk kedua kalinya.</li></ul>
+      <a class="btn" href="/barang-keluar?status=dimuat">Lihat yang menunggu verifikasi</a>
+    </section>
+    <details class="bantuan-kirim__cepat"><summary>Pengiriman di bawah 200 kg</summary><p>Admin mengonfirmasi jumlah aktual dan penyerahan secara langsung. Tidak perlu langkah muat operator; tiket timbang bersifat opsional. Jumlah aktual tetap wajib diperiksa. Pengambilan barang jasa tersedia melalui jalur terpisah.</p></details>
+  </div>
+</details>
+<details class="keluar-pencarian"{{ " open" if pencarian or status_filter or sejak_filter }}><summary>Cari dan filter pengiriman</summary>
+<form class="keluar-filter" method="get" action="/barang-keluar">
+<label>Cari perintah<input class="fld" name="q" value="{{ pencarian }}" placeholder="Kode, pelanggan, atau plat"></label>
+<label>Status<select class="fld" name="status">{% for nilai,label in [('', 'Semua status'),('perintah','Menunggu pengeluaran'),('dimuat','Menunggu verifikasi'),('selesai','Selesai'),('batal','Dibatalkan')] %}<option value="{{ nilai }}"{{ ' selected' if status_filter == nilai }}>{{ label }}</option>{% endfor %}</select></label>
+<label>Sejak tanggal<input class="fld" type="date" name="sejak" value="{{ sejak_filter }}"></label><button class="btn">Terapkan</button><a href="/barang-keluar">Reset</a>
+</form></details>

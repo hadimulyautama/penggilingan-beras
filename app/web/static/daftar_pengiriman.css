@@ -1,0 +1,99 @@
+/* Khusus daftar Barang Keluar; formulir dan halaman detail memakai gaya lama. */
+.keluar-ringkas {--kirim-garis:#d4ddd0;--kirim-hijau:#36583f;gap:18px!important;max-width:1280px;width:100%;margin-inline:auto;box-sizing:border-box}
+.keluar-ringkas * {box-sizing:border-box}
+.keluar-ringkas__kepala {display:flex;align-items:center;justify-content:space-between;gap:20px}
+.keluar-ringkas__kepala h1 {margin:0;font-size:1.7rem;line-height:1.2}
+.keluar-ringkas__kepala p {margin:8px 0 0;color:var(--redup,#596573);font-size:.94rem}
+.keluar-ringkas__angka {display:flex;gap:10px;flex-shrink:0}
+.keluar-ringkas__angka>span {display:grid;gap:3px;border:1px solid var(--kirim-garis);border-radius:12px;padding:12px 16px;background:#fff;font-size:.82rem;color:#596573}
+.keluar-ringkas__angka strong {font-size:1.4rem;color:#24352a;font-variant-numeric:tabular-nums}
+.keluar-ringkas .pengiriman-tab {grid-row:2;margin:0;padding:0 0 10px;gap:6px}
+.keluar-ringkas .pengiriman-tab a {padding:10px 18px;border-radius:10px}
+.keluar-ringkas__tindakan {grid-row:3;gap:10px!important;display:flex;flex-wrap:wrap}
+.keluar-ringkas__tindakan .btn:first-child,.bantuan-kirim__panel .btn {background:var(--kirim-hijau);border-color:var(--kirim-hijau);color:white}
+.keluar-ringkas .bantuan-kirim {grid-row:4}
+.keluar-ringkas .keluar-pencarian {grid-row:5;margin:0;border:1px solid var(--kirim-garis);border-radius:12px;background:#fff;padding:0 16px}
+.keluar-ringkas .keluar-pencarian>summary {font-size:.94rem;min-height:48px;font-weight:600;cursor:pointer}
+.keluar-ringkas .keluar-filter {padding:4px 0 14px;margin:0;align-items:end}
+.keluar-ringkas .keluar-filter label {font-size:.87rem}
+.bantuan-kirim {border:1px solid var(--kirim-garis);border-radius:16px;background:#fff;overflow:hidden}
+.bantuan-kirim>summary {display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 20px;cursor:pointer;list-style:none}
+.bantuan-kirim>summary::-webkit-details-marker {display:none}
+.bantuan-kirim>summary strong {font-size:1rem;display:block}
+.bantuan-kirim>summary small {display:block;color:#596573;font-size:.85rem;margin-top:4px;line-height:1.5}
+.bantuan-kirim[open]>summary>span:last-child {transform:rotate(180deg)}
+.bantuan-kirim__isi {padding:0 20px 16px}
+.bantuan-kirim__tahap {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.bantuan-kirim__tahap button {display:flex;align-items:center;gap:10px;text-align:left;padding:12px;border:1px solid var(--kirim-garis);border-radius:12px;background:#fff;color:#24352a;font:inherit;cursor:pointer;min-width:0}
+.bantuan-kirim__tahap button>span:first-child {display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#edf0e9;font-size:.85rem;font-weight:700}
+.bantuan-kirim__tahap strong {display:block;font-size:.92rem}
+.bantuan-kirim__tahap small {display:block;font-size:.78rem;color:#596573;margin-top:4px}
+.bantuan-kirim__tahap button[aria-selected=true] {background:#edf3e9;border-color:#718b70}
+.bantuan-kirim__tahap button[aria-selected=true]>span:first-child {background:var(--kirim-hijau);color:#fff}
+.bantuan-kirim__panel {border-top:1px solid var(--kirim-garis);padding-top:16px}
+.bantuan-kirim__panel[hidden] {display:none}
+.bantuan-kirim__label {margin:0 0 8px;color:#596573;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.bantuan-kirim__panel h2 {font-size:1.08rem;line-height:1.4;margin:0}
+.bantuan-kirim__panel ul {padding-left:20px;margin:10px 0 16px;color:#475548;font-size:.9rem;line-height:1.65}
+.bantuan-kirim__panel li+li {margin-top:4px}
+.bantuan-kirim__panel .btn {min-height:44px;font-size:.9rem}
+.bantuan-kirim__cepat {margin-top:16px;border-top:1px solid var(--kirim-garis);padding-top:6px;font-size:.85rem;color:#596573}
+.bantuan-kirim__cepat summary {cursor:pointer;min-height:40px;align-content:center;font-weight:600}
+.bantuan-kirim__cepat p {line-height:1.65;margin:4px 0}
+.keluar-ringkas__bagian {min-width:0;background:#fff;border:1px solid var(--kirim-garis);border-radius:16px;padding:20px}
+.keluar-ringkas__bagian h2 {margin:0;font-size:1.15rem;line-height:1.4}
+.keluar-ringkas__bagian>p {margin:8px 0 0;font-size:.9rem;line-height:1.6}
+.keluar-ringkas__kosong {padding:24px 12px;text-align:center;border:1px dashed var(--kirim-garis);border-radius:12px;background:#fafbf8;margin-top:16px;color:#596573}
+.keluar-ringkas__kosong strong {font-size:.95rem;color:#35443a}
+.keluar-ringkas__kosong p {font-size:.86rem;margin:6px 0 0;line-height:1.6}
+.keluar-ringkas #draf-saya {border:1px solid var(--kirim-garis);border-radius:16px;background:#fff;padding:16px;margin:0}
+.keluar-ringkas #draf-saya:has([data-draf-kosong]:not([hidden])) {display:none}
+.keluar-ringkas #draf-saya h2 {font-size:1.05rem;margin:0}
+.keluar-ringkas :focus-visible {outline:3px solid #71916e;outline-offset:3px}
+@media(max-width:700px) {
+ .keluar-ringkas {gap:14px!important}
+ .keluar-ringkas__kepala {display:block}
+ .keluar-ringkas__kepala h1 {font-size:1.5rem}
+ .keluar-ringkas__kepala p {font-size:.87rem}
+ .keluar-ringkas__angka {margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .keluar-ringkas__angka>span {padding:10px 12px;font-size:.76rem}
+ .keluar-ringkas .pengiriman-tab a {flex:1;text-align:center;padding:10px 8px;font-size:.9rem}
+ .keluar-ringkas__tindakan {display:grid;grid-template-columns:1fr}
+ .keluar-ringkas__tindakan .btn {font-size:.9rem;text-align:center;justify-content:center}
+ .bantuan-kirim>summary {padding:14px}
+ .bantuan-kirim__isi {padding:0 14px 12px}
+ .bantuan-kirim__tahap {gap:6px;margin-bottom:14px}
+ .bantuan-kirim__tahap button {flex-direction:column;text-align:center;padding:10px 4px;gap:7px}
+ .bantuan-kirim__tahap button>span:first-child {flex-basis:28px;width:28px;height:28px}
+ .bantuan-kirim__tahap strong {font-size:.81rem}
+ .bantuan-kirim__tahap small {font-size:.68rem;line-height:1.4}
+ .bantuan-kirim__panel h2 {font-size:1rem}
+ .bantuan-kirim__panel ul {font-size:.85rem}
+ .bantuan-kirim__panel .btn {width:100%;justify-content:center;text-align:center;white-space:normal}
+ .keluar-ringkas__bagian {padding:14px}
+ .keluar-ringkas__bagian h2 {font-size:1.08rem}
+ .keluar-ringkas__bagian .tabel-standar__scroll {margin:12px 0 0!important}
+ .keluar-ringkas .keluar-tabel {margin-top:12px}
+}
+/* Warna mengikuti tema aplikasi; override hanya tombol panduan halaman ini. */
+.keluar-ringkas {--kirim-garis:var(--garis);--kirim-hijau:#36583f}
+.keluar-ringkas__angka>span,.keluar-ringkas .keluar-pencarian,.keluar-ringkas .bantuan-kirim,.keluar-ringkas__bagian,.keluar-ringkas #draf-saya {background:var(--panel)}
+.keluar-ringkas__angka>span,.bantuan-kirim>summary small,.bantuan-kirim__label,.bantuan-kirim__cepat,.bantuan-kirim__panel ul,.keluar-ringkas__kosong {color:var(--redup)}
+.keluar-ringkas__angka strong,.keluar-ringkas__kosong strong {color:var(--tinta)}
+.keluar-ringkas__kosong {background:var(--panel-2)}
+.keluar-ringkas .bantuan-kirim__tahap button {background:var(--panel)!important;color:var(--tinta)!important;border-color:var(--garis)!important}
+.keluar-ringkas .bantuan-kirim__tahap button[aria-selected=true] {background:var(--panel-2)!important;border-color:#718b70!important}
+.keluar-ringkas .bantuan-kirim__tahap button>span:first-child {background:var(--panel-2)}
+.keluar-ringkas .bantuan-kirim__tahap button[aria-selected=true]>span:first-child {background:var(--kirim-hijau);color:white!important}
+.keluar-ringkas .bantuan-kirim__tahap small {color:var(--redup)!important}
+.keluar-ringkas__tindakan .btn:first-child,.keluar-ringkas .bantuan-kirim__panel .btn {background:var(--kirim-hijau)!important;border-color:var(--kirim-hijau)!important;color:white!important}
+.keluar-ringkas .bantuan-kirim__panel .btn,.keluar-ringkas .keluar-filter .btn {width:auto;display:inline-flex;align-items:center;justify-content:center}
+.keluar-ringkas .keluar-filter .btn {flex:0 0 auto;padding-inline:20px}
+@media(max-width:700px) {.keluar-ringkas .bantuan-kirim__panel .btn{width:100%}.keluar-ringkas .keluar-filter .btn{flex:1}}
+.keluar-ringkas .keluar-filter .fld {min-width:0;width:100%;max-width:100%}
+@media(max-width:700px) {
+ .keluar-ringkas .keluar-filter {display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .keluar-ringkas .keluar-filter label {min-width:0}
+ .keluar-ringkas .keluar-filter label:first-child {grid-column:1/-1}
+ .keluar-ringkas .keluar-filter>a {min-height:44px;display:flex;align-items:center;justify-content:center}
+}
