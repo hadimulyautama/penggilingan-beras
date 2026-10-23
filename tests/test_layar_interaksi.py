@@ -984,8 +984,12 @@ def test_ikon_laci_bukan_emoji_dan_bukan_huruf_biasa():
             # Simbol baru dirender sebagai SVG monokrom, bukan teks nama ikon.
             assert t[0] == {"chart-no-axes-combined": "laporan_riwayat", "truck": "barang_keluar"}[t[5]]
             base = (AKAR / "hmu_tampilan/templates/base.html").read_text()
-            assert f"ikon == '{t[5]}'" in base
-            assert 'stroke="currentColor"' in base
+            assert 'ikon_portal(ikon)' in base
+            from jinja2 import Environment, FileSystemLoader
+            env = Environment(loader=FileSystemLoader(str(AKAR / "hmu_tampilan/templates")), autoescape=True)
+            ikon = str(env.get_template("_ikon_portal.html").module.ikon_portal(t[5]))
+            assert '<svg ' in ikon and 'stroke="currentColor"' in ikon
+            assert '<path ' in ikon and '</svg>' in ikon
             continue
         for ch in (t[5] or ""):
             k = ord(ch)
