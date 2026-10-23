@@ -9,9 +9,9 @@
   // Berjalan sekali per render (termasuk PINDAH), tanpa pendengar global.
   var asal = document.querySelector('.qc-gabah-stok');
   var bahan = document.querySelector('.pk-detail__grid');
-  if (asal && bahan) { bahan.appendChild(asal.firstElementChild); asal.remove(); }
+  if (asal && bahan) { bahan.appendChild(asal); }
 })();
 </script>
 {% endif %}
-<style>.qc-gabah-stok{width:100%;max-width:1160px;margin:0 auto 34px}.qc-gabah-stok>.qc-gabah-asal,.pk-detail__grid>.qc-gabah-asal{margin-top:0}.pk-detail__grid>.qc-gabah-asal{grid-column:1/-1}</style>
+<style>.qc-gabah-stok{width:100%;max-width:1160px;margin:0 auto 34px}.qc-gabah-stok>.qc-gabah-asal,.pk-detail__grid>.qc-gabah-asal{margin-top:0}.pk-detail__grid>.qc-gabah-stok{grid-column:1/-1;max-width:none;margin:0}</style>
 {% endblock %}
