@@ -89,7 +89,13 @@ def test_setelan_kerja_hanya_untuk_admin():
     # Satu blok per PROSES, bukan satu blok per setelan: yang dicari orang
     # adalah "setelan pengeringan", bukan "setelan target". Sebab berhenti
     # tinggal di dalam bloknya masing-masing.
-    for blok in ("Sebab berhenti", "Batas ubah catatan", "Mesin giling rusak"):
+    assert '/pengaturan/sebab-berhenti' in penuh
+    assert '/pengaturan/sistem' in penuh
+    assert 'Mesin giling rusak' not in penuh, 'formulir rincian tidak dicampur ke halaman utama'
+    penuh = templates.get_template('_pengaturan_formulir.html').render(
+        BAGIAN='sebab-berhenti', blok_setelan=True, sebab_jeda={'giling':['Mesin giling rusak']},
+        PROSES=(('giling','Giling'),))
+    for blok in ('Sebab berhenti', 'Mesin giling rusak'):
         assert blok in penuh, blok
     assert penuh.count("Sebab berhenti") == 1
     assert "Target kadar air" not in penuh and "Listrik padam" not in penuh
@@ -181,7 +187,7 @@ def test_batas_48_jam_ditampilkan_tapi_tak_bisa_diubah():
     """Batas yang bisa dilonggarkan oleh orang yang ingin melonggarkannya
     bukan batas. Tetapi menyembunyikannya juga salah — setelan yang diam tanpa
     keterangan akan dicari orang di menu lain sampai lelah."""
-    html = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
+    html = (AKAR / "hmu_tampilan/templates/_pengaturan_formulir.html").read_text()
     blok = html[html.index("Batas ubah catatan"):]
     blok = blok[:blok.index("</div>\n</div>") + 12] if "</div>\n</div>" in blok else blok
     assert "<form" not in blok, "batas tak boleh punya borang"
@@ -223,7 +229,7 @@ def test_satu_tombol_satu_perubahan():
 def test_mutu_dipasang_sebagai_saklar_yang_menunjukkan_keadaannya():
     """Tombol bertuliskan "Matikan" memaksa orang membaca dulu keadaan
     sekarang untuk tahu arah tekanannya. Saklar MENUNJUKKAN keadaannya."""
-    html = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
+    html = (AKAR / "hmu_tampilan/templates/_pengaturan_formulir.html").read_text()
     # Blok setelannya bernama "Pencatatan mutu" sejak 24 September 2026: nama
     # "Mutu & QC" kini milik LAYAR, dan dua hal bernama sama dalam satu app
     # adalah kelas kebingungan yang pemilik sendiri pernah mengeluhkannya.
@@ -248,7 +254,7 @@ def test_setelan_dikelompokkan_per_proses():
     menemukan satu angka: target kadar air, lalu sebab berhenti pengeringan,
     lalu sebab berhenti giling, masing-masing dengan judulnya sendiri. Yang
     dicari orang adalah "setelan pengeringan", bukan "setelan target"."""
-    html = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
+    html = (AKAR / "hmu_tampilan/templates/_pengaturan_formulir.html").read_text()
     assert "Sebab berhenti · " not in html, "judul lama yang berdiri sendiri kembali"
     # Sebab berhenti tinggal di dalam blok prosesnya, lewat satu macro —
     # dua salinan akan berbeda begitu salah satunya diperbaiki.

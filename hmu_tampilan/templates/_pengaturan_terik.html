@@ -1,0 +1,14 @@
+  <form method="post" action="/pengaturan/terik" class="saklar-borang">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
+    <input type="hidden" name="balik" value="/pengaturan">
+    <div>
+      <div class="lbl">Mode terik</div>
+      <div class="bantu">Layar terang untuk kerja di bawah matahari. Berlaku
+        untuk perangkat ini saja.</div>
+    </div>
+    <button class="saklar{{ ' saklar--nyala' if TERIK }}" type="submit"
+            aria-pressed="{{ 'true' if TERIK else 'false' }}"
+            aria-label="Mode terik">
+      <span class="saklar__bulat"></span>
+    </button>
+  </form>

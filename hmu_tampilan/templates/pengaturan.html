@@ -1,431 +1,54 @@
 {% extends "base.html" %}
-{# ── Pengaturan: satu kerangka, lima blok yang dipasang atau tidak ──
-
-   Tahap 2 penyatuan kulit, 23 September 2026. Sebelum ini berkas ini ada
-   tiga: 296 baris di produksi, 235 di Meja, 73 di Gudang 2 — beda 160 dan
-   274 baris. Bedanya SAH (tiap app menawarkan pekerjaan yang berbeda), jadi
-   yang disatukan kerangkanya, bukan keputusannya.
-
-   Yang memutuskan blok mana muncul tetap APP-nya, lewat bendera yang ia
-   hitung dengan mesin view yang sudah ada (`layar.gudang1/gudang2`,
-   himpunan `V_KELOLA`/`V_SETELAN`, bendera `boleh_*` dari Pos Produksi).
-   Tak ada mekanisme kedua di sini — templat ini tidak pernah menebak peran:
-
-     tuan                admin ke atas: setelan kerja, peringatan skema,
-                         & tombol List audit
-     blok_kelola         "Pengelolaan sistem" (orang, akun, alat)
-     kelola_darurat      blok itu sedang dipinjamkan karena Super Admin kosong
-     blok_lihat_sebagai  penyamaran peran
-     blok_kerja_gudang   operator memilih gudang yang sedang dikerjakannya
-     blok_setelan        setelan kerja
-     PROSES              [(jenis, judul), …] blok sebab berhenti per proses
-     blok_mode_uji       pintu hapus data uji
-
-   Kalimat yang memang milik satu app ada di `_kata_pengaturan.html` milik app
-   itu — pola yang sama dengan `_kata_aksi_lain.html` (Tahap 1). Yang di sini
-   berlaku untuk semuanya. #}
 {% from "_versi.html" import peringatan, baris as baris_versi %}
-{# `with context`: makronya hari ini hanya mengembalikan teks, tetapi yang
-   sejenisnya di `aksi.html` membaca `VIEW` — dan namespace kosong membuat
-   syarat di dalam makro terbalik tanpa satu pun tanda. Satu pola untuk kedua
-   berkas, supaya yang menambahkan syarat nanti tak menabraknya. #}
+{% from "_pengaturan_ikon.html" import ikon %}
 {% import "_kata_pengaturan.html" as kata with context %}
+{% macro pintu(url, judul, isi, gambar) -%}
+<a class="pg-pintu" href="{{ url }}"><span class="pg-pintu__ikon">{{ ikon(gambar) }}</span><span class="pg-pintu__isi"><strong>{{ judul }}</strong><small>{{ isi }}</small></span><span class="pg-panah" aria-hidden="true">›</span></a>
+{%- endmacro %}
 {% block judul %}Pengaturan{% endblock %}
 {% block isi %}
-{% if err %}<div class="nota nota--buruk">{{ err }}</div>{% endif %}
-{{ peringatan(versi, tuan) }}
-
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+<section class="pg" aria-labelledby="pg-judul">
+{% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
-
-<div>
-  <span class="lbl">Akun saya</span>
-  <div class="kartu">
-    {# ── Mode terik ──
-     Layar terang untuk kerja di bawah matahari. Per PERANGKAT, bukan per
-     akun. Ditaruh paling atas karena ia satu-satunya setelan di halaman ini
-     yang dicari orang sambil berdiri di luar. Temuan QA UI-04. #}
-  <form method="post" action="/pengaturan/terik" class="saklar-borang">
-    <input type="hidden" name="_csrf" value="{{ CSRF }}">
-    <div>
-      <div class="lbl">Mode terik</div>
-      <div class="bantu">Layar terang untuk kerja di bawah matahari. Berlaku
-        untuk perangkat ini saja.</div>
-    </div>
-    <button class="saklar{{ ' saklar--nyala' if TERIK }}" type="submit"
-            aria-pressed="{{ 'true' if TERIK else 'false' }}"
-            aria-label="Mode terik">
-      <span class="saklar__bulat"></span>
-    </button>
-  </form>
-
-  <form method="post" action="/pengaturan/nama" class="grup">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <div>
-        <label class="lbl" for="nama">Nama Anda</label>
-        <input class="fld" id="nama" name="nama" value="{{ akun.nama }}"
-               minlength="3" required autocomplete="name">
-        {# Bukan sekadar label layar: nama ini menempel pada ribuan catatan
-           lama, dan yang berubah di sini ikut berubah di semua catatan itu.
-           APA yang dilekatinya berbeda per app — itulah yang `kata` sebut. #}
-        <p class="bantu" style="margin-top:6px">
-          Nama ini yang tercantum pada {{ kata.nama_melekat() }} yang Anda
-          kerjakan — termasuk yang sudah lewat.
-        </p>
-      </div>
-      <button class="btn btn--utama" type="submit">Simpan nama</button>
-    </form>
+{{ peringatan(versi, tuan) }}
+{% if BAGIAN|default('') %}
+  <a class="pg-kembali" href="/pengaturan">← Kembali ke Pengaturan</a>
+  <p class="pg-lingkup">Pengaturan / {{ kelompok_pengaturan }}</p><h1 id="pg-judul">{{ judul_pengaturan }}</h1>
+  <div class="pg-rincian">{% include "_pengaturan_formulir.html" %}</div>
+{% else %}
+  <header class="pg-intro"><h1 id="pg-judul">Pengaturan</h1><p>Akun, perangkat, dan pengaturan kerja.</p></header>
+  <div class="pg-akun"><span class="pg-akun__ikon">{{ ikon('user') }}</span><div><strong>{{ akun.nama }}</strong><p>{{ akun_peran_label|default('') }}</p></div></div>
+  <div class="pg-terik">{% include "_pengaturan_terik.html" %}</div>
+  <div class="pg-kelompok">
+    <section class="pg-grup" aria-labelledby="pg-akun"><header><span>{{ ikon('user') }}</span><div><h2 id="pg-akun">Akun &amp; perangkat</h2><p>Pribadi · perangkat ini</p></div></header>
+      {{ pintu('/pengaturan/akun', 'Nama & kata sandi', 'Nama pada catatan pekerjaan', 'user') }}
+      {% if blok_lihat_sebagai %}{{ pintu('/pengaturan/peran', 'Lihat sebagai', 'Pratinjau tampilan peran yang diizinkan', 'eye') }}
+      {% elif blok_kerja_gudang %}{{ pintu('/pengaturan/peran', 'Kerja di gudang', 'Pilih gudang yang sedang dikerjakan', 'warehouse') }}{% endif %}
+      {{ pintu('/pengaturan/sesi', 'Sesi perangkat', 'Keluar atau ganti pengguna', 'device') }}
+    </section>
+    {% if blok_setelan %}
+    <section class="pg-grup" aria-labelledby="pg-operasional"><header><span>{{ ikon('sliders') }}</span><div><h2 id="pg-operasional">Operasional</h2><p>Berlaku untuk proses produksi</p></div></header>
+      {{ pintu('/pengaturan/sebab-berhenti', 'Sebab berhenti proses', 'Pilihan sebab sesuai proses yang tersedia', 'pause') }}
+      {{ pintu('/pengaturan/mutu', 'Pencatatan mutu / QC', 'Formulir dan pengingat mutu', 'clipboard') }}
+    </section>
+    {% endif %}
+    {% if blok_kelola %}
+    <section class="pg-grup" aria-labelledby="pg-pengelolaan"><header><span>{{ ikon('users') }}</span><div><h2 id="pg-pengelolaan">Pengelolaan</h2><p>Orang, alat, dan gudang</p></div></header>
+      {% if kelola_darurat %}<p class="pg-darurat">Belum ada akun Super Admin aktif, jadi pengelolaan sementara masih di tangan {{ kata.pemegang_sementara() }}.</p>{% endif %}
+      {{ pintu('/pengguna', 'Kelola pengguna', 'Orang, akun, peran, dan sandi', 'users') }}
+      {{ pintu('/pengaturan/alat', 'Alat: dryer & silo', 'Target dan sebab berhenti per dryer', 'factory') }}
+      {{ pintu('/pengaturan/gudang', 'Gudang', 'Nama, alamat, dan geotag', 'warehouse') }}
+    </section>
+    {% endif %}
+    <section class="pg-grup" aria-labelledby="pg-sistem"><header><span>{{ ikon('plug') }}</span><div><h2 id="pg-sistem">Sistem &amp; koneksi</h2><p>Informasi aplikasi{% if tuan %} dan koneksi{% endif %}</p></div></header>
+      {% if blok_setelan %}{{ pintu('/pengaturan/kledo', 'Kontak Kledo', 'Perbarui kontak pelanggan & vendor', 'refresh') }}{% endif %}
+      {% if tuan %}{{ pintu('/audit', 'List audit', 'Catatan, pelaku, waktu, dan filter', 'history') }}{% endif %}
+      {{ pintu('/pengaturan/sistem', 'Batas ubah & versi' if tuan else 'Informasi versi', 'Informasi dan aturan aplikasi', 'info') }}
+      {% if blok_mode_uji %}{{ pintu('/pengaturan/mode-uji', 'Mode uji', 'Hapus data uji — tiket timbang tetap tersimpan', 'flask') }}{% endif %}
+    </section>
   </div>
-
-  <a class="tindakan" href="/ganti-sandi" style="margin-top:8px">
-    <div class="tindakan__ikon tindakan--ikon-ungu">
-      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="4" y="10.5" width="16" height="10" rx="2"/>
-        <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
-      </svg>
-    </div>
-    <div class="tindakan__isi">
-      <div class="tindakan__nama">Ganti kata sandi</div>
-      <div class="tindakan__ket">
-        {% if akun.harus_ganti_sandi %}masih sandi awal{% else %}ubah sandi Anda sendiri{% endif %}
-      </div>
-    </div>
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-         stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-  </a>
-</div>
-
-{# Orang, akun, dan alat adalah blok SUPER ADMIN — dan itu bukan aturan baru
-   melainkan aturan yang sudah lama tertulis dan belum pernah terlihat. Daftar
-   peran di halaman Pengguna berbunyi: Super Admin = "semua di atas, DITAMBAH
-   mengelola orang, akun, dan alat". Selama blok ini muncul juga di layar
-   Admin, kalimat itu cuma keterangan yang tak dipakai siapa pun.
-
-   Rutenya sendiri BELUM dipersempit: `butuh_admin` masih menerima Admin.
-   Yang dikerjakan di sini hanya berhenti menawarkan — supaya pekerjaan
-   harian Admin tidak dipenuhi pintu yang bukan bagiannya. #}
-{% if blok_kelola %}
-<div>
-  <span class="lbl">Pengelolaan sistem</span>
-  {# Selama belum ada Super Admin, bloknya tetap terbuka untuk Admin — dan
-     alasannya disebut, bukan didiamkan. Blok yang muncul lalu hilang sendiri
-     tanpa keterangan terbaca sebagai aplikasi yang berubah-ubah. #}
-  {% if kelola_darurat %}
-    <p class="bantu" style="margin:6px 0 8px">
-      Belum ada akun Super Admin di pabrik ini, jadi pengelolaan akun &amp;
-      alat masih di tangan {{ kata.pemegang_sementara() }}. Begitu satu Super
-      Admin diangkat, blok ini pindah ke layarnya.
-    </p>
-  {% endif %}
-  <div class="grup" style="gap:8px">
-    <a class="tindakan" href="/pengguna">
-      <div class="tindakan__ikon tindakan--ikon-biru">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.2 2.5-5.2 5.5-5.2s5.5 2 5.5 5.2"/>
-          <path d="M16.5 11.2a3 3 0 1 0-1.6-5.5"/><path d="M18 20c0-2.4-.9-4.2-2.4-5.2"/>
-        </svg>
-      </div>
-      <div class="tindakan__isi">
-        <div class="tindakan__nama">Kelola pengguna</div>
-        {# Ketiga pekerjaan ini ADA di kedua app: layar Pengguna satu templat
-           sejak Tahap 1, dan Meja meneruskan borangnya ke rute yang sama. #}
-        <div class="tindakan__ket">daftarkan orang · buatkan akun · setel ulang sandi</div>
-      </div>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-           stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-    </a>
-
-    <a class="tindakan" href="/pengaturan/alat">
-      <div class="tindakan__ikon tindakan--ikon-jingga">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 20V9l8-5 8 5v11"/><path d="M4 20h16"/><path d="M10 20v-6h4v6"/>
-        </svg>
-      </div>
-      <div class="tindakan__isi">
-        <div class="tindakan__nama">Alat: dryer &amp; silo</div>
-        <div class="tindakan__ket">tambah mesin pengering &amp; silo gabah kering</div>
-      </div>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-           stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-    </a>
-    <a class="tindakan" href="/pengaturan/gudang">
-      <div class="tindakan__ikon tindakan--ikon-hijau">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 10 12 4l9 6v10H3z"/><path d="M8 20v-6h8v6"/>
-        </svg>
-      </div>
-      <div class="tindakan__isi">
-        <div class="tindakan__nama">Gudang</div>
-        <div class="tindakan__ket">tambah gudang · ubah nama, alamat, dan geotag</div>
-      </div>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-           stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-    </a>
-  </div>
-</div>
 {% endif %}
-
-{# ── List audit — permintaan pemilik 7 Oktober 2026 ──
-   "List Audit jangan tampilkan lagi di side-bar tetapi buat tombol di
-   halaman pengaturan." Pintunya sendiri di laci DIPENSIUNKAN (pola yang
-   sama `stok_produk` dkk. — lihat `Berjalan.lencana()`); halaman `/audit`
-   itu sendiri TIDAK berubah sama sekali, cuma jalan masuknya pindah.
-
-   Gerbangnya `tuan` SENDIRIAN — BUKAN `blok_kelola`, yang sejak Super
-   Admin pertama diangkat menyempit jadi Super Admin-saja. Rute `/audit`
-   (`butuh_admin`) tetap menerima admin BIASA selamanya; menaruh tombolnya
-   di dalam `blok_kelola` akan menyembunyikannya dari admin biasa tepat
-   saat Super Admin pertama ada, padahal haknya atas halaman itu tak
-   pernah hilang. #}
-{% if tuan %}
-<div>
-  <span class="lbl">Riwayat</span>
-  <div class="grup" style="gap:8px">
-    <a class="tindakan" href="/audit">
-      <div class="tindakan__ikon tindakan--ikon-biru">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
-          <path d="M12 7v5l4 2"/>
-        </svg>
-      </div>
-      <div class="tindakan__isi">
-        <div class="tindakan__nama">List audit</div>
-        <div class="tindakan__ket">semua catatan, siapa &amp; jam berapa — bisa disaring</div>
-      </div>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-           stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-    </a>
-  </div>
-</div>
-{% endif %}
-
-{% if blok_lihat_sebagai %}
-<div>
-  <span class="lbl">Lihat sebagai</span>
-  <p class="bantu" style="margin:6px 0 8px">
-    Menampilkan aplikasi persis seperti yang dilihat peran itu — untuk menguji,
-    tanpa membuat akun palsu. Hak Anda sendiri tidak berubah, dan peran yang
-    lebih tinggi dari peran Anda tidak bisa dipilih.
-  </p>
-  <form method="post" action="/lihat-sebagai" class="grup">
-    <input type="hidden" name="_csrf" value="{{ CSRF }}">
-    <select class="fld" name="peran">
-      {% for kode, nama in LIHAT_PILIHAN %}
-        <option value="{{ kode }}"{% if kode == (LIHAT_SEBAGAI or "") %} selected{% endif %}>{{ nama }}</option>
-      {% endfor %}
-    </select>
-    <button class="btn" type="submit">Terapkan</button>
-  </form>
-</div>
-{% elif blok_kerja_gudang %}
-<div>
-  <span class="lbl">Kerja di gudang</span>
-  <p class="bantu" style="margin:6px 0 8px">
-    Operator saling menggantikan bila ada yang berhalangan. Pilih gudang yang
-    sedang Anda kerjakan — layar dan aksinya mengikuti. Gudang utama Anda tidak
-    berubah; pilih "Gudang utama saya" untuk kembali.
-  </p>
-  <form method="post" action="/lihat-sebagai" class="grup">
-    <input type="hidden" name="_csrf" value="{{ CSRF }}">
-    <select class="fld" name="peran">
-      {% for kode, nama in PILIHAN_GUDANG %}
-        <option value="{{ kode }}"{% if kode == (LIHAT_SEBAGAI or "") %} selected{% endif %}>{{ nama }}</option>
-      {% endfor %}
-    </select>
-    <button class="btn" type="submit">Terapkan</button>
-  </form>
-</div>
-{% endif %}
-
-{% if blok_setelan %}
-{# ── Setelan kerja ──
-   Yang boleh ada di sini hanya hal yang memang berubah di lapangan, bukan
-   semua yang kebetulan berupa angka. Setelan yang tak pernah diubah cuma
-   menambah tempat untuk salah. #}
-{# ── Setelan per proses ──
-   Satu blok per PROSES, bukan satu blok per setelan. Target kadar air dan
-   sebab berhenti pengeringan dulu berdiri sendiri-sendiri, dan halaman ini
-   jadi deretan judul yang harus digulung untuk menemukan satu angka. Yang
-   dicari orang adalah "setelan pengeringan", bukan "setelan target".
-
-   PROSES-nya datang dari app: Meja memegang kedua gudang dan karena itu punya
-   blok Penyosohan yang tak ada di Pos Produksi. Daftar, bukan tiga cabang
-   `{% raw %}{% if %}{% endraw %}` — menambah proses berarti menambah satu baris di app-nya. #}
-{% macro sebab_blok(jenis) -%}
-  {# Dilipat. Daftar sebab tumbuh — itu gunanya, tiap sebab yang berulang naik
-     jadi pilihan tetap — dan daftar yang tumbuh terus membuat setelan lain di
-     bawahnya makin jauh dari jangkauan. Jumlahnya disebut di ringkasannya,
-     supaya yang cuma ingin tahu "ada berapa" tak perlu membukanya. #}
-  <details class="lipat">
-    <summary>
-      <span class="lbl" style="margin:0">Sebab berhenti</span>
-      <span class="lipat__jml">{{ sebab_jeda.get(jenis, [])|length }}</span>
-    </summary>
-  <div class="grup daftar-standar" style="gap:6px">
-    {% for s in sebab_jeda.get(jenis, []) %}
-      <div class="baris daftar-standar__baris">
-        <span>{{ s }}</span>
-        <form method="post" action="/pengaturan/sebab-jeda">
-          <input type="hidden" name="_csrf" value="{{ CSRF }}">
-          <input type="hidden" name="jenis" value="{{ jenis }}">
-          <input type="hidden" name="buang" value="{{ s }}">
-          <button class="btn btn--kecil btn--bahaya" type="submit"
-                  {{ 'disabled' if sebab_jeda.get(jenis, [])|length < 2 }}>Buang</button>
-        </form>
-      </div>
-    {% endfor %}
-    <form method="post" action="/pengaturan/sebab-jeda" class="sebaris-borang">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <input type="hidden" name="jenis" value="{{ jenis }}">
-      <input class="fld" name="tambah" type="text" maxlength="120"
-             placeholder="Tambah sebab baru…" aria-label="Tambah sebab berhenti {{ jenis }}">
-      <button class="btn btn--kecil" type="submit">Tambah</button>
-    </form>
-  </div>
-  </details>
-{%- endmacro %}
-
-{# Target per mesin dan sebab berhenti pengeringan kini dikelola di Alat.
-   Jangan sisakan judul dan kartu kosong di sini setelah pemindahan itu. #}
-{% for jenis, judul in PROSES if jenis != 'pengeringan' %}
-<div>
-  <span class="lbl">{{ judul }}</span>
-  <div class="kartu">
-    {{ sebab_blok(jenis) }}
-  </div>
-</div>
-{% endfor %}
-
-{# ── Mutu: satu saklar untuk seluruh fiturnya ──
-   Pabrik yang belum melakukan QC tak perlu melihat borangnya, dan lebih
-   penting lagi tak perlu melihat kartu "mutu belum diperiksa" yang menagih
-   pekerjaan yang memang tak dilakukan. Tagihan yang tak pernah bisa lunas
-   mengajari orang mengabaikan tagihan. #}
-{# Namanya "Pencatatan mutu", bukan "Mutu & QC": sejak 24 September 2026 ada
-   LAYAR bernama "Mutu & QC", dan dua hal bernama sama dalam satu aplikasi
-   adalah kelas kebingungan yang pemilik sendiri pernah mengeluhkannya. Yang di
-   sini memang bukan layarnya melainkan SAKLARNYA — `setelan.fitur_mutu`. #}
-<div>
-  <span class="lbl">Pencatatan mutu</span>
-  <div class="kartu">
-    <form method="post" action="/pengaturan/fitur-mutu" class="saklar-borang">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <input type="hidden" name="aktif" value="{{ '0' if mutu_aktif else '1' }}">
-      <button class="saklar{{ ' saklar--nyala' if mutu_aktif }}" type="submit"
-              role="switch" aria-checked="{{ 'true' if mutu_aktif else 'false' }}"
-              aria-label="Pencatatan mutu">
-        <span class="saklar__bulat"></span>
-      </button>
-      <span>Catat mutu &amp; QC</span>
-    </form>
-    <p class="bantu">
-      {%- if mutu_aktif %}Borang QC tersedia; kartu Stok menyebut kadar air,
-      butir patah, dan susut; layar &ldquo;Mutu &amp; QC&rdquo; menagih mutu yang
-      belum diperiksa.
-      {%- else %}Borang QC, kartu &ldquo;mutu belum diperiksa&rdquo;, dan baris
-      mutu di kartu Stok semuanya disembunyikan. Catatan yang sudah ada tidak
-      dihapus — ia kembali begitu dinyalakan lagi.{% endif -%}
-    </p>
-  </div>
-</div>
-
-{# ── Kontak Kledo: PEMICU, bukan setelan ──
-   Beda sifat dari kartu-kartu di atas: tak ada nilai yang disimpan di sini,
-   cuma satu tombol yang memulai pekerjaan LATAR (~600 kontak Kledo, diambil
-   berhalaman-halaman — lihat `app/services/kledo_sinkron.py`). Karena itu
-   tombolnya dinonaktifkan dua cara berbeda, bukan disembunyikan: belum
-   tersambung (KLEDO_API_KEY kosong) tetap menjelaskan APA yang kurang, dan
-   sedang berjalan tetap menjelaskan KAPAN mencoba lagi — tombol yang hilang
-   membuat orang mengira fiturnya tak ada sama sekali. #}
-<div>
-  <span class="lbl">Kontak Kledo</span>
-  <div class="kartu">
-    <form method="post" action="/pengaturan/kledo-kontak">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <button class="btn" type="submit"
-              {{ 'disabled' if not kledo.terkonfigurasi or kledo.sedang_berjalan }}>
-        {{ 'Sedang berjalan…' if kledo.sedang_berjalan else 'Perbarui Kontak' }}
-      </button>
-    </form>
-    <p class="bantu">
-      {%- if not kledo.terkonfigurasi %}
-        <b>Kledo belum tersambung.</b> Variabel <code>KLEDO_API_KEY</code>
-        belum diisi di service ini — minta yang mengelola Railway mengisinya.
-        Sampai itu diisi, kontak vendor &amp; pelanggan baru di Kledo tidak
-        ikut masuk ke daftar pos timbang.
-      {%- elif kledo.sedang_berjalan %}
-        Mengambil sekitar 600 kontak dari Kledo, berhalaman-halaman — bisa
-        beberapa menit. Muat ulang halaman ini sebentar lagi untuk melihat
-        hasilnya.
-      {%- elif kledo.gagal_terakhir %}
-        Percobaan terakhir ({{ kledo.selesai_pada | jam('%d %b %H.%M') }})
-        gagal: {{ kledo.gagal_terakhir }}
-      {%- elif kledo.hasil_terakhir %}
-        {{ kledo.hasil_terakhir }}
-        <br><span style="font-size:12px">selesai
-          {{ kledo.selesai_pada | jam('%d %b %H.%M') }}</span>
-      {%- else %}
-        Belum pernah dijalankan sejak layanan ini terakhir dinyalakan.
-        Berjalan juga otomatis tiap tengah malam, dan lewat tombol serupa
-        di Timbangan.
-      {%- endif %}
-    </p>
-  </div>
-</div>
-
-<div>
-  <span class="lbl">Batas ubah catatan</span>
-  <div class="kartu">
-    <div class="benda__judul"><span>{{ JAM_BATAS }} jam</span></div>
-    <p class="bantu">Catatan yang lebih tua terkunci: tak bisa dibatalkan lagi.
-      Batas ini sengaja tak punya kotak isian — batas yang bisa dilonggarkan
-      oleh orang yang ingin melonggarkannya bukan batas. Mengubahnya perlu
-      keputusan Direksi, bukan satu ketukan di telepon.</p>
-  </div>
-</div>
-{% endif %}
-
-{% if blok_mode_uji %}
-<div>
-  <span class="lbl">Mode uji</span>
-  <div class="grup" style="gap:8px">
-    <a class="tindakan" href="/pengaturan/mode-uji">
-      <div class="tindakan__ikon tindakan__ikon--emoji tindakan--ikon-merah">🧹</div>
-      <div class="tindakan__isi">
-        <div class="tindakan__nama">Hapus data uji</div>
-        <div class="tindakan__ket">mulai dari bersih — tiket timbang tidak ikut terhapus</div>
-      </div>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-           stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-    </a>
-  </div>
-</div>
-{% endif %}
-
-<div class="setelan-sesi">
-  <span class="lbl">Sesi perangkat</span>
-  <div class="kartu setelan-sesi__isi">
-    <p class="bantu">Keluar dari akun pada perangkat ini, atau akhiri sesi akun di semua perangkat.</p>
-    <form method="post" action="/keluar">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <button class="btn btn--utama" type="submit">
-        {% if akun.sesi_pendek %}Ganti pengguna{% else %}Keluar{% endif %}
-      </button>
-    </form>
-    <form method="post" action="/keluar-semua"
-          onsubmit="return confirm('Keluarkan akun Anda dari SEMUA perangkat, termasuk yang tidak ada di tangan Anda? Anda perlu masuk lagi di sini.')">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <button class="btn btn--putih-sesi" type="submit">Keluar dari semua perangkat</button>
-    </form>
-  </div>
-</div>
-
+</section>
 {% endblock %}
-
-{% block kaki %}
-{{ baris_versi(versi) }}
-{% endblock %}
+{% block kaki %}{{ baris_versi(versi) }}{% endblock %}

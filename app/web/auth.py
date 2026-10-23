@@ -186,8 +186,11 @@ async def naikkan_versi_token(akun_id: int, *, sebab: str = "") -> None:
 
 @router.get("/ganti-sandi")
 async def halaman_ganti_sandi(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
+    from app.web.pengaturan_navigasi import kembali as kembali_pengaturan
+    balik = kembali_pengaturan(request.query_params.get('kembali_pengaturan'), '')
     return render(request, "ganti_sandi.html", wajib=akun.harus_ganti_sandi,
-                  kembali=None if akun.harus_ganti_sandi else "/")
+                  kembali=None if akun.harus_ganti_sandi else (balik or "/pengaturan/akun"),
+                  kembali_pengaturan=balik)
 
 
 @router.post("/ganti-sandi")
@@ -199,10 +202,13 @@ async def proses_ganti_sandi(
     akun: ProduksiAkun = Depends(butuh_akun),
 ):
     wajib = akun.harus_ganti_sandi
+    from app.web.pengaturan_navigasi import tujuan_form
+    balik = await tujuan_form(request, '') if not wajib else ''
 
     def gagal(pesan: str):
         return render(request, "ganti_sandi.html", wajib=wajib,
-                      kembali=None if wajib else "/", pesan_err=pesan)
+                      kembali=None if wajib else (balik or "/pengaturan/akun"),
+                      kembali_pengaturan=balik, pesan_err=pesan)
 
     # Saat sandi masih sandi awal dari Super Admin, sandi lama TIDAK diminta:
     # orangnya baru saja membuktikan dirinya beberapa detik lalu di halaman
@@ -229,7 +235,7 @@ async def proses_ganti_sandi(
     # Cookie-nya diperbarui di sini juga: versi tokennya baru saja naik, jadi
     # tanpa token baru orangnya akan terlempar ke halaman masuk persis
     # sesudah berhasil mengganti sandinya sendiri.
-    balasan = redirect("/?pesan=sandi-diganti")
+    balasan = redirect((balik or '/') + "?pesan=sandi-diganti")
     balasan.set_cookie(
         NAMA_COOKIE, token_baru, max_age=umur,
         httponly=True, samesite="lax",

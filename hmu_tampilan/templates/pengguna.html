@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block judul %}Kelola pengguna{% endblock %}
 {% block isi %}
+<a class="btn" href="/pengaturan">← Kembali ke Pengaturan</a>
 
 {% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}

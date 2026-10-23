@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from urllib.parse import quote, urlsplit
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from app.config import settings
 from app.database import SessionLocal
@@ -26,6 +26,7 @@ from app.web.security import (ada_superadmin, butuh_admin, butuh_akun,
                                butuh_super)
 from app.web.tampilan import redirect, render
 from app.web import versi as _versi
+from app.web.pengaturan_navigasi import HALAMAN, tujuan_form
 from hmu_core import User
 
 router = APIRouter(tags=["webapp"])
@@ -152,6 +153,13 @@ def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
 
 
 @router.get("/pengaturan")
+@router.get("/pengaturan/akun")
+@router.get("/pengaturan/peran")
+@router.get("/pengaturan/sesi")
+@router.get("/pengaturan/sebab-berhenti")
+@router.get("/pengaturan/mutu")
+@router.get("/pengaturan/kledo")
+@router.get("/pengaturan/sistem")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     from app.services import kledo_sinkron
     from app.services.setelan import fitur_mutu, sebab_jeda
@@ -161,6 +169,10 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     # Setelan kerja hanya ditampilkan kepada admin ke atas — operator mengurus
     # data dirinya sendiri dan sandinya sendiri, tak lebih.
     tuan = akun.peran in PERAN_ADMIN_KEATAS
+    bagian = request.url.path.rsplit('/', 1)[-1]
+    bagian = bagian if bagian in HALAMAN else ''
+    if bagian in ('sebab-berhenti', 'mutu', 'kledo') and not tuan:
+        raise HTTPException(403, 'Pengaturan ini hanya tersedia untuk Admin ke atas.')
     async with SessionLocal() as db:
         sebab = await sebab_jeda(db) if tuan else {}
         mutu_aktif = await fitur_mutu(db) if tuan else False
@@ -190,8 +202,19 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     # `PERAN_ASLI` sudah ada tanpa perlu dibaca ulang dari templat.
     view = await view_untuk(akun.user)
     peran_asli = getattr(request.state, "peran_asli", None) or akun.peran
+    from app.web.lihat_sebagai import NAMA_KUKI
+    if bagian == 'peran' and not _P.boleh_ganti_gudang(peran_asli):
+        raise HTTPException(403, 'Pilihan tampilan dan gudang tidak tersedia untuk akun ini.')
+    kelompok, judul = HALAMAN.get(bagian, ('', 'Pengaturan'))
+    if bagian == 'peran':
+        judul = 'Lihat sebagai' if _P.admin_keatas(peran_asli) else 'Kerja di gudang'
+    elif bagian == 'sistem' and not tuan:
+        judul = 'Informasi versi'
     return render(
         request, "pengaturan.html",
+        BAGIAN=bagian, kelompok_pengaturan=kelompok, judul_pengaturan=judul,
+        akun_peran_label=_P.LABEL.get(_P.normal(peran_asli), 'Peran tidak dikenal'),
+        PILIHAN_TAMPILAN=request.cookies.get(NAMA_KUKI, ''),
         **await lencana(akun.user),
         versi=versi,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
@@ -255,12 +278,13 @@ async def ubah_fitur_mutu(request: Request, aktif: str = Form(""),
     yang perlu dua ketukan sering tinggal satu — orang mencentangnya lalu
     berpindah layar, dan yang tersimpan tetap yang lama.
     """
+    tujuan = await tujuan_form(request)
     from app.services.setelan import set_fitur_mutu
 
     async with SessionLocal() as db:
         u = await db.get(User, akun.user.id)
         await set_fitur_mutu(db, aktif == "1", user=u)
-    return redirect("/pengaturan?pesan="
+    return redirect(tujuan + "?pesan="
                     + ("mutu-nyala" if aktif == "1" else "mutu-padam"))
 
 
@@ -280,8 +304,8 @@ async def ubah_sebab_jeda(request: Request, jenis: str = Form(...),
         u = await db.get(User, akun.user.id)
         daftar = await sebab_jeda(db)
         if jenis not in daftar:
-            return redirect("/pengaturan?err_teks=" + quote("Jenis proses tak dikenal."))
-        tujuan = "/pengaturan/alat" if jenis == "pengeringan" else "/pengaturan"
+            return redirect((await tujuan_form(request)) + "?err_teks=" + quote("Jenis proses tak dikenal."))
+        tujuan = "/pengaturan/alat" if jenis == "pengeringan" else await tujuan_form(request)
         isi = list(daftar[jenis])
         tambah, buang = tambah.strip(), buang.strip()
         if tambah:
@@ -314,13 +338,14 @@ async def mulai_sinkron_kledo_kontak(
     dimuat ulang (lihat `halaman_pengaturan`), bukan dari balasan permintaan
     ini.
     """
+    tujuan = await tujuan_form(request)
     from app.services import kledo_sinkron
 
     if not kledo_sinkron.status().terkonfigurasi:
-        return redirect("/pengaturan?err=kledo-belum-tersambung")
+        return redirect(tujuan + "?err=kledo-belum-tersambung")
     if not kledo_sinkron.mulai():
-        return redirect("/pengaturan?err=kledo-sedang-berjalan")
-    return redirect("/pengaturan?pesan=kledo-dimulai")
+        return redirect(tujuan + "?err=kledo-sedang-berjalan")
+    return redirect(tujuan + "?pesan=kledo-dimulai")
 
 
 #: Hanya kunci yang dikenal yang jadi pesan — teks bebas dari URL tak pernah
@@ -398,13 +423,14 @@ async def ganti_nama(
     justru karena itu tak boleh sembarang dikosongkan atau disingkat jadi satu
     huruf, sebab daftar akun lalu mustahil dibaca.
     """
+    tujuan = await tujuan_form(request)
     nama = " ".join(nama.split())
     if len(nama) < 3:
-        return redirect("/pengaturan?err=nama-pendek")
+        return redirect(tujuan + "?err=nama-pendek")
     async with SessionLocal() as db:
         orang = await db.get(User, akun.user_id)
         if orang is None:
-            return redirect("/pengaturan")
+            return redirect(tujuan)
         # ── Nama kembar ditolak ──
         #
         # Nama inilah yang tertulis sebagai PELAKU di seluruh catatan, dan
@@ -423,10 +449,10 @@ async def ganti_nama(
                                User.id != orang.id)
         )).scalars().first()
         if kembar is not None:
-            return redirect("/pengaturan?err=nama-dipakai")
+            return redirect(tujuan + "?err=nama-dipakai")
         orang.nama = nama
         await db.commit()
-    return redirect("/pengaturan?pesan=nama-diganti")
+    return redirect(tujuan + "?pesan=nama-diganti")
 
 
 # ─────────────────────────── Alat: dryer & silo ───────────────────────────

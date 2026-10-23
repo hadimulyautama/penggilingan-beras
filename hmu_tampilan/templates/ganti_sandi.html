@@ -24,6 +24,7 @@
 
 <form method="post" action="/ganti-sandi" class="grup">
   <input type="hidden" name="_csrf" value="{{ CSRF }}">
+  {% if kembali_pengaturan|default('') and not wajib %}<input type="hidden" name="kembali_pengaturan" value="{{ kembali_pengaturan }}">{% endif %}
   {% if not wajib %}
     <div>
       <label class="lbl" for="lama">Kata sandi sekarang</label>
@@ -56,5 +57,5 @@
   <button class="btn btn--utama" type="submit">Simpan</button>
 </form>
 
-{% if not wajib %}<p style="margin-top:6px"><a href="/">← Kembali</a></p>{% endif %}
+{% if not wajib %}<p style="margin-top:6px"><a href="{{ kembali|default('/') }}">← Kembali ke Pengaturan</a></p>{% endif %}
 {% endblock %}

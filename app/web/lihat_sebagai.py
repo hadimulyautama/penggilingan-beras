@@ -58,7 +58,8 @@ async def pilih(request: Request, peran: str = Form(""), _=Depends(butuh_akun)):
     # selalu gagal, dan kukinya tak pernah terpasang — persis yang terjadi
     # pada percobaan pertama, tanpa satu pun galat muncul.
     asli = getattr(request.state, "peran_asli", None)
-    balasan = RedirectResponse("/", status_code=303)
+    from app.web.pengaturan_navigasi import tujuan_form
+    balasan = RedirectResponse(await tujuan_form(request, '/'), status_code=303)
     # Admin ke atas boleh menyamar peran; operator hanya boleh berpindah
     # GUDANG (tetap operator) — pemilik 13 Sep 2026: saling menggantikan.
     if not boleh_menyamar(asli) and not boleh_ganti_gudang(asli):

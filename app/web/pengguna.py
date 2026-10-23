@@ -119,7 +119,7 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
         belum = list((await db.execute(
             q.order_by(User.nama).limit(MAKS_BELUM)
         )).scalars())
-    return {"akun_list": akun_list, "kembali": "/", "PERAN": PERAN,
+    return {"akun_list": akun_list, "kembali": "/pengaturan", "PERAN": PERAN,
             "belum": [{"id": u.id, "nama": u.nama, "role": u.role,
                        "saran": _saran_username(u.nama)} for u in belum],
             # `/pengguna/<id>` hanya ada DI SINI; Meja meneruskan borangnya ke
