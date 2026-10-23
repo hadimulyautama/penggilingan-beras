@@ -224,12 +224,16 @@ async def rincian(db, *, jenis, model, kartu, params):
                            [f"{k}: {v}" for k, v in rincian_kualitatif(r, termasuk_kosong=True)]),
                 _nilai_qc(r), " · ".join(x for x in (r.kondisi, r.catatan_lab) if x) or "Belum diisi", nama], params, "halaman_qc"))
     else:
+        # Hanya metadata penyajian; waktu dan ikatan tetap dibaca dari sumber lama.
+        d["jeda_mulai"] = _waktu(macet.mulai) if macet else None
+        d["jeda_sebab"] = macet.sebab if macet else None
         d["statistik"] = [("Total bahan proses", svc._kg(kartu.neraca.bahan_kg) if kartu.neraca else "Belum diketahui"),
                           ("Hasil beras sementara", svc._kg(kartu.neraca.beras.kg) if kartu.neraca else "Belum dicatat"),
                           ("Rendemen beras sementara", _persen(kartu.neraca.beras.persen) if kartu.neraca else "Belum dapat dihitung")]
         d["fakta"] += kartu.fakta
         silos = (await db.execute(select(PolishingSiloUsage, Silo.nama_silo).join(Silo, Silo.id == PolishingSiloUsage.silo_id)
                  .where(PolishingSiloUsage.polishing_process_id == model.id).order_by(PolishingSiloUsage.id))).all()
+        d["silo_aktif"] = list(dict.fromkeys(nama for u, nama in silos if u.berat_akhir_kg is None))
         for judul, rows in kartu.anak_grup:
             if judul == "Bahan baku masuk per silo":
                 kelompok = kelompok_bahan_silo(rows, silos)

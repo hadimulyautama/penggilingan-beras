@@ -1,0 +1,26 @@
+/* Khusus detail penyosohan; halaman dan komponen bersama tetap memakai gaya lama. */
+.sosoh-detail [hidden]{display:none!important}
+.sosoh-detail .riwayat-detail__hero{background:var(--panel-2);border:1px solid var(--kulit-batas);border-radius:16px}
+.sosoh-detail .proses-detail__sementara{color:var(--kulit-redup)}
+.sosoh-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--kulit-batas);gap:4px}
+.sosoh-tabs a{display:flex;align-items:center;justify-content:center;text-align:center;min-height:48px;padding:10px 6px;color:var(--kulit-redup);text-decoration:none;font-size:.85rem;border-bottom:3px solid transparent}
+.sosoh-tabs a[aria-selected=true]{color:var(--aman);border-bottom-color:var(--aman);font-weight:700;background:var(--panel-2)}
+.sosoh-panel{display:grid;gap:16px;min-width:0}
+.sosoh-overview{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start}
+.sosoh-aksi-utama{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}
+.sosoh-pengelolaan{margin-top:14px;border-top:1px solid var(--kulit-batas)}
+.sosoh-pengelolaan summary{cursor:pointer;min-height:48px;display:flex;align-items:center;font-weight:650;font-size:.85rem}
+.sosoh-pengelolaan summary:before{content:'＋';margin-right:8px}
+.sosoh-pengelolaan[open] summary:before{content:'−'}
+.sosoh-detail .riwayat-detail__card{margin:0}
+@media(max-width:700px){.sosoh-overview,.sosoh-aksi-utama{grid-template-columns:minmax(0,1fr)}.sosoh-tabs{gap:0}.sosoh-tabs a{font-size:.76rem;padding:10px 3px}.sosoh-panel,.sosoh-overview{gap:12px}.sosoh-detail .riwayat-detail__hero{padding:18px}}
+body .isi .sosoh-detail .riwayat-detail__hero{padding:22px;border-radius:16px;color:var(--tinta)}
+body .isi .sosoh-detail .riwayat-detail__hero p{color:var(--kulit-redup);margin:6px 0}
+body .isi .sosoh-detail .riwayat-detail__hero .riwayat-detail__eyebrow{color:var(--kulit-redup)}
+body .isi .sosoh-detail .riwayat-detail__hero .riwayat-status--pabrik{color:var(--tinta);background:var(--panel-2)}
+body .isi .sosoh-detail .proses-detail__aksi .pilihan__satu{background:var(--kulit-kartu);color:var(--tinta);border-color:var(--kulit-batas)}
+body .isi .sosoh-detail .proses-detail__aksi .pilihan__satu .pilihan__ket{color:var(--kulit-redup)}
+body .isi .sosoh-detail .proses-detail__aksi .pilihan__satu--utama{background:#4b7043;border-color:#4b7043;color:#fff}
+body .isi .sosoh-detail .proses-detail__aksi .pilihan__satu--utama .pilihan__ket{color:inherit}
+/* Ikuti kontrak token tombol bersama, termasuk aturan kontras bertanda important. */
+.sosoh-detail .pilihan__satu--utama{--tombol-pucat:#4b7043;--tombol-pucat-teks:#fff;--tombol-batas:#4b7043;--tombol-hover:#3e6037;--tombol-tekan:#35532e}
