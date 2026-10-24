@@ -3654,3 +3654,12 @@ body.padiflow-ui .lembar--hasil :focus-visible{outline:3px solid var(--aman);out
 
 /* Jawaban hasil kumulatif membawa total dan tambahan dari layanan. */
 body.padiflow-ui .kabar.kabar--hasil{width:min(520px,calc(100vw - 32px));max-width:calc(100vw - 32px);box-sizing:border-box;border-radius:12px;background:var(--panel);padding:13px 16px;line-height:1.5}
+
+/* Konteks hasil giling: bobot acuan proses dibedakan dari PK kumulatif. */
+.lembar--hasil .giling-basis{display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-top:1px solid var(--garis);padding-top:10px;margin-top:5px;font-size:13px}
+.lembar--hasil .giling-basis strong{text-align:right;font-variant-numeric:tabular-nums}
+.lembar--hasil .giling-context{overflow-wrap:anywhere}
+.lembar--hasil .grup>.hasil-before{margin:0 0 18px}
+
+.kabar--hasil .kabar__peringatan{display:grid;gap:4px;border-top:1px solid var(--garis);margin-top:10px;padding-top:10px;font-size:.85rem;overflow-wrap:anywhere;white-space:pre-line}
+.kabar--hasil .kabar__peringatan strong{color:var(--tinta)}

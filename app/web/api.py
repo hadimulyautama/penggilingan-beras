@@ -691,12 +691,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/silo-siap-giling",
                   "kosong": "Tidak ada silo berisi gabah kering yang siap digiling."},
              ]},
-            {"id": "hasil_giling", "label": "📈 Perbarui hasil giling",
+            {"id": "hasil_giling", "label": "📈 Catat hasil penggilingan",
+             "ringkasan_giling": {"source": "/api/actions/ringkasan-hasil-giling",
+                                  "proses": "kode_proses", "total": "berat_kumulatif"},
              "post": "/api/actions/hasil-giling", "fields": [
                  {"name": "kode_proses", "label": "Giling yang sedang berjalan", "type": "remote",
                   "source": "/api/actions/milling-active",
                   "kosong": "Tidak ada proses giling yang sedang berjalan."},
-                 {"name": "berat_kumulatif", "label": "PK kumulatif (kg)", "type": "number"},
+                 {"name": "berat_kumulatif", "label": "PK kumulatif (kg)", "type": "number", "wajib": True},
              ]},
             # Hasil akhir WAJIB di sini. Dulu aksi ini hanya menutup prosesnya,
             # jadi giling bisa berakhir tanpa satu pun angka hasil — PK-nya ada
@@ -2142,6 +2144,22 @@ async def milling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
     return [{"value": k, "label": k} for k in procs]
 
 
+@router.get("/actions/ringkasan-hasil-giling")
+async def ringkasan_hasil_giling(kode_proses: str, berat_kumulatif: float | None = None,
+                                user: User = Depends(pengguna_aksi)):
+    """Konteks dan perkiraan baca saja; tidak menjadi syarat baru penyimpanan."""
+    _require(await _is_g1_operator(user))
+    from fastapi.responses import JSONResponse
+    from app.web.form_hasil_giling import ringkasan
+    from app.penggilingan.gudang1.services.milling import MillingError
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_proses=kode_proses, berat_kumulatif=berat_kumulatif)
+        except MillingError as e:
+            raise _err(e, "Ringkasan hasil belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/actions/silo-giling-terbuka")
 async def silo_giling_terbuka(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo yang dipakai satu proses giling dan BELUM dibebaskan.
@@ -2852,7 +2870,7 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_ak
     pesan = f"✓ Hasil giling *{req.kode_proses}*: {req.berat_kumulatif:g} kg (kumulatif)."
     if r.peringatan:
         pesan += "\n" + r.peringatan
-    return {"ok": True, "pesan": pesan}
+    return {"ok": True, "pesan": pesan, "peringatan": r.peringatan}
 
 
 class MulaiPengeringanReq(BaseModel):
