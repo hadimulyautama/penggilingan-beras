@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy import select, text, delete
 from hmu_identitas.peran import ADMIN, SUPERADMIN, OPERATOR
 from app.database import now_local
-from app.models import MillingQcLog, PurchaseBatch, PurchaseBatchQc, User, SetelanPabrik
+from app.models import MillingQcLog, PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample, User, SetelanPabrik
 from app.services.mutu_pk import penilaian_dari_log
 from tests.pg.test_riwayat_qc_detail import qc  # noqa: F401
 from tests.pg.test_riwayat_giling import _klien
@@ -51,6 +51,20 @@ async def test_empat_tab_semua_kategori_tetap_membaca_data_yang_sama(pg,qc):
                 assert all('kembali_qc=' in a['href'] for a in s.select('.qc-tabs a'))
                 assert s.select_one('.riwayat-detail__back')['href']=='/stok?tab=bahan&gudang=g1'
                 assert not s.select('.qc-detail form[method=post]')
+                if jenis.startswith('gabah-'):
+                    async with pg() as db:
+                        sampel=(await db.scalars(select(PurchaseBatchQcSample)
+                            .join(PurchaseBatchQc,PurchaseBatchQc.id==PurchaseBatchQcSample.purchase_batch_qc_id)
+                            .join(PurchaseBatch,PurchaseBatch.id==PurchaseBatchQc.purchase_batch_id)
+                            .where(PurchaseBatch.kode_batch==ref)
+                            .order_by(PurchaseBatchQcSample.created_at,PurchaseBatchQcSample.id))).all()
+                    putaran=s.select('.qc-history-round')
+                    assert len(putaran)==len(sampel)
+                    for kartu,asli in zip(putaran,sampel):
+                        fields={x.dt.get_text():x.dd.get_text() for x in kartu.select('.qc-fields>div')}
+                        assert fields['Kadar air 1']==str(asli.kadar_air_1).replace('.',',')+'%'
+                        assert fields['Kadar air 2']==str(asli.kadar_air_2).replace('.',',')+'%'
+                        assert 'Kadar air' not in fields
                 if jenis=='gabah-kering': assert 'Lamur' not in r.text and 'berlamur' not in r.text
                 if jenis=='pk-hasil-giling':
                     assert s.select_one('.qc-score strong').get_text()==f"{sebelum['nilai']:.2f}".replace('.',',')

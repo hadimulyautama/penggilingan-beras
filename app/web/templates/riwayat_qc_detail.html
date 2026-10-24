@@ -3,9 +3,9 @@
 {% block isi %}
 {% from "_penilaian_pk.html" import penilaian_pk with context %}
 <link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/qc-detail.css?v={{ VERSI }}&qc=2">
+<link rel="stylesheet" href="/static/qc-detail.css?v={{ VERSI }}&qc=3">
 {% macro waktu(r) %}{{ r.waktu|jam('%d/%m/%Y · %H:%M') if r.waktu else 'Waktu tidak tercatat' }}{% endmacro %}
-{% macro hasil_asli(r) %}<dl class="qc-fields">{% for label, value in r.detail %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>{% endfor %}</dl>{% endmacro %}
+{% macro hasil_asli(r) %}<dl class="qc-fields">{% for label, value in r.detail %}{% if label=='Kadar air' and r.bacaan_gabah %}{% for bacaan in r.bacaan_gabah %}<div><dt>Kadar air {{ loop.index }}</dt><dd>{{ (bacaan|string|replace('.', ',')) ~ '%' if bacaan is not none else 'Belum diketahui' }}</dd></div>{% endfor %}{% else %}<div><dt>{{ label }}</dt><dd>{{ value|replace('.', ',') if label in ('Kadar air','Broken','Susut','Penyusutan') else value }}</dd></div>{% endif %}{% endfor %}</dl>{% endmacro %}
 <div class="riwayat-detail qc-detail">
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ judul if kembali == '/riwayat-qc/' ~ jenis else 'halaman asal' }}</a>
   <header class="riwayat-detail__card qc-hero">
@@ -33,7 +33,7 @@
     <section class="riwayat-detail__card"><h2>{{ 'Hasil rata-rata tiap komponen' if penilaian else 'Pemeriksaan terakhir' }}</h2>
       {% if penilaian %}<div class="qc-components">{% for r in penilaian.rows %}<div><span>{{ r.label }}</span><strong>{{ r.hasil }}</strong><small>{{ r.n }} pengukuran · {{ 'skor ' ~ r.skor if r.skor is not none else 'belum ikut perhitungan' }}</small></div>{% endfor %}</div>{% else %}{{ hasil_asli(k.rounds[-1]) }}{% endif %}
     </section></div>
-    <div class="qc-actions"><a class="btn qc-primary" href="{{ qc_halaman(tab='putaran') }}">Lihat seluruh putaran</a><a class="btn" href="{{ qc_halaman(tab='perhitungan') }}">Lihat cara hitung</a></div>
+    <div class="qc-actions qc-summary-actions"><a class="btn qc-primary" href="{{ qc_halaman(tab='putaran') }}">Lihat seluruh putaran</a><a class="btn" href="{{ qc_halaman(tab='perhitungan') }}">Lihat cara hitung</a></div>
     <section class="riwayat-detail__card"><h2>Penelusuran pemeriksaan</h2><dl class="qc-fields"><div><dt>Putaran terakhir</dt><dd>{{ 'QC ' ~ k.rounds[-1].nomor if k.rounds[-1].nomor else 'Catatan lama' }}</dd></div><div><dt>Waktu</dt><dd>{{ waktu(k.rounds[-1]) }}</dd></div><div><dt>Pencatat</dt><dd>{% for l,v in k.rounds[-1].detail if l=='Pencatat' %}{{ v }}{% else %}Tidak tercatat{% endfor %}</dd></div></dl><a href="{{ qc_halaman(tab='asal') }}">Buka asal bahan & catatan →</a></section>
   </div>
   {# Macro bersama tetap utuh: angka, rumus dan pedoman sama dengan Stok. #}
