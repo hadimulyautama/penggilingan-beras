@@ -3714,3 +3714,6 @@ body.padiflow-ui .lembar--pindah-silo .lembar__isi{max-width:940px}
 @media(max-width:640px){.lembar--pindah-silo .ps-layout{grid-template-columns:minmax(0,1fr);gap:18px}.lembar--pindah-silo .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}.lembar--pindah-silo .hasil-actions button{white-space:normal;min-width:0}}
 
 .lembar--pindah-silo .ps-summary{background:var(--panel-2)}
+
+/* Pilihan tetap select asli agar keyboard dan pemilih sistem dipertahankan. */
+.lembar--pindah-silo select.fld{appearance:auto;padding-right:36px}
