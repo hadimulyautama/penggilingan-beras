@@ -3679,3 +3679,15 @@ body.padiflow-ui #lembar.lembar--kadar .kadar-titik>[data-hapus-kadar]:hover{bac
 .kadar-summary #air-jumlah{display:block}.kadar-warning{white-space:pre-line;line-height:1.5;color:var(--tinta);background:var(--panel-2);border-left:3px solid var(--redup);padding:12px 14px;margin:0 0 16px;border-radius:8px;font-size:.85rem}
 .kadar-lain{border-top:1px solid var(--garis);margin-top:20px;padding-top:16px;display:grid;gap:6px}.kadar-lain small{font-size:.75rem;color:var(--redup)}
 @media(max-width:570px){.kadar-titik-grid{grid-template-columns:minmax(0,1fr)}.kadar-titik:first-child label{min-height:22px;padding-right:0}}
+
+/* Selesai pengeringan: referensi baca saja dan akibat tindakan dekat tombol. */
+body.padiflow-ui .lembar--selesai-kering .lembar__isi{max-width:700px}
+.lembar--selesai-kering .sk-facts{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px 0 2px;color:var(--tinta)}
+.sk-facts>div{display:grid;gap:4px;min-width:0}.sk-facts span{font-size:.75rem;color:var(--redup)}.sk-facts strong{font-size:.9rem;font-variant-numeric:tabular-nums}
+.lembar--selesai-kering .hasil-unit input{font-size:28px!important;min-height:62px!important}
+.sk-last{display:grid;gap:8px;padding:12px 0 16px;margin-bottom:16px;border-top:1px solid var(--garis);color:var(--redup);font-size:.8rem}
+.sk-last>div{display:flex;gap:6px 16px;flex-wrap:wrap;justify-content:space-between}.sk-last strong{color:var(--tinta);font-weight:600}.sk-last small{font-size:.75rem;line-height:1.5}
+.sk-effect{display:grid;gap:8px;padding:14px;background:var(--panel-2);border-radius:11px;margin-bottom:18px;font-size:.85rem;overflow-wrap:anywhere}
+.sk-effect h3{font-size:.95rem;margin:0;font-weight:600}.sk-effect>strong{color:var(--aman)}.sk-effect p{margin:0;line-height:1.6}.sk-effect small{font-size:.75rem;color:var(--redup);line-height:1.5}
+.sk-check:has(#sk-info:empty){display:none}.sk-check{margin-bottom:14px}.sk-check .btn{margin:6px 0 0}.sk-check [hidden]{display:none!important}
+@media(max-width:570px){.lembar--selesai-kering .sk-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.lembar--selesai-kering .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.7fr)}.lembar--selesai-kering .hasil-actions .btn{white-space:normal;line-height:1.4}}
