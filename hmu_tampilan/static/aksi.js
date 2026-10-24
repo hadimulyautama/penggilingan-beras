@@ -1086,8 +1086,8 @@
         var d = await ambil(pindahSilo.source + "?kode_lot=" + encodeURIComponent(kode) + "&silo=" + encodeURIComponent(silo));
         if (!d || !lembar.open || !borangHasil.isConnected || nomor !== urutanPindah || kode !== nilaiMedan("kode_lot") || silo !== nilaiMedan("silo")) return null;
         dataPindah = d;
-        $("ps-pemilik").textContent = d.pemilik;$("ps-milik").textContent = d.kepemilikan;
-        $("ps-sumber").textContent = d.dryer + " · " + d.jumlah_batch + " batch sumber" + (d.pesanan ? " · " + d.pesanan : "");
+        $("ps-pemilik").textContent = d.pemilik + " · " + d.dryer;$("ps-milik").textContent = d.kepemilikan;
+        $("ps-sumber").textContent = d.jumlah_batch + " batch sumber" + (d.pesanan ? " · " + d.pesanan : "");
         $("ps-status").textContent = d.status;$("ps-dingin").textContent = "Dinyatakan dingin: " + d.dingin;
         $("ps-bobot").textContent = d.bobot;$("ps-dari").textContent = d.dryer;
         $("ps-ke").textContent = d.tujuan ? d.tujuan.nama : "Pilih silo";
