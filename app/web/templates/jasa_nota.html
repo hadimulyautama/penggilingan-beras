@@ -1,23 +1,24 @@
 {% extends "base.html" %}
-{% block judul %}Nota jasa{% endblock %}
+{% block judul %}{{ d.judul }}{% endblock %}
 {% block isi %}
-
-{# ── Satu-satunya yang dilihat orang yang tak pernah membuka isi app ini ──
-
-   Dirender sebagai teks BLOK, bukan tabel: notanya dicetak dan diserahkan,
-   dan lebar kolom yang bergeser antar ponsel membuat angka tak berbaris.
-   Susunannya dibentuk `jasa.nota_jasa()` — satu tempat, supaya yang tercetak
-   dan yang terbaca di layar tak pernah berbeda.
-
-   ⚠ TANPA SATU PUN ANGKA UANG. Pemilik barang berhak tahu BOBOTNYA; berapa
-   nilainya urusan keuangan. #}
-
-<pre class="kartu" style="white-space:pre-wrap;font-family:var(--mono);
-     font-size:13px;line-height:1.55;overflow-x:auto">{{ teks }}</pre>
-
-{# `btn--halus` dan `blok` dua-duanya kelas karangan yang tak ada di
-   `app.css`. Yang ada `btn--kecil`; jaraknya lewat gaya sebaris, sebab satu
-   tombol di satu halaman tak pantas melahirkan kelas baru di paket bersama. #}
-<a href="/jasa" class="btn btn--kecil" style="margin-top:12px">Kembali ke daftar Jasa</a>
-
+<link rel="stylesheet" href="/static/rekap-jasa.css?v={{ VERSI }}-rekap1">
+<div class="rekap-jasa">
+<header class="rekap-header">
+ <div><p class="rekap-eyebrow">Pesanan jasa</p><h1>{{ d.judul }}</h1><p class="rekap-customer">{{ d.pelanggan }} <span class="lencana">{{ d.status }}</span></p></div>
+ <div class="rekap-actions">{% if d.digabung %}<a class="btn btn--kecil" href="/jasa/{{ d.digabung.id }}/nota">Lihat rekap gabungan</a>{% else %}<a class="btn btn--kecil" href="/jasa/{{ d.id }}/nota.pdf">Baca PDF</a><a class="btn btn--utama btn--kecil" href="/jasa/{{ d.id }}/nota.pdf?unduh=1">Unduh PDF</a>{% endif %}</div>
+</header>
+<div class="rekap-identitas"><span>{{ 'Pesanan asal' if d.digabung else 'Nomor pesanan utama' }} <strong>{{ d.kode }}</strong></span>{% if not d.digabung %}<span>Kondisi <strong>{{ d.fase }}</strong></span>{% endif %}</div>
+{% if d.digabung %}
+<section class="kartu rekap-section"><h2>Pesanan ini sudah digabung</h2><p>Seluruh penerimaan, hasil dan pengambilan dicatat dalam rekap <a href="/jasa/{{ d.digabung.id }}/nota">{{ d.digabung.kode }}</a>. Nomor {{ d.kode }} tetap disimpan sebagai riwayat; barang tidak dihitung ulang.</p></section>
+{% else %}
+{% if d.pesanan_asal %}<aside class="rekap-origin"><strong>Pesanan yang digabung</strong><span>{% for j in d.pesanan_asal %}<a href="/jasa/{{ j.id }}/nota">{{ j.kode }}</a>{{ ' · ' if not loop.last }}{% endfor %}</span><p>Dua atau lebih penerimaan, satu rekap hasil. Nomor asal tetap dapat ditelusuri.</p></aside>{% endif %}
+<dl class="rekap-totals"><div><dt>Bahan diterima</dt><dd>{{ kg(d.masuk_kg) }}</dd><small>{{ d.dibawa|length }} penerimaan tercatat</small></div><div><dt>Sudah diambil</dt><dd>{{ kg(d.kembali_kg) }}</dd><small>Muatan pengambilan yang tercatat</small></div></dl>
+<section class="kartu rekap-section"><h2>Penerimaan bahan</h2><div class="rekap-table-scroll"><table class="rekap-table"><thead><tr><th>Bahan</th><th>Referensi penerimaan</th><th class="rekap-number">Berat</th></tr></thead><tbody>{% for r in d.dibawa %}<tr><td>{{ r.nama }}</td><td class="rekap-reference">{{ r.kode }}</td><td class="rekap-number">{{ kg(r.kg) }}</td></tr>{% else %}<tr><td colspan="3">Belum ada barang masuk.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="kartu rekap-section"><h2>Pengambilan hasil</h2><div class="rekap-table-scroll"><table class="rekap-table"><thead><tr><th>Barang</th><th>Referensi pengambilan</th><th class="rekap-number">Berat</th></tr></thead><tbody>{% for r in d.kembali %}<tr><td>{{ r.nama }}</td><td class="rekap-reference">{{ r.kode }}</td><td class="rekap-number">{{ kg(r.kg) }}</td></tr>{% else %}<tr><td colspan="3">Belum ada hasil yang diambil.</td></tr>{% endfor %}</tbody></table></div></section>
+<div class="rekap-bottom"><section class="kartu rekap-section"><h2>Masih di pabrik</h2><dl class="rekap-lines">{% for r in d.sisa %}<div><dt>{{ r.nama }}</dt><dd>{{ kg(r.kg) }}</dd></div>{% else %}<div><dt>Tidak ada sisa barang tercatat.</dt></div>{% endfor %}</dl><p class="rekap-help">Bobot ditampilkan per tahap; saldo antar tahap tidak dijumlahkan sebagai stok siap diambil.</p></section>
+<section class="kartu rekap-section"><h2>Neraca bobot</h2><dl class="rekap-lines"><div><dt>Bahan diterima</dt><dd>{{ kg(d.masuk_kg) }}</dd></div><div><dt>Sudah diambil</dt><dd>{{ kg(d.kembali_kg) }}</dd></div>{% for r in d.sisa %}<div><dt>{{ r.nama }}</dt><dd>{{ kg(r.kg) }}</dd></div>{% endfor %}{% if d.selisih_kg > 0 %}<div class="rekap-balance"><dt>Selisih</dt><dd>{{ kg(d.selisih_kg) }}</dd></div>{% endif %}</dl><p class="rekap-help">Susut pengeringan, sekam &amp; susut proses tidak diukur terpisah. Bobot selama proses berlangsung belum final.</p></section></div>
+{% if d.bekatul %}<section class="kartu rekap-section"><h2>Bekatul per proses sosoh</h2><p class="rekap-help">Informasi hasil proses. Pengambilan hanya dihitung pada bagian Pengambilan hasil.</p><dl class="rekap-lines">{% for r in d.bekatul %}<div><dt>{{ r.kode }}</dt><dd>{{ kg(r.kg) }}</dd></div>{% endfor %}</dl></section>{% endif %}
+{% endif %}
+<a class="rekap-back" href="{{ '/jasa/pelanggan/' ~ request.state.portal_scope.reader.pelanggan_id if PORTAL_READ_ONLY else '/jasa' }}">← Kembali ke pesanan jasa</a>
+</div>
 {% endblock %}

@@ -8,7 +8,7 @@ MENU = (
     ('barang-keluar','Pengiriman & Retur','keluar'), ('riwayat-giling','Riwayat Barang','riwayat'),
     ('riwayat-qc/gabah-basah','Riwayat QC','qc'), ('laporan','Laporan','laporan'),
     ('kabar','Berita & Notifikasi','kabar'))
-READS = re.compile(r'^/(?:ringkasan|pekerjaan|stok|stok-pk-jasa|stok-produk-jasa(?:/detail)?|stok-karung-jasa|stok/pk/detail|barang-masuk(?:/\d+)?|barang-keluar(?:/\d+)?|retur(?:/\d+|/tiket/\d+|/pengajuan/\d+)?|proses-aktif/(?:pengeringan|pendinginan|giling|sosoh)/[\w-]+|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:/\d+(?:/laporan(?:\.pdf)?)?)?|riwayat-qc/[\w-]+(?:/[\w-]+)?|jasa/pelanggan/\d+|jasa/\d+(?:/nota)?|laporan|audit|kabar)$')
+READS = re.compile(r'^/(?:ringkasan|pekerjaan|stok|stok-pk-jasa|stok-produk-jasa(?:/detail)?|stok-karung-jasa|stok/pk/detail|barang-masuk(?:/\d+)?|barang-keluar(?:/\d+)?|retur(?:/\d+|/tiket/\d+|/pengajuan/\d+)?|proses-aktif/(?:pengeringan|pendinginan|giling|sosoh)/[\w-]+|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:/\d+(?:/laporan(?:\.pdf)?)?)?|riwayat-qc/[\w-]+(?:/[\w-]+)?|jasa/pelanggan/\d+|jasa/\d+(?:/nota(?:\.pdf)?)?|laporan|audit|kabar)$')
 
 
 def portal_url(value):

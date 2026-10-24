@@ -83,9 +83,10 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     elif m:=re.fullmatch(r'/jasa/pelanggan/(\d+)',path):
         if int(m[1])!=reader.pelanggan_id:missing()
         result=await jasa.detail_pelanggan(reader.pelanggan_id,req,account)
-    elif m:=re.fullmatch(r'/jasa/(\d+)(/nota)?',path):
+    elif m:=re.fullmatch(r'/jasa/(\d+)(/nota(?:\.pdf)?)?',path):
         await own_order(scope,int(m[1]))
-        if m[2]:result=await jasa.nota(int(m[1]),req,account)
+        if m[2]=='/nota.pdf':result=await jasa.rekap_pdf(int(m[1]),req,unduh=integer(q.get('unduh')) or 0,akun=account)
+        elif m[2]:result=await jasa.nota(int(m[1]),req,account)
         else:result=RedirectResponse(f'/pelanggan/jasa/pelanggan/{reader.pelanggan_id}#pesanan-{m[1]}',303)
     elif m:=re.fullmatch(r'/proses-aktif/([\w-]+)/([\w-]+)',path):
         await own_model(scope,m[1],m[2],by_code=True)

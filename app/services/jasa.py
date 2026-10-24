@@ -1265,7 +1265,15 @@ def _kg_nota(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
 
 
+JUDUL_REKAP = "Rekap Barang Jasa"
+
+
 async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
+    """Teks kompatibel untuk pembaca lama; angka berasal dari rekap bersama."""
+    return (await rekap_barang_jasa(db, jasa_id))["teks"]
+
+
+async def rekap_barang_jasa(db: AsyncSession, jasa_id: int) -> dict:
     """Nota satu pesanan: apa yang dibawa, apa yang kembali, dan selisihnya.
 
     TIGA hal dalam bentuknya yang tidak boleh digeser:
@@ -1308,10 +1316,25 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
         raise JasaError("Pesanan jasa tidak ditemukan.")
     pesanan, nama = baris
 
-    baris_out: list[str] = [f"Pesanan {pesanan.kode} · {nama or '-'}"]
+    baris_out: list[str] = [JUDUL_REKAP, f"Pesanan {pesanan.kode} · {nama or '-'}"]
     keadaan = {BERJALAN: "Berjalan", SELESAI: "Selesai",
                DIBATALKAN: "Dibatalkan", DIGABUNG: "Digabung"}.get(
                    pesanan.status, pesanan.status)
+    data = dict(judul=JUDUL_REKAP, id=pesanan.id, kode=pesanan.kode,
+                pelanggan=nama or '-', status=keadaan, digabung=None,
+                pesanan_asal=[], dibawa=[], kembali=[], sisa=[], bekatul=[],
+                masuk_kg=0.0, kembali_kg=0.0, selisih_kg=0.0, fase='')
+    # Nomor asal tetap jejak, bukan rekap hasil kedua. Batasi ke pelanggan ini.
+    orders = (await db.scalars(select(Jasa).where(
+        Jasa.pelanggan_id == pesanan.pelanggan_id).order_by(Jasa.id))).all()
+    by_id = {j.id: j for j in orders}
+    for asal in orders:
+        target, seen = asal, set()
+        while target.status == DIGABUNG and target.digabung_ke_id in by_id and target.id not in seen:
+            seen.add(target.id)
+            target = by_id[target.digabung_ke_id]
+        if asal.id != pesanan.id and target.id == pesanan.id:
+            data['pesanan_asal'].append(dict(id=asal.id, kode=asal.kode))
     baris_out.append(f"Keadaan: {keadaan}")
     baris_out.append("─" * 58)
 
@@ -1331,7 +1354,9 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
             "nota selanjutnya ada di sana, bukan hilang.")
         if pesanan.digabung_pada:
             baris_out.append(f"Digabung pada: {pesanan.digabung_pada:%d/%m/%Y %H:%M}")
-        return "\n".join(baris_out)
+        data['digabung'] = dict(id=pesanan.digabung_ke_id, kode=kode_survivor)
+        data['teks'] = "\n".join(baris_out)
+        return data
 
     # ── DIBAWA: bobot MASUK, satu-satunya angka yang pasti ──
     masuk = 0.0
@@ -1342,6 +1367,7 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
     )).scalars().all():
         kg = dari_batch(b).angka()
         masuk += kg
+        data['dibawa'].append(dict(nama='Gabah ' + b.kondisi_gabah, kg=kg, kode=b.kode_batch))
         baris_out.append(f"   gabah {b.kondisi_gabah:<7} {_kg_nota(kg):>12}   "
                          f"{b.kode_batch}")
     for b in (await db.execute(
@@ -1355,6 +1381,7 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
     )).scalars().all():
         kg = float(b.berat_total_kg or 0)
         masuk += kg
+        data['dibawa'].append(dict(nama='Beras PK', kg=kg, kode=b.kode_batch))
         baris_out.append(f"   beras PK        {_kg_nota(kg):>12}   {b.kode_batch}")
     if masuk <= 0:
         baris_out.append("   (belum ada barang masuk)")
@@ -1368,12 +1395,13 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
     # nota berbohong tepat di angka yang paling diperiksa.
     kembali = 0.0
     baris_out.append("Kembali (sudah diambil)")
-    for kategori, mutu, kg, kode in (await db.execute(
-        select(ProductSku.kategori, RiceQualityStandard.kode,
+    for tipe, samping, kategori, mutu, kg, kode in (await db.execute(
+        select(OutgoingItem.item_type, OutgoingItem.jenis_byproduct,
+               ProductSku.kategori, RiceQualityStandard.kode,
                func.coalesce(func.sum(OutgoingItem.berat_kg), 0),
-               func.min(OutgoingRecord.kode))
+               OutgoingRecord.kode)
         .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
-        .join(ProductSku, ProductSku.id == OutgoingItem.product_sku_id)
+        .outerjoin(ProductSku, ProductSku.id == OutgoingItem.product_sku_id)
         .join(RiceQualityStandard,
               RiceQualityStandard.id == OutgoingItem.rice_quality_standard_id,
               isouter=True)
@@ -1385,12 +1413,22 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
         .where(OutgoingItem.jasa_id == jasa_id,
                OutgoingRecord.status != "batal",
                OutgoingItem.berat_kg > 0)
-        .group_by(ProductSku.kategori, RiceQualityStandard.kode)
+        .group_by(OutgoingRecord.kode, OutgoingItem.item_type, OutgoingItem.jenis_byproduct,
+                  ProductSku.kategori, RiceQualityStandard.kode)
+        .order_by(OutgoingRecord.kode, OutgoingItem.item_type, OutgoingItem.jenis_byproduct,
+                  ProductSku.kategori, RiceQualityStandard.kode)
     )).all():
         kg = float(kg or 0)
         kembali += kg
+        # PK/gabah langsung dan hasil samping curah tidak memiliki SKU.
+        # Inner join SKU akan menghapus pengambilan itu dari total kembali.
+        sebut = ("beras PK" if tipe in ("pk_langsung", "pk_g2") else
+                 "gabah kering" if tipe == "gabah_langsung" else
+                 nama_produk(samping) if tipe == "byproduct_curah" else
+                 nama_produk(jenis_produk(kategori, mutu)))
+        data['kembali'].append(dict(nama=sebut[0].upper() + sebut[1:], kg=kg, kode=kode or '—'))
         baris_out.append(
-            f"   {nama_produk(jenis_produk(kategori, mutu)):<16}"
+            f"   {sebut:<16}"
             f"{_kg_nota(kg):>12}   {kode or ''}")
     if kembali <= 0:
         baris_out.append("   (belum ada yang diambil)")
@@ -1399,6 +1437,7 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
 
     # ── MASIH DI PABRIK ──
     sisa = await sisa_jasa(db, jasa_id)
+    data['fase'] = FASE_JASA.get(sisa.fase, sisa.fase)
     if sisa.ada:
         baris_out.append("")
         baris_out.append(f"Masih di pabrik ({FASE_JASA.get(sisa.fase, sisa.fase)})")
@@ -1407,15 +1446,18 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
                           ("gabah kering ditumpuk", sisa.gabah_kering_kg),
                           ("PK Gudang 1", sisa.pk_g1_kg),
                           ("PK Gudang 2", sisa.pk_g2_kg),
+                          ("broken curah / silo", sisa.broken_kg),
                           ("hasil samping curah", sisa.samping_kg),
                           ("barang jadi", sisa.barang_jadi_kg)):
             if kg > 1.0:
+                data['sisa'].append(dict(nama=sebut[0].upper() + sebut[1:], kg=kg))
                 baris_out.append(f"   {sebut:<16}{_kg_nota(kg):>12}")
 
     # ── SELISIH: satu baris, TIDAK dirinci ──
     if masuk > 0:
         selisih = masuk - kembali - sisa.total
         if selisih > 1.0:
+            data['selisih_kg'] = selisih
             baris_out.append("─" * 58)
             baris_out.append(f"Selisih{_kg_nota(selisih):>29}")
             baris_out.append("  susut pengeringan, sekam & susut proses")
@@ -1462,9 +1504,11 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
         for kode in sorted(per_proses):
             kg = per_proses[kode]
             jum += kg
+            data['bekatul'].append(dict(kode=kode, kg=kg))
             baris_out.append(f"   {kode:<16}{_kg_nota(kg):>12}")
         baris_out.append(f"   {'Jumlah':<16}{_kg_nota(jum):>12}")
-    return "\n".join(baris_out)
+    data.update(masuk_kg=masuk, kembali_kg=kembali, teks="\n".join(baris_out))
+    return data
 
 
 async def _bobot_masuk_pk_jasa(db, jasa_id):

@@ -135,7 +135,7 @@ def render_customer(request, name, *, status_code=200, **ctx):
     body=env.get_template(name).render(**ctx)
     path=request.url.path+('?' +request.url.query if request.url.query else '')
     content=read_only(body,path,origin=str(request.base_url))
-    return shell(request,content,status_code=status_code,title=ctx.get('breadcrumb_detail') or 'Portal pelanggan')
+    return shell(request,content,status_code=status_code,title=ctx.get('page_title') or ctx.get('breadcrumb_detail') or 'Portal pelanggan')
 
 
 def shell(request,content,*,title='Portal pelanggan',status_code=200):

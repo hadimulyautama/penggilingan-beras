@@ -110,16 +110,39 @@ async def referensi_pesanan(jasa_id:int,request:Request,akun=Depends(butuh_akun)
 
 @router.get("/jasa/{jasa_id:int}/nota")
 async def nota(jasa_id: int, request: Request, akun=Depends(butuh_akun)):
-    """Nota satu pesanan — bobot & milik saja, tanpa satu pun angka uang."""
+    """Rekap bersama untuk app produksi dan portal pelanggan."""
     from app.peran import can_see_financials
-    from app.services.jasa import JasaError, nota_jasa
-
+    from app.services.jasa import JUDUL_REKAP, JasaError, rekap_barang_jasa
+    from app.services.bahan_silo import kg_rinci
     if not is_customer_read(request) and not can_see_financials(akun.user):
         raise HTTPException(403, "Layar Jasa milik Admin ke atas.")
     async with SessionLocal() as db:
         try:
-            teks = await nota_jasa(db, jasa_id)
+            data = await rekap_barang_jasa(db, jasa_id)
         except JasaError as e:
-            raise HTTPException(404, e.args[0] if e.args else "Tidak ditemukan.")
-    return await render_laci(request, "jasa_nota.html", teks=teks,
-                             jasa_id=jasa_id)
+            raise HTTPException(404, str(e))
+    return await render_laci(request, "jasa_nota.html", d=data, kg=kg_rinci,
+                            page_title=JUDUL_REKAP)
+
+
+@router.get("/jasa/{jasa_id:int}/nota.pdf")
+async def rekap_pdf(jasa_id: int, request: Request, unduh: int = 0,
+                    akun=Depends(butuh_akun)):
+    """PDF memakai penyusun data yang sama dengan halaman rekap."""
+    from fastapi.responses import Response, RedirectResponse
+    from app.peran import can_see_financials
+    from app.services.jasa import JasaError, rekap_barang_jasa
+    from app.web.rekap_jasa import buat_pdf
+    if not is_customer_read(request) and not can_see_financials(akun.user):
+        raise HTTPException(403, "Layar Jasa milik Admin ke atas.")
+    async with SessionLocal() as db:
+        try:
+            data = await rekap_barang_jasa(db, jasa_id)
+        except JasaError as e:
+            raise HTTPException(404, str(e))
+    if data['digabung']:
+        suffix = "?unduh=1" if unduh else ""
+        return RedirectResponse(f"/jasa/{data['digabung']['id']}/nota.pdf{suffix}", 303)
+    return Response(buat_pdf(data), media_type="application/pdf", headers={
+        "Content-Disposition": f'{"attachment" if unduh else "inline"}; filename="rekap-barang-jasa-{data["kode"]}.pdf"',
+        "Cache-Control": "no-store, private", "Vary": "Cookie"})
