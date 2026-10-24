@@ -716,13 +716,21 @@
       var total = sah ? Number(teks.replace(",", ".")) : NaN;
       $("giling-total").textContent = teks ? kgHasil(total) : "Belum diisi";
       var lama = acuanGiling && acuanGiling.tercatat;
-      var delta = Number.isFinite(lama) && Number.isFinite(total) ? bedaDesimalHasil(teks.replace(",", "."), String(lama)) : null;
+      var valid = Number.isFinite(total) && total > 0;
+      var delta = Number.isFinite(lama) && valid ? bedaDesimalHasil(teks.replace(",", "."), String(lama)) : null;
       $("giling-perubahan").textContent = delta !== null ? (Number(delta) > 0 ? "+" : "") + kgHasil(delta) : "Belum tersedia";
       $("giling-sebelum").textContent = Number.isFinite(lama) ? kgHasil(lama) : (acuanGiling ? "Belum dicatat" : "Belum tersedia");
+      if (!valid) {
+        $("giling-total").textContent = teks ? "Isian belum valid" : "Belum diisi";
+        $("giling-perubahan").textContent = "Belum dapat dihitung";
+        $("giling-rendemen").textContent = "Belum dapat dihitung";
+        $("giling-catatan").textContent = teks ? "Masukkan PK kumulatif yang valid dan lebih dari nol." : "Isi PK kumulatif untuk melihat ringkasan.";
+        return;
+      }
       $("giling-catatan").textContent = delta !== null && Number(delta) < 0
         ? "Kumulatif boleh turun untuk membetulkan catatan proses berjalan. Perubahan ini hanya pembanding."
         : delta !== null && Number(delta) === 0 ? "Nilai sama tetap mengikuti pencatatan penggilingan."
-        : "Isi total PK sejak awal proses, bukan hanya tambahannya. Penyimpanan memeriksa data terbaru.";
+        : "Perubahan dibandingkan dengan catatan terakhir. Data diperiksa saat disimpan.";
     }
     function perbaruiRingkasanGiling() {
       if (!hasilGiling || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return;
@@ -743,7 +751,7 @@
       if (!kode) return;
       var angka = /^[+-]?\d+(?:[.,]\d+)?$/.test(teks) ? Number(teks.replace(",", ".")) : NaN;
       var url = hasilGiling.source + "?kode_proses=" + encodeURIComponent(kode);
-      if (Number.isFinite(angka)) url += "&berat_kumulatif=" + encodeURIComponent(angka);
+      if (Number.isFinite(angka) && angka > 0) url += "&berat_kumulatif=" + encodeURIComponent(angka);
       // Pembaca server memakai helper rendemen yang sama. Penundaan hanya
       // menghemat permintaan saat mengetik; isian/fokus tidak pernah diganti.
       waktuGiling = setTimeout(function () {
