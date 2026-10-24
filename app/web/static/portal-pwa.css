@@ -1,0 +1,4 @@
+.portal-pasang{margin-block:16px}
+.portal-pasang[hidden],.portal-pasang [hidden]{display:none}
+.portal-pasang .btn{min-height:44px;white-space:normal}
+.portal-pasang p{font-size:.875rem;line-height:1.6;color:var(--redup);max-width:34rem}

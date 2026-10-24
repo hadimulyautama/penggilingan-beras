@@ -16,8 +16,8 @@ Tema memakai cookie `produksi_terik` serta aset dan token warna produksi.
 - Router hanya mengizinkan daftar tetap fungsi baca produksi. Tidak ada
   penerusan bebas ke URL/API staf. POST terbatas ke login, logout, dan status
   baca notifikasi pribadi; seluruhnya dilindungi CSRF.
-- HTML/PDF bersifat privat dan tidak disimpan cache. Portal tidak mendaftarkan
-  service worker atau menyimpan data pelanggan untuk akses luring.
+- HTML/PDF bersifat privat dan tidak disimpan cache. Worker portal hanya
+  menyediakan pesan umum saat luring; data pelanggan tetap dari jaringan.
 
 ## Komponen dan laporan bersama
 
@@ -189,3 +189,20 @@ portal tetap memakai tabel, cookie, dan kunci tanda tangan yang terpisah.
 Rute GET/POST pengelolaan wajib Super Admin tanpa pengecualian Admin darurat.
 Berlaku juga saat sistem belum memiliki Super Admin aktif. Tidak ada migrasi
 baru untuk halaman pengelolaan ini; memakai tabel portal dari migrasi 0110.
+
+## Pemasangan PadiFlow Pelanggan
+
+Portal dapat dipasang dari `/pelanggan/masuk` atau tombol **Pasang aplikasi**
+di menu pelanggan. Android/desktop yang mendukung menampilkan dialog pemasangan;
+Safari iPhone/iPad memakai Bagikan → Tambahkan ke Layar Utama, Safari Mac memakai
+File → Tambahkan ke Dock.
+
+Nama aplikasi **PadiFlow Pelanggan**, memakai marka PadiFlow putih dengan latar
+oranye. Manifest `/pelanggan/manifest.webmanifest` mempunyai ID dan cakupan
+`/pelanggan/`, terpisah dari pemasangan PadiFlow Produksi. Halaman awal
+`/pelanggan/` membuka ringkasan saat sesi aktif atau login pelanggan bila belum
+masuk. Ikon dibuat ulang melalui `scripts/buat_ikon_pelanggan.py`.
+
+Worker `/pelanggan/sw.js` hanya menaungi portal. Halaman, PDF, dan sesi tidak
+disimpan dalam Cache Storage; saat jaringan putus hanya pesan umum yang tampil.
+Pemasangan tidak mengubah pembatasan data server maupun akses app internal.

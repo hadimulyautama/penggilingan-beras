@@ -134,6 +134,8 @@ app.include_router(internal_kledo_router)
 app.include_router(auth_router)
 from app.web.portal.auth import router as portal_auth_router
 from app.web.portal.routes import router as portal_router
+from app.web.portal.pwa import router as portal_pwa_router
+app.include_router(portal_pwa_router)
 app.include_router(portal_auth_router)
 app.include_router(portal_router)
 from app.web.portal.admin import router as portal_admin_router

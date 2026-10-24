@@ -48,7 +48,8 @@ async def login(request:Request, username:str=Form(...,min_length=1,max_length=8
             return login_page(request,'Nama pengguna atau kata sandi tidak sesuai.',401)
         value=issue(account)
     gerbang_masuk.catat_berhasil(limiter,ip)
-    response=RedirectResponse('/pelanggan',303)
+    # Garis miring mempertahankan halaman tujuan di cakupan PWA pelanggan.
+    response=RedirectResponse('/pelanggan/',303)
     response.set_cookie(COOKIE,value,max_age=SESSION_SECONDS,httponly=True,
                         secure=secure_cookie(request),samesite='lax',path='/pelanggan')
     response.set_cookie(csrf.NAMA_COOKIE,csrf.terbitkan_baru(),httponly=False,
