@@ -1032,7 +1032,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     qc_detail = {}
 
     def tambah(ref: str, waktu, nomor: int | None, detail: list[tuple[str, str]],
-               *, asal: str | None = None, plat: str | None = None, qc_pk=None):
+               *, asal: str | None = None, plat: str | None = None, qc_pk=None,
+               bacaan_gabah=None):
         kartu = grouped.setdefault(ref, {"ref": ref, "rounds": [],
                                         "asal_set": set(), "plat_set": set()})
         if asal:
@@ -1040,7 +1041,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         if plat:
             kartu["plat_set"].add(plat)
         kartu["rounds"].append({"waktu": waktu, "nomor": nomor,
-                                "detail": detail,
+                                "detail": detail, "bacaan_gabah": bacaan_gabah,
                                 "penilaian": penilaian_dari_log([qc_pk]) if referensi and qc_pk is not None else None})
 
     catatan_kosong = None
@@ -1089,7 +1090,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                        asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}"
                              if batch.jasa_id in pemilik else
                              f"Supplier: {nama_supplier}" if nama_supplier else None),
-                       plat=batch.no_polisi_truk)
+                       plat=batch.no_polisi_truk,
+                       bacaan_gabah=(sample.kadar_air_1, sample.kadar_air_2))
         elif jenis == "pk-luar":
             from app.models import PkPurchaseQcLog, User
             batch_terbaru = (select(PkPurchaseQcLog.pk_purchase_batch_id)
