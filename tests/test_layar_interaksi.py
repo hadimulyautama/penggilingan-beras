@@ -52,7 +52,7 @@ def test_yang_sudah_dikerjakan_hilang_seketika():
     assert "PINDAH.segarkan(" in simpan
     # Kabarnya ditampilkan SESUDAH isinya ditukar — ia ikut tersapu bersama
     # isi lama kalau ditampilkan lebih dulu.
-    assert 'PINDAH.segarkan(function () { kabar(pesan, "ok"); });' in simpan
+    assert 'PINDAH.segarkan(function () { kabar(pesan, "ok", !!hasilKumulatif); });' in simpan
 
 
 def test_pintu_laci_layar_yang_sedang_dibuka_bukan_jalan_buntu():
@@ -351,8 +351,9 @@ def test_kabar_cukup_berhasil_atau_gagal():
     aksinya menutup, LAYARNYA digambar ulang, jadi apa yang terjadi sudah
     terbaca di tempat aslinya.
     """
-    fn = AKSI.split("function kabar(pesan, jenis)")[1].split("\n  }")[0]
-    assert '"Tersimpan"' in fn, "berhasil cukup satu kata"
+    fn = AKSI.split("function kabar(pesan, jenis, rinci)")[1].split("\n  }")[0]
+    assert '"Tersimpan"' in fn, "umpan balik umum tetap singkat"
+    assert "rinci ?" in fn, "form kumulatif dapat menunjukkan jawaban total/tambahan server"
     assert "kabar__nota" not in fn, "peringatan tak lagi ditumpahkan ke sini"
     # Gagal TETAP membawa sebabnya — "Gagal" tanpa sebab tak bisa
     # ditindaklanjuti; orangnya hanya tahu harus mencoba lagi, tanpa tahu
@@ -366,7 +367,7 @@ def test_galat_tidak_hilang_lebih_cepat_dari_yang_lain():
     """Urutannya pernah terbalik: galat — satu-satunya kabar yang
     MENGHENTIKAN pekerjaan dan menuntut tindakan — justru yang paling cepat
     hilang, 4,2 detik, sementara peringatan bertahan 11 detik."""
-    fn = AKSI.split("function kabar(pesan, jenis)")[1].split("\n  }")[0]
+    fn = AKSI.split("function kabar(pesan, jenis, rinci)")[1].split("\n  }")[0]
     assert 'if (jenis !== "err")' in fn, "galat tak berumur; ia menunggu ditekan"
     # Dan bisa ditutup dengan menekannya — yang sudah membaca tak perlu menunggu.
     assert "t.onclick" in fn
