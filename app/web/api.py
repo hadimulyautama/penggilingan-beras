@@ -881,11 +881,10 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  # membiarkannya sebagai satu-satunya medan melahirkan lagi
                  # perkalian nominal di kepala dan selisih di sisa terakhir.
                  {"name": "jumlah_karung_partai", "label": "Jumlah seluruh karung separtai (sesuai surat jalan)", "type": "number"},
-                 {"name": "ukuran_karung_kg", "label": "Ukuran nominal karung pada surat jalan (kg, boleh kosong)", "type": "number"},
                  {"name": "jumlah_karung", "label": "Jumlah karung yang dipindah ke silo", "type": "number"},
                  {"name": "bobot_pemindahan", "label": "Pilih tumpukan untuk melihat bobot per karung dan totalnya.",
                   "type": "pratinjau", "source": "/api/actions/pratinjau-pk-karung",
-                  "acuan": ["tumpukan", "jumlah_karung_partai", "ukuran_karung_kg", "jumlah_karung", "hasil_timbang", "berat_kg"], "bersihkan": {"tumpukan": ["jumlah_karung_partai", "ukuran_karung_kg"]}},
+                  "acuan": ["tumpukan", "jumlah_karung_partai", "jumlah_karung", "hasil_timbang", "berat_kg"], "bersihkan": {"tumpukan": ["jumlah_karung_partai"]}},
                  {"name": "hasil_timbang", "label": "Yang dipindahkan", "rincian": "Khusus bahan lepas / sebagian karung", "type": "select", "bawaan": "karung", "options": [
                      ["karung", "Karung utuh — kg dihitung otomatis"],
                      ["ya", "Bahan lepas / sebagian karung — kg sudah diketahui"]]},
@@ -4352,7 +4351,6 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
                             "nonaktif": ["berat_kg"]}
                 from app.penggilingan.gudang2.service import acuan_karung_surat_jalan
                 batch = await acuan_karung_surat_jalan(db, batch, int(n))
-                batch.ukuran_karung_kg = None
                 if ukuran_karung_kg.strip():
                     try:
                         ukuran = Decimal(ukuran_karung_kg.replace(",", "."))
@@ -4401,7 +4399,9 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
             if belum_final:
                 teks += " Bobot truk belum final; kg akan mengikuti timbang final."
         peringatan = peringatan_karung(batch)
-        return {**jawaban, "teks": teks + f" Tersedia {sisa} karung utuh." + tambahan + (" " + peringatan if peringatan else "")}
+        nominal = (f" Ukuran nominal pada surat jalan: {teks_kg(batch.ukuran_karung_kg)} per karung (data penerimaan)."
+                   if batch.ukuran_karung_kg is not None else "")
+        return {**jawaban, "teks": teks + f" Tersedia {sisa} karung utuh." + nominal + tambahan + (" " + peringatan if peringatan else "")}
 
 
 @router.get("/actions/sosoh-berjalan")

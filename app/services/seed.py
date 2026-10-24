@@ -162,7 +162,7 @@ async def seed_master() -> None:
             ("Imbiss", "house"), ("LosPulen", "house"), ("Pulenesia", "house"),
             ("Pulenisme", "house"), ("Raja", "house"), ("Lele", "house"),
             ("Melon", "house"), ("FJ", "house"), ("Gunung Mas", "house"),
-            ("Polos", "polos"),
+            ("Sakura", "house"), ("Polos", "polos"),
         ]
         for nama, tipe in _BRANDS:
             ada = (
