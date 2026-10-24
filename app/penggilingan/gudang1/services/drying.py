@@ -768,6 +768,21 @@ class MoistureResult:
     target_kini: float | None = None
 
 
+def ringkasan_bacaan(*, sampel=None, indikator=None, tes_manual=None):
+    """Hitungan bacaan asli, dipakai pencatatan dan pratinjau tanpa pembulatan.
+
+    tes_manual eksplisit tetap menang bagi pemanggil layanan lama. Titik
+    kosong dikeluarkan; bacaan mesin tidak ikut rata-rata alat tes.
+    """
+    isi = [x for x in (sampel or []) if x is not None]
+    if isi and tes_manual is None:
+        tes_manual = sum(isi) / len(isi)
+    return (tes_manual,
+            (max(isi) - min(isi)) if len(isi) > 1 else None,
+            ((indikator - tes_manual)
+             if indikator is not None and tes_manual is not None else None))
+
+
 async def log_moisture(
     db: AsyncSession,
     *,
@@ -816,8 +831,8 @@ async def log_moisture(
         )
 
     isi = [x for x in (sampel or []) if x is not None]
-    if isi and tes_manual is None:
-        tes_manual = sum(isi) / len(isi)
+    tes_manual, sebar, selisih_mesin = ringkasan_bacaan(
+        sampel=sampel, indikator=indikator, tes_manual=tes_manual)
     if indikator is None and tes_manual is None:
         raise DryingError(
             "Sebutkan angka kadar airnya — minimal satu sampel alat tes, "
@@ -864,10 +879,9 @@ async def log_moisture(
         jam_sejak_mulai=_hours(now, lot.waktu_mulai_pengeringan),
         jam_sejak_log_sebelumnya=_hours(now, prev) if prev else None,
         rata_tes=tes_manual,
-        sebar=(max(isi) - min(isi)) if len(isi) > 1 else None,
+        sebar=sebar,
         indikator=indikator,
-        selisih_mesin=((indikator - tes_manual)
-                       if indikator is not None and tes_manual is not None else None),
+        selisih_mesin=selisih_mesin,
         target_lama=(target_lama if (target_baru is not None
                                      and target_baru != target_lama) else None),
         target_kini=(float(lot.target_kadar_air)

@@ -190,7 +190,8 @@ def test_kadar_air_dari_empat_sampel_bukan_satu_angka():
 
     kode = kode_saja(drying.log_moisture)
     assert "sampel" in kode
-    assert "sum(isi) / len(isi)" in kode          # rata-rata, bukan satu angka
+    assert "ringkasan_bacaan" in kode
+    assert "sum(isi) / len(isi)" in kode_saja(drying.ringkasan_bacaan)  # satu helper resmi
     for n in range(1, 5):
         assert f"kadar_air_tes_{n}" in kode       # mentahnya ikut disimpan
 
@@ -202,7 +203,8 @@ def test_bacaan_mesin_tidak_dirata_ratakan_bersama_alat_tes():
     from app.penggilingan.gudang1.services import drying
     from tests.bantu import kode_saja
 
-    kode = kode_saja(drying.log_moisture)
+    assert "ringkasan_bacaan" in kode_saja(drying.log_moisture)
+    kode = kode_saja(drying.ringkasan_bacaan)
     # Baris yang menyusun daftar untuk dirata-ratakan — `ast.unparse`
     # membuang tanda kurungnya, jadi yang dicari isinya, bukan bentuk persis.
     baris = next(b for b in kode.splitlines() if b.strip().startswith("isi ="))

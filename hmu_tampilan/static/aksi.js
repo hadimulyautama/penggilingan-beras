@@ -570,23 +570,26 @@
     var judul = belah(a.label).teks;
     var hasilKumulatif = a.ringkasan_hasil;
     var hasilGiling = a.ringkasan_giling, formHasil = hasilKumulatif || hasilGiling;
-    var labelSimpan = formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
+    var kadarAir = a.ringkasan_kadar, targetAir = a.konteks_target, formAir = kadarAir || targetAir;
+    var formKhusus = formHasil || formAir;
+    var labelSimpan = kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     var lembar = $("lembar");
-    lembar.classList.toggle("lembar--hasil", !!formHasil);
+    lembar.classList.toggle("lembar--hasil", !!formKhusus);
+    lembar.classList.toggle("lembar--kadar", !!formAir);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
         '<div class="lembar__kepala"><h2>' + esc(judul) + "</h2>" +
-          (formHasil ? '' : '<button class="btn btn--kecil" id="tutup" type="button">Batal</button>') + '</div>' +
-        (formHasil ? '' : konteksKartu) +
-        (a.hint && !formHasil ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
+          (formKhusus ? '' : '<button class="btn btn--kecil" id="tutup" type="button">Batal</button>') + '</div>' +
+        (formKhusus ? '' : konteksKartu) +
+        (a.hint && !formKhusus ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
         '<div class="grup">' + isi + "</div>" +
-        (formHasil ? '<div class="hasil-actions"><button class="btn" id="tutup" type="button">Batal</button>' : '') +
-        '<button class="btn btn--utama" id="simpan" type="button"' + (formHasil ? '' : ' style="margin-top:18px"') + '>' + labelSimpan + '</button>' +
-        (formHasil ? '</div>' : '') +
+        (formKhusus ? '<div class="hasil-actions"><button class="btn" id="tutup" type="button">Batal</button>' : '') +
+        '<button class="btn btn--utama" id="simpan" type="button"' + (formKhusus ? '' : ' style="margin-top:18px"') + '>' + labelSimpan + '</button>' +
+        (formKhusus ? '</div>' : '') +
         tombolLain +
       "</div>";
-    if (asalKartu && !formHasil) {
+    if (asalKartu && !formKhusus) {
       var jenisKartu = asalKartu.querySelector(".proses-jenis");
       if (jenisKartu) {
         var jenisFormulir = jenisKartu.cloneNode(true);
@@ -823,6 +826,151 @@
       borangHasil.addEventListener("input", perbaruiRingkasanGiling);
       borangHasil.addEventListener("change", function (e) { if (e.target.dataset.name === hasilGiling.proses) perbaruiRingkasanGiling(); });
       perbaruiRingkasanGiling();
+    }
+
+    // Bacaan alat tes dan mesin tetap terpisah. Browser mengirim isian
+    // untuk bantuan baca; rumus dan ambang dijawab helper resmi di server.
+    var dataAir = null, urutanAir = 0, timerAir;
+    function isianAir() {
+      var tes = [], salah = false;
+      function angka(teks) {
+        teks = String(teks || "").trim();
+        if (!teks) return null;
+        var n = /^[+-]?\d+(?:[.,]\d+)?$/.test(teks) ? Number(teks.replace(",", ".")) : NaN;
+        if (!Number.isFinite(n) || n <= 0 || n > 100) { salah = true; return null; }
+        return n;
+      }
+      borangHasil.querySelectorAll('[data-ulang-untuk="tes"] input').forEach(function (e) { var n = angka(e.value); if (n !== null) tes.push(n); });
+      var mesin = angka(nilaiMedan("indikator"));
+      return {tes:tes, mesin:mesin, salah:salah};
+    }
+    function gambarAir(isi, memuat) {
+      if (!kadarAir) return;
+      ["rata", "sebar", "mesin", "selisih"].forEach(function (nama) {
+        $("air-" + nama).textContent = isi.salah ? "Isian belum valid" : memuat ? "Memuat…" :
+          dataAir ? dataAir[nama + "_teks"] : (nama === "sebar" ? "Perlu minimal dua titik" : nama === "mesin" ? "Belum diisi" : "Belum dapat dihitung");
+      });
+      $("air-jumlah").textContent = isi.salah ? "Periksa bacaan yang diisi" : isi.tes.length + " titik terukur";
+      $("air-peringatan").textContent = !isi.salah && !memuat && dataAir ? (dataAir.peringatan || []).join("\n") : "";
+      $("air-peringatan").hidden = !$("air-peringatan").textContent;
+    }
+    function perbaruiRingkasanAir() {
+      if (!formAir || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return;
+      clearTimeout(timerAir);
+      var kode = nilaiMedan(formAir.proses), isi = isianAir(), nomor = ++urutanAir;
+      if (!dataAir || dataAir.kode_lot !== kode) {
+        dataAir = null;
+        $("air-pemilik").textContent = kode ? "Memuat pemilik dan pengeringan…" : "Pilih pengeringan";
+        ["air-milik","air-status"].forEach(function (id) { $(id).textContent = ""; });
+        $("air-sumber").textContent = "Konteks belum tersedia.";
+        $("air-target").textContent = "Belum tercatat";
+      }
+      gambarAir(isi, !!kode && !isi.salah && (isi.tes.length > 0 || isi.mesin !== null));
+      if (!kode) return;
+      var url = formAir.source + "?kode_lot=" + encodeURIComponent(kode);
+      if (!isi.salah) {
+        isi.tes.forEach(function (n) { url += "&tes=" + encodeURIComponent(n); });
+        if (isi.mesin !== null) url += "&indikator=" + encodeURIComponent(isi.mesin);
+      }
+      timerAir = setTimeout(function () {
+        fetch(url,{credentials:"same-origin",cache:"no-store"}).then(function (r) {
+          if (!r.ok) throw new Error("Ringkasan belum tersedia");
+          return r.json();
+        }).then(function (d) {
+          if (nomor !== urutanAir || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil || nilaiMedan(formAir.proses) !== kode) return;
+          if (d.kode_lot !== kode) throw new Error("Konteks tidak sesuai pengeringan");
+          dataAir = d;
+          $("air-pemilik").textContent = d.pemilik || "Pemilik belum tercatat";
+          $("air-milik").textContent = d.kepemilikan || "";
+          $("air-status").textContent = ({berjalan:"Berjalan",dijeda:"Dijeda",selesai:"Selesai"})[d.status] || "Status belum diketahui";
+          $("air-status").classList.toggle("lencana--hati", d.status === "dijeda");
+          $("air-sumber").textContent = d.dryer + " · Bahan " + d.bahan + (d.sebab_jeda ? " · Jeda: " + d.sebab_jeda : "");
+          $("air-target").textContent = d.target_teks || "Belum tercatat";
+          gambarAir(isi, false);
+        }).catch(function () {
+          if (nomor !== urutanAir || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return;
+          dataAir = null;
+          $("air-pemilik").textContent = "Konteks pengeringan belum tersedia";
+          ["air-milik","air-status"].forEach(function (id) { $(id).textContent = ""; });
+          $("air-sumber").textContent = "Isian tetap utuh. Penyimpanan memeriksa data server.";
+          $("air-target").textContent = "Belum tercatat";
+          gambarAir(isi, false);
+        });
+      },150);
+    }
+    if (formAir) {
+      borangHasil.querySelector(".lembar__kepala").insertAdjacentHTML("afterend",
+        '<div class="hasil-context"><div><span id="air-milik"></span><span class="lencana" id="air-status"></span></div>' +
+        '<strong id="air-pemilik"></strong><small id="air-sumber"></small>' +
+        '<div class="giling-basis"><span>Target pengeringan saat ini</span><strong id="air-target">Belum tercatat</strong></div></div>');
+      var grupAir = borangHasil.querySelector(".grup");
+      ["kode_lot", kadarAir ? "indikator" : "target"].forEach(function (nama) {
+        var input = grupAir.querySelector('[data-name="' + nama + '"]');
+        if (!input) return;
+        var label = input.type === "hidden" ? null : grupAir.querySelector('label[for="' + input.id + '"]');
+        var terkunci = input.type === "hidden" ? input.previousElementSibling : null;
+        var wadah = document.createElement("div"); wadah.className = "hasil-field";
+        grupAir.insertBefore(wadah, label || terkunci || input);
+        if (!label) { label = document.createElement("span"); label.className = "lbl"; label.textContent = input.dataset.label; }
+        wadah.appendChild(label);
+        if (terkunci) { wadah.appendChild(terkunci); terkunci.setAttribute("role","textbox"); terkunci.setAttribute("aria-label",input.dataset.label); terkunci.setAttribute("aria-readonly","true"); }
+        wadah.appendChild(input);
+        if (nama === "kode_lot") {
+          if (terkunci) wadah.insertAdjacentHTML("beforeend",'<small class="hasil-help">Terisi dari pengeringan yang dibuka.</small>');
+        } else {
+          var unit = document.createElement("div"); unit.className="hasil-unit";wadah.appendChild(unit);unit.appendChild(input);
+          unit.insertAdjacentHTML("beforeend",'<span aria-hidden="true">%</span>');
+          if (kadarAir) { wadah.classList.add("kadar-mesin");wadah.insertAdjacentHTML("beforeend",'<p class="hasil-help">Opsional. Bacaan mesin tidak ikut rata-rata alat tes.</p>'); }
+        }
+      });
+      if (kadarAir) {
+        var titik = grupAir.querySelector('[data-ulang-untuk="tes"]'), labelTitik = grupAir.querySelector('label[for="f_tes"]');
+        var bagian = document.createElement("section");bagian.className="kadar-alat";bagian.setAttribute("aria-label","Titik alat tes");
+        grupAir.insertBefore(bagian,labelTitik);bagian.appendChild(labelTitik);labelTitik.removeAttribute("for");
+        bagian.insertAdjacentHTML("beforeend",'<p class="hasil-help">Isi titik yang diukur. Titik pertama wajib; maksimal empat titik.</p>');
+        bagian.appendChild(titik);bagian.appendChild(grupAir.querySelector('[data-tambah="tes"]'));
+        titik.classList.add("kadar-titik-grid");
+        titik._titikKadar = function () {
+          titik.querySelectorAll("input").forEach(function (input,i) {
+            input.id = i === 0 ? "f_tes" : "f_tes_" + (i+1);
+            var lama = input.closest(".kadar-titik");
+            if (lama) {
+              var namaTitik=lama.querySelector("label");namaTitik.htmlFor=input.id;
+              namaTitik.textContent="Titik " + (i+1) + (i === 0 ? " · wajib" : " · opsional");
+              input.dataset.label="Titik " + (i+1) + " alat tes (%)";
+              return;
+            }
+            if (i > 0) { input.removeAttribute("aria-invalid");input.removeAttribute("aria-describedby"); }
+            var cell = document.createElement("div");cell.className="kadar-titik";input.before(cell);
+            var label = document.createElement("label");label.htmlFor=input.id;label.textContent="Titik " + (i+1) + (i === 0 ? " · wajib" : " · opsional");
+            cell.appendChild(label);var unit=document.createElement("div");unit.className="hasil-unit";cell.appendChild(unit);unit.appendChild(input);
+            unit.insertAdjacentHTML("beforeend",'<span aria-hidden="true">%</span>');
+            input.dataset.label="Titik " + (i+1) + " alat tes (%)";
+            if (i > 0) {
+              var hapus=document.createElement("button");hapus.type="button";hapus.className="btn btn--kecil";
+              hapus.dataset.hapusKadar="1";hapus.textContent="Hapus titik";cell.appendChild(hapus);
+            }
+          });
+          perbaruiRingkasanAir();
+        };
+        bagian.onclick = function(e) {
+          var hapus=e.target.closest("[data-hapus-kadar]");if(!hapus)return;
+          hapus.closest(".kadar-titik").remove();titik._titikKadar();
+          var tambah=bagian.querySelector('[data-tambah="tes"]');tambah.hidden=false;tambah.focus();lembar._berubah=true;
+        };
+        borangHasil.querySelector(".hasil-actions").insertAdjacentHTML("beforebegin",'<div class="hasil-preview kadar-summary" role="status" aria-live="polite">' +
+          '<div><span>Rata-rata alat tes<small id="air-jumlah"></small></span><strong id="air-rata">Belum dapat dihitung</strong></div>' +
+          '<div><span>Sebaran tertinggi − terendah</span><strong id="air-sebar">Perlu minimal dua titik</strong></div>' +
+          '<div><span>Bacaan mesin</span><strong id="air-mesin">Belum diisi</strong></div>' +
+          '<div><span>Mesin − rata-rata alat tes</span><strong id="air-selisih">Belum dapat dihitung</strong></div>' +
+          '<small>Pratinjau · angka mesin tidak dicampur dengan alat tes.</small></div><div class="kadar-warning" id="air-peringatan" role="status" hidden></div>');
+        var aksiLain=borangHasil.querySelector('[data-buka-aksi="ubah_target"]');
+        if (aksiLain) { var bagianLain=document.createElement("div");bagianLain.className="kadar-lain";aksiLain.before(bagianLain);bagianLain.appendChild(aksiLain);bagianLain.insertAdjacentHTML("beforeend",'<small>Tindakan terpisah; perubahan target meminta konfirmasi.</small>'); }
+      }
+      if (kadarAir) titik._titikKadar();
+      borangHasil.addEventListener("input",perbaruiRingkasanAir);
+      borangHasil.addEventListener("change",function (e) { if(e.target.dataset.name === formAir.proses) perbaruiRingkasanAir(); });
+      perbaruiRingkasanAir();
     }
 
     // Angka turunan tetap dijawab server yang memiliki sumber bobotnya.
@@ -1362,13 +1510,15 @@
             perbaruiPratinjau();
             perbaruiRingkasanHasil();
             perbaruiRingkasanGiling();
+            perbaruiRingkasanAir();
             return;
           }
           // Detail tetap menunjuk proses asal meskipun proses itu baru saja
           // selesai. Konteks baca menampilkan keadaannya; POST tetap memagari.
-          if (formHasil && f.name === formHasil.proses) {
+          if (formKhusus && f.name === formKhusus.proses) {
             perbaruiRingkasanHasil();
             perbaruiRingkasanGiling();
+            perbaruiRingkasanAir();
             return;
           }
           if ((f.name === "sumber_stok" && sumberBaris) ||
@@ -1468,6 +1618,7 @@
         perbaruiKonteksMuat();
         perbaruiRingkasanHasil(true);
         perbaruiRingkasanGiling();
+        perbaruiRingkasanAir();
         ambilAcuanJeda();
         aturWaktuJeda();
       }).catch(function () {});
@@ -1655,7 +1806,7 @@
       if (tbl) { tbl.disabled = true; tbl.textContent = "Menyimpan…"; }
       try {
         var hasil = await kirim(a.post, isi);
-        if (formHasil && (!hasil || hasil.ok !== true)) throw new TypeError("Hasil simpan belum terkonfirmasi");
+        if (formKhusus && (!hasil || hasil.ok !== true)) throw new TypeError("Hasil simpan belum terkonfirmasi");
         // Tombolnya sendiri yang menjawab: memuat → tercentang, di tempat.
         if (tbl) { tbl.textContent = "✓ Tersimpan"; }
         await new Promise(function (r) { setTimeout(r, 260); });
@@ -1686,7 +1837,12 @@
         function kabarHasil() {
           var peringatan = hasilGiling && hasil.peringatan;
           var utama = peringatan ? pesan.replace("\n" + peringatan, "") : pesan;
-          kabar(utama, "ok", !!formHasil);
+          if (kadarAir) {
+            var baris = pesan.split("\n");
+            peringatan = baris.filter(function (b) { return /^⚠/.test(b); }).map(function (b) { return b.replace(/^⚠️?\s*/, ""); }).join("\n");
+            utama = baris.filter(function (b) { return !/^⚠/.test(b); }).join("\n");
+          }
+          kabar(utama, "ok", !!formKhusus);
           if (peringatan) {
             $("kabar").insertAdjacentHTML("beforeend", '<div class="kabar__peringatan"><strong>Perlu diperiksa</strong><span>' + esc(peringatan) + '</span></div>');
             clearTimeout($("kabar")._t);
@@ -1730,7 +1886,7 @@
     }
 
     $("simpan").onclick = async function () {
-      if (formHasil && lembar._menyimpan) return;
+      if (formKhusus && lembar._menyimpan) return;
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
       bersihkanSalah(lembar);
@@ -1749,6 +1905,8 @@
         if (nilai && el.dataset.pJenis === "angka" && Number(nilai.replace(",", ".")) <= 0) pesan = "Jumlah harus lebih dari nol.";
         if (formHasil && el.dataset.name === formHasil.total && nilai &&
             Number.isFinite(Number(nilai.replace(",", "."))) && Number(nilai.replace(",", ".")) <= 0) pesan = "Total hasil harus lebih dari nol.";
+        if (formAir && ["tes","indikator","target"].indexOf(el.dataset.name) !== -1 && nilai &&
+            Number.isFinite(Number(nilai.replace(",", "."))) && (Number(nilai.replace(",", ".")) <= 0 || Number(nilai.replace(",", ".")) > 100)) pesan = "Isi persen lebih dari 0 dan maksimal 100%.";
         if (pesan) { kurang.push({el: el, pesan: pesan}); }
       });
       if (kurang.length) {
@@ -2357,6 +2515,7 @@
       kotak.removeAttribute("data-wajib");  // hanya titik pertama yang wajib
       kotak.placeholder = "titik " + (ada + 1);
       wadah.appendChild(kotak);
+      if (wadah._titikKadar) wadah._titikKadar();
       kotak.focus();
       /* Tombolnya HILANG saat penuh, bukan diam tak menanggapi. Tombol yang
          ditekan lalu tak melakukan apa pun terbaca sebagai aplikasi rusak,

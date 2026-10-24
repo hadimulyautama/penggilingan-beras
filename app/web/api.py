@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from typing import Annotated
 
 from pydantic import BaseModel, Field
@@ -559,7 +559,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                          "adalah setelan di mesin.",
                  "ya": "Sudah disetel — nyalakan",
              }},
-            {"id": "kadar_air", "label": "💧 Perbarui kadar air",
+            {"id": "kadar_air", "label": "💧 Catat kadar air pengeringan",
+             "ringkasan_kadar": {"source": "/api/actions/ringkasan-kadar-air", "proses": "kode_lot"},
              "post": "/api/actions/kadar-air",
              "hint": "Beberapa titik dengan alat tes — yang dipakai rata-ratanya. "
                      "Satu titik saja bisa kebetulan mengenai bagian paling basah. "
@@ -604,6 +605,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "bawa": "kode_lot"},
              ]},
             {"id": "ubah_target", "label": "🎯 Ubah target kadar air",
+             "konteks_target": {"source": "/api/actions/ringkasan-kadar-air", "proses": "kode_lot"},
              "post": "/api/actions/ubah-target",
              "hint": "Garis selesai pengeringan. Menggesernya mengubah kapan "
                      "mesin dimatikan — dan itu ikut menentukan gabah ini "
@@ -879,11 +881,10 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  # membiarkannya sebagai satu-satunya medan melahirkan lagi
                  # perkalian nominal di kepala dan selisih di sisa terakhir.
                  {"name": "jumlah_karung_partai", "label": "Jumlah seluruh karung separtai (sesuai surat jalan)", "type": "number"},
-                 {"name": "ukuran_karung_kg", "label": "Ukuran nominal karung pada surat jalan (kg, boleh kosong)", "type": "number"},
                  {"name": "jumlah_karung", "label": "Jumlah karung yang dipindah ke silo", "type": "number"},
                  {"name": "bobot_pemindahan", "label": "Pilih tumpukan untuk melihat bobot per karung dan totalnya.",
                   "type": "pratinjau", "source": "/api/actions/pratinjau-pk-karung",
-                  "acuan": ["tumpukan", "jumlah_karung_partai", "ukuran_karung_kg", "jumlah_karung", "hasil_timbang", "berat_kg"], "bersihkan": {"tumpukan": ["jumlah_karung_partai", "ukuran_karung_kg"]}},
+                  "acuan": ["tumpukan", "jumlah_karung_partai", "jumlah_karung", "hasil_timbang", "berat_kg"], "bersihkan": {"tumpukan": ["jumlah_karung_partai"]}},
                  {"name": "hasil_timbang", "label": "Yang dipindahkan", "rincian": "Khusus bahan lepas / sebagian karung", "type": "select", "bawaan": "karung", "options": [
                      ["karung", "Karung utuh — kg dihitung otomatis"],
                      ["ya", "Bahan lepas / sebagian karung — kg sudah diketahui"]]},
@@ -2142,6 +2143,23 @@ async def milling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/ringkasan-kadar-air")
+async def ringkasan_kadar_air(kode_lot: str, tes: list[float] = Query(default=[]),
+                            indikator: float | None = None,
+                            user: User = Depends(pengguna_aksi)):
+    """Bantuan baca formulir; tidak mencatat pengukuran atau mengubah target."""
+    _require(await _is_g1_operator(user))
+    from fastapi.responses import JSONResponse
+    from app.web.form_kadar_air import ringkasan
+    from app.penggilingan.gudang1.services.drying import DryingError
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_lot=kode_lot, tes=tes, indikator=indikator)
+        except DryingError as e:
+            raise _err(e, "Ringkasan pengukuran belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/actions/ringkasan-hasil-giling")
@@ -4333,7 +4351,6 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
                             "nonaktif": ["berat_kg"]}
                 from app.penggilingan.gudang2.service import acuan_karung_surat_jalan
                 batch = await acuan_karung_surat_jalan(db, batch, int(n))
-                batch.ukuran_karung_kg = None
                 if ukuran_karung_kg.strip():
                     try:
                         ukuran = Decimal(ukuran_karung_kg.replace(",", "."))
@@ -4382,7 +4399,9 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
             if belum_final:
                 teks += " Bobot truk belum final; kg akan mengikuti timbang final."
         peringatan = peringatan_karung(batch)
-        return {**jawaban, "teks": teks + f" Tersedia {sisa} karung utuh." + tambahan + (" " + peringatan if peringatan else "")}
+        nominal = (f" Ukuran nominal pada surat jalan: {teks_kg(batch.ukuran_karung_kg)} per karung (data penerimaan)."
+                   if batch.ukuran_karung_kg is not None else "")
+        return {**jawaban, "teks": teks + f" Tersedia {sisa} karung utuh." + nominal + tambahan + (" " + peringatan if peringatan else "")}
 
 
 @router.get("/actions/sosoh-berjalan")

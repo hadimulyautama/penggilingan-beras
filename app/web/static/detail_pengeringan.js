@@ -71,6 +71,8 @@
   });
   new MutationObserver(function () {
     lembar.querySelectorAll('[data-ulang-untuk="tes"] input').forEach(function (el, i) {
+      // Formulir baru merawat kartu, nomor, label dan hapus titik sendiri.
+      if (lembar.classList.contains('lembar--kadar')) return;
       if (!el.parentElement.classList.contains('pengeringan-titik')) {
         var baris = document.createElement('div'); baris.className = 'pengeringan-titik';
         el.before(baris); baris.appendChild(el);
@@ -99,6 +101,8 @@
       while (lembar.querySelectorAll('[data-ulang-untuk="tes"] input').length < pulih.tes.length) tambah.click();
       lembar.querySelectorAll('[data-ulang-untuk="tes"] input').forEach(function (el, i) { el.value = pulih.tes[i] || ''; });
       lembar.querySelector('#f_indikator').value = pulih.indikator;
+      // Pulihkan pula pratinjau baca saja dari semua ketikan yang dikembalikan.
+      lembar.querySelector('#f_tes').dispatchEvent(new Event('input', {bubbles: true}));
       lembar._berubah = pulih.berubah;
     }
   }).observe(lembar, {childList: true, subtree: true});

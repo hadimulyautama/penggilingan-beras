@@ -54,7 +54,7 @@ def test_yang_sudah_dikerjakan_hilang_seketika():
     # isi lama kalau ditampilkan lebih dulu.
     # Dua form hasil berbagi lifecycle; semantik kumulatif tetap di layanan masing-masing.
     assert 'PINDAH.segarkan(kabarHasil);' in simpan
-    assert 'kabar(utama, "ok", !!formHasil)' in simpan
+    assert 'kabar(utama, "ok", !!formKhusus)' in simpan
 
 
 def test_pintu_laci_layar_yang_sedang_dibuka_bukan_jalan_buntu():

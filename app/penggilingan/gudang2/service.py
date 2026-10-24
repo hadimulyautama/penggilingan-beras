@@ -1792,7 +1792,8 @@ async def acuan_karung_surat_jalan(db, batch, jumlah):
                      if v is not None and float(v) > 0), None)
         tiket["berat_hpp_kg"], tiket["sumber_berat"] = real, "timbangan"
         berat, sumber, perkiraan = await bobot_awal_dari_tiket(db, tiket)
-    return SimpleNamespace(jumlah_karung=jumlah, berat_total_kg=berat,
+    return SimpleNamespace(jumlah_karung=jumlah, ukuran_karung_kg=batch.ukuran_karung_kg,
+                           berat_total_kg=berat,
                            sumber_berat=sumber, berat_perkiraan_kg=perkiraan)
 
 
@@ -1866,7 +1867,11 @@ async def pindah_tumpukan_ke_silo(
             if ukuran_karung_kg is not None and (not Decimal(str(ukuran_karung_kg)).is_finite() or ukuran_karung_kg <= 0):
                 raise Gudang2Error("Ukuran nominal karung harus lebih dari nol.")
             acuan = await acuan_karung_surat_jalan(db, batch, int(n))
-            batch.jumlah_karung, batch.ukuran_karung_kg = int(n), ukuran_karung_kg
+            batch.jumlah_karung = int(n)
+            # Nota sudah tercatat saat penerimaan; tidak perlu diketik ulang.
+            # Payload lama tetap boleh melengkapinya secara eksplisit.
+            if ukuran_karung_kg is not None:
+                batch.ukuran_karung_kg = ukuran_karung_kg
             batch.berat_total_kg, batch.sumber_berat = acuan.berat_total_kg, acuan.sumber_berat
             batch.berat_perkiraan_kg = acuan.berat_perkiraan_kg
             intake.berat_kg, intake.bobot_final = acuan.berat_total_kg, dari_batch(acuan).pasti

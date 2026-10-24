@@ -174,7 +174,10 @@
        diam-diam tak boleh menggerakkan layar di bawah jari. Tanpa dukungan,
        jalurnya persis seperti sebelumnya. */
     if (halus && document.startViewTransition) {
-      document.startViewTransition(function () { tukar(doc, baru); });
+      var transisi = document.startViewTransition(function () { tukar(doc, baru); });
+      // Ketukan berikutnya boleh melewati animasi yang masih berjalan.
+      // `ready` ditolak saat animasi dilewati; pemasangan halaman tetap jalan.
+      transisi.ready.catch(function () {});
     } else {
       tukar(doc, baru);
     }
