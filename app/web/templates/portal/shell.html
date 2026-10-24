@@ -2,8 +2,8 @@
 <!doctype html><html lang="id" class="portal-document"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="formulir-sesi" content="{{ CSRF }}"><meta name="robots" content="noindex,nofollow">
-<title>{{ title }} · PadiFlow</title>
-<link rel="icon" href="/static/ikon-192.png">
+<title>{{ title }} · PadiFlow Pelanggan</title>
+{% include 'portal/_pwa.html' %}
 <link rel="stylesheet" href="/static/app.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/tabel-standar.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
@@ -14,10 +14,10 @@
 <a class="portal-skip" href="#isi-pelanggan">Lewati ke isi</a>
 <div class="portal-shade" hidden></div>
 <aside class="portal-sidebar" id="sidebar-pelanggan" aria-label="Menu portal pelanggan">
-<a class="portal-brand" href="/pelanggan"><img class="logo-light" src="/static/padiflow-logo-terang.png" alt="PadiFlow"><img class="logo-dark laci__logo--gelap" src="/static/padiflow-logo-gelap.png" alt="PadiFlow"></a>
+<a class="portal-brand" href="/pelanggan/"><img class="logo-light" src="/static/padiflow-logo-terang.png" alt="PadiFlow"><img class="logo-dark laci__logo--gelap" src="/static/padiflow-logo-gelap.png" alt="PadiFlow"></a>
 <p class="portal-kicker">PORTAL PELANGGAN</p>
 <nav>{% for path,label,key in MENU %}<a class="pintu {{ 'pintu--kini' if active==key }}" href="/pelanggan/{{ path }}" {% if active==key %}aria-current="page"{% endif %}><span class="pintu__ikon">{{ ikon_portal({'ringkasan':'beranda','masuk':'barang_masuk','keluar':'barang_keluar','riwayat':'laporan_riwayat','qc':'mutu','laporan':'laporan_riwayat'}.get(key,key)) }}</span><span>{{ label }}</span></a>{% endfor %}</nav>
-<div class="portal-account"><strong>{{ reader.nama }}</strong><p>Pelanggan jasa</p><form method="post" action="/pelanggan/keluar"><input type="hidden" name="_csrf" value="{{ CSRF }}"><button class="btn" type="submit">Keluar</button></form></div>
+<div class="portal-account"><strong>{{ reader.nama }}</strong><p>Pelanggan jasa</p>{% include 'portal/_pasang.html' %}<form method="post" action="/pelanggan/keluar"><input type="hidden" name="_csrf" value="{{ CSRF }}"><button class="btn" type="submit">Keluar</button></form></div>
 </aside>
 <div class="portal-workspace"><header class="portal-topbar"><button type="button" class="btn portal-menu" aria-controls="sidebar-pelanggan" aria-expanded="false">☰ <span>Menu</span></button><span>{{ reader.nama }}</span><div class="portal-top-actions"><a class="btn" href="/pelanggan/kabar" aria-label="Berita dan notifikasi">{{ ikon_portal('kabar') }}</a><button type="button" class="btn" data-theme-toggle aria-label="{{ 'Aktifkan mode gelap' if light else 'Aktifkan mode terang' }}">{{ '☾' if light else '☀' }}</button></div></header>
 <main class="isi portal-content" id="isi-pelanggan" tabindex="-1">{{ content }}</main></div>

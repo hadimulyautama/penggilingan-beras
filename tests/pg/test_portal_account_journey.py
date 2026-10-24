@@ -64,7 +64,7 @@ async def test_contact_create_login_and_customer_boundary(pg,portal,selected):
     async with browser_client() as customer:
         login=await customer.get('/pelanggan/masuk')
         result=await customer.post('/pelanggan/masuk',data={'username':username,'sandi':password,'_csrf':token(login)})
-        assert result.status_code==303 and result.headers['location']=='/pelanggan'
+        assert result.status_code==303 and result.headers['location']=='/pelanggan/'
         assert COOKIE in customer.cookies and security.NAMA_COOKIE not in customer.cookies
         home=await customer.get('/pelanggan')
         assert home.status_code==200 and owner.nama_pelanggan in home.text
