@@ -569,23 +569,24 @@
     var konteksKartu = asalKartu ? '<p class="identitas-formulir" role="note">Dibuka dari: ' + esc(asalKartu.dataset.konteks) + '</p>' : '';
     var judul = belah(a.label).teks;
     var hasilKumulatif = a.ringkasan_hasil;
-    var labelSimpan = hasilKumulatif ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
+    var hasilGiling = a.ringkasan_giling, formHasil = hasilKumulatif || hasilGiling;
+    var labelSimpan = formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     var lembar = $("lembar");
-    lembar.classList.toggle("lembar--hasil", !!hasilKumulatif);
+    lembar.classList.toggle("lembar--hasil", !!formHasil);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
         '<div class="lembar__kepala"><h2>' + esc(judul) + "</h2>" +
-          (hasilKumulatif ? '' : '<button class="btn btn--kecil" id="tutup" type="button">Batal</button>') + '</div>' +
-        (hasilKumulatif ? '' : konteksKartu) +
-        (a.hint && !hasilKumulatif ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
+          (formHasil ? '' : '<button class="btn btn--kecil" id="tutup" type="button">Batal</button>') + '</div>' +
+        (formHasil ? '' : konteksKartu) +
+        (a.hint && !formHasil ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
         '<div class="grup">' + isi + "</div>" +
-        (hasilKumulatif ? '<div class="hasil-actions"><button class="btn" id="tutup" type="button">Batal</button>' : '') +
-        '<button class="btn btn--utama" id="simpan" type="button"' + (hasilKumulatif ? '' : ' style="margin-top:18px"') + '>' + labelSimpan + '</button>' +
-        (hasilKumulatif ? '</div>' : '') +
+        (formHasil ? '<div class="hasil-actions"><button class="btn" id="tutup" type="button">Batal</button>' : '') +
+        '<button class="btn btn--utama" id="simpan" type="button"' + (formHasil ? '' : ' style="margin-top:18px"') + '>' + labelSimpan + '</button>' +
+        (formHasil ? '</div>' : '') +
         tombolLain +
       "</div>";
-    if (asalKartu && !hasilKumulatif) {
+    if (asalKartu && !formHasil) {
       var jenisKartu = asalKartu.querySelector(".proses-jenis");
       if (jenisKartu) {
         var jenisFormulir = jenisKartu.cloneNode(true);
@@ -703,6 +704,117 @@
         if ([hasilKumulatif.proses, hasilKumulatif.jenis].indexOf(e.target.dataset.name) !== -1) perbaruiRingkasanHasil();
       });
       perbaruiRingkasanHasil();
+    }
+
+    // Penggilingan mencatat kumulatif terbaru, termasuk penurunan dan
+    // nilai sama. Selisih di sini hanya pembanding, bukan mutasi stok.
+    var acuanGiling = null, nomorGiling = 0, waktuGiling;
+    function gambarRingkasanGiling() {
+      if (!hasilGiling || !borangHasil.isConnected) return;
+      var teks = nilaiMedan(hasilGiling.total).trim();
+      var sah = /^[+-]?\d+(?:[.,]\d+)?$/.test(teks);
+      var total = sah ? Number(teks.replace(",", ".")) : NaN;
+      $("giling-total").textContent = teks ? kgHasil(total) : "Belum diisi";
+      var lama = acuanGiling && acuanGiling.tercatat;
+      var delta = Number.isFinite(lama) && Number.isFinite(total) ? bedaDesimalHasil(teks.replace(",", "."), String(lama)) : null;
+      $("giling-perubahan").textContent = delta !== null ? (Number(delta) > 0 ? "+" : "") + kgHasil(delta) : "Belum tersedia";
+      $("giling-sebelum").textContent = Number.isFinite(lama) ? kgHasil(lama) : (acuanGiling ? "Belum dicatat" : "Belum tersedia");
+      $("giling-catatan").textContent = delta !== null && Number(delta) < 0
+        ? "Kumulatif boleh turun untuk membetulkan catatan proses berjalan. Perubahan ini hanya pembanding."
+        : delta !== null && Number(delta) === 0 ? "Nilai sama tetap mengikuti pencatatan penggilingan."
+        : "Isi total PK sejak awal proses, bukan hanya tambahannya. Penyimpanan memeriksa data terbaru.";
+    }
+    function perbaruiRingkasanGiling() {
+      if (!hasilGiling || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return;
+      clearTimeout(waktuGiling);
+      var kode = nilaiMedan(hasilGiling.proses), teks = nilaiMedan(hasilGiling.total).trim();
+      var nomor = ++nomorGiling;
+      if (!acuanGiling || acuanGiling.kode_proses !== kode) {
+        acuanGiling = null;
+        $("giling-pemilik").textContent = kode ? "Memuat pemilik dan proses…" : "Pilih proses penggilingan";
+        ["giling-milik", "giling-status", "giling-jenis"].forEach(function (id) { $(id).textContent = ""; });
+        $("giling-silos").textContent = kode ? "Konteks belum tersedia." : "Daftar mengikuti proses aktif yang dapat Anda akses.";
+        $("giling-bobot").textContent = "Belum diketahui";
+        $("giling-label-bobot").textContent = "Bobot gabah acuan";
+        $("giling-label-rendemen").textContent = "Perkiraan rendemen";
+      }
+      $("giling-rendemen").textContent = kode && teks ? "Menghitung…" : "Belum dapat dihitung";
+      gambarRingkasanGiling();
+      if (!kode) return;
+      var angka = /^[+-]?\d+(?:[.,]\d+)?$/.test(teks) ? Number(teks.replace(",", ".")) : NaN;
+      var url = hasilGiling.source + "?kode_proses=" + encodeURIComponent(kode);
+      if (Number.isFinite(angka)) url += "&berat_kumulatif=" + encodeURIComponent(angka);
+      // Pembaca server memakai helper rendemen yang sama. Penundaan hanya
+      // menghemat permintaan saat mengetik; isian/fokus tidak pernah diganti.
+      waktuGiling = setTimeout(function () {
+        fetch(url, {credentials:"same-origin", cache:"no-store"}).then(function (r) {
+          if (!r.ok) throw new Error("Ringkasan belum tersedia");
+          return r.json();
+        }).then(function (data) {
+          if (nomor !== nomorGiling || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil ||
+              nilaiMedan(hasilGiling.proses) !== kode || nilaiMedan(hasilGiling.total).trim() !== teks) return;
+          if (data.kode_proses !== kode) throw new Error("Ringkasan tidak sesuai pilihan");
+          acuanGiling = data;
+          $("giling-pemilik").textContent = data.pemilik || "Pemilik belum tercatat";
+          $("giling-milik").textContent = data.kepemilikan || "";
+          $("giling-status").textContent = ({berjalan:"Berjalan",dijeda:"Dijeda",selesai:"Selesai"})[data.status] || "Status belum diketahui";
+          $("giling-status").classList.toggle("lencana--hati", data.status === "dijeda");
+          $("giling-silos").textContent = (data.silos || []).join(" + ") || "Sumber silo belum tercatat.";
+          if (data.sebab_jeda) $("giling-silos").textContent += " · Jeda: " + data.sebab_jeda;
+          $("giling-jenis").textContent = data.jenis_pk ? "Jenis PK dari asal bahan · " + data.jenis_pk : "Jenis PK belum diketahui";
+          $("giling-bobot").textContent = data.bobot_acuan === null ? "Belum diketahui" : kgHasil(data.bobot_acuan);
+          $("giling-label-bobot").textContent = "Bobot gabah acuan" + (data.bobot_acuan === null ? "" : data.bobot_final ? " · final" : " · sementara");
+          $("giling-label-rendemen").textContent = "Perkiraan rendemen" + (data.bobot_final ? "" : " · sementara");
+          $("giling-rendemen").textContent = data.rendemen_teks || "Belum dapat dihitung";
+          gambarRingkasanGiling();
+        }).catch(function () {
+          if (nomor !== nomorGiling || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return;
+          acuanGiling = null;
+          $("giling-pemilik").textContent = "Konteks proses belum tersedia";
+          ["giling-milik", "giling-status", "giling-jenis"].forEach(function (id) { $(id).textContent = ""; });
+          $("giling-silos").textContent = "Isian tetap utuh. Penyimpanan memeriksa data terbaru di server.";
+          $("giling-bobot").textContent = "Belum diketahui";
+          $("giling-label-bobot").textContent = "Bobot gabah acuan";
+          $("giling-label-rendemen").textContent = "Perkiraan rendemen";
+          $("giling-rendemen").textContent = "Belum dapat dihitung";
+          gambarRingkasanGiling();
+        });
+      }, 150);
+    }
+    if (hasilGiling) {
+      borangHasil.querySelector(".lembar__kepala").insertAdjacentHTML("afterend",
+        '<div class="hasil-context giling-context"><div><span id="giling-milik"></span><span class="lencana" id="giling-status"></span></div>' +
+        '<strong id="giling-pemilik"></strong><small id="giling-silos"></small><small id="giling-jenis"></small>' +
+        '<div class="giling-basis"><span id="giling-label-bobot">Bobot gabah acuan</span><strong id="giling-bobot">Belum diketahui</strong></div></div>');
+      var grupGiling = borangHasil.querySelector(".grup");
+      [hasilGiling.proses, hasilGiling.total].forEach(function (nama) {
+        var input = grupGiling.querySelector('[data-name="' + nama + '"]');
+        if (!input) return;
+        var label = input.type === "hidden" ? null : grupGiling.querySelector('label[for="' + input.id + '"]');
+        var terkunci = input.type === "hidden" ? input.previousElementSibling : null;
+        var wadah = document.createElement("div"); wadah.className = "hasil-field";
+        grupGiling.insertBefore(wadah, label || terkunci || input);
+        if (!label) { label = document.createElement("span"); label.className = "lbl"; label.textContent = input.dataset.label; }
+        wadah.appendChild(label);
+        if (terkunci) { wadah.appendChild(terkunci); terkunci.setAttribute("role", "textbox"); terkunci.setAttribute("aria-label", input.dataset.label); terkunci.setAttribute("aria-readonly", "true"); }
+        wadah.appendChild(input);
+        if (nama === hasilGiling.proses) {
+          if (terkunci) wadah.insertAdjacentHTML("beforeend", '<small class="hasil-help">Terisi dari proses yang dibuka.</small>');
+          wadah.insertAdjacentHTML("afterend", '<div class="hasil-before" role="status" aria-live="polite"><span>PK terakhir tercatat</span><strong id="giling-sebelum">Belum tersedia</strong></div>');
+        } else {
+          var unit = document.createElement("div"); unit.className = "hasil-unit"; wadah.appendChild(unit); unit.appendChild(input);
+          unit.insertAdjacentHTML("beforeend", '<span aria-hidden="true">kg</span>');
+          wadah.insertAdjacentHTML("beforeend", '<p class="hasil-help" id="giling-hint">Isi <strong>total PK sejak awal proses</strong>, bukan hanya tambahannya.</p>');
+          input.setAttribute("aria-describedby", "giling-hint");
+        }
+      });
+      borangHasil.querySelector(".hasil-actions").insertAdjacentHTML("beforebegin",
+        '<div class="hasil-preview" role="status" aria-live="polite" aria-atomic="true"><div><span>Total PK dari isian</span><strong id="giling-total">Belum diisi</strong></div>' +
+        '<div><span>Perubahan dari catatan terakhir</span><strong id="giling-perubahan">Belum tersedia</strong></div>' +
+        '<div><span id="giling-label-rendemen">Perkiraan rendemen</span><strong id="giling-rendemen">Belum dapat dihitung</strong></div><small id="giling-catatan"></small></div>');
+      borangHasil.addEventListener("input", perbaruiRingkasanGiling);
+      borangHasil.addEventListener("change", function (e) { if (e.target.dataset.name === hasilGiling.proses) perbaruiRingkasanGiling(); });
+      perbaruiRingkasanGiling();
     }
 
     // Angka turunan tetap dijawab server yang memiliki sumber bobotnya.
@@ -1241,12 +1353,14 @@
             perbaruiMaksimalKemas();
             perbaruiPratinjau();
             perbaruiRingkasanHasil();
+            perbaruiRingkasanGiling();
             return;
           }
           // Detail tetap menunjuk proses asal meskipun proses itu baru saja
           // selesai. Konteks baca menampilkan keadaannya; POST tetap memagari.
-          if (hasilKumulatif && f.name === hasilKumulatif.proses) {
+          if (formHasil && f.name === formHasil.proses) {
             perbaruiRingkasanHasil();
+            perbaruiRingkasanGiling();
             return;
           }
           if ((f.name === "sumber_stok" && sumberBaris) ||
@@ -1345,6 +1459,7 @@
         perbaruiPratinjau();
         perbaruiKonteksMuat();
         perbaruiRingkasanHasil(true);
+        perbaruiRingkasanGiling();
         ambilAcuanJeda();
         aturWaktuJeda();
       }).catch(function () {});
@@ -1532,7 +1647,7 @@
       if (tbl) { tbl.disabled = true; tbl.textContent = "Menyimpan…"; }
       try {
         var hasil = await kirim(a.post, isi);
-        if (hasilKumulatif && (!hasil || hasil.ok !== true)) throw new TypeError("Hasil simpan belum terkonfirmasi");
+        if (formHasil && (!hasil || hasil.ok !== true)) throw new TypeError("Hasil simpan belum terkonfirmasi");
         // Tombolnya sendiri yang menjawab: memuat → tercentang, di tempat.
         if (tbl) { tbl.textContent = "✓ Tersimpan"; }
         await new Promise(function (r) { setTimeout(r, 260); });
@@ -1560,10 +1675,19 @@
            digambar server, jadi `muat()` — yang cuma memuat ulang daftar
            aksi — tak menyentuhnya sama sekali. Kabarnya ditampilkan sesudah
            isinya ditukar, karena ia ikut tersapu bersama isi lama. */
+        function kabarHasil() {
+          var peringatan = hasilGiling && hasil.peringatan;
+          var utama = peringatan ? pesan.replace("\n" + peringatan, "") : pesan;
+          kabar(utama, "ok", !!formHasil);
+          if (peringatan) {
+            $("kabar").insertAdjacentHTML("beforeend", '<div class="kabar__peringatan"><strong>Perlu diperiksa</strong><span>' + esc(peringatan) + '</span></div>');
+            clearTimeout($("kabar")._t);
+          }
+        }
         if (window.PINDAH && PINDAH.segarkan) {
-          PINDAH.segarkan(function () { kabar(pesan, "ok", !!hasilKumulatif); });
+          PINDAH.segarkan(kabarHasil);
         } else {
-          kabar(pesan, "ok", !!hasilKumulatif);
+          kabarHasil();
         }
       } catch (e) {
         lembar._menyimpan = false;
@@ -1598,7 +1722,7 @@
     }
 
     $("simpan").onclick = async function () {
-      if (hasilKumulatif && lembar._menyimpan) return;
+      if (formHasil && lembar._menyimpan) return;
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
       bersihkanSalah(lembar);
@@ -1615,7 +1739,7 @@
           pesan = "Masukkan angka yang benar.";
         }
         if (nilai && el.dataset.pJenis === "angka" && Number(nilai.replace(",", ".")) <= 0) pesan = "Jumlah harus lebih dari nol.";
-        if (hasilKumulatif && el.dataset.name === hasilKumulatif.total && nilai &&
+        if (formHasil && el.dataset.name === formHasil.total && nilai &&
             Number.isFinite(Number(nilai.replace(",", "."))) && Number(nilai.replace(",", ".")) <= 0) pesan = "Total hasil harus lebih dari nol.";
         if (pesan) { kurang.push({el: el, pesan: pesan}); }
       });

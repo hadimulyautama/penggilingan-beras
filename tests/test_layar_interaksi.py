@@ -52,7 +52,9 @@ def test_yang_sudah_dikerjakan_hilang_seketika():
     assert "PINDAH.segarkan(" in simpan
     # Kabarnya ditampilkan SESUDAH isinya ditukar — ia ikut tersapu bersama
     # isi lama kalau ditampilkan lebih dulu.
-    assert 'PINDAH.segarkan(function () { kabar(pesan, "ok", !!hasilKumulatif); });' in simpan
+    # Dua form hasil berbagi lifecycle; semantik kumulatif tetap di layanan masing-masing.
+    assert 'PINDAH.segarkan(kabarHasil);' in simpan
+    assert 'kabar(utama, "ok", !!formHasil)' in simpan
 
 
 def test_pintu_laci_layar_yang_sedang_dibuka_bukan_jalan_buntu():
