@@ -848,7 +848,7 @@
       if (!kadarAir) return;
       ["rata", "sebar", "mesin", "selisih"].forEach(function (nama) {
         $("air-" + nama).textContent = isi.salah ? "Isian belum valid" : memuat ? "Memuat…" :
-          dataAir ? dataAir[nama + "_teks"] : (nama === "sebar" ? "Perlu minimal dua titik" : nama === "mesin" ? "Belum diisi" : "Belum dapat dihitung");
+          dataAir ? dataAir[nama + "_teks"] : (nama === "sebar" && isi.tes.length < 2 ? "Perlu minimal dua titik" : nama === "mesin" ? (isi.mesin === null ? "Belum diisi" : "Belum tersedia") : "Belum dapat dihitung");
       });
       $("air-jumlah").textContent = isi.salah ? "Periksa bacaan yang diisi" : isi.tes.length + " titik terukur";
       $("air-peringatan").textContent = !isi.salah && !memuat && dataAir ? (dataAir.peringatan || []).join("\n") : "";
@@ -893,7 +893,7 @@
           $("air-pemilik").textContent = "Konteks pengeringan belum tersedia";
           ["air-milik","air-status"].forEach(function (id) { $(id).textContent = ""; });
           $("air-sumber").textContent = "Isian tetap utuh. Penyimpanan memeriksa data server.";
-          $("air-target").textContent = "Belum tercatat";
+          $("air-target").textContent = "Belum tersedia";
           gambarAir(isi, false);
         });
       },150);
