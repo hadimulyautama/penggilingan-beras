@@ -112,7 +112,8 @@ async def pengeluaran(db, oid, *, scope=None):
     orders=(await db.scalars(select(Jasa).where(Jasa.id.in_({it.jasa_id for it in items if it.jasa_id})))).all()
     codes={j.id:j.kode for j in orders}
     ticket=(await db.execute(text('SELECT kode,pelanggan_id,nama_sopir,netto_timbangan_kg,total_tara_kg,berat_barang_kg FROM timbangan_transaksi WHERE id=:id AND arah=\'KELUAR\''),{'id':rec.timbangan_transaksi_id})).mappings().first() if rec.timbangan_transaksi_id else None
-    if scope and ticket and ticket['pelanggan_id'] is not None and ticket['pelanggan_id']!=scope.reader.pelanggan_id:
+    # Identitas pada tiket harus cocok dengan sesi; ini bukan klasifikasi jasa.
+    if scope and ticket and ticket['pelanggan_id'] not in (None,scope.reader.pelanggan_id):
         raise HTTPException(404,'Pengeluaran tidak ditemukan.')
     ready=rec.status=='selesai' and bool(items) and any(float(it.berat_kg or 0)>0 for it in items)
     baris=[]

@@ -214,4 +214,21 @@ async def test_nomor_dokumen_dan_pesanan_asal_tetap_saat_digabung(pg,handover):
         text,_=pdf_text(await c.get(f'/pelanggan/barang-masuk/{h.tids[0]}/serah-terima.pdf'))
         assert 'STP-T-ST-0' in text
         assert 'JAS-ST-GABUNG' in text and h.portal.orders[0].kode in text
-        assert 'Pesanan pada tiket' in text and 'Pesanan barang saat ini' in text
+        # Label dapat membungkus baris di kolom PDF yang sempit.
+        normalized=' '.join(text.split())
+        assert 'Pesanan pada tiket' in normalized and 'Pesanan barang saat ini' in normalized
+
+
+async def test_identitas_pelanggan_pada_tiket_keluar_tetap_diperiksa(pg,handover):
+    h=handover
+    async with pg() as db:
+        rec=await db.get(OutgoingRecord,h.outs[0]);tid=rec.timbangan_transaksi_id
+        await db.execute(sql_text('UPDATE timbangan_transaksi SET pelanggan_id=:pid WHERE id=:tid'),{'pid':h.portal.owners[1].id,'tid':tid});await db.commit()
+    async with client(h.portal.accounts[0]) as c:
+        assert (await c.get(f'/pelanggan/barang-keluar/{h.outs[0]}/serah-terima')).status_code==404
+        assert (await c.get(f'/pelanggan/barang-keluar/{h.outs[0]}/serah-terima.pdf')).status_code==404
+    # Tiket lama tanpa ID kontak tetap diikat oleh seluruh item milik akun.
+    async with pg() as db:
+        await db.execute(sql_text('UPDATE timbangan_transaksi SET pelanggan_id=NULL WHERE id=:tid'),{'tid':tid});await db.commit()
+    async with client(h.portal.accounts[0]) as c:
+        assert (await c.get(f'/pelanggan/barang-keluar/{h.outs[0]}/serah-terima')).status_code==200
