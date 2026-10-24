@@ -118,7 +118,7 @@ async def test_rekap_staff_portal_pdf_sama_dan_pelanggan_lain_ditolak(pg, portal
         halaman = await c.get(f'/pelanggan/jasa/{jid}/nota')
         assert halaman.status_code == 200
         soup = BeautifulSoup(halaman.text, 'html.parser')
-        assert soup.title.get_text(strip=True) == 'Rekap Barang Jasa · PadiFlow'
+        assert soup.title.get_text(strip=True) == 'Rekap Barang Jasa · PadiFlow Pelanggan'
         teks = soup.select_one('.rekap-jasa').get_text(' ',strip=True)
         assert soup.find('a', string='Baca PDF')['href'] == f'/pelanggan/jasa/{jid}/nota.pdf'
         pdf = await c.get(f'/pelanggan/jasa/{jid}/nota.pdf')
