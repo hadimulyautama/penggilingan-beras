@@ -242,3 +242,15 @@ async def test_isi_berubah_tetap_cocok_tidak_ditolak(pg,siap):
   await isi(pg,siap)
   r=await post(c,'pindah-silo',{'kode_lot':siap['kode'],'silo':'A'});assert r.status_code==200,r.text
   assert (await ringkas(c,siap,'A'))['tujuan']['isi']=='11.000 kg'
+
+
+async def test_tautan_lama_lot_yang_silonya_sudah_dikosongkan_tetap_bukan_siap_pindah(pg,siap):
+ from app.models import SiloStorage
+ async with await _klien(pg,peran='admin') as c:
+  assert (await post(c,'pindah-silo',{'kode_lot':siap['kode'],'silo':'A'})).status_code==200
+  async with pg() as db:
+   row=await db.scalar(select(SiloStorage).where(SiloStorage.drying_lot_id==siap['id']));row.status='kosong';await db.commit()
+  before=await fakta(pg)
+  d=await ringkas(c,siap,'A');assert not d['siap'] and d['status']=='Sudah dipindah dari dryer' and d['tujuan']['sesudah']=='Pemindahan tidak tersedia'
+  assert siap['kode'] not in {x['value'] for x in (await c.get('/api/actions/drying-done')).json()}
+  assert await fakta(pg)==before
