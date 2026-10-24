@@ -572,12 +572,14 @@
     var hasilGiling = a.ringkasan_giling, formHasil = hasilKumulatif || hasilGiling;
     var kadarAir = a.ringkasan_kadar, targetAir = a.konteks_target, formAir = kadarAir || targetAir;
     var selesaiKering = a.konteks_selesai_pengeringan;
-    var formKhusus = formHasil || formAir || selesaiKering;
-    var labelSimpan = selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
+    var pindahSilo = a.konteks_pindah_silo;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo;
+    var labelSimpan = pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
     lembar.classList.toggle("lembar--kadar", !!formAir);
     lembar.classList.toggle("lembar--selesai-kering", !!selesaiKering);
+    lembar.classList.toggle("lembar--pindah-silo", !!pindahSilo);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
@@ -1055,11 +1057,86 @@
       borangHasil.querySelector(".hasil-actions").insertAdjacentHTML("beforebegin",
         '<section class="sk-last" aria-label="Referensi pengukuran terakhir"><div><span>Mesin terakhir <strong id="sk-mesin">Belum tersedia</strong></span><small id="sk-mesin-waktu"></small></div>' +
         '<div><span>Alat tes terakhir <strong id="sk-tes">Belum tersedia</strong></span><small id="sk-tes-waktu"></small></div><small>Referensi saja. Isi bacaan akhir yang terlihat sekarang; angka di atas tidak diisikan otomatis.</small></section>' +
-        '<section class="sk-effect"><h3>Setelah disimpan</h3><strong>Pengeringan → Pendinginan</strong><p>Pengeringan selesai dan pendinginan otomatis dimulai. Gabah tetap di dryer.</p><p>Nyatakan sudah dingin melalui tindakan terpisah sebelum pindah ke silo.</p><small>Bacaan akhir dicatat sebagai bacaan mesin, terpisah dari hasil alat tes.</small></section>' +
+        '<section class="sk-effect"><h3>Setelah disimpan</h3><strong>Pengeringan → Pendinginan</strong><p>Bacaan mesin akhir: <strong id="sk-bacaan-akhir">Belum diisi</strong></p><p>Pengeringan selesai dan pendinginan otomatis dimulai. Gabah tetap di dryer.</p><p>Nyatakan sudah dingin melalui tindakan terpisah sebelum pindah ke silo.</p><small>Bacaan akhir dicatat sebagai bacaan mesin, terpisah dari hasil alat tes.</small></section>' +
         '<div class="sk-check"><p class="hasil-help" id="sk-info" role="status"></p><button class="btn" id="sk-periksa" type="button" hidden>Periksa status terbaru</button><a class="btn" id="sk-detail" hidden>Buka detail terbaru</a></div>');
+      function tampilBacaanAkhir() {
+        // Cermin ketikan saja: angka resmi dan validasi tetap milik jalur simpan.
+        var teks = $("f_kadar_air").value.trim();
+        $("sk-bacaan-akhir").textContent = teks ? teks + "%" : "Belum diisi";
+      }
+      $("f_kadar_air").addEventListener("input", tampilBacaanAkhir);
+      $("f_kadar_air").addEventListener("change", tampilBacaanAkhir);
+      tampilBacaanAkhir();
       $("sk-periksa").onclick = perbaruiSelesai;
       borangHasil.addEventListener("change",function(e) { if (e.target.dataset.name === selesaiKering.proses) perbaruiSelesai(); });
       perbaruiSelesai();
+    }
+
+    var dataPindah = null, urutanPindah = 0, periksaPindah = false;
+    async function perbaruiPindah() {
+      if (!pindahSilo || !borangHasil.isConnected) return null;
+      var kode = nilaiMedan("kode_lot"), silo = nilaiMedan("silo"), nomor = ++urutanPindah;
+      dataPindah = null;
+      ["ps-milik","ps-pemilik","ps-sumber","ps-status","ps-dingin","ps-bobot","ps-dari","ps-ke","ps-isi","ps-owner","ps-kegiatan","ps-kapasitas","ps-sesudah"].forEach(function(id) { $(id).textContent = "Belum tersedia"; });
+      $("ps-pemilik").textContent = kode ? "Memuat konteks pemindahan…" : "Pilih pengeringan";
+      $("ps-lot").textContent = kode || "Belum dipilih";
+      $("ps-tujuan").hidden = !silo;$("ps-peringatan").replaceChildren();$("ps-detail").hidden = true;
+      if (!kode) return null;
+      try {
+        var d = await ambil(pindahSilo.source + "?kode_lot=" + encodeURIComponent(kode) + "&silo=" + encodeURIComponent(silo));
+        if (!d || !lembar.open || !borangHasil.isConnected || nomor !== urutanPindah || kode !== nilaiMedan("kode_lot") || silo !== nilaiMedan("silo")) return null;
+        dataPindah = d;
+        $("ps-pemilik").textContent = d.pemilik;$("ps-milik").textContent = d.kepemilikan;
+        $("ps-sumber").textContent = d.dryer + " · " + d.jumlah_batch + " batch sumber" + (d.pesanan ? " · " + d.pesanan : "");
+        $("ps-status").textContent = d.status;$("ps-dingin").textContent = "Dinyatakan dingin: " + d.dingin;
+        $("ps-bobot").textContent = d.bobot;$("ps-dari").textContent = d.dryer;
+        $("ps-ke").textContent = d.tujuan ? d.tujuan.nama : "Pilih silo";
+        $("ps-detail").href = d.detail;$("ps-detail").hidden = !periksaPindah && d.siap;
+        $("simpan").disabled = !d.siap;periksaPindah = false;
+        $("ps-info").textContent = d.siap ? "" : "Lot tidak lagi siap dipindah. Buka detail terbaru untuk memeriksa lokasi dan pendinginan.";
+        if (d.tujuan) {
+          $("ps-isi").textContent = d.tujuan.isi;$("ps-owner").textContent = d.tujuan.pemilik;
+          $("ps-kegiatan").textContent = d.tujuan.kegiatan;$("ps-kapasitas").textContent = d.tujuan.kapasitas;
+          $("ps-sesudah").textContent = d.tujuan.sesudah;
+        }
+        (d.peringatan || []).forEach(function(teks) { var p = document.createElement("p");p.className = "ps-warning";p.textContent = teks;$("ps-peringatan").appendChild(p); });
+        return d;
+      } catch (e) {
+        if (nomor !== urutanPindah || !borangHasil.isConnected) return null;
+        $("ps-pemilik").textContent = "Ringkasan pemindahan belum tersedia";
+        $("ps-periksa").hidden = false;
+        $("ps-info").textContent = "Pilihan tetap utuh. Pemeriksaan akhir dilakukan server saat menyimpan.";
+        // Gangguan pratinjau awal bukan syarat bisnis baru. Setelah hasil
+        // simpan tidak pasti, periksa keadaan dahulu tanpa mengulang POST.
+        $("simpan").disabled = periksaPindah;
+        return null;
+      }
+    }
+    if (pindahSilo) {
+      borangHasil.querySelector(".lembar__kepala").insertAdjacentHTML("afterend",
+        '<section class="hasil-context ps-context"><div><span id="ps-milik"></span><span class="lencana" id="ps-status"></span></div><strong id="ps-pemilik">Pilih pengeringan</strong><small id="ps-sumber"></small><small id="ps-dingin"></small></section>');
+      var grupPindah = borangHasil.querySelector(".grup");
+      ["kode_lot","silo"].forEach(function(nama) {
+        var input = grupPindah.querySelector('[data-name="' + nama + '"]');
+        var label = input.type === "hidden" ? null : grupPindah.querySelector('label[for="' + input.id + '"]');
+        var kunci = input.type === "hidden" ? input.previousElementSibling : null;
+        var wadah = document.createElement("div");wadah.className = "hasil-field";
+        grupPindah.insertBefore(wadah,label || kunci || input);
+        if (!label) { label = document.createElement("span");label.className = "lbl";label.textContent = input.dataset.label; }
+        wadah.appendChild(label);
+        if (kunci) { wadah.appendChild(kunci);kunci.setAttribute("role","textbox");kunci.setAttribute("aria-label",input.dataset.label);kunci.setAttribute("aria-readonly","true"); }
+        wadah.appendChild(input);
+      });
+      grupPindah.insertAdjacentHTML("beforeend",'<p class="hasil-help">Pindahkan seluruh lot ke satu silo tujuan. Pilihan silo mengikuti master alat Gudang 1.</p>');
+      var tataPindah = document.createElement("div");tataPindah.className = "ps-layout";
+      grupPindah.before(tataPindah);tataPindah.appendChild(grupPindah);
+      tataPindah.insertAdjacentHTML("beforeend",'<div class="ps-preview"><div class="ps-route"><div><small>Dari</small><strong id="ps-dari">Belum tersedia</strong></div><span aria-hidden="true">→</span><div><small>Ke</small><strong id="ps-ke">Pilih silo</strong></div></div>' +
+        '<section class="ps-card" id="ps-tujuan" hidden><h3>Silo tujuan saat ini</h3><dl><div><dt>Isi tercatat</dt><dd id="ps-isi"></dd></div><div><dt>Pemilik isi</dt><dd id="ps-owner"></dd></div><div><dt>Kegiatan</dt><dd id="ps-kegiatan"></dd></div><div><dt>Kapasitas informasi</dt><dd id="ps-kapasitas"></dd></div></dl><small>Kapasitas adalah keterangan, bukan batas penolakan.</small></section>' +
+        '<section class="ps-card ps-summary"><h3>Ringkasan pemindahan</h3><dl><div><dt>Lot</dt><dd id="ps-lot">Belum dipilih</dd></div><div><dt>Bobot acuan lot</dt><dd id="ps-bobot">Belum tersedia</dd></div><div class="ps-total"><dt>Isi tercatat sesudah pindah</dt><dd id="ps-sesudah">Pilih silo</dd></div></dl><small>Bobot mengikuti batch sumber beserta kepastiannya. Pemindahan ini tidak menimbang ulang atau menghitung susut pengeringan.</small></section><div id="ps-peringatan" aria-live="polite"></div><p class="hasil-help">Setelah disimpan, gabah tercatat di silo dan dryer kosong. Mulai giling tetap tindakan terpisah; proses giling yang sudah berjalan tetap berjalan.</p></div>');
+      borangHasil.querySelector(".hasil-actions").insertAdjacentHTML("beforebegin",'<div class="ps-check"><p id="ps-info" class="hasil-help" role="status"></p><button class="btn" id="ps-periksa" type="button" hidden>Periksa posisi lot & isi terbaru</button><a class="btn" id="ps-detail" hidden>Buka detail lot</a></div>');
+      $("ps-periksa").onclick = perbaruiPindah;
+      borangHasil.addEventListener("change",function(e) { if (["kode_lot","silo"].indexOf(e.target.dataset.name) >= 0) { bersihkanSalah(lembar);periksaPindah = false;$("simpan").disabled = false;perbaruiPindah(); } });
+      perbaruiPindah();
     }
 
     // Angka turunan tetap dijawab server yang memiliki sumber bobotnya.
@@ -1920,7 +1997,7 @@
         // Tutup modal menghabiskan satu entri history secara asinkron.
         // Tunggu Back milik modal dahulu sebelum mengganti alamat fase;
         // tanpa ini, Back dapat menimpa URL pendinginan yang baru dipasang.
-        var balikSelesai = selesaiKering && lembar._riwayat ? new Promise(function (resolve) {
+        var balikSelesai = (selesaiKering || pindahSilo) && lembar._riwayat ? new Promise(function (resolve) {
           var selesaiBalik = function () { clearTimeout(batasBalik);window.removeEventListener("popstate",selesaiBalik);resolve(); };
           var batasBalik = setTimeout(selesaiBalik,1000);
           window.addEventListener("popstate",selesaiBalik,{once:true});
@@ -1990,6 +2067,12 @@
             pesanGagal = "Penyelesaian belum terkonfirmasi; catatan pengukuran mungkin sudah tersimpan. Buka detail terbaru untuk memeriksanya. Isian tetap utuh dan tidak dikirim ulang otomatis.";
           }
         }
+        if (pindahSilo) {
+          $("ps-periksa").hidden = false;
+          periksaPindah = e instanceof TypeError;
+          var terbaruPindah = await perbaruiPindah();
+          if (terbaruPindah && !terbaruPindah.siap) pesanGagal = "Status atau lokasi lot sudah berubah. Periksa detail terbaru; formulir tidak mengirim ulang. Pilihan tetap utuh.";
+        }
         salahFormulir(lembar, pesanGagal);
       }
     }
@@ -2017,6 +2100,7 @@
     $("simpan").onclick = async function () {
       if (formKhusus && lembar._menyimpan) return;
       if (selesaiKering && (periksaSelesai || risikoSelesai || (dataSelesai && dataSelesai.dapat_diselesaikan === false))) return;
+      if (pindahSilo && (periksaPindah || (dataPindah && !dataPindah.siap))) return;
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
       bersihkanSalah(lembar);
