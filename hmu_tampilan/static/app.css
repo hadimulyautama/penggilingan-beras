@@ -3691,3 +3691,26 @@ body.padiflow-ui .lembar--selesai-kering .lembar__isi{max-width:700px}
 .sk-effect h3{font-size:.95rem;margin:0;font-weight:600}.sk-effect>strong{color:var(--aman)}.sk-effect p{margin:0;line-height:1.6}.sk-effect small{font-size:.75rem;color:var(--redup);line-height:1.5}
 .sk-check:has(#sk-info:empty){display:none}.sk-check{margin-bottom:14px}.sk-check .btn{margin:6px 0 0}.sk-check [hidden]{display:none!important}
 @media(max-width:570px){.lembar--selesai-kering .sk-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.lembar--selesai-kering .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.7fr)}.lembar--selesai-kering .hasil-actions .btn{white-space:normal;line-height:1.4}}
+
+/* Pemindahan dryer → silo: dua pilihan lama, rincian baca di sampingnya. */
+body.padiflow-ui .lembar--pindah-silo .lembar__isi{max-width:940px}
+.lembar--pindah-silo .ps-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:24px;align-items:start}
+.lembar--pindah-silo .ps-preview{display:grid;gap:12px;min-width:0;overflow-wrap:anywhere}
+.lembar--pindah-silo .ps-route{display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--panel-2);border-radius:10px}
+.lembar--pindah-silo .ps-route>div{display:grid;gap:4px;flex:1;min-width:0}
+.lembar--pindah-silo .ps-route small,.lembar--pindah-silo .ps-card small{font-size:.75rem;color:var(--redup);line-height:1.5}
+.lembar--pindah-silo .ps-route strong{font-size:.9rem;color:var(--aman)}
+.lembar--pindah-silo .ps-card{padding:14px;border:1px solid var(--garis);border-radius:10px;background:var(--panel)}
+.lembar--pindah-silo .ps-card h3{margin:0 0 10px;font-size:.95rem;font-weight:600}
+.lembar--pindah-silo .ps-card dl{margin:0 0 10px;font-size:.8rem}
+.lembar--pindah-silo .ps-card dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--garis)}
+.lembar--pindah-silo .ps-card dt{color:var(--redup)}
+.lembar--pindah-silo .ps-card dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.lembar--pindah-silo .ps-total dd{color:var(--aman)}
+.lembar--pindah-silo .ps-warning{padding:12px;border-radius:8px;background:var(--panel-2);border-left:3px solid var(--hati);font-size:.8rem;line-height:1.6;margin:0 0 8px}
+.lembar--pindah-silo .ps-check{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px}
+.lembar--pindah-silo .ps-check p{flex-basis:100%;margin:0}
+.lembar--pindah-silo .ps-check .btn{font-size:.75rem;white-space:normal}
+@media(max-width:640px){.lembar--pindah-silo .ps-layout{grid-template-columns:minmax(0,1fr);gap:18px}.lembar--pindah-silo .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}.lembar--pindah-silo .hasil-actions button{white-space:normal;min-width:0}}
+
+.lembar--pindah-silo .ps-summary{background:var(--panel-2)}

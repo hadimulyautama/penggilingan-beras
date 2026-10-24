@@ -667,7 +667,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/cooling-active",
                   "kosong": "Tidak ada pengeringan yang sedang didinginkan."},
              ]},
-            {"id": "pindah_silo", "label": "🏗️ Pindah dari mesin pengering ke silo",
+            {"id": "pindah_silo", "label": "🏗️ Pindah ke silo",
+             "konteks_pindah_silo": {"source": "/api/actions/ringkasan-pindah-silo"},
              "post": "/api/actions/pindah-silo",
              "hint": "Hanya pengeringan yang sudah dinyatakan selesai pendinginan.", "fields": [
                  {"name": "kode_lot", "label": "Pengeringan yang sudah selesai didinginkan", "type": "remote",
@@ -1676,16 +1677,17 @@ async def silo_g1(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """
     _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.silo import (
-        _silo_content_kg, isi_silo, silos_g1)
+        _silo_content_bobot, _silo_active_rows, isi_silo, silos_g1)
     out = []
     async with SessionLocal() as db:
         for si in await silos_g1(db):
-            kg = await _silo_content_kg(db, si.id)
-            isi = f"berisi {_rp(kg)} kg" if kg else "kosong"
+            bobot = await _silo_content_bobot(db, si.id)
+            berisi = bool(await _silo_active_rows(db, si.id))
+            isi = f"berisi {bobot.teks()}" if berisi else "kosong"
             # Pemilik isinya ikut disebut. Operator yang memilih silo perlu tahu
             # SEBELUM memilih bahwa isinya barang orang — bukan diberi tahu lewat
             # penolakan sesudahnya, dengan gabah sudah di tangan.
-            if kg:
+            if berisi:
                 rinci = await isi_silo(db, si.id)
                 pemilik = {x.pemilik for x in rinci if x.pemilik}
                 if len(pemilik) == 1:
@@ -3043,6 +3045,20 @@ async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna
     pesan = (f"✓ Pendinginan *{req.kode_lot}* selesai ({jam:.0f} jam) — dryer idle. "
              "Pindahkan ke silo saat ada silo kosong.")
     return {"ok": True, "pesan": pesan}
+
+
+@router.get("/actions/ringkasan-pindah-silo")
+async def ringkasan_pindah_silo(kode_lot: str, silo: str = "", user: User = Depends(pengguna_aksi)):
+    from fastapi.responses import JSONResponse
+    _require(await _is_g1_operator(user))
+    from app.web.form_pindah_silo import ringkasan
+    from app.penggilingan.gudang1.services.silo import SiloError
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_lot=kode_lot, silo=silo)
+        except SiloError as e:
+            raise _err(e, "Ringkasan pemindahan belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
 class PindahSiloReq(BaseModel):
