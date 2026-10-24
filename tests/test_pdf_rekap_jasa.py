@@ -49,6 +49,7 @@ def test_rekap_panjang_mengulang_kop_dan_header_tanpa_baris_hilang():
     reader=PdfReader(BytesIO(buat_pdf(data)))
     periksa_kop(reader)
     assert len(reader.pages)>2
+    assert 'REF-MASUK-001' in reader.pages[0].extract_text()
     text=' '.join('\n'.join(page.extract_text() for page in reader.pages).split())
     for n in range(1,151):
         assert f'REF-MASUK-{n:03d}' in text

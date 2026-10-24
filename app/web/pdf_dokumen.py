@@ -25,6 +25,8 @@ class PenyajiDokumen:
         self.section = ParagraphStyle('DokumenSection', parent=self.bold, fontSize=10,
                                        leading=14, spaceBefore=12, spaceAfter=7,
                                        keepWithNext=True)
+        self.table_section = ParagraphStyle('DokumenTableSection', parent=self.section,
+                                            keepWithNext=False)
 
     def p(self, value, style=None):
         from reportlab.platypus import Paragraph
@@ -64,6 +66,15 @@ class PenyajiDokumen:
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ]))
         return table
+
+    def bagian_tabel(self, heading, table, first_row_height):
+        """Sisakan judul + header + satu baris; tabel panjang boleh membelah halaman."""
+        from reportlab.lib.units import mm
+        from reportlab.platypus import CondPageBreak
+        label = self.p(heading, self.table_section)
+        label_height = label.wrap(174 * mm, 100000)[1]
+        minimum = label_height + label.getSpaceBefore() + label.getSpaceAfter() + first_row_height
+        return [CondPageBreak(minimum), label, table]
 
     def pdf(self, story, *, judul, referensi):
         from reportlab.lib.pagesizes import A4
