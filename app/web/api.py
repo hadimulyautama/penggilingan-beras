@@ -630,6 +630,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  "ya": "Ya, ubah targetnya",
              }},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
+             "konteks_selesai_pengeringan": {"source": "/api/actions/ringkasan-selesai-pengeringan", "proses": "kode_lot"},
              "post": "/api/actions/selesai-pengeringan",
              "hint": "Isikan kadar air yang TERTERA DI MESIN saat dimatikan — "
                      "angka itu tak bisa dicari lagi setelah gabahnya pindah. "
@@ -2159,6 +2160,22 @@ async def ringkasan_kadar_air(kode_lot: str, tes: list[float] = Query(default=[]
             data = await ringkasan(db, kode_lot=kode_lot, tes=tes, indikator=indikator)
         except DryingError as e:
             raise _err(e, "Ringkasan pengukuran belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/actions/ringkasan-selesai-pengeringan")
+async def ringkasan_selesai_pengeringan(kode_lot: str,
+                                      user: User = Depends(pengguna_aksi)):
+    """Konteks dan status terbaru, tanpa menulis atau mengganti validasi aksi."""
+    _require(await _is_g1_operator(user))
+    from fastapi.responses import JSONResponse
+    from app.web.form_selesai_pengeringan import ringkasan
+    from app.penggilingan.gudang1.services.drying import DryingError
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_lot=kode_lot)
+        except DryingError as e:
+            raise _err(e, "Konteks penyelesaian belum tersedia.")
     return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
