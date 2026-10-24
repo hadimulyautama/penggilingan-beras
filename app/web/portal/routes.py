@@ -59,9 +59,19 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
         layar_stok as stock,layar_riwayat as history,layar_sosoh as sosoh,
         layar_berjalan as active,layar_keluar as outgoing,layar_retur as returns,
         layar_retur_asal as applications)
-    if path=='/ringkasan' and not scope.jasa_ids and not scope.resources['timbangan_transaksi']:
+    if path=='/serah-terima' or '/serah-terima' in path:
+        from app.web import serah_terima
+        if path=='/serah-terima':
+            return await serah_terima.daftar(req,account)
+        match=re.fullmatch(r'/(barang-masuk|barang-keluar)/(\d+)/serah-terima(?:\.pdf)?',path)
+        if not match:missing()
+        ident=int(match[2])
+        if match[1]=='barang-masuk':await own_ticket(scope,ident)
+        else:await own_outgoing(scope,ident)
+        result=await serah_terima.detail(ident,req,account)
+    elif path=='/ringkasan' and not scope.jasa_ids and not scope.resources['timbangan_transaksi']:
         return shell(req,'<h1>Ringkasan</h1><section class="kartu"><h2>Belum ada barang atau pesanan</h2><p>Penerimaan dan pekerjaan milik Anda akan tampil setelah tercatat di produksi.</p></section>')
-    if path=='/ringkasan':
+    elif path=='/ringkasan':
         req=native_request(request,f'/jasa/pelanggan/{reader.pelanggan_id}',scope)
         result=await jasa.detail_pelanggan(reader.pelanggan_id,req,account)
     elif path=='/pekerjaan':result=await work.halaman_pekerjaan(req,account)
@@ -167,13 +177,15 @@ async def reports(request):
     async with SessionLocal() as db:
         from app.models import Jasa
         orders=(await db.scalars(select(Jasa).where(Jasa.id.in_(scope.jasa_ids)).order_by(Jasa.id.desc()))).all()
+        from app.services.serah_terima import daftar as daftar_serah
+        serah=await daftar_serah(db,scope=scope)
         rows=[]
         for kind in ('pengeringan','giling','sosoh'):
             model,col=MODELS[kind]
             for row in (await db.scalars(select(model).where(model.id.in_(scope.ids(model))).order_by(model.id.desc()))).all():
                 finished=(row.waktu_selesai_pendinginan is not None if kind=='pengeringan' else row.status=='selesai')
                 if finished:rows.append(dict(kind=kind,code=getattr(row,col),id=row.id))
-    return await render_laci(request,'portal/reports.html',reports=rows,orders=orders)
+    return await render_laci(request,'portal/reports.html',reports=rows,orders=orders,serah_terima=serah[:10])
 
 
 async def ownership(request):

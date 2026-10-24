@@ -53,7 +53,7 @@ async def test_lima_tab_skenario_campuran_saldo_dan_sumber_tidak_berubah(pg,pema
             assert all('cari=Catur' in a['href'] and 'halaman=2' in a['href'] for a in links)
             if tab=='ringkasan':
                 assert [n.get_text(strip=True) for n in s.select('.jasa-detail-angka strong')]==['2.000 kg','4.500 kg','3.200 kg']
-                assert 'Pesanan & nota' in r.text
+                assert 'Pesanan & rekap barang' in r.text
                 assert s.find(id='pesanan-'+str(data['jasa_ids'][0]))
                 assert not s.select('details.jasa-catatan ul')  # Item pengiriman dipindah ke tab khusus.
             elif tab=='proses':
@@ -142,7 +142,7 @@ async def test_lima_tab_data_kosong_lama_dan_bobot_belum_diketahui(pg,stok_lengk
             if keadaan=='lama-aktif' and tab=='stok':assert 'Belum diukur' in r.text
             if keadaan=='lama-aktif' and tab=='ringkasan':assert 'Sebagian bobot belum diukur' in r.text
             if keadaan=='historis' and tab=='ringkasan':
-                for kata in ('Selesai','Dibatalkan','Digabung','pesanan rujukan'):assert kata in r.text
+                for kata in ('Selesai','Dibatalkan','Digabung','rekap pesanan gabungan'):assert kata in r.text
             bukti(keadaan+'-'+tab+'.html',r.text)
         assert await cuplik(pg)==sebelum
         async with pg() as db:assert await svc.pelanggan(db,pid)==awal

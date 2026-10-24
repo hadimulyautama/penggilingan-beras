@@ -16,6 +16,7 @@
       {% if k.rec.nama_ekspedisi %}<div><dt>Ekspedisi</dt><dd>{{ k.rec.nama_ekspedisi }}</dd></div>{% endif %}
     </dl>
   </header>
+  {% if k.rec.status=='selesai' %}<p><a class="btn btn--kecil" href="/barang-keluar/{{ k.rec.id }}/serah-terima">Serah Terima Pengeluaran</a></p>{% endif %}
 
 {% macro retur_terkait_kartu() %}<section class="kirim-detail__bagian"><h2>Retur terkait</h2>
 {% if BOLEH_PERINTAH or PORTAL_READ_ONLY %}{% if k.rec.status == 'selesai' %}<a class="btn" href="/barang-keluar/{{ k.rec.id }}/retur">Retur barang</a>{% endif %}

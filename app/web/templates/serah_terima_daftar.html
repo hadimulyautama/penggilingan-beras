@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block judul %}Serah Terima{% endblock %}{% block isi %}
+<h1>Serah Terima</h1>{% set serah_title='Dokumen tersedia' %}{% include '_serah_terima_daftar.html' %}
+<nav class="saring" aria-label="Halaman dokumen">{% if halaman>1 %}<a class="btn btn--kecil" href="?halaman={{ halaman-1 }}">Sebelumnya</a>{% endif %}<span>Halaman {{ halaman }} / {{ halaman_akhir }}</span>{% if halaman<halaman_akhir %}<a class="btn btn--kecil" href="?halaman={{ halaman+1 }}">Berikutnya</a>{% endif %}</nav>
+<a class="btn btn--kecil" href="/laporan">Kembali ke Laporan</a>{% endblock %}
