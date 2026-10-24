@@ -63,7 +63,7 @@ async def test_gabah_basah_kering_digabung_lalu_pk_diambil(pg, dunia):
     result = '\n'.join(p.extract_text() for p in reader.pages)
     assert data['kode'] == 'JAS-2610-301'
     assert [j['kode'] for j in data['pesanan_asal']] == ['JAS-2610-302']
-    for value in ['Rekap Barang Jasa','JAS-2610-301','JAS-2610-302',
+    for value in ['REKAP BARANG JASA','JAS-2610-301','JAS-2610-302',
                   'Gabah basah','Gabah kering','Beras PK','2.500 kg','500 kg','2.000 kg']:
         assert value in result
     out = Path('output/rekap-barang-jasa');out.mkdir(parents=True, exist_ok=True)
@@ -129,7 +129,7 @@ async def test_rekap_staff_portal_pdf_sama_dan_pelanggan_lain_ditolak(pg, portal
                 text = td.get_text(' ',strip=True)
                 if text not in ('Belum ada barang masuk.','Belum ada hasil yang diambil.'):
                     assert text in flattened
-        assert 'Rekap Barang Jasa' in isi
+        assert 'REKAP BARANG JASA' in isi
         assert 'Rahasia Pelanggan B' not in isi
         unduh = await c.get(f'/pelanggan/jasa/{jid}/nota.pdf?unduh=1')
         assert unduh.headers['content-disposition'].startswith('attachment;')
