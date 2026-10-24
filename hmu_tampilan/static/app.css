@@ -3663,3 +3663,15 @@ body.padiflow-ui .kabar.kabar--hasil{width:min(520px,calc(100vw - 32px));max-wid
 
 .kabar--hasil .kabar__peringatan{display:grid;gap:4px;border-top:1px solid var(--garis);margin-top:10px;padding-top:10px;font-size:.85rem;overflow-wrap:anywhere;white-space:pre-line}
 .kabar--hasil .kabar__peringatan strong{color:var(--tinta)}
+
+/* Formulir kadar air: kelompok titik alat tes dan mesin memiliki makna berbeda. */
+body.padiflow-ui .lembar--kadar .lembar__isi{max-width:700px}
+.kadar-alat{margin:0 0 20px;min-width:0}.kadar-alat>.lbl{margin-bottom:4px}.kadar-alat>p{margin:0 0 12px}
+.kadar-titik-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.kadar-titik{min-width:0}.kadar-titik label{display:block;font-size:.8rem;color:var(--redup);margin:0 0 6px}
+.kadar-titik .hasil-unit input{font-size:22px!important;min-height:54px!important}
+.kadar-mesin{padding-top:16px;border-top:1px solid var(--garis)}
+.kadar-summary>div:first-child{border-bottom:1px solid var(--garis);padding-bottom:10px}.kadar-summary>div:first-child strong{font-size:1.3rem;color:var(--aman)}
+.kadar-summary #air-jumlah{display:block}.kadar-warning{white-space:pre-line;line-height:1.5;color:var(--tinta);background:var(--panel-2);border-left:3px solid var(--redup);padding:12px 14px;margin:0 0 16px;border-radius:8px;font-size:.85rem}
+.kadar-lain{border-top:1px solid var(--garis);margin-top:20px;padding-top:16px;display:grid;gap:6px}.kadar-lain small{font-size:.75rem;color:var(--redup)}
+@media(max-width:570px){.kadar-titik-grid{grid-template-columns:minmax(0,1fr)}}

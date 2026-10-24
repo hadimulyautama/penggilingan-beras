@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from typing import Annotated
 
 from pydantic import BaseModel, Field
@@ -559,7 +559,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                          "adalah setelan di mesin.",
                  "ya": "Sudah disetel — nyalakan",
              }},
-            {"id": "kadar_air", "label": "💧 Perbarui kadar air",
+            {"id": "kadar_air", "label": "💧 Catat kadar air pengeringan",
+             "ringkasan_kadar": {"source": "/api/actions/ringkasan-kadar-air", "proses": "kode_lot"},
              "post": "/api/actions/kadar-air",
              "hint": "Beberapa titik dengan alat tes — yang dipakai rata-ratanya. "
                      "Satu titik saja bisa kebetulan mengenai bagian paling basah. "
@@ -604,6 +605,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "bawa": "kode_lot"},
              ]},
             {"id": "ubah_target", "label": "🎯 Ubah target kadar air",
+             "konteks_target": {"source": "/api/actions/ringkasan-kadar-air", "proses": "kode_lot"},
              "post": "/api/actions/ubah-target",
              "hint": "Garis selesai pengeringan. Menggesernya mengubah kapan "
                      "mesin dimatikan — dan itu ikut menentukan gabah ini "
@@ -2142,6 +2144,23 @@ async def milling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/ringkasan-kadar-air")
+async def ringkasan_kadar_air(kode_lot: str, tes: list[float] = Query(default=[]),
+                            indikator: float | None = None,
+                            user: User = Depends(pengguna_aksi)):
+    """Bantuan baca formulir; tidak mencatat pengukuran atau mengubah target."""
+    _require(await _is_g1_operator(user))
+    from fastapi.responses import JSONResponse
+    from app.web.form_kadar_air import ringkasan
+    from app.penggilingan.gudang1.services.drying import DryingError
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_lot=kode_lot, tes=tes, indikator=indikator)
+        except DryingError as e:
+            raise _err(e, "Ringkasan pengukuran belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/actions/ringkasan-hasil-giling")
