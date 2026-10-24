@@ -1001,6 +1001,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
              "post": "/api/actions/hasil-penyosohan",
+             "ringkasan_hasil": {"source": "/api/actions/ringkasan-hasil-penyosohan",
+                                 "proses": "kode_proses", "jenis": "jenis",
+                                 "total": "berat_kumulatif"},
              "hint": "Isi total hasil jenis yang dipilih sejak awal proses, bukan tambahan. "
                      "Contoh: sudah 300 kg, bertambah 200 kg → isi 500 kg.",
              "fields": [
@@ -2378,6 +2381,22 @@ async def polishing_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/ringkasan-hasil-penyosohan")
+async def ringkasan_hasil_penyosohan(kode_proses: str, jenis: str = "",
+                                   user: User = Depends(pengguna_aksi)):
+    """Bantuan baca formulir; penyimpanan tetap memeriksa total di bawah lock."""
+    _require(await _is_g2_operator(user))
+    from fastapi.responses import JSONResponse
+    from app.web.form_hasil_sosoh import ringkasan
+    from app.penggilingan.gudang2.polishing import Gudang2Error
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_proses=kode_proses, jenis=jenis)
+        except Gudang2Error as e:
+            raise _err(e, "Ringkasan hasil belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/actions/pk-intake-pending")
