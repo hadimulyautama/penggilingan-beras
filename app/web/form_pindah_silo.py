@@ -18,9 +18,10 @@ async def ringkasan(db, *, kode_lot, silo=""):
     batches = await drying._lot_batches(db, lot.id)
     bobot = await si._lot_bobot(db, lot.id)
     simpan = (await db.scalars(select(SiloStorage).where(
-        SiloStorage.drying_lot_id == lot.id, SiloStorage.status == "terisi"))).first()
-    siap = lot.status == "selesai" and lot.waktu_selesai_pendinginan is not None and simpan is None
-    status = "Sudah di silo" if simpan else "Sudah dingin" if siap else "Belum selesai pendinginan"
+        SiloStorage.drying_lot_id == lot.id).order_by(SiloStorage.id.desc()))).first()
+    siap = (lot.status == "selesai" and lot.dryer_id is not None
+            and lot.waktu_selesai_pendinginan is not None and simpan is None)
+    status = ("Sudah di silo" if simpan.status == "terisi" else "Sudah dipindah dari dryer") if simpan else "Sudah dingin" if siap else "Belum selesai pendinginan"
     pesanan = await db.get(Jasa, lot.jasa_id) if lot.jasa_id else None
     data = dict(kode_lot=lot.kode_lot, dryer=mesin.nama if mesin else "Dryer belum tercatat",
         pemilik=await nama_pemilik(db, lot.jasa_id) if lot.jasa_id else "Pabrik",
