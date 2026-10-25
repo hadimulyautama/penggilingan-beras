@@ -435,11 +435,14 @@ async def tambah_silo_giling(
             .values(milling_process_id=proc.id)
         )).rowcount or 0
         if dikunci != len(ids_baris):
+            # rollback menghapus cache atribut ORM. Simpan ID yang sudah sah
+            # agar pesan konflik tidak memicu lazy-load sinkron di AsyncSession.
+            proses_id = proc.id
             await db.rollback()
             sibuk = []
             for sid, nm in id_silo:
                 j = await giling_berjalan_untuk_silo(db, sid)
-                if j is not None and j.id != proc.id:
+                if j is not None and j.id != proses_id:
                     sibuk.append(f"Silo {nm} ({j.kode_proses})")
             raise MillingError(
                 "Silo tidak ditambahkan — " + (

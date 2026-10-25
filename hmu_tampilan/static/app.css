@@ -3786,3 +3786,33 @@ body.padiflow-ui .lembar--bebaskan-giling .lembar__isi{max-width:850px}
 .lembar--bebaskan-giling .bs-status{display:inline-block;max-width:100%;padding:4px 8px;border-radius:6px;background:var(--panel-2);color:var(--redup);font-size:.75rem;line-height:1.5;overflow-wrap:anywhere}
 .lembar--bebaskan-giling .bs-status[hidden]{display:none}.lembar--bebaskan-giling .bs-status[data-status="berjalan"]{color:var(--aman)}.lembar--bebaskan-giling .bs-status[data-status="dijeda"]{color:var(--hati)}
 .lembar--bebaskan-giling .bs-review-head .bs-context-top{margin-bottom:12px}.lembar--bebaskan-giling .bs-summary .bs-summary-note{margin-top:10px}
+
+/* Mix G1: dua pilihan transaksi; rincian sumber dan bobot hanya bantuan baca. */
+body.padiflow-ui .lembar--tambah-giling .lembar__isi{max-width:930px}
+.lembar--tambah-giling .tg-context{display:grid;gap:6px;border-bottom:1px solid var(--garis);padding-bottom:16px;margin-bottom:20px;overflow-wrap:anywhere}
+.lembar--tambah-giling .tg-context-top{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:.78rem;color:var(--redup)}
+.lembar--tambah-giling #tg-status{background:var(--panel-2);border:1px solid var(--garis);border-radius:99px;padding:4px 10px;color:var(--tinta);font-weight:600}
+.lembar--tambah-giling .tg-context>strong{font-size:1rem}
+.lembar--tambah-giling .tg-context small{color:var(--redup);font-size:.78rem;line-height:1.6}
+.lembar--tambah-giling .tg-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.95fr);gap:24px;align-items:start}
+.lembar--tambah-giling .grup,.lembar--tambah-giling .tg-preview{min-width:0}
+.lembar--tambah-giling .tg-preview{display:grid;gap:14px;overflow-wrap:anywhere}
+.lembar--tambah-giling .tg-summary{padding:16px;background:var(--panel-2);border:1px solid var(--garis);border-radius:12px}
+.lembar--tambah-giling h3{font-size:.95rem;margin:0 0 10px;font-weight:650}
+.lembar--tambah-giling dl{margin:0;font-size:.82rem}
+.lembar--tambah-giling dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--garis)}
+.lembar--tambah-giling dt{color:var(--redup);line-height:1.5}
+.lembar--tambah-giling dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.5}
+.lembar--tambah-giling .tg-total dd{color:var(--aman);font-size:1.05rem}
+.lembar--tambah-giling .tg-summary small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:10px}
+.lembar--tambah-giling .tg-warning{border-left:3px solid var(--hati);background:var(--panel-2);padding:12px;margin:0 0 8px;border-radius:8px;font-size:.8rem;line-height:1.6}
+.lembar--tambah-giling #tg-peringatan:empty{display:none}
+.lembar--tambah-giling .tg-sources{border:1px solid var(--garis);border-radius:10px;padding:12px;font-size:.8rem;line-height:1.6}
+.lembar--tambah-giling .tg-sources summary{cursor:pointer;font-weight:600;min-height:30px}
+.lembar--tambah-giling .tg-source{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px 12px;padding:12px 0;border-top:1px solid var(--garis)}
+.lembar--tambah-giling .tg-source>span{text-align:right;font-variant-numeric:tabular-nums}
+.lembar--tambah-giling .tg-source small{grid-column:1/-1;color:var(--redup)}
+.lembar--tambah-giling .tg-meta{border-top:1px solid var(--garis);padding-top:16px;margin:20px 0 12px}
+.lembar--tambah-giling .tg-check{margin:0 0 12px;font-size:.8rem;white-space:normal}
+.lembar--tambah-giling .hasil-actions{margin-top:16px}
+@media(max-width:660px){.lembar--tambah-giling .tg-layout{grid-template-columns:minmax(0,1fr);gap:18px}.lembar--tambah-giling .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.4fr)}}
