@@ -1745,9 +1745,8 @@ async def _catat_pindah(
     # ikut dihitung sebagai bahan proses berjalan.
     karung_50, curah_50 = None, None
     if intake.internal_transfer_id is not None and jumlah_karung is None:
-        from decimal import ROUND_HALF_UP
-        from app.services.pk_50 import bagi
-        karung_50, curah_50 = bagi(Decimal(str(kirim)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP))
+        from app.services.pk_50 import bagi_tersimpan
+        karung_50, curah_50 = bagi_tersimpan(kirim, 3)
     muatan = {
         "kode_pindah": kode, "intake_id": intake.id, "intake_peristiwa_id": intake.peristiwa_id,
         "silo_id": silo.id, "nama_silo": nama_silo, "berat_kg": None if jumlah_karung is not None else kirim,

@@ -4,7 +4,7 @@ Aturan pemilik 25 Oktober 2026. Ini memecah satu bobot yang sudah sah,
 bukan menghasilkan stok atau membulatkan bobot bahan menjadi kelipatan50.
 PK pembelian luar tetap memakai pembagi partainya sendiri.
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 UKURAN = Decimal('50')
 
@@ -15,6 +15,18 @@ def bagi(berat):
         raise ValueError('Bobot PK harus valid dan tidak negatif.')
     n = int(kg // UKURAN)
     return n, kg - n * UKURAN
+
+
+def bagi_tersimpan(berat, desimal):
+    """Rincian unit mengikuti Numeric PostgreSQL, tanpa mengubah bobotnya.
+
+    asyncpg mengode float sebagai Decimal(float), bukan Decimal(str(float)).
+    Keduanya berbeda tepat di setengah satuan: ketikan1.005 sudah menjadi
+    float sedikit di bawah1.005 dan tetap tersimpan1.00 oleh jalur lama.
+    Mengubah bobot utama untuk merapikan unit akan mengubah stok lama.
+    """
+    nilai = Decimal(berat) if isinstance(berat, float) else Decimal(str(berat))
+    return bagi(nilai.quantize(Decimal(1).scaleb(-desimal), rounding=ROUND_HALF_UP))
 
 
 def angka(kg):
