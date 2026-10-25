@@ -1206,7 +1206,9 @@
     function kgSg(n) { return n == null ? "Belum tersedia" : kgHasil(n); }
     function sumberSg(d) {
       return '<section class="sg-silos"><h3>Pemeriksaan sisa silo</h3>' + (d.sumber.length ? d.sumber.map(function (r) {
-        return '<div class="sg-source"><div><strong>' + esc(r.silo) + '</strong><small>Sumber #' + esc(r.id) + ' · ' + esc(r.sumber) + '</small></div><span class="' + (r.sisa == null ? 'sg-pending' : '') + '">' + (r.sisa == null ? 'Belum diperiksa' : 'Sisa ' + esc(kgSg(r.sisa))) + '</span></div>';
+        var keterangan = r.sisa == null ? 'Sisa belum diperiksa melalui Bebaskan silo.' :
+          r.sisa === 0 ? 'Sudah diperiksa · tidak ada sisa pada sumber ini.' : 'Sudah diperiksa · sisa tetap berada di silo.';
+        return '<div class="sg-source"><div><strong>' + esc(r.silo) + '</strong><small>Sumber #' + esc(r.id) + ' · ' + esc(r.sumber) + '</small></div><span class="sg-badge' + (r.sisa == null ? ' sg-pending' : '') + '">' + (r.sisa == null ? 'Belum diperiksa' : 'Sisa ' + esc(kgSg(r.sisa))) + '</span><small class="sg-source-note">' + esc(keterangan) + '</small></div>';
       }).join('') : '<p>Sumber proses lama belum terverifikasi.</p>') + '</section>';
     }
     function pasangSg(nama, nilai) { var el = $("sg-" + nama);if (el) el.textContent = nilai; }
@@ -1238,9 +1240,9 @@
       }).catch(function(){if(n!==nomorSg || lembar.querySelector(".lembar__isi")!==borangHasil)return null;pasangSg("pemilik","Konteks belum tersedia");pasangSg("konteks","Isian tetap utuh. Periksa penyelesaian untuk meminta pemeriksaan server terbaru.");$("sg-silos").textContent="Pemeriksaan sumber belum dapat dimuat.";return null;});
     }
     function konfirmasiSg(d) {
-      function pair(a,b){return '<div><dt>'+esc(a)+'</dt><dd>'+esc(b)+'</dd></div>';}
+      function pair(a,b,utama){return '<div'+(utama?' class="sg-total"':'')+'><dt>'+esc(a)+'</dt><dd>'+esc(b)+'</dd></div>';}
       return '<div class="sg-stage"><span>Isi hasil akhir →</span><strong>Periksa & konfirmasi</strong></div><div class="sg-review-head"><h3>'+esc(d.kode_proses)+'</h3><p>'+esc(d.pemilik+' · '+d.silos.join(' + '))+'</p></div>'+sumberSg(d)+
-        '<section class="sg-summary"><h3>Hasil dan stok setelah selesai</h3><dl>'+pair('Hasil akhir PK operator',kgSg(d.hasil_akhir))+(d.terverifikasi!=null?pair('Dasar stok · verifikasi Admin',kgSg(d.terverifikasi)):'')+pair('Transfer terkirim',kgSg(d.transfer))+pair('Penjualan PK langsung',kgSg(d.penjualan))+pair('Retur diterima',kgSg(d.retur))+pair('PK tersedia',kgSg(d.stok_sesudah))+'</dl><small>PK tersedia sebelumnya '+esc(kgSg(d.stok_sebelum))+'. Penyelesaian tidak menambahkan hasil kumulatif dua kali.</small></section><p class="sg-warning">Konfirmasikan setelah mesin benar-benar selesai. Sisa tetap berada di silo; penyelesaian tidak mengosongkannya. Verifikasi output Admin tetap tindakan terpisah.</p>';
+        '<section class="sg-summary"><h3>Hasil dan stok setelah selesai</h3><dl>'+pair('Hasil akhir PK operator',kgSg(d.hasil_akhir))+(d.terverifikasi!=null?pair('Dasar stok · verifikasi Admin',kgSg(d.terverifikasi)):'')+pair('Transfer terkirim',kgSg(d.transfer))+pair('Penjualan PK langsung',kgSg(d.penjualan))+pair('Retur diterima',kgSg(d.retur))+pair('PK tersedia',kgSg(d.stok_sesudah),true)+'</dl><small>PK tersedia sebelumnya '+esc(kgSg(d.stok_sebelum))+'. Penyelesaian tidak menambahkan hasil kumulatif dua kali.</small></section><p class="sg-warning">Konfirmasikan setelah mesin benar-benar selesai. Sisa tetap berada di silo; penyelesaian tidak mengosongkannya. Verifikasi output Admin tetap tindakan terpisah.</p>';
     }
     if(selesaiGiling){
       kembaliSelesaiGiling=null;
