@@ -1098,7 +1098,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "silo", "label": "Silo yang dibebaskan", "type": "remote",
                   "induk": "kode_proses", "source": "/api/actions/sosoh-silo",
                   "kosong": "Semua silo proses ini sudah ditandai selesai."},
-                 {"name": "sisa", "label": "Sisa di silo (kg) — isi 0 jika kosong", "type": "number", "wajib": True},
+                 {"name": "sisa", "label": "Sisa fisik di silo", "type": "number", "wajib": True},
              ]},
             {"id": "akhiri_penyosohan", "label": "🏁 Selesaikan penyosohan",
              "post": "/api/actions/akhiri-penyosohan", "pratinjau_proses": "sosoh",
