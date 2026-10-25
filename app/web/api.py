@@ -1544,7 +1544,7 @@ for _a in (
     # dengan Gudang 1 dan selama ini beraturan berlawanan.
     "mulai_penyosohan", "hasil_penyosohan", "hentikan_penyosohan",
     "lanjutkan_penyosohan", "selesai_penyosohan", "akhiri_penyosohan", "pindah_tumpukan_silo",
-    "tambah_silo_penyosohan", "catat_packing", "catat_broken",
+    "tambah_silo_penyosohan", "catat_packing", "catat_curah", "catat_broken",
     # Catat broken curah dan masukkan broken ke silo sama-sama dibuka dari
     # kartu Stok Produk; jangan tampilkan pintu kedua di katalog.
     "masukkan_broken_silo", "masukkan_menir_silo", "masukkan_reject_silo",
@@ -1621,7 +1621,7 @@ _ACTION_WH = {
     # Inventory: packing & bekatul lahir di Gudang 2. Pembelian karung, harga
     # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
-    "catat_packing": "g2", "catat_bekatul": "g2", "catat_broken": "g2",
+    "catat_packing": "g2", "catat_curah": "g2", "catat_bekatul": "g2", "catat_broken": "g2",
     "masukkan_broken_silo": "g2", "masukkan_beras_silo": "g2",
     "masukkan_menir_silo": "g2", "masukkan_reject_silo": "g2",
     "pindah_kepemilikan_produk": "g2",

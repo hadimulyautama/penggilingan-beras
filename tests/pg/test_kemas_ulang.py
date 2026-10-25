@@ -137,7 +137,7 @@ async def test_halaman_dan_post_berizin_sesi(pg,sosoh_jasa):
         response=await c.post('/api/kemas-ulang',json={**req,'setuju':True},headers={'x-csrf-token':token})
         assert response.status_code==200,response.text
         p=await c.get('/stok-produk-jasa/detail',params={'jenis':'medium','pelanggan_id':sosoh_jasa['pelanggan_id']})
-        assert 'Kemas ulang' in p.text and 'Sisa kemas ulang (curah)' in p.text
+        assert 'Kemas ulang' in p.text and 'Curah tercatat' in p.text
         from pathlib import Path
         Path('/tmp/kemas369-halaman.html').write_text(page.text)
         Path('/tmp/kemas369-stok-jasa.html').write_text(p.text)

@@ -231,6 +231,7 @@ async def catat_packing(
 
 
 async def _packed_kg(db: AsyncSession, proc_id: int, kategori: str, std_id: int | None) -> float:
+    """Hasil yang sudah dibukukan ke batch kemasan atau curah tercatat."""
     q = (
         select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
         .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
@@ -243,6 +244,56 @@ async def _packed_kg(db: AsyncSession, proc_id: int, kategori: str, std_id: int 
     else:
         q = q.where(FinishedGoodsStock.rice_quality_standard_id == std_id)
     return float((await db.execute(q)).scalar_one())
+
+
+async def catat_curah(
+    db: AsyncSession, *, user, kode_pol: str, jenis: str,
+) -> float:
+    """Seluruh sisa hasil beras menjadi batch curah, tanpa memakai karung.
+
+    Batch mengikuti jalur curah yang sudah dipakai sisa kemas ulang: nol
+    karung, berat nyata, dan pemilik dari proses. Dengan begitu hasil mesin
+    hanya punya satu rumah; stok tidak bertambah dua kali dan pengemasan
+    berikutnya memakai batch ini lewat kemas ulang. Kunci saldo lalu proses
+    mengikuti urutan packing agar dua operator tidak mengambil sisa yang sama.
+    """
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    from app.services.jasa import pemilik_hasil_proses
+    from app.services.stok import BERAS_JENIS, beras_curah, kategori_dan_mutu
+
+    if not kode_pol or jenis not in BERAS_JENIS:
+        raise InventoryError("Pilih lot dan mutu beras hasil sosoh yang dijadikan curah.")
+    await _kunci_saldo_keluar(db)
+    proc = await _proc_by_kode(db, kode_pol)
+    sumber = next((b for b in await beras_curah(db, proses_id=proc.id)
+                   if b.kode_proses == proc.kode_proses and b.jenis == jenis), None)
+    if sumber is None or sumber.sisa_kg <= 0:
+        raise InventoryError("Tidak ada sisa hasil sosoh yang bisa dijadikan curah. Muat ulang pekerjaan.")
+    kategori, mutu = kategori_dan_mutu(jenis)
+    std = await get_standard(db, mutu) if mutu else None
+    if mutu and std is None:
+        raise InventoryError(f"Standar mutu '{mutu}' tidak ada.")
+    # SKU hanya rujukan jenis produk untuk batch curah, seperti pada sisa
+    # kemas ulang. Ukurannya tidak menjadi berat atau pemakaian kemasan.
+    sku = await find_or_create_sku(db, kategori=kategori, material_kode="biasa", ukuran=25)
+    berat = sumber.sisa_kg
+    fg = FinishedGoodsStock(
+        product_sku_id=sku.id, rice_quality_standard_id=std.id if std else None,
+        source_type="polishing", source_id=proc.id, jumlah_karung=0,
+        berat_total_kg=berat, warehouse_id=await _g2_warehouse_id(db),
+        waktu=now_local(), input_by=user.id,
+        jasa_id=await pemilik_hasil_proses(db, proc.jasa_id, jenis),
+        curah_kemas_ulang=True, kemasan_mengurangi_stok=False,
+    )
+    db.add(fg)
+    await db.flush()
+    await log_activity(
+        db, table_name="finished_goods_stock", record_id=fg.id, action="INSERT",
+        changed_by=user.id, gudang="g2",
+        new_value=f"{proc.kode_proses} · {jenis} · dijadikan curah {berat:g} kg · tanpa karung",
+    )
+    await db.commit()
+    return berat
 
 
 async def _bekatul_dibukukan(db: AsyncSession, proc_id: int) -> float:

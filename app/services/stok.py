@@ -969,7 +969,7 @@ class BerasCurah:
     keluar_kg: float
     #: Yang sudah dipindahkan ke barang jadi lewat packing.
     dikemas_kg: float
-    #: Yang masih berdiri sebagai curah — inilah angka stoknya.
+    #: Sisa hasil yang belum dialokasikan ke batch kemasan/curah atau silo.
     sisa_kg: float
     #: Kapan sosohnya ditutup. None berarti MASIH BERJALAN.
     selesai: object | None = None
@@ -1079,12 +1079,14 @@ async def _dipindah_silo_proc(db: AsyncSession, proc_ids: list[int]
     return keluar
 
 
-async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
+async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True,
+                      proses_id: int | None = None,
                       ) -> list[BerasCurah]:
-    """Beras yang belum dipacking manual, per lot × jenis.
+    """Beras yang belum dipacking atau ditetapkan curah, per lot × jenis.
 
-    Stok curah = yang KELUAR mesin − yang SUDAH DIKEMAS. Dua angka yang
-    dua-duanya sudah tercatat; yang belum ada cuma pengurangannya.
+    Sisa pekerjaan = hasil mesin − batch kemasan/curah − yang masuk silo.
+    Batch curah tercatat tetap dihitung sebagai curah di `stok_produk`,
+    tetapi sudah bukan pekerjaan packing yang wajib diselesaikan.
 
     Bekatul, reject, menir, dan broken mengikuti aturan packing otomatis
     (`_UKURAN_KEMASAN_OTOMATIS`) dan tidak menjadi pekerjaan di antrean packing.
@@ -1102,6 +1104,8 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     from app.penggilingan.inventory.finished_goods import _packed_kg, get_standard
 
     q = select(PolishingProcess).order_by(PolishingProcess.id.desc())
+    if proses_id is not None:
+        q = q.where(PolishingProcess.id == proses_id)
     if not termasuk_berjalan:
         q = q.where(PolishingProcess.status == "selesai")
     keluar: list[BerasCurah] = []
@@ -1109,12 +1113,13 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
         for jenis, kg in (await output_sosoh(db, proc.id)).items():
             if jenis in _UKURAN_KEMASAN_OTOMATIS:
                 continue
-            if jenis in BERAS_JENIS:
-                std = await get_standard(db, jenis)
-                dikemas = await _packed_kg(db, proc.id, "beras_putih",
+            kategori, mutu = kategori_dan_mutu(jenis)
+            if mutu:
+                std = await get_standard(db, mutu)
+                dikemas = await _packed_kg(db, proc.id, kategori,
                                            std.id if std else None)
             else:
-                dikemas = await _packed_kg(db, proc.id, jenis, None)
+                dikemas = await _packed_kg(db, proc.id, kategori, None)
             # Grade yang sudah dipindah jadi bahan Silo Beras juga "sudah punya
             # rumah" — pola yang sama dengan dikemas di atas (keputusan pemilik
             # 8 Oktober 2026). Lihat docstring `_dipindah_silo_proc`.

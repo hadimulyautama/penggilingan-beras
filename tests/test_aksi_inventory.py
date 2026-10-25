@@ -105,11 +105,11 @@ def test_operator_gudang2_tak_pernah_melihat_aksi_uang():
     dulu, lalu karung dibongkar bila kurang), menggantikan "Pindah broken
     ke silo" yang lama. `catat_broken` TETAP ADA berdampingan: ia menjawab
     pertanyaan yang berbeda (mencatat hasil mesin sebagai curah, belum
-    punya tujuan) — lihat kartu "Tunggu packing" (`_kartu_beras_curah`,
-    tombol "Sisa dicurah") yang justru butuh aksi ini tetap terjangkau.
+    punya tujuan). `catat_curah` menyusul 25 Oktober 2026: beras hasil sosoh
+    juga boleh tetap curah tanpa mengharuskan operator memakai karung.
     """
     ids = {a["id"] for a in inv.spesifikasi(g2=True, fin=False)}
-    assert ids == {"catat_packing", "catat_bekatul", "catat_broken",
+    assert ids == {"catat_packing", "catat_curah", "catat_bekatul", "catat_broken",
                    "muat_semua", "muat_barang", "selesai_muat"}
     # Yang memutuskan & yang berbau uang tetap tak pernah sampai ke sini —
     # termasuk MEMBUAT perintah dan MEMVERIFIKASI-nya.

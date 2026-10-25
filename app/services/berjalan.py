@@ -3026,26 +3026,10 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
             kelompok="produk", gudang="g2", jasa_id=b.jasa_id,
             pilihan=[("catat_packing", "Catat packing barang jadi",
                       "Memindahkan dari curah ke barang jadi",
-                      f"{b.kode_proses}|{b.jenis}")]
-                     # ── Sisa dicurah — laporan lapangan 7 Oktober 2026 ──
-                     #
-                     # Tak seluruh hasil berakhir dikarungi; sebagian memang
-                     # tetap dijual/disimpan curah. Sebelum ini kartu "Tunggu
-                     # packing" hanya menawarkan SATU jalan (mengemas), jadi
-                     # mencatat sisanya sebagai curah menuntut membuka
-                     # katalog umum dan mengetik kode prosesnya sendiri —
-                     # dua langkah untuk pekerjaan yang kartunya sendiri
-                     # sudah tahu kode & jenisnya.
-                     #
-                     # ⚠ Hanya bekatul & broken: keduanya SATU-SATUNYA jenis
-                     # yang punya jalan curah (`catat_bekatul`/`catat_broken`
-                     # → `byproduct_stock`) — menir & reject tak punya
-                     # (`stok.py`'s `curah_saja`). Menawarkan tombol yang
-                     # pasti ditolak lebih buruk daripada tak menawarkannya.
-                     + ([(("catat_bekatul" if b.jenis == "bekatul" else "catat_broken"),
-                         "Sisa dicurah",
-                         "Tidak dikemas — tetap dijual/disimpan curah",
-                         b.kode_proses)] if b.jenis in ("bekatul", "broken") else [])))
+                      f"{b.kode_proses}|{b.jenis}"),
+                     ("catat_curah", "Jadikan curah",
+                      "Seluruh sisa masuk stok curah, tanpa memakai karung",
+                      f"{b.kode_proses}|{b.jenis}")]))
     return keluar
 
 

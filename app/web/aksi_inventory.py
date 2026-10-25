@@ -162,7 +162,9 @@ async def produk_kemasan(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/beras-belum-dikemas")
-async def beras_belum_dikemas(jenis: str | None = None, pemilik: str | None = None, user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def beras_belum_dikemas(jenis: str | None = None, pemilik: str | None = None,
+                             hanya_beras: bool = False,
+                             user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Beras yang sudah keluar mesin dan BELUM dikemas — per lot × jenis.
 
     Ia penunjuk borang packing, dan bentuknya menjawab keluhan pemilik 28
@@ -186,7 +188,8 @@ async def beras_belum_dikemas(jenis: str | None = None, pemilik: str | None = No
     from app.services.jasa import nama_pemilik_banyak
     async with SessionLocal() as db:
         curah = await beras_curah(db, termasuk_berjalan=True)
-        curah += await hasil_samping_bisa_dikemas(db)
+        if not hanya_beras:
+            curah += await hasil_samping_bisa_dikemas(db)
         nama_pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b in curah if b.jasa_id})
     return [{"value": f"{b.kode_proses}|{b.jenis}",
              "berat_kg": float(b.sisa_kg),
@@ -474,6 +477,32 @@ async def act_catat_packing(req: PackingReq,
     pesan = (f"✓ Packing {KATEGORI_LABEL.get(r.kategori, r.kategori)}{grade}: "
              f"{r.jumlah_karung} karung ({kg(r.berat_total_kg)}).{warn}")
     return {"ok": True, "pesan": pesan}
+
+
+class CurahReq(BaseModel):
+    sumber: str                       # "POL-…|jenis", seluruh sisa terkini
+
+
+@router.post("/actions/catat-curah")
+async def act_catat_curah(req: CurahReq,
+                          user: User = Depends(pengguna_aksi)) -> dict:
+    from app.web.api import _is_g2_operator
+    from app.services.stok import nama_produk
+
+    wajib(await _is_g2_operator(user) or can_see_financials(user))
+    bagian = req.sumber.split("|")
+    if len(bagian) != 2 or not bagian[0].strip():
+        raise HTTPException(400, "Pilih hasil sosoh yang dijadikan curah.")
+    kode, jenis = bagian[0].strip(), bagian[1].strip().lower()
+    async with SessionLocal() as db:
+        try:
+            berat = await bj.catat_curah(
+                db, user=await db.get(User, user.id), kode_pol=kode, jenis=jenis)
+        except bj.InventoryError as e:
+            raise galat(e, "Gagal mencatat hasil curah.")
+    return {"ok": True, "pesan": (
+        f"✓ {nama_produk(jenis)} {kg(berat)} dari {kode} dijadikan curah. "
+        "Tercatat di Stok Produk dan tidak lagi menunggu packing.")}
 
 
 class BekatulReq(BaseModel):
@@ -1836,6 +1865,16 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "optional": True, "source": "/api/actions/merk"},
                  {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
                   "maksimal_karung": True},
+             ]},
+            {"id": "catat_curah", "label": "Jadikan curah",
+             "post": "/api/actions/catat-curah",
+             "hint": "Seluruh sisa beras pada lot dan mutu ini dicatat sebagai stok curah, "
+                     "tanpa memakai karung. Pekerjaan packing untuk sisa ini selesai. "
+                     "Berasnya tetap tersedia di Stok Produk dan bisa dikemas kemudian.",
+             "fields": [
+                 {"name": "sumber", "label": "Hasil sosoh yang dijadikan curah", "type": "remote",
+                  "source": "/api/actions/beras-belum-dikemas?hanya_beras=true",
+                  "kosong": "Tidak ada sisa beras hasil sosoh yang menunggu packing."},
              ]},
             {"id": "catat_bekatul", "label": "🌾 Catat bekatul (curah)",
              "post": "/api/actions/catat-bekatul",

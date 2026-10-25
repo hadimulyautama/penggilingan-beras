@@ -133,10 +133,13 @@ class FinishedGoodsStock(Base, TimestampMixin):
     #: saringan stok dibaca di hampir tiap layar, dan yang paling sering
     #: ditanyakan tak boleh dijawab paling mahal — lewat join ke tabel lain.
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
-    #: False bila barang sudah datang dalam kemasan sendiri (misalnya beras
-    #: dari tiket Timbangan); kemasan itu bukan pemakaian stok karung gudang.
+    #: Batch curah tercatat: sisa kemas ulang ATAU hasil sosoh yang dipilih
+    #: tetap curah. Nama kolom lama dipertahankan; keduanya nol karung dan
+    #: tidak mengurangi stok kemasan, serta bisa dikemas dari batch yang sama.
     curah_kemas_ulang: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
+    #: False untuk curah atau barang yang datang dengan kemasannya sendiri;
+    #: keduanya tidak memakai stok karung gudang.
     kemasan_mengurangi_stok: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )

@@ -451,7 +451,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
                 if abs(curah_belum)>0.5:
                     baris(owner=owner,bentuk="Curah · belum dikemas",berat=curah_belum)
     for fg,_,_ in sisa_rows:
-        rows.append(dict(bentuk='Sisa kemas ulang (curah)',kg=float(fg.berat_total_kg),karung=0,ukuran=0,merk='',bahan='',href=None,pindah=None,sumber=None,
+        rows.append(dict(bentuk='Curah tercatat',kg=float(fg.berat_total_kg),karung=0,ukuran=0,merk='',bahan='',href=None,pindah=None,sumber=None,
             kemas=kemas_href(fg.product_sku_id,fg.rice_quality_standard_id,fg.jasa_id) if boleh_kemas else None))
     return await render_laci(request, "stok_produk_detail.html",
         layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",
