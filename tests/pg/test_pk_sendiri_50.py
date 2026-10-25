@@ -198,3 +198,13 @@ async def test_kunci_sama_tidak_menerima_muatan_unit_berbeda(pg,pabrik,ulang):
     async with pg() as db:
         assert await db.scalar(select(func.count()).select_from(PkTumpukanToSilo))==1
         assert await g2._sisa_tumpukan_intake(db,ids[1])==5900
+
+
+async def test_jawaban_curah_mengikuti_presisi_yang_tersimpan(pg,pabrik):
+    ids=await siapkan(pg,pabrik)
+    r=await pindah(pg,ids,berat_curah_kg=.1234)
+    assert r.berat_kg==.123 and r.berat_curah_kg==.123
+    async with pg() as db:
+        m=(await db.scalars(select(PkTumpukanToSilo))).one()
+        assert m.berat_curah_kg==Decimal('.123')
+        assert r.sisa_tumpukan_intake==6419.877
