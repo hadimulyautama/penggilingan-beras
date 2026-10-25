@@ -3717,3 +3717,37 @@ body.padiflow-ui .lembar--pindah-silo .lembar__isi{max-width:940px}
 
 /* Pilihan tetap select asli agar keyboard dan pemilih sistem dipertahankan. */
 .lembar--pindah-silo select.fld{appearance:auto;padding-right:36px}
+
+/* Mulai giling: checkbox asli dan satu lot; ringkasan hanya membaca server. */
+body.padiflow-ui .lembar--mulai-giling .lembar__isi{max-width:980px}
+.lembar--mulai-giling .mg-intro{display:grid;gap:6px;margin:0 0 20px;line-height:1.6;font-size:.85rem;color:var(--redup)}
+.lembar--mulai-giling .mg-intro strong{color:var(--tinta);font-size:1rem}
+.lembar--mulai-giling .mg-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px;align-items:start}
+.lembar--mulai-giling .mg-fieldset{border:0;padding:0;margin:0;min-width:0}
+.lembar--mulai-giling legend{font-weight:600;font-size:.85rem;line-height:1.6;padding:0;margin-bottom:12px}
+.lembar--mulai-giling .centang{padding:14px;align-items:flex-start;gap:12px;border-radius:12px;min-width:0;cursor:pointer}
+.lembar--mulai-giling .centang:has(input:checked){background:var(--panel-2);box-shadow:inset 0 0 0 1px var(--aksi)}
+.lembar--mulai-giling .centang input{margin-top:3px}
+.lembar--mulai-giling .mg-main{display:grid;gap:5px;flex:1;min-width:0;overflow-wrap:anywhere}
+.lembar--mulai-giling .mg-name{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.9rem;flex-wrap:wrap}
+.lembar--mulai-giling .mg-name strong:last-child{color:var(--aman);font-variant-numeric:tabular-nums}
+.lembar--mulai-giling .mg-owner{font-size:.8rem}
+.lembar--mulai-giling .mg-main small{font-size:.75rem;color:var(--redup);line-height:1.5}
+.lembar--mulai-giling .mg-preview{min-width:0;overflow-wrap:anywhere;display:grid;gap:12px}
+.lembar--mulai-giling .mg-summary{padding:16px;background:var(--panel-2);border:1px solid var(--garis);border-radius:12px}
+.lembar--mulai-giling h3{font-size:.95rem;margin:0 0 12px;font-weight:600}
+.lembar--mulai-giling dl{margin:0;font-size:.8rem}
+.lembar--mulai-giling dl>div,.lembar--mulai-giling #mg-per-silo>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--garis)}
+.lembar--mulai-giling dt{color:var(--redup)}
+.lembar--mulai-giling dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.lembar--mulai-giling .mg-total dd{font-size:1.1rem;color:var(--aman)}
+.lembar--mulai-giling #mg-per-silo{font-size:.75rem;color:var(--redup)}
+.lembar--mulai-giling #mg-per-silo strong{text-align:right;font-weight:500}
+.lembar--mulai-giling .mg-summary small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:12px}
+.lembar--mulai-giling .mg-warning{padding:12px;border-radius:8px;border-left:3px solid var(--hati);background:var(--panel-2);font-size:.8rem;line-height:1.6;margin:0 0 8px}
+.lembar--mulai-giling .mg-check{margin:12px 0}.lembar--mulai-giling .mg-check:has(#mg-info:empty):has(button[hidden]){display:none}
+.lembar--mulai-giling .mg-check button{font-size:.8rem;white-space:normal}
+.lembar--mulai-giling #mg-tautan{display:flex;flex-wrap:wrap;gap:12px;font-size:.8rem}
+@media(max-width:660px){.lembar--mulai-giling .mg-layout{grid-template-columns:minmax(0,1fr);gap:16px}.lembar--mulai-giling .centang{padding:12px}.lembar--mulai-giling .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.4fr)}}
+.lembar--mulai-giling #mg-peringatan:empty,.lembar--mulai-giling #mg-tautan:empty{display:none}
+.lembar--mulai-giling .hasil-actions{margin-top:18px}

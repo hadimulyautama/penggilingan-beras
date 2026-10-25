@@ -573,13 +573,15 @@
     var kadarAir = a.ringkasan_kadar, targetAir = a.konteks_target, formAir = kadarAir || targetAir;
     var selesaiKering = a.konteks_selesai_pengeringan;
     var pindahSilo = a.konteks_pindah_silo;
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo;
-    var labelSimpan = pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
+    var mulaiGiling = a.konteks_mulai_giling;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiGiling;
+    var labelSimpan = mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
     lembar.classList.toggle("lembar--kadar", !!formAir);
     lembar.classList.toggle("lembar--selesai-kering", !!selesaiKering);
     lembar.classList.toggle("lembar--pindah-silo", !!pindahSilo);
+    lembar.classList.toggle("lembar--mulai-giling", !!mulaiGiling);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
@@ -1139,6 +1141,60 @@
       perbaruiPindah();
     }
 
+    // Ringkasan hanya membaca sumber yang sama dengan start_milling. Pilihan
+    // tetap satu kelompok checkbox; tidak ada bobot/delta transaksi di browser.
+    var urutanMulai = 0, periksaMulai = false;
+    function pilihanMulai() {
+      var el = borangHasil.querySelector('[data-name="silo"]');
+      return String(el && el.value || "").split(",").filter(Boolean);
+    }
+    function perbaruiMulai() {
+      if (!mulaiGiling || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return Promise.resolve(null);
+      var pilihan = pilihanMulai(), kunci = pilihan.join(","), nomor = ++urutanMulai;
+      $("mg-dipilih").textContent = pilihan.length ? pilihan.map(function (n) { return "Silo " + n; }).join(" + ") : "Belum dipilih";
+      $("mg-bobot").textContent = pilihan.length ? "Memuat bobot…" : "Belum tersedia";
+      $("mg-pemilik").textContent = "Belum tersedia";
+      $("mg-bentuk").textContent = pilihan.length ? "1 lot · sumber sedang dibaca" : "Belum dipilih";
+      $("mg-per-silo").textContent = "";$("mg-peringatan").textContent = "";$("mg-tautan").textContent = "";
+      $("mg-final").textContent = pilihan.length ? "Ringkasan baca saja. Kondisi terbaru diperiksa saat menyimpan." : "Centang minimal satu silo sumber.";
+      if (!pilihan.length) { periksaMulai = false;$("simpan").disabled = !borangHasil.querySelector('#b_silo input');return Promise.resolve(null); }
+      return fetch(mulaiGiling.source + "?" + pilihan.map(function (n) { return "silo=" + encodeURIComponent(n); }).join("&"),
+        {credentials:"same-origin",cache:"no-store"}).then(function (r) { if (!r.ok) throw new Error("Ringkasan belum tersedia");return r.json(); }).then(function (d) {
+        if (nomor !== urutanMulai || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil || pilihanMulai().join(",") !== kunci) return null;
+        if ((d.pilihan || []).join(",") !== kunci.toUpperCase()) throw new Error("Pilihan sudah berubah");
+        $("mg-bobot").textContent = d.bobot;$("mg-pemilik").textContent = d.pemilik || "Pemilik belum tersedia";
+        $("mg-bentuk").textContent = "1 lot · " + d.jumlah_sumber + " sumber bahan";
+        $("mg-final").textContent = d.final ? "Bobot sumber sudah final." : "Bobot bahan belum final; pemutakhiran mengikuti data timbang dan mekanisme lama.";
+        (d.silos || []).forEach(function (s) {
+          var baris = document.createElement("div"), nama = document.createElement("span"), berat = document.createElement("strong");
+          nama.textContent = s.nama;berat.textContent = s.bobot;baris.append(nama,berat);$("mg-per-silo").appendChild(baris);
+          if (s.detail) { var link = document.createElement("a");link.textContent = "Buka " + s.proses;link.href = s.detail;$("mg-tautan").appendChild(link); }
+        });
+        (d.peringatan || []).forEach(function (teks) { var p = document.createElement("p");p.className = "mg-warning";p.textContent = teks;$("mg-peringatan").appendChild(p); });
+        $("simpan").disabled = periksaMulai && !d.siap;periksaMulai = periksaMulai && !d.siap;
+        $("mg-info").textContent = d.siap ? "" : "Pilihan diperiksa kembali oleh server saat mulai giling. Perbaiki centang yang tidak sesuai.";
+        return d;
+      }).catch(function () {
+        if (nomor !== urutanMulai || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return null;
+        $("mg-bobot").textContent = "Belum tersedia";
+        $("mg-final").textContent = "Ringkasan belum dapat dimuat. Pilihan tetap utuh; layanan memeriksa bobot dan pemilik saat menyimpan.";
+        $("simpan").disabled = periksaMulai;
+        return null;
+      });
+    }
+    if (mulaiGiling) {
+      borangHasil.querySelector(".lembar__kepala").insertAdjacentHTML("afterend", '<div class="mg-intro"><strong>Satu atau beberapa silo, satu lot.</strong><span>Seluruh isi silo yang dipilih menjadi bahan satu proses penggilingan.</span></div>');
+      var grupMulai = borangHasil.querySelector(".grup"), tataMulai = document.createElement("div");tataMulai.className = "mg-layout";
+      grupMulai.before(tataMulai);tataMulai.appendChild(grupMulai);
+      var daftarMulai = $("b_silo"), judulMulai = daftarMulai.previousElementSibling;
+      var kelompokMulai = document.createElement("fieldset"), legendaMulai = document.createElement("legend");kelompokMulai.className = "mg-fieldset";
+      legendaMulai.textContent = judulMulai.textContent;judulMulai.replaceWith(kelompokMulai);kelompokMulai.append(legendaMulai,daftarMulai);
+      grupMulai.insertAdjacentHTML("beforeend",'<p class="hasil-help">Daftar mengikuti silo aktif Gudang 1. Silo kosong dan silo yang masih dipakai giling tidak ditawarkan.</p>');
+      tataMulai.insertAdjacentHTML("beforeend",'<div class="mg-preview" aria-live="polite"><section class="mg-summary"><h3>Ringkasan giling baru</h3><dl><div><dt>Silo dipilih</dt><dd id="mg-dipilih">Belum dipilih</dd></div></dl><div id="mg-per-silo"></div><dl><div class="mg-total"><dt>Bobot gabah acuan</dt><dd id="mg-bobot">Belum tersedia</dd></div><div><dt>Pemilik</dt><dd id="mg-pemilik">Belum tersedia</dd></div><div><dt>Hasil pembentukan</dt><dd id="mg-bentuk">Belum dipilih</dd></div></dl><small id="mg-final">Centang minimal satu silo sumber.</small></section><div id="mg-peringatan"></div><div id="mg-tautan"></div><p class="hasil-help">Seluruh isi silo terpilih didaftarkan dalam satu proses. Hasil PK dicatat setelah giling berjalan; rendemen belum dihitung di formulir ini.</p></div>');
+      borangHasil.querySelector(".hasil-actions").insertAdjacentHTML("beforebegin",'<div class="mg-check"><p id="mg-info" class="hasil-help" role="status"></p><button class="btn" id="mg-periksa" type="button" hidden>Periksa proses & silo terbaru</button></div>');
+      $("mg-periksa").onclick = perbaruiMulai;
+    }
+
     // Angka turunan tetap dijawab server yang memiliki sumber bobotnya.
     // Nomor urut dan identitas borang mencegah jawaban lama menimpa pilihan
     // baru saat jaringan lambat atau operator cepat mengganti tumpukan.
@@ -1441,8 +1497,9 @@
         sumber += (sumber.indexOf("?") >= 0 ? "&" : "?") + "induk=" +
           encodeURIComponent(nilaiInduk);
       }
+      var borangBanyak = lembar.querySelector(".lembar__isi");
       ambil(sumber).then(function (daftar) {
-        if (!daftar) { return; }
+        if (!daftar || (mulaiGiling && lembar.querySelector(".lembar__isi") !== borangBanyak)) { return; }
         var wadah = $("b_" + f.name);
         var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
         if (!wadah || !simpanan) { return; }
@@ -1455,8 +1512,16 @@
             });
           simpanan.value = nilai.join(",");
           simpanan.dataset.teks = teks.join(" · ");
+          if (mulaiGiling) { bersihkanSalah(lembar);perbaruiMulai(); }
         }
 
+        if (mulaiGiling && segar) {
+          // Centang konflik tetap terlihat supaya operator dapat membacanya,
+          // lalu melepas sendiri. Jangan diam-diam memulai sebagian sumber.
+          wadah.querySelectorAll("input:checked").forEach(function (cb) {
+            if (!daftar.some(function (o) { return o.value === cb.value; })) daftar.push({value:cb.value,label:cb.dataset.teks,rincian:{nama:"Silo " + cb.value,bobot:"Tidak lagi siap",pemilik:"Periksa proses terbaru",pesanan:[],asal:[],jumlah_sumber:null}});
+          });
+        }
         if (!daftar.length) {
           /* Sama seperti daftar jatuh yang kosong: dikatakan SEKARANG, bukan
              sesudah orang menekan Simpan dan ditolak. */
@@ -1483,11 +1548,14 @@
         var pulih = (simpanan.dataset.pulih || "").split(",").filter(Boolean);
         delete simpanan.dataset.pulih;
 
+        var fokusBanyak = mulaiGiling && wadah.contains(document.activeElement) ? document.activeElement.value : null;
         wadah.innerHTML = daftar.map(function (o) {
           var c = sudah.indexOf(o.value) >= 0 || pulih.indexOf(o.value) >= 0;
+          var rincian = mulaiGiling && o.rincian;
+          var teksKartu = rincian ? '<span class="mg-name"><strong>' + esc(rincian.nama) + '</strong><strong>' + esc(rincian.bobot) + '</strong></span><span class="mg-owner">' + esc(rincian.pemilik) + '</span>' + (rincian.pesanan.length ? '<small>' + esc(rincian.pesanan.join(" · ")) + '</small>' : '') + '<small>' + (rincian.jumlah_sumber === null ? '' : rincian.jumlah_sumber + ' sumber · ') + esc(rincian.asal.join(" + ")) + '</small>' : esc(o.label);
           return '<label class="centang"><input type="checkbox" value="' + esc(o.value) +
             '" data-teks="' + esc(o.label) + '"' + (c ? " checked" : "") + ">" +
-            "<span>" + esc(o.label) + "</span></label>";
+            (mulaiGiling ? '<span class="mg-main">' : '<span>') + teksKartu + "</span></label>";
         }).join("");
         Array.prototype.forEach.call(
           wadah.querySelectorAll('input[type="checkbox"]'), function (cb) {
@@ -1497,11 +1565,16 @@
            (silonya baru saja diambil proses lain) tak boleh tetap terkirim
            hanya karena ia masih tercatat di kolom tersembunyi. */
         sinkron();
+        if (fokusBanyak !== null) wadah.querySelectorAll("input").forEach(function (cb) { if (cb.value === fokusBanyak) cb.focus({preventScroll:true}); });
         var lamaNota = $("kosong_" + f.name);
         if (lamaNota) { lamaNota.remove(); }
         var tbl2 = $("simpan");
-        if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = "Simpan"; }
-      }).catch(function () {});
+        if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = labelSimpan; }
+      }).catch(function () {
+        if (!mulaiGiling || lembar.querySelector(".lembar__isi") !== borangBanyak) return;
+        var kotak = $("b_" + f.name);
+        if (kotak && !kotak.querySelector("input")) kotak.textContent = "Pilihan silo belum dapat dimuat. Periksa koneksi dan buka kembali formulir.";
+      });
     }
 
     /* ── Daftar pilihan dimuat ULANG, bukan sekali ──
@@ -1997,7 +2070,7 @@
         // Tutup modal menghabiskan satu entri history secara asinkron.
         // Tunggu Back milik modal dahulu sebelum mengganti alamat fase;
         // tanpa ini, Back dapat menimpa URL pendinginan yang baru dipasang.
-        var balikSelesai = (selesaiKering || pindahSilo) && lembar._riwayat ? new Promise(function (resolve) {
+        var balikSelesai = (selesaiKering || pindahSilo || mulaiGiling) && lembar._riwayat ? new Promise(function (resolve) {
           var selesaiBalik = function () { clearTimeout(batasBalik);window.removeEventListener("popstate",selesaiBalik);resolve(); };
           var batasBalik = setTimeout(selesaiBalik,1000);
           window.addEventListener("popstate",selesaiBalik,{once:true});
@@ -2019,6 +2092,13 @@
             utama = baris.filter(function (b) { return !/^⚠/.test(b); }).join("\n");
           }
           kabar(utama, "ok", !!formKhusus);
+          if (mulaiGiling && hasil.kode_proses) {
+            if (hasil.pemilik) { var pemilikGiling = document.createElement("p");pemilikGiling.textContent = hasil.pemilik + " · " + (hasil.bobot_final ? "Bobot final" : "Bobot belum final");$("kabar").appendChild(pemilikGiling); }
+            var lihatGiling = document.createElement("a");lihatGiling.className = "btn";lihatGiling.textContent = "Lihat penggilingan";
+            var konteksGiling = new URLSearchParams(location.search).get("kembali_kerja");
+            lihatGiling.href = "/proses-aktif/giling/" + encodeURIComponent(hasil.kode_proses) + (konteksGiling ? "?kembali_kerja=" + encodeURIComponent(konteksGiling) : "");
+            $("kabar").appendChild(lihatGiling);
+          }
           if (selesaiKering) {
             var lihat = document.createElement("a");lihat.className = "btn";
             lihat.textContent = "Lihat pendinginan";
@@ -2073,6 +2153,11 @@
           var terbaruPindah = await perbaruiPindah();
           if (terbaruPindah && !terbaruPindah.siap) pesanGagal = "Status atau lokasi lot sudah berubah. Periksa detail terbaru; formulir tidak mengirim ulang. Pilihan tetap utuh.";
         }
+        if (mulaiGiling) {
+          $("mg-periksa").hidden = false;periksaMulai = e instanceof TypeError;
+          var terbaruMulai = await perbaruiMulai();
+          if (terbaruMulai && !terbaruMulai.siap) pesanGagal = "Pilihan atau status silo sudah berubah. Periksa proses terbaru dan perbaiki centang; formulir tidak mengirim ulang. Pilihan tetap utuh.";
+        }
         salahFormulir(lembar, pesanGagal);
       }
     }
@@ -2100,6 +2185,7 @@
     $("simpan").onclick = async function () {
       if (formKhusus && lembar._menyimpan) return;
       if (selesaiKering && (periksaSelesai || risikoSelesai || (dataSelesai && dataSelesai.dapat_diselesaikan === false))) return;
+      if (mulaiGiling && periksaMulai) return;
       if (pindahSilo && (periksaPindah || (dataPindah && !dataPindah.siap))) return;
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
