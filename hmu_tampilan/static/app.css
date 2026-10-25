@@ -3911,3 +3911,14 @@ body.padiflow-ui .lembar--tambah-sosoh .lembar__isi{max-width:870px}
    termasuk pada kartu ponsel yang metadata lainnya memang satu baris. */
 .stok-mobile-list__isi small.stok-pk-unit,
 .stok-baris__kode small.stok-pk-unit { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+
+/* Permintaan/muatan PK: satu bobot, dengan dua cara input. Pembungkus
+   tersembunyi mengikuti cara yang aktif sebelum respons pratinjau datang. */
+body.padiflow-ui .lembar--unit-pk .lembar__isi{max-width:900px}
+.unit-pk-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.95fr);gap:24px;align-items:start}
+.lembar--unit-pk .hasil-field[hidden]{display:none}
+.unit-pk-input{position:relative;min-width:0}.unit-pk-input span{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:.85rem;color:var(--redup);pointer-events:none}
+body.padiflow-ui .lembar--unit-pk .unit-pk-input .fld{font-size:1.5rem;padding-right:80px;min-height:58px;font-variant-numeric:tabular-nums}
+.unit-pk-summary{padding:18px;border:1px solid var(--garis);border-radius:12px;background:var(--panel-2);min-width:0;overflow-wrap:anywhere;line-height:1.7}
+.unit-pk-summary h3{margin:0 0 12px;font-size:1rem}.unit-pk-summary .nota{white-space:pre-line;margin:0 0 16px;font-size:.9rem}.unit-pk-impact{font-size:.85rem;border-top:1px solid var(--garis);padding-top:14px;margin:14px 0 0}.lembar--unit-pk .hasil-actions{margin-top:18px}
+@media(max-width:640px){.unit-pk-layout{grid-template-columns:minmax(0,1fr);gap:0}.unit-pk-summary{padding:14px}.lembar--unit-pk .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}}

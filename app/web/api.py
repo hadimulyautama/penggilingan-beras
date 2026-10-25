@@ -17,7 +17,7 @@ import logging
 from datetime import date, datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -397,6 +397,22 @@ async def _wajib_mutu() -> None:
         if not await fitur_mutu(db):
             raise HTTPException(
                 400, "Pencatatan mutu sedang dimatikan di Pengaturan.")
+
+
+def _medan_unit_transfer(tahap):
+    """Satu susunan unit untuk permintaan G2 dan muatan aktual G1."""
+    acuan = 'kode_proses' if tahap == 'minta' else 'permintaan'
+    return [
+        {'name': 'cara', 'label': 'Cara mengisi jumlah', 'type': 'select',
+         'bawaan': 'karung', 'options': [['karung', 'Karung 50 kg dan curah'],
+                                        ['kg', 'Bobot hasil timbang (kg)']]},
+        {'name': 'jumlah_karung', 'label': 'Jumlah karung 50 kg', 'type': 'number'},
+        {'name': 'berat_curah_kg', 'label': 'Curah / bagian karung (kg, boleh kosong)', 'type': 'number'},
+        {'name': 'berat', 'label': 'Bobot hasil timbang (kg)', 'type': 'number'},
+        {'name': 'unit_pk', 'label': 'Pilih lot untuk melihat jumlah dan bobot.', 'type': 'pratinjau',
+         'source': '/api/actions/pratinjau-unit-transfer-pk/' + tahap,
+         'acuan': [acuan, 'cara', 'jumlah_karung', 'berat_curah_kg', 'berat']},
+    ]
 
 
 @router.get("/actions/menu")
@@ -838,15 +854,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # sesuatu.
             {"id": "kirim_permintaan_pk", "label": "🚚 Kirim PK ke Gudang 2",
              "post": "/api/actions/kirim-permintaan-pk",
+             "unit_transfer_pk": "kirim",
              "hint": "Catat yang BENAR-BENAR dimuat. Barangnya berpindah "
                      "sekarang juga, dan Admin yang menutup catatannya.",
              "fields": [
                  {"name": "permintaan", "label": "Permintaan yang mana",
                   "type": "remote", "source": "/api/actions/permintaan-disetujui",
                   "kosong": "Tidak ada permintaan yang sudah disetujui Admin."},
-                 {"name": "berat", "label": "Berat yang dimuat (kg)",
-                  "type": "number", "wajib": True},
-             ]},
+             ] + _medan_unit_transfer('kirim')},
         ]
     if g2 and (not fin or super_):
         # ⚠ Pindah tumpukan → silo bukan pekerjaan Admin (keputusan pemilik
@@ -1132,6 +1147,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             actions += [
                 {"id": "minta_pk_g1", "label": "🙋 Minta lot PK Gudang 1",
                  "post": "/api/actions/minta-pk-g1",
+                 "unit_transfer_pk": "minta",
                  "hint": "Memberitahu Admin bahwa bahan ini Anda perlukan. "
                          "Admin yang menyetujui dan menetapkan tujuannya.",
                  "fields": [
@@ -1139,12 +1155,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                       "type": "remote", "source": "/api/actions/pk-g1-tersedia",
                       "kosong": "Tidak ada lot PK Gudang 1 yang masih bersisa "
                                 "dan belum diminta."},
-                     # Satu isian, dan ia menghapus satu percakapan WhatsApp:
-                     # tanpa angka ini Admin menebak batas atas muatan, atau
-                     # bertanya di luar aplikasi (temuan QA 28 September 2026).
-                     {"name": "berat", "label": "Berapa kg yang Anda perlukan",
-                      "type": "number", "wajib": True},
-                 ]},
+                 ] + _medan_unit_transfer('minta')},
                 # Aksi "Muat & kirim PK" DIPINDAH ke blok `if g1:` pada 27
                 # September 2026 — lihat komentar di sana. Gudang 2 yang
                 # MEMINTA, Gudang 1 yang MENGIRIM sesudah Admin menyetujui.
@@ -3959,9 +3970,97 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
     return {"ok": True, "pesan": pesan}
 
 
-class MintaPkReq(BaseModel):
-    kode_proses: str
+@router.get('/actions/pratinjau-unit-transfer-pk/{tahap}')
+async def pratinjau_unit_transfer_pk(tahap: str, kode_proses: str = '',
+        permintaan: str = '', cara: str = 'karung', jumlah_karung: str = '',
+        berat_curah_kg: str = '', berat: str = '',
+        user: User = Depends(pengguna_aksi)):
+    """Bantuan unit saja; tidak menyetujui, mencadangkan, atau memindah stok."""
+    if tahap == 'minta':
+        _require(await _is_g2_operator(user) and not can_see_financials(user))
+    elif tahap == 'kirim':
+        _require(await _is_g1_operator(user))
+    else:
+        raise HTTPException(404, 'Tahap tidak ditemukan.')
+    from sqlalchemy import select
+    from app.models import MillingProcess, PermintaanPk
+    from app.models.permintaan import DISETUJUI
+    from app.services.pk_50 import bobot_isian, teks, angka
+    from app.services.jasa import nama_pemilik
+    from app.penggilingan.gudang1.services.milling import _pk_breakdown
+
+    nonaktif = ['berat'] if cara == 'karung' else ['jumlah_karung', 'berat_curah_kg']
+    if not (kode_proses.strip() if tahap == 'minta' else permintaan.strip()):
+        return {'teks': 'Pilih lot PK.' if tahap == 'minta' else 'Pilih permintaan yang sudah disetujui.', 'nonaktif': nonaktif}
+    async with SessionLocal() as db:
+        b = None
+        if tahap == 'minta':
+            proc = await db.scalar(select(MillingProcess).where(MillingProcess.kode_proses == kode_proses.strip()))
+        else:
+            try:
+                pid = int(permintaan)
+            except ValueError:
+                raise HTTPException(400, 'Pilih permintaan yang sah.') from None
+            b = await db.get(PermintaanPk, pid)
+            if b is None or b.status != DISETUJUI:
+                raise HTTPException(409, 'Permintaan tidak lagi menunggu pengiriman. Periksa keadaan terbaru.')
+            proc = await db.get(MillingProcess, b.milling_process_id)
+        if proc is None:
+            raise HTTPException(404, 'Lot PK tidak ditemukan.')
+        saldo = (await _pk_breakdown(db, proc.id)).tersedia
+        pemilik = await nama_pemilik(db, proc.jasa_id) if proc.jasa_id else 'Milik pabrik'
+        dasar = f'{proc.kode_proses} · {pemilik or "Pemilik belum tercatat"}\nSisa PK G1 {angka(saldo)} kg'
+        if saldo >= 0:
+            dasar += f' (setara {teks(saldo)})'
+        batas = float(b.berat_setuju_kg) if b and b.berat_setuju_kg is not None else None
+        if batas is not None:
+            from app.penggilingan.gudang2.service import label_tujuan
+            dasar += f'\nDisetujui {angka(batas)} kg ke {await label_tujuan(db, b.tujuan, b.silo_id)}'
+        rincian = dict(kode_proses=proc.kode_proses, pemilik=pemilik, tersedia_kg=saldo,
+                       disetujui_kg=batas, total_kg=None)
+    try:
+        def nilai(s):
+            return s.replace(',', '.') if s.strip() else None
+        if cara == 'kg':
+            from app.services.angka import angka_wajar
+            total = angka_wajar(nilai(berat), 'Bobot hasil timbang') if berat.strip() else None
+        else:
+            total = bobot_isian(jumlah_karung=nilai(jumlah_karung),
+                                berat_curah_kg=nilai(berat_curah_kg), cara=cara)
+        rincian['total_kg'] = total
+        if total is None:
+            pesan = 'Isi bobot hasil timbang.'
+        else:
+            pesan = f'Total {"permintaan" if tahap == "minta" else "muatan aktual"}: {angka(total)} kg\nSetara {teks(total)}.'
+            if total > saldo + .001:
+                pesan += ' Melebihi sisa PK; periksa jumlah.'
+            if batas is not None and total > batas + .001:
+                pesan += ' Melebihi persetujuan Admin; kurangi muatan atau mintakan persetujuan baru.'
+    except ValueError as e:
+        pesan = str(e)
+    return {'teks': dasar + '\n\n' + pesan,
+            'nonaktif': nonaktif, 'rincian': rincian}
+
+
+class UnitTransferPkReq(BaseModel):
+    """Unit baru di pintu web; bobot kg pemanggil lama tetap sah."""
     berat: Positif | None = None
+    cara: Literal['karung', 'kg'] | None = None
+    jumlah_karung: Annotated[int, Field(strict=True, ge=0)] | None = None
+    berat_curah_kg: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = None
+
+
+def _bobot_unit_transfer(req):
+    from app.services.pk_50 import bobot_isian
+    try:
+        return bobot_isian(berat=req.berat, jumlah_karung=req.jumlah_karung,
+                           berat_curah_kg=req.berat_curah_kg, cara=req.cara)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+
+
+class MintaPkReq(UnitTransferPkReq):
+    kode_proses: str
 
 
 @router.post("/actions/minta-pk-g1")
@@ -3979,12 +4078,13 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
     _require(await _is_g2_operator(user) and not can_see_financials(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih lot PK dulu.")
+    berat = _bobot_unit_transfer(req)
     from app.services.permintaan_pk import PermintaanError, minta
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            await minta(db, user=u, kode_proses=req.kode_proses,
-                        berat=req.berat)
+            b = await minta(db, user=u, kode_proses=req.kode_proses,
+                            berat=berat)
         except PermintaanError as e:
             raise _err(e, "Gagal meminta lot PK.")
     # Kalimat ini dua kali menyebut hal yang salah, dan keduanya ketahuan
@@ -3995,8 +4095,9 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
     # Dua kalimat sekerabatnya sudah dibetulkan lebih dulu; yang ini tertinggal
     # karena ia satu-satunya yang dibaca operator Gudang 2, dan tak seorang pun
     # dari kami membuka layar itu sesudah tangannya berpindah.
+    from app.services.pk_50 import angka
     return {"ok": True,
-            "pesan": f"✓ Lot *{req.kode_proses}* diminta {_rp(float(req.berat or 0))} "
+            "pesan": f"✓ Lot *{req.kode_proses}* diminta {angka(b.berat_minta_kg)} "
                      "kg — Admin memutuskannya di Menunggu keputusan. Kalau "
                      "disetujui, Gudang 1 yang memuat dan mengirimnya."}
 
@@ -4045,9 +4146,8 @@ async def act_acc_permintaan_pk(req: AccPermintaanReq,
                      "Antrian tunggu mereka."}
 
 
-class KirimPermintaanReq(BaseModel):
+class KirimPermintaanReq(UnitTransferPkReq):
     permintaan: str
-    berat: Positif | None = None
 
 
 @router.post("/actions/kirim-permintaan-pk")
@@ -4076,6 +4176,7 @@ async def act_kirim_permintaan_pk(req: KirimPermintaanReq,
     lenyap tanpa kabar membuat orangnya menekannya lagi besok.
     """
     _require(await _is_g1_operator(user))
+    berat = _bobot_unit_transfer(req)
     try:
         pid = int((req.permintaan or "").strip())
     except ValueError:
@@ -4084,19 +4185,19 @@ async def act_kirim_permintaan_pk(req: KirimPermintaanReq,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            b = await kirim(db, user=u, permintaan_id=pid, berat=req.berat)
+            b = await kirim(db, user=u, permintaan_id=pid, berat=berat)
         except PermintaanError as e:
             raise _err(e, "Gagal mengirim PK.")
         from app.penggilingan.gudang2.service import label_tujuan
 
         lok = await label_tujuan(db, b.tujuan, b.silo_id)
-        kg = float(b.berat_kirim_kg or 0)
         from app.models import InternalTransfer
-        from app.services.pk_50 import teks
+        from app.services.pk_50 import teks, angka
         transfer = await db.get(InternalTransfer, b.internal_transfer_id)
+        kg = transfer.berat_kg
         packing = teks(transfer.berat_kg)
     return {"ok": True,
-            "pesan": f"✓ {_rp(kg)} kg dikirim ke {lok} — Gudang 2 sudah bisa "
+            "pesan": f"✓ {angka(kg)} kg dikirim ke {lok} — Gudang 2 sudah bisa "
                      "memakainya. Admin menutup catatannya. Packing otomatis: " + packing + "."}
 
 

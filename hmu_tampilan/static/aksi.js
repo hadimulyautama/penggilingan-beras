@@ -590,8 +590,10 @@
     var bebaskanSosoh = a.konteks_bebaskan_sosoh;
     var tambahGiling = a.konteks_tambah_giling;
     var tambahSosoh = a.konteks_tambah_sosoh;
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh;
+    var unitTransferPk = a.unit_transfer_pk;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk;
     var labelSimpan = (tambahGiling || tambahSosoh) ? "Tambahkan silo" : (bebaskanGiling || bebaskanSosoh) ? "Periksa sisa silo" : (selesaiGiling || selesaiSosoh) ? "Periksa penyelesaian" : mulaiSosoh ? "Mulai penyosohan" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
+    if (unitTransferPk) labelSimpan = unitTransferPk === 'minta' ? 'Minta PK' : 'Catat pengiriman';
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
     lembar.classList.toggle("lembar--kadar", !!formAir);
@@ -605,6 +607,7 @@
     lembar.classList.toggle("lembar--bebaskan-sosoh", !!bebaskanSosoh);
     lembar.classList.toggle("lembar--tambah-giling", !!tambahGiling);
     lembar.classList.toggle("lembar--tambah-sosoh", !!tambahSosoh);
+    lembar.classList.toggle('lembar--unit-pk', !!unitTransferPk);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
@@ -631,6 +634,54 @@
     lembar.oninput = lembar.onchange = function () { lembar._berubah = true; };
     bukaLembar(lembar);
     document.body.style.overflow = "hidden";
+
+    function aturUnitPk() {
+      if (!unitTransferPk) return;
+      var karung = $('f_cara').value === 'karung';
+      ['jumlah_karung', 'berat_curah_kg', 'berat'].forEach(function (nama) {
+        var input = $('f_' + nama), nonaktif = nama === 'berat' ? karung : !karung;
+        input.disabled = nonaktif;
+        input.hidden = nonaktif;
+        input.dataset.pratinjauNonaktif = nonaktif ? '1' : '';
+        input.closest('.hasil-field').hidden = nonaktif;
+        var label = lembar.querySelector('label[for="f_' + nama + '"]');
+        if (label) label.hidden = nonaktif;
+      });
+      $('f_berat').toggleAttribute('data-wajib', !karung);
+    }
+    if (unitTransferPk) {
+      var grupUnit = lembar.querySelector('.grup');
+      (a.fields || []).filter(function (f) { return f.type !== 'pratinjau'; }).forEach(function (f) {
+        var input = grupUnit.querySelector('[data-name="' + f.name + '"]');
+        var kunci = input.type === 'hidden' ? input.previousElementSibling : null;
+        var label = grupUnit.querySelector('label[for="f_' + f.name + '"]');
+        var wadah = document.createElement('div'); wadah.className = 'hasil-field';
+        grupUnit.insertBefore(wadah, label || kunci || input);
+        if (label) wadah.appendChild(label);
+        if (kunci) {
+          wadah.insertAdjacentHTML('beforeend', '<span class="lbl">' + esc(f.label) + '</span>');
+          wadah.appendChild(kunci);
+          kunci.setAttribute('role', 'textbox'); kunci.setAttribute('aria-readonly', 'true');
+          kunci.setAttribute('aria-label', f.label);
+        }
+        wadah.appendChild(input);
+        if (f.type === 'number') {
+          var satuan = document.createElement('div'); satuan.className = 'unit-pk-input';
+          input.before(satuan); satuan.appendChild(input);
+          satuan.insertAdjacentHTML('beforeend', '<span>' + (f.name === 'jumlah_karung' ? 'karung' : 'kg') + '</span>');
+          if (f.name === 'jumlah_karung') input.inputMode = 'numeric';
+        }
+      });
+      var layoutUnit = document.createElement('div'); layoutUnit.className = 'unit-pk-layout';
+      grupUnit.before(layoutUnit); layoutUnit.appendChild(grupUnit);
+      var asideUnit = document.createElement('aside'); asideUnit.className = 'unit-pk-summary';
+      asideUnit.innerHTML = '<h3>Ringkasan ' + (unitTransferPk === 'minta' ? 'permintaan' : 'muatan aktual') + '</h3>';
+      layoutUnit.appendChild(asideUnit); asideUnit.appendChild($('p_unit_pk'));
+      asideUnit.insertAdjacentHTML('beforeend', '<p class="hasil-help">Satu karung PK sendiri = 50 kg. Isi curah atau bagian karung dalam kg. Untuk seluruh muatan hasil timbang, pilih cara kg.</p><p class="unit-pk-impact">' +
+        (unitTransferPk === 'minta' ? 'Permintaan belum memindahkan stok. Admin menetapkan tujuan dan batas bobot; Gudang 1 mencatat muatan aktual.' : 'Catat yang benar-benar dimuat. Muatan boleh kurang dari persetujuan. Stok berpindah saat pengiriman tercatat; Admin menutupnya setelah itu.') + '</p>');
+      $('f_cara').addEventListener('change', aturUnitPk);
+      aturUnitPk();
+    }
 
     // Hanya bantuan baca: tiga input/handler asli tetap mengirim TOTAL.
     // Kegagalan ringkasan tidak mematikan Simpan atau mengosongkan isian.
@@ -2621,8 +2672,13 @@
             Number.isFinite(Number(nilai.replace(",", "."))) && (Number(nilai.replace(",", ".")) <= 0 || Number(nilai.replace(",", ".")) > 100)) pesan = "Isi persen lebih dari 0 dan maksimal 100%.";
         if((bebaskanGiling || bebaskanSosoh) && el.dataset.name==="sisa" && nilai && Number.isFinite(Number(nilai.replace(",","."))) && Number(nilai.replace(",","."))<0)pesan="Sisa harus nol atau lebih.";
         if(selesaiGiling && el.dataset.name==="berat_akhir" && nilai && Number.isFinite(Number(nilai.replace(",","."))) && Number(nilai.replace(",","."))<=0)pesan="Hasil akhir PK harus lebih dari nol.";
+        if (unitTransferPk && nilai && el.dataset.name === 'jumlah_karung' && (!Number.isInteger(Number(nilai.replace(',', '.'))) || Number(nilai.replace(',', '.')) < 0)) pesan = 'Jumlah karung harus bilangan bulat, nol atau lebih.';
+        if (unitTransferPk && nilai && el.dataset.name === 'berat_curah_kg' && Number(nilai.replace(',', '.')) < 0) pesan = 'Bobot curah tidak boleh negatif.';
         if (pesan) { kurang.push({el: el, pesan: pesan}); }
       });
+      if (unitTransferPk && $('f_cara').value === 'karung' && !$('f_jumlah_karung').value.trim() && !$('f_berat_curah_kg').value.trim()) {
+        kurang.push({el: $('f_jumlah_karung'), pesan: 'Isi jumlah karung atau bobot curah yang diperlukan.'});
+      }
       if (kurang.length) {
         kurang.forEach(function (k, i) {
           var tampak = k.el.type === "hidden" ? ($("x_" + k.el.dataset.name) || $("b_" + k.el.dataset.name) || k.el) : k.el;

@@ -117,8 +117,14 @@ PK sendiri. Kosong keduanya berarti seluruh saldo; jalur kg manual tetap
 ada untuk sebagian karung. Kolom `jumlah_karung_50` sengaja terpisah dari
 `jumlah_karung` milik PK luar: PK luar memakai rasio bobot partai dinamis,
 sedangkan PK sendiri tetap mempunyai kg tetap. Jangan memasukkan PK sendiri
-ke sinkronisasi bobot karung pembelian luar. Permintaan transfer tetap memakai
-kontrak kg yang berlaku; perubahan satuannya merupakan pekerjaan terpisah.
+ke sinkronisasi bobot karung pembelian luar. Permintaan Gudang 2 dan pengiriman Gudang 1 kini menerima jumlah karung
+50 kg dan curah, atau bobot kg hasil timbang. `pk_50.bobot_isian` mengubah
+satu isian menjadi bobot kg sebelum memanggil layanan empat langkah lama.
+Permintaan/persetujuan belum memindahkan stok; kirim tetap satu perpindahan.
+Persetujuan dan penutupan Admin tetap kg. Payload lama `berat`, termasuk
+kirim tanpa berat yang memakai persetujuan, tetap didukung. Rincian satuan
+yang dihitung dari bobot diberi label setara, bukan jumlah karung historis
+yang direka. Tidak ada migrasi atau perubahan rumus saldo untuk input ini.
 
 ## Peristiwa — tulang punggung baru (Tahap 3, sejak 13 September 2026)
 

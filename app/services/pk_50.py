@@ -38,6 +38,38 @@ def teks(berat):
     return f'{n} karung × 50 kg + {angka(c)} kg curah'
 
 
+def bobot_isian(*, berat=None, jumlah_karung=None, berat_curah_kg=None,
+                 cara=None):
+    """Ubah satu pilihan unit menjadi kg, tanpa membaca atau menulis stok.
+
+    Permintaan dan pengiriman tetap lewat layanan empat langkah yang lama.
+    Cara kg mempertahankan pemanggil lama, termasuk berat kosong pada kirim.
+    Angka curah juga boleh merupakan bagian karung hasil timbang: jangan
+    menambah batas curah atau batas saldo per komponen di pintu konversi ini.
+    """
+    unit = jumlah_karung is not None or berat_curah_kg is not None
+    if cara not in (None, 'karung', 'kg'):
+        raise ValueError('Pilih cara pengisian karung atau kg hasil timbang.')
+    if (berat is not None and unit) or (cara == 'kg' and unit) or (cara == 'karung' and berat is not None):
+        raise ValueError('Gunakan karung dan curah, atau bobot kg; jangan mengirim keduanya.')
+    if not unit and cara != 'karung':
+        return berat
+    try:
+        k = Decimal(str(jumlah_karung)) if jumlah_karung is not None else Decimal(0)
+        c = Decimal(str(berat_curah_kg)) if berat_curah_kg is not None else Decimal(0)
+        if isinstance(jumlah_karung, bool) or not k.is_finite() or k < 0 or k != k.to_integral_value():
+            raise ValueError('Jumlah karung harus bilangan bulat, nol atau lebih.')
+        if not c.is_finite() or c < 0:
+            raise ValueError('Bobot curah harus valid, nol atau lebih.')
+        total = float(k * UKURAN + c)
+    except (ArithmeticError, TypeError):
+        raise ValueError('Isi jumlah karung dan bobot curah yang valid.') from None
+    from math import isfinite
+    if not isfinite(total) or total <= 0:
+        raise ValueError('Isi karung atau curah dengan total lebih dari nol.')
+    return total
+
+
 def pilihan(saldo, jumlah_karung=None, berat_curah_kg=None):
     """Unit yang dipilih atas saldo yang dibaca pemanggil.
 
