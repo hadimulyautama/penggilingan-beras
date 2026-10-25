@@ -1101,6 +1101,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "akhiri_penyosohan", "label": "🏁 Selesaikan penyosohan",
              "post": "/api/actions/akhiri-penyosohan", "pratinjau_proses": "sosoh",
+             "konteks_selesai_sosoh": {"source": "/api/actions/ringkasan-selesai-penyosohan"},
              "hint": "Nyatakan seluruh bahan selesai melewati mesin dan semua hasil sudah dicatat. Bebaskan setiap silo dan catat sisanya terlebih dahulu.",
              "fields": [{"name": "kode_proses", "label": "Proses penyosohan",
                 "type": "remote", "source": "/api/actions/polishing-active"}]},
@@ -4383,6 +4384,19 @@ class AkhiriPenyosohanReq(BaseModel):
     dasar: str
 
 
+@router.get("/actions/ringkasan-selesai-penyosohan")
+async def konteks_selesai_penyosohan(kode_proses: str, user: User = Depends(pengguna_aksi)):
+    from fastapi.responses import JSONResponse
+    from app.web.form_selesai_penyosohan import ringkasan
+    _require(await _is_g2_operator(user))
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_proses=kode_proses)
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/actions/pratinjau-selesai-proses")
 async def pratinjau_selesai_proses(jenis: str, kode_proses: str,
         berat_akhir: float | None = None, user: User = Depends(pengguna_aksi)) -> dict:
@@ -4398,6 +4412,16 @@ async def pratinjau_selesai_proses(jenis: str, kode_proses: str,
             if jenis == "giling":
                 from app.web.form_selesai_giling import ringkasan
                 data["rincian"] = await ringkasan(db, kode_proses=kode_proses, berat_akhir=berat_akhir)
+            if jenis == "sosoh":
+                from app.web.form_selesai_penyosohan import ringkasan
+                data["rincian"] = await ringkasan(db, kode_proses=kode_proses)
+                # Teks/token lama dan rincian baru harus menggambarkan keadaan
+                # yang sama. Pemeriksaan ini hanya membaca, tidak menutup proses.
+                ulang = await ringkasan_selesai(db, jenis=jenis, kode=kode_proses)
+                if ulang["dasar"] != data["dasar"]:
+                    raise ValueError("Data proses berubah saat diperiksa. Periksa ulang penyelesaian.")
+                from fastapi.responses import JSONResponse
+                return JSONResponse(data, headers={"Cache-Control": "no-store"})
             return data
         except ValueError as e:
             raise HTTPException(409, str(e))
