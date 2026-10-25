@@ -3862,3 +3862,8 @@ body.padiflow-ui .lembar--mulai-sosoh .lembar__isi{max-width:980px}
 .lembar--mulai-sosoh .ms-source p{margin:0;font-size:.75rem;overflow-wrap:anywhere}
 .lembar--mulai-sosoh .ms-source small{color:var(--redup);font-size:.72rem}
 .lembar--mulai-sosoh .hasil-actions button{white-space:normal;min-width:0}
+
+/* Keterangan asal berlaku untuk semua silo; bantuan tidak menempel ke kartu. */
+.lembar--mulai-sosoh .ms-origin-help{margin:0 0 12px;color:var(--redup);font-size:.75rem;line-height:1.6}
+.lembar--mulai-sosoh .ms-options-help{margin:12px 0 0}
+.lembar--mulai-sosoh .ms-footer-help{margin:20px 0 0}

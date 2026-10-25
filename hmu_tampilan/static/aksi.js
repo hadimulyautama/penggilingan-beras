@@ -1188,7 +1188,6 @@
             var blok=document.createElement('article');blok.className='ms-source';
             var judul=document.createElement('strong');judul.textContent=s.nama+' · '+s.bobot;blok.appendChild(judul);
             (s.komposisi||[]).forEach(function(k){var p=document.createElement('p');p.textContent=k.jenis+' · '+k.bobot;blok.appendChild(p);});
-            var catatan=document.createElement('small');catatan.textContent='Riwayat asal masuk. Bobot asal bukan sisa per lot dan tidak ditambahkan lagi ke total bahan.';blok.appendChild(catatan);
             (s.sumber||[]).forEach(function(r){var p=document.createElement('p');p.textContent=r.kode+' · '+r.jenis+' · '+r.bobot+' · '+r.pemilik;blok.appendChild(p);});
             $('ms-rinci').appendChild(blok);
           });
@@ -1219,9 +1218,10 @@
         tataMulai.querySelector('h3').textContent='Ringkasan penyosohan baru';
         $('mg-bobot').previousElementSibling.textContent='Total bahan awal';
         $('mg-bentuk').previousElementSibling.textContent='Proses yang dibentuk';
-        var petunjukSosoh=tataMulai.querySelector('.mg-preview>.hasil-help');petunjukSosoh.textContent='Memulai proses mencatat bahan awal. Sisa per silo dan hasil penyosohan dicatat lewat tindakan yang sudah ada. Silo tidak otomatis kosong.';borangHasil.querySelector('.hasil-actions').before(petunjukSosoh);
+        grupMulai.querySelector('.hasil-help').classList.add('ms-options-help');
+        var petunjukSosoh=tataMulai.querySelector('.mg-preview>.hasil-help');petunjukSosoh.classList.add('ms-footer-help');petunjukSosoh.textContent='Memulai proses mencatat bahan awal. Sisa per silo dan hasil penyosohan dicatat lewat tindakan yang sudah ada. Silo tidak otomatis kosong.';borangHasil.querySelector('.hasil-actions').before(petunjukSosoh);
         $('mg-final').textContent='Bobot diambil otomatis dari saldo silo saat disimpan.';
-        tataMulai.querySelector('.mg-preview').insertAdjacentHTML('beforeend','<details class="ms-sources" id="ms-sumber" hidden><summary>Lihat komposisi &amp; asal bahan</summary><div id="ms-rinci"></div></details>');
+        tataMulai.querySelector('.mg-preview').insertAdjacentHTML('beforeend','<details class="ms-sources" id="ms-sumber" hidden><summary>Lihat komposisi &amp; asal bahan</summary><p class="ms-origin-help">Riwayat asal masuk. Bobot asal bukan sisa per lot dan tidak ditambahkan lagi ke total bahan.</p><div id="ms-rinci"></div></details>');
       }
       $("mg-periksa").onclick = perbaruiMulai;
     }
