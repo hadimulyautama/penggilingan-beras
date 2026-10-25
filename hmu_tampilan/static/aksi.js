@@ -1401,7 +1401,7 @@
       pasangTs('pemilik',d.pemilik);pasangTs('milik',d.kepemilikan);pasangTs('status',d.status==='dijeda'?'Dijeda':d.status==='selesai'?'Selesai':'Berjalan');
       pasangTs('konteks',[d.kode,d.pesanan,d.sumber_aktif.length?'Sumber aktif '+d.sumber_aktif.join(' + '):'Seluruh silo sebelumnya sudah dibebaskan',d.sebab_jeda].filter(Boolean).join(' · '));
       pasangTs('silo',d.silos.map(function(r){return r.nama;}).join(' + ')||'Belum dipilih');pasangTs('total',d.tambahan);pasangTs('owner',d.pemilik);
-      pasangTs('impact','Tetap pada proses yang sama. Penyosohan '+(d.status==='dijeda'?'tetap dijeda':'tetap berjalan')+'; hasil dan sisa dicatat melalui tindakan yang sudah ada.');
+      pasangTs('impact',d.status==='selesai'?'Proses sudah selesai; silo tidak dapat ditambahkan. Buka detail untuk melihat keadaan terbaru.':'Tetap pada proses yang sama. Penyosohan '+(d.status==='dijeda'?'tetap dijeda':'tetap berjalan')+'; hasil dan sisa dicatat melalui tindakan yang sudah ada.');
       var ulang=d.silos.filter(function(r){return r.pakai_kembali;}),kosong=ulang.some(function(r){return r.kosong;});$('ts-reuse').hidden=!ulang.length;
       pasangTs('reuse-title',kosong?'Silo kosong dipakai kembali':'Pemakaian baru pada silo yang sama');pasangTs('reuse-text',kosong?'Pemakaian baru dimulai dengan bahan awal 0 kg untuk silo yang kosong. Bahan dapat diisi setelah silo ditambahkan. Riwayat sebelumnya tetap tersimpan.':'Saldo tersedia menjadi bahan awal pemakaian baru. Riwayat sisa dan bahan terpakai sebelumnya tetap tersimpan.');
       $('ts-warning').innerHTML=d.peringatan.map(function(x){return '<p>'+esc(x)+'</p>';}).join('');$('ts-warning').hidden=!d.peringatan.length;
