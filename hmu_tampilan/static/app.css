@@ -3807,8 +3807,10 @@ body.padiflow-ui .lembar--tambah-giling .lembar__isi{max-width:930px}
 .lembar--tambah-giling .tg-summary small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:10px}
 .lembar--tambah-giling .tg-warning{border-left:3px solid var(--hati);background:var(--panel-2);padding:12px;margin:0 0 8px;border-radius:8px;font-size:.8rem;line-height:1.6}
 .lembar--tambah-giling #tg-peringatan:empty{display:none}
-.lembar--tambah-giling .tg-sources{border:1px solid var(--garis);border-radius:10px;padding:12px;font-size:.8rem;line-height:1.6}
-.lembar--tambah-giling .tg-sources summary{cursor:pointer;font-weight:600;min-height:30px}
+.lembar--tambah-giling select.fld{appearance:auto;padding-right:36px}
+.lembar--tambah-giling .tg-sources{border:0;border-top:1px solid var(--garis);border-radius:0;padding:8px 0 0;font-size:.8rem;line-height:1.6}
+.lembar--tambah-giling .tg-sources summary{cursor:pointer;font-weight:400;min-height:44px;align-content:center;color:var(--pd-blue,#a5c5ff)}
+.terik .lembar--tambah-giling .tg-sources summary{color:var(--pd-blue,#3275d6)}
 .lembar--tambah-giling .tg-source{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px 12px;padding:12px 0;border-top:1px solid var(--garis)}
 .lembar--tambah-giling .tg-source>span{text-align:right;font-variant-numeric:tabular-nums}
 .lembar--tambah-giling .tg-source small{grid-column:1/-1;color:var(--redup)}
