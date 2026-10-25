@@ -1552,7 +1552,7 @@
         wadah.innerHTML = daftar.map(function (o) {
           var c = sudah.indexOf(o.value) >= 0 || pulih.indexOf(o.value) >= 0;
           var rincian = mulaiGiling && o.rincian;
-          var teksKartu = rincian ? '<span class="mg-name"><strong>' + esc(rincian.nama) + '</strong><strong>' + esc(rincian.bobot) + '</strong></span><span class="mg-owner">' + esc(rincian.pemilik) + '</span>' + (rincian.pesanan.length ? '<small>' + esc(rincian.pesanan.join(" · ")) + '</small>' : '') + '<small>' + (rincian.jumlah_sumber === null ? '' : rincian.jumlah_sumber + ' sumber · ') + esc(rincian.asal.join(" + ")) + '</small>' : esc(o.label);
+          var teksKartu = rincian ? '<span class="mg-name"><strong>' + esc(rincian.nama) + '</strong><strong>' + esc(rincian.bobot) + '</strong></span><span class="mg-owner">' + esc(rincian.pemilik) + (rincian.pesanan.length ? ' · ' + esc(rincian.pesanan.join(" · ")) : '') + '</span>' + '<small>' + (rincian.jumlah_sumber === null ? '' : rincian.jumlah_sumber + ' sumber · ') + esc(rincian.asal.join(" + ")) + '</small>' : esc(o.label);
           return '<label class="centang"><input type="checkbox" value="' + esc(o.value) +
             '" data-teks="' + esc(o.label) + '"' + (c ? " checked" : "") + ">" +
             (mulaiGiling ? '<span class="mg-main">' : '<span>') + teksKartu + "</span></label>";

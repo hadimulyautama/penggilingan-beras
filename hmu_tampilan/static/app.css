@@ -3734,16 +3734,16 @@ body.padiflow-ui .lembar--mulai-giling .lembar__isi{max-width:980px}
 .lembar--mulai-giling .mg-owner{font-size:.8rem}
 .lembar--mulai-giling .mg-main small{font-size:.75rem;color:var(--redup);line-height:1.5}
 .lembar--mulai-giling .mg-preview{min-width:0;overflow-wrap:anywhere;display:grid;gap:12px}
-.lembar--mulai-giling .mg-summary{padding:16px;background:var(--panel-2);border:1px solid var(--garis);border-radius:12px}
-.lembar--mulai-giling h3{font-size:.95rem;margin:0 0 12px;font-weight:600}
+.lembar--mulai-giling .mg-summary{padding:14px;background:var(--panel-2);border:1px solid var(--garis);border-radius:12px}
+.lembar--mulai-giling h3{font-size:.95rem;margin:0 0 8px;font-weight:600}
 .lembar--mulai-giling dl{margin:0;font-size:.8rem}
-.lembar--mulai-giling dl>div,.lembar--mulai-giling #mg-per-silo>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--garis)}
+.lembar--mulai-giling dl>div,.lembar--mulai-giling #mg-per-silo>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:12px;padding:6px 0;border-bottom:1px solid var(--garis)}
 .lembar--mulai-giling dt{color:var(--redup)}
 .lembar--mulai-giling dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 .lembar--mulai-giling .mg-total dd{font-size:1.1rem;color:var(--aman)}
 .lembar--mulai-giling #mg-per-silo{font-size:.75rem;color:var(--redup)}
 .lembar--mulai-giling #mg-per-silo strong{text-align:right;font-weight:500}
-.lembar--mulai-giling .mg-summary small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:12px}
+.lembar--mulai-giling .mg-summary small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:8px}
 .lembar--mulai-giling .mg-warning{padding:12px;border-radius:8px;border-left:3px solid var(--hati);background:var(--panel-2);font-size:.8rem;line-height:1.6;margin:0 0 8px}
 .lembar--mulai-giling .mg-check{margin:12px 0}.lembar--mulai-giling .mg-check:has(#mg-info:empty):has(button[hidden]){display:none}
 .lembar--mulai-giling .mg-check button{font-size:.8rem;white-space:normal}
