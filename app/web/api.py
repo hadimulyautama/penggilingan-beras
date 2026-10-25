@@ -1000,13 +1000,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # diketik seseorang bertahun lalu — juga tak ikut dalam "A+B".
             {"id": "mulai_penyosohan", "label": "🏭 Mulai penyosohan",
              "post": "/api/actions/mulai-penyosohan",
+             "konteks_mulai_penyosohan": {"source": "/api/actions/ringkasan-mulai-penyosohan"},
              "hint": "Boleh beberapa silo sekaligus — hasilnya satu proses "
                      "penyosohan, dan sisanya dicatat per silo saat selesai.",
              "fields": [
                  {"name": "silo", "label": "Silo bahan (boleh lebih dari satu)",
                   "type": "remote_banyak",
                   "source": "/api/actions/silo-bahan-g2",
-                  "kosong": "Tidak ada silo Gudang 2 berisi PK yang siap disosoh."},
+                  "kosong": "Tidak ada silo Gudang 2 berisi bahan yang siap disosoh."},
              ]},
             {"id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
              "post": "/api/actions/hasil-penyosohan",
@@ -4262,7 +4263,7 @@ async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pen
             raise _err(e, "Gagal mulai penyosohan.")
     pesan = (f"✓ Penyosohan *{r.proc.kode_proses}* mulai — silo "
              f"{'+'.join(r.silos)} ({r.berat_awal_total:g} kg).")
-    return {"ok": True, "pesan": pesan}
+    return {"ok": True, "pesan": pesan, "kode_proses": r.proc.kode_proses}
 
 
 class TambahSiloPenyosohanReq(BaseModel):
@@ -4602,7 +4603,7 @@ async def tujuan_pk_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/silo-bahan-g2")
-async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def silo_bahan_g2(induk: str = "", rincian: bool = False, user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo berisi atau silo kosong yang dibebaskan oleh proses yang dipilih.
 
     Daftarnya dari MASTER, bukan tupel huruf yang diketik di kode: silo Gudang
@@ -4674,8 +4675,22 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
             huruf = s.nama_silo.replace("Silo ", "")
             label = (f"{s.nama_silo} · kosong, gunakan kembali lalu isi bahan"
                      if kg <= 0 else f"{s.nama_silo} · {_rp(kg)} kg")
-            keluar.append({"value": huruf, "label": label})
+            item = {"value": huruf, "label": label}
+            if rincian:
+                from app.web.form_mulai_penyosohan import baca_silo
+                item["rincian"] = (await baca_silo(db, s))[0]
+            keluar.append(item)
     return keluar
+
+
+@router.get("/actions/ringkasan-mulai-penyosohan")
+async def ringkasan_mulai_penyosohan(silo: Annotated[list[str] | None, Query()] = None,
+                                   user: User = Depends(pengguna_aksi)):
+    _require(await _is_g2_operator(user))
+    from fastapi.responses import JSONResponse
+    from app.web.form_mulai_penyosohan import ringkasan
+    async with SessionLocal() as db:
+        return JSONResponse(await ringkasan(db, silo or []), headers={"Cache-Control": "no-store"})
 
 
 @router.get("/actions/silo-broken-g2")
