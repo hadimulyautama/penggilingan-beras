@@ -215,10 +215,16 @@ async def create_internal_transfer(
         n = await buku.jumlah_jenis(db, PK_DIPINDAH_G1G2, "milling_process_id", proc.id)
         kunci_kiriman = f"{PK_DIPINDAH_G1G2}:proses:{proc.id}:{n + 1}"
 
+    from decimal import Decimal, ROUND_HALF_UP
+    from app.services.pk_50 import bagi
+    # Kolom transfer tetap dua desimal seperti sebelumnya. Pemecahan unit
+    # memakai bobot yang benar-benar akan tercatat, termasuk batas50kg.
+    karung, curah = bagi(Decimal(str(kirim)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
     kode_transfer = await next_transfer_code(db)
     muatan = {
         "kode_transfer": kode_transfer, "milling_process_id": proc.id, "kode_proses": kode_proses,
         "drying_lot_id": proc.drying_lot_id, "berat_kg": kirim,
+        "jumlah_karung": karung, "berat_curah_kg": curah,
         "lokasi_tujuan": lokasi_tujuan, "silo_id": silo_tujuan_id,
         "hpp_per_kg": hpp, "jenis": jenis, "tanggal": now.date(), "waktu": now,
         # Pemiliknya ikut ke buku besar. Tanpa ini, satu-satunya tempat yang
@@ -244,7 +250,7 @@ async def create_internal_transfer(
         # yang berpindah sudah berpindah, dan pemiliknya tak boleh ikut bergeser
         # bila lotnya kemudian dikoreksi.
         jasa_id=proc.jasa_id,
-        berat_kg=kirim,
+        berat_kg=kirim, jumlah_karung=karung, berat_curah_kg=curah,
         lokasi_tujuan=lokasi_tujuan,
         silo_id=silo_tujuan_id,
         hpp_per_kg=hpp,

@@ -37,7 +37,7 @@
         {% endfor %}
         {% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
         <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
-          <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{% if t.tanggal %}{{ t.tanggal }}{% endif %}{% if t.lama %}{% if t.tanggal %} · {% endif %}{{ t.lama }}{% endif %}</small></span>
+          <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{% if t.tanggal %}{{ t.tanggal }}{% endif %}{% if t.lama %}{% if t.tanggal %} · {% endif %}{{ t.lama }}{% endif %}</small>{% if t.ringkasan_karung|default('') %}<small class="stok-pk-unit">{{ t.ringkasan_karung }}</small>{% endif %}</span>
           <span>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }}</span>
           <span>Gudang 2</span>
           <span><span class="stok-status {{ 'stok-status--jasa' if t.pemilik else 'stok-status--pabrik' }}">{{ "Jasa" if t.pemilik else "Pabrik" }}</span></span>

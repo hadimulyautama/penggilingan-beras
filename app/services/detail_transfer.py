@@ -81,7 +81,11 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
         nilai=permintaan.berat_final_kg-permintaan.berat_kirim_kg
         selisih=('+' if nilai>0 else '−' if nilai<0 else '')+bobot(abs(nilai))
     tahap=3 if permintaan and permintaan.status=='selesai' else 2 if permintaan and permintaan.waktu_kirim else 1 if permintaan and permintaan.waktu_setuju else 0
-    return dict(kode=kode,catatan=catatan,permintaan=permintaan,proses=proc,pemilik=pemilik,jasa=jasa,
+    packing = "Belum tercatat pada data lama"
+    if catatan and catatan.jumlah_karung is not None:
+        from app.services.pk_50 import angka
+        packing = f"{catatan.jumlah_karung} karung × 50 kg + {angka(catatan.berat_curah_kg)} kg curah"
+    return dict(packing=packing, kode=kode,catatan=catatan,permintaan=permintaan,proses=proc,pemilik=pemilik,jasa=jasa,
         status_catatan=status_catatan,status_permintaan=STATUS.get(permintaan.status,permintaan.status) if permintaan else 'Tanpa permintaan',
         tujuan=tujuan,jenis_pk=await pk_jenis(db,proc),berat=berat,selisih=selisih,tahap=tahap,
         statistik=[('Berat transfer ini',bobot(catatan.berat_kg) if catatan else 'Belum ada transfer'),

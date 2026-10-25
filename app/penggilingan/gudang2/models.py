@@ -252,6 +252,9 @@ class PkTumpukanToSilo(Base, TimestampMixin):
     # menyimpan K saja supaya koreksi bobot truk tidak membekukan perkalian lama.
     berat_timbang_kg: Mapped[Decimal | None] = mapped_column("berat_kg", Numeric(12, 3))
     jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    # PK sendiri tetap kg tetap; unit50kg terpisah dari rasio karung PK luar.
+    jumlah_karung_50: Mapped[int | None] = mapped_column(Integer)
+    berat_curah_kg: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
     pemakaian_silo_id: Mapped[int | None] = mapped_column(ForeignKey("polishing_silo_usage.id"))
     selama_proses: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
                                                server_default=text("false"))

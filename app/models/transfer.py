@@ -41,6 +41,9 @@ class InternalTransfer(Base, TimestampMixin):
     )
     drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # NULL pada catatan lama: jumlah fisik historis tidak dikarang.
+    jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    berat_curah_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: JENIS tempatnya: `silo` atau `ditumpuk`. Silo MANA ada di `silo_id`.
     #:
     #: Baris lama menyimpan `silo_a`/`silo_b` — dua nama silo yang diketik ke

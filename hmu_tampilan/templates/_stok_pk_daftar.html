@@ -35,7 +35,7 @@
               <span class="stok-mobile-list__ikon" aria-hidden="true">{% if t.pemilik %}◇{% else %}▦{% endif %}</span>
               <span class="stok-mobile-list__isi"><strong>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</strong><small>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }} · {{ "Jasa" if t.pemilik else "Bukan jasa" }} · {{ t.tanggal or "Tanggal tidak tersedia" }}</small>
                 {% if mutu_aktif %}{% if t.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} · {{ t.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}{% endif %}
-                {{ mutu_mobile(t.mutu, t.kelas) }}</span>
+                {% if t.ringkasan_karung|default('') %}<small class="stok-pk-unit">{{ t.ringkasan_karung }}</small>{% endif %}{{ mutu_mobile(t.mutu, t.kelas) }}</span>
               <strong class="stok-mobile-list__berat">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong><span class="stok-mobile-list__panah" aria-hidden="true">›</span>
             </a>
           {% endfor %}

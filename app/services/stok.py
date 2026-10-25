@@ -860,6 +860,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             diambil_fifo[i.id] = ambil
             sisa_ambil -= ambil
 
+    from app.services import pk_50
     keluar: list[LotPkG2] = []
     for i in intakes:
         batch = batches_karung.get(i.pk_purchase_batch_id)
@@ -908,7 +909,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             intake_id=i.id, qc_kode=kode_batch if i.pk_purchase_batch_id and not i.internal_transfer_id else None,
             berat_awal=berat_awal, kelas=kelas, bahan=bahan,
             jumlah_karung=batch.jumlah_karung if batch else None,
-            ringkasan_karung=teks_sisa_karung(batch, None if awal_kg is None else sisa, batch.jumlah_karung - int(karung_dipindah.get(i.id,0))) if batch and batch.jumlah_karung else None,
+            ringkasan_karung=teks_sisa_karung(batch, None if awal_kg is None else sisa, batch.jumlah_karung - int(karung_dipindah.get(i.id,0))) if batch and batch.jumlah_karung else ("Packing otomatis: " + pk_50.teks(sisa) if i.internal_transfer_id and awal_kg is not None else None),
             selisih_kiriman=selisih_kiriman(batch, nama or "Pemasok") if batch and batch.jumlah_karung else None,
             peringatan_karung=peringatan_karung(batch) if batch and batch.jumlah_karung else None,
         ))
