@@ -1040,6 +1040,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "Bahan boleh diisi setelah silo ditambahkan kembali. Pilih silo yang "
                      "belum dipakai proses lain, dan sepemilik dengan bahan "
                      "yang sudah berjalan.",
+             "konteks_tambah_sosoh": {"source": "/api/actions/ringkasan-tambah-silo-penyosohan"},
              "post": "/api/actions/tambah-silo-penyosohan", "fields": [
                  {"name": "kode", "label": "Proses penyosohan", "type": "remote",
                   "source": "/api/actions/polishing-active",
@@ -4295,6 +4296,20 @@ async def act_tambah_silo_penyosohan(req: TambahSiloPenyosohanReq,
     return {"ok": True, "pesan": pesan}
 
 
+@router.get("/actions/ringkasan-tambah-silo-penyosohan")
+async def konteks_tambah_silo_sosoh(kode: str, silo: Annotated[list[str] | None, Query()] = None,
+                                   user: User = Depends(pengguna_aksi)):
+    from fastapi.responses import JSONResponse
+    from app.web.form_tambah_silo_sosoh import ringkasan
+    _require(await _is_g2_operator(user))
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode=kode, pilihan=silo or [])
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
 class HasilPenyosohanReq(BaseModel):
     kode_proses: str
     jenis: str
@@ -4727,6 +4742,8 @@ async def silo_bahan_g2(induk: str = "", rincian: bool = False, user: User = Dep
             if rincian:
                 from app.web.form_mulai_penyosohan import baca_silo
                 item["rincian"] = (await baca_silo(db, s))[0]
+                if induk.strip():
+                    item["rincian"].update(pakai_kembali=s.id in dibebaskan, kosong=kg <= 0)
             keluar.append(item)
     return keluar
 
