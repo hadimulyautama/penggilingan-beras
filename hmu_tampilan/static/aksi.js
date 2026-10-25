@@ -580,8 +580,9 @@
     var pindahSilo = a.konteks_pindah_silo;
     var mulaiGiling = a.konteks_mulai_giling;
     var selesaiGiling = a.konteks_selesai_giling;
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiGiling || selesaiGiling;
-    var labelSimpan = selesaiGiling ? "Periksa penyelesaian" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
+    var bebaskanGiling = a.konteks_bebaskan_giling;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiGiling || selesaiGiling || bebaskanGiling;
+    var labelSimpan = bebaskanGiling ? "Periksa sisa silo" : selesaiGiling ? "Periksa penyelesaian" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
     lembar.classList.toggle("lembar--kadar", !!formAir);
@@ -589,6 +590,7 @@
     lembar.classList.toggle("lembar--pindah-silo", !!pindahSilo);
     lembar.classList.toggle("lembar--mulai-giling", !!mulaiGiling);
     lembar.classList.toggle("lembar--selesai-giling", !!selesaiGiling);
+    lembar.classList.toggle("lembar--bebaskan-giling", !!bebaskanGiling);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
@@ -1262,6 +1264,52 @@
       borangHasil.addEventListener('input',function(e){if(e.target.dataset.name==='berat_akhir'){bersihkanSalah(lembar);clearTimeout(timerSg);timerSg=setTimeout(perbaruiSg,150);}});
       borangHasil.addEventListener('change',function(e){if(e.target.dataset.name==='kode_proses'){bersihkanSalah(lembar);perbaruiSg();}});perbaruiSg();
     }
+    // Hanya pembebasan silo giling G1. Sumber, selisih, saldo dan token
+    // dijawab server; ketikan tidak dirender ulang saat input kehilangan fokus.
+    var dataBs=null, nomorBs=0, timerBs, memeriksaBs=false, risikoBs=false;
+    function pasangBs(n,t){var el=$('bs-'+n);if(el)el.textContent=t;}
+    function angkaBs(){var t=nilaiMedan('sisa').trim();return /^[+]?\d+(?:[.,]\d+)?$/.test(t)&&Number.isFinite(Number(t.replace(',','.')))?Number(t.replace(',','.')):null;}
+    function pasanganBs(a,b,utama){return '<div'+(utama?' class="bs-total"':'')+'><dt>'+esc(a)+'</dt><dd>'+esc(b)+'</dd></div>';}
+    function sumberBs(d){return d.sumber.map(function(r){return '<article class="bs-source"><strong>'+esc(r.sumber)+'</strong><small>Sumber #'+esc(r.id)+' · '+esc(r.silo)+'</small><span>'+esc(r.bobot==null?'Menunggu timbang':kgHasil(r.bobot))+'</span></article>';}).join('');}
+    function konteksBs(d){return d.kepemilikan+' · '+({berjalan:'Berjalan',dijeda:'Dijeda',selesai:'Selesai'}[d.status]||'Status belum diketahui')+(d.pesanan?' · '+d.pesanan:'')+(d.mulai?' · Mulai '+d.mulai:'')+(d.sebab_jeda?' · Jeda: '+d.sebab_jeda:'');}
+    function gambarBs(d){
+      pasangBs('pemilik',d.pemilik);pasangBs('konteks',konteksBs(d));pasangBs('silo',d.silo||'Belum dipilih');
+      pasangBs('bahan',d.bahan==null?'Belum dapat dipastikan':(d.bobot_final?'':'Sementara · ')+kgHasil(d.bahan));
+      pasangBs('sisa',d.sisa==null?'Belum diisi dengan benar':kgHasil(d.sisa));pasangBs('terpakai',d.terpakai==null?'Belum dapat dipastikan':(d.bobot_final?'':'Sementara · ')+kgHasil(d.terpakai));
+      pasangBs('akibat',d.sisa===0?'Silo dinyatakan kosong berdasarkan pemeriksaan fisik. Ikatan ke proses dilepas.':'Sisa lebih dari 0 tetap berada di silo. Ikatan ke proses dilepas.');
+      pasangBs('proses',d.status==='dijeda'?'Penggilingan tetap dijeda. Silo lain dan hasil PK tidak berubah.':'Penggilingan tidak diselesaikan. Silo lain dan hasil PK tidak berubah.');
+      var ds=$('bs-rincian');ds.hidden=!d.sumber.length;$('bs-jumlah').textContent='Lihat '+d.sumber.length+' sumber pada siklus ini';$('bs-sumber').innerHTML=sumberBs(d);
+      pasangBs('info',!d.sumber_proses.length?'Sumber proses lama belum dapat dipastikan. Minta Admin memeriksa sumber; tidak ada silo yang dikosongkan.':d.status==='selesai'?'Proses sudah selesai. Buka detail terbaru.':nilaiMedan('silo')&&!d.terbuka?'Silo ini tidak lagi terbuka. Periksa detail dan pilihan sumber terbaru.':d.terbuka&&d.bahan==null?'Bobot sumber belum lengkap. Sisa positif belum dapat dicatat. Isi 0 hanya jika pemeriksaan fisik memastikan silo benar-benar kosong.':'Bobot dan sumber mengikuti siklus yang masih terbuka, bukan seluruh riwayat silo.');
+    }
+    function perbaruiBs(){
+      if(!bebaskanGiling||!lembar.open||lembar.querySelector('.lembar__isi')!==borangHasil)return;
+      clearTimeout(timerBs);var kode=nilaiMedan('kode_proses'),silo=nilaiMedan('silo'),teks=nilaiMedan('sisa'),n=++nomorBs;dataBs=null;
+      pasangBs('pemilik',kode?'Memuat konteks proses…':'Pilih proses giling');pasangBs('konteks','');pasangBs('silo',silo?'Silo '+silo:'Belum dipilih');
+      ['bahan','terpakai'].forEach(function(x){pasangBs(x,'Belum tersedia');});pasangBs('sisa',angkaBs()==null?'Belum diisi dengan benar':kgHasil(angkaBs()));$('bs-rincian').hidden=true;
+      pasangBs('info',kode?'Memuat sumber siklus…':'Pilih proses dan silo untuk melihat ringkasan.');if(!kode)return;
+      var url=bebaskanGiling.source+'?kode_proses='+encodeURIComponent(kode)+'&silo='+encodeURIComponent(silo);var angka=angkaBs();if(angka!=null)url+='&sisa='+encodeURIComponent(angka);
+      timerBs=setTimeout(function(){fetch(url,{credentials:'same-origin',cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('Konteks belum tersedia');return r.json();}).then(function(d){
+        if(n!==nomorBs||!borangHasil.isConnected||nilaiMedan('kode_proses')!==kode||nilaiMedan('silo')!==silo||nilaiMedan('sisa')!==teks)return;
+        if(d.kode_proses!==kode)throw new Error('Konteks tidak sesuai proses');dataBs=d;gambarBs(d);
+      }).catch(function(){if(n!==nomorBs||!borangHasil.isConnected)return;pasangBs('pemilik','Konteks belum tersedia');pasangBs('info','Isian tetap utuh. Periksa sisa silo untuk meminta pemeriksaan terbaru dari server.');});},150);
+    }
+    function hasilTerkiniBs(isi){
+            var hasilBs=document.createElement('p');hasilBs.className='bs-note';hasilBs.textContent='Memuat keadaan silo terbaru…';$('kabar').appendChild(hasilBs);
+            fetch(bebaskanGiling.source+'?kode_proses='+encodeURIComponent(isi.kode_proses)+'&silo='+encodeURIComponent(isi.silo),{credentials:'same-origin',cache:'no-store'}).then(function(r){if(!r.ok)throw new Error();return r.json();}).then(function(d){if(d.kode_proses!==isi.kode_proses)throw new Error();hasilBs.textContent='Penggilingan '+(d.status==='dijeda'?'tetap dijeda':d.status==='berjalan'?'tetap berjalan':'mengikuti status terbaru')+'. '+d.silo_sekarang.map(function(x){return x.silo+' · '+x.status+' · '+x.bobot;}).join(' | ');}).catch(function(){hasilBs.textContent='Sisa telah tersimpan. Keadaan silo terbaru belum dapat dimuat; periksa detail sebelum tindakan berikutnya.';});
+    }
+    function konfirmasiBs(d){return '<div class="bs-stage"><span>Catat sisa →</span><strong>Periksa & konfirmasi</strong></div><div class="bs-review-head"><h3>'+esc(d.kode_proses+' · '+d.silo)+'</h3><p>'+esc(d.pemilik+' · '+d.sumber.length+' sumber pada siklus yang diperiksa')+'</p><small>'+esc(konteksBs(d))+'</small></div><section class="bs-summary"><h3>Hasil pemeriksaan</h3><dl>'+pasanganBs('Bahan tercatat pada siklus ini',d.bahan==null?'Menunggu timbang':(d.bobot_final?'':'Sementara · ')+kgHasil(d.bahan))+pasanganBs('Sisa fisik yang diperiksa',kgHasil(d.sisa))+pasanganBs('Bahan terpakai',d.terpakai==null?'Menunggu timbang':(d.bobot_final?'':'Sementara · ')+kgHasil(d.terpakai),true)+'</dl></section><div class="bs-warning"><strong>'+(d.sisa===0?'Konfirmasi silo benar-benar kosong':'Sisa tetap tersedia di silo')+'</strong><p>'+esc(d.sisa===0?'Angka 0 menyatakan seluruh bahan pada siklus ini sudah keluar dari silo.':kgHasil(d.sisa)+' tetap tercatat di silo; tidak dihapus atau dipindahkan ke lot lain.')+' Ikatan silo pada proses dilepas; penggilingan tidak ditutup'+(d.status==='dijeda'?' dan tetap dijeda':'')+'.</p></div><div class="bs-note"><strong>Hasil dan stok PK tidak diubah</strong><p>Ini pencatatan sisa bahan. Silo lain tetap terikat sesuai keadaannya. Selesai giling tetap tindakan terpisah.</p></div><details class="bs-sources"><summary>Lihat sumber pada siklus yang diperiksa</summary>'+sumberBs(d)+'</details>';}
+    if(bebaskanGiling){
+      borangHasil.querySelector('.lembar__kepala').insertAdjacentHTML('afterend','<div class="bs-stage"><strong>Catat sisa</strong><span>→ Periksa ringkasan → Konfirmasi</span></div><div class="bs-context"><strong id="bs-pemilik">Pilih proses giling</strong><small id="bs-konteks"></small></div>');
+      var grupBs=borangHasil.querySelector('.grup'),tataBs=document.createElement('div');tataBs.className='bs-layout';grupBs.before(tataBs);tataBs.appendChild(grupBs);
+      ['kode_proses','silo','sisa'].forEach(function(nama){var input=grupBs.querySelector('[data-name="'+nama+'"]'),kunci=input.type==='hidden'?input.previousElementSibling:null,label=grupBs.querySelector('label[for="f_'+nama+'"]'),wadah=document.createElement('div');wadah.className='hasil-field';grupBs.insertBefore(wadah,label||kunci||input);if(label)wadah.appendChild(label);if(kunci){wadah.insertAdjacentHTML('beforeend','<span class="lbl">'+esc(input.dataset.label)+'</span>');wadah.appendChild(kunci);kunci.setAttribute('role','textbox');kunci.setAttribute('aria-label',input.dataset.label);kunci.setAttribute('aria-readonly','true');}wadah.appendChild(input);});
+      var sisaBs=$('f_sisa'),unitBs=document.createElement('div');unitBs.className='hasil-unit';sisaBs.before(unitBs);unitBs.appendChild(sisaBs);unitBs.insertAdjacentHTML('beforeend','<span aria-hidden="true">kg</span>');sisaBs.setAttribute('aria-describedby','bs-hint');unitBs.insertAdjacentHTML('afterend','<p class="hasil-help" id="bs-hint">Wajib diisi dari pemeriksaan fisik. Isi 0 hanya jika benar-benar kosong.</p>');
+      tataBs.insertAdjacentHTML('beforeend','<div class="bs-preview" aria-live="polite"><section class="bs-summary"><h3>Ringkasan pembebasan</h3><dl></dl></section></div>');
+      tataBs.querySelector('.bs-summary dl').innerHTML='<div><dt>Silo terpilih</dt><dd id="bs-silo">Belum dipilih</dd></div><div><dt>Bahan siklus yang masih terbuka</dt><dd id="bs-bahan">Belum tersedia</dd></div><div><dt>Sisa yang diperiksa</dt><dd id="bs-sisa">Belum diisi</dd></div><div class="bs-total"><dt>Terpakai dari siklus ini</dt><dd id="bs-terpakai">Belum tersedia</dd></div>';
+      tataBs.querySelector('.bs-preview').insertAdjacentHTML('beforeend','<section class="bs-impact"><h3>Setelah disimpan</h3><strong id="bs-akibat">Ikatan silo pada proses dilepas. Sisa yang diperiksa tetap tercatat.</strong><p id="bs-proses">Penggilingan tidak diselesaikan. Silo lain dan hasil PK tidak berubah.</p></section><p class="hasil-help" id="bs-info" role="status"></p><details class="bs-sources" id="bs-rincian" hidden><summary id="bs-jumlah">Lihat sumber pada siklus ini</summary><div id="bs-sumber"></div></details>');
+      borangHasil.addEventListener('input',function(e){if(e.target.dataset.name==='sisa'){bersihkanSalah(lembar);perbaruiBs();}});
+      borangHasil.addEventListener('change',function(e){if(['kode_proses','silo'].indexOf(e.target.dataset.name)>=0){bersihkanSalah(lembar);perbaruiBs();}});perbaruiBs();
+    }
+
     if(a.id==='tutup_silo_giling' && kembaliSelesaiGiling){
       borangHasil.querySelector('.lembar__kepala').insertAdjacentHTML('afterend','<p class="nota">Tindakan terpisah. Hasil akhir PK belum disimpan dan penggilingan belum selesai. Isian penyelesaian tetap disimpan sementara pada formulir.</p>');
       $('tutup').textContent='Kembali ke penyelesaian';$('tutup').onclick=function(){bukaAksi('selesai_giling',kembaliSelesaiGiling.draft);};
@@ -1822,6 +1870,7 @@
             perbaruiRingkasanHasil();
             perbaruiRingkasanGiling();
         perbaruiSg();
+        perbaruiBs();
             perbaruiRingkasanAir();
             return;
           }
@@ -1831,6 +1880,7 @@
             perbaruiRingkasanHasil();
             perbaruiRingkasanGiling();
         perbaruiSg();
+        perbaruiBs();
             perbaruiRingkasanAir();
             return;
           }
@@ -1933,6 +1983,7 @@
         perbaruiRingkasanHasil(true);
         perbaruiRingkasanGiling();
         perbaruiSg();
+        perbaruiBs();
         perbaruiRingkasanAir();
         ambilAcuanJeda();
         aturWaktuJeda();
@@ -2105,6 +2156,7 @@
     function kembaliKeBorang() {
       if (!borangAsli) return;
       if (selesaiGiling) risikoSg=false;
+      if (bebaskanGiling) {risikoBs=false;perbaruiBs();}
       var konfirmasi = lembar.querySelector(".lembar__konfirmasi");
       if (konfirmasi) konfirmasi.remove();
       borangAsli.hidden = false;
@@ -2114,7 +2166,7 @@
     }
 
     async function simpan(isi, v, tbl) {
-      if (selesaiGiling && (lembar._menyimpan || risikoSg)) return;
+      if ((selesaiGiling && (lembar._menyimpan || risikoSg)) || (bebaskanGiling && (lembar._menyimpan || risikoBs))) return;
       var sebelumSelesai = dataSelesai;
       lembar._menyimpan = true;
       var grup = lembar.querySelector(".grup");
@@ -2171,6 +2223,7 @@
           }
           kabar(utama, "ok", !!formKhusus);
           if(a.id==='tutup_silo_giling' && kembaliSelesaiGiling){var draftSg=kembaliSelesaiGiling.draft;bukaAksi('selesai_giling',draftSg);}
+          if(bebaskanGiling) hasilTerkiniBs(isi);
           if(selesaiGiling && dataSg){var linkSg=document.createElement('a');linkSg.className='btn';linkSg.href='/riwayat-giling/'+dataSg.id;linkSg.textContent='Lihat riwayat penggilingan';$('kabar').appendChild(linkSg);}
           if (mulaiGiling && hasil.kode_proses) {
             if (hasil.pemilik) { var pemilikGiling = document.createElement("p");pemilikGiling.textContent = hasil.pemilik + " · " + (hasil.bobot_final ? "Bobot final" : "Bobot belum final");$("kabar").appendChild(pemilikGiling); }
@@ -2209,7 +2262,7 @@
         lembar._menyimpan = false;
         if (grup) grup.inert = false;
         if (kembali) kembali.disabled = false;
-        if (!(selesaiGiling && e instanceof TypeError)) kembaliKeBorang();
+        if (!((selesaiGiling || bebaskanGiling) && e instanceof TypeError)) kembaliKeBorang();
         if (tbl) { tbl.disabled = false; tbl.textContent = labelSimpan; }
         var pesanGagal = e instanceof TypeError
           ? "Simpan belum terkonfirmasi. Periksa koneksi dan catatan terbaru sebelum mencoba lagi. Isian tetap utuh."
@@ -2246,6 +2299,14 @@
             lembar.querySelector('.lembar__konfirmasi').appendChild(cekSg);
           }else{risikoSg=false;perbaruiSg();}
         }
+        if(bebaskanGiling && e instanceof TypeError){risikoBs=true;if(tbl){tbl.disabled=true;tbl.textContent='Perlu diperiksa';}
+          var cekBs=document.createElement('button');cekBs.type='button';cekBs.className='btn bs-check';cekBs.textContent='Periksa sumber & silo terbaru';
+          cekBs.onclick=async function(){cekBs.disabled=true;var info=document.createElement('p');info.className='bs-note';cekBs.after(info);
+            try{var r=await fetch(bebaskanGiling.source+'?kode_proses='+encodeURIComponent(isi.kode_proses)+'&silo='+encodeURIComponent(isi.silo),{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw new Error();var d=await r.json();if(d.kode_proses!==isi.kode_proses)throw new Error();
+              info.textContent=d.terbuka?'Sumber masih terbuka. Kembali periksa isian dan minta ringkasan baru sebelum konfirmasi.':'Siklus tidak lagi terbuka. Periksa catatan sisa di detail terbaru; jangan kirim ulang.';var link=document.createElement('a');link.className='btn';link.textContent='Buka detail terbaru';link.href=d.detail;info.after(link);
+            }catch(_){info.textContent='Keadaan terbaru belum dapat dibaca. Ringkasan dan isian tetap utuh; tidak ada pengiriman ulang otomatis.';}finally{cekBs.disabled=false;}};
+          lembar.querySelector('.lembar__konfirmasi').appendChild(cekBs);
+        }
         salahFormulir(lembar, pesanGagal);
       }
     }
@@ -2265,6 +2326,9 @@
       if(selesaiGiling && k.rincian){
         konfirmasi.innerHTML='<div class="lembar__kepala"><h2>'+esc(k.judul)+'</h2></div>'+konfirmasiSg(k.rincian)+'<div class="hasil-actions"><button class="btn" id="kembali" type="button">Kembali periksa isian</button><button class="btn btn--utama" id="ya" type="button">Selesaikan giling</button></div>';
       }
+      if(bebaskanGiling && k.rincian){
+        konfirmasi.innerHTML='<div class="lembar__kepala"><h2>'+esc(k.judul)+'</h2></div>'+konfirmasiBs(k.rincian)+'<div class="hasil-actions"><button class="btn" id="kembali" type="button">Kembali periksa isian</button><button class="btn btn--utama" id="ya" type="button">Simpan sisa; bebaskan dari proses</button></div>';
+      }
       // Kembali menampilkan elemen formulir yang sama, berikut seluruh pilihannya.
       lembar.appendChild(konfirmasi);
       lembar.setAttribute("aria-label", k.judul || "Sudah benar?");
@@ -2276,6 +2340,7 @@
     $("simpan").onclick = async function () {
       if (formKhusus && lembar._menyimpan) return;
       if(selesaiGiling && memeriksaSg) return;
+      if(bebaskanGiling && memeriksaBs) return;
       if (selesaiKering && (periksaSelesai || risikoSelesai || (dataSelesai && dataSelesai.dapat_diselesaikan === false))) return;
       if (mulaiGiling && periksaMulai) return;
       if (pindahSilo && (periksaPindah || (dataPindah && !dataPindah.siap))) return;
@@ -2299,6 +2364,7 @@
             Number.isFinite(Number(nilai.replace(",", "."))) && Number(nilai.replace(",", ".")) <= 0) pesan = "Total hasil harus lebih dari nol.";
         if ((formAir || selesaiKering) && ["tes","indikator","target","kadar_air"].indexOf(el.dataset.name) !== -1 && nilai &&
             Number.isFinite(Number(nilai.replace(",", "."))) && (Number(nilai.replace(",", ".")) <= 0 || Number(nilai.replace(",", ".")) > 100)) pesan = "Isi persen lebih dari 0 dan maksimal 100%.";
+        if(bebaskanGiling && el.dataset.name==="sisa" && nilai && Number.isFinite(Number(nilai.replace(",","."))) && Number(nilai.replace(",","."))<0)pesan="Sisa harus nol atau lebih.";
         if(selesaiGiling && el.dataset.name==="berat_akhir" && nilai && Number.isFinite(Number(nilai.replace(",","."))) && Number(nilai.replace(",","."))<=0)pesan="Hasil akhir PK harus lebih dari nol.";
         if (pesan) { kurang.push({el: el, pesan: pesan}); }
       });
@@ -2358,15 +2424,18 @@
       if (a.pratinjau_silo) {
         var tombolSilo = $("simpan"), borangSilo = lembar.querySelector(".lembar__isi");
         tombolSilo.disabled = true;
+        if(bebaskanGiling)memeriksaBs=true;
         try {
           var ringkasSilo = await ambil("/api/actions/pratinjau-bebaskan-silo?jenis=" + encodeURIComponent(a.pratinjau_silo) +
             "&kode_proses=" + encodeURIComponent(isi.kode_proses) + "&silo=" + encodeURIComponent(isi.silo || "") + "&sisa=" + encodeURIComponent(isi.sisa));
           if (!ringkasSilo || !lembar.open || lembar.querySelector(".lembar__isi") !== borangSilo ||
               nilaiMedan("kode_proses") !== isi.kode_proses) return;
+          if(bebaskanGiling && (nilaiMedan('silo')!==isi.silo || muatan().sisa!==isi.sisa))return;
+          if(bebaskanGiling && (!ringkasSilo.dasar || !ringkasSilo.rincian || ringkasSilo.rincian.kode_proses!==isi.kode_proses || ringkasSilo.rincian.sisa!==isi.sisa))throw new Error('Ringkasan sisa belum lengkap. Periksa kembali.');
           isi.dasar = ringkasSilo.dasar;
-          tanyaYakin(isi, v, {judul: "Periksa sisa silo", teks: ringkasSilo.teks, ya: "Simpan sisa; bebaskan dari proses"});
+          tanyaYakin(isi, v, {judul: "Periksa sisa silo", teks: ringkasSilo.teks, rincian: ringkasSilo.rincian, ya: "Simpan sisa; bebaskan dari proses"});
         } catch (e) { salahFormulir(lembar, String(e)); }
-        finally { tombolSilo.disabled = false; }
+        finally { tombolSilo.disabled = false;memeriksaBs=false; }
         return;
       }
       if (a.pratinjau_proses) {

@@ -731,7 +731,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # bisa diisi gabah baru, TANPA menutup prosesnya: yang menutup
             # tetap "Selesai giling", di sanalah hasil akhir & pagar
             # rendemen berdiri. Sebangun "Selesai penyosohan" Gudang 2.
-            {"id": "tutup_silo_giling", "label": "📤 Bebaskan silo (boleh sebagian)",
+            {"id": "tutup_silo_giling", "label": "📤 Bebaskan silo",
+             "konteks_bebaskan_giling": {"proses": "kode_proses", "source": "/api/actions/ringkasan-bebaskan-silo-giling"},
              "hint": "Mesin lanjut dari silo lain — proses TIDAK ditutup. "
                      "Isi 0 jika silo sudah kosong. "
                      "Hanya silo dengan sisa 0 kg yang kosong dan siap diisi ulang; "
@@ -2246,6 +2247,24 @@ async def silo_giling_terbuka(induk: str = "", user: User = Depends(pengguna_aks
            for h in sorted(jumlah)]
 
 
+@router.get("/actions/ringkasan-bebaskan-silo-giling")
+async def konteks_bebaskan_silo_giling(kode_proses: str, silo: str = "", sisa: float | None = None,
+                                      user: User = Depends(pengguna_aksi)):
+    _require(await _is_g1_operator(user))
+    from math import isfinite
+    if sisa is not None and not isfinite(sisa):
+        raise HTTPException(422, "Sisa harus berupa angka terbatas.")
+    from fastapi.responses import JSONResponse
+    from app.web.form_bebaskan_silo_giling import ringkasan
+    from app.penggilingan.gudang1.services.milling import MillingError
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_proses=kode_proses, silo=silo, sisa=sisa)
+        except MillingError as e:
+            raise _err(e, "Konteks pembebasan belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/actions/silo-g1-tambah")
 async def silo_g1_tambah(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 1 yang BISA ditambahkan ke proses giling `induk` —
@@ -3402,7 +3421,7 @@ async def act_tutup_silo_giling(req: TutupSiloGilingReq,
     terpakai = f"{r.terpakai_kg:g} kg terpakai" if r.terpakai_kg is not None else "berat terpakai menunggu timbang"
     keadaan = "Silo dinyatakan kosong dan boleh diisi ulang." if r.sisa_kg == 0 else "Sisa tetap berada di silo; statusnya terisi."
     pesan = (f"✓ Silo {r.nama_silo} pada *{req.kode_proses}* dibebaskan dari proses — "
-             f"{terpakai}, sisa {r.sisa_kg:g} kg. {keadaan} Giling TETAP berjalan.")
+             f"{terpakai}, sisa {r.sisa_kg:g} kg. {keadaan} Penggilingan belum selesai.")
     return {"ok": True, "pesan": pesan}
 
 
@@ -4323,7 +4342,18 @@ async def pratinjau_bebaskan_silo(jenis: str, kode_proses: str, sisa: float,
     from app.services.penyelesaian_proses import ringkasan_bebaskan
     async with SessionLocal() as db:
         try:
-            return await ringkasan_bebaskan(db, jenis=jenis, kode=kode_proses, silo=silo, sisa=sisa)
+            data = await ringkasan_bebaskan(db, jenis=jenis, kode=kode_proses, silo=silo, sisa=sisa)
+            if jenis == "giling":
+                from app.web.form_bebaskan_silo_giling import ringkasan
+                data["rincian"] = await ringkasan(db, kode_proses=kode_proses, silo=silo, sisa=sisa, auto_satu=True)
+                # Jangan menampilkan konteks yang lebih baru di samping token
+                # lama jika sumber bergeser di sela dua pembacaan ini.
+                ulang = await ringkasan_bebaskan(db, jenis=jenis, kode=kode_proses, silo=silo, sisa=sisa)
+                if data['dasar'] != ulang['dasar']:
+                    raise ValueError("Sumber berubah saat diperiksa. Periksa ulang sisa silo.")
+                from fastapi.responses import JSONResponse
+                return JSONResponse(data, headers={"Cache-Control": "no-store"})
+            return data
         except ValueError as e:
             raise HTTPException(409, str(e))
 
