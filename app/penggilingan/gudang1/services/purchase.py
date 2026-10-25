@@ -478,7 +478,7 @@ async def create_purchase_batch_dari_timbang(
             return CreatedBatch(batch=ada, supplier=supplier, supplier_created=False,
                                 jasa=jasa_ini)
 
-    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"))
+    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"), dari_tiket_lama=True)
 
     # Cermin untuk layar & laporan lama — bentuknya persis seperti sebelum
     # Tahap 3, ditambah penunjuk ke peristiwanya.
