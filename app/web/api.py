@@ -684,7 +684,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # pilihan tunggal, dan bukan pula tupel tertulis-tangan A/B/AB
             # seperti penyosohan: silo Gudang 1 lebih dari dua dan bisa
             # bertambah lewat Pengaturan → Alat. Daftarnya dari master.
-            {"id": "mulai_giling", "label": "⚙️ Mulai giling",
+            {"id": "mulai_giling", "label": "⚙️ Mulai penggilingan",
+             "konteks_mulai_giling": {"source": "/api/actions/ringkasan-mulai-giling"},
              "post": "/api/actions/mulai-giling",
              "hint": "Bentuk 1 LOT (LOT-…) dari SELURUH isi silo yang dicentang "
                      "— boleh beberapa silo sekaligus, dan semuanya jadi SATU "
@@ -2370,8 +2371,9 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
     from sqlalchemy import select
     from app.models import Silo
     from app.penggilingan.gudang1.services.silo import (
-        _g1_warehouse_id, _silo_active_rows, _silo_content_kg,
+        _g1_warehouse_id, _silo_active_rows,
         giling_berjalan_untuk_silo)
+    from app.web.form_mulai_giling import baca_silo
     out: list[dict] = []
     async with SessionLocal() as db:
         wid = await _g1_warehouse_id(db)
@@ -2390,16 +2392,22 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
             if await giling_berjalan_untuk_silo(db, s.id) is not None:
                 continue
             letter = s.nama_silo.replace("Silo ", "")
-            kg = await _silo_content_kg(db, s.id)
-            # Pemiliknya disebut: menggiling silo berisi barang pelanggan sah
-            # (pesanannya memang harus digiling) tetapi ia keputusan yang berbeda
-            # dari menggiling gabah pabrik — rendemennya akan ditunjukkan kepada
-            # orang yang membawa barangnya.
-            pemilik = await _pemilik_isi_silo(db, s.id)
+            rincian, _ = await baca_silo(db, s)
             out.append({"value": letter,
-                        "label": f"Silo {letter} · {_rp(kg)} kg"
-                                 + (f" · {pemilik}" if pemilik else "")})
+                        "label": f"{s.nama_silo} · {rincian['bobot']} · {rincian['pemilik']}",
+                        "rincian": rincian})
     return out
+
+
+@router.get("/actions/ringkasan-mulai-giling")
+async def ringkasan_mulai_giling(silo: Annotated[list[str], Query()] = [],
+                               user: User = Depends(pengguna_aksi)):
+    from fastapi.responses import JSONResponse
+    from app.web.form_mulai_giling import ringkasan
+    _require(await _is_g1_operator(user))
+    async with SessionLocal() as db:
+        data = await ringkasan(db, silo)
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/actions/pk-transfer")
@@ -3435,10 +3443,14 @@ async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_ak
             raise HTTPException(
                 400, "Giling tidak bisa dimulai karena aturan basis data menolak "
                      "bahannya. Coba sekali lagi; bila berulang, sebutkan ke Super Admin.")
+        from app.services.jasa import nama_pemilik
+        pemilik = await nama_pemilik(db, r.proc.jasa_id) or "Pabrik"
     bobot = r.bobot.teks() if r.bobot is not None else f"{r.berat_masuk:g} kg"
     pesan = (f"✓ Giling *{r.proc.kode_proses}* mulai — Silo {r.nama_silo} "
              f"({bobot} gabah).")
-    return {"ok": True, "pesan": pesan}
+    return {"ok": True, "pesan": pesan, "kode_proses": r.proc.kode_proses,
+            "bobot": bobot, "bobot_final": r.proc.bobot_masuk_final,
+            "silos": r.nama_silo, "pemilik": pemilik}
 
 
 class KodeProsesReq(BaseModel):
