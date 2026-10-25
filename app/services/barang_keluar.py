@@ -535,9 +535,11 @@ async def _pembeli(db: AsyncSession, pelanggan_id: int | None) -> tuple[str, int
 async def koreksi_plat(db: AsyncSession, *, user, rec_id: int,
                        no_polisi: str, alasan: str) -> OutgoingRecord:
     """Koreksi identitas truk sebelum diverifikasi, tanpa mengubah muatan."""
-    from hmu_core import normalisasi_nomor_polisi
-
-    plat = normalisasi_nomor_polisi(no_polisi)
+    from hmu_core.armada import validasi_nomor_polisi
+    try:
+        plat = validasi_nomor_polisi(no_polisi)
+    except ValueError as e:
+        raise BarangKeluarError(str(e)) from e
     if not plat or len(plat) > 20:
         raise BarangKeluarError("Isi nomor polisi, maksimal 20 karakter.")
     sebab = (alasan or "").strip()
@@ -754,6 +756,13 @@ async def buat_perintah(
                 + ", ".join(nama.get(p, f"#{p}") for p in sorted(pelanggan_set)) + ".")
         pelanggan_id = pelanggan_set.pop()
     nama_pembeli, pelanggan_id = await _pembeli(db, pelanggan_id)
+
+    if no_polisi and tiket_armada_id is None:
+        from hmu_core.armada import validasi_nomor_polisi
+        try:
+            no_polisi = validasi_nomor_polisi(no_polisi)
+        except ValueError as e:
+            raise BarangKeluarError(str(e)) from e
 
     if tiket_armada_id is not None:
         tiket_armada = await _armada_dari_tiket(db, tiket_armada_id, pelanggan_id)

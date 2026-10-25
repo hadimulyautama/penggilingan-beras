@@ -663,7 +663,10 @@ async def create_pk_purchase(
     if jenis is None:
         raise Gudang2Error("Sebutkan jenis PK: KS, KL, Campuran, atau Semi KS.")
     now = input_time(tanggal, jam)  # BackdateError bila di masa depan
-    armada = await armada_dari_nomor_polisi(db, no_polisi)
+    try:
+        armada = await armada_dari_nomor_polisi(db, no_polisi)
+    except ValueError as e:
+        raise Gudang2Error(str(e)) from e
     supplier, created = await find_or_create_supplier(db, nama_supplier)
     kode = await next_pk_purchase_code(db, now.date())
     batch = PkPurchaseBatch(
@@ -823,7 +826,7 @@ async def create_pk_purchase_dari_timbang(
         if ada is not None:
             return PkPurchaseResult(batch=ada, supplier_nama=_sebut(), supplier_created=False)
 
-    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"))
+    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"), dari_tiket_lama=True)
 
     # Cermin untuk layar & laporan lama, ditambah penunjuk ke peristiwanya.
     batch = PkPurchaseBatch(
@@ -951,7 +954,7 @@ async def create_pk_rejection_dari_timbang(
         supplier, _ = await find_or_create_supplier(db, nama)
     pihak_nama = (supplier.nama_supplier if supplier else
                  f"JASA {jasa_ini.kode} {tiket.get('nama_pelanggan') or ''}".strip())
-    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"))
+    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"), dari_tiket_lama=True)
 
     kode = await next_pk_purchase_code(db, now.date())
     batch = PkPurchaseBatch(
