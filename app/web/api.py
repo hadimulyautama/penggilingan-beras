@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from typing import Annotated
 
 from pydantic import BaseModel, Field
@@ -1075,6 +1075,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "selesai_penyosohan", "label": "📤 Bebaskan silo penyosohan",
              "post": "/api/actions/selesai-penyosohan", "pratinjau_silo": "sosoh",
+             "konteks_bebaskan_sosoh": {"source": "/api/actions/ringkasan-bebaskan-silo-sosoh", "proses": "kode_proses"},
              "hint": "Lepas ikatan silo dari proses; sisanya tetap tercatat. Penyosohan dan pencatatan hasil tetap berjalan. Hanya silo dengan sisa 0 kg yang kosong dan siap diisi ulang.",
              "konfirmasi": {"judul": "Bebaskan silo?", "teks": "{kode_proses} · Silo {silo}: sisa {sisa} kg. Silo dibebaskan; penyosohan tetap berjalan. Gunakan Selesaikan penyosohan saat seluruh bahan di mesin benar-benar selesai.", "ya": "Bebaskan silo, lanjutkan sosoh"},
              "fields": [
@@ -4356,9 +4357,23 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
     return {"ok": True, "pesan": f"Silo {r.silo} dibebaskan (sisa {req.sisa:g} kg). Penyosohan tetap berjalan; hasil masih bisa dicatat."}
 
 
+@router.get("/actions/ringkasan-bebaskan-silo-sosoh")
+async def konteks_bebaskan_sosoh(kode_proses: str, silo: str = "", sisa: float | None = None,
+                                user: User = Depends(pengguna_aksi)):
+    from fastapi.responses import JSONResponse
+    from app.web.form_bebaskan_silo_sosoh import ringkasan
+    _require(await _is_g2_operator(user))
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_proses=kode_proses, silo=silo, sisa=sisa)
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/actions/pratinjau-bebaskan-silo")
 async def pratinjau_bebaskan_silo(jenis: str, kode_proses: str, sisa: float,
-        silo: str = "", user: User = Depends(pengguna_aksi)) -> dict:
+        silo: str = "", user: User = Depends(pengguna_aksi), response: Response = None) -> dict:
     _require(await (_is_g1_operator(user) if jenis == "giling" else _is_g2_operator(user)))
     from app.services.penyelesaian_proses import ringkasan_bebaskan
     async with SessionLocal() as db:
@@ -4374,6 +4389,15 @@ async def pratinjau_bebaskan_silo(jenis: str, kode_proses: str, sisa: float,
                     raise ValueError("Sumber berubah saat diperiksa. Periksa ulang sisa silo.")
                 from fastapi.responses import JSONResponse
                 return JSONResponse(data, headers={"Cache-Control": "no-store"})
+            if jenis == "sosoh":
+                from app.web.form_bebaskan_silo_sosoh import ringkasan
+                data["rincian"] = await ringkasan(db, kode_proses=kode_proses, silo=silo, sisa=sisa, auto_satu=True)
+                ulang = await ringkasan_bebaskan(db, jenis=jenis, kode=kode_proses, silo=silo, sisa=sisa)
+                if data['dasar'] != ulang['dasar']:
+                    raise ValueError("Isi atau pemakaian berubah saat diperiksa. Periksa ulang sisanya.")
+                if response is not None:
+                    response.headers["Cache-Control"] = "no-store"
+                return data
             return data
         except ValueError as e:
             raise HTTPException(409, str(e))
