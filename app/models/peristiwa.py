@@ -206,6 +206,8 @@ class ProyeksiTransferPk(Base):
     milling_process_id: Mapped[int | None] = mapped_column(Integer)
     kode_proses: Mapped[str | None] = mapped_column(String(20))
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    berat_curah_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: JENIS tempatnya: `silo` atau `ditumpuk` — silo MANA ada di `silo_id`.
     #: Baris lama menyimpan `silo_a`/`silo_b`; lihat catatan pada
     #: `InternalTransfer.lokasi_tujuan`.
@@ -247,6 +249,8 @@ class ProyeksiPindahTumpukanSilo(Base):
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
     berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
     jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    jumlah_karung_50: Mapped[int | None] = mapped_column(Integer)
+    berat_curah_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
     ke_proses: Mapped[str | None] = mapped_column(String(20))
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

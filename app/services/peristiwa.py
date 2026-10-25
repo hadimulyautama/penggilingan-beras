@@ -197,6 +197,7 @@ async def _pk_dipindah_g1g2(db: AsyncSession, e: Peristiwa) -> None:
         peristiwa_id=e.id, kode_transfer=m["kode_transfer"],
         milling_process_id=m.get("milling_process_id"), kode_proses=m.get("kode_proses"),
         berat_kg=m["berat_kg"], lokasi_tujuan=m["lokasi_tujuan"],
+        jumlah_karung=m.get("jumlah_karung"), berat_curah_kg=m.get("berat_curah_kg"),
         # Peristiwa LAMA tak memuat `silo_id` — muatannya ditulis sebelum 24
         # September 2026, dan peristiwa tambah-saja. `.get` membuat pembangunan
         # ulang proyeksi tetap jalan di atasnya; baris hasilnya berkolom kosong,
@@ -224,7 +225,8 @@ async def _pk_tumpukan_ke_silo(db: AsyncSession, e: Peristiwa) -> None:
     e.proyeksi = ProyeksiPindahTumpukanSilo(
         peristiwa_id=e.id, kode_pindah=m["kode_pindah"], intake_id=m["intake_id"],
         intake_peristiwa_id=m.get("intake_peristiwa_id"), silo_id=m["silo_id"],
-        berat_kg=m["berat_kg"], jumlah_karung=m.get("jumlah_karung"), ke_proses=m.get("ke_proses"),
+        berat_kg=m["berat_kg"], jumlah_karung=m.get("jumlah_karung"),
+        jumlah_karung_50=m.get("jumlah_karung_50"), berat_curah_kg=m.get("berat_curah_kg"), ke_proses=m.get("ke_proses"),
         tanggal=date.fromisoformat(m["tanggal"]), waktu=datetime.fromisoformat(m["waktu"]),
         pelaku_id=e.pelaku_id, status=TERCATAT, move_id=m.get("move_id"),
     )

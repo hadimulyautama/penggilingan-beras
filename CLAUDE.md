@@ -104,6 +104,22 @@ lokasi gudangnya; batasi berdasarkan tumpukan versus silo dan kepemilikan.
 Perintah, muatan aktual, serta sisa harus tetap dibedakan. Perubahan perintah
 bukan bukti barang sudah dimuat.
 
+## PK giling sendiri: karung 50 kg dan curah (25 Oktober 2026)
+
+Keputusan pemilik: "otomatis packing ukuran 50kg. sisanya jadi curah".
+Transfer PK sendiri mencatat karung penuh dan sisa curah sebagai rincian dari
+bobot transfer yang sama; tidak membuat stok hasil atau transaksi packing
+produk jadi. `services.pk_50` menjadi satu sumber pemecahan unit. Transfer
+lama tetap NULL pada dua kolom unit, tanpa backfill angka historis.
+
+Pemindahan tumpukan G2 menerima jumlah karung 50 kg dan/atau curah untuk
+PK sendiri. Kosong keduanya berarti seluruh saldo; jalur kg manual tetap
+ada untuk sebagian karung. Kolom `jumlah_karung_50` sengaja terpisah dari
+`jumlah_karung` milik PK luar: PK luar memakai rasio bobot partai dinamis,
+sedangkan PK sendiri tetap mempunyai kg tetap. Jangan memasukkan PK sendiri
+ke sinkronisasi bobot karung pembelian luar. Permintaan transfer tetap memakai
+kontrak kg yang berlaku; perubahan satuannya merupakan pekerjaan terpisah.
+
 ## Peristiwa — tulang punggung baru (Tahap 3, sejak 13 September 2026)
 
 `peristiwa` = apa yang terjadi, TAMBAH-SAJA (trigger Postgres menolak UPDATE

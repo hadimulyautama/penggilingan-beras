@@ -45,6 +45,7 @@
           {% if t.dikirim %}<div><dt>Sudah dikirim</dt><dd>{{ kg(t.dikirim) }} kg</dd></div>{% endif %}
           <div><dt>Status proses</dt><dd>{{ "Masih digiling" if t.berjalan else ("Hasil belum dicatat" if t.belum_dicatat else "Selesai") }}</dd></div>
         {% else %}
+          {% if t.ringkasan_karung|default('') %}<div><dt>Karung & curah tersedia</dt><dd>{{ t.ringkasan_karung }}</dd></div>{% endif %}
           <div><dt>Berat awal masuk</dt><dd>{% if t.bobot_final %}{{ kg(t.berat_awal) }} kg{% else %}Belum ditimbang kedua{% endif %}</dd></div>
           {% if t.berat_awal and t.berat_awal > t.tersedia %}<div><dt>Sudah dipindah ke silo</dt><dd>{{ kg(t.berat_awal - t.tersedia) }} kg</dd></div>{% endif %}
         {% endif %}
