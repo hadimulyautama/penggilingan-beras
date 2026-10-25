@@ -1148,7 +1148,7 @@ async def _latest_progress(db: AsyncSession, proc_id: int) -> float | None:
     return float(v) if v is not None else None
 
 
-async def _produced_pk(db: AsyncSession, proc_id: int) -> float:
+async def _produced_pk(db: AsyncSession, proc_id: int, *, hasil_operator: float | None = None) -> float:
     """PK dihasilkan. Angka TERVERIFIKASI menang atas progres operator.
 
     Progres kumulatif diketik operator sambil mesin jalan — ia perkiraan yang
@@ -1168,7 +1168,7 @@ async def _produced_pk(db: AsyncSession, proc_id: int) -> float:
     )).scalars().first()
     if v is not None:
         return float(v)
-    v = await _latest_progress(db, proc_id)
+    v = hasil_operator if hasil_operator is not None else await _latest_progress(db, proc_id)
     return float(v) if v is not None else 0.0
 
 
@@ -1206,9 +1206,13 @@ async def _sold_pk_langsung(db: AsyncSession, proc_id: int) -> float:
     return float(r)
 
 
-async def _pk_breakdown(db: AsyncSession, proc_id: int) -> PkBreakdown:
-    """Stok PK siap kirim = hasil − dikirim (transfer) − dijual langsung."""
-    produced = await _produced_pk(db, proc_id)
+async def _pk_breakdown(db: AsyncSession, proc_id: int, *, hasil_operator: float | None = None) -> PkBreakdown:
+    """Stok PK siap kirim; pratinjau boleh memasok hasil operator tanpa menulis.
+
+    Jalur lama tanpa argumen tetap membaca progres terakhir. Hasil verifikasi
+    tetap menang, termasuk pada pratinjau; rumus stok hanya ada di sini.
+    """
+    produced = await _produced_pk(db, proc_id, hasil_operator=hasil_operator)
     transferred = await _transferred_pk(db, proc_id)
     sold = await _sold_pk_langsung(db, proc_id)
     from app.services.retur_penerimaan import berat_kembali
