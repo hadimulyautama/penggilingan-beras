@@ -872,6 +872,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "post": "/api/actions/pindah-tumpukan-silo",
              "hint": "PK sendiri otomatis memakai karung penuh 50 kg dan sisa curah. "
                      "PK beli luar mengikuti bobot per karung dari partainya; surat jalan dilengkapi jika belum tercatat. "
+                     "Pada cara karung, kosongkan isian jumlah untuk seluruh sisa. "
                      "Bahan lepas atau sebagian karung tetap dapat dicatat dalam kg.",
              "fields": [
                  {"name": "tumpukan", "label": "PK di tumpukan", "type": "remote",
@@ -4090,10 +4091,13 @@ async def act_kirim_permintaan_pk(req: KirimPermintaanReq,
 
         lok = await label_tujuan(db, b.tujuan, b.silo_id)
         kg = float(b.berat_kirim_kg or 0)
-    from app.services.pk_50 import teks
+        from app.models import InternalTransfer
+        from app.services.pk_50 import teks
+        transfer = await db.get(InternalTransfer, b.internal_transfer_id)
+        packing = teks(transfer.berat_kg)
     return {"ok": True,
             "pesan": f"✓ {_rp(kg)} kg dikirim ke {lok} — Gudang 2 sudah bisa "
-                     "memakainya. Admin menutup catatannya. Packing otomatis: " + teks(kg) + "."}
+                     "memakainya. Admin menutup catatannya. Packing otomatis: " + packing + "."}
 
 
 class TutupPermintaanReq(BaseModel):
@@ -4531,14 +4535,15 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
             nonaktif += ["berat_kg"]
             if saldo is None:
                 return {"teks": "Bobot PK belum diketahui; unit karung belum dapat dihitung.", "nonaktif": nonaktif}
-            from app.services.pk_50 import pilihan
+            from app.services.pk_50 import pilihan, bagi_tersimpan, UKURAN
             try:
                 k, curah, total = pilihan(saldo,
                     jumlah_karung.replace(',', '.') if jumlah_karung.strip() else None,
                     berat_curah_kg.replace(',', '.') if berat_curah_kg.strip() else None)
             except ValueError as e:
                 return {"teks": str(e), "nonaktif": nonaktif}
-            return {"teks": "PK hasil giling sendiri · tersedia " + teks(saldo) + ". Dipindah: " + str(int(k)) + " karung × 50 kg + " + angka(curah) + " kg curah = " + angka(total) + " kg. Kosongkan kedua isian untuk seluruh sisa; isi curah saja untuk memindahkan curah saja.", "nonaktif": nonaktif}
+            pk, pc = bagi_tersimpan(float(total), 3)
+            return {"teks": "PK hasil giling sendiri · tersedia " + teks(saldo) + ". Dipindah: " + str(pk) + " karung × 50 kg + " + angka(pc) + " kg curah = " + angka(pk * UKURAN + pc) + " kg. Kosongkan kedua isian untuk seluruh sisa; isi curah saja untuk memindahkan curah saja.", "nonaktif": nonaktif}
         baru = False
         tambahan = ""
         if batch and not batch.jumlah_karung and hasil_timbang != "ya":

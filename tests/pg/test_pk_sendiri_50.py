@@ -200,11 +200,58 @@ async def test_kunci_sama_tidak_menerima_muatan_unit_berbeda(pg,pabrik,ulang):
         assert await g2._sisa_tumpukan_intake(db,ids[1])==5900
 
 
-async def test_jawaban_curah_mengikuti_presisi_yang_tersimpan(pg,pabrik):
+@pytest.mark.parametrize('ketikan,tersimpan',[(.1234,.123),(2.0005,2.001)])
+async def test_jawaban_curah_mengikuti_presisi_yang_tersimpan(pg,pabrik,ketikan,tersimpan):
     ids=await siapkan(pg,pabrik)
-    r=await pindah(pg,ids,berat_curah_kg=.1234)
-    assert r.berat_kg==.123 and r.berat_curah_kg==.123
+    from app.services.pk_50 import angka
+    async with await _klien(pg,ids[0],'curah-presisi',mode='operator') as c:
+        p=await c.get('/api/actions/pratinjau-pk-karung',params={'tumpukan':ids[1],'berat_curah_kg':ketikan})
+        assert p.status_code==200
+        assert '0 karung × 50 kg + '+angka(tersimpan)+' kg curah' in p.json()['teks']
+    r=await pindah(pg,ids,berat_curah_kg=ketikan)
+    assert r.berat_kg==tersimpan and r.berat_curah_kg==tersimpan
     async with pg() as db:
         m=(await db.scalars(select(PkTumpukanToSilo))).one()
-        assert m.berat_curah_kg==Decimal('.123')
-        assert r.sisa_tumpukan_intake==6419.877
+        assert m.berat_curah_kg==Decimal(str(tersimpan))
+        assert r.sisa_tumpukan_intake==float(Decimal('6420')-Decimal(str(tersimpan)))
+
+
+@pytest.mark.parametrize('ketikan,tersimpan', [(1.005,'1.00'),(2.675,'2.67'),(49.995,'49.99'),(50.005,'50.01')])
+async def test_unit_transfer_mengikuti_angka_pg_jalur_lama(pg,pabrik,ketikan,tersimpan):
+    async with pg() as db:
+        r=await create_internal_transfer(db,user=await db.get(User,pabrik['user_id']),kode_proses=pabrik['kode'],lokasi_tujuan='ditumpuk',berat=ketikan)
+        await db.refresh(r.transfer)
+        t=r.transfer
+        assert t.berat_kg==Decimal(tersimpan)
+        assert t.jumlah_karung*50+t.berat_curah_kg==t.berat_kg
+        pr=await db.get(ProyeksiTransferPk,t.peristiwa_id)
+        assert pr.berat_kg==t.berat_kg and pr.berat_curah_kg==t.berat_curah_kg
+
+@pytest.mark.parametrize('cara',['curah','manual'])
+async def test_unit_pindah_mengikuti_batas_presisi_pg_lama(pg,pabrik,cara):
+    ids=await siapkan(pg,pabrik)
+    kw=dict(berat_curah_kg=1.0005) if cara=='curah' else dict(berat=1.0005,hasil_timbang=True)
+    r=await pindah(pg,ids,**kw)
+    assert r.berat_kg==1 and r.berat_curah_kg==1
+    async with pg() as db:
+        m=(await db.scalars(select(PkTumpukanToSilo))).one()
+        assert m.jumlah_karung_50*50+m.berat_curah_kg==m.berat_kg
+        assert await g2._sisa_tumpukan_intake(db,ids[1])==6419
+
+
+async def test_pesan_kirim_permintaan_memakai_unit_transfer_tersimpan(pg,pemakai,pemasok):
+    from tests.pg.test_permintaan_empat_langkah import pabrik as fixture
+    from tests.pg.test_riwayat_giling import _klien as klien
+    from app.models import PermintaanPk
+    dunia=await fixture.__wrapped__(pg,pemakai,pemasok)
+    async with await klien(pg,peran='operator',gudang='Gudang 2') as g2c, await klien(pg,peran='operator',gudang='Gudang 1') as g1c, await klien(pg,peran='admin') as admin:
+        for c in [g2c,g1c,admin]:c.headers['X-CSRF-Token']=cap_formulir(c)
+        assert (await g2c.post('/api/actions/minta-pk-g1',json=dict(kode_proses=dunia['lot'],berat=1.005))).status_code==200
+        async with pg() as db:pid=await db.scalar(select(PermintaanPk.id))
+        assert (await admin.post('/api/actions/acc-permintaan-pk',json=dict(permintaan=str(pid),tujuan='ditumpuk',berat=5))).status_code==200
+        r=await g1c.post('/api/actions/kirim-permintaan-pk',json=dict(permintaan=str(pid),berat=1.005))
+        assert r.status_code==200,r.text
+        assert '0 karung × 50 kg + 1 kg curah' in r.json()['pesan']
+        async with pg() as db:
+            t=(await db.scalars(select(InternalTransfer))).one()
+            assert t.berat_kg==Decimal('1.00') and t.berat_curah_kg==Decimal('1.00')

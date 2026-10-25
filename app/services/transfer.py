@@ -215,11 +215,10 @@ async def create_internal_transfer(
         n = await buku.jumlah_jenis(db, PK_DIPINDAH_G1G2, "milling_process_id", proc.id)
         kunci_kiriman = f"{PK_DIPINDAH_G1G2}:proses:{proc.id}:{n + 1}"
 
-    from decimal import Decimal, ROUND_HALF_UP
-    from app.services.pk_50 import bagi
+    from app.services.pk_50 import bagi_tersimpan
     # Kolom transfer tetap dua desimal seperti sebelumnya. Pemecahan unit
     # memakai bobot yang benar-benar akan tercatat, termasuk batas50kg.
-    karung, curah = bagi(Decimal(str(kirim)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+    karung, curah = bagi_tersimpan(kirim, 2)
     kode_transfer = await next_transfer_code(db)
     muatan = {
         "kode_transfer": kode_transfer, "milling_process_id": proc.id, "kode_proses": kode_proses,
