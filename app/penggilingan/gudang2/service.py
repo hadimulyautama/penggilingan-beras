@@ -1891,9 +1891,13 @@ async def pindah_tumpukan_ke_silo(
         now = input_time(tanggal,jam)
         move,ke_proses = await _catat_pindah(db,user=user,intake=intake,silo=silo,nama_silo=nama_silo,kirim=float(kirim),now=now,kunci_kiriman=kunci_kiriman)
         if commit:await db.commit()
+        # Gunakan presisi yang benar-benar tersimpan, sama seperti jalur kg
+        # lama. Ketikan dengan desimal lebih banyak tidak boleh membuat
+        # pesan hasil berbeda dari unit pada cermin dan proyeksinya.
+        await db.refresh(move)
         sisa = await _sisa_tumpukan_intake(db,intake.id)
         return PindahResult(move.kode_pindah,nama_silo,float(move.berat_kg),sisa,ke_proses,
-            jumlah_karung=int(k),sisa_karung=bagi(sisa)[0],berat_curah_kg=float(c))
+            jumlah_karung=move.jumlah_karung_50,sisa_karung=bagi(sisa)[0],berat_curah_kg=float(move.berat_curah_kg))
     if jumlah_karung_partai is not None:
         if hasil_timbang or berat is not None:
             raise Gudang2Error("Lengkapi surat jalan untuk pemindahan karung utuh; kg khusus dicatat terpisah.")
