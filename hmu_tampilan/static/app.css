@@ -3751,3 +3751,20 @@ body.padiflow-ui .lembar--mulai-giling .lembar__isi{max-width:980px}
 @media(max-width:660px){.lembar--mulai-giling .mg-layout{grid-template-columns:minmax(0,1fr);gap:16px}.lembar--mulai-giling .centang{padding:12px}.lembar--mulai-giling .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.4fr)}}
 .lembar--mulai-giling #mg-peringatan:empty,.lembar--mulai-giling #mg-tautan:empty{display:none}
 .lembar--mulai-giling .hasil-actions{margin-top:18px}
+
+/* Penyelesaian giling tetap dua field, pemeriksaan server dan konfirmasi. */
+body.padiflow-ui .lembar--selesai-giling .lembar__isi{max-width:940px}
+.lembar--selesai-giling .sg-stage{display:flex;flex-wrap:wrap;gap:6px;font-size:.8rem;color:var(--redup);margin:0 0 16px}.lembar--selesai-giling .sg-stage strong{color:var(--aman)}
+.lembar--selesai-giling .sg-context{display:grid;gap:6px;background:var(--panel-2);padding:14px;border-radius:11px;margin-bottom:20px;overflow-wrap:anywhere}
+.lembar--selesai-giling .sg-context strong{font-size:1rem}.lembar--selesai-giling .sg-context small{font-size:.75rem;color:var(--redup);line-height:1.6}
+.lembar--selesai-giling .sg-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:24px;align-items:start}
+.lembar--selesai-giling .sg-preview{display:grid;gap:12px;min-width:0;overflow-wrap:anywhere}
+.lembar--selesai-giling .sg-silos,.lembar--selesai-giling .sg-summary{padding:14px;border:1px solid var(--garis);border-radius:11px;background:var(--panel);margin-bottom:12px}
+.lembar--selesai-giling h3{font-size:.95rem;margin:0 0 10px;font-weight:600}
+.lembar--selesai-giling .sg-source{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--garis);font-size:.8rem;align-items:start}
+.lembar--selesai-giling .sg-source>div{display:grid;gap:5px;min-width:0}.lembar--selesai-giling .sg-source small{font-size:.7rem;color:var(--redup);line-height:1.5}.lembar--selesai-giling .sg-source>span{color:var(--aman);text-align:right;flex-shrink:0;max-width:45%;font-variant-numeric:tabular-nums}.lembar--selesai-giling .sg-source>span.sg-pending{color:var(--hati)}
+.lembar--selesai-giling .sg-summary{background:var(--panel-2)}.lembar--selesai-giling dl{margin:0;font-size:.8rem}.lembar--selesai-giling dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--garis)}.lembar--selesai-giling dt{color:var(--redup)}.lembar--selesai-giling dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.lembar--selesai-giling .sg-total dd{color:var(--aman);font-size:1rem}
+.lembar--selesai-giling .sg-summary small{display:block;margin-top:10px;color:var(--redup);font-size:.75rem;line-height:1.6}
+.lembar--selesai-giling .sg-warning{padding:12px;border-left:3px solid var(--hati);border-radius:8px;background:var(--panel-2);font-size:.8rem;line-height:1.6;margin:0 0 10px;overflow-wrap:anywhere}.lembar--selesai-giling .sg-review-head{margin-bottom:16px}.lembar--selesai-giling .sg-review-head p{font-size:.85rem;line-height:1.6;color:var(--redup);overflow-wrap:anywhere}
+.lembar--selesai-giling .sg-link{font-size:.8rem;white-space:normal}.lembar--selesai-giling .hasil-actions{margin-top:20px}.lembar--selesai-giling #sg-peringatan:empty{display:none}
+@media(max-width:640px){.lembar--selesai-giling .sg-layout{grid-template-columns:minmax(0,1fr);gap:18px}.lembar--selesai-giling .hasil-actions{grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr)}}

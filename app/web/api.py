@@ -711,7 +711,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # Stok. Yang ditolak penutupannya, bukan pencatatannya: prosesnya
             # tak disentuh sampai angkanya ada, jadi kartunya tetap di Sedang
             # berjalan sampai dilengkapi.
-            {"id": "selesai_giling", "label": "🏁 Selesai giling",
+            {"id": "selesai_giling", "label": "🏁 Selesai penggilingan",
+             "konteks_selesai_giling": {"source": "/api/actions/ringkasan-selesai-giling", "proses": "kode_proses"},
              "hint": "Catat sisa setiap silo melalui Bebaskan silo terlebih dahulu. "
                      "Isi 0 hanya jika benar-benar kosong. Penyelesaian tidak mengosongkan silo.",
              "post": "/api/actions/selesai-giling", "pratinjau_proses": "giling", "fields": [
@@ -3457,6 +3458,21 @@ class KodeProsesReq(BaseModel):
     kode_proses: str
 
 
+@router.get("/actions/ringkasan-selesai-giling")
+async def konteks_selesai_giling(kode_proses: str, berat_akhir: float | None = None,
+                                user: User = Depends(pengguna_aksi)):
+    from fastapi.responses import JSONResponse
+    from app.web.form_selesai_giling import ringkasan
+    from app.penggilingan.gudang1.services.milling import MillingError
+    _require(await _is_g1_operator(user))
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_proses=kode_proses, berat_akhir=berat_akhir)
+        except MillingError as e:
+            raise _err(e, "Konteks penyelesaian belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
 class SelesaiGilingReq(BaseModel):
     kode_proses: str
     #: Hasil akhir PK (kg). Boleh kosong HANYA bila operator sudah pernah
@@ -4324,7 +4340,15 @@ async def pratinjau_selesai_proses(jenis: str, kode_proses: str,
     from app.services.penyelesaian_proses import ringkasan_selesai
     async with SessionLocal() as db:
         try:
-            return await ringkasan_selesai(db, jenis=jenis, kode=kode_proses, berat_akhir=berat_akhir)
+            if jenis == "giling" and berat_akhir is not None:
+                from math import isfinite
+                if not isfinite(berat_akhir) or berat_akhir <= 0:
+                    raise ValueError("Hasil akhir PK harus lebih dari nol dan berupa angka terbatas.")
+            data = await ringkasan_selesai(db, jenis=jenis, kode=kode_proses, berat_akhir=berat_akhir)
+            if jenis == "giling":
+                from app.web.form_selesai_giling import ringkasan
+                data["rincian"] = await ringkasan(db, kode_proses=kode_proses, berat_akhir=berat_akhir)
+            return data
         except ValueError as e:
             raise HTTPException(409, str(e))
 
