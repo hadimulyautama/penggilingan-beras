@@ -761,7 +761,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # proses, silo lainnya juga dipergunakan untuk mix bahan baku
             # jika dibutuhkan." `start_milling` menerima beberapa silo,
             # tetapi hanya saat MULAI — pintu ini membuka jalan mid-proses.
-            {"id": "tambah_silo_giling", "label": "➕ Tambah silo (mix bahan)",
+            {"id": "tambah_silo_giling", "label": "➕ Tambah silo untuk mix bahan",
+             "konteks_tambah_giling": {"proses": "kode_proses", "source": "/api/actions/ringkasan-tambah-silo-giling"},
              "hint": "Silo lain ikut jadi bahan proses ini — harus silo yang "
                      "belum dipakai proses lain, dan sepemilik dengan bahan "
                      "yang sudah berjalan.",
@@ -2265,6 +2266,20 @@ async def konteks_bebaskan_silo_giling(kode_proses: str, silo: str = "", sisa: f
     return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
+@router.get("/actions/ringkasan-tambah-silo-giling")
+async def konteks_tambah_silo_giling(kode_proses: str, silo: str = "", user: User = Depends(pengguna_aksi)):
+    _require(await _is_g1_operator(user))
+    from fastapi.responses import JSONResponse
+    from app.web.form_tambah_silo_giling import ringkasan
+    from app.penggilingan.gudang1.services.milling import MillingError
+    async with SessionLocal() as db:
+        try:
+            data = await ringkasan(db, kode_proses=kode_proses, silo=silo)
+        except MillingError as e:
+            raise _err(e, "Ringkasan tambahan belum tersedia.")
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/actions/silo-g1-tambah")
 async def silo_g1_tambah(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 1 yang BISA ditambahkan ke proses giling `induk` —
@@ -2334,10 +2349,14 @@ async def act_tambah_silo_giling(req: TambahSiloGilingReq,
                                          nama_silo=req.silo.upper())
         except MillingError as e:
             raise _err(e, "Gagal menambah silo.")
-    pesan = (f"✓ Silo {r.nama_silo} ditambahkan ke *{r.proc.kode_proses}* "
-             f"(+{r.bertambah:,.0f} kg) — bahan kini {r.proc.berat_gabah_masuk_kg:,.0f} kg."
-             .replace(",", "."))
-    return {"ok": True, "pesan": pesan}
+    tambahan = r.bobot.teks() if r.bobot else "Bobot belum tersedia"
+    total = (f"{r.proc.berat_gabah_masuk_kg:,.0f} kg".replace(",", ".")
+             if r.proc.berat_gabah_masuk_kg is not None and r.proc.bobot_masuk_final
+             else "belum final; periksa rincian sumber terbaru")
+    pesan = (f"✓ Silo {r.nama_silo} ditambahkan ke {r.proc.kode_proses}. "
+             f"Tambahan {tambahan} — bahan kini {total}. Hasil PK tetap dicatat terpisah.")
+    return {"ok": True, "pesan": pesan, "kode_proses": r.proc.kode_proses}
+
 
 
 @router.get("/actions/cooling-active")
