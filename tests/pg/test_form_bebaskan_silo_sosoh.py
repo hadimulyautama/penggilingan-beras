@@ -22,7 +22,7 @@ async def stock(pg,s='B'):
  async with pg() as db:return await g2.hitung_stok_silo(db,(await g2.get_g2_silo(db,s)).id)
 async def test_tiga_field_konteks_baca_saja_dan_daftar_lama(pg,proses):
  async with await _klien(pg,peran='admin') as c:
-  old=await fakta(pg);a=next(x for x in (await c.get('/api/actions/menu')).json() if x['id']=='selesai_penyosohan');assert [f['name'] for f in a['fields']]==['kode_proses','silo','sisa'];assert a['fields'][1]['induk']=='kode_proses';assert a['post']=='/api/actions/selesai-penyosohan'
+  old=await fakta(pg);a=next(x for x in (await c.get('/api/actions/menu')).json() if x['id']=='selesai_penyosohan');assert [f['name'] for f in a['fields']]==['kode_proses','silo','sisa'];assert a['fields'][2]['label']=='Sisa fisik di silo';assert a['fields'][1]['induk']=='kode_proses';assert a['post']=='/api/actions/selesai-penyosohan'
   assert (await c.get('/api/actions/sosoh-silo')).json()==[]
   options=(await c.get('/api/actions/sosoh-silo',params={'induk':proses['kode']})).json();assert [x['value'] for x in options]==['B']
   r=await baca(c,proses['kode']);assert r.status_code==200 and r.headers['cache-control']=='no-store';d=r.json();assert d['awal']==9800 and d['tambahan']==0 and d['sisa'] is None and d['terpakai'] is None
