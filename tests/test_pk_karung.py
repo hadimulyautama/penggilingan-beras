@@ -45,14 +45,20 @@ def test_simpangan_karung_adalah_peringatan_bukan_penolakan():
 
 
 @pytest.mark.asyncio
-async def test_pilihan_kg_tetap_dapat_dipilih_di_borang(monkeypatch):
+async def test_satuan_otomatis_tanpa_pilihan_cara_dan_api_kg_lama_tetap_sah(monkeypatch):
     from tests.test_gudang2_operator import _menu_g2
     menu=await _menu_g2(monkeypatch)
     aksi=next(a for a in menu if a['id']=='pindah_tumpukan_silo')
     medan={f['name']:f for f in aksi['fields']}
-    assert 'jumlah_karung' in medan
-    assert medan['hasil_timbang']['options'][1][0] == 'ya'
-    assert medan['hasil_timbang']['bawaan'] == 'karung'
+    # Pemilik menyetujui penghapusan pemilih cara: bentuk sumber yang
+    # menentukan field. Dukungan kg klien lama tetap diuji sebagai kontrak API.
+    assert medan['jumlah_karung']['type'] == medan['berat_kg']['type'] == 'number'
+    assert 'hasil_timbang' not in medan
+    assert medan['tumpukan']['source'] == '/api/actions/sumber-masukkan-silo'
+    assert aksi['konteks_masukkan_silo']['source'] == '/api/actions/rincian-masukkan-silo'
+    from app.web.api import PindahTumpukanSiloReq
+    lama=PindahTumpukanSiloReq(tumpukan='1',silo='A',hasil_timbang='ya',berat_kg=12.5)
+    assert lama.hasil_timbang == 'ya' and lama.berat_kg == 12.5
 
 
 def test_koreksi_komponen_tetap_tidak_menghitung_ulang_karung_dua_kali():
