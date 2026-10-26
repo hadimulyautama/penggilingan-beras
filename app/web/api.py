@@ -929,6 +929,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "number", "wajib": True},
              ]},
             {"id": "masukkan_menir_silo", "label": "📤 Masukkan menir ke silo",
+             "konteks_menir_silo": {"source": "/api/actions/rincian-menir-silo"},
              "post": "/api/actions/masukkan-menir-silo",
              "hint": "Hanya stok menir yang tersedia; pemilik stok dibawa ke silo.",
              "fields": [
@@ -5500,8 +5501,41 @@ async def _act_masukkan_hasil_samping(req: MasukkanHasilSampingSiloReq,
                 nama_silo=req.silo.strip(), berat_kg=float(req.berat_kg))
         except Gudang2Error as e:
             raise _err(e, f"Gagal memasukkan {jenis} ke silo.")
-    return {"ok": True, "pesan": f"✓ {result['moved_kg']:,.2f} kg {jenis} masuk "
+    hasil = {"ok": True, "pesan": f"✓ {result['moved_kg']:,.2f} kg {jenis} masuk "
             f"ke {result['nama_silo']}.".replace(",", ".")}
+    if jenis == 'menir':
+        # Jawaban tambahan membaca catatan yang sudah commit, bukan estimasi
+        # browser. Kegagalan pembacaan tidak membatalkan keberhasilan transaksi.
+        hasil['rincian_menir'] = dict(kg=None, silo=result['nama_silo'],
+                                     codes=result['codes'], setelah=None)
+        try:
+            from app.services.rencana_menir_silo import rincian
+            from app.models import HasilSampingKeSilo
+            from sqlalchemy import select, func
+            async with SessionLocal() as db:
+                hasil['rincian_menir']['kg'] = float(await db.scalar(
+                    select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
+                    .where(HasilSampingKeSilo.kode_pindah.in_(result['codes']))))
+                hasil['rincian_menir']['setelah'] = await rincian(
+                    db, str(result['jasa_id']) if result['jasa_id'] is not None else 'pabrik')
+        except Exception:
+            log.exception('Saldo menir sesudah simpan belum terbaca')
+    return hasil
+
+
+
+@router.get("/actions/rincian-menir-silo")
+async def rincian_menir_silo(pemilik: str = '', berat_kg: str = '', silo: str = '',
+                           user: User = Depends(pengguna_aksi)) -> dict:
+    from hmu_identitas import peran as P
+    _require((await _is_g2_operator(user) and not can_see_financials(user))
+             or P.super_saja(user.role))
+    from app.services.rencana_menir_silo import rincian
+    async with SessionLocal() as db:
+        try:
+            return await rincian(db, pemilik, berat_kg, silo)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
 
 
 @router.post("/actions/masukkan-menir-silo")

@@ -593,7 +593,8 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
     Pemanggil yang memperlakukan keduanya sama akan menolak silo kosong, atau
     menerima silo campuran, tergantung arah salahnya.
     """
-    from app.models import BerasKeSilo, BrokenKeSilo, PkGudang2Intake, PkTumpukanToSilo
+    from app.models import (BerasKeSilo, BrokenKeSilo, HasilSampingKeSilo,
+                            PkGudang2Intake, PkTumpukanToSilo)
     # Impor malas: `gudang2.service` mengimpor berkas ini di kepalanya, jadi
     # impor di tingkat modul akan melingkar.
     from app.penggilingan.gudang2.service import hitung_stok_silo
@@ -632,7 +633,18 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
         .limit(1)
     )).first()
 
-    calon = [b for b in (langsung, lewat_tumpukan, lewat_broken, lewat_beras)
+    # Menir/Reject juga merupakan muatan nyata. Melewatkan jalur ini
+    # membuat silo berisi menir pelanggan terbaca milik pabrik, padahal
+    # hitung_stok_silo sudah memasukkan kg-nya. Aturan pemilik tidak berubah:
+    # muatan terbaru menentukan pemilik selama saldo belum kosong.
+    lewat_hasil_samping = (await db.execute(
+        select(HasilSampingKeSilo.waktu, HasilSampingKeSilo.jasa_id)
+        .where(HasilSampingKeSilo.silo_id == silo_id)
+        .order_by(HasilSampingKeSilo.waktu.desc(), HasilSampingKeSilo.id.desc())
+        .limit(1)
+    )).first()
+
+    calon = [b for b in (langsung, lewat_tumpukan, lewat_broken, lewat_beras, lewat_hasil_samping)
              if b is not None]
     if not calon:
         # Stoknya positif tetapi tak ada satu pun muatan yang menjelaskannya —

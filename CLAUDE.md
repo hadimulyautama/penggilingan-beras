@@ -1232,3 +1232,23 @@ mengurangi karung gudang. Tidak ada backfill historis dari angka perkiraan.
 Jangan menghapus jejak ini pada rollback UI atau menganggapnya pembelian/
 kehilangan karung baru. Batas commit per sumber dan ketiadaan undo broken
 masih merupakan keterbatasan lama yang terpisah.
+
+## Formulir menir ke silo (26 Oktober 2026)
+
+Tiga field tetap `pemilik`, `silo`, `berat_kg`, dalam kg; tidak ada pemilihan
+kemasan/pembongkaran karung baru. `gudang2.rencana_hasil_samping` memuat
+pembacaan dan alokasi lama Menir/Reject: urutan ID proses, hak curah pemilik
++ kemasan miliknya − pemindahan, lalu pengiriman lama dialokasikan FIFO
+sebelum permintaan baru. Toleransi 0,005 kg tetap. Pembaca rincian Menir
+memakai bagian yang sama tanpa menulis. Receipt membaca kg baris tersimpan.
+
+Dua celah yang ditemukan uji terisolasi diperbaiki tanpa mengganti rumus:
+layanan mengunci saldo bersama barang keluar SEBELUM membaca alokasi,
+sehingga dua permintaan600kg tidak memakai950kg menjadi1200kg; pembaca
+`pemilik_silo_g2` juga membaca muatan Menir/Reject terbaru agar menir jasa
+tidak dinyatakan milik pabrik. Reject tetap memakai kontrak serta UI lama.
+
+Batas lama: pemindahan HSS memiliki audit, tetapi belum ada penangan undo
+otomatis. UI menahan kiriman ulang bila hasil jaringan belum terkonfirmasi;
+ini bukan idempotensi backend. Jangan menjanjikan pembatalan otomatis atau
+retry aman hanya karena audit dan tombol Stok tersedia.
