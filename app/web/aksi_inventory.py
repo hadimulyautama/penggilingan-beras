@@ -450,6 +450,19 @@ def _urai_packing(req: PackingReq) -> tuple[str, str, str | None, str, int]:
     return req.kode_pol, kategori, mutu, material, ukuran
 
 
+@router.get("/actions/rincian-packing-beras")
+async def rincian_packing_beras(sumber: str = '', kemasan: str = '', merk: str = '',
+                               jumlah_karung: str = '', user: User = Depends(pengguna_aksi)) -> dict:
+    from app.web.api import _is_g2_operator
+    wajib(await _is_g2_operator(user) or can_see_financials(user))
+    from app.services.rencana_packing import rincian
+    async with SessionLocal() as db:
+        try:
+            return await rincian(db, sumber, kemasan, merk, jumlah_karung)
+        except (ValueError, bj.InventoryError) as e:
+            raise galat(e, 'Ringkasan pengemasan belum tersedia.')
+
+
 @router.post("/actions/catat-packing")
 async def act_catat_packing(req: PackingReq,
                             user: User = Depends(pengguna_aksi)) -> dict:
@@ -476,7 +489,21 @@ async def act_catat_packing(req: PackingReq,
     warn = f"\n{r.warning}" if r.warning else ""
     pesan = (f"✓ Packing {KATEGORI_LABEL.get(r.kategori, r.kategori)}{grade}: "
              f"{r.jumlah_karung} karung ({kg(r.berat_total_kg)}).{warn}")
-    return {"ok": True, "pesan": pesan}
+    hasil = {"ok": True, "pesan": pesan}
+    if kategori in KATEGORI_BERMERK:
+        # Simpan sudah commit. Saldo terbaru adalah informasi tambahan; gagal
+        # membaca ulang tidak mengubah transaksi berhasil menjadi kegagalan.
+        from app.services.stok import jenis_produk
+        from app.services.rencana_packing import rincian
+        hasil['rincian_packing'] = dict(jumlah=r.jumlah_karung, berat=r.berat_total_kg, setelah=None)
+        try:
+            async with SessionLocal() as db:
+                hasil['rincian_packing']['setelah'] = await rincian(
+                    db, kode_pol+'|'+jenis_produk(kategori, mutu), material+'|'+str(ukuran), req.merk or '')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Saldo sesudah packing belum terbaca')
+    return hasil
 
 
 class CurahReq(BaseModel):
@@ -1835,6 +1862,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "type": "text"},
              ]},
             {"id": "catat_packing", "label": "📦 Catat packing barang jadi",
+             "konteks_kemas_beras": {"source": "/api/actions/rincian-packing-beras"},
              "post": "/api/actions/catat-packing",
              "hint": "Mengurangi stok karung dan menambah stok barang jadi. "
                      "Packing boleh selama sosoh berjalan, dari hasil yang sudah tercatat "
