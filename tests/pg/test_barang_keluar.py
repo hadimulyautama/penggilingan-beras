@@ -185,7 +185,7 @@ async def test_tambah_baris_pesanan_jasa_tak_lagi_lolos_memakai_stok_pabrik(pg, 
     from app.services import barang_keluar as bk
 
     async with pg() as db:
-        bu_sri = Pelanggan(nama_pelanggan="Bu Sri")
+        bu_sri = Pelanggan(nama_pelanggan="Bu Sri", kledo_contact_id=100001)
         db.add(bu_sri)
         await db.flush()
         jasa_a = Jasa(kode="JAS-2610-020", pelanggan_id=bu_sri.id, status="berjalan")
@@ -1820,6 +1820,10 @@ async def _pelanggan(pg, nama, *, status="aktif", dihapus=False, kledo=None):
                       kledo_contact_id=kledo,
                       deleted_at=now_local() if dihapus else None)
         db.add(p)
+        await db.flush()
+        # Fixture perintah baru memakai pelanggan Kledo yang sah.
+        if kledo is None:
+            p.kledo_contact_id = 1000000 + p.id
         await db.commit()
         return p.id
 
@@ -2720,7 +2724,7 @@ async def test_detail_tambahan_jasa_memisahkan_pesanan_dan_pemilik(pg,gudang):
     from app.services import barang_keluar as bk
     from app.web.aksi_inventory import barang_tambahan_perintah
     async with pg() as db:
-        pa=Pelanggan(nama_pelanggan='Pemilik A');pb=Pelanggan(nama_pelanggan='Pemilik B')
+        pa=Pelanggan(nama_pelanggan='Pemilik A',kledo_contact_id=100001);pb=Pelanggan(nama_pelanggan='Pemilik B',kledo_contact_id=100002)
         db.add_all([pa,pb]);await db.flush()
         pesanan=[Jasa(kode=f'JAS-UJI-DETAIL-{i}',pelanggan_id=p.id,status='berjalan')
                  for i,p in enumerate([pa,pa,pb])]

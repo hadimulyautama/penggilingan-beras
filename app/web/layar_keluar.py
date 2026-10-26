@@ -141,9 +141,30 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         pemilik_item = await nama_pemilik_banyak(db, {it.jasa_id for _, items in baris for it in items if it.jasa_id})
         nama = await _nama_barang(db, baris)
         nama_orang = await _nama_orang(db, baris)
+        kiriman_bersama = {}
+        if not is_customer_read(request):
+            from app.models import OutgoingItem
+            for rec, _ in baris:
+                if not rec.kiriman_id or rec.kiriman_id in kiriman_bersama:
+                    continue
+                anggota = await svc.anggota_kiriman(db, rec)
+                ids_anggota = [r.id for r in anggota]
+                semua_item = list((await db.scalars(select(OutgoingItem).where(
+                    OutgoingItem.outgoing_record_id.in_(ids_anggota)).order_by(OutgoingItem.id))).all())
+                rincian = [(r, [it for it in semua_item if it.outgoing_record_id == r.id]) for r in anggota]
+                nama_anggota = await _nama_barang(db, rincian)
+                kiriman_bersama[rec.kiriman_id] = [dict(rec=r,
+                    barang=[dict(nama=nama_anggota.get(it.id, '?'),
+                        perintah=float(it.berat_perintah_kg or 0), dimuat=float(it.berat_kg or 0),
+                        karung=it.jumlah_karung_perintah) for it in items],
+                    perintah=sum(float(it.berat_perintah_kg or 0) for it in items),
+                    dimuat=sum(float(it.berat_kg or 0) for it in items)) for r, items in rincian]
 
     kartu = []
     for rec, items in baris:
+        bersama = kiriman_bersama.get(rec.kiriman_id, [])
+        total_armada = (sum(p['dimuat'] for p in bersama if p['rec'].status != OUT_BATAL)
+                        if bersama else sum(float(i.berat_kg or 0) for i in items))
         isi = []
         for it in items:
             perintah = float(it.berat_perintah_kg or 0)
@@ -167,12 +188,13 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                 "berkarung": it.item_type == "finished_goods",
             })
         kata, warna = KEADAAN.get(rec.status, (rec.status, "baru"))
-        if rec.status == OUT_PERINTAH and svc.boleh_keluar_cepat(items):
+        if rec.status == OUT_PERINTAH and (not rec.kiriman_id and svc.boleh_keluar_cepat(items)):
             kata = "Menunggu penyerahan · <200 kg"
         kartu.append({
             "boleh_ubah": boleh_perintah and rec.status in OUT_HIDUP,
             "rec": rec, "isi": isi, "keadaan": kata, "warna": warna,
-            "cepat": svc.boleh_keluar_cepat(items),
+            "kiriman_bersama": bersama, "total_armada_dimuat": total_armada,
+            "cepat": (not rec.kiriman_id and svc.boleh_keluar_cepat(items)),
             "tiket_timbang": tiket_timbang.get(rec.timbangan_transaksi_id),
             # ── TOMBOL DI KARTUNYA SENDIRI ──
             #
@@ -193,15 +215,15 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             # memilih ulang transaksi yang barusan ia baca.
             "tombol": _tombol(rec, boleh_perintah=boleh_perintah,
                               boleh_muat=boleh_muat, dasar=dasar_perintah.get(rec.id, ""),
-                              cepat=svc.boleh_keluar_cepat(items)),
+                              cepat=(not rec.kiriman_id and svc.boleh_keluar_cepat(items))),
             "total_perintah": sum(x["perintah"] for x in isi),
-            "batas_selisih": svc.ambang_selisih(sum(x["dimuat"] for x in isi)),
+            "batas_selisih": svc.ambang_selisih(total_armada),
             "total_dimuat": sum(x["dimuat"] for x in isi),
             "total_sisa": sum(x["sisa_perintah"] for x in isi),
             "jasa": rec.jasa_id is not None or any(it.jasa_id is not None for it in items),
             "selisih_timbang": (
                 float(tiket_timbang[rec.timbangan_transaksi_id]["berat_barang_kg"])
-                - sum(x["dimuat"] for x in isi)
+                - total_armada
                 if rec.timbangan_transaksi_id in tiket_timbang
                 and tiket_timbang[rec.timbangan_transaksi_id]["berat_barang_kg"] is not None
                 else None),

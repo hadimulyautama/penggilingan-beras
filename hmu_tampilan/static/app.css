@@ -4057,3 +4057,48 @@ body.padiflow-ui .lembar--kemas-beras .lembar__isi #f_jumlah_karung{font-size:1.
 
 .lembar--kemas-beras .jumlah-berdampingan{grid-template-columns:minmax(0,1fr)}
 .lembar--kemas-beras .maksimal-kemas{display:flex;justify-content:space-between;align-items:center;gap:12px;border-left:0;padding:10px 12px}.lembar--kemas-beras .maksimal-kemas span{font-size:12px;letter-spacing:0;text-transform:none;font-weight:400}.lembar--kemas-beras .maksimal-kemas strong{font-size:14px;text-align:right}
+
+/* Kiriman bersama: setiap penerima tetap memiliki kartu dan barang sendiri. */
+.editor-perintah { max-width:1120px; container-type:inline-size; }
+.editor-perintah .draf-layout { display:grid; gap:24px; min-width:0; }
+.editor-perintah .draf-isian,.editor-perintah .draf-bagian { min-width:0; }
+.editor-perintah .draf-bagian > h2 { margin-top:0; }
+.editor-perintah .draf-bagian + .draf-bagian { border-top:1px solid var(--garis); padding-top:20px; margin-top:24px; }
+.editor-perintah .draf-bagian > label { display:block; margin:16px 0 6px; font-weight:600; }
+.editor-perintah .draf-kelompok { border:1px solid var(--garis); background:var(--panel); border-radius:13px; padding:16px; margin-bottom:16px; min-width:0; }
+.editor-perintah .draf-kelompok-kepala,.editor-perintah .draf-item > header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; }
+.editor-perintah .draf-kelompok-kepala { border-bottom:1px solid var(--garis); padding-bottom:12px; margin-bottom:16px; }
+.editor-perintah h3 { font-size:.95rem; margin:14px 0 8px; overflow-wrap:anywhere; }
+.editor-perintah .draf-item { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; padding:16px 0; }
+.editor-perintah .draf-item:first-child { padding-top:4px; }
+.editor-perintah .draf-item > label:first-child { grid-column:auto; }
+.editor-perintah .draf-item select { font-size:16px; }
+.editor-perintah .draf-jumlah { max-width:320px; }
+.editor-perintah .draf-jumlah input { width:100%; }
+.editor-perintah .draf-sumber:empty { display:none; }
+.editor-perintah .draf-sumber { background:var(--panel-2); border-radius:8px; padding:12px; }
+.editor-perintah .draf-pasang { display:flex; align-items:baseline; justify-content:space-between; gap:14px; margin:8px 0; overflow-wrap:anywhere; }
+.editor-perintah .draf-pasang > * { min-width:0; }
+.editor-perintah .draf-pasang strong { text-align:right; }
+.editor-perintah .draf-ringkas-pelanggan { border-bottom:1px solid var(--garis); padding-bottom:12px; }
+.editor-perintah .draf-ringkas-pelanggan > p { font-size:.9rem; overflow-wrap:anywhere; }
+.editor-perintah .draf-subtotal { font-weight:600; border-top:1px solid var(--garis); padding-top:12px; }
+.editor-perintah .draf-ringkasan { border-top:1px solid var(--garis); padding-top:20px; }
+.editor-perintah summary { cursor:pointer; min-height:44px; padding:10px 0; }
+.editor-perintah .draf-tindakan { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:24px; }
+.editor-perintah #draf-terbitkan { flex:2; margin:0; }
+.editor-perintah .draf-tindakan > a { flex:1; text-align:center; }
+.editor-perintah button { min-height:44px; white-space:normal; overflow-wrap:anywhere; }
+.editor-perintah textarea { width:100%; min-height:48px; resize:vertical; }
+@container (min-width:800px) {
+  .editor-perintah .draf-layout { grid-template-columns:minmax(0,1.25fr) minmax(280px,.85fr); }
+  .editor-perintah .draf-ringkasan { align-self:start; border-top:0; border-left:1px solid var(--garis); padding:0 0 0 22px; }
+}
+@media (max-width:600px) {
+  .editor-perintah .draf-kelompok { padding:12px; }
+  .editor-perintah .draf-tindakan { flex-direction:column; align-items:stretch; }
+  .editor-perintah #draf-terbitkan { width:100%; }
+}
+.editor-perintah .draf-kelompok-kepala > .btn,
+.editor-perintah .draf-item > header > .btn { width:auto; flex:0 0 auto; }
+.editor-perintah textarea { field-sizing:content; }

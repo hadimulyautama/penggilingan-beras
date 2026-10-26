@@ -1,10 +1,11 @@
 <section class="editor-perintah" data-editor-perintah="{{ draf_id }}">
-  <a href="/barang-keluar">‹ Barang keluar</a>
-  <h1>Perintah barang keluar baru</h1>
-  <p class="bantu">Tersimpan otomatis sebagai draf. Terbitkan saat siap dimuat. Tiket armada boleh menyusul.</p>
-  <p id="draf-status" role="status">Belum ada perubahan</p>
+  <a href="/barang-keluar">‹ Pengiriman</a>
+  <h1>Buat perintah pengiriman</h1>
+  <p class="bantu">Satu armada dapat membawa barang untuk beberapa pelanggan. Tambahkan barang di dalam kelompok pelanggan yang menerimanya.</p>
+  <p id="draf-status" role="status">Memuat daftar pilihan…</p>
   <div id="draf-galat" class="nota nota--buruk" role="alert" hidden></div>
-  <button type="button" id="draf-coba" class="btn" hidden>Coba simpan lagi</button>
+  <a id="draf-periksa" href="/barang-keluar" hidden>Periksa daftar Pengiriman sebelum mengulang</a>
+  <button type="button" id="draf-coba" class="btn" hidden>Coba simpan draf lagi</button>
   <section id="draf-konflik" hidden>
     <h2>Draf terbaru di server</h2><div id="draf-pembanding"></div>
     <p class="bantu">Isian Anda tetap di formulir. Periksa perbedaannya sebelum memilih.</p>
@@ -12,24 +13,31 @@
     <button type="button" class="btn" id="draf-pakai-isian">Simpan isian saya setelah diperiksa</button>
   </section>
   <form id="draf-form" novalidate>
-    <label for="draf-pelanggan">Pelanggan</label>
-    <div class="kombo draf-pelanggan">
-      <textarea rows="1" class="fld" id="draf-pelanggan" placeholder="Ketik untuk mencari pelanggan" role="combobox" aria-autocomplete="list" aria-controls="draf-pelanggan-saran" aria-expanded="false" autocomplete="off"></textarea>
-      <input type="hidden" id="draf-pelanggan-id" name="pelanggan">
-      <div class="kombo__saran" id="draf-pelanggan-saran" role="listbox" aria-label="Pelanggan yang cocok" hidden></div>
+    <div class="draf-layout"><div class="draf-isian">
+      <section class="draf-bagian" aria-labelledby="judul-pelanggan-barang">
+        <h2 id="judul-pelanggan-barang">Pelanggan dan barangnya</h2>
+        <div id="draf-kelompok"></div>
+        <button type="button" id="draf-tambah-pelanggan" class="btn">+ Tambah pelanggan</button>
+      </section>
+      <section class="draf-bagian" aria-labelledby="judul-armada-bersama">
+        <h2 id="judul-armada-bersama">Armada kiriman bersama</h2>
+        <label for="draf-metode">Cara kirim <small>— opsional</small></label>
+        <select class="fld" id="draf-metode" name="metode"><option value="">— belum ditentukan —</option><option value="diantar">Diantar</option><option value="diambil">Diambil sendiri</option><option value="ekspedisi">Ekspedisi</option></select>
+        <label for="draf-armada">Tiket timbang armada <small>— boleh menyusul</small></label>
+        <select class="fld" id="draf-armada" name="tiket_armada"><option value="">Pilih nanti · tiket menyusul</option></select>
+        <p class="bantu">Satu tiket memeriksa total muatan seluruh pelanggan. Pilih tiket setelah armada selesai timbang pertama.</p>
+        <label for="draf-ekspedisi">Ekspedisi <small>— bila ada</small></label>
+        <input class="fld" id="draf-ekspedisi" name="nama_ekspedisi" maxlength="100">
+      </section>
     </div>
-    <h2>Isi muatan</h2>
-    <div id="draf-barang"></div>
-    <button type="button" id="draf-tambah" class="btn">+ Tambah item</button>
-    <label for="draf-armada">Tiket armada <small>— boleh menyusul</small></label>
-    <select class="fld" id="draf-armada" name="tiket_armada"><option value="">Belum ada armada</option></select>
-    <p class="bantu">Tiket ditautkan saat perintah diterbitkan. Tiket yang sudah dipakai perintah lain tidak ditawarkan.</p>
-    <label for="draf-ekspedisi">Ekspedisi <small>— opsional</small></label>
-    <input class="fld" id="draf-ekspedisi" name="nama_ekspedisi" maxlength="200">
-    <p class="bantu">Draf belum mengubah stok atau muncul di antrean operator.</p>
-    <button type="submit" class="btn" id="draf-terbitkan">Terbitkan perintah</button>
+    <aside class="draf-ringkasan draf-bagian" aria-labelledby="judul-ringkasan-kiriman">
+      <h2 id="judul-ringkasan-kiriman">Ringkasan satu kiriman</h2>
+      <div id="draf-ringkasan" aria-live="polite"></div>
+      <p class="bantu" id="draf-saldo-status"></p>
+      <p class="bantu">Stok fisik belum berkurang. Draf belum mengikat saldo. Setelah perintah dibuat, saldo dicadangkan; stok berpindah saat muatan dicatat.</p>
+    </aside></div>
+    <div class="draf-tindakan"><a class="btn" href="/barang-keluar">Batal</a><button type="submit" class="btn" id="draf-terbitkan" disabled>Buat perintah pengiriman</button></div>
   </form>
-
 </section>
 <script type="application/json" id="draf-awal">{{ awal | tojson }}</script>
 <script src="/static/editor-perintah.js?v={{ VERSI }}" defer></script>

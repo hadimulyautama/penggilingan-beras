@@ -1,115 +1,70 @@
-/* Draf pribadi: satu kiriman berjalan, revisi diperiksa server, terbit eksplisit. */
+/* Draf pribadi tetap memakai revisi dan kunci idempoten lama. Perintah baru
+   diterbitkan atomik; kelompok DOM tidak dibangun ulang saat kelompok lain dihapus. */
 (function () {
   var root=document.querySelector('[data-editor-perintah]');
-  if (!root || root.dataset.siap) return;
+  if(!root || root.dataset.siap)return;
   root.dataset.siap='1';
-  var form=document.getElementById('draf-form'), status=document.getElementById('draf-status');
+  var form=root.querySelector('form'), status=document.getElementById('draf-status');
   var galat=document.getElementById('draf-galat'), coba=document.getElementById('draf-coba');
   var awal=JSON.parse(document.getElementById('draf-awal').textContent), revisi=awal.revisi;
   var identitas=root.dataset.editorPerintah, api='/api/actions/draf-perintah/'+identitas;
-  var daftarBarang=[], pelanggan=[], armada=[], timer, berjalan=null, tertunda=null, konflik=null, siap=false, menerbitkan=false;
-  var tersimpan=JSON.stringify(awal.isi), perubahan=0;
-  var selectP=document.getElementById('draf-pelanggan-id'), inputP=document.getElementById('draf-pelanggan'), saranP=document.getElementById('draf-pelanggan-saran'), selectA=document.getElementById('draf-armada');
-  var daftar=document.getElementById('draf-barang'), terbit=document.getElementById('draf-terbitkan');
-  function uuid(){return crypto.randomUUID();}
-  function sesi(){if(window.SESIFORM && !SESIFORM.periksa()) throw Error('Sesi berubah. Isian tetap tersedia; masuk dengan akun pembuka dan buka kembali draf ini.');}
+  var barang=[], pelanggan=[], armada=[], sumber={}, timer, pratinjauTimer, urutPratinjau=0;
+  var berjalan=null, tertunda=null, konflik=null, siap=false, menerbitkan=false, tidakPasti=false;
+  var tersimpan=JSON.stringify(awal.isi), perubahan=0, urutKelompok=0;
+  var kelompok=document.getElementById('draf-kelompok'), terbit=document.getElementById('draf-terbitkan');
+  var selectA=document.getElementById('draf-armada'), metode=document.getElementById('draf-metode');
+  var ekspedisi=document.getElementById('draf-ekspedisi');
+  function elemen(tag,teks,cls){var el=document.createElement(tag);if(teks!=null)el.textContent=teks;if(cls)el.className=cls;return el;}
+  function tombol(teks,aksi){var el=elemen('button',teks,'btn');el.type='button';el.onclick=aksi;return el;}
+  function grup(){return Array.from(kelompok.children);}
+  function unit(v){return /^(bj:|[0-9]+(?:\||$))/.test(v)?'karung':'kg';}
+  function fmt(n){return Number(n).toLocaleString('id-ID',{maximumFractionDigits:3});}
+  function sesi(){if(window.SESIFORM&&!SESIFORM.periksa())throw Error('Sesi berubah. Isian tetap tersedia; masuk dengan akun pembuka dan buka kembali draf ini.');}
   function pesan(teks){galat.textContent=teks;galat.hidden=false;}
-  function opsi(sel, data, nilai, kosong) {
-    sel.replaceChildren(new Option(kosong,''));
-    data.forEach(function(o){sel.add(new Option(o.label,o.value));});
-    if(nilai && !data.some(function(o){return String(o.value)===nilai;})) sel.add(new Option('Pilihan sebelumnya tidak tersedia ('+nilai+'). Pilih ulang.',nilai));
-    sel.value=nilai||'';
+  function opsi(sel,data,nilai,kosong){sel.replaceChildren(new Option(kosong,''));data.forEach(function(o){sel.add(new Option(o.label,o.value));});if(nilai&&!data.some(function(o){return String(o.value)===nilai;}))sel.add(new Option('Pilihan sebelumnya tidak tersedia ('+nilai+'). Pilih ulang.',nilai));sel.value=nilai||'';}
+  function dataKelompok(g){return {kunci:g.dataset.kunci,pelanggan:g.querySelector('[data-pelanggan-id]').value,pelanggan_teks:g.querySelector('[data-pelanggan]').value,barang:Array.from(g.querySelectorAll('.draf-item')).map(function(r){return {pilih:r.querySelector('select').value,jumlah:r.querySelector('input').value};})};}
+  function isi(){return {kelompok:grup().map(dataKelompok),metode:metode.value,tiket_armada:selectA.value,nama_ekspedisi:ekspedisi.value};}
+  function bacaKelompok(data){return Array.isArray(data.kelompok)?data.kelompok:[{pelanggan:data.pelanggan||'',pelanggan_teks:data.pelanggan_teks||'',barang:data.barang||[{}]}];}
+  function perbaruiTombol(){var gs=grup();gs.forEach(function(g,i){g.querySelector('[data-judul]').textContent='Pelanggan '+(i+1);g.querySelector('[data-hapus-pelanggan]').disabled=gs.length===1;var rs=g.querySelectorAll('.draf-item');rs.forEach(function(r,j){r.querySelector('strong').textContent='Barang '+(j+1);r.querySelector('button').disabled=rs.length===1;});g.querySelector('[data-tambah-barang]').disabled=rs.length>=12;g.querySelector('[data-batas]').textContent=rs.length+' dari maksimal 12 barang untuk pelanggan ini';});}
+  function pilihPelanggan(g,p){var lain=grup().find(function(x){return x!==g&&x.querySelector('[data-pelanggan-id]').value===String(p.value);});if(lain){pesan(p.label+' sudah memiliki kelompok. Tambahkan barang pada kelompok tersebut. Seluruh isian tetap tersedia.');lain.querySelector('[data-tambah-barang]').focus();return;}g.querySelector('[data-pelanggan-id]').value=String(p.value);g.querySelector('[data-pelanggan]').value=p.label;g.tutupSaran();if(!tidakPasti)galat.hidden=true;ubah();}
+  function kombo(g,nomor,data){
+    var id=nomor===0?'draf-pelanggan':'draf-pelanggan-'+nomor;
+    var label=elemen('label','Pelanggan penerima');label.htmlFor=id;
+    var wrap=elemen('div',null,'kombo draf-pelanggan'), input=elemen('textarea',null,'fld');input.rows=1;input.id=id;input.dataset.pelanggan='';input.placeholder='Ketik untuk mencari pelanggan';input.autocomplete='off';input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-expanded','false');input.setAttribute('aria-required','true');input.setAttribute('aria-controls',id+'-saran');
+    var hidden=elemen('input');hidden.type='hidden';hidden.id=id+'-id';hidden.dataset.pelangganId='';
+    var saran=elemen('div',null,'kombo__saran');saran.id=id+'-saran';saran.setAttribute('role','listbox');saran.setAttribute('aria-label','Pelanggan yang cocok');saran.hidden=true;
+    var aktif=-1;
+    function ukuran(){input.style.height='auto';input.style.height=Math.max(48,input.scrollHeight)+'px';}
+    g.tutupSaran=function(){ukuran();saran.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');aktif=-1;};
+    function saring(){ukuran();var q=input.value.trim().toLocaleLowerCase('id');saran.replaceChildren();aktif=-1;input.removeAttribute('aria-activedescendant');pelanggan.filter(function(p){return p.label.toLocaleLowerCase('id').includes(q);}).slice(0,50).forEach(function(p,i){var b=tombol(p.label,function(){pilihPelanggan(g,p);});b.className='kombo__opsi';b.id=id+'-opsi-'+i;b.setAttribute('role','option');b.setAttribute('aria-selected','false');b.tabIndex=-1;b.onmousedown=function(e){e.preventDefault();};saran.append(b);});if(!saran.children.length)saran.append(elemen('p','Pelanggan tidak ditemukan. Pilih pelanggan Kledo yang aktif.','kombo__kosong'));saran.hidden=false;input.setAttribute('aria-expanded','true');}
+    input.addEventListener('input',function(){hidden.value='';saring();});input.addEventListener('focus',function(){if(siap)saring();});input.addEventListener('blur',function(){setTimeout(g.tutupSaran,100);});
+    input.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();g.tutupSaran();return;}var os=Array.from(saran.querySelectorAll('[role=option]'));if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(saran.hidden){saring();os=Array.from(saran.querySelectorAll('[role=option]'));}if(!os.length)return;aktif=aktif<0?(e.key==='ArrowDown'?0:os.length-1):(aktif+(e.key==='ArrowDown'?1:-1)+os.length)%os.length;os.forEach(function(o,i){o.setAttribute('aria-selected',String(i===aktif));});input.setAttribute('aria-activedescendant',os[aktif].id);os[aktif].scrollIntoView({block:'nearest'});}else if(e.key==='Enter'){e.preventDefault();if(os[aktif])os[aktif].click();}});
+    var p=pelanggan.find(function(p){return String(p.value)===String(data.pelanggan);});hidden.value=p?String(p.value):'';input.value=p?p.label:(data.pelanggan_teks||'');wrap.append(input,hidden,saran);g.append(label,wrap,elemen('p','Wajib memilih pelanggan dari daftar Kledo yang aktif.','bantu'));
   }
-  function isi(){return {pelanggan:selectP.value,pelanggan_teks:inputP.value,tiket_armada:selectA.value,nama_ekspedisi:document.getElementById('draf-ekspedisi').value,
-    barang:Array.from(daftar.children).map(function(row){return {pilih:row.querySelector('select').value,jumlah:row.querySelector('input').value};})};}
-  function baris(b) {
-    var row=document.createElement('div');row.className='draf-item';
-    var label=document.createElement('label');label.textContent='Barang';
-    var bungkus=document.createElement('div');bungkus.className='ulang__pilihan';
-    var nama=document.createElement('span');nama.className='ulang__nama';
-    var sel=document.createElement('select');sel.setAttribute('aria-label','Barang');
-    opsi(sel,daftarBarang,b.pilih,'Pilih barang');bungkus.append(nama,sel);label.append(bungkus);
-    var jumlahLabel=document.createElement('label');jumlahLabel.textContent='Jumlah';
-    var input=document.createElement('input');input.className='fld';input.type='number';input.min='0';input.inputMode='decimal';input.value=b.jumlah==null?'':b.jumlah;
-    var satuan=document.createElement('span');satuan.className='draf-satuan';
-    var jumlahGrup=document.createElement('div');jumlahGrup.className='draf-jumlah';jumlahGrup.append(input,satuan);jumlahLabel.append(jumlahGrup);
-    var hapus=document.createElement('button');hapus.type='button';hapus.className='btn';hapus.textContent='Hapus item';
-    hapus.onclick=function(){row.remove();ubah();};
-    function namaUnit(){nama.textContent=sel.selectedOptions[0].textContent;var karung=/^(bj:|[0-9]+\|)/.test(sel.value);satuan.textContent=karung?'karung':'kg';input.step=karung?'1':'any';input.setAttribute('aria-label','Jumlah '+satuan.textContent);}
-    sel.addEventListener('change',namaUnit);namaUnit();row.append(label,jumlahLabel,hapus);daftar.append(row);
+  function baris(g,b){var daftar=g.querySelector('[data-barang]'),row=elemen('section',null,'draf-item');var head=elemen('header');var hapus=tombol('Hapus barang',function(){if(daftar.children.length<=1)return;row.remove();perbaruiTombol();ubah();});head.append(elemen('strong','Barang'),hapus);
+    var label=elemen('label','Barang'),wrap=elemen('div',null,'ulang__pilihan'),nama=elemen('span',null,'ulang__nama'),sel=elemen('select');sel.setAttribute('aria-label','Barang');opsi(sel,barang,b.pilih,'Pilih barang');wrap.append(nama,sel);label.append(wrap);
+    var saldo=elemen('div',null,'draf-sumber');saldo.dataset.saldo='';
+    var jumlahLabel=elemen('label','Jumlah untuk pelanggan ini'),jg=elemen('div',null,'draf-jumlah'),input=elemen('input',null,'fld'),satuan=elemen('span',null,'draf-satuan');input.type='number';input.min='0';input.inputMode='decimal';input.value=b.jumlah==null?'':b.jumlah;jg.append(input,satuan);jumlahLabel.append(jg);
+    function namaUnit(){nama.textContent=sel.selectedOptions[0].textContent;satuan.textContent=sel.value?unit(sel.value):'karung / kg';input.step=unit(sel.value)==='karung'?'1':'any';input.setAttribute('aria-label','Jumlah '+satuan.textContent);}
+    sel.addEventListener('change',namaUnit);namaUnit();row.append(head,label,saldo,jumlahLabel);daftar.append(row);
   }
-  function pasang(data){selectP.value=data.pelanggan||'';var ditemukan=pelanggan.find(function(o){return String(o.value)===selectP.value;});inputP.value=ditemukan?ditemukan.label:(data.pelanggan_teks||'');if(!ditemukan)selectP.value='';tutupSaran();opsi(selectA,armada,data.tiket_armada,'Belum ada armada');
-    document.getElementById('draf-ekspedisi').value=data.nama_ekspedisi||'';daftar.replaceChildren();(data.barang&&data.barang.length?data.barang:[{}]).forEach(baris);}
-  async function kirim(url,method,data){sesi();var el=document.getElementById('formulir-sesi');
-    var r=await fetch(url,{method:method,credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':el?el.dataset.token:''},body:JSON.stringify(data)});
-    var j=await r.json().catch(function(){return {};});sesi();
-    if(!r.ok){var e=Error(typeof j.detail==='string'?j.detail:(j.detail&&j.detail.pesan)||'Permintaan gagal. Isian tetap ada.');e.data=j.detail;e.status=r.status;throw e;}return j;
-  }
-  function tampilKonflik(data){konflik=data;document.getElementById('draf-konflik').hidden=false;terbit.disabled=true;
-    var pembanding=document.getElementById('draf-pembanding');pembanding.replaceChildren();
-    var p=document.createElement('p');p.textContent='Pelanggan: '+((pelanggan.find(function(o){return String(o.value)===data.isi.pelanggan;})||{}).label||data.isi.pelanggan||(data.isi.pelanggan_teks?data.isi.pelanggan_teks+' (belum dipilih)':'Belum dipilih'));pembanding.append(p);
-    (data.isi.barang||[]).forEach(function(b){var p=document.createElement('p');p.textContent=((daftarBarang.find(function(o){return o.value===b.pilih;})||{}).label||b.pilih||'Belum dipilih')+' · '+b.jumlah+' '+(/^(bj:|[0-9]+\|)/.test(b.pilih)?'karung':'kg');pembanding.append(p);});
-    var a=document.createElement('p');a.textContent='Armada: '+((armada.find(function(o){return String(o.value)===data.isi.tiket_armada;})||{}).label||data.isi.tiket_armada||'Belum ada')+' · Ekspedisi: '+(data.isi.nama_ekspedisi||'—');pembanding.append(a);
-    if(data.tujuan){var link=document.createElement('a');link.href=data.tujuan;link.textContent='Buka perintah yang sudah terbit';pembanding.append(link);document.getElementById('draf-pakai-isian').disabled=true;}
-  }
-  async function simpan(){clearTimeout(timer);if(berjalan){await berjalan;return simpan();}if(konflik)throw Error('Periksa konflik draf dahulu.');
-    var sekarang=isi();if(!tertunda && JSON.stringify(sekarang)===tersimpan)return;
-    if(!tertunda)tertunda={revisi:revisi,kiriman:uuid(),isi:sekarang};
-    status.textContent='Menyimpan…';coba.hidden=true;galat.hidden=true;
-    berjalan=(async function(){try{var j=await kirim(api,'PUT',tertunda);revisi=j.revisi;tersimpan=JSON.stringify(tertunda.isi);tertunda=null;
-      history.replaceState(null,'','/barang-keluar/draf/'+identitas);status.textContent='Tersimpan sebagai draf';
-    }catch(e){status.textContent='Belum tersimpan';pesan(e.message);if(e.status===409 && e.data && e.data.isi)tampilKonflik(e.data);else coba.hidden=false;throw e;
-    }finally{berjalan=null;}})();
-    await berjalan;
-    if(JSON.stringify(isi())!==tersimpan)return simpan();
-  }
-  function ubah(){if(!siap)return;perubahan++;status.textContent='Perubahan belum tersimpan';clearTimeout(timer);if(!konflik)timer=setTimeout(function(){simpan().catch(function(){});},600);}
+  function tambahKelompok(data){var g=elemen('section',null,'draf-kelompok'),nomor=urutKelompok++;g.dataset.kunci=data.kunci||crypto.randomUUID();var head=elemen('header',null,'draf-kelompok-kepala'),judul=elemen('strong');judul.dataset.judul='';var hapus=tombol('Hapus pelanggan',function(){if(grup().length<=1)return;g.remove();perbaruiTombol();ubah();});hapus.dataset.hapusPelanggan='';head.append(judul,hapus);g.append(head);kombo(g,nomor,data);g.append(elemen('h3','Barang pelanggan ini'));var daftar=elemen('div');daftar.dataset.barang='';if(nomor===0)daftar.id='draf-barang';g.append(daftar);(data.barang&&data.barang.length?data.barang:[{}]).forEach(function(b){baris(g,b);});var tambah=tombol('+ Tambah barang untuk pelanggan ini',function(){if(daftar.children.length>=12)return;baris(g,{});perbaruiTombol();ubah();daftar.lastElementChild.querySelector('select').focus();});tambah.dataset.tambahBarang='';if(nomor===0)tambah.id='draf-tambah';var batas=elemen('p',null,'bantu');batas.dataset.batas='';var subtotal=elemen('p',null,'draf-subtotal');subtotal.dataset.subtotal='';g.append(tambah,batas,subtotal);kelompok.append(g);g.tutupSaran();perbaruiTombol();return g;}
+  function pasang(data){kelompok.replaceChildren();urutKelompok=0;var gs=bacaKelompok(data);(gs.length?gs:[{}]).forEach(tambahKelompok);opsi(selectA,armada,data.tiket_armada,'Pilih nanti · tiket menyusul');metode.value=data.metode||'';ekspedisi.value=data.nama_ekspedisi||'';ringkas();}
+  function pair(wrap,label,nilai){var p=elemen('div',null,'draf-pasang');p.append(elemen('span',label),elemen('strong',nilai));wrap.append(p);}
+  function ringkas(){var box=document.getElementById('draf-ringkasan');box.replaceChildren();var total=0,pakai={};grup().forEach(function(g,i){var data=dataKelompok(g),p=pelanggan.find(function(p){return String(p.value)===data.pelanggan;}),s=elemen('section',null,'draf-ringkas-pelanggan');s.append(elemen('h3',p?p.label:'Pelanggan '+(i+1)+' belum dipilih'));var subtotal=0;Array.from(g.querySelectorAll('.draf-item')).forEach(function(row){var sel=row.querySelector('select'),input=row.querySelector('input'),n=Number(input.value),meta=sumber[sel.value],berat=meta&&input.value&&Number.isFinite(n)?n*meta.kg_per_unit:0;subtotal+=berat;var saldo=row.querySelector('[data-saldo]');saldo.replaceChildren();if(sel.value){var nama=(barang.find(function(b){return b.value===sel.value;})||{}).label||sel.value;s.append(elemen('p',nama));pair(s,(input.value||'—')+' '+unit(sel.value),meta?fmt(berat)+' kg':'Berat sedang diperiksa');if(meta){pair(saldo,'Saldo bebas sumber',fmt(meta.tersedia)+' kg');pair(saldo,'Pemilik / sumber','Pabrik · '+(meta.lokasi?meta.lokasi+' · ':'')+meta.nama);saldo.append(elemen('p',unit(sel.value)==='karung'?'1 karung = '+fmt(meta.kg_per_unit)+' kg.':'Isi dalam kg.','bantu'));var detail=elemen('details');detail.append(elemen('summary','Rincian saldo'));pair(detail,'Stok fisik',fmt(meta.fisik)+' kg');pair(detail,'Terikat perintah lain',fmt(meta.terikat)+' kg');saldo.append(detail);}else saldo.append(elemen('p','Memeriksa saldo sumber…'));if(!pakai[sel.value])pakai[sel.value]={kg:0,nama:meta?meta.nama:nama,pelanggan:new Set()};pakai[sel.value].kg+=berat;pakai[sel.value].pelanggan.add(g.dataset.kunci);}});pair(s,'Subtotal pelanggan',fmt(subtotal)+' kg');g.querySelector('[data-subtotal]').textContent='Subtotal pelanggan · '+fmt(subtotal)+' kg';total+=subtotal;box.append(s);});pair(box,'Total seluruh pelanggan',fmt(total)+' kg');pair(box,'Armada / tiket',selectA.value?selectA.selectedOptions[0].textContent:'Tiket menyusul');pair(box,'Cara kirim',metode.selectedOptions[0].textContent);if(ekspedisi.value)pair(box,'Ekspedisi',ekspedisi.value);var detail=elemen('details');detail.open=true;detail.append(elemen('summary','Pemakaian sumber bersama'));Object.keys(pakai).forEach(function(key){var p=pakai[key],m=sumber[key],s=elemen('section');s.append(elemen('h3',p.nama));pair(s,'Untuk '+p.pelanggan.size+' pelanggan',fmt(p.kg)+' kg');pair(s,'Dicadangkan rancangan ini',fmt(p.kg)+' kg (belum terikat)');if(m){pair(s,'Terikat perintah lain',fmt(m.terikat)+' kg');pair(s,'Sisa bebas setelah kiriman',fmt(m.tersedia-p.kg)+' kg');if(p.kg>m.tersedia+0.5)s.append(elemen('p','Saldo tidak cukup untuk seluruh pelanggan.','nota nota--buruk'));}detail.append(s);});box.append(detail);}
+  async function kirim(url,method,data){sesi();var el=document.getElementById('formulir-sesi');var r=await fetch(url,{method:method,credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':el?el.dataset.token:''},body:JSON.stringify(data)});var j=await r.json().catch(function(){return {};});sesi();if(!r.ok){var e=Error(typeof j.detail==='string'?j.detail:(j.detail&&j.detail.pesan)||'Permintaan gagal. Isian tetap ada.');e.data=j.detail;e.status=r.status;throw e;}return j;}
+  function pratinjau(){clearTimeout(pratinjauTimer);var nomor=++urutPratinjau;var data=isi();data.kelompok.forEach(function(g){g.barang.forEach(function(b){var n=Number(b.jumlah);if(!b.jumlah||!Number.isFinite(n)||n<=0||(unit(b.pilih)==='karung'&&!Number.isInteger(n)))b.jumlah=null;});});if(!data.kelompok.some(function(g){return g.barang.some(function(b){return b.pilih;});}))return;document.getElementById('draf-saldo-status').textContent='Memeriksa saldo sumber…';pratinjauTimer=setTimeout(async function(){try{var j=await kirim('/api/actions/pratinjau-kiriman','POST',data);if(nomor!==urutPratinjau||!root.isConnected)return;sumber=j.sumber;ringkas();document.getElementById('draf-saldo-status').textContent='Saldo diperiksa ulang saat perintah dibuat.';}catch(e){if(nomor===urutPratinjau)document.getElementById('draf-saldo-status').textContent='Saldo belum dapat diperiksa: '+e.message;}},250);}
+  function tampilKonflik(data){konflik=data;document.getElementById('draf-konflik').hidden=false;terbit.disabled=true;var box=document.getElementById('draf-pembanding');box.replaceChildren();bacaKelompok(data.isi).forEach(function(g){box.append(elemen('p','Pelanggan: '+((pelanggan.find(function(p){return String(p.value)===g.pelanggan;})||{}).label||g.pelanggan_teks||'Belum dipilih')));(g.barang||[]).forEach(function(b){box.append(elemen('p',((barang.find(function(p){return p.value===b.pilih;})||{}).label||b.pilih||'Belum dipilih')+' · '+b.jumlah+' '+unit(b.pilih)));});});box.append(elemen('p','Armada: '+((armada.find(function(a){return String(a.value)===data.isi.tiket_armada;})||{}).label||'Tiket menyusul')+' · Ekspedisi: '+(data.isi.nama_ekspedisi||'—')));if(data.tujuan){var a=elemen('a','Buka perintah yang sudah terbit');a.href=data.tujuan;box.append(a);document.getElementById('draf-pakai-isian').disabled=true;}}
+  async function simpan(){clearTimeout(timer);if(berjalan){await berjalan;return simpan();}if(konflik)throw Error('Periksa konflik draf dahulu.');var sekarang=isi();if(!tertunda&&JSON.stringify(sekarang)===tersimpan)return;if(!tertunda)tertunda={revisi:revisi,kiriman:crypto.randomUUID(),isi:sekarang};status.textContent='Menyimpan…';coba.hidden=true;galat.hidden=true;berjalan=(async function(){try{var j=await kirim(api,'PUT',tertunda);revisi=j.revisi;tersimpan=JSON.stringify(tertunda.isi);tertunda=null;history.replaceState(null,'','/barang-keluar/draf/'+identitas);status.textContent='Tersimpan sebagai draf';}catch(e){status.textContent='Belum tersimpan';pesan(e.message);if(e.status===409&&e.data&&e.data.isi)tampilKonflik(e.data);else coba.hidden=false;throw e;}finally{berjalan=null;}})();await berjalan;if(JSON.stringify(isi())!==tersimpan)return simpan();}
+  function ubah(){if(!siap)return;perubahan++;ringkas();pratinjau();status.textContent='Perubahan belum tersimpan';clearTimeout(timer);if(!konflik&&!menerbitkan&&!tidakPasti)timer=setTimeout(function(){simpan().catch(function(){});},600);}
   form.addEventListener('input',ubah);form.addEventListener('change',ubah);
-  document.getElementById('draf-tambah').onclick=function(){baris({});ubah();};
-  coba.onclick=function(){simpan().catch(function(){});};
-  var opsiAktif=-1;
-  function ukuranNama(){inputP.style.height='auto';inputP.style.height=Math.max(48,inputP.scrollHeight)+'px';}
-  function tutupSaran(){ukuranNama();saranP.hidden=true;inputP.setAttribute('aria-expanded','false');inputP.removeAttribute('aria-activedescendant');opsiAktif=-1;}
-  function pilihPelanggan(p){selectP.value=String(p.value);inputP.value=p.label;tutupSaran();ubah();}
-  function saringPelanggan(){
-    var q=inputP.value.trim().toLocaleLowerCase('id');
-    var cocok=pelanggan.filter(function(p){return p.label.toLocaleLowerCase('id').includes(q);}).slice(0,50);
-    saranP.replaceChildren();opsiAktif=-1;inputP.removeAttribute('aria-activedescendant');
-    cocok.forEach(function(p,i){var btn=document.createElement('button');btn.type='button';btn.className='kombo__opsi';btn.id='draf-pelanggan-opsi-'+i;btn.setAttribute('role','option');btn.setAttribute('aria-selected','false');btn.tabIndex=-1;btn.textContent=p.label;
-      btn.onmousedown=function(e){e.preventDefault();};btn.onclick=function(){pilihPelanggan(p);};saranP.append(btn);});
-    if(!cocok.length){var kosong=document.createElement('p');kosong.className='kombo__kosong';kosong.textContent='Pelanggan tidak ditemukan. Pilih pelanggan yang sudah terdaftar.';saranP.append(kosong);}
-    saranP.hidden=false;inputP.setAttribute('aria-expanded','true');
-  }
-  window.addEventListener('resize',ukuranNama);
-  inputP.addEventListener('input',function(){ukuranNama();selectP.value='';saringPelanggan();});
-  inputP.addEventListener('focus',function(){if(siap)saringPelanggan();});
-  inputP.addEventListener('blur',function(){setTimeout(tutupSaran,100);});
-  inputP.addEventListener('keydown',function(e){
-    if(e.key==='Escape'){tutupSaran();e.preventDefault();return;}
-    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
-      e.preventDefault();if(saranP.hidden)saringPelanggan();var opsi=Array.from(saranP.querySelectorAll('[role=option]'));if(!opsi.length)return;
-      opsiAktif=opsiAktif<0?(e.key==='ArrowDown'?0:opsi.length-1):(opsiAktif+(e.key==='ArrowDown'?1:-1)+opsi.length)%opsi.length;
-      opsi.forEach(function(o,i){o.setAttribute('aria-selected',String(i===opsiAktif));});
-      inputP.setAttribute('aria-activedescendant',opsi[opsiAktif].id);opsi[opsiAktif].scrollIntoView({block:'nearest'});
-    }else if(e.key==='Enter'){e.preventDefault();if(!saranP.hidden){var aktif=saranP.querySelector('[aria-selected=true]');if(aktif)aktif.click();}}
-  });
-  function selesaiKonflik(){revisi=konflik.revisi;tertunda=null;konflik=null;document.getElementById('draf-konflik').hidden=true;terbit.disabled=false;galat.hidden=true;}
-  document.getElementById('draf-pakai-terbaru').onclick=function(){var data=konflik;if(data.tujuan){location.assign(data.tujuan);return;}pasang(data.isi);selesaiKonflik();tersimpan=JSON.stringify(isi());status.textContent='Draf terbaru dimuat';};
-  document.getElementById('draf-pakai-isian').onclick=function(){selesaiKonflik();tersimpan=null;ubah();};
-  form.onsubmit=async function(e){e.preventDefault();if(!siap||menerbitkan)return;
-    galat.hidden=true;var invalid=Array.from(form.querySelectorAll('input[type=number]')).find(function(el){return !el.value||!el.checkValidity()||Number(el.value)<=0;});
-    if(!selectP.value)invalid=inputP;
-    if(!invalid)invalid=Array.from(daftar.querySelectorAll('select')).find(function(el){return !el.value;});
-    if(!daftar.children.length){pesan('Tambahkan setidaknya satu barang.');document.getElementById('draf-tambah').focus();return;}
-    if(invalid){pesan('Lengkapi pelanggan, barang, dan jumlah positif. Jumlah karung harus bilangan bulat.');invalid.focus();return;}
-    menerbitkan=true;terbit.disabled=true;var versi=perubahan;
-    try{await simpan();if(versi!==perubahan)throw Error('Isian berubah saat diperiksa. Periksa ulang lalu terbitkan.');
-      form.querySelectorAll('input,select,button').forEach(function(el){el.disabled=true;});
-      var j=await kirim(api+'/terbitkan','POST',{revisi:revisi});if(!/^\/barang-keluar\/\d+$/.test(j.tujuan))throw Error('Periksa daftar perintah sebelum mengulang.');
-      tersimpan=JSON.stringify(isi());location.assign(j.tujuan);
-    }catch(e){pesan(e.message);if(e.status===409&&e.data&&e.data.isi)tampilKonflik(e.data);}
-    finally{menerbitkan=false;form.querySelectorAll('input,select,button').forEach(function(el){el.disabled=false;});if(konflik)terbit.disabled=true;}
-  };
-  window.addEventListener('beforeunload',function(e){if(siap&&(tertunda||JSON.stringify(isi())!==tersimpan)){e.preventDefault();e.returnValue='';}});
-  Promise.all(['/api/actions/barang-bisa-keluar','/api/actions/pelanggan-kledo','/api/actions/tiket-armada'].map(async function(url){var r=await fetch(url,{credentials:'same-origin'});if(!r.ok)throw Error('Daftar pilihan gagal dimuat. Muat ulang halaman; draf yang tersimpan tetap ada.');return r.json();})).then(function(data){daftarBarang=data[0];pelanggan=data[1];armada=data[2];pasang(awal.isi);tersimpan=JSON.stringify(isi());siap=true;status.textContent=revisi?'Tersimpan sebagai draf':'Belum ada perubahan';}).catch(function(e){pesan(e.message);terbit.disabled=true;});
+  document.getElementById('draf-tambah-pelanggan').onclick=function(){var g=tambahKelompok({});ubah();g.querySelector('[data-pelanggan]').focus();};coba.onclick=function(){simpan().catch(function(){});};
+  function selesaiKonflik(){revisi=konflik.revisi;tertunda=null;konflik=null;document.getElementById('draf-konflik').hidden=true;terbit.disabled=tidakPasti;galat.hidden=true;}
+  document.getElementById('draf-pakai-terbaru').onclick=function(){var data=konflik;if(data.tujuan){location.assign(data.tujuan);return;}pasang(data.isi);selesaiKonflik();tersimpan=JSON.stringify(isi());status.textContent='Draf terbaru dimuat';pratinjau();};document.getElementById('draf-pakai-isian').onclick=function(){selesaiKonflik();tersimpan=null;ubah();};
+  function validasi(){var ids=new Set();for(var g of grup()){var p=g.querySelector('[data-pelanggan-id]');if(!p.value||ids.has(p.value)){pesan(ids.has(p.value)?'Pelanggan yang sama muncul dua kali. Tambahkan barang pada kelompok yang sudah ada.':'Pilih pelanggan penerima dari daftar Kledo yang aktif.');g.querySelector('[data-pelanggan]').focus();return false;}ids.add(p.value);var ada=0;for(var r of g.querySelectorAll('.draf-item')){var s=r.querySelector('select'),n=r.querySelector('input');if(!s.value&&!n.value)continue;ada++;if(!s.value||!n.value||!n.checkValidity()||!Number.isFinite(Number(n.value))||Number(n.value)<=0){pesan('Lengkapi barang dan jumlah positif pada setiap pelanggan. Jumlah karung harus bilangan bulat.');(!s.value?s:n).focus();return false;}}if(!ada){pesan('Setiap pelanggan wajib memiliki setidaknya satu barang lengkap.');g.querySelector('select').focus();return false;}}return true;}
+  form.onsubmit=async function(e){e.preventDefault();if(!siap||menerbitkan||tidakPasti||konflik||!validasi())return;menerbitkan=true;terbit.disabled=true;var versi=perubahan,dikirim=false;try{await simpan();if(versi!==perubahan)throw Error('Isian berubah saat diperiksa. Periksa ulang lalu terbitkan.');form.querySelectorAll('input,textarea,select,button').forEach(function(el){el.disabled=true;});dikirim=true;var j=await kirim(api+'/terbitkan','POST',{revisi:revisi});if(!/^\/barang-keluar\/\d+$/.test(j.tujuan))throw Error('Balasan simpan belum lengkap.');tersimpan=JSON.stringify(isi());location.assign(j.tujuan);}catch(e){if(dikirim&&(!e.status||e.status>=500)){tidakPasti=true;pesan('Status pembuatan kiriman belum dapat dipastikan. Isian tetap tersedia. Periksa daftar Pengiriman sebelum mengulang.');document.getElementById('draf-periksa').hidden=false;}else{pesan(e.message);if(e.status===409&&e.data&&e.data.isi)tampilKonflik(e.data);}}finally{menerbitkan=false;form.querySelectorAll('input,textarea,select,button').forEach(function(el){el.disabled=false;});perbaruiTombol();terbit.disabled=!!konflik||tidakPasti;}};
+  var keluar=function(e){if(siap&&(tertunda||JSON.stringify(isi())!==tersimpan)){e.preventDefault();e.returnValue='';}};
+  if(window.PINDAH&&PINDAH.pasang)PINDAH.pasang(window,'beforeunload',keluar);else window.addEventListener('beforeunload',keluar);
+  pasang(awal.isi);form.querySelectorAll('input,textarea,select,button').forEach(function(el){el.disabled=true;});
+  Promise.all(['/api/actions/barang-bisa-keluar','/api/actions/pelanggan-kledo','/api/actions/tiket-armada'].map(async function(url){var r=await fetch(url,{credentials:'same-origin'});if(!r.ok)throw Error('Daftar pilihan gagal dimuat. Muat ulang halaman; draf yang tersimpan tetap ada.');return r.json();})).then(function(data){if(!root.isConnected)return;barang=data[0];pelanggan=data[1];armada=data[2];pasang(awal.isi);form.querySelectorAll('input,textarea,select,button').forEach(function(el){el.disabled=false;});perbaruiTombol();tersimpan=JSON.stringify(isi());siap=true;terbit.disabled=false;status.textContent=revisi?'Tersimpan sebagai draf':'Belum ada perubahan';if(!pelanggan.length||!barang.length)pesan(!pelanggan.length?'Daftar pelanggan Kledo belum tersedia. Sinkronkan pelanggan dahulu.':'Tidak ada barang yang tersedia untuk diperintahkan keluar.');pratinjau();}).catch(function(e){pesan(e.message);terbit.disabled=true;});
 })();

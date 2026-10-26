@@ -60,6 +60,7 @@ from app.penggilingan.inventory.models import (
     FinishedGoodsStock,
     OutgoingItem,
     OutgoingRecord,
+    KirimanKeluar,
     PackageSize,
     PackagingLoss,
     PackagingMaterial,
@@ -133,6 +134,7 @@ __all__ = [
     "BrokenKarungDibongkar",
     "ByproductPrice",
     "OutgoingRecord",
+    "KirimanKeluar",
     "OutgoingItem",
     # jasa (toll milling) — pemilik barang, bukan pembelinya
     "Jasa",

@@ -188,11 +188,15 @@ async def test_pengiriman_menggunakan_master_tara_per_kemasan(pg,konteks,monkeyp
                            package_size_id=sku.package_size_id,tara_per_karung_kg=Decimal('0.08')))
         await db.commit()
     async def cocok(db,tid):
-        return None,SimpleNamespace(kode='OUT-UJI',nama_pembeli='Toko Uji',no_polisi='AD 9 ZZ'),[
-            SimpleNamespace(item_type='finished_goods',product_sku_id=sid,rice_quality_standard_id=None,berat_kg=2500,jumlah_karung=100),
-            SimpleNamespace(item_type='byproduct_curah',jenis_byproduct='bekatul',berat_kg=500,jumlah_karung=None),
+        return None,SimpleNamespace(id=1,kiriman_id=None,pelanggan_id=None,status='dimuat',kode='OUT-UJI',nama_pembeli='Toko Uji',no_polisi='AD 9 ZZ'),[
+            SimpleNamespace(id=1,outgoing_record_id=1,item_type='finished_goods',product_sku_id=sid,rice_quality_standard_id=None,berat_kg=2500,jumlah_karung=100),
+            SimpleNamespace(id=2,outgoing_record_id=1,item_type='byproduct_curah',jenis_byproduct='bekatul',berat_kg=500,jumlah_karung=None),
         ]
     monkeypatch.setattr(internal,'_cocokkan_pengiriman_tiket',cocok)
+    # Uji tara dengan sumber tiruan; sidik sumber nyata diuji pada kiriman dan HTTP lintas aplikasi.
+    from app.services import barang_keluar as bk
+    async def sidik(*args, **kwargs): return 'sumber-uji-tara'
+    monkeypatch.setattr(bk, 'sidik_sumber_muatan', sidik)
     r=await c.get(f'/internal/pengiriman/tiket/{tid}/muatan',headers={'X-Internal-Token':'token-uji'})
     assert r.status_code==200
     muatan=r.json()['muatan']
@@ -212,9 +216,13 @@ async def test_pengiriman_karung_lima_puluh_dan_tara_berbeda(pg,konteks,monkeypa
     await seed_master()
     c,tid,sid=konteks
     async def cocok(db,tid):
-        return None,SimpleNamespace(kode='OUT-UJI',nama_pembeli='Toko Uji',no_polisi='AD 9 ZZ'),[
-            SimpleNamespace(item_type=jenis,berat_kg=1000,jumlah_karung=20)]
+        return None,SimpleNamespace(id=1,kiriman_id=None,pelanggan_id=None,status='dimuat',kode='OUT-UJI',nama_pembeli='Toko Uji',no_polisi='AD 9 ZZ'),[
+            SimpleNamespace(id=1,outgoing_record_id=1,item_type=jenis,berat_kg=1000,jumlah_karung=20)]
     monkeypatch.setattr(internal,'_cocokkan_pengiriman_tiket',cocok)
+    # Uji tara dengan sumber tiruan; sidik sumber nyata diuji pada kiriman dan HTTP lintas aplikasi.
+    from app.services import barang_keluar as bk
+    async def sidik(*args, **kwargs): return 'sumber-uji-tara'
+    monkeypatch.setattr(bk, 'sidik_sumber_muatan', sidik)
     r=await c.get(f'/internal/pengiriman/tiket/{tid}/muatan',headers={'X-Internal-Token':'token-uji'})
     assert r.status_code==200
     assert Decimal(r.json()['muatan'][0]['tara_per_karung_kg'])==Decimal('0.07')

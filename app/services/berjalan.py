@@ -3042,7 +3042,7 @@ async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str) -> list[Baris]:
     keluar: list[Baris] = []
     for rec, items in await bk.daftar(db, status=(keadaan,), batas=30):
         # Penyerahan kecil dikonfirmasi Admin langsung di Barang Keluar.
-        if bk.boleh_keluar_cepat(items):
+        if not rec.kiriman_id and bk.boleh_keluar_cepat(items):
             continue
         # Gudang mana yang harus melihatnya dihitung dari BARANGNYA, bukan
         # dipilih Admin: perintah yang mendarat di layar yang salah akan berdiri

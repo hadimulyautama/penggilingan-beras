@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.peran import can_see_financials
@@ -532,6 +532,32 @@ async def act_catat_curah(req: CurahReq,
         "Tercatat di Stok Produk dan tidak lagi menunggu packing.")}
 
 
+class CurahReq(BaseModel):
+    sumber: str                       # "POL-…|jenis", seluruh sisa terkini
+
+
+@router.post("/actions/catat-curah")
+async def act_catat_curah(req: CurahReq,
+                          user: User = Depends(pengguna_aksi)) -> dict:
+    from app.web.api import _is_g2_operator
+    from app.services.stok import nama_produk
+
+    wajib(await _is_g2_operator(user) or can_see_financials(user))
+    bagian = req.sumber.split("|")
+    if len(bagian) != 2 or not bagian[0].strip():
+        raise HTTPException(400, "Pilih hasil sosoh yang dijadikan curah.")
+    kode, jenis = bagian[0].strip(), bagian[1].strip().lower()
+    async with SessionLocal() as db:
+        try:
+            berat = await bj.catat_curah(
+                db, user=await db.get(User, user.id), kode_pol=kode, jenis=jenis)
+        except bj.InventoryError as e:
+            raise galat(e, "Gagal mencatat hasil curah.")
+    return {"ok": True, "pesan": (
+        f"✓ {nama_produk(jenis)} {kg(berat)} dari {kode} dijadikan curah. "
+        "Tercatat di Stok Produk dan tidak lagi menunggu packing.")}
+
+
 class BekatulReq(BaseModel):
     kode_pol: str
     berat_kg: float
@@ -803,7 +829,7 @@ async def perintah_kecil(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         baris = await bk.daftar(db, status=(OUT_PERINTAH,))
     return [{"value": str(r.id), "label": _ringkas_perintah(r, it)}
-            for r, it in baris if bk.boleh_keluar_cepat(it)]
+            for r, it in baris if not r.kiriman_id and bk.boleh_keluar_cepat(it)]
 
 
 @router.get("/actions/perintah-bisa-ditambah")
@@ -1166,7 +1192,8 @@ async def pelanggan_kledo(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         baris = (await db.execute(
             select(Pelanggan.id, Pelanggan.nama_pelanggan)
-            .where(Pelanggan.deleted_at.is_(None), Pelanggan.status == "aktif")
+            .where(Pelanggan.deleted_at.is_(None), Pelanggan.status == "aktif",
+                   Pelanggan.kledo_contact_id.is_not(None))
             .order_by(Pelanggan.nama_pelanggan))).all()
     return [{"value": str(i), "label": n} for i, n in baris]
 
@@ -1183,8 +1210,19 @@ class BarisReq(BaseModel):
     pilih: str = ""
     jumlah: float | None = None
 
+    @field_validator("jumlah", mode="before")
+    @classmethod
+    def kosong(cls, v):
+        return None if v == "" else v
+
+
+class KelompokPelangganReq(BaseModel):
+    pelanggan: str | None = None
+    barang: list[BarisReq] = Field(default_factory=list)
+
 
 class PerintahKeluarReq(BaseModel):
+    kelompok: list[KelompokPelangganReq] | None = None
     #: Bentuk BARU sejak 29 September 2026 — daftar pasangan dari medan
     #: `ulang_barang`. Satu transaksi memuat beberapa macam barang.
     barang: list[BarisReq] | None = None
@@ -1230,7 +1268,8 @@ async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
     depan, _, akhiran = pilih.rpartition("@")
     if depan and akhiran.isdigit():
         pilih, jasa_asal = depan, int(akhiran)
-    if float(jumlah or 0) <= 0:
+    from math import isfinite
+    if not isfinite(float(jumlah or 0)) or float(jumlah or 0) <= 0:
         raise HTTPException(400, f"Isi jumlah untuk '{pilih}' lebih dari 0.")
     if pilih.startswith("cr:"):
         # Curah DIKETIK DALAM KG. Jumlahnya tak pernah diturunkan dari karung
@@ -1279,10 +1318,70 @@ async def _baris_dari_borang(db, req) -> list["bk.BarisPerintah"]:
         # sampai ke sini dan ditolak dengan menyebut barangnya — bukan dibuang
         # diam-diam, yang akan membuat perintah kurang satu barang tanpa sebab.
         return [await _satu_baris(db, b.pilih, b.jumlah) for b in req.barang
-                if (b.pilih or "").strip() or b.jumlah]
+                if (b.pilih or "").strip() or b.jumlah is not None]
     if (req.stok or "").strip():
         return [await _satu_baris(db, req.stok, req.jumlah_karung)]
     raise HTTPException(400, "Pilih dulu barang yang akan keluar.")
+
+
+async def _kelompok_dari_borang(db, req):
+    """Adaptasi payload lama; identitas penerima selalu disimpan terpisah."""
+    kelompok = req.kelompok if req.kelompok is not None else [
+        KelompokPelangganReq(pelanggan=req.pelanggan, barang=req.barang or [])]
+    if not kelompok:
+        raise HTTPException(400, "Pilih minimal satu pelanggan beserta barangnya.")
+    hasil = []
+    for i, k in enumerate(kelompok, 1):
+        barang = [b for b in k.barang if b.pilih.strip() or b.jumlah is not None]
+        if req.kelompok is None and req.stok and not barang:
+            barang = [BarisReq(pilih=req.stok, jumlah=req.jumlah_karung)]
+        if not barang or len(barang) > 12:
+            raise HTTPException(400, f"Pelanggan {i}: isi 1 sampai 12 barang lengkap.")
+        if any(not b.pilih.strip() or b.jumlah is None for b in barang):
+            raise HTTPException(400, f"Pelanggan {i}: baris terisi sebagian. Lengkapi barang dan jumlahnya.")
+        pid = _pelanggan_id(k.pelanggan)
+        if pid in [p for p, _ in hasil]:
+            raise HTTPException(400, f"Pelanggan {i} sudah memiliki kelompok. Tambahkan barang pada kelompok yang sudah ada; isian tidak digabung otomatis.")
+        baris = [await _satu_baris(db, b.pilih, b.jumlah) for b in barang]
+        if any(b.jasa_id is not None for b in baris):
+            raise HTTPException(400, "Barang titipan melalui Pengambilan barang jasa.")
+        hasil.append((pid, baris))
+    return hasil
+
+
+@router.post("/actions/pratinjau-kiriman")
+async def pratinjau_kiriman(req: PerintahKeluarReq, user: User = Depends(pengguna_aksi)):
+    """Baca saldo, tanpa reservasi; server memeriksa ulang saat terbit."""
+    wajib(can_see_financials(user))
+    kelompok = req.kelompok or [KelompokPelangganReq(pelanggan=req.pelanggan, barang=req.barang or [])]
+    sumber, subtotal = {}, []
+    async with SessionLocal() as db:
+        for k in kelompok:
+            total = 0
+            for b in k.barang:
+                if not b.pilih:
+                    continue
+                try:
+                    baris = await _satu_baris(db, b.pilih, b.jumlah if b.jumlah is not None else 1)
+                    if baris.jasa_id is not None:
+                        raise bk.BarangKeluarError("Barang titipan melalui Pengambilan barang jasa.")
+                    # Pilihan katalog memakai satu nilai stabil untuk sumber.
+                    if b.pilih not in sumber:
+                        fisik, nama = await bk.tersedia(db, baris, abaikan_pesanan=True)
+                        tersedia, _ = await bk.tersedia(db, baris)
+                        satu_kg, _ = await bk._berat_baris(db, replace(baris,
+                            jumlah_karung=1 if baris.tipe == "finished_goods" else None,
+                            berat_kg=1 if baris.tipe != "finished_goods" else None))
+                        sumber[b.pilih] = dict(nama=nama, lokasi="Gudang 1" if bk.GUDANG_ITEM.get(baris.tipe) == bk.G1 else "Gudang 2", fisik=fisik,
+                            terikat=fisik-tersedia, tersedia=tersedia, rancangan=0,
+                            satuan="karung" if baris.tipe == "finished_goods" else "kg", kg_per_unit=satu_kg)
+                    berat = (await bk._berat_baris(db, baris))[0] if b.jumlah is not None else 0
+                    sumber[b.pilih]["rancangan"] += berat
+                    total += berat
+                except (HTTPException, bk.BarangKeluarError) as e:
+                    raise HTTPException(400, str(e.detail if isinstance(e, HTTPException) else e))
+            subtotal.append(total)
+    return dict(sumber=sumber, subtotal=subtotal, total=sum(subtotal))
 
 
 @router.post("/actions/perintah-keluar")
@@ -1292,21 +1391,25 @@ async def act_perintah_keluar(req: PerintahKeluarReq,
     wajib(can_see_financials(user))
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
-        baris = await _baris_dari_borang(db, req)
+        kelompok = await _kelompok_dari_borang(db, req)
         try:
-            r = await bk.buat_perintah(
-                db, user=u, baris=baris,
-                pelanggan_id=_pelanggan_id(req.pelanggan),
-                metode=req.metode, no_polisi=(req.no_polisi or None),
+            hasil = await bk.buat_kiriman(
+                db, user=u, kelompok=kelompok,
+                metode=req.metode, no_polisi=req.no_polisi or None,
                 tiket_armada_id=_id(req.tiket_armada) if (req.tiket_armada or "").strip() else None,
                 nama_ekspedisi=(req.nama_ekspedisi or None))
+            r = hasil[0]
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal membuat perintah barang keluar.")
         kode, pembeli, rec_id = r.rec.kode, r.rec.nama_pembeli, r.rec.id
     return {"ok": True, "tujuan": f"/barang-keluar/{rec_id}",
-            "pesan": f"✓ Perintah *{kode}* terbit untuk {pembeli}. "
+            "kiriman_id": r.rec.kiriman_id,
+            "perintah": [{"id": h.rec.id, "kode": h.rec.kode,
+                          "pelanggan_id": h.rec.pelanggan_id, "pelanggan": h.rec.nama_pembeli} for h in hasil],
+            "pesan": (f"✓ Satu kiriman untuk {len(hasil)} pelanggan dibuat. Barang dan perintah tetap terpisah per penerima."
+                      if len(hasil) > 1 else f"✓ Perintah *{kode}* terbit untuk {pembeli}. "
                      "Tambahkan barang lain bila muatannya lebih dari satu macam — "
-                     "operator melihatnya di Antrian tunggu."}
+                     "operator melihatnya di Antrian tunggu.")}
 
 
 class TambahBarangKeluarReq(PerintahKeluarReq):
@@ -1432,7 +1535,7 @@ async def tiket_armada(induk: str = "", user: User = Depends(pengguna_aksi)) -> 
             rec = await db.get(OutgoingRecord, rec_id)
             if rec is None:
                 return []
-            pid = rec.pelanggan_id
+            pid = None if rec.kiriman_id else rec.pelanggan_id
         rows = (await db.execute(text("""
             SELECT t.id,t.kode,t.nomor_polisi,t.timbang1_kg,
                    COALESCE(p.nama_pelanggan,t.pihak_nama,'') AS pelanggan
@@ -1442,7 +1545,7 @@ async def tiket_armada(induk: str = "", user: User = Depends(pengguna_aksi)) -> 
               AND t.nomor_polisi IS NOT NULL AND t.timbang1_kg IS NOT NULL
               AND (CAST(:pid AS INTEGER) IS NULL OR t.pelanggan_id IS NULL OR t.pelanggan_id=:pid)
               AND NOT EXISTS (SELECT 1 FROM outgoing_records o
-                WHERE o.timbangan_transaksi_id=t.id AND o.status<>'batal')
+                WHERE COALESCE((SELECT k.timbangan_transaksi_id FROM kiriman_keluar k WHERE k.id=o.kiriman_id),o.timbangan_transaksi_id)=t.id AND o.status<>'batal')
             ORDER BY t.id DESC LIMIT 100
         """), {"pid": pid})).mappings().all()
     return [{"value": str(t["id"]), "label": f"{t['kode']} · {t['nomor_polisi']} · {t['pelanggan']}"} for t in rows]
@@ -1479,10 +1582,11 @@ async def perintah_armada_tertaut(user: User = Depends(pengguna_aksi)):
     from sqlalchemy import bindparam
     async with SessionLocal() as db:
         rows = (await db.execute(text("""
-            SELECT o.id,o.kode,o.nama_pembeli,o.no_polisi,o.timbangan_transaksi_id,t.kode AS kode_tiket
+            SELECT o.id,o.kode,o.nama_pembeli,o.no_polisi,COALESCE(k.timbangan_transaksi_id,o.timbangan_transaksi_id) AS timbangan_transaksi_id,t.kode AS kode_tiket
             FROM outgoing_records o
-            LEFT JOIN timbangan_transaksi t ON t.id=o.timbangan_transaksi_id
-            WHERE o.status IN :status AND o.timbangan_transaksi_id IS NOT NULL
+            LEFT JOIN kiriman_keluar k ON k.id=o.kiriman_id
+            LEFT JOIN timbangan_transaksi t ON t.id=COALESCE(k.timbangan_transaksi_id,o.timbangan_transaksi_id)
+            WHERE o.status IN :status AND COALESCE(k.timbangan_transaksi_id,o.timbangan_transaksi_id) IS NOT NULL
             ORDER BY o.id DESC LIMIT 500
         """).bindparams(bindparam("status", expanding=True)), {"status": tuple(OUT_HIDUP)})).mappings().all()
         dasar = {}

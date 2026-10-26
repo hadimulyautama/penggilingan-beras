@@ -11,7 +11,7 @@ from app.database import SessionLocal
 from app.models import DrafKeluar, User
 from app.peran import can_see_financials
 from app.services import barang_keluar as bk
-from app.web.aksi_inventory import PerintahKeluarReq, _baris_dari_borang, _pelanggan_id, _id
+from app.web.aksi_inventory import PerintahKeluarReq, _kelompok_dari_borang, _id
 from app.web.aksi_umum import wajib
 from app.web.deps import pengguna_aksi
 from app.web.security import butuh_akun
@@ -99,21 +99,16 @@ async def terbitkan(identitas: UUID, req: TerbitDraf, user: User = Depends(pengg
             raise HTTPException(409, dict(pesan='Draf berubah. Periksa ulang sebelum menerbitkan.', **_hasil(d)))
         try:
             isi = PerintahKeluarReq.model_validate(d.isi)
-            if not isi.barang or len(isi.barang) > 100 or any(not b.pilih or b.jumlah is None for b in isi.barang):
-                raise HTTPException(400, 'Pilih barang dan isi jumlah pada setiap baris.')
-            for b in isi.barang:
-                if not math.isfinite(b.jumlah) or b.jumlah <= 0 or (b.pilih.startswith("bj:") and b.jumlah != int(b.jumlah)):
-                    raise HTTPException(400, "Jumlah harus positif; karung wajib bilangan bulat.")
-            baris = await _baris_dari_borang(db, isi)
-            hasil = await bk.buat_perintah(db, user=await db.get(User,user.id), baris=baris,
-                pelanggan_id=_pelanggan_id(isi.pelanggan), metode=isi.metode,
+            kelompok = await _kelompok_dari_borang(db, isi)
+            hasil = await bk.buat_kiriman(db, user=await db.get(User,user.id), kelompok=kelompok,
+                metode=isi.metode,
                 tiket_armada_id=_id(isi.tiket_armada) if isi.tiket_armada else None,
                 nama_ekspedisi=isi.nama_ekspedisi or None, simpan=False)
         except ValidationError:
             raise HTTPException(400, 'Periksa pilihan barang dan jumlah. Karung harus bilangan bulat positif.')
         except bk.BarangKeluarError as e:
             raise HTTPException(400, str(e))
-        d.perintah_id = hasil.rec.id
+        d.perintah_id = hasil[0].rec.id
         await db.commit()
         return _hasil(d)
 
@@ -124,16 +119,24 @@ async def daftar_draf(db, user):
     ds=list((await db.scalars(select(DrafKeluar).where(
         DrafKeluar.pemilik_id==user.id,DrafKeluar.perintah_id.is_(None),
         DrafKeluar.dihapus_pada.is_(None)).order_by(DrafKeluar.diperbarui.desc(),DrafKeluar.id))).all())
-    ids={int(str(d.isi.get('pelanggan'))) for d in ds if str(d.isi.get('pelanggan','')).isdigit()}
+    def kelompok(isi):
+        return isi.get('kelompok') if isi.get('kelompok') is not None else [isi]
+    ids={int(str(k.get('pelanggan'))) for d in ds for k in kelompok(d.isi)
+         if isinstance(k,dict) and str(k.get('pelanggan','')).isdigit()}
     nama=dict((await db.execute(select(Pelanggan.id,Pelanggan.nama_pelanggan).where(Pelanggan.id.in_(ids)))).all()) if ids else {}
     hasil=[]
     for d in ds:
-        pid=str(d.isi.get('pelanggan',''))
-        pembeli=nama.get(int(pid)) if pid.isdigit() else None
-        teks=d.isi.get('pelanggan_teks')
-        pembeli=pembeli or (str(teks)+' (belum dipilih)' if teks else 'Pelanggan belum dipilih')
-        barang=d.isi.get('barang')
-        jumlah=sum(1 for b in barang if isinstance(b,dict) and (b.get('pilih') or b.get('jumlah'))) if isinstance(barang,list) else 0
+        penerima=[]; jumlah=0
+        for k in kelompok(d.isi):
+            if not isinstance(k,dict):
+                continue
+            pid=str(k.get('pelanggan',''))
+            pembeli=nama.get(int(pid)) if pid.isdigit() else None
+            teks=k.get('pelanggan_teks')
+            penerima.append(pembeli or (str(teks)+' (belum dipilih)' if teks else 'Pelanggan belum dipilih'))
+            barang=k.get('barang')
+            jumlah+=sum(1 for b in barang if isinstance(b,dict) and (b.get('pilih') or b.get('jumlah'))) if isinstance(barang,list) else 0
+        pembeli=' · '.join(penerima)
         hasil.append(dict(id=d.id,revisi=d.revisi,pelanggan=pembeli,jumlah=jumlah,waktu=d.diperbarui))
     return hasil
 

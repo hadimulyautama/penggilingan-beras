@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import (Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric,
-                        String, UniqueConstraint, text)
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric,
+                        String, UniqueConstraint, text, select, func)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.database import Base, TimestampMixin
 from hmu_core import Brand, PackageSize, PackagingMaterial, RiceQualityStandard
@@ -286,9 +287,27 @@ OUT_PERINTAH, OUT_DIMUAT, OUT_SELESAI, OUT_BATAL = (
 OUT_HIDUP = (OUT_PERINTAH, OUT_DIMUAT)
 
 
+class KirimanKeluar(Base, TimestampMixin):
+    """Satu perjalanan; penerima dan barang tetap di perintah anak masing-masing.
+
+    Tiket hanya disimpan di sini untuk kiriman gabungan. Kolom tiket lama
+    tetap dibaca untuk sejarah, tanpa backfill atau pemindahan kepemilikan.
+    """
+    __tablename__ = "kiriman_keluar"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    metode: Mapped[str | None] = mapped_column(String(20))
+    no_polisi: Mapped[str | None] = mapped_column(String(20))
+    nama_ekspedisi: Mapped[str | None] = mapped_column(String(100))
+
+
 class OutgoingRecord(Base, TimestampMixin):
     """Barang keluar / dikirim. Kode: OUT-YYYYMMDD-NN. Proses jual lengkap
     (pelanggan/faktur/piutang) ada di modul Penjualan; di sini = dispatch fisik.
+
+    Sejak 0114, baris ini merupakan alokasi SATU penerima dalam kiriman.
+    `kiriman_id` mengelompokkan beberapa penerima pada satu perjalanan;
+    NULL mempertahankan seluruh catatan dan pembaca satu pelanggan lama.
 
     ⭐ SATU TRANSAKSI, BANYAK BARANG — dan itu sudah begitu sejak awal lewat
     `OutgoingItem`. Yang baru sejak 28 September 2026 adalah KEADAANNYA:
@@ -307,6 +326,8 @@ class OutgoingRecord(Base, TimestampMixin):
 
     __tablename__ = "outgoing_records"
     __table_args__ = (
+        UniqueConstraint("kiriman_id", "pelanggan_id", name="uq_outgoing_kiriman_pelanggan"),
+        CheckConstraint("kiriman_id IS NULL OR timbangan_transaksi_id IS NULL", name="ck_outgoing_tiket_tunggal"),
         # Satu tiket timbang keluar, satu transaksi yang HIDUP. Parsial, bukan
         # unik polos: yang dibatalkan harus boleh dicatat ulang, kalau tidak
         # truk yang salah dicatat tak punya jalan pulang. Syaratnya wajib sama
@@ -342,6 +363,8 @@ class OutgoingRecord(Base, TimestampMixin):
     #: di halaman menunggu keuangan membuat kontak.
     nama_pembeli: Mapped[str | None] = mapped_column(String(100))
     pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
+    kiriman_id: Mapped[int | None] = mapped_column(ForeignKey("kiriman_keluar.id"), index=True)
+    kiriman: Mapped[KirimanKeluar | None] = relationship(lazy="selectin")
     #: Pengambilan barang JASA oleh pemiliknya — NULL untuk penjualan biasa.
     #:
     #: Berbeda arti dari `pelanggan_id` di atasnya, dan keduanya memang bisa
@@ -380,7 +403,26 @@ class OutgoingRecord(Base, TimestampMixin):
     waktu_verifikasi: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     #: Tiket armada KELUAR, dipilih sesudah timbang pertama; boleh menyusul
     #: perintah yang dibuat sebelum armada datang.
-    timbangan_transaksi_id: Mapped[int | None] = mapped_column(Integer)
+    _tiket_lama: Mapped[int | None] = mapped_column("timbangan_transaksi_id", Integer)
+
+    @hybrid_property
+    def timbangan_transaksi_id(self):
+        # Pembaca ORM lama mendapat tiket efektif yang sama; tidak ada salinan
+        # FK tiket per pelanggan yang bisa dianggap sebagai perjalanan lain.
+        return self.kiriman.timbangan_transaksi_id if self.kiriman else self._tiket_lama
+
+    @timbangan_transaksi_id.inplace.setter
+    def _isi_tiket(self, nilai):
+        if self.kiriman:
+            self.kiriman.timbangan_transaksi_id = nilai
+        else:
+            self._tiket_lama = nilai
+
+    @timbangan_transaksi_id.inplace.expression
+    @classmethod
+    def _tiket_efektif(cls):
+        return func.coalesce(select(KirimanKeluar.timbangan_transaksi_id).where(
+            KirimanKeluar.id == cls.kiriman_id).scalar_subquery(), cls._tiket_lama)
     catatan_perintah: Mapped[str | None] = mapped_column(String(300))
     sebab_batal: Mapped[str | None] = mapped_column(String(300))
     #: Sebab selisih timbang yang BESAR — wajib diisi Admin saat menutup bila

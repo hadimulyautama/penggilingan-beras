@@ -23,7 +23,7 @@ async def buat(pg,pemakai,*,ambil=True):
                 db.add(wh[fungsi]);await db.flush()
         u=await db.get(User,pemakai.id)
         u.role='superadmin';u.default_warehouse_id=wh['g2'].id
-        p=Pelanggan(nama_pelanggan='Catur Uji 392');lain=Pelanggan(nama_pelanggan='Catur Uji 392')
+        p=Pelanggan(nama_pelanggan='Catur Uji 392',kledo_contact_id=100001);lain=Pelanggan(nama_pelanggan='Catur Uji 392',kledo_contact_id=100002)
         db.add_all([p,lain]);await db.flush()
         js=[Jasa(kode=f'JAS-392-00{i+1}',pelanggan_id=p.id,status='berjalan') for i in range(3)]
         db.add_all(js);await db.flush()

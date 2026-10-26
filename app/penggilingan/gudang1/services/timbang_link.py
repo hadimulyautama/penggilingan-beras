@@ -390,7 +390,7 @@ _SQL_KELUAR_AKTIF = text("""
      WHERE t.arah = 'KELUAR'""" + SYARAT_TIKET_SAH + """
        AND NOT EXISTS (
              SELECT 1 FROM outgoing_records o
-              WHERE o.timbangan_transaksi_id = t.id
+              WHERE COALESCE((SELECT k.timbangan_transaksi_id FROM kiriman_keluar k WHERE k.id=o.kiriman_id),o.timbangan_transaksi_id) = t.id
                 AND o.status <> 'batal')
      ORDER BY t.id DESC
      LIMIT 60

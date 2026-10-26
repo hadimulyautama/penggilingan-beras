@@ -14,6 +14,17 @@ async def test_skenario_lengkap_dan_tidak_menghapus_data(pg, monkeypatch):
     monkeypatch.setattr(settings, 'mode_uji', True)
     monkeypatch.setattr(contoh, 'SessionLocal', pg)
     monkeypatch.setattr(contoh, 'engine', pg.kw['bind'])
+    # Kontak sintetis memenuhi sumber Kledo yang diwajibkan formulir baru.
+    master_asli = contoh.Pengisi.master
+    async def master_kledo(self):
+        data = await master_asli(self)
+        from app.models import Pelanggan
+        async with pg() as db:
+            for p in (await db.scalars(select(Pelanggan).where(Pelanggan.id.in_(data['pelanggan'])))).all():
+                p.kledo_contact_id = 1000000 + p.id
+            await db.commit()
+        return data
+    monkeypatch.setattr(contoh.Pengisi, 'master', master_kledo)
     await seed_master()
     async with pg() as db:
         from hmu_identitas.peran import SUPERADMIN

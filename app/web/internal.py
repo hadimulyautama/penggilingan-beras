@@ -70,6 +70,21 @@ async def _cocokkan_pengiriman_tiket(db, tid: int):
         raise HTTPException(status_code=409, detail="Tiket bukan timbang keluar aktif.")
     nopol = _kunci_nopol(tiket["nomor_polisi"])
     pihak = _kunci_teks(tiket["pihak"])
+    from app.models import OutgoingRecord, OutgoingItem
+    tertaut = list((await db.scalars(select(OutgoingRecord).where(
+        OutgoingRecord.timbangan_transaksi_id == int(tid),
+        OutgoingRecord.status != "batal").order_by(OutgoingRecord.id))).all())
+    if tertaut and tertaut[0].kiriman_id:
+        if any(r.kiriman_id != tertaut[0].kiriman_id for r in tertaut):
+            raise HTTPException(409, "Tiket terkait beberapa kiriman; periksa tautannya.")
+        if any(r.status not in (OUT_DIMUAT, OUT_SELESAI) for r in tertaut):
+            raise HTTPException(409, "Selesaikan muat setiap pelanggan pada kiriman bersama di Produksi.")
+        if not nopol or any(_kunci_nopol(r.no_polisi) != nopol for r in tertaut):
+            raise HTTPException(409, "Nomor polisi kiriman berbeda dari tiket armada.")
+        items = list((await db.scalars(select(OutgoingItem).where(
+            OutgoingItem.outgoing_record_id.in_([r.id for r in tertaut]))
+            .order_by(OutgoingItem.id))).all())
+        return tiket, tertaut[0], items
     if not nopol or not pihak:
         raise HTTPException(status_code=409, detail="Pilih tiket armada pada perintah barang keluar di Produksi; pelanggan mengikuti perintah dan plat mengikuti tiket.")
 
@@ -127,7 +142,14 @@ async def pengiriman_muatan_tiket(
     """Rincian barang yang benar-benar dicatat dimuat, untuk layar timbang 2."""
     _pastikan_token(x_internal_token)
     async with SessionLocal() as db:
+        # Snapshot muatan dan sidiknya dibaca di bawah kunci yang sama dengan
+        # pencatatan muat, perubahan perintah, dan verifikasi.
+        from app.services import barang_keluar as bk
+        await bk._kunci_saldo_keluar(db)
         _tiket, rec, items = await _cocokkan_pengiriman_tiket(db, tid)
+        sidik = await bk.sidik_sumber_muatan(db, rec, tiket_id=tid)
+        from app.services.barang_keluar import anggota_kiriman
+        penerima = {r.id:r for r in await anggota_kiriman(db, rec)}
         muatan = []
         from app.models import KemasanTara, PackagingMaterial, PackageSize
         for item in items:
@@ -199,15 +221,30 @@ async def pengiriman_muatan_tiket(
             else:
                 raise HTTPException(status_code=409, detail=f"Jenis muatan {item.item_type} belum didukung integrasi timbang.")
             muatan.append({
+                "outgoing_item_id": item.id,
+                "perintah_id": item.outgoing_record_id,
+                "kode_perintah": penerima[item.outgoing_record_id].kode,
+                "pelanggan_id": penerima[item.outgoing_record_id].pelanggan_id,
+                "pelanggan": penerima[item.outgoing_record_id].nama_pembeli,
                 "jenis_kode": kode,
-                "nama": label,
+                "nama": label + (" · untuk " + penerima[item.outgoing_record_id].nama_pembeli if rec.kiriman_id else ""),
                 "berat_kg": float(item.berat_kg or 0),
                 "jumlah_karung": int(item.jumlah_karung or 0),
+                "satuan": "karung" if item.item_type == "finished_goods" else "kg",
+                "jumlah": int(item.jumlah_karung or 0) if item.item_type == "finished_goods" else float(item.berat_kg or 0),
                 "tara_per_karung_kg": str(tara),
                 **produk,
             })
-        return {"kode_perintah": rec.kode, "pelanggan": rec.nama_pembeli,
+        return {"kode_perintah": rec.kode, "pelanggan": "Kiriman bersama" if rec.kiriman_id else rec.nama_pembeli,
+                "kiriman_id": rec.kiriman_id,
+                "sidik_sumber": sidik,
+                "penerima": [{"perintah_id":r.id,"kode_perintah":r.kode,"pelanggan_id":r.pelanggan_id,"pelanggan":r.nama_pembeli}
+                              for r in penerima.values() if r.status != "batal"],
                 "nomor_polisi": rec.no_polisi, "muatan": muatan}
+
+
+class VerifikasiTiketReq(BaseModel):
+    sidik_sumber: str
 
 
 @router.post("/pengiriman/tiket/{tid}/verifikasi")
@@ -215,6 +252,7 @@ async def verifikasi_pengiriman_tiket(
     tid: int,
     x_operator_akun: int = Header(alias="X-Operator-Akun"),
     x_internal_token: str | None = Header(default=None),
+    req: VerifikasiTiketReq | None = None,
 ) -> dict:
     """Tautkan tiket dan verifikasi otomatis untuk muatan yang cocok."""
     _pastikan_token(x_internal_token)
@@ -224,20 +262,26 @@ async def verifikasi_pengiriman_tiket(
     from app.penggilingan.inventory.models import OUT_SELESAI
 
     async with SessionLocal() as db:
+        akun = await db.get(Akun, int(x_operator_akun))
+        user = await db.get(User, akun.user_id) if akun else None
+        if akun is None or akun.status != "aktif" or user is None or user.status != "aktif":
+            raise HTTPException(status_code=403, detail="Akun operator Timbangan tidak terhubung ke pengguna aktif Produksi.")
+        await bk._kunci_saldo_keluar(db)
         _tiket, rec, _items = await _cocokkan_pengiriman_tiket(db, tid)
+        if rec.kiriman_id and req is None:
+            raise HTTPException(409, "Kiriman bersama memerlukan sidik_sumber dari snapshot muatan yang disimpan Pos Timbang.")
+        if req and req.sidik_sumber != await bk.sidik_sumber_muatan(db, rec, tiket_id=tid):
+            raise HTTPException(409, "Muatan sumber berubah sejak dibaca Pos Timbang. Muat ulang rincian seluruh kiriman dan periksa timbang kedua sebelum mengulang.")
         if rec.status == OUT_SELESAI and rec.timbangan_transaksi_id == int(tid):
             return {"selesai": True, "kode_perintah": rec.kode,
                     "catatan": "Sudah tertaut dan terverifikasi sebelumnya."}
-        akun = await db.get(Akun, int(x_operator_akun))
-        user = await db.get(User, akun.user_id) if akun else None
-        if user is None or user.status != "aktif":
-            raise HTTPException(status_code=403, detail="Akun operator Timbangan tidak terhubung ke pengguna aktif Produksi.")
         if rec.timbangan_transaksi_id not in (None, int(tid)):
             raise HTTPException(status_code=409, detail="Perintah ini sudah tertaut ke tiket timbang lain.")
         rec_id, kode_perintah = rec.id, rec.kode
         try:
             _rec, catatan = await bk.verifikasi(
                 db, user=user, rec_id=rec.id, timbangan_transaksi_id=int(tid), otomatis=True,
+                sidik_sumber=req.sidik_sumber if req else None,
             )
             return {"selesai": True, "kode_perintah": rec.kode, "catatan": catatan}
         except bk.BarangKeluarError as exc:
