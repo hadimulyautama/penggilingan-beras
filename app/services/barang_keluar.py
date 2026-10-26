@@ -1661,6 +1661,25 @@ async def muat_semua(db: AsyncSession, *, user, rec_id: int,
     return hasil
 
 
+def syarat_selesai_muat(items):
+    """Ambang layanan lama; tampilan dan pratinjau memakai penentu yang sama."""
+    kurang=sum(max(float(i.berat_perintah_kg or 0)-float(i.berat_kg or 0),0) for i in items)
+    return dict(ada_muatan=any(float(i.berat_kg or 0)>0.5 for i in items),
+                alasan_wajib=kurang>0.5,tidak_terkirim_kg=kurang)
+
+
+def periksa_selesai_muat(rec, items, sebab):
+    syarat=syarat_selesai_muat(items)
+    if not syarat['ada_muatan']:
+        raise BarangKeluarError(
+            f"{rec.kode} belum punya satu pun barang yang tercatat dimuat. "
+            "Catat muatannya dulu — atau kalau tak jadi berangkat, mintakan "
+            "Admin membatalkan perintahnya.")
+    if syarat['alasan_wajib'] and not sebab.strip():
+        raise BarangKeluarError("Muatan kurang dari perintah. Tulis alasan barang tidak terkirim.")
+    return syarat
+
+
 async def selesai_muat(db: AsyncSession, *, user, rec_id: int,
                        tanggal=None, jam=None, dasar: str | None = None,
                        sebab: str = "") -> HasilPerintah:
@@ -1671,25 +1690,21 @@ async def selesai_muat(db: AsyncSession, *, user, rec_id: int,
     seminggu kemudian ke truk yang salah. Selisihnya terbaca berdampingan di
     kartu verifikasi Admin — di situlah ia jadi pertanyaan, bukan jadi tugas.
     """
-    rec = await _kunci(db, rec_id, keadaan=OUT_PERINTAH)
+    rec = await _kunci_muat(db,rec_id,dasar=dasar)
     await _periksa_dasar_muat(db, rec, dasar)
     items = list((await db.execute(
         select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec.id)
     )).scalars().all())
-    if not any(float(i.berat_kg or 0) > 0.5 for i in items):
-        raise BarangKeluarError(
-            f"{rec.kode} belum punya satu pun barang yang tercatat dimuat. "
-            "Catat muatannya dulu — atau kalau tak jadi berangkat, mintakan "
-            "Admin membatalkan perintahnya.")
-    kurang = sum(max(float(i.berat_perintah_kg or 0) - float(i.berat_kg or 0), 0)
-                 for i in items)
-    if kurang > 0.5 and not sebab.strip():
-        raise BarangKeluarError("Muatan kurang dari perintah. Tulis alasan barang tidak terkirim.")
+    periksa_selesai_muat(rec,items,sebab)
     # `diisi` kosong dengan sengaja: ketukan ini tak mengisi satu angka pun —
     # angkanya sudah dicatat operator per baris lebih dulu. Yang dibatalkan
     # nanti cuma PENUTUPANNYA, dan angka per barisnya tetap berdiri.
-    return await _tutup_muatan(db, user=user, rec=rec, items=items,
-                               tanggal=tanggal, jam=jam, diisi=[], sebab=sebab)
+    async with db.begin_nested():
+        hasil=await _tutup_muatan(db,user=user,rec=rec,items=items,
+            tanggal=tanggal,jam=jam,diisi=[],sebab=sebab,simpan=False)
+    await db.commit()
+    await db.refresh(rec)
+    return hasil
 
 
 async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
@@ -1709,8 +1724,10 @@ async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
                            f"{rec.nama_pembeli}"
                            + (f" — kurang {_kg(kurang)} kg dari perintah"
                               if kurang > 0.5 else "")
-                           + ". Tinggal diverifikasi Admin (tempelkan kode timbang "
-                             "keluarnya).")
+                           + (". Pelanggan lain tetap sesuai statusnya. Verifikasi armada "
+                              "menunggu semua pelanggan selesai muat dan pemeriksaan tiket."
+                              if rec.kiriman_id else
+                              ". Tinggal diverifikasi Admin (tempelkan kode timbang keluarnya)."))
     # Jejak lama cukup menyebut id untuk baris yang sebelumnya nol. Ketika
     # melengkapi muatan parsial, pembatalan harus kembali ke 80, bukan nol.
     import json

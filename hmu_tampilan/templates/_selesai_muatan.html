@@ -1,0 +1,14 @@
+<link rel="stylesheet" href="/static/catat-muatan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/selesai-muatan.css?v={{ VERSI }}">
+<section class="catat-muatan selesai-muatan" data-selesai-muatan data-perintah="{{ perintah or '' }}" data-boleh="{{ '1' if boleh_selesai else '0' }}" data-buka="{{ buka_awal }}">
+  <a href="/pekerjaan">‹ Pekerjaan</a>
+  <h1>Selesai muat</h1>
+  <p class="bantu">Periksa aktual dan barang tidak terkirim untuk setiap pelanggan dalam kiriman.</p>
+  <p data-kabar role="status" hidden></p>
+  <div data-galat class="nota nota--buruk" role="alert" hidden></div>
+  <button type="button" class="btn" data-terbaru>Periksa muatan terbaru</button>
+  <div data-isi-selesai></div>
+  <noscript>Aktifkan JavaScript untuk memeriksa dan menyelesaikan muatan.</noscript>
+</section>
+<script type="application/json" id="selesai-awal">{{ awal | tojson }}</script>
+<script src="/static/selesai-muatan.js?v={{ VERSI }}" defer></script>

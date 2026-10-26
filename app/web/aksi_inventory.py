@@ -1806,8 +1806,20 @@ async def act_muat_barang(req: MuatBarisReq,
     return {"ok": True, "pesan": pesan}
 
 
+class SelesaiMuatReq(MuatReq):
+    # Konteks baru opsional: pemanggil lama tetap memakai perintah + dasar.
+    item_ids: list[int] | None = None
+
+
+def _periksa_item_selesai(req, items):
+    if 'item_ids' in req.model_fields_set:
+        ids=req.item_ids
+        if ids is None or len(ids)!=len(set(ids)) or set(ids)!={i.id for i in items}:
+            raise HTTPException(400,"Daftar barang tidak sesuai dengan perintah pelanggan ini.")
+
+
 @router.post("/actions/selesai-muat")
-async def act_selesai_muat(req: MuatReq, user: User = Depends(pengguna_aksi)) -> dict:
+async def act_selesai_muat(req: SelesaiMuatReq, user: User = Depends(pengguna_aksi)) -> dict:
     from app.web.api import _is_g1_operator, _is_g2_operator
 
     # Gudang MANA pun yang memegang barangnya: barang jadi di Gudang 2, tetapi
@@ -1819,6 +1831,13 @@ async def act_selesai_muat(req: MuatReq, user: User = Depends(pengguna_aksi)) ->
         u = await db.get(User, user.id)
         try:
             _wajib_periksa_muat(req.dasar)
+            rec=await bk._kunci_muat(db,_id(req.perintah),dasar=req.dasar)
+            await bk._periksa_dasar_muat(db,rec,req.dasar)
+            _periksa_konteks_muat(req,rec)
+            from app.models import OutgoingItem
+            items=list((await db.scalars(select(OutgoingItem).where(
+                OutgoingItem.outgoing_record_id==rec.id))).all())
+            _periksa_item_selesai(req,items)
             r = await bk.selesai_muat(db, user=u, rec_id=_id(req.perintah),
                                       dasar=req.dasar, sebab=req.sebab)
         except bk.BarangKeluarError as e:
