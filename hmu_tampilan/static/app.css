@@ -3965,10 +3965,10 @@ body.padiflow-ui .lembar--broken-silo .lembar__isi{max-width:1000px}
 body.padiflow-ui .lembar--broken-silo .mi-count .fld{font-size:1.5rem;min-height:54px;font-weight:550;font-variant-numeric:tabular-nums}
 .lembar--broken-silo .mi-note{margin:0;color:var(--redup);font-size:.77rem;line-height:1.7;overflow-wrap:anywhere}
 .lembar--broken-silo .mi-quantity-help{display:grid;gap:9px;margin:0 0 20px}.lembar--broken-silo #mi-all{justify-self:start;text-align:left;white-space:normal;color:var(--aman);font-size:.8rem;min-height:40px}
-.lembar--broken-silo .mi-result-preview{display:grid;gap:14px;min-width:0;border-left:1px solid var(--garis);padding-left:25px;font-size:.85rem;overflow-wrap:anywhere}
+.lembar--broken-silo .mi-result-preview{display:grid;gap:8px;min-width:0;border-left:1px solid var(--garis);padding-left:25px;font-size:.85rem;overflow-wrap:anywhere}
 .lembar--broken-silo .mi-result-preview h3{font-size:1rem;margin:0 0 3px}.lembar--broken-silo .mi-pair{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:.8rem;min-width:0}.lembar--broken-silo .mi-pair span{color:var(--redup)}.lembar--broken-silo .mi-pair strong{text-align:right;font-variant-numeric:tabular-nums;max-width:58%;overflow-wrap:anywhere;font-weight:550}
-.lembar--broken-silo .mi-total{border-block:1px solid var(--garis);padding-block:14px}.lembar--broken-silo .mi-total strong{font-size:1.35rem;color:var(--aman)}
-.lembar--broken-silo .mi-warning{padding:12px;border-left:3px solid var(--hati);background:var(--panel-2);font-size:.8rem;line-height:1.6;margin:0}.lembar--broken-silo .hasil-actions{margin-top:22px}
+.lembar--broken-silo .mi-total{border-block:1px solid var(--garis);padding-block:10px}.lembar--broken-silo .mi-total strong{font-size:1.2rem;color:var(--aman)}
+.lembar--broken-silo .mi-warning{padding:11px 12px;border:0;border-radius:9px;background:var(--hati-muda);color:var(--hati);font-size:.8rem;line-height:1.5;margin:0}.lembar--broken-silo .hasil-actions{margin-top:22px}
 @media(max-width:680px){.lembar--broken-silo .mi-layout{grid-template-columns:minmax(0,1fr);gap:5px}.lembar--broken-silo .mi-result-preview{border-left:0;padding-left:0;border-top:1px solid var(--garis);padding-top:18px}.lembar--broken-silo .mi-stock{padding:13px}.lembar--broken-silo .mi-stock-values strong{font-size:1.08rem}}
 .kabar .mi-receipt{display:grid;gap:8px;border-top:1px solid currentColor;padding-top:12px;margin-top:12px;font-size:.85rem;line-height:1.6;overflow-wrap:anywhere}.kabar .mi-receipt .mi-pair{display:flex;justify-content:space-between;gap:14px}.kabar .mi-receipt .mi-pair strong{text-align:right;max-width:60%;overflow-wrap:anywhere}
 .lembar--broken-silo .mi-count{flex-wrap:wrap}.lembar--broken-silo .mi-count>.formulir-salah{flex-basis:100%;order:3;margin:0}body.padiflow-ui .lembar--broken-silo .mi-count .fld{width:0;flex:1 1 0}
@@ -3976,3 +3976,9 @@ body.padiflow-ui .lembar--broken-silo .mi-count .fld{font-size:1.5rem;min-height
 .lembar--broken-silo .bk-source,.lembar--broken-silo .bk-balance{display:grid;gap:10px;border-top:1px solid var(--garis);padding-top:12px;margin-top:12px}.lembar--broken-silo .mi-stock small{display:block}.lembar--broken-silo h4{margin:0}
 
 @media(max-width:450px){.lembar--broken-silo .mi-stock-values{grid-template-columns:minmax(0,1fr)}}
+
+/* Ringkasan broken: rapat tanpa mengecilkan field/tombol atau mengubah angka. */
+.lembar--broken-silo .mi-result-preview .mi-note{line-height:1.55}
+.lembar--broken-silo .bk-balance{gap:8px;padding-top:10px;margin-top:2px}
+.lembar--broken-silo .bk-pending{border-block:1px solid var(--garis);padding-block:10px}
+.lembar--broken-silo .bk-pending strong{color:var(--redup);font-weight:500}
