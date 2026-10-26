@@ -2175,6 +2175,12 @@ async def pindah_broken_ke_silo(
     )
 
 
+def jumlah_bongkar_broken(sisa_butuh, ukuran, jumlah):
+    """Pembulatan karung penuh lama; dipakai transaksi dan pratinjau."""
+    from math import ceil
+    return min(int(jumlah), ceil(sisa_butuh / float(ukuran)))
+
+
 @dataclass
 class MasukkanBrokenResult:
     nama_silo: str
@@ -2362,7 +2368,7 @@ async def masukkan_broken_ke_silo(
             )).scalar_one_or_none()
             if not ukuran or not krow.jumlah_karung:
                 continue
-            ambil_karung = min(int(krow.jumlah_karung), ceil(sisa_butuh / float(ukuran)))
+            ambil_karung = jumlah_bongkar_broken(sisa_butuh, ukuran, krow.jumlah_karung)
             if ambil_karung <= 0:
                 continue
             ambil_kg = ambil_karung * float(ukuran)
@@ -2422,21 +2428,14 @@ async def masukkan_broken_ke_silo(
     )
 
 
-async def masukkan_stok_broken_pemilik_ke_silo(
-    db: AsyncSession, *, user: User, jasa_id: int | None, nama_silo: str,
-    berat_kg: float, tanggal=None, jam=None,
-) -> MasukkanBrokenResult:
-    """Ambil broken FIFO dari tumpukan stok milik satu pemilik.
+async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat_kg: float | None):
+    """Bagian baca dari alokasi lama. None membaca semua sumber untuk tampilan.
 
-    Asal proses tetap disimpan per baris ledger, tetapi tidak menjadi pilihan
-    operator. Satu pemindahan boleh menghabiskan beberapa proses sekaligus.
+    Urutan penerimaan lalu proses FIFO tetap sama; tidak menulis pembukuan,
+    membuka karung, mengunci ulang transaksi, ataupun menjalankan pemindahan.
     """
     from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock, ProductSku
     from app.services.stok import output_sosoh
-
-    if not berat_kg or float(berat_kg) <= 0:
-        raise Gudang2Error("Sebutkan berat yang masuk silo (kg), lebih dari 0.")
-
     def milik(col):
         return col.is_(None) if jasa_id is None else col == jasa_id
 
@@ -2465,7 +2464,7 @@ async def masukkan_stok_broken_pemilik_ke_silo(
     # Stok broken yang diterima dari Timbangan juga merupakan tumpukan biasa.
     # Rencanakan sebagai sumber pertama sebelum hasil sosoh, tetap lewat
     # `pindah_broken_ke_silo` agar ledger dan kepemilikan stok tercatat.
-    left = float(berat_kg)
+    left = float("inf") if berat_kg is None else float(berat_kg)
     plan: list[tuple[PolishingProcess, float]] = []
     direct_rows = (await db.execute(
         select(ByproductStock.id, ByproductStock.berat_kg)
@@ -2517,6 +2516,21 @@ async def masukkan_stok_broken_pemilik_ke_silo(
             left -= take
         if left <= 0.5:
             break
+    return direct_plan, plan, left
+
+
+async def masukkan_stok_broken_pemilik_ke_silo(
+    db: AsyncSession, *, user: User, jasa_id: int | None, nama_silo: str,
+    berat_kg: float, tanggal=None, jam=None,
+) -> MasukkanBrokenResult:
+    """Ambil broken FIFO dari tumpukan stok milik satu pemilik.
+
+    Asal proses tetap disimpan per baris ledger, tetapi tidak menjadi pilihan
+    operator. Satu pemindahan boleh menghabiskan beberapa proses sekaligus.
+    """
+    if not berat_kg or float(berat_kg) <= 0:
+        raise Gudang2Error("Sebutkan berat yang masuk silo (kg), lebih dari 0.")
+    direct_plan, plan, left = await rencana_broken_pemilik(db, jasa_id=jasa_id, berat_kg=berat_kg)
     if left > 0.5:
         raise Gudang2Error(
             f"Stok broken milik pemilih tinggal {berat_kg-left:,.0f} kg; "

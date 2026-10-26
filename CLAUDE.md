@@ -1197,3 +1197,27 @@ menggunakan alur biasa. Perubahan target tidak memotong stok; aktual dan
 penutupan disimpan atomik setelah pemeriksaan ulang cuplikan, saldo, serta
 pemilik per item/pesanan jasa. Audit muat dan verifikasi mempertahankan jalur
 pembatalan yang mengembalikan angka sebelum konfirmasi.
+
+## Formulir broken ke silo (26 Oktober 2026)
+
+Tiga field lama tetap `proses`, `silo`, `berat_kg`; `proses` dapat berupa
+`pemilik|pabrik`, `pemilik|<jasa_id>`, atau tautan proses lama `<POL>|<jasa_id>`.
+Tampilan memakai kg saja, tanpa pilihan sumber manual atau jumlah karung.
+`rencana_broken_pemilik` merupakan bagian BACA dari layanan FIFO lama:
+penerimaan timbang dahulu, lalu proses menurut urutan lama, dengan curah →
+hasil mesin yang berhak dibukukan → kemasan pada setiap proses. Jangan
+menggantinya menjadi curah global dahulu. `rencana_broken_silo` membacanya
+untuk estimasi; tidak menjalankan layanan tulis dan melakukan rollback.
+
+Rumus jumlah bongkar karung penuh dipakai bersama melalui
+`jumlah_bongkar_broken`. Toleransi 0,5 kg dan presisi simpan lama tetap ada;
+rincian hasil API membaca jumlah baris `BrokenKeSilo` yang benar-benar
+tersimpan, bukan memakai pratinjau sebagai bukti simpan.
+
+Batas lama yang BELUM diperbaiki: pemindahan lintas sumber melakukan commit
+per sumber; kegagalan sumber berikutnya dapat menyisakan sumber sebelumnya
+sudah tercatat. Aksi broken ini juga belum memiliki undo pemindahan di
+layanan undo (label audit tersedia, bukan bukti dukungan pembatalan).
+Perapian tidak menambah idempotensi atau mengubah batas transaksi itu.
+UI menahan kirim ulang jika hasil jaringan belum pasti dan mengarahkan
+pemeriksaan Stok/riwayat; jangan menjanjikan retry aman atau rollback total.

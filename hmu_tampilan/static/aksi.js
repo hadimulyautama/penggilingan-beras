@@ -173,6 +173,7 @@
           .test(String(j.detail || ""))) {
         if (window.PINDAH && !lembarSedangTerbuka()) { PINDAH.lupakan(); PINDAH.segarkan(); }
       }
+      if(url === "/api/actions/masukkan-broken-silo" && r.status >= 500) throw new TypeError("Hasil pemindahan broken belum terkonfirmasi");
       throw (j.detail || ("Gagal disimpan (HTTP " + r.status + ")"));
     }
     /* Sesuatu baru saja tercatat: halaman yang tersimpan di memori kini
@@ -596,10 +597,12 @@
     var tambahSosoh = a.konteks_tambah_sosoh;
     var unitTransferPk = a.unit_transfer_pk;
     var masukkanSilo = a.konteks_masukkan_silo;
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo;
+    var masukkanBroken = a.konteks_broken_silo;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo || masukkanBroken;
     var labelSimpan = (tambahGiling || tambahSosoh) ? "Tambahkan silo" : (bebaskanGiling || bebaskanSosoh) ? "Periksa sisa silo" : (selesaiGiling || selesaiSosoh) ? "Periksa penyelesaian" : mulaiSosoh ? "Mulai penyosohan" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     if (unitTransferPk) labelSimpan = unitTransferPk === 'minta' ? 'Minta PK' : 'Catat pengiriman';
     if (masukkanSilo) labelSimpan = 'Masukkan ke silo';
+    if (masukkanBroken) labelSimpan = 'Masukkan broken ke silo';
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
     lembar.classList.toggle("lembar--kadar", !!formAir);
@@ -615,6 +618,7 @@
     lembar.classList.toggle("lembar--tambah-sosoh", !!tambahSosoh);
     lembar.classList.toggle('lembar--unit-pk', !!unitTransferPk);
     lembar.classList.toggle('lembar--masukkan-silo', !!masukkanSilo);
+    lembar.classList.toggle('lembar--broken-silo', !!masukkanBroken);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
@@ -710,6 +714,35 @@
       $('mi-all').onclick=function(){if(!dataMasukkan||!dataMasukkan.sumber)return;var s=dataMasukkan.sumber,n=s.bentuk==='karung'?'jumlah_karung':'berat_kg';$('f_'+n).value=String(s.bentuk==='karung'?s.karung:s.saldo_kg);$('f_'+n).dispatchEvent(new Event('input',{bubbles:true}));$('f_'+n).focus();};
       ['jumlah_karung','berat_kg','jumlah_karung_partai'].forEach(function(n){medanMasukkan(n,false,false);});
       lembar._masukkan=perbaruiMasukkan;lembar.addEventListener('input',perbaruiMasukkan);lembar.addEventListener('change',perbaruiMasukkan);gambarMasukkan(null);
+    }
+
+    var nomorBroken=0,timerBroken,risikoBroken=false;
+    function barisBroken(s){return '<article class="bk-source"><strong>'+esc(s.kode)+'</strong>'+pasanganMasukkan('Curah tercatat',kgMasukkan(s.curah))+pasanganMasukkan('Hasil mesin belum dialokasikan',kgMasukkan(s.mesin))+(s.packs||[]).map(function(p){return pasanganMasukkan(p.n+' karung × '+kgMasukkan(p.ukuran),kgMasukkan(p.kg));}).join('')+'</article>';}
+    function gambarBroken(d){
+      if(!d||!d.saldo){$('bk-stock').textContent='Pilih pemilik untuk melihat stok broken yang tersedia.';$('bk-preview').innerHTML='<h3>Rencana pemindahan</h3><p>Pilih pemilik stok broken terlebih dahulu.</p>';return;}
+      var stockOpenBk=!!lembar.querySelector('#bk-stock details[open]'),planOpenBk=!!lembar.querySelector('#bk-preview details[open]');
+      var s=d.saldo,p=d.rencana,locked=$('t_proses');if(locked)locked.textContent=d.pemilik+' · '+d.cakupan;
+      $('bk-stock').innerHTML='<div class="mi-stock-head"><div><strong>Broken · '+esc(d.pemilik)+'</strong><small>'+esc(d.cakupan)+' · Gudang 2</small></div><span class="mi-badge">Tersedia</span></div><div class="mi-stock-values"><div><span>Total broken tersedia</span><strong>'+esc(kgMasukkan(s.total))+'</strong><small>Curah, hasil mesin, dan kemasan</small></div><div><span>Stok berkarung</span><strong>'+esc(s.karung+' karung')+'</strong><small>'+esc(kgMasukkan(s.kemasan))+' dalam kemasan</small></div></div>'+pasanganMasukkan('Curah tercatat',kgMasukkan(s.curah))+pasanganMasukkan('Hasil mesin belum dialokasikan',kgMasukkan(s.mesin))+'<details><summary>Rincian sumber dan ukuran karung</summary>'+d.sumber.map(barisBroken).join('')+'</details>';
+      $('bk-preview').innerHTML='<h3>Rencana pemindahan</h3>'+pasanganMasukkan('Masuk ke silo',p?kgMasukkan(p.kg):'Menunggu berat yang valid',true)+pasanganMasukkan('Silo tujuan',p&&p.silo?p.silo:'Belum dipilih')+(p?pasanganMasukkan('Dari curah tercatat',kgMasukkan(p.curah))+pasanganMasukkan('Dari hasil mesin',kgMasukkan(p.mesin))+pasanganMasukkan('Dari isi karung',kgMasukkan(p.isi_karung))+(p.karung?'<p class="mi-warning"><strong>'+esc(p.karung+' karung dibongkar · '+kgMasukkan(p.bongkar_kg))+'</strong><br>'+esc(kgMasukkan(p.kelebihan))+' tetap menjadi stok curah. Karung kosong tidak ditambahkan ke Stok Karung.</p>':'<p class="mi-note">Tidak perlu membongkar karung.</p>')+'<div class="bk-balance"><h4>Sisa setelah dipindahkan</h4>'+pasanganMasukkan('Curah tercatat',kgMasukkan(p.sisa.curah))+pasanganMasukkan('Hasil mesin belum dialokasikan',kgMasukkan(p.sisa.mesin))+pasanganMasukkan('Karung utuh',p.sisa.karung+' karung · '+kgMasukkan(p.sisa.kemasan))+pasanganMasukkan('Total stok broken',kgMasukkan(p.sisa.total),true)+'</div><details><summary>Urutan sumber yang dipakai</summary>'+p.urutan.map(function(u){return '<article class="bk-source"><strong>'+esc(u.kode+' · '+kgMasukkan(u.kg))+'</strong>'+pasanganMasukkan('Curah',kgMasukkan(u.curah))+pasanganMasukkan('Hasil mesin',kgMasukkan(u.mesin))+pasanganMasukkan('Isi karung',kgMasukkan(u.isi_karung))+'</article>';}).join('')+'</details>':'')+(d.pesan?'<p class="mi-warning">'+esc(d.pesan)+'</p>':'')+(d.proses_penerima.length?'<p class="mi-note">Silo digunakan '+esc(d.proses_penerima.join(', '))+'. Tambahan bahan tetap diperiksa terhadap proses sumber dan pemilik saat disimpan.</p>':'')+'<p class="mi-note">Perkiraan sebelum simpan. Alokasi diperiksa ulang saat disimpan; belum ada pembukuan atau stok yang dipindahkan.</p>';
+      if(stockOpenBk&&lembar.querySelector('#bk-stock details'))lembar.querySelector('#bk-stock details').open=true;if(planOpenBk&&lembar.querySelector('#bk-preview details'))lembar.querySelector('#bk-preview details').open=true;
+      if(p&&p.diminta_kg!==p.kg)$('bk-preview').insertAdjacentHTML('beforeend','<p class="mi-note">Isian '+esc(kgMasukkan(p.diminta_kg))+'; rencana mengikuti toleransi lama per baris. Hasil aktual ditampilkan setelah simpan.</p>');
+    }
+    function perbaruiBroken(e){
+      if(!masukkanBroken)return;
+      if(e&&e.target.dataset.name){lembar.querySelectorAll('.formulir-salah').forEach(function(x){x.remove();});lembar.querySelectorAll('[aria-invalid="true"]').forEach(function(x){x.removeAttribute('aria-invalid');x.removeAttribute('aria-describedby');});var errBk=lembar.querySelector('.formulir-gagal');if(errBk&&/^Periksa \d+ isian/.test(errBk.textContent))errBk.remove();}
+      if(e&&e.target.dataset.name==='proses'){$('f_berat_kg').value='';$('f_silo').value='';$('bk-stock').textContent='Memuat saldo pemilik…';}
+      clearTimeout(timerBroken);var n=++nomorBroken,b=lembar.querySelector('.lembar__isi'),q=['proses','silo','berat_kg'].map(function(k){return k+'='+encodeURIComponent(nilaiMedan(k));}).join('&');
+      if(!nilaiMedan('proses')){gambarBroken(null);return;}
+      timerBroken=setTimeout(function(){ambil(masukkanBroken.source+'?'+q).then(function(d){if(n!==nomorBroken||!lembar.open||lembar.querySelector('.lembar__isi')!==b)return;gambarBroken(d);}).catch(function(){if(n===nomorBroken&&lembar.querySelector('.lembar__isi')===b)$('bk-preview').textContent='Ringkasan belum tersedia. Isian tetap utuh; angka tidak dianggap nol.';});},150);
+    }
+    if(lembar._brokenSilo){lembar.removeEventListener('input',lembar._brokenSilo);lembar.removeEventListener('change',lembar._brokenSilo);}
+    if(masukkanBroken){
+      var gBk=lembar.querySelector('.grup');(a.fields||[]).forEach(function(f){var i=gBk.querySelector('[data-name="'+f.name+'"]'),k=i.type==='hidden'?i.previousElementSibling:null,l=gBk.querySelector('label[for="f_'+f.name+'"]'),w=document.createElement('div');w.className='hasil-field';gBk.insertBefore(w,l||k||i);if(l)w.appendChild(l);if(k){w.insertAdjacentHTML('beforeend','<span class="lbl">'+esc(f.label)+'</span>');w.appendChild(k);}w.appendChild(i);});
+      var layBk=document.createElement('div');layBk.className='mi-layout';gBk.before(layBk);layBk.appendChild(gBk);layBk.insertAdjacentHTML('beforebegin','<p class="mi-hint">Isi berat broken yang benar-benar masuk silo. Sumber diambil otomatis menurut urutan stok.</p>');
+      var stockBk=document.createElement('section');stockBk.id='bk-stock';stockBk.className='mi-stock';stockBk.setAttribute('aria-label','Saldo broken tersedia');gBk.querySelector('.hasil-field').after(stockBk);
+      var fldBk=$('f_berat_kg').closest('.hasil-field'),siloBk=$('f_silo').closest('.hasil-field');stockBk.after(fldBk);var countBk=document.createElement('div');countBk.className='mi-count';$('f_berat_kg').before(countBk);countBk.appendChild($('f_berat_kg'));countBk.insertAdjacentHTML('beforeend','<span>kg</span>');siloBk.insertAdjacentHTML('afterend','<p class="mi-note">Pada tiap proses sumber, curah dan hasil mesin digunakan sebelum karung dibongkar. Hasil serta proses tidak ditutup.</p>');
+      var sideBk=document.createElement('aside');sideBk.id='bk-preview';sideBk.className='mi-result-preview';sideBk.setAttribute('aria-live','polite');layBk.appendChild(sideBk);gambarBroken(null);
+      lembar._brokenSilo=perbaruiBroken;lembar.addEventListener('input',perbaruiBroken);lembar.addEventListener('change',perbaruiBroken);perbaruiBroken();
     }
 
     function aturUnitPk() {
@@ -2224,6 +2257,7 @@
         perbaruiTs();
             perbaruiRingkasanAir();
             perbaruiMasukkan();
+            perbaruiBroken();
             return;
           }
           // Detail tetap menunjuk proses asal meskipun proses itu baru saja
@@ -2345,6 +2379,7 @@
         perbaruiTs();
         perbaruiRingkasanAir();
         perbaruiMasukkan();
+        perbaruiBroken();
         ambilAcuanJeda();
         aturWaktuJeda();
       }).catch(function () {});
@@ -2530,6 +2565,7 @@
 
     async function simpan(isi, v, tbl) {
       if ((selesaiSosoh && (lembar._menyimpan || risikoSs)) || (selesaiGiling && (lembar._menyimpan || risikoSg)) || (bebaskanGiling && (lembar._menyimpan || risikoBs)) || (bebaskanSosoh && (lembar._menyimpan || risikoBsp)) || (tambahSosoh && (lembar._menyimpan || risikoTs))) return;
+      if(masukkanBroken && (lembar._menyimpan || risikoBroken)) return;
       var sebelumSelesai = dataSelesai;
       lembar._menyimpan = true;
       var grup = lembar.querySelector(".grup");
@@ -2585,6 +2621,7 @@
             utama = baris.filter(function (b) { return !/^⚠/.test(b); }).join("\n");
           }
           kabar(utama, "ok", !!formKhusus);
+          if(masukkanBroken && hasil.rincian_broken){var nyataBk=hasil.rincian_broken,receiptBk=document.createElement('div');receiptBk.className='mi-receipt';receiptBk.innerHTML='<strong>Broken tersimpan</strong>'+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataBk.kg))+pasanganMasukkan('Silo tujuan',nyataBk.silo)+pasanganMasukkan('Dibongkar dari kemasan',kgMasukkan(nyataBk.dibongkar_kg))+(nyataBk.setelah?pasanganMasukkan('Sisa curah',kgMasukkan(nyataBk.setelah.saldo.curah))+pasanganMasukkan('Sisa hasil mesin',kgMasukkan(nyataBk.setelah.saldo.mesin))+pasanganMasukkan('Kemasan tersisa',nyataBk.setelah.saldo.karung+' karung · '+kgMasukkan(nyataBk.setelah.saldo.kemasan))+pasanganMasukkan('Total sisa stok',kgMasukkan(nyataBk.setelah.saldo.total)):'<p>Saldo terbaru belum terbaca; periksa Stok sebelum tindakan berikutnya.</p>')+'<details><summary>Catatan pemindahan</summary>'+esc(nyataBk.kode.join(', '))+'</details>';$('kabar').appendChild(receiptBk);}
           if(masukkanSilo&&hasil.rincian_masukkan){var nyataMi=hasil.rincian_masukkan,catatanMi=document.createElement('div');catatanMi.className='mi-receipt';catatanMi.innerHTML='<strong>Hasil tersimpan · '+esc(nyataMi.kode_pindah)+'</strong>'+pasanganMasukkan('Bentuk sumber',nyataMi.bentuk==='karung'?'Berkarung':nyataMi.bentuk==='curah'?'Curah':'Data lama')+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataMi.berat_masuk,nyataMi.bobot_final))+(nyataMi.karung_masuk!=null?pasanganMasukkan('Karung masuk',nyataMi.karung_masuk+' karung'):'')+pasanganMasukkan('Silo tujuan',nyataMi.silo)+pasanganMasukkan('Sisa berat sumber',kgMasukkan(nyataMi.sisa_kg,nyataMi.bobot_final))+(nyataMi.sisa_karung!=null?pasanganMasukkan('Sisa karung',nyataMi.sisa_karung+' karung'):'')+(nyataMi.sejawat||[]).map(function(s){return pasanganMasukkan('Sumber '+s.bentuk+' tetap tersedia',kgMasukkan(s.saldo_kg,s.bobot_final));}).join('');$('kabar').appendChild(catatanMi);}
           if(a.id==='selesai_penyosohan' && kembaliSelesaiSosoh){var draftSs=kembaliSelesaiSosoh.draft;bukaAksi('akhiri_penyosohan',draftSs);}
           if(a.id==='tutup_silo_giling' && kembaliSelesaiGiling){var draftSg=kembaliSelesaiGiling.draft;bukaAksi('selesai_giling',draftSg);}
@@ -2688,6 +2725,12 @@
               info.textContent=d.terbuka?'Sumber masih terbuka. Kembali periksa isian dan minta ringkasan baru sebelum konfirmasi.':'Siklus tidak lagi terbuka. Periksa catatan sisa di detail terbaru; jangan kirim ulang.';var link=document.createElement('a');link.className='btn';link.textContent='Buka detail terbaru';link.href=d.detail;info.after(link);
             }catch(_){info.textContent='Keadaan terbaru belum dapat dibaca. Ringkasan dan isian tetap utuh; tidak ada pengiriman ulang otomatis.';}finally{cekBs.disabled=false;}};
           lembar.querySelector('.lembar__konfirmasi').appendChild(cekBs);
+        }
+        if(masukkanBroken){pesanGagal='Pemindahan belum berhasil sepenuhnya. '+String(e)+' Periksa saldo dan riwayat sebelum mencoba kembali; isian tetap utuh.';perbaruiBroken();}
+        if(masukkanBroken && (e instanceof TypeError || /Sesi berubah ketika/.test(String(e)))){
+          risikoBroken=true;if(tbl){tbl.disabled=true;tbl.textContent='Perlu diperiksa';}
+          pesanGagal='Pemindahan belum terkonfirmasi. Jangan kirim ulang sebelum memeriksa Stok dan riwayat; layanan ini belum menjamin retry idempoten. Isian tetap utuh.';
+          var cekBroken=document.createElement('a');cekBroken.className='btn';cekBroken.href='/stok';cekBroken.textContent='Buka stok dan riwayat broken';lembar.querySelector('.hasil-actions').before(cekBroken);
         }
         salahFormulir(lembar, pesanGagal);
       }

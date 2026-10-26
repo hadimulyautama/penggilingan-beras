@@ -914,8 +914,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # kurang — lihat `gudang2.service.masukkan_broken_ke_silo`.
             {"id": "masukkan_broken_silo", "label": "📤 Masukkan broken ke silo",
              "post": "/api/actions/masukkan-broken-silo",
-             "hint": "Sumbernya otomatis: curah dulu, lalu karung dibongkar bila "
-                     "kurang — sisanya tetap jadi curah di stok.",
+             "konteks_broken_silo": {"source": "/api/actions/rincian-broken-silo", "proses": "proses"},
+             "hint": "Isi berat broken yang benar-benar masuk silo. Sumber diambil otomatis menurut urutan stok.",
              "fields": [
                  {"name": "proses", "label": "Pemilik stok broken", "type": "remote",
                   "source": "/api/actions/broken-proses-tersedia",
@@ -926,7 +926,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "auto_satu": True,
                   "kosong": "Belum ada silo broken. Tambahkan di Pengaturan → Alat."},
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
-                  "type": "number"},
+                  "type": "number", "wajib": True},
              ]},
             {"id": "masukkan_menir_silo", "label": "📤 Masukkan menir ke silo",
              "post": "/api/actions/masukkan-menir-silo",
@@ -5515,6 +5515,23 @@ async def act_masukkan_reject_silo(req: MasukkanHasilSampingSiloReq,
     return await _act_masukkan_hasil_samping(req, "reject", user)
 
 
+@router.get("/actions/rincian-broken-silo")
+async def rincian_broken_silo(proses: str='', berat_kg: str='', silo: str='',
+                              user: User = Depends(pengguna_aksi)):
+    await _izin_masukkan_silo(user)
+    from app.services.rencana_broken_silo import rincian
+    from app.penggilingan.gudang2.service import Gudang2Error
+    if not proses:return {'sumber':[], 'saldo':None, 'rencana':None, 'pesan':''}
+    async with SessionLocal() as db:
+        try:
+            dasar=await rincian(db,proses)
+            if berat_kg.strip():
+                try:return await rincian(db,proses,berat=berat_kg.replace(',','.'),silo=silo)
+                except (ValueError,Gudang2Error) as e:dasar['pesan']=str(e)
+            return dasar
+        except (ValueError,Gudang2Error) as e:raise HTTPException(400,str(e)) from None
+
+
 @router.post("/actions/masukkan-broken-silo")
 async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
                                    user: User = Depends(pengguna_aksi)) -> dict:
@@ -5556,9 +5573,22 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
             raise _err(e, "Gagal memasukkan broken ke silo.")
     ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"
            .replace(",", ".") if r.dibongkar_dari_karung_kg else "")
-    return {"ok": True,
+    hasil = {"ok": True,
             "pesan": f"✓ {r.moved_kg:,.0f} kg masuk Silo {r.nama_silo}{ekor}."
-                     .replace(",", ".")}
+                     .replace(",", "."),
+            "rincian_broken": {"kg": None, "diminta_kg": r.moved_kg, "silo": r.nama_silo,
+                "dibongkar_kg": r.dibongkar_dari_karung_kg, "kode": r.kodes}}
+    try:
+        from app.services.rencana_broken_silo import rincian
+        from app.models import BrokenKeSilo
+        from sqlalchemy import select,func
+        async with SessionLocal() as db:
+            hasil['rincian_broken']['kg'] = float(await db.scalar(select(func.coalesce(func.sum(BrokenKeSilo.berat_kg),0)).where(BrokenKeSilo.kode_pindah.in_(r.kodes))))
+            hasil['rincian_broken']['setelah'] = await rincian(db,pilihan)
+    except Exception:
+        log.exception("Saldo broken sesudah simpan belum terbaca")
+        hasil['rincian_broken']['saldo_belum_terbaca'] = True
+    return hasil
 
 
 @router.get("/actions/silo-beras-tujuan-g2")
