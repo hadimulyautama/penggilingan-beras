@@ -3982,3 +3982,36 @@ body.padiflow-ui .lembar--broken-silo .mi-count .fld{font-size:1.5rem;min-height
 .lembar--broken-silo .bk-balance{gap:8px;padding-top:10px;margin-top:2px}
 .lembar--broken-silo .bk-pending{border-block:1px solid var(--garis);padding-block:10px}
 .lembar--broken-silo .bk-pending strong{color:var(--redup);font-weight:500}
+
+/* Beras ke silo tetap empat field; saldo dan FIFO hanya informasi. */
+body.padiflow-ui .lembar--beras-silo .lembar__isi{max-width:1000px}
+.lembar--beras-silo .mi-hint{font-size:.85rem;color:var(--redup);margin:0 0 20px;line-height:1.6}
+.lembar--beras-silo .mi-layout{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:28px;align-items:start}
+.lembar--beras-silo .hasil-field[hidden],.lembar--beras-silo .mi-quantity-help[hidden]{display:none}
+.lembar--beras-silo .mi-stock{background:var(--panel-2);padding:16px;border-radius:11px;display:grid;gap:12px;min-width:0;margin:0 0 20px;overflow-wrap:anywhere}
+.lembar--beras-silo .mi-stock-head{display:flex;align-items:start;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem}
+.lembar--beras-silo .mi-stock-head small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:4px}
+.lembar--beras-silo .mi-badge{background:var(--panel);border:1px solid var(--garis);border-radius:6px;padding:3px 8px;font-size:.72rem;white-space:normal}
+.lembar--beras-silo .mi-stock-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.lembar--beras-silo .mi-stock-values>div{display:grid;gap:6px;min-width:0}.lembar--beras-silo .mi-stock-values span,.lembar--beras-silo .mi-stock-values small{color:var(--redup);font-size:.74rem;line-height:1.6}
+.lembar--beras-silo .mi-stock-values strong{font-size:1.2rem;font-weight:550;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.lembar--beras-silo .mi-stock details{border-top:1px solid var(--garis);padding-top:10px;font-size:.8rem}.lembar--beras-silo summary{min-height:34px;color:var(--aman);cursor:pointer}
+.lembar--beras-silo .mi-count{display:flex;align-items:center;gap:12px;min-width:0}.lembar--beras-silo .mi-count span{flex-shrink:0;color:var(--redup);font-size:.85rem}
+body.padiflow-ui .lembar--beras-silo .mi-count .fld{font-size:1.5rem;min-height:54px;font-weight:550;font-variant-numeric:tabular-nums}
+.lembar--beras-silo .mi-note{margin:0;color:var(--redup);font-size:.77rem;line-height:1.7;overflow-wrap:anywhere}
+.lembar--beras-silo .mi-quantity-help{display:grid;gap:9px;margin:0 0 20px}.lembar--beras-silo #mi-all{justify-self:start;text-align:left;white-space:normal;color:var(--aman);font-size:.8rem;min-height:40px}
+.lembar--beras-silo .mi-result-preview{display:grid;gap:8px;min-width:0;border-left:1px solid var(--garis);padding-left:25px;font-size:.85rem;overflow-wrap:anywhere}
+.lembar--beras-silo .mi-result-preview h3{font-size:1rem;margin:0 0 3px}.lembar--beras-silo .mi-pair{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:.8rem;min-width:0}.lembar--beras-silo .mi-pair span{color:var(--redup)}.lembar--beras-silo .mi-pair strong{text-align:right;font-variant-numeric:tabular-nums;max-width:58%;overflow-wrap:anywhere;font-weight:550}
+.lembar--beras-silo .mi-total{border-block:1px solid var(--garis);padding-block:10px}.lembar--beras-silo .mi-total strong{font-size:1.2rem;color:var(--aman)}
+.lembar--beras-silo .mi-warning{padding:11px 12px;border:0;border-radius:9px;background:var(--hati-muda);color:var(--hati);font-size:.8rem;line-height:1.5;margin:0}.lembar--beras-silo .hasil-actions{margin-top:22px}
+@media(max-width:680px){.lembar--beras-silo .mi-layout{grid-template-columns:minmax(0,1fr);gap:5px}.lembar--beras-silo .mi-result-preview{border-left:0;padding-left:0;border-top:1px solid var(--garis);padding-top:18px}.lembar--beras-silo .mi-stock{padding:13px}.lembar--beras-silo .mi-stock-values strong{font-size:1.08rem}}
+
+.lembar--beras-silo .mi-source-title{font-size:.85rem;line-height:1.6;margin:8px 0 14px;overflow-wrap:anywhere}
+.lembar--beras-silo .br-source,.lembar--beras-silo .br-balance{display:grid;gap:8px;border-top:1px solid var(--garis);padding-top:10px;margin-top:10px}
+.lembar--beras-silo .br-source small{color:var(--redup);font-size:.77rem;overflow-wrap:anywhere}
+.lembar--beras-silo h4{margin:0}.lembar--beras-silo .br-pending{border-block:1px solid var(--garis);padding-block:10px}.lembar--beras-silo .br-pending strong{font-weight:500;color:var(--redup)}
+.lembar--beras-silo .mi-count{flex-wrap:wrap}.lembar--beras-silo .mi-count>.formulir-salah{flex-basis:100%;order:3;margin:0}body.padiflow-ui .lembar--beras-silo .mi-count .fld{width:0;flex:1 1 0}
+.lembar--beras-silo .mi-stock small{display:block}.lembar--beras-silo .hasil-field>.mi-note{margin-top:8px}
+@media(max-width:450px){.lembar--beras-silo .mi-stock-values{grid-template-columns:minmax(0,1fr)}}
+
+.lembar--beras-silo .mi-note.mi-inline-error{color:var(--bahaya)}

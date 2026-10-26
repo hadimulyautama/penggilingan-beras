@@ -598,11 +598,13 @@
     var unitTransferPk = a.unit_transfer_pk;
     var masukkanSilo = a.konteks_masukkan_silo;
     var masukkanBroken = a.konteks_broken_silo;
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo || masukkanBroken;
+    var masukkanBeras = a.konteks_beras_silo;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo || masukkanBroken || masukkanBeras;
     var labelSimpan = (tambahGiling || tambahSosoh) ? "Tambahkan silo" : (bebaskanGiling || bebaskanSosoh) ? "Periksa sisa silo" : (selesaiGiling || selesaiSosoh) ? "Periksa penyelesaian" : mulaiSosoh ? "Mulai penyosohan" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     if (unitTransferPk) labelSimpan = unitTransferPk === 'minta' ? 'Minta PK' : 'Catat pengiriman';
     if (masukkanSilo) labelSimpan = 'Masukkan ke silo';
     if (masukkanBroken) labelSimpan = 'Masukkan broken ke silo';
+    if (masukkanBeras) labelSimpan = 'Masukkan beras ke silo';
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
     lembar.classList.toggle("lembar--kadar", !!formAir);
@@ -619,6 +621,7 @@
     lembar.classList.toggle('lembar--unit-pk', !!unitTransferPk);
     lembar.classList.toggle('lembar--masukkan-silo', !!masukkanSilo);
     lembar.classList.toggle('lembar--broken-silo', !!masukkanBroken);
+    lembar.classList.toggle('lembar--beras-silo', !!masukkanBeras);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
@@ -743,6 +746,37 @@
       var fldBk=$('f_berat_kg').closest('.hasil-field'),siloBk=$('f_silo').closest('.hasil-field');stockBk.after(fldBk);var countBk=document.createElement('div');countBk.className='mi-count';$('f_berat_kg').before(countBk);countBk.appendChild($('f_berat_kg'));countBk.insertAdjacentHTML('beforeend','<span>kg</span>');siloBk.insertAdjacentHTML('afterend','<p class="mi-note">Pada tiap proses sumber, curah dan hasil mesin digunakan sebelum karung dibongkar. Hasil serta proses tidak ditutup.</p>');
       var sideBk=document.createElement('aside');sideBk.id='bk-preview';sideBk.className='mi-result-preview';sideBk.setAttribute('aria-live','polite');layBk.appendChild(sideBk);gambarBroken(null);
       lembar._brokenSilo=perbaruiBroken;lembar.addEventListener('input',perbaruiBroken);lembar.addEventListener('change',perbaruiBroken);perbaruiBroken();
+    }
+
+    var nomorBeras=0,timerBeras,risikoBeras=false;
+    function barisAsalBeras(r){return '<article class="br-source"><strong>'+esc(r.kode)+'</strong><small>'+esc(r.asal)+(r.stok_id!=null?' · Stok #'+esc(r.stok_id):'')+'</small>'+pasanganMasukkan('Tersedia',kgMasukkan(r.kg))+(r.karung!=null?pasanganMasukkan('Karung',r.karung+' karung'):'')+'</article>';}
+    function gambarBeras(d){
+      if(!d){$('br-padanan').classList.remove('mi-inline-error');$('br-stock').textContent='Pilih jenis dan sumber stok untuk melihat saldo tersedia.';$('br-preview').innerHTML='<h3>Rencana pemindahan</h3><p class="mi-note">Pilih sumber stok beras terlebih dahulu.</p>';$('br-padanan').textContent='Input tetap dalam kg.';return;}
+      var stockOpen=!!lembar.querySelector('#br-stock details[open]'),planOpen=!!lembar.querySelector('#br-preview details[open]'),p=d.rencana,kemasan=d.bentuk==='kemasan';
+      var kemasanLabel=kemasan?[d.merek,d.bahan,kgMasukkan(d.ukuran)].join(' · '):'Curah · jumlah karung tidak berlaku';
+      $('br-stock').innerHTML='<div class="mi-stock-head"><div><strong>'+esc(d.jenis_label)+'</strong><small>'+esc(d.pemilik)+' · Gudang 2</small></div><span class="mi-badge">'+(kemasan?'Kemasan':'Curah')+'</span></div><p class="mi-source-title">'+esc(kemasanLabel)+'</p><div class="mi-stock-values"><div><span>Berat sumber tersedia</span><strong>'+esc(kgMasukkan(d.saldo_kg))+'</strong><small>Saldo sumber yang dipilih</small></div><div><span>Jumlah karung tersedia</span><strong>'+esc(kemasan?d.karung+' karung':'Tidak berlaku')+'</strong><small>'+(kemasan?'Hanya merek dan kemasan ini':'Stok curah tetap dihitung dalam kg')+'</small></div></div><details><summary>Asal stok · urutan FIFO</summary>'+d.fifo.map(barisAsalBeras).join('')+(d.fifo.length?'':'<p class="mi-note">Tidak ada saldo sumber yang tersedia.</p>')+'</details>';
+      $('br-padanan').classList.toggle('mi-inline-error',!!d.pesan);$('br-padanan').textContent=d.pesan?d.pesan:p&&kemasan?'Setara '+p.karung+' karung × '+kgMasukkan(d.ukuran)+'.':kemasan?'Isi berat sesuai kelipatan '+kgMasukkan(d.ukuran)+'.':'Input curah dalam kg. Kemasan tidak diambil untuk menutup kekurangan.';
+      $('br-preview').innerHTML='<h3>Rencana pemindahan</h3>'+(p?pasanganMasukkan('Berat masuk silo',kgMasukkan(p.kg),true):'<div class="br-pending">'+pasanganMasukkan('Berat masuk silo','Menunggu berat yang valid')+'</div>')+(p&&kemasan?pasanganMasukkan('Karung dibongkar',p.karung+' karung'):'')+pasanganMasukkan('Silo tujuan',nilaiMedan('silo')||'Belum dipilih')+(p?'<div class="br-balance"><h4>Sisa sumber setelah dipindahkan</h4>'+pasanganMasukkan('Berat tersedia',kgMasukkan(p.sisa_kg),true)+(kemasan?pasanganMasukkan('Karung utuh',p.sisa_karung+' karung'):'')+'</div>':'')+'<p class="mi-note">'+(kemasan?'Seluruh isi karung yang dibongkar masuk silo. ':'')+'Stok kemasan lain dan curah yang tidak dipilih tetap tersedia.</p>'+(p?'<details><summary>Rincian sumber yang dipakai</summary>'+p.fifo.map(function(r){return '<article class="br-source"><strong>'+esc(r.kode)+'</strong><small>'+esc(r.asal)+(r.stok_id!=null?' · Stok #'+esc(r.stok_id):'')+'</small>'+pasanganMasukkan('Masuk silo',kgMasukkan(r.kg))+(r.karung!=null?pasanganMasukkan('Karung',r.karung+' karung'):'')+'</article>';}).join('')+'</details>':'')+(d.peringatan_tujuan?'<p class="mi-warning">'+esc(d.peringatan_tujuan)+'</p>':'')+(d.proses_penerima.length?'<p class="mi-warning">Silo sedang dipakai '+esc(d.proses_penerima.map(function(x){return x.kode;}).join(', '))+'. '+(d.jasa_id!=null?'Beras jasa tidak dapat ditambahkan ke proses yang berjalan.':'Tambahan bahan dan seluruh proses asal diperiksa kembali saat simpan.')+'</p>':'')+'<p class="mi-note">Pemilik: '+esc(d.pemilik)+'. Perkiraan ini belum memindahkan stok.</p>';
+      if(stockOpen&&lembar.querySelector('#br-stock details'))lembar.querySelector('#br-stock details').open=true;if(planOpen&&lembar.querySelector('#br-preview details'))lembar.querySelector('#br-preview details').open=true;
+    }
+    function perbaruiBeras(e){
+      if(!masukkanBeras)return;
+      var nama=e&&e.target&&e.target.dataset.name;
+      if(nama){lembar.querySelectorAll('.formulir-salah').forEach(function(x){x.remove();});lembar.querySelectorAll('[aria-invalid="true"]').forEach(function(x){x.removeAttribute('aria-invalid');x.removeAttribute('aria-describedby');});var err=lembar.querySelector('.formulir-gagal');if(err&&!risikoBeras)err.remove();}
+      if(nama==='jenis'||nama==='sumber_stok'){$('f_berat_kg').value='';if(nama==='jenis'&&$('f_sumber_stok'))$('f_sumber_stok').value='';$('br-stock').textContent='Memuat saldo sumber terpilih…';$('br-preview').textContent='Memuat rencana pemindahan…';}
+      clearTimeout(timerBeras);var n=++nomorBeras,b=lembar.querySelector('.lembar__isi');
+      if(!nilaiMedan('jenis')||!nilaiMedan('sumber_stok')){gambarBeras(null);return;}
+      var q=['jenis','sumber_stok','berat_kg','silo'].map(function(k){var v=nilaiMedan(k);return k+'='+encodeURIComponent(k==='berat_kg'?v.replace(',','.'):v);}).join('&');
+      timerBeras=setTimeout(function(){ambil(masukkanBeras.source+'?'+q).then(function(d){if(n!==nomorBeras||!lembar.open||lembar.querySelector('.lembar__isi')!==b)return;gambarBeras(d);}).catch(function(){if(n===nomorBeras&&lembar.querySelector('.lembar__isi')===b)$('br-preview').textContent='Ringkasan belum tersedia. Isian tetap utuh; saldo tidak dianggap nol. Penyimpanan tetap diperiksa server.';});},150);
+    }
+    if(lembar._berasSilo){lembar.removeEventListener('input',lembar._berasSilo);lembar.removeEventListener('change',lembar._berasSilo);}
+    if(masukkanBeras){
+      var grupBr=lembar.querySelector('.grup');(a.fields||[]).forEach(function(f){var i=grupBr.querySelector('[data-name="'+f.name+'"]'),k=i.type==='hidden'?i.previousElementSibling:null,l=grupBr.querySelector('label[for="f_'+f.name+'"]'),w=document.createElement('div');w.className='hasil-field';grupBr.insertBefore(w,l||k||i);if(l)w.appendChild(l);if(k){w.insertAdjacentHTML('beforeend','<span class="lbl">'+esc(f.label)+'</span>');w.appendChild(k);}w.appendChild(i);});
+      var layBr=document.createElement('div');layBr.className='mi-layout';grupBr.before(layBr);layBr.appendChild(grupBr);layBr.insertAdjacentHTML('beforebegin','<p class="mi-hint">Pilih sumber beras, isi berat, lalu tentukan silo tujuan.</p>');
+      var stockBr=document.createElement('section');stockBr.id='br-stock';stockBr.className='mi-stock';stockBr.setAttribute('aria-label','Saldo sumber beras tersedia');grupBr.querySelector('[data-name="sumber_stok"]').closest('.hasil-field').after(stockBr);
+      var qtyBr=$('f_berat_kg'),unitBr=document.createElement('div');unitBr.className='mi-count';qtyBr.before(unitBr);unitBr.appendChild(qtyBr);unitBr.insertAdjacentHTML('beforeend','<span>kg</span>');unitBr.insertAdjacentHTML('afterend','<p class="mi-note" id="br-padanan" aria-live="polite"></p>');
+      var sideBr=document.createElement('aside');sideBr.id='br-preview';sideBr.className='mi-result-preview';sideBr.setAttribute('aria-live','polite');layBr.appendChild(sideBr);gambarBeras(null);
+      lembar._berasSilo=perbaruiBeras;lembar.addEventListener('input',perbaruiBeras);lembar.addEventListener('change',perbaruiBeras);perbaruiBeras();
     }
 
     function aturUnitPk() {
@@ -2258,6 +2292,7 @@
             perbaruiRingkasanAir();
             perbaruiMasukkan();
             perbaruiBroken();
+            perbaruiBeras();
             return;
           }
           // Detail tetap menunjuk proses asal meskipun proses itu baru saja
@@ -2380,6 +2415,7 @@
         perbaruiRingkasanAir();
         perbaruiMasukkan();
         perbaruiBroken();
+        perbaruiBeras();
         ambilAcuanJeda();
         aturWaktuJeda();
       }).catch(function () {});
@@ -2566,6 +2602,7 @@
     async function simpan(isi, v, tbl) {
       if ((selesaiSosoh && (lembar._menyimpan || risikoSs)) || (selesaiGiling && (lembar._menyimpan || risikoSg)) || (bebaskanGiling && (lembar._menyimpan || risikoBs)) || (bebaskanSosoh && (lembar._menyimpan || risikoBsp)) || (tambahSosoh && (lembar._menyimpan || risikoTs))) return;
       if(masukkanBroken && (lembar._menyimpan || risikoBroken)) return;
+      if(masukkanBeras && (lembar._menyimpan || risikoBeras)) return;
       var sebelumSelesai = dataSelesai;
       lembar._menyimpan = true;
       var grup = lembar.querySelector(".grup");
@@ -2621,6 +2658,7 @@
             utama = baris.filter(function (b) { return !/^⚠/.test(b); }).join("\n");
           }
           kabar(utama, "ok", !!formKhusus);
+          if(masukkanBeras&&hasil.rincian_beras){var nyataBr=hasil.rincian_beras,receiptBr=document.createElement('div');receiptBr.className='mi-receipt';receiptBr.innerHTML='<strong>Beras tersimpan</strong>'+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataBr.kg))+pasanganMasukkan('Silo tujuan',nyataBr.silo)+(nyataBr.karung?pasanganMasukkan('Karung dibongkar',nyataBr.karung+' karung'):'')+(nyataBr.setelah?pasanganMasukkan('Pemilik',nyataBr.setelah.pemilik)+pasanganMasukkan('Sisa sumber terpilih',kgMasukkan(nyataBr.setelah.saldo_kg))+(nyataBr.setelah.karung!=null?pasanganMasukkan('Sisa karung',nyataBr.setelah.karung+' karung'):''):'<p>Saldo terbaru belum terbaca; periksa Stok sebelum tindakan berikutnya.</p>')+'<details><summary>Catatan pemindahan</summary>'+esc(nyataBr.pemindahan.map(function(x){return x.kode;}).join(', '))+'</details>';$('kabar').appendChild(receiptBr);}
           if(masukkanBroken && hasil.rincian_broken){var nyataBk=hasil.rincian_broken,receiptBk=document.createElement('div');receiptBk.className='mi-receipt';receiptBk.innerHTML='<strong>Broken tersimpan</strong>'+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataBk.kg))+pasanganMasukkan('Silo tujuan',nyataBk.silo)+pasanganMasukkan('Dibongkar dari kemasan',kgMasukkan(nyataBk.dibongkar_kg))+(nyataBk.karung_dibongkar!=null?pasanganMasukkan('Karung utuh dibongkar',nyataBk.karung_dibongkar+' karung'):'')+(nyataBk.kemasan_dibongkar||[]).map(function(j){return pasanganMasukkan('Karung '+kgMasukkan(j.ukuran)+' tetap tersedia',j.saldo_karung+' lembar kosong');}).join('')+(nyataBk.setelah?pasanganMasukkan('Sisa curah',kgMasukkan(nyataBk.setelah.saldo.curah))+pasanganMasukkan('Sisa hasil mesin',kgMasukkan(nyataBk.setelah.saldo.mesin))+pasanganMasukkan('Kemasan tersisa',nyataBk.setelah.saldo.karung+' karung · '+kgMasukkan(nyataBk.setelah.saldo.kemasan))+pasanganMasukkan('Total sisa stok',kgMasukkan(nyataBk.setelah.saldo.total)):'<p>Saldo terbaru belum terbaca; periksa Stok sebelum tindakan berikutnya.</p>')+'<details><summary>Catatan pemindahan</summary>'+esc(nyataBk.kode.join(', '))+'</details>';$('kabar').appendChild(receiptBk);}
           if(masukkanSilo&&hasil.rincian_masukkan){var nyataMi=hasil.rincian_masukkan,catatanMi=document.createElement('div');catatanMi.className='mi-receipt';catatanMi.innerHTML='<strong>Hasil tersimpan · '+esc(nyataMi.kode_pindah)+'</strong>'+pasanganMasukkan('Bentuk sumber',nyataMi.bentuk==='karung'?'Berkarung':nyataMi.bentuk==='curah'?'Curah':'Data lama')+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataMi.berat_masuk,nyataMi.bobot_final))+(nyataMi.karung_masuk!=null?pasanganMasukkan('Karung masuk',nyataMi.karung_masuk+' karung'):'')+pasanganMasukkan('Silo tujuan',nyataMi.silo)+pasanganMasukkan('Sisa berat sumber',kgMasukkan(nyataMi.sisa_kg,nyataMi.bobot_final))+(nyataMi.sisa_karung!=null?pasanganMasukkan('Sisa karung',nyataMi.sisa_karung+' karung'):'')+(nyataMi.sejawat||[]).map(function(s){return pasanganMasukkan('Sumber '+s.bentuk+' tetap tersedia',kgMasukkan(s.saldo_kg,s.bobot_final));}).join('');$('kabar').appendChild(catatanMi);}
           if(a.id==='selesai_penyosohan' && kembaliSelesaiSosoh){var draftSs=kembaliSelesaiSosoh.draft;bukaAksi('akhiri_penyosohan',draftSs);}
@@ -2732,6 +2770,8 @@
           pesanGagal='Pemindahan belum terkonfirmasi. Jangan kirim ulang sebelum memeriksa Stok dan riwayat; layanan ini belum menjamin retry idempoten. Isian tetap utuh.';
           var cekBroken=document.createElement('a');cekBroken.className='btn';cekBroken.href='/stok';cekBroken.textContent='Buka stok dan riwayat broken';lembar.querySelector('.hasil-actions').before(cekBroken);
         }
+        if(masukkanBeras){perbaruiBeras();}
+        if(masukkanBeras&&(e instanceof TypeError||/Sesi berubah ketika/.test(String(e)))){risikoBeras=true;if(tbl){tbl.disabled=true;tbl.textContent='Perlu diperiksa';}pesanGagal='Pemindahan belum terkonfirmasi. Periksa Stok dan riwayat sebelum mencoba kembali; isian tetap utuh dan tidak dikirim ulang otomatis.';var cekBr=document.createElement('a');cekBr.className='btn';cekBr.href='/stok';cekBr.textContent='Buka stok dan riwayat beras';lembar.querySelector('.hasil-actions').before(cekBr);}
         salahFormulir(lembar, pesanGagal);
       }
     }
@@ -2800,6 +2840,7 @@
         if (unitTransferPk && nilai && el.dataset.name === 'jumlah_karung' && (!Number.isInteger(Number(nilai.replace(',', '.'))) || Number(nilai.replace(',', '.')) < 0)) pesan = 'Jumlah karung harus bilangan bulat, nol atau lebih.';
         if (unitTransferPk && nilai && el.dataset.name === 'berat_curah_kg' && Number(nilai.replace(',', '.')) < 0) pesan = 'Bobot curah tidak boleh negatif.';
         if(masukkanSilo&&nilai&&['jumlah_karung','jumlah_karung_partai'].indexOf(el.dataset.name)>=0&&(!Number.isInteger(Number(nilai.replace(',','.')))||Number(nilai.replace(',','.'))<=0))pesan='Isi jumlah karung bulat lebih dari nol.';
+        if(masukkanBeras&&nilai&&el.dataset.name==='berat_kg'&&Number(nilai.replace(',','.'))<=0)pesan='Isi berat lebih dari nol.';
         if(masukkanSilo&&nilai&&el.dataset.name==='berat_kg'&&Number(nilai.replace(',','.'))<=0)pesan='Isi berat lebih dari nol.';
         if (pesan) { kurang.push({el: el, pesan: pesan}); }
       });
