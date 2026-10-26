@@ -5585,6 +5585,20 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
         async with SessionLocal() as db:
             hasil['rincian_broken']['kg'] = float(await db.scalar(select(func.coalesce(func.sum(BrokenKeSilo.berat_kg),0)).where(BrokenKeSilo.kode_pindah.in_(r.kodes))))
             hasil['rincian_broken']['setelah'] = await rincian(db,pilihan)
+            from app.models import BrokenKarungDibongkar,ProductSku,PackageSize,Jasa
+            from app.penggilingan.inventory.packaging import hitung_stok_kemasan
+            jejak=[]
+            for rj,sku,size in (await db.execute(select(BrokenKarungDibongkar,ProductSku,PackageSize.ukuran_kg)
+                    .join(ProductSku,ProductSku.id==BrokenKarungDibongkar.product_sku_id)
+                    .join(PackageSize,PackageSize.id==ProductSku.package_size_id)
+                    .where(BrokenKarungDibongkar.id.in_(r.bongkar_ids or [])).order_by(BrokenKarungDibongkar.id))).all():
+                owner=await db.get(Jasa,rj.jasa_id) if rj.jasa_id else None
+                saldo=await hitung_stok_kemasan(db,sku.packaging_material_id,sku.package_size_id,sku.brand_id,
+                    pelanggan_id=owner.pelanggan_id if owner else None)
+                jejak.append(dict(id=rj.id,stok_asal_id=rj.stok_asal_id,jumlah=rj.jumlah_karung,
+                    ukuran=float(size),kg=float(rj.berat_kg),saldo_karung=saldo))
+            hasil['rincian_broken']['karung_dibongkar']=sum(j['jumlah']for j in jejak)
+            hasil['rincian_broken']['kemasan_dibongkar']=jejak
     except Exception:
         log.exception("Saldo broken sesudah simpan belum terbaca")
         hasil['rincian_broken']['saldo_belum_terbaca'] = True

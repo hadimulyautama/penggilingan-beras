@@ -48,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     BerasKeSilo,
     BrokenKeSilo,
+    BrokenKarungDibongkar,
     ByproductStock,
     CustomerReturnItem,
     HasilSampingKeSilo,
@@ -234,7 +235,7 @@ async def pastikan_satu_jasa_bernama(db: AsyncSession, pemilik) -> int | None:
 #: diserap.
 TABEL_BER_JASA_ID: tuple[type, ...] = (
     PurchaseBatch, DryingLot, SiloStorage, GabahKeringLot, MillingProcess,
-    PkPurchaseBatch, PkGudang2Intake, BrokenKeSilo, BerasKeSilo, PolishingProcess,
+    PkPurchaseBatch, PkGudang2Intake, BrokenKeSilo, BrokenKarungDibongkar, BerasKeSilo, PolishingProcess,
     InternalTransfer, FinishedGoodsStock, ByproductStock, OutgoingRecord,
     OutgoingItem, CustomerReturnItem, HasilSampingKeSilo,
 )

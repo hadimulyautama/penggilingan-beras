@@ -458,3 +458,23 @@ class OutgoingItem(Base, TimestampMixin):
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     harga_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     total_harga: Mapped[float | None] = mapped_column(Numeric(16, 2))
+
+
+class BrokenKarungDibongkar(Base):
+    """Jejak karung utuh yang sudah dipakai, meskipun stok FG berkurang/habis.
+
+    Bukan penerimaan karung kosong atau kehilangan karung. Ini mempertahankan
+    pengurang Stok Karung ketika isi kemasannya dipindah ke silo.
+    Stok asal dapat dihapus setelah habis, sehingga ID-nya berupa snapshot.
+    """
+    __tablename__ = "broken_karung_dibongkar"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    polishing_process_id: Mapped[int] = mapped_column(ForeignKey("polishing_process.id"),nullable=False)
+    stok_asal_id: Mapped[int] = mapped_column(Integer,nullable=False)
+    product_sku_id: Mapped[int] = mapped_column(ForeignKey("product_skus.id"),nullable=False)
+    jumlah_karung: Mapped[int] = mapped_column(Integer,nullable=False)
+    berat_kg: Mapped[float] = mapped_column(Numeric(12,2),nullable=False)
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    mengurangi_stok: Mapped[bool] = mapped_column(Boolean,nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"),nullable=False)

@@ -125,3 +125,47 @@ async def test_toleransi_lama_dan_bobot_aktual(pg,sosoh,w,rencana,aktual):
         r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses='pemilik|pabrik',berat_kg=w,silo='C'),headers={'X-CSRF-Token':cap_formulir(c)})
         assert r.status_code==200,r.text
         assert r.json()['rincian_broken']['kg']==pytest.approx(aktual)
+
+async def test_perbaikan_saldo_karung_tetap_terpakai_setelah_bongkar(pg,sosoh):
+    """Persetujuan pemilik: saldo karung kosong tidak naik setelah bongkar."""
+    from app.models import PackagingPurchase,ProductSku
+    from app.database import now_local
+    from app.penggilingan.inventory.packaging import hitung_stok_kemasan
+    await hasil(pg,sosoh,500);await _kemas(pg,sosoh,jumlah_karung=10)
+    async with pg() as db:
+        sku=await db.scalar(select(ProductSku).join(FinishedGoodsStock,FinishedGoodsStock.product_sku_id==ProductSku.id).where(FinishedGoodsStock.source_id==sosoh['proc_id']))
+        db.add(PackagingPurchase(kode='PKM-BROKEN-UJI',packaging_material_id=sku.packaging_material_id,package_size_id=sku.package_size_id,jumlah_lembar=100,tanggal=now_local().date(),waktu=now_local(),input_by=sosoh['user']));await db.commit()
+        before=await hitung_stok_kemasan(db,sku.packaging_material_id,sku.package_size_id,sku.brand_id);assert before==90
+        await g2.masukkan_stok_broken_pemilik_ke_silo(db,user=await db.get(User,sosoh['user']),jasa_id=None,nama_silo='C',berat_kg=175)
+        after=await hitung_stok_kemasan(db,sku.packaging_material_id,sku.package_size_id,sku.brand_id)
+        assert after==90
+
+@pytest.mark.parametrize('owner_jasa,kurangi,berat',[(False,True,500),(False,False,175),(True,True,175)])
+async def test_jejak_karung_pemilik_flag_dan_stok_habis(pg,sosoh,owner_jasa,kurangi,berat):
+    from app.models import PackagingPurchase,ProductSku,BrokenKarungDibongkar,Jasa,Pelanggan
+    from app.database import now_local
+    from app.penggilingan.inventory.packaging import hitung_stok_kemasan
+    await hasil(pg,sosoh,500);await _kemas(pg,sosoh,jumlah_karung=10)
+    async with pg() as db:
+        row=await db.scalar(select(FinishedGoodsStock).where(FinishedGoodsStock.source_id==sosoh['proc_id']));sku=await db.get(ProductSku,row.product_sku_id)
+        jid=pid=None
+        if owner_jasa:
+            pel=Pelanggan(nama_pelanggan='Pemilik karung uji');db.add(pel);await db.flush();j=Jasa(kode='JAS-BONGKAR-KARUNG',pelanggan_id=pel.id);db.add(j);await db.flush();jid,pid=j.id,pel.id;row.jasa_id=jid
+        row.kemasan_mengurangi_stok=kurangi
+        db.add(PackagingPurchase(kode='PKM-BONGKAR-2',packaging_material_id=sku.packaging_material_id,package_size_id=sku.package_size_id,jumlah_lembar=100,pelanggan_id=pid,tanggal=now_local().date(),waktu=now_local(),input_by=sosoh['user']));await db.commit()
+        before=await hitung_stok_kemasan(db,sku.packaging_material_id,sku.package_size_id,pelanggan_id=pid)
+        await g2.masukkan_stok_broken_pemilik_ke_silo(db,user=await db.get(User,sosoh['user']),jasa_id=jid,nama_silo='C',berat_kg=berat)
+        assert await hitung_stok_kemasan(db,sku.packaging_material_id,sku.package_size_id,pelanggan_id=pid)==before
+        records=(await db.scalars(select(BrokenKarungDibongkar))).all();assert sum(r.jumlah_karung for r in records)==(10 if berat==500 else 4)
+        assert all(r.jasa_id==jid and r.mengurangi_stok==kurangi for r in records)
+        if owner_jasa:assert await hitung_stok_kemasan(db,sku.packaging_material_id,sku.package_size_id)==0
+        if berat==500:assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock))==0
+
+async def test_jejak_bongkar_ikut_rollback_sumber_gagal(pg,sosoh):
+    from app.models import BrokenKarungDibongkar
+    await hasil(pg,sosoh,500);await _kemas(pg,sosoh,jumlah_karung=10)
+    async with await _klien(pg,sosoh['user'],'broken-rollback-karung',mode='admin') as c:
+        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses=sosoh['kode_pol']+'|',berat_kg=550,silo='C'),headers={'X-CSRF-Token':cap_formulir(c)});assert r.status_code==400
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(BrokenKarungDibongkar))==0
+        assert await db.scalar(select(func.sum(FinishedGoodsStock.jumlah_karung)))==10

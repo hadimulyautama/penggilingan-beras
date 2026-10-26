@@ -1221,3 +1221,14 @@ layanan undo (label audit tersedia, bukan bukti dukungan pembatalan).
 Perapian tidak menambah idempotensi atau mengubah batas transaksi itu.
 UI menahan kirim ulang jika hasil jaringan belum pasti dan mengarahkan
 pemeriksaan Stok/riwayat; jangan menjanjikan retry aman atau rollback total.
+
+Pemilik menyetujui PERBAIKAN bug Stok Karung pada tahap ini: 4 karung yang
+dibongkar sebelumnya membuat saldo kosong90→94 karena rumus membaca sisa
+FG. Migrasi0113 menyimpan `BrokenKarungDibongkar` (SKU, jumlah, berat,
+pemilik, asal, pelaku, waktu, dan flag pengurang stok). Pengurang karung
+menggabungkan FG tersisa dengan jejak bongkar, sehingga contoh itu tetap90.
+Stok datang dengan kemasan sendiri (`kemasan_mengurangi_stok=False`) tidak
+mengurangi karung gudang. Tidak ada backfill historis dari angka perkiraan.
+Jangan menghapus jejak ini pada rollback UI atau menganggapnya pembelian/
+kehilangan karung baru. Batas commit per sumber dan ketiadaan undo broken
+masih merupakan keterbatasan lama yang terpisah.

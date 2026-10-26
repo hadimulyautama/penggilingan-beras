@@ -2187,6 +2187,7 @@ class MasukkanBrokenResult:
     moved_kg: float
     dibongkar_dari_karung_kg: float
     kodes: list[str]
+    bongkar_ids: list[int] | None = None
 
 
 async def masukkan_broken_ke_silo(
@@ -2308,6 +2309,7 @@ async def masukkan_broken_ke_silo(
 
     now = input_time(tanggal, jam)
     dibongkar_kg = 0.0
+    jejak_bongkar = []
 
     # ── Langkah 1.5 · masih kurang? bukukan dulu hasil mesin yang BELUM
     #   TERCATAT, sebelum membongkar karung — lihat ⚠⚠ di docstring.
@@ -2372,6 +2374,16 @@ async def masukkan_broken_ke_silo(
             if ambil_karung <= 0:
                 continue
             ambil_kg = ambil_karung * float(ukuran)
+            # Karung sudah habis dipakai saat packing. Ketika isi dibongkar,
+            # FG berkurang tetapi pengurang Stok Karung harus tetap ada.
+            from app.models import BrokenKarungDibongkar
+            jejak = BrokenKarungDibongkar(
+                polishing_process_id=proc.id,stok_asal_id=krow.id,
+                product_sku_id=krow.product_sku_id,jumlah_karung=ambil_karung,
+                berat_kg=ambil_kg,jasa_id=krow.jasa_id,
+                mengurangi_stok=krow.kemasan_mengurangi_stok,
+                waktu=now,input_by=user.id)
+            db.add(jejak);jejak_bongkar.append(jejak)
             krow.jumlah_karung = int(krow.jumlah_karung) - ambil_karung
             krow.berat_total_kg = float(krow.berat_total_kg) - ambil_kg
             if krow.jumlah_karung <= 0:
@@ -2425,6 +2437,7 @@ async def masukkan_broken_ke_silo(
     return MasukkanBrokenResult(
         nama_silo=nama_silo, moved_kg=berat_kg,
         dibongkar_dari_karung_kg=dibongkar_kg, kodes=kodes,
+        bongkar_ids=[j.id for j in jejak_bongkar],
     )
 
 
@@ -2538,6 +2551,7 @@ async def masukkan_stok_broken_pemilik_ke_silo(
 
     moved_codes: list[str] = []
     opened_bags = 0.0
+    opened_ids = []
     for row_id, take in direct_plan:
         result = await pindah_broken_ke_silo(
             db, user=user, byproduct_stock_id=row_id, nama_silo=nama_silo,
@@ -2549,8 +2563,9 @@ async def masukkan_stok_broken_pemilik_ke_silo(
             berat_kg=take, jasa_id=jasa_id, tanggal=tanggal, jam=jam)
         opened_bags += result.dibongkar_dari_karung_kg
         moved_codes.extend(result.kodes)
+        opened_ids.extend(result.bongkar_ids or [])
     return MasukkanBrokenResult(nama_silo=nama_silo, moved_kg=float(berat_kg),
-                                dibongkar_dari_karung_kg=opened_bags, kodes=moved_codes)
+                                dibongkar_dari_karung_kg=opened_bags, kodes=moved_codes,bongkar_ids=opened_ids)
 
 
 async def masukkan_hasil_samping_ke_silo(

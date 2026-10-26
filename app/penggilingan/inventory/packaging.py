@@ -235,7 +235,15 @@ async def hitung_stok_kemasan(
         .join(ProductSku,ProductSku.id==KemasUlang.sku_asal_id).where(
             ProductSku.packaging_material_id==material_id,ProductSku.package_size_id==size_id,
             _brand(ProductSku.brand_id),_jasa_milik_pelanggan(KemasUlang.jasa_id)))
-    return int(beli) - int(hilang) - int(terpakai) - int(lama)
+    # Broken yang dibongkar tidak mengembalikan karung kosong. Pertahankan
+    # jejak pemakaian setelah baris FG berkurang, dengan merk/pemilik asli.
+    from app.models import BrokenKarungDibongkar
+    dibongkar = await db.scalar(select(func.coalesce(func.sum(BrokenKarungDibongkar.jumlah_karung),0))
+        .join(ProductSku,ProductSku.id==BrokenKarungDibongkar.product_sku_id).where(
+            ProductSku.packaging_material_id==material_id,ProductSku.package_size_id==size_id,
+            _brand(ProductSku.brand_id),BrokenKarungDibongkar.mengurangi_stok.is_(True),
+            _jasa_milik_pelanggan(BrokenKarungDibongkar.jasa_id)))
+    return int(beli) - int(hilang) - int(terpakai) - int(lama) - int(dibongkar)
 
 
 # `hpp_kemasan_wavg` DIBUANG 28 September 2026. Satu-satunya pembacanya
