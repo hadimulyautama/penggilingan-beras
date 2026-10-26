@@ -968,6 +968,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # komoditas yang tidak sesuai.
             {"id": "masukkan_beras_silo", "label": "📤 Masukkan beras ke silo",
              "post": "/api/actions/masukkan-beras-silo",
+             "konteks_beras_silo": {"source": "/api/actions/rincian-beras-silo", "proses": "jenis"},
              "hint": "Jenis beras dan pemilik mengikuti kartu yang dipilih. "
                      "Pilih stok curah atau kemasan yang ingin dipindahkan, lalu masukkan beratnya. "
                      "Untuk kemasan, berat harus kelipatan ukuran karung.",
@@ -975,12 +976,12 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "jenis", "label": "Jenis beras", "type": "remote",
                   "source": "/api/actions/beras-jenis-silo",
                   "kosong": "Belum ada jenis beras yang bisa dipindahkan."},
-                 {"name": "sumber_stok", "label": "Bentuk stok · curah atau kemasan", "type": "remote",
+                 {"name": "sumber_stok", "label": "Sumber stok · curah / merek & kemasan", "type": "remote",
                   "source": "/api/actions/beras-sumber-tersedia", "induk": "jenis",
                   "kosong": "Tidak ada stok dengan pemilik dan jenis beras ini."},
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
                   "type": "number", "wajib": True},
-                 {"name": "silo", "label": "Silo tujuan (Beras atau PK)", "type": "remote",
+                 {"name": "silo", "label": "Silo tujuan", "type": "remote",
                   "source": "/api/actions/silo-beras-tujuan-g2",
                   "kosong": "Belum ada Silo Beras atau silo PK. Tambahkan di "
                            "Pengaturan → Alat."},
@@ -5772,6 +5773,21 @@ async def beras_sumber_tersedia(induk: str | None = None,
     return keluar
 
 
+@router.get("/actions/rincian-beras-silo")
+async def rincian_beras_silo(jenis: str = "", sumber_stok: str = "",
+                           berat_kg: str = "", silo: str = "",
+                           user: User = Depends(pengguna_aksi)) -> dict:
+    from hmu_identitas import peran as P
+    _require((await _is_g2_operator(user) and not can_see_financials(user))
+             or P.super_saja(user.role))
+    from app.services.rencana_beras_silo import rincian
+    async with SessionLocal() as db:
+        try:
+            return await rincian(db, jenis, sumber_stok, berat_kg, silo)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+
+
 class MasukkanBerasSiloReq(BaseModel):
     jenis: str       # grade|pabrik atau grade|jasa, otomatis dari kartu stok
     sumber_stok: str # curah|pemilik, curah:<batch>|pemilik, atau sku:<id>|pemilik
@@ -5820,9 +5836,30 @@ async def act_masukkan_beras_silo(req: MasukkanBerasSiloReq,
                 sumber_stok=sumber)
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan beras ke silo.")
+    # Hasil aktual dibaca setelah commit; preview tidak dipakai sebagai
+    # bukti simpan. Kegagalan membaca saldo tidak membatalkan keberhasilan
+    # yang sudah dikonfirmasi layanan atau mendorong POST ulang.
+    from sqlalchemy import select
+    from app.models import BerasKeSilo
+    from app.services.rencana_beras_silo import rincian
+    async with SessionLocal() as db:
+        moves = (await db.execute(select(BerasKeSilo.id, BerasKeSilo.kode_pindah,
+            BerasKeSilo.berat_kg).where(BerasKeSilo.id.in_(r.pemindahan_ids))
+            .order_by(BerasKeSilo.id))).all()
+        try:
+            # Layanan lama dapat menyatukan pesanan sepemilik. Baca saldo
+            # dengan identitas hasil layanan, bukan ID administratif lama.
+            sumber_akhir = sumber + "|" + (str(r.jasa_id) if r.jasa_id is not None else "pabrik")
+            setelah = await rincian(db, req.jenis, sumber_akhir, silo=req.silo)
+        except Exception:
+            setelah = None
+    nyata = dict(kg=sum(float(w) for _,_,w in moves),
+                 karung=r.karung_dibongkar, silo=r.nama_silo,
+                 pemindahan=[dict(id=i,kode=k,kg=float(w)) for i,k,w in moves],
+                 setelah=setelah)
     ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"
            .replace(",", ".") if r.dibongkar_dari_karung_kg else "")
-    return {"ok": True,
+    return {"ok": True, "rincian_beras": nyata,
             "pesan": f"✓ {r.moved_kg:,.0f} kg masuk Silo {r.nama_silo}{ekor}."
                      .replace(",", ".")}
 
