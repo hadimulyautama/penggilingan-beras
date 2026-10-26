@@ -1,24 +1,26 @@
-"""Rincian baca saja Menir, memakai saldo dan alokasi layanan simpan lama."""
+"""Rincian baca saja Menir/Reject, memakai saldo dan alokasi layanan simpan lama."""
 from sqlalchemy import select
 from app.models import Jasa, PolishingProcess, PolishingSiloUsage
 from app.penggilingan.gudang2.rencana_hasil_samping import saldo_sumber, alokasikan
 from app.penggilingan.gudang2 import service as g2
 
 
-def pemilik_sah(pemilik):
+def pemilik_sah(pemilik, jenis="menir"):
     pilihan = str(pemilik or '').strip()
     if pilihan != 'pabrik' and not pilihan.isdigit():
-        raise ValueError('Pilih pemilik stok menir yang sah.')
+        raise ValueError(f'Pilih pemilik stok {jenis} yang sah.')
     return None if pilihan == 'pabrik' else int(pilihan)
 
 
-async def rincian(db, pemilik, berat=None, silo=''):
+async def rincian(db, pemilik, berat=None, silo='', *, jenis='menir'):
     from app.services.jasa import nama_pemilik
     from app.services.angka import angka_wajar
-    owner = pemilik_sah(pemilik)
+    if jenis not in ('menir', 'reject'):
+        raise ValueError('Jenis hasil samping tidak didukung.')
+    owner = pemilik_sah(pemilik, jenis)
     if owner is not None and await db.get(Jasa, owner) is None:
         raise ValueError('Pemilik stok jasa tidak ditemukan.')
-    data = await saldo_sumber(db, 'menir', owner)
+    data = await saldo_sumber(db, jenis, owner)
     out = dict(pemilik=await nama_pemilik(db, owner) if owner else 'Milik pabrik',
                jasa_id=owner, saldo_kg=data['saldo_kg'], sumber=data['sumber'],
                keluar_curah=data['keluar_curah'], keluar_kemasan=data['keluar_kemasan'],
@@ -33,7 +35,7 @@ async def rincian(db, pemilik, berat=None, silo=''):
         return out
     try:
         kg = angka_wajar(berat, 'Berat yang masuk silo')
-        rencana = alokasikan(data, 'menir', kg)
+        rencana = alokasikan(data, jenis, kg)
     except (ValueError, g2.Gudang2Error) as e:
         out['pesan'] = str(e)
         return out
@@ -43,5 +45,5 @@ async def rincian(db, pemilik, berat=None, silo=''):
     out['rencana'] = dict(kg=sum(w for _,w in rencana), diminta_kg=kg,
                          sisa_kg=max(0.0,data['saldo_kg']-sum(w for _,w in rencana)), fifo=rows)
     if dest and any(p.id in {i for i,_ in aktif} for p,_ in rencana):
-        out['peringatan_tujuan'] = 'Silo tujuan masih dipakai proses sumber menir. Pilih silo lain.'
+        out['peringatan_tujuan'] = f'Silo tujuan masih dipakai proses sumber {jenis}. Pilih silo lain.'
     return out

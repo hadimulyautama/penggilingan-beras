@@ -206,7 +206,8 @@ async def test_picker_master_dan_kontrak_reject_tidak_berubah(pg,menir):
         owners=(await c.get('/api/actions/hasil-samping-pemilik-tersedia?jenis=menir')).json()
         assert [x['value']for x in owners]==['pabrik']
         r=await c.post('/api/actions/masukkan-reject-silo',json=dict(pemilik='pabrik',silo='Campuran Timur',berat_kg=125.5),headers={'X-CSRF-Token':cap_formulir(c)})
-        assert r.status_code==200 and set(r.json())=={'ok','pesan'}
+        assert r.status_code==200 and set(r.json())=={'ok','pesan','rincian_reject'}
+        assert r.json()['rincian_reject']['kg']==125.5
     async with pg() as db:
         assert (await db.scalar(select(HasilSampingKeSilo))).jenis=='reject'
         assert (await rincian(db,'pabrik'))['saldo_kg']==950
