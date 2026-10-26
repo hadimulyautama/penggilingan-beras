@@ -126,6 +126,29 @@ kirim tanpa berat yang memakai persetujuan, tetap didukung. Rincian satuan
 yang dihitung dari bobot diberi label setara, bukan jumlah karung historis
 yang direka. Tidak ada migrasi atau perubahan rumus saldo untuk input ini.
 
+## Masukkan ke silo: satuan mengikuti sumber (26 Oktober 2026)
+
+Formulir web memakai identitas `intake:bentuk` (karung/curah/lama). Pembaca
+`services.masukkan_silo` memakai saldo lama; ia tidak membuat ledger baru.
+PK sendiri yang SUDAH memiliki metadata packing50 menawarkan karung dan
+curah sebagai bagian saldo yang sama. Baris transfer lama tanpa metadata
+unit tetap data lama, bukan diberi jumlah karung rekaan.
+
+PK luar berkarung memakai rasio W/N lama. Bagian karung akibat pengeluaran
+kg tetap disebut dan tidak ikut jumlah karung utuh. Setelah tak ada karung
+utuh, jalur kg lama tetap tersedia. Batch tanpa N tidak dinyatakan curah:
+operator boleh melengkapi surat jalan pada pemindahan pertama sesuai aturan
+lama, atau memakai kg pada jalur data lama. Ukuran nominal dari nota tidak
+perlu diketik ulang.
+
+Web baru mewajibkan jumlah eksplisit. “Isi seluruh” hanya mengisi angka,
+tidak menyimpan. Klien lama dengan intake numerik tetap memiliki kontrak
+kosong=seluruh sisa. Sumber/bentuk diperiksa ulang setelah intake dikunci.
+Muatan `isian_sumber` pada peristiwa baru mengikat kunci kiriman pada isian
+asli, sehingga respons koneksi yang hilang dapat diperiksa/diulang dengan
+kunci yang sama tanpa menggandakan pemindahan. Proyeksi lama tetap membaca
+kg/K yang sama; kolom karung PK luar dan metadata50 PK sendiri tidak dicampur.
+
 ## Peristiwa — tulang punggung baru (Tahap 3, sejak 13 September 2026)
 
 `peristiwa` = apa yang terjadi, TAMBAH-SAJA (trigger Postgres menolak UPDATE

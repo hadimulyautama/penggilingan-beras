@@ -1696,6 +1696,7 @@ async def _catat_pindah(
     db: AsyncSession, *, user: User, intake: PkGudang2Intake, silo: Silo, nama_silo: str,
     kirim: float | None, now, kunci_kiriman: str | None = None,
     jumlah_karung: int | None = None, hasil_timbang: bool = False,
+    isian_sumber: dict | None = None,
 ) -> tuple[PkTumpukanToSilo, str | None]:
     """SATU titik tulis pemindahan tumpukan → silo (jalur peristiwa, Tahap 3
     aksi kelima): nomor atomik → catat ke proses yang sedang memakai silo →
@@ -1755,6 +1756,8 @@ async def _catat_pindah(
         "cara_bobot": "karung" if jumlah_karung is not None else "hasil_timbang" if hasil_timbang else "kg_lama",
         "tanggal": now.date(), "waktu": now,
     }
+    if isian_sumber is not None:
+        muatan['isian_sumber'] = isian_sumber
     e = await buku.catat(db, jenis=PK_TUMPUKAN_KE_SILO, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
                          muatan=muatan, waktu=now)
     move = PkTumpukanToSilo(
@@ -1817,6 +1820,7 @@ async def pindah_tumpukan_ke_silo(
     jumlah_karung: int | None = None, hasil_timbang: bool = False, commit: bool = True,
     jumlah_karung_partai: int | None = None, ukuran_karung_kg: float | None = None,
     berat_curah_kg: float | None = None,
+    bentuk_sumber: str | None = None,
 ) -> PindahResult:
     """Pindah PK dari tumpukan ke silo. HANYA operator Gudang 2 (admin fallback).
 
@@ -1844,6 +1848,12 @@ async def pindah_tumpukan_ke_silo(
     if intake.tujuan != "ditumpuk":
         raise Gudang2Error("Sumber bukan tumpukan — hanya PK di tumpukan yang bisa dipindah.")
 
+    # Kontrak web baru menyebut bentuk sumber dan jumlah eksplisit. Klien
+    # lama tanpa bentuk tetap mempunyai arti kosong=seluruh sisa yang lama.
+    isian_sumber = None if bentuk_sumber is None else buku.bersih(dict(
+        bentuk=bentuk_sumber, karung=jumlah_karung, kg=berat,
+        curah=berat_curah_kg, jumlah_partai=jumlah_karung_partai))
+
     if kunci_kiriman:
         from app.models import Peristiwa
         ada = (await db.scalars(select(PkTumpukanToSilo).join(Peristiwa,
@@ -1852,7 +1862,11 @@ async def pindah_tumpukan_ke_silo(
         if ada is not None:
             # Kiriman yang sama mengembalikan hasil semula. Unit baru tidak
             # boleh dipakai untuk mengganti muatan di bawah kunci yang sama.
-            if ada.jumlah_karung_50 is not None:
+            if isian_sumber is not None:
+                e_lama = await db.get(Peristiwa, ada.peristiwa_id)
+                if e_lama.muatan.get('isian_sumber') != isian_sumber:
+                    raise Gudang2Error("Kunci kiriman ini sudah dipakai untuk isian sumber yang berbeda. Periksa catatan tersimpan.")
+            if isian_sumber is None and ada.jumlah_karung_50 is not None:
                 k = jumlah_karung if jumlah_karung is not None else (0 if berat_curah_kg is not None else None)
                 c = berat_curah_kg if berat_curah_kg is not None else (0 if jumlah_karung is not None else None)
                 if ((k is not None and k != ada.jumlah_karung_50)
@@ -1860,14 +1874,30 @@ async def pindah_tumpukan_ke_silo(
                         or (berat is not None and Decimal(str(berat)) != ada.berat_kg)):
                     raise Gudang2Error("Kunci kiriman ini sudah dipakai untuk pemindahan lain.")
             if (ada.pk_gudang2_intake_id != intake.id or ada.silo_id != silo.id
-                    or (jumlah_karung is not None and (ada.jumlah_karung_50 if ada.jumlah_karung_50 is not None else ada.jumlah_karung) != jumlah_karung)
-                    or (berat_curah_kg is not None and ada.berat_curah_kg != Decimal(str(berat_curah_kg)))):
+                    or (isian_sumber is None and jumlah_karung is not None and (ada.jumlah_karung_50 if ada.jumlah_karung_50 is not None else ada.jumlah_karung) != jumlah_karung)
+                    or (isian_sumber is None and berat_curah_kg is not None and ada.berat_curah_kg != Decimal(str(berat_curah_kg)))):
                 raise Gudang2Error("Kunci kiriman ini sudah dipakai untuk pemindahan lain.")
             batch = await db.get(PkPurchaseBatch,intake.pk_purchase_batch_id) if intake.pk_purchase_batch_id else None
             sisa = await _sisa_tumpukan_intake(db,intake.id)
             return PindahResult(ada.kode_pindah,nama_silo,
                 None if ada.berat_kg is None else float(ada.berat_kg),sisa,
                 jumlah_karung=ada.jumlah_karung_50 if ada.jumlah_karung_50 is not None else ada.jumlah_karung,berat_curah_kg=float(ada.berat_curah_kg) if ada.berat_curah_kg is not None else None,bobot_final=dari_batch(batch).pasti if batch else intake.bobot_final)
+    if bentuk_sumber is not None:
+        from app.services.masukkan_silo import sumber, pilih, periksa
+        try:
+            if berat is not None and berat_curah_kg is not None:
+                raise ValueError('Kirim satu isian berat, bukan dua bobot bersamaan.')
+            jenis = pilih(await sumber(db, intake, jumlah_partai=jumlah_karung_partai), bentuk_sumber)
+            kg = periksa(jenis, jumlah_karung=jumlah_karung,
+                         berat_kg=berat_curah_kg if berat_curah_kg is not None else berat)
+        except ValueError as e:
+            raise Gudang2Error(str(e)) from None
+        if jenis['bentuk']=='curah':
+            jumlah_karung, berat_curah_kg, berat, hasil_timbang = 0, kg, None, False
+        elif jenis['bentuk']=='karung':
+            hasil_timbang = False
+        else:
+            berat, hasil_timbang = kg, True
     if berat is not None and (not Decimal(str(berat)).is_finite() or berat <= 0):
         raise Gudang2Error("Kg hasil timbang harus lebih dari nol.")
     batch = await db.get(PkPurchaseBatch, intake.pk_purchase_batch_id) if intake.pk_purchase_batch_id else None
@@ -1888,7 +1918,7 @@ async def pindah_tumpukan_ke_silo(
         except ValueError as e:
             raise Gudang2Error(str(e)) from None
         now = input_time(tanggal,jam)
-        move,ke_proses = await _catat_pindah(db,user=user,intake=intake,silo=silo,nama_silo=nama_silo,kirim=float(kirim),now=now,kunci_kiriman=kunci_kiriman)
+        move,ke_proses = await _catat_pindah(db,user=user,intake=intake,silo=silo,nama_silo=nama_silo,kirim=float(kirim),now=now,kunci_kiriman=kunci_kiriman,isian_sumber=isian_sumber)
         if commit:await db.commit()
         # Gunakan presisi yang benar-benar tersimpan, sama seperti jalur kg
         # lama. Ketikan dengan desimal lebih banyak tidak boleh membuat
@@ -1950,7 +1980,7 @@ async def pindah_tumpukan_ke_silo(
             raise Gudang2Error(f"Tinggal {utuh} karung utuh; sisanya kurang dari 1 karung. Gunakan kg hasil timbang untuk bagian karung.")
         now = input_time(tanggal, jam)
         move, ke_proses = await _catat_pindah(db, user=user, intake=intake, silo=silo,
-            nama_silo=nama_silo, kirim=None, jumlah_karung=int(k), now=now, kunci_kiriman=kunci_kiriman)
+            nama_silo=nama_silo, kirim=None, jumlah_karung=int(k), now=now, kunci_kiriman=kunci_kiriman,isian_sumber=isian_sumber)
         if commit:
             await db.commit()
         await db.refresh(move)
@@ -2002,7 +2032,7 @@ async def pindah_tumpukan_ke_silo(
 
     now = input_time(tanggal, jam)
     move, ke_proses = await _catat_pindah(db, user=user, intake=intake, silo=silo, nama_silo=nama_silo,
-                                          kirim=kirim, now=now, kunci_kiriman=kunci_kiriman, hasil_timbang=hasil_timbang)
+                                          kirim=kirim, now=now, kunci_kiriman=kunci_kiriman, hasil_timbang=hasil_timbang,isian_sumber=isian_sumber)
     if commit:
         await db.commit()
     await db.refresh(move)

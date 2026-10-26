@@ -3922,3 +3922,28 @@ body.padiflow-ui .lembar--unit-pk .unit-pk-input .fld{font-size:1.5rem;padding-r
 .unit-pk-summary{padding:18px;border:1px solid var(--garis);border-radius:12px;background:var(--panel-2);min-width:0;overflow-wrap:anywhere;line-height:1.7}
 .unit-pk-summary h3{margin:0 0 12px;font-size:1rem}.unit-pk-summary .nota{white-space:pre-line;margin:0 0 16px;font-size:.9rem}.unit-pk-impact{font-size:.85rem;border-top:1px solid var(--garis);padding-top:14px;margin:14px 0 0}.lembar--unit-pk .hasil-actions{margin-top:18px}
 @media(max-width:640px){.unit-pk-layout{grid-template-columns:minmax(0,1fr);gap:0}.unit-pk-summary{padding:14px}.lembar--unit-pk .hasil-actions{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}}
+
+/* Masukkan PK ke silo: satuan dibaca dari sumber, tanpa pengalih cara. */
+body.padiflow-ui .lembar--masukkan-silo .lembar__isi{max-width:1000px}
+.lembar--masukkan-silo .mi-hint{font-size:.85rem;color:var(--redup);margin:0 0 20px;line-height:1.6}
+.lembar--masukkan-silo .mi-layout{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:28px;align-items:start}
+.lembar--masukkan-silo .hasil-field[hidden],.lembar--masukkan-silo .mi-quantity-help[hidden]{display:none}
+.lembar--masukkan-silo .mi-stock{background:var(--panel-2);padding:16px;border-radius:11px;display:grid;gap:12px;min-width:0;margin:0 0 20px;overflow-wrap:anywhere}
+.lembar--masukkan-silo .mi-stock-head{display:flex;align-items:start;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem}
+.lembar--masukkan-silo .mi-stock-head small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:4px}
+.lembar--masukkan-silo .mi-badge{background:var(--panel);border:1px solid var(--garis);border-radius:6px;padding:3px 8px;font-size:.72rem;white-space:normal}
+.lembar--masukkan-silo .mi-stock-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.lembar--masukkan-silo .mi-stock-values>div{display:grid;gap:6px;min-width:0}.lembar--masukkan-silo .mi-stock-values span,.lembar--masukkan-silo .mi-stock-values small{color:var(--redup);font-size:.74rem;line-height:1.6}
+.lembar--masukkan-silo .mi-stock-values strong{font-size:1.2rem;font-weight:550;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.lembar--masukkan-silo .mi-stock details{border-top:1px solid var(--garis);padding-top:10px;font-size:.8rem}.lembar--masukkan-silo summary{min-height:34px;color:var(--aman);cursor:pointer}
+.lembar--masukkan-silo .mi-count{display:flex;align-items:center;gap:12px;min-width:0}.lembar--masukkan-silo .mi-count span{flex-shrink:0;color:var(--redup);font-size:.85rem}
+body.padiflow-ui .lembar--masukkan-silo .mi-count .fld{font-size:1.5rem;min-height:54px;font-weight:550;font-variant-numeric:tabular-nums}
+.lembar--masukkan-silo .mi-note{margin:0;color:var(--redup);font-size:.77rem;line-height:1.7;overflow-wrap:anywhere}
+.lembar--masukkan-silo .mi-quantity-help{display:grid;gap:9px;margin:0 0 20px}.lembar--masukkan-silo #mi-all{justify-self:start;text-align:left;white-space:normal;color:var(--aman);font-size:.8rem;min-height:40px}
+.lembar--masukkan-silo .mi-result-preview{display:grid;gap:14px;min-width:0;border-left:1px solid var(--garis);padding-left:25px;font-size:.85rem;overflow-wrap:anywhere}
+.lembar--masukkan-silo .mi-result-preview h3{font-size:1rem;margin:0 0 3px}.lembar--masukkan-silo .mi-pair{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:.8rem;min-width:0}.lembar--masukkan-silo .mi-pair span{color:var(--redup)}.lembar--masukkan-silo .mi-pair strong{text-align:right;font-variant-numeric:tabular-nums;max-width:58%;overflow-wrap:anywhere;font-weight:550}
+.lembar--masukkan-silo .mi-total{border-block:1px solid var(--garis);padding-block:14px}.lembar--masukkan-silo .mi-total strong{font-size:1.35rem;color:var(--aman)}
+.lembar--masukkan-silo .mi-warning{padding:12px;border-left:3px solid var(--hati);background:var(--panel-2);font-size:.8rem;line-height:1.6;margin:0}.lembar--masukkan-silo .hasil-actions{margin-top:22px}
+@media(max-width:680px){.lembar--masukkan-silo .mi-layout{grid-template-columns:minmax(0,1fr);gap:5px}.lembar--masukkan-silo .mi-result-preview{border-left:0;padding-left:0;border-top:1px solid var(--garis);padding-top:18px}.lembar--masukkan-silo .mi-stock{padding:13px}.lembar--masukkan-silo .mi-stock-values strong{font-size:1.08rem}}
+.kabar .mi-receipt{display:grid;gap:8px;border-top:1px solid currentColor;padding-top:12px;margin-top:12px;font-size:.85rem;line-height:1.6;overflow-wrap:anywhere}.kabar .mi-receipt .mi-pair{display:flex;justify-content:space-between;gap:14px}.kabar .mi-receipt .mi-pair strong{text-align:right;max-width:60%;overflow-wrap:anywhere}
+.lembar--masukkan-silo .mi-count{flex-wrap:wrap}.lembar--masukkan-silo .mi-count>.formulir-salah{flex-basis:100%;order:3;margin:0}body.padiflow-ui .lembar--masukkan-silo .mi-count .fld{width:0;flex:1 1 0}

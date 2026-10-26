@@ -19,7 +19,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.services.mutu_pk import LABEL_KUALITATIF, NILAI_KUALITATIF, ATURAN_RATA_QC_PK
 
@@ -883,35 +883,19 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         # `can_see_financials` tak membedakan Admin dari Super Admin, jadi
         # yang menyempitkannya kembali ke Super Admin saja adalah `super_`.
         actions += [
-            {"id": "pindah_tumpukan_silo", "label": "📤 Pindah tumpukan ke silo",
+            {"id": "pindah_tumpukan_silo", "label": "📤 Masukkan ke silo",
              "post": "/api/actions/pindah-tumpukan-silo",
-             "hint": "PK sendiri otomatis memakai karung penuh 50 kg dan sisa curah. "
-                     "PK beli luar mengikuti bobot per karung dari partainya; surat jalan dilengkapi jika belum tercatat. "
-                     "Pada cara karung, kosongkan isian jumlah untuk seluruh sisa. "
-                     "Bahan lepas atau sebagian karung tetap dapat dicatat dalam kg.",
+             "konteks_masukkan_silo": {"source": "/api/actions/rincian-masukkan-silo", "proses": "tumpukan"},
+             "hint": "Pilih sumber stok. Satuan mengikuti bentuk stok yang tercatat.",
              "fields": [
-                 {"name": "tumpukan", "label": "PK di tumpukan", "type": "remote",
-                  "source": "/api/actions/tumpukan-sisa",
-                  "kosong": "Tumpukan kosong — tak ada yang perlu dipindah."},
-                 # Tanpa "Tumpukan": PK ini memang sedang DIPINDAH dari
-                 # tumpukan. Daftarnya tetap dari master.
-                 {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "remote",
-                  "source": "/api/actions/silo-g2", "induk": "tumpukan",
-                  "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
-                 # Operator menghitung karung. Kg hanya pintu eksplisit untuk
-                 # hasil timbang / bagian karung, atau batch lama tanpa N;
-                 # membiarkannya sebagai satu-satunya medan melahirkan lagi
-                 # perkalian nominal di kepala dan selisih di sisa terakhir.
+                 {"name": "tumpukan", "label": "Partai / sumber stok", "type": "remote",
+                  "source": "/api/actions/sumber-masukkan-silo", "kosong": "Tidak ada sumber PK di tumpukan yang tersedia."},
                  {"name": "jumlah_karung_partai", "label": "Jumlah seluruh karung separtai (sesuai surat jalan)", "type": "number"},
-                 {"name": "jumlah_karung", "label": "Jumlah karung yang dipindah ke silo", "type": "number"},
-                 {"name": "berat_curah_kg", "label": "Curah PK sendiri yang dipindah (kg)", "type": "number", "optional": True},
-                 {"name": "bobot_pemindahan", "label": "Pilih tumpukan untuk melihat bobot per karung dan totalnya.",
-                  "type": "pratinjau", "source": "/api/actions/pratinjau-pk-karung",
-                  "acuan": ["tumpukan", "jumlah_karung_partai", "jumlah_karung", "hasil_timbang", "berat_kg", "berat_curah_kg"], "bersihkan": {"tumpukan": ["jumlah_karung_partai", "berat_curah_kg"]}},
-                 {"name": "hasil_timbang", "label": "Yang dipindahkan", "rincian": "Khusus bahan lepas / sebagian karung", "type": "select", "bawaan": "karung", "options": [
-                     ["karung", "Karung utuh — kg dihitung otomatis"],
-                     ["ya", "Bahan lepas / sebagian karung — kg sudah diketahui"]]},
-                 {"name": "berat_kg", "label": "Berat yang dipindah (kg, sudah diketahui)", "type": "number"},
+                 {"name": "jumlah_karung", "label": "Jumlah karung yang dimasukkan", "type": "number"},
+                 {"name": "berat_kg", "label": "Berat curah yang dimasukkan (kg)", "type": "number"},
+                 {"name": "silo", "label": "Silo tujuan", "type": "remote",
+                  "source": "/api/actions/silo-g2", "induk": "tumpukan",
+                  "kosong": "Tidak ada silo tujuan yang sesuai sumber dan pemiliknya."},
              ]},
             # Broken (patah hasil sosoh) punya silonya SENDIRI (keputusan
             # pemilik 6 Oktober 2026), supaya ia bisa disosoh ulang sebagai
@@ -4713,6 +4697,79 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
         return {**jawaban, "teks": teks + f" Tersedia {sisa} karung utuh." + nominal + tambahan + (" " + peringatan if peringatan else "")}
 
 
+async def _izin_masukkan_silo(user):
+    from hmu_identitas import peran as P
+    _require((await _is_g2_operator(user) and not can_see_financials(user)) or P.super_saja(user.role))
+
+
+@router.get("/actions/sumber-masukkan-silo")
+async def sumber_masukkan_silo(user: User = Depends(pengguna_aksi)):
+    await _izin_masukkan_silo(user)
+    from sqlalchemy import select
+    from app.models import PkGudang2Intake
+    from app.services.masukkan_silo import sumber
+    from app.services.pk_50 import angka
+    out=[]
+    async with SessionLocal() as db:
+        for it in (await db.scalars(select(PkGudang2Intake).where(
+                PkGudang2Intake.tujuan=='ditumpuk').order_by(PkGudang2Intake.waktu_masuk,PkGudang2Intake.id))).all():
+            for s in await sumber(db,it):
+                if s['saldo_kg'] is not None and s['saldo_kg']<=0 and not s['karung']:
+                    continue
+                bentuk={'karung':'Berkarung','curah':'Curah','lama':'Data lama / bagian karung'}[s['bentuk']]
+                saldo='bobot belum diketahui' if s['saldo_kg'] is None else angka(s['saldo_kg'])+' kg'
+                out.append({'value':s['value'],'label':f"{s['kode']} · {bentuk} · {s['pemilik']} · {saldo}",
+                            'intake_id':it.id})
+    return out
+
+
+@router.get("/actions/rincian-masukkan-silo")
+async def rincian_masukkan_silo(tumpukan: str='', silo: str='', jumlah_karung: str='',
+        berat_kg: str='', jumlah_karung_partai: str='',
+        user: User = Depends(pengguna_aksi)):
+    await _izin_masukkan_silo(user)
+    from decimal import Decimal, InvalidOperation
+    from app.models import PkGudang2Intake
+    from app.services.masukkan_silo import urai, sumber, pilih, periksa
+    from app.penggilingan.gudang2.service import Gudang2Error, get_g2_silo
+    from app.penggilingan.gudang2.models import PolishingSiloUsage, PolishingProcess
+    from sqlalchemy import select
+    if not tumpukan:
+        return {'sumber':None,'siap':False}
+    try:
+        iid,bentuk=urai(tumpukan)
+        def baca(s):
+            if not s.strip():return None
+            d=Decimal(s.replace(',','.'))
+            if not d.is_finite():raise ValueError('Isi angka yang valid dan terbatas.')
+            return d
+        n=baca(jumlah_karung_partai)
+        async with SessionLocal() as db:
+            rows=await sumber(db,await db.get(PkGudang2Intake,iid),jumlah_partai=n)
+            if not rows:
+                raise ValueError('Sumber ini sudah habis. Periksa stok terbaru.')
+            src=pilih(rows,bentuk) if bentuk else rows[0]
+            opsi = await silo_g2_daftar(induk=tumpukan,user=user) if silo else []
+            dest=await get_g2_silo(db,silo) if any(o['value']==silo for o in opsi) else None
+            proses=[]
+            if dest:
+                proses=list((await db.scalars(select(PolishingProcess.kode_proses).join(PolishingSiloUsage).where(
+                    PolishingSiloUsage.silo_id==dest.id,PolishingSiloUsage.berat_akhir_kg.is_(None),
+                    PolishingProcess.status=='proses'))).all())
+            out={'sumber':src,'sejawat':[s for s in rows if s['value']!=src['value']],
+                 'tujuan':dest.nama_silo if dest else None,'proses':proses,
+                 'berat_masuk':None,'sisa_kg':None,'sisa_karung':None,'siap':False,'pesan':''}
+            try:
+                k=baca(jumlah_karung);w=baca(berat_kg)
+                kg=periksa(src,jumlah_karung=k,berat_kg=w)
+                out.update(berat_masuk=kg,sisa_karung=src['karung']-int(k) if src['bentuk']=='karung' and k is not None else None,
+                    sisa_kg=None if src['saldo_kg'] is None or kg is None else max(0,src['saldo_kg']-float(kg)),siap=bool(dest))
+            except ValueError as e:out['pesan']=str(e)
+            return out
+    except (ValueError,InvalidOperation,Gudang2Error) as e:
+        raise HTTPException(400,str(e)) from None
+
+
 @router.get("/actions/sosoh-berjalan")
 async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Penyosohan yang berjalan DAN belum berhenti."""
@@ -4756,10 +4813,15 @@ async def silo_g2_daftar(komoditas: str = "pk", induk: str = "",
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         intake = None
-        if induk.strip().isdigit():
-            intake = await db.get(PkGudang2Intake, int(induk.strip()))
-        if induk.strip() and (not induk.strip().isdigit() or intake is None):
-            return []
+        if induk.strip():
+            from app.services.masukkan_silo import urai
+            try:
+                iid,_ = urai(induk)
+            except ValueError:
+                return []
+            intake = await db.get(PkGudang2Intake,iid)
+            if intake is None:
+                return []
         for s in (await db.execute(
             select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
             .order_by(Silo.nama_silo)
@@ -5031,6 +5093,15 @@ class PindahTumpukanSiloReq(BaseModel):
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def angka_formulir_baru(cls, data):
+        if isinstance(data,dict) and ':' in str(data.get('tumpukan','')):
+            for nama in ['jumlah_karung','jumlah_karung_partai','berat_kg','berat_curah_kg']:
+                if isinstance(data.get(nama),bool):
+                    raise ValueError('Isi jumlah atau berat sebagai angka, bukan nilai ya/tidak.')
+        return data
+
 
 @router.post("/actions/pindah-tumpukan-silo")
 async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
@@ -5064,8 +5135,11 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
 
     _require((await _is_g2_operator(user) and not can_see_financials(user))
              or P.super_saja(user.role))
-    if not str(req.tumpukan or "").strip().isdigit():
-        raise HTTPException(400, "Pilih PK di tumpukan yang mau dipindah dulu.")
+    from app.services.masukkan_silo import urai
+    try:
+        iid,bentuk=urai(req.tumpukan)
+    except ValueError as e:
+        raise HTTPException(400,str(e)) from None
     if not (req.silo or "").strip():
         raise HTTPException(400, "Pilih silo tujuan dulu.")
     # KOSONG dan NOL dua hal berbeda: kosong berarti "seluruh sisanya", nol
@@ -5073,14 +5147,16 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
     # kotak kosong memindahkan seluruh tumpukan tanpa diminta.
     if req.berat_kg is not None and float(req.berat_kg) <= 0:
         raise HTTPException(
-            400, "Isi berat yang dipindah lebih dari 0 — atau kosongkan "
+            400, "Isi berat yang dipindah lebih dari 0." if bentuk else
+                 "Isi berat yang dipindah lebih dari 0 — atau kosongkan "
                  "kotaknya untuk memindahkan seluruh sisanya.")
     from app.penggilingan.gudang2.service import Gudang2Error, pindah_tumpukan_ke_silo
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
             r = await pindah_tumpukan_ke_silo(
-                db, user=u, intake_id=int(req.tumpukan), nama_silo=req.silo.strip(),
+                db, user=u, intake_id=iid, nama_silo=req.silo.strip(),
+                bentuk_sumber=bentuk,
                 jumlah_karung=req.jumlah_karung, hasil_timbang=req.hasil_timbang == "ya",
                 jumlah_karung_partai=req.jumlah_karung_partai, ukuran_karung_kg=req.ukuran_karung_kg,
                 berat_curah_kg=req.berat_curah_kg,
@@ -5088,9 +5164,30 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
                 kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
             raise _err(e, "Gagal memindahkan PK dari tumpukan.")
+        aktual = None
+        ringkasan_gagal = False
+        if bentuk:
+            try:
+                from app.models import PkGudang2Intake
+                from app.services.masukkan_silo import sumber
+                rows = await sumber(db, await db.get(PkGudang2Intake,iid))
+                jenis = 'karung' if req.jumlah_karung is not None and bentuk!='curah' else bentuk
+                akhir = next((s for s in rows if s['bentuk']==jenis),None)
+                bobot_aktual_final = rows[0]['bobot_final'] if rows else (await db.get(PkGudang2Intake,iid)).bobot_final
+                aktual = dict(kode_pindah=r.kode_pindah, bentuk=jenis, sumber=req.tumpukan,
+                    berat_masuk=r.berat_kg, karung_masuk=r.jumlah_karung if jenis=='karung' else None,
+                    silo=r.nama_silo, bobot_final=bobot_aktual_final, ke_proses=r.ke_proses,
+                    sisa_kg=akhir['saldo_kg'] if akhir else 0,
+                    sisa_karung=akhir['karung'] if akhir else 0 if jenis=='karung' else None,
+                    sejawat=[s for s in rows if s['bentuk']!=jenis and (s['saldo_kg'] is None or s['saldo_kg']>0)])
+            except Exception:
+                # Pemindahan sudah dikonfirmasi layanan. Gangguan pembacaan
+                # tambahan tidak boleh dinyatakan sebagai gagal menyimpan.
+                log.exception("Saldo sesudah pemindahan %s belum terbaca", r.kode_pindah)
+                ringkasan_gagal = True
     from app.penggilingan.gudang2.karung import teks_kg
     angka = "bobot belum diketahui" if r.berat_kg is None else teks_kg(r.berat_kg)
-    if not r.bobot_final and r.berat_kg is not None:
+    if not (aktual['bobot_final'] if aktual is not None else r.bobot_final) and r.berat_kg is not None:
         angka = "± " + angka + " (bobot truk belum final)"
     jumlah = f"{r.jumlah_karung} karung ~ " if r.jumlah_karung is not None else ""
     if r.berat_curah_kg is not None:
@@ -5104,7 +5201,22 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
     elif r.sisa_karung is not None:
         sisa = f"sisa {r.sisa_karung} karung ~ " + sisa.removeprefix("sisa ")
     ekor = f" — ikut dihitung di {r.ke_proses}" if r.ke_proses else ""
-    return {"ok": True, "pesan": f"✓ {r.kode_pindah} · {jumlah}{angka} ke {r.nama_silo} ({sisa}){ekor}."}
+    if aktual is not None:
+        # Curah tidak ditampilkan sebagai jumlah karung nol. Hasil bagian
+        # sumber terpilih dibedakan dari saldo keseluruhan partainya.
+        jumlah = f"{aktual['karung_masuk']} karung ~ " if aktual['karung_masuk'] is not None else ''
+        sisa = ('sisa sumber belum diketahui' if aktual['sisa_kg'] is None else
+                'sisa sumber '+teks_kg(aktual['sisa_kg']))
+        if aktual['sisa_karung'] is not None:
+            sisa = f"sisa {aktual['sisa_karung']} karung ~ " + (
+                teks_kg(aktual['sisa_kg']) if aktual['sisa_kg'] is not None else 'bobot belum diketahui')
+    hasil = {"ok": True, "pesan": f"✓ {r.kode_pindah} · {jumlah}{angka} ke {r.nama_silo} ({sisa}){ekor}."}
+    if aktual is not None:
+        hasil['rincian_masukkan'] = aktual
+    if ringkasan_gagal:
+        hasil['ringkasan_tersedia'] = False
+        hasil['pesan'] = f"✓ {r.kode_pindah} tersimpan · {angka} ke {r.nama_silo}. Status bobot dan saldo terbaru belum dapat dimuat; periksa Stok sebelum tindakan berikutnya."
+    return hasil
 
 
 

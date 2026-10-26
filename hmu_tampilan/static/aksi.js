@@ -314,6 +314,10 @@
        Di seluruh spesifikasi, isian itulah yang menyebut benda yang sedang
        dikerjakan; sisanya keputusan yang memang belum diambil. */
     var terkunci = nilaiBaris();
+    var sumberAwalMasukkan = a.konteks_masukkan_silo ? terkunci : '';
+    // Tautan lama menunjuk intake, belum bentuknya. Saat ada karung DAN
+    // curah, tetap bawa intake tersebut tetapi biarkan memilih bagiannya.
+    if (sumberAwalMasukkan && sumberAwalMasukkan.indexOf(':') < 0) terkunci = '';
     var lingkupKemas = id === "catat_packing" && terkunci.indexOf("curah@") === 0 ? terkunci.split("@") : null;
     if (lingkupKemas) terkunci = "";
     var namaKunci = "";
@@ -591,9 +595,11 @@
     var tambahGiling = a.konteks_tambah_giling;
     var tambahSosoh = a.konteks_tambah_sosoh;
     var unitTransferPk = a.unit_transfer_pk;
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk;
+    var masukkanSilo = a.konteks_masukkan_silo;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo;
     var labelSimpan = (tambahGiling || tambahSosoh) ? "Tambahkan silo" : (bebaskanGiling || bebaskanSosoh) ? "Periksa sisa silo" : (selesaiGiling || selesaiSosoh) ? "Periksa penyelesaian" : mulaiSosoh ? "Mulai penyosohan" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     if (unitTransferPk) labelSimpan = unitTransferPk === 'minta' ? 'Minta PK' : 'Catat pengiriman';
+    if (masukkanSilo) labelSimpan = 'Masukkan ke silo';
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
     lembar.classList.toggle("lembar--kadar", !!formAir);
@@ -608,6 +614,7 @@
     lembar.classList.toggle("lembar--tambah-giling", !!tambahGiling);
     lembar.classList.toggle("lembar--tambah-sosoh", !!tambahSosoh);
     lembar.classList.toggle('lembar--unit-pk', !!unitTransferPk);
+    lembar.classList.toggle('lembar--masukkan-silo', !!masukkanSilo);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
       '<div class="lembar__isi">' +
@@ -634,6 +641,76 @@
     lembar.oninput = lembar.onchange = function () { lembar._berubah = true; };
     bukaLembar(lembar);
     document.body.style.overflow = "hidden";
+
+    var dataMasukkan=null, nomorMasukkan=0, timerMasukkan;
+    var kunciMasukkan=masukkanSilo?'silo-web-'+Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(16)),function(n){return n.toString(16).padStart(2,'0');}).join(''):'';
+    function medanMasukkan(nama,tampil,wajib){
+      var e=$('f_'+nama);if(!e)return;
+      e.disabled=!tampil;e.hidden=!tampil;e.dataset.pratinjauNonaktif=tampil?'':'1';e.toggleAttribute('data-wajib',!!wajib&&tampil);
+      e.closest('.hasil-field').hidden=!tampil;
+    }
+    function kgMasukkan(kg,final){return kg==null?'Belum diketahui':(final===false?'± ':'')+Number(kg).toLocaleString('id-ID',{maximumFractionDigits:3})+' kg';}
+    function pasanganMasukkan(label,isi,utama){return '<div class="mi-pair'+(utama?' mi-total':'')+'"><span>'+esc(label)+'</span><strong>'+esc(isi)+'</strong></div>';}
+    function gambarMasukkan(d){
+      var s=d&&d.sumber;
+      var bantuanJumlah=$('mi-all').parentElement;bantuanJumlah.hidden=!s;
+      if(!s){$('mi-stock').innerHTML='<p class="hasil-help">Pilih sumber untuk melihat saldo tersedia dan satuan pencatatan.</p>';return;}
+      var karung=s.bentuk==='karung',curah=s.bentuk==='curah';
+      medanMasukkan('jumlah_karung',karung,true);medanMasukkan('berat_kg',!karung,true);medanMasukkan('jumlah_karung_partai',s.bisa_lengkapi,false);
+      var labelKg=lembar.querySelector('label[for="f_berat_kg"]');if(labelKg)labelKg.textContent=curah?'Berat curah yang dimasukkan (kg)':'Berat hasil timbang — jalur data lama (kg)';
+      var bentuk=karung?'Berkarung':curah?'Curah':'Data lama / bagian karung';
+      $('mi-stock').innerHTML='<div class="mi-stock-head"><div><strong>'+esc(s.kode)+'</strong><small>'+esc(s.pemilik)+' · '+esc(s.asal)+' · Gudang 2</small></div><span class="mi-badge">'+bentuk+'</span></div><div class="mi-stock-values"><div><span>'+(curah?'Berat curah tersedia':'Total berat tersedia')+'</span><strong>'+esc(kgMasukkan(s.saldo_kg,s.bobot_final))+'</strong><small>'+(s.saldo_kg==null?'Menunggu timbang':s.bobot_final?'Bobot final':'Bobot sementara · mengikuti timbang final')+'</small></div><div><span>'+(karung?'Karung utuh tersedia':'Jumlah karung')+'</span><strong>'+esc(curah?'Tidak berlaku':s.karung==null?'Belum tercatat':s.karung+' karung')+'</strong><small>'+(curah?'Stok curah dicatat dalam kg':'Saldo setelah pemindahan/pengeluaran')+'</small></div></div>'+
+        (s.bagian_karung_kg>0.000001?'<p class="mi-note">Ada bagian karung '+esc(kgMasukkan(s.bagian_karung_kg,s.bobot_final))+' di luar karung utuh. Bagian tersebut tetap tercatat setelah pemindahan karung utuh.</p>':'')+
+        (!karung&&!curah?'<p class="mi-note">Jumlah karung belum lengkap atau hanya tersisa bagian karung. Jalur kg lama dipertahankan; sumber ini tidak dinyatakan sebagai stok curah.</p>':'')+
+        ((d.sejawat||[]).length?'<p class="mi-note">Partai ini juga memiliki sumber '+esc(d.sejawat[0].bentuk==='curah'?'curah':'berkarung')+'. Saldo bentuk lainnya tetap terpisah.</p>':'')+
+        '<details><summary>Lihat asal dan saldo awal sumber</summary>'+pasanganMasukkan('Identitas sumber','Intake #'+s.intake_id+' · '+s.bentuk)+pasanganMasukkan('Berat awal partai',kgMasukkan(s.berat_awal,s.bobot_final))+pasanganMasukkan('Karung awal',s.karung_awal==null?'Belum tercatat':s.karung_awal+' karung')+pasanganMasukkan('Tiket timbang',s.tiket_id==null?'Belum tertaut':'#'+s.tiket_id)+((d.sejawat||[]).map(function(x){return pasanganMasukkan('Sumber '+x.bentuk,kgMasukkan(x.saldo_kg,x.bobot_final));}).join(''))+'</details>';
+      var belum='Menunggu jumlah yang valid';
+      $('mi-preview').innerHTML='<h3>Setelah dipindahkan</h3>'+pasanganMasukkan('Bentuk stok',bentuk)+(karung?pasanganMasukkan('Karung masuk silo',$('f_jumlah_karung').value||'Belum diisi'):'')+pasanganMasukkan('Berat masuk silo',d.pesan?'Belum valid':kgMasukkan(d.berat_masuk,s.bobot_final),true)+
+        (karung?'<p class="mi-note">'+esc(s.rasio_kg==null?'Bobot per karung belum diketahui; tetap mengikuti timbang final.':'Bobot per karung partai: '+kgMasukkan(s.rasio_kg,s.bobot_final)+'. Berat dihitung otomatis.')+'</p>':'')+
+        pasanganMasukkan('Silo tujuan',d.tujuan||'Belum dipilih')+(karung?pasanganMasukkan('Sisa karung di tumpukan',d.sisa_karung==null?belum:d.sisa_karung+' karung'):'')+pasanganMasukkan('Sisa berat sumber',d.sisa_kg==null?belum:kgMasukkan(d.sisa_kg,s.bobot_final))+
+        '<p class="mi-note">Pemilik tetap '+esc(s.pemilik)+'. Belum ada stok yang dipindahkan.</p>'+(d.proses.length?'<p class="mi-warning">Silo sedang digunakan '+esc(d.proses.join(', '))+'. Bahan masuk sebagai tambahan proses tersebut; status mesin tidak diubah.</p>':'')+(d.pesan?'<p class="mi-note">'+esc(d.pesan)+'</p>':'');
+      var semua=$('mi-all');semua.textContent=karung?'Isi seluruh '+s.karung+' karung':'Isi seluruh '+kgMasukkan(s.saldo_kg,s.bobot_final);
+      semua.disabled=karung?!(s.karung>0):!(s.saldo_kg>0);
+      $('mi-help').textContent=karung?'Isi karung utuh yang benar-benar dituang. Bobot dihitung dari sumber, bukan ukuran nominal.':curah?'Isi berat curah yang benar-benar dituang. Jumlah karung tidak berlaku.':'Jalur data lama tetap memakai bobot kg hasil timbang. Jangan menebak jumlah karung.';
+    }
+    function perbaruiMasukkan(e){
+      if(!masukkanSilo)return;
+      var asal=e&&e.target&&e.target.dataset.name;
+      if(asal){
+        lembar.querySelectorAll('.formulir-salah').forEach(function(x){x.remove();});
+        lembar.querySelectorAll('[aria-invalid="true"]').forEach(function(x){x.removeAttribute('aria-invalid');x.removeAttribute('aria-describedby');});
+        var pesanLama=lembar.querySelector('.formulir-gagal');
+        if(pesanLama&&/^Periksa \d+ isian/.test(pesanLama.textContent))pesanLama.remove();
+      }
+      if(asal==='tumpukan'||asal==='jumlah_karung_partai'){
+        ['jumlah_karung','berat_kg'].forEach(function(n){$('f_'+n).value='';});
+        if(asal==='tumpukan'){$('f_jumlah_karung_partai').value='';$('f_silo').value='';}
+        dataMasukkan=null;$('mi-all').disabled=true;
+        ['jumlah_karung','berat_kg'].forEach(function(n){medanMasukkan(n,false,false);});
+        $('mi-preview').textContent='Memuat sumber dan saldo terbaru…';
+        if(asal==='tumpukan')$('mi-stock').textContent='Memuat sumber stok…';
+      }
+      clearTimeout(timerMasukkan);var nomor=++nomorMasukkan,borang=lembar.querySelector('.lembar__isi');
+      var kunci=['tumpukan','silo','jumlah_karung','berat_kg','jumlah_karung_partai'].map(function(n){return encodeURIComponent(n)+'='+encodeURIComponent(nilaiMedan(n));}).join('&');
+      if(!nilaiMedan('tumpukan')){dataMasukkan=null;gambarMasukkan(null);['jumlah_karung','berat_kg','jumlah_karung_partai'].forEach(function(n){medanMasukkan(n,false,false);});return;}
+      timerMasukkan=setTimeout(function(){ambil(masukkanSilo.source+'?'+kunci).then(function(d){
+        if(nomor!==nomorMasukkan||!lembar.open||lembar.querySelector('.lembar__isi')!==borang)return;
+        dataMasukkan=d;gambarMasukkan(d);
+      }).catch(function(err){if(nomor!==nomorMasukkan||lembar.querySelector('.lembar__isi')!==borang)return;$('mi-preview').textContent='Saldo belum dapat dibaca. Isian tetap utuh. '+String(err);});},150);
+    }
+    if(lembar._masukkan){lembar.removeEventListener('input',lembar._masukkan);lembar.removeEventListener('change',lembar._masukkan);}
+    if(masukkanSilo){
+      var grupMi=lembar.querySelector('.grup');
+      (a.fields||[]).forEach(function(f){var input=grupMi.querySelector('[data-name="'+f.name+'"]'),kunci=input.type==='hidden'?input.previousElementSibling:null,label=grupMi.querySelector('label[for="f_'+f.name+'"]'),wadah=document.createElement('div');wadah.className='hasil-field';grupMi.insertBefore(wadah,label||kunci||input);if(label)wadah.appendChild(label);if(kunci){wadah.insertAdjacentHTML('beforeend','<span class="lbl">'+esc(f.label)+'</span>');wadah.appendChild(kunci);}wadah.appendChild(input);if(f.type==='number'){var unit=document.createElement('div');unit.className='mi-count';input.before(unit);unit.appendChild(input);unit.insertAdjacentHTML('beforeend','<span>'+(['jumlah_karung','jumlah_karung_partai'].indexOf(f.name)>=0?'karung':'kg')+'</span>');if(f.name!=='berat_kg')input.inputMode='numeric';}});
+      grupMi.insertAdjacentHTML('beforebegin','<p class="mi-hint">Pilih sumber stok. Satuan mengikuti bentuk stok yang tercatat.</p>');
+      var layoutMi=document.createElement('div');layoutMi.className='mi-layout';grupMi.before(layoutMi);layoutMi.appendChild(grupMi);
+      var stokMi=document.createElement('section');stokMi.id='mi-stock';stokMi.className='mi-stock';stokMi.setAttribute('aria-label','Saldo sumber stok tersedia');grupMi.querySelector('.hasil-field').after(stokMi);
+      var tombolMi=document.createElement('div');tombolMi.className='mi-quantity-help';tombolMi.innerHTML='<p class="mi-note" id="mi-help"></p><button type="button" id="mi-all" class="btn btn--kecil" disabled>Isi seluruh</button>';grupMi.querySelector('[data-name="silo"]').closest('.hasil-field').before(tombolMi);
+      var previewMi=document.createElement('aside');previewMi.className='mi-result-preview';previewMi.id='mi-preview';previewMi.setAttribute('aria-live','polite');previewMi.textContent='Pilih sumber stok untuk melihat pratinjau pemindahan.';layoutMi.appendChild(previewMi);
+      $('mi-all').onclick=function(){if(!dataMasukkan||!dataMasukkan.sumber)return;var s=dataMasukkan.sumber,n=s.bentuk==='karung'?'jumlah_karung':'berat_kg';$('f_'+n).value=String(s.bentuk==='karung'?s.karung:s.saldo_kg);$('f_'+n).dispatchEvent(new Event('input',{bubbles:true}));$('f_'+n).focus();};
+      ['jumlah_karung','berat_kg','jumlah_karung_partai'].forEach(function(n){medanMasukkan(n,false,false);});
+      lembar._masukkan=perbaruiMasukkan;lembar.addEventListener('input',perbaruiMasukkan);lembar.addEventListener('change',perbaruiMasukkan);gambarMasukkan(null);
+    }
 
     function aturUnitPk() {
       if (!unitTransferPk) return;
@@ -2146,6 +2223,7 @@
         perbaruiTg();
         perbaruiTs();
             perbaruiRingkasanAir();
+            perbaruiMasukkan();
             return;
           }
           // Detail tetap menunjuk proses asal meskipun proses itu baru saja
@@ -2200,6 +2278,7 @@
               '>' + esc(o.label) + "</option>";
           }).join("");
         if (dipilih) { s.value = dipilih; }
+        if(masukkanSilo&&f.name==='tumpukan'&&!dipilih&&sumberAwalMasukkan){var bawaanMi=daftar.find(function(o){return o.value===sumberAwalMasukkan||o.value.split(':')[0]===sumberAwalMasukkan;});if(bawaanMi){s.value=bawaanMi.value;s.dispatchEvent(new Event('change',{bubbles:true}));sumberAwalMasukkan='';}}
         if ((selesaiGiling || selesaiSosoh) && f.name==='kode_proses' && semula && semula['kode:kode_proses']) s.value=semula['kode:kode_proses'];
         /* Tiket dari tautan aplikasi Timbangan dibawa sampai ke lembar ini.
            Pilihan tetap menunggu transaksi barang keluar dipilih lebih dulu;
@@ -2265,6 +2344,7 @@
         perbaruiTg();
         perbaruiTs();
         perbaruiRingkasanAir();
+        perbaruiMasukkan();
         ambilAcuanJeda();
         aturWaktuJeda();
       }).catch(function () {});
@@ -2427,6 +2507,7 @@
           return { pilih: b.pilih, jumlah: b.jumlah };
         });
       });
+      if(masukkanSilo) isi.kunci_kiriman=kunciMasukkan;
       return isi;
     }
 
@@ -2504,6 +2585,7 @@
             utama = baris.filter(function (b) { return !/^⚠/.test(b); }).join("\n");
           }
           kabar(utama, "ok", !!formKhusus);
+          if(masukkanSilo&&hasil.rincian_masukkan){var nyataMi=hasil.rincian_masukkan,catatanMi=document.createElement('div');catatanMi.className='mi-receipt';catatanMi.innerHTML='<strong>Hasil tersimpan · '+esc(nyataMi.kode_pindah)+'</strong>'+pasanganMasukkan('Bentuk sumber',nyataMi.bentuk==='karung'?'Berkarung':nyataMi.bentuk==='curah'?'Curah':'Data lama')+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataMi.berat_masuk,nyataMi.bobot_final))+(nyataMi.karung_masuk!=null?pasanganMasukkan('Karung masuk',nyataMi.karung_masuk+' karung'):'')+pasanganMasukkan('Silo tujuan',nyataMi.silo)+pasanganMasukkan('Sisa berat sumber',kgMasukkan(nyataMi.sisa_kg,nyataMi.bobot_final))+(nyataMi.sisa_karung!=null?pasanganMasukkan('Sisa karung',nyataMi.sisa_karung+' karung'):'')+(nyataMi.sejawat||[]).map(function(s){return pasanganMasukkan('Sumber '+s.bentuk+' tetap tersedia',kgMasukkan(s.saldo_kg,s.bobot_final));}).join('');$('kabar').appendChild(catatanMi);}
           if(a.id==='selesai_penyosohan' && kembaliSelesaiSosoh){var draftSs=kembaliSelesaiSosoh.draft;bukaAksi('akhiri_penyosohan',draftSs);}
           if(a.id==='tutup_silo_giling' && kembaliSelesaiGiling){var draftSg=kembaliSelesaiGiling.draft;bukaAksi('selesai_giling',draftSg);}
           if(bebaskanGiling) hasilTerkiniBs(isi);
@@ -2674,6 +2756,8 @@
         if(selesaiGiling && el.dataset.name==="berat_akhir" && nilai && Number.isFinite(Number(nilai.replace(",","."))) && Number(nilai.replace(",","."))<=0)pesan="Hasil akhir PK harus lebih dari nol.";
         if (unitTransferPk && nilai && el.dataset.name === 'jumlah_karung' && (!Number.isInteger(Number(nilai.replace(',', '.'))) || Number(nilai.replace(',', '.')) < 0)) pesan = 'Jumlah karung harus bilangan bulat, nol atau lebih.';
         if (unitTransferPk && nilai && el.dataset.name === 'berat_curah_kg' && Number(nilai.replace(',', '.')) < 0) pesan = 'Bobot curah tidak boleh negatif.';
+        if(masukkanSilo&&nilai&&['jumlah_karung','jumlah_karung_partai'].indexOf(el.dataset.name)>=0&&(!Number.isInteger(Number(nilai.replace(',','.')))||Number(nilai.replace(',','.'))<=0))pesan='Isi jumlah karung bulat lebih dari nol.';
+        if(masukkanSilo&&nilai&&el.dataset.name==='berat_kg'&&Number(nilai.replace(',','.'))<=0)pesan='Isi berat lebih dari nol.';
         if (pesan) { kurang.push({el: el, pesan: pesan}); }
       });
       if (unitTransferPk && $('f_cara').value === 'karung' && !$('f_jumlah_karung').value.trim() && !$('f_berat_curah_kg').value.trim()) {

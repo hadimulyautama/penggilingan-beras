@@ -121,10 +121,12 @@ async def test_kotak_berat_kosong_memindahkan_seluruh_sisanya(pg, g2):
     assert await _sisa(pg, g2["intake"]) <= 0.001
 
 
-async def test_borang_menawarkan_kotak_berat_yang_boleh_kosong(monkeypatch):
-    """Baca katalog nyata, bukan potongan 2.200 karakter yang terputus ketika
-    medan karung ditambahkan. PK lama masih boleh memindahkan seluruh kg,
-    sementara PK baru menawarkan seluruh karung tanpa ketik bobot nominal.
+async def test_borang_satuan_otomatis_dan_jumlah_eksplisit(monkeypatch):
+    """Keputusan26Oktober: web mengisi seluruh sisa lewat tombol eksplisit.
+
+    Medan aktif ditentukan sumber. Kontrak kosong=seluruh sisa untuk klien
+    lama tetap diuji oleh test_kotak_berat_kosong di atas, bukan diterapkan
+    lagi pada formulir Usulan yang baru.
     """
     from tests.test_gudang2_operator import _menu_g2
     menu = await _menu_g2(monkeypatch)
@@ -133,7 +135,10 @@ async def test_borang_menawarkan_kotak_berat_yang_boleh_kosong(monkeypatch):
     assert medan["berat_kg"]["type"] == "number"
     assert not medan["berat_kg"].get("wajib")
     assert "jumlah_karung" in medan
-    assert "kosong" in aksi["hint"].lower()
+    assert 'hasil_timbang' not in medan
+    assert aksi['konteks_masukkan_silo']['source']=='/api/actions/rincian-masukkan-silo'
+    assert medan['tumpukan']['source']=='/api/actions/sumber-masukkan-silo'
+    assert 'kosongkan' not in aksi['hint'].lower()
 
 
 async def test_berat_jauh_di_atas_sisa_tetap_ditolak(pg, g2):
