@@ -6,9 +6,8 @@ Yang dijaga di sini adalah janji-janji yang mahal bila dilanggar:
   · token sesi yang diutak-atik satu huruf pun ditolak — tanda tangannya, bukan
     isinya, yang menentukan;
   · token kedaluwarsa ditolak walau tanda tangannya sah;
-  · operator mendapat sesi PENDEK dan admin sesi panjang, karena operator
-    memakai perangkat gudang yang dipakai bergantian — sesi panjang di sana
-    berarti pekerjaan tercatat atas nama orang sebelumnya.
+  · akun baru termasuk operator memakai perangkat pribadi; sesi pendek
+    tetap tersedia bila perangkat memang dipakai bergantian.
 """
 from __future__ import annotations
 
@@ -120,9 +119,18 @@ def test_umur_sesi_beda_menurut_perangkat():
 # ─────────────────────── Jenis perangkat per peran ───────────────────────
 
 @pytest.mark.parametrize("peran,harapan", [
-    ("operator", "bersama"),   # perangkat gudang: data pabrik tak menetap di HP pribadi
+    ("operator", "pribadi"),  # keputusan pemilik 26 Oktober 2026: HP masing-masing
     ("admin", "pribadi"),
     ("peran_baru_yang_belum_ada", "pribadi"),
 ])
 def test_mode_perangkat_bawaan_menurut_peran(peran, harapan):
     assert mode_bawaan(peran) == harapan
+
+
+def test_operator_baru_mendapat_sesi_pribadi_30_hari(monkeypatch):
+    from app.config import settings
+    from hmu_identitas import peran as P
+
+    monkeypatch.setattr(settings, "sesi_hari", 30)
+    a = AkunPalsu(mode=mode_bawaan(P.OPERATOR))
+    assert sec.umur_sesi_detik(a) == 30 * 24 * 3600

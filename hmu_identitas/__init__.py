@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-VERSI = "2"
+VERSI = "3"
 
 AKAR_PAKET = Path(__file__).resolve().parent
 
