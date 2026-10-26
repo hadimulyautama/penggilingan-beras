@@ -2573,10 +2573,6 @@ async def masukkan_hasil_samping_ke_silo(
     nama_silo: str, berat_kg: float,
 ) -> dict:
     """Pindahkan stok Menir/Reject yang masih tersedia dari hasil sosoh ke silo."""
-    from app.penggilingan.inventory.models import (
-        FinishedGoodsStock, PackageSize, ProductSku)
-    from app.services.stok import output_sosoh
-
     jenis = (jenis or "").strip().lower()
     if jenis not in {"menir", "reject"}:
         raise Gudang2Error("Jenis stok harus Menir atau Reject.")
@@ -2590,70 +2586,15 @@ async def masukkan_hasil_samping_ke_silo(
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
     _pastikan_komoditas_silo(silo, jenis)
 
-    procs = (await db.execute(
-        select(PolishingProcess).where(PolishingProcess.status.in_(("proses", "selesai")))
-        .order_by(PolishingProcess.id)
-    )).scalars().all()
-    from app.penggilingan.inventory.finished_goods import _packed_kg
-    candidates: list[list] = []
-    for proc in procs:
-        hasil = float((await output_sosoh(db, proc.id)).get(jenis) or 0)
-        if hasil <= 0:
-            continue
-        packed_all = await _packed_kg(db, proc.id, jenis, None)
-        packed_owner_q = (select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
-                          .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-                          .where(FinishedGoodsStock.source_type == "polishing",
-                                 FinishedGoodsStock.source_id == proc.id,
-                                 ProductSku.kategori == jenis,
-                                 (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
-                                  else FinishedGoodsStock.jasa_id == jasa_id))
-                          )
-        packed_owner = float((await db.execute(packed_owner_q)).scalar_one())
-        curah_owner = max(0.0, hasil - packed_all) if proc.jasa_id == jasa_id else 0.0
-        moved = float((await db.execute(
-            select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
-            .where(HasilSampingKeSilo.polishing_process_id == proc.id,
-                   HasilSampingKeSilo.jenis == jenis,
-                   (HasilSampingKeSilo.jasa_id.is_(None) if jasa_id is None
-                    else HasilSampingKeSilo.jasa_id == jasa_id))
-        )).scalar_one())
-        candidates.append([proc, max(0.0, curah_owner + packed_owner - moved)])
-
-    milik_keluar = (OutgoingItem.jasa_id.is_(None) if jasa_id is None
-                    else OutgoingItem.jasa_id == jasa_id)
-    keluar_curah = float((await db.execute(
-        select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-        .where(OutgoingItem.item_type == "byproduct_curah",
-               OutgoingItem.jenis_byproduct == jenis, milik_keluar)
-    )).scalar_one())
-    keluar_karung = float((await db.execute(
-        select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-        .join(ProductSku, ProductSku.id == OutgoingItem.product_sku_id)
-        .where(OutgoingItem.item_type == "finished_goods",
-               ProductSku.kategori == jenis, milik_keluar)
-    )).scalar_one())
-    sisa_keluar = keluar_curah + keluar_karung
-    # Stok dikeluarkan FIFO; terapkan pengeluaran lama sebelum merencanakan
-    # perpindahan baru agar aksi tidak menghabiskan kg yang sudah dikirim.
-    for candidate in candidates:
-        consumed = min(candidate[1], sisa_keluar)
-        candidate[1] -= consumed
-        sisa_keluar -= consumed
-
-    sisa_diminta = float(berat_kg)
-    rencana: list[tuple[PolishingProcess, float]] = []
-    for proc, tersedia in candidates:
-        ambil = min(tersedia, sisa_diminta)
-        if ambil > 0.005:
-            rencana.append((proc, ambil))
-            sisa_diminta -= ambil
-        if sisa_diminta <= 0.005:
-            break
-    if sisa_diminta > 0.005:
-        raise Gudang2Error(
-            f"Stok {jenis.title()} yang masih tersedia hanya "
-            f"{float(berat_kg)-sisa_diminta:,.2f} kg.".replace(",", "."))
+    # Saldo harus dibaca SETELAH kunci stok, sebelum kunci tujuan. Dua
+    # kiriman ke silo yang sama/berbeda sebelumnya dapat memakai saldo lama
+    # bersamaan. Kunci ini juga dipakai pengiriman barang dan pemasukan beras;
+    # rumus, urutan FIFO, dan toleransi alokasi tetap tidak berubah.
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
+    from .rencana_hasil_samping import saldo_sumber, alokasikan
+    data = await saldo_sumber(db, jenis, jasa_id)
+    rencana = alokasikan(data, jenis, berat_kg)
 
     await kunci_silo(db, silo.id)
     try:
@@ -2699,7 +2640,8 @@ async def masukkan_hasil_samping_ke_silo(
                                      + (f" | ditambah ke {ke_proses}" if ke_proses else ""))
         codes.append(code)
     await db.commit()
-    return {"nama_silo": silo.nama_silo, "moved_kg": float(berat_kg), "codes": codes}
+    return {"nama_silo": silo.nama_silo, "moved_kg": float(berat_kg), "codes": codes,
+            "jasa_id": jasa_id}
 
 
 @dataclass
