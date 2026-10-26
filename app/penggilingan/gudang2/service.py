@@ -2703,8 +2703,10 @@ async def masukkan_beras_ke_silo(
 ) -> MasukkanBerasResult:
     """Pindahkan grade beras dari curah atau satu SKU kemasan ke silo.
 
-    Sumber proses tidak dipilih pengguna. Curah dialokasikan FIFO ke proses
-    pabrik/pesanan yang menghasilkan grade tersebut; kemasan dialokasikan FIFO
+    Sumber proses tidak dipilih pengguna. Curah yang belum dicatat dialokasikan
+    FIFO ke proses pabrik/pesanan yang menghasilkan grade tersebut. Curah
+    tercatat mengambil kg dari batch pada kartu, tanpa perlu dikemas dahulu;
+    kemasan dialokasikan FIFO
     ke baris stok untuk kombinasi merek (termasuk tanpa merek), bahan kemasan,
     ukuran, dan pemilik yang dipilih. Curah maupun kemasan dapat dipilih.
     Setiap sumber dicatat terpisah di buku pemindahan.
@@ -2739,6 +2741,11 @@ async def masukkan_beras_ke_silo(
         raise Gudang2Error("Sebutkan silo tujuannya.")
     if not sumber_stok:
         raise Gudang2Error("Pilih bentuk stok beras yang akan dipindahkan.")
+    # Curah tercatat juga dapat dikemas ulang dari layar lain. Pakai kunci
+    # saldo yang sama SEBELUM mengunci proses/batch agar kedua aksi tidak
+    # memakai kg yang sama atau mengambil kunci dalam urutan berlawanan.
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
@@ -2749,6 +2756,7 @@ async def masukkan_beras_ke_silo(
     std = await get_standard(db, jenis)
     alokasi: dict[int, float] = {}
     baris_karung: list[tuple[FinishedGoodsStock, int]] = []
+    baris_curah: list[tuple[FinishedGoodsStock, float]] = []
     rencana_pindah: list[tuple[int | None, str, int | None, int | None, float]] = []
     dibongkar_kg = 0.0
 
@@ -2785,6 +2793,31 @@ async def masukkan_beras_ke_silo(
                 f"Stok curah {jenis} untuk pemilik ini tinggal "
                 f"{berat_kg - perlu:,.2f} kg; tak cukup untuk "
                 f"{berat_kg:,.2f} kg.".replace(",", "."))
+    elif sumber_stok.startswith("curah:"):
+        try:
+            row_id = int(sumber_stok.partition(":")[2])
+        except ValueError:
+            raise Gudang2Error("Pilih stok curah tercatat yang valid.") from None
+        row = await db.scalar(select(FinishedGoodsStock)
+            .where(FinishedGoodsStock.id == row_id)
+            .with_for_update().execution_options(populate_existing=True))
+        sku = await db.get(ProductSku, row.product_sku_id) if row else None
+        if (row is None or not row.curah_kemas_ulang or row.jumlah_karung != 0
+                or row.jasa_id != jasa_id or sku is None or sku.kategori != kategori_sku
+                or row.rice_quality_standard_id != (std.id if std else None)):
+            raise Gudang2Error("Stok curah tidak cocok dengan jenis beras dan pemilik yang dipilih.")
+        if berat_kg > float(row.berat_total_kg):
+            raise Gudang2Error(
+                f"Stok curah tercatat tinggal {float(row.berat_total_kg):,.2f} kg; "
+                f"tak cukup untuk {berat_kg:,.2f} kg.".replace(",", "."))
+        proc_id = row.source_id if row.source_type == "polishing" else None
+        if row.source_type == "polishing" and proc_id is None:
+            raise Gudang2Error("Asal proses stok curah tidak tercatat; perpindahan dibatalkan.")
+        if proc_id is not None:
+            alokasi[proc_id] = berat_kg
+        baris_curah.append((row, berat_kg))
+        rencana_pindah.append((proc_id, row.source_type, row.source_id,
+                               row.product_sku_id, berat_kg))
     elif sumber_stok == "legacy":
         from math import ceil
 
@@ -2941,6 +2974,21 @@ async def masukkan_beras_ke_silo(
         [u.id, None if u.berat_akhir_kg is None else float(u.berat_akhir_kg)]
         for u in usages_sebelum], "usage_aktif": [
         u.id for u in usages_sebelum if u.berat_akhir_kg is None]}
+    for row, ambil_kg in baris_curah:
+        cuplikan["stok"].append({
+            "id": row.id, "product_sku_id": row.product_sku_id,
+            "rice_quality_standard_id": row.rice_quality_standard_id,
+            "source_type": row.source_type, "source_id": row.source_id,
+            "jumlah_karung": 0, "berat_total_kg": ambil_kg,
+            "hpp_per_kg": None if row.hpp_per_kg is None else float(row.hpp_per_kg),
+            "warehouse_id": row.warehouse_id, "waktu": row.waktu.isoformat(),
+            "input_by": row.input_by, "jasa_id": row.jasa_id,
+            "curah_kemas_ulang": True,
+            "kemasan_mengurangi_stok": row.kemasan_mengurangi_stok,
+        })
+        # Pertahankan batch yang habis: riwayat catat curah/kemas ulang masih
+        # menunjuknya, dan undo mengembalikan kg ke bentuk serta asal yang sama.
+        row.berat_total_kg = Decimal(str(row.berat_total_kg)) - Decimal(str(ambil_kg))
     # Kurangi hanya karung yang dipilih. Asal tiap baris stok tetap ditandai
     # di BerasKeSilo, termasuk stok timbang/retur yang bukan hasil penyosohan.
     for row, ambil in baris_karung:

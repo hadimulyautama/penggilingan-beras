@@ -35,8 +35,10 @@ class Akun(Base, TimestampMixin):
     #: aktif | nonaktif — CERMIN dari `users.status` yang disetel bersama-sama
     #: lewat `masuk.nonaktifkan`; keputusan "boleh masuk?" membaca keduanya.
     status: Mapped[str] = mapped_column(String(20), default=AKTIF, nullable=False)
-    #: pribadi | bersama — umur sesi menurut jenis perangkat (lihat `mode_bawaan`).
-    mode_perangkat: Mapped[str] = mapped_column(String(10), default=BERSAMA, nullable=False)
+    #: HP masing-masing operator adalah perangkat pribadi (pemilik 26 Okt
+    #: 2026). Perangkat yang bergantian tetap boleh dipilih sebagai BERSAMA.
+    mode_perangkat: Mapped[str] = mapped_column(
+        String(10), default=PRIBADI, server_default=PRIBADI, nullable=False)
     harus_ganti_sandi: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     terakhir_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     #: Ikut di dalam token; naik saat keluar-semua, ganti/reset sandi, ganti
@@ -73,5 +75,10 @@ class Akun(Base, TimestampMixin):
 
 
 def mode_bawaan(peran: str | None) -> str:
-    """Operator → perangkat gudang bersama (sesi pendek); selebihnya pribadi."""
-    return BERSAMA if P.operator_saja(peran) else PRIBADI
+    """Akun baru memakai perangkat pribadi, termasuk operator.
+
+    Peran tetap diterima supaya pembuat akun dan penyemaian lama memakai
+    satu pintu yang sama. Umur sesi mengikuti perangkat, bukan jabatan;
+    pemilik memastikan tiap operator memakai HP-nya sendiri pada 26 Okt 2026.
+    """
+    return PRIBADI

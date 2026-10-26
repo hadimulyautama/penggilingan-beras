@@ -1053,17 +1053,10 @@ async def _dipindah_silo_proc(db: AsyncSession, proc_ids: list[int]
     bukan cuma proses — satu proses bisa memindahkan beberapa grade
     sekaligus.
 
-    ⚠ `stok_produk()` (ledger `/stok-produk`) SENGAJA TAK memakai fungsi ini.
-    Broken punya jalan yang SAMA (`broken_ke_silo`) tetapi hanya tersambung
-    ke `stok_produk()` lewat `hitung_stok_broken_curah()` — jalur `curah_saja`
-    yang sudah ada SEBELUM silo broken lahir. Beras grade tak punya jalur
-    "curah_saja" serupa (ia selalu masuk cabang generik `else`), dan
-    menganyam suku baru ke cabang itu — yang sudah tiga kali punya catatan
-    bug di komentarnya sendiri — berisiko menggeser invarian `hasil = curah +
-    dikemas + keluar` yang dijaga `test_persamaan_empat_suku_bertahan_di_
-    setiap_langkah`. Dibiarkan sebagai kesenjangan yang SAMA besarnya dengan
-    yang sudah diterima untuk broken (`_isian_silo` juga tak membaca
-    `broken_ke_silo`) — bukan baru, bukan diperbesar oleh fitur ini.
+    `stok_produk()` juga memakainya: kg yang sudah masuk silo bukan lagi
+    curah yang belum dialokasikan. Saat batch curah/kemasan dikurangi,
+    penambahan di ledger ini menahan kg tersebut agar tidak terbaca sebagai
+    hasil mesin yang belum dicatat dan bisa dipakai lagi.
     """
     from app.penggilingan.gudang2.models import BerasKeSilo
 
@@ -1751,6 +1744,9 @@ async def stok_produk(db: AsyncSession, *,
     # cacatnya.
     dikemas_proc: dict[str, float] = {}
     masuk_curah_proc: dict[str, float] = {}
+    beras_dipindah_proc: dict[str, float] = {}
+    for (_, jenis), kg in (await _dipindah_silo_proc(db, proc_ids)).items():
+        beras_dipindah_proc[jenis] = beras_dipindah_proc.get(jenis, 0.0) + kg
     if proc_ids:
         for kategori, mutu, kg in (await db.execute(
             select(ProductSku.kategori, RiceQualityStandard.kode,
@@ -1873,7 +1869,9 @@ async def stok_produk(db: AsyncSession, *,
             # kepemilikan_barang_jadi`, berlaku untuk SKU apa pun, termasuk
             # beras/menir/reject) tak boleh membuatnya seolah belum pernah
             # dikemas sama sekali. Lihat catatan panjang di dekat deklarasinya.
-            curah = h - dikemas_proc.get(jenis, 0.0) - keluar_curah.get(jenis, 0.0)
+            curah = (h - dikemas_proc.get(jenis, 0.0)
+                     - beras_dipindah_proc.get(jenis, 0.0)
+                     - keluar_curah.get(jenis, 0.0))
         sisa = punya_rumah + curah - pindah_silo.get(jenis, 0.0)
         if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
             continue

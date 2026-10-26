@@ -969,13 +969,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "masukkan_beras_silo", "label": "📤 Masukkan beras ke silo",
              "post": "/api/actions/masukkan-beras-silo",
              "hint": "Jenis beras dan pemilik mengikuti kartu yang dipilih. "
-                     "Pilih merek dan kemasan stok yang ingin dipindahkan, lalu masukkan beratnya. "
+                     "Pilih stok curah atau kemasan yang ingin dipindahkan, lalu masukkan beratnya. "
                      "Untuk kemasan, berat harus kelipatan ukuran karung.",
              "fields": [
                  {"name": "jenis", "label": "Jenis beras", "type": "remote",
                   "source": "/api/actions/beras-jenis-silo",
                   "kosong": "Belum ada jenis beras yang bisa dipindahkan."},
-                 {"name": "sumber_stok", "label": "Merek dan kemasan", "type": "remote",
+                 {"name": "sumber_stok", "label": "Bentuk stok · curah atau kemasan", "type": "remote",
                   "source": "/api/actions/beras-sumber-tersedia", "induk": "jenis",
                   "kosong": "Tidak ada stok dengan pemilik dan jenis beras ini."},
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
@@ -5707,6 +5707,22 @@ async def beras_sumber_tersedia(induk: str | None = None,
                                "label": f"Curah{owner_suffix} · "
                                         f"{_kg(curah_total)} tersedia"})
 
+            # Batch nol karung sudah dialokasikan dari hasil mesin, sehingga
+            # tidak muncul di curah_total. Tawarkan baris nyatanya sendiri;
+            # SKU batch hanya penanda produk, bukan kewajiban memakai karung.
+            curah_rows = (await db.scalars(select(FinishedGoodsStock)
+                .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+                .where(ProductSku.kategori == kategori_sku, std_filter,
+                       FinishedGoodsStock.curah_kemas_ulang.is_(True),
+                       FinishedGoodsStock.berat_total_kg > 0,
+                       FinishedGoodsStock.jasa_id.is_(None) if owner is None
+                       else FinishedGoodsStock.jasa_id == owner)
+                .order_by(FinishedGoodsStock.waktu, FinishedGoodsStock.id))).all()
+            for row in curah_rows:
+                keluar.append({"value": f"curah:{row.id}|{owner_token}",
+                               "label": f"Curah tercatat{owner_suffix} · "
+                                        f"{_kg(float(row.berat_total_kg))} tersedia"})
+
             milik = (FinishedGoodsStock.jasa_id.is_(None) if owner is None
                      else FinishedGoodsStock.jasa_id == owner)
             skus = (await db.execute(
@@ -5744,7 +5760,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
 
 class MasukkanBerasSiloReq(BaseModel):
     jenis: str       # grade|pabrik atau grade|jasa, otomatis dari kartu stok
-    sumber_stok: str # curah|pemilik atau sku:<id>|pemilik
+    sumber_stok: str # curah|pemilik, curah:<batch>|pemilik, atau sku:<id>|pemilik
     silo: str        # nama silo Beras atau PK, mis. "C"
     berat_kg: Positif
 
