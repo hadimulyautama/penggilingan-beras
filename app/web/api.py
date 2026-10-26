@@ -942,6 +942,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)", "type": "number"},
              ]},
             {"id": "masukkan_reject_silo", "label": "📤 Masukkan reject ke silo",
+             "konteks_reject_silo": {"source": "/api/actions/rincian-reject-silo"},
              "post": "/api/actions/masukkan-reject-silo",
              "hint": "Hanya stok reject yang tersedia; pemilik stok dibawa ke silo.",
              "fields": [
@@ -5503,23 +5504,24 @@ async def _act_masukkan_hasil_samping(req: MasukkanHasilSampingSiloReq,
             raise _err(e, f"Gagal memasukkan {jenis} ke silo.")
     hasil = {"ok": True, "pesan": f"✓ {result['moved_kg']:,.2f} kg {jenis} masuk "
             f"ke {result['nama_silo']}.".replace(",", ".")}
-    if jenis == 'menir':
+    if jenis in ('menir', 'reject'):
+        kunci_rincian = 'rincian_' + jenis
         # Jawaban tambahan membaca catatan yang sudah commit, bukan estimasi
         # browser. Kegagalan pembacaan tidak membatalkan keberhasilan transaksi.
-        hasil['rincian_menir'] = dict(kg=None, silo=result['nama_silo'],
+        hasil[kunci_rincian] = dict(kg=None, silo=result['nama_silo'],
                                      codes=result['codes'], setelah=None)
         try:
             from app.services.rencana_menir_silo import rincian
             from app.models import HasilSampingKeSilo
             from sqlalchemy import select, func
             async with SessionLocal() as db:
-                hasil['rincian_menir']['kg'] = float(await db.scalar(
+                hasil[kunci_rincian]['kg'] = float(await db.scalar(
                     select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
                     .where(HasilSampingKeSilo.kode_pindah.in_(result['codes']))))
-                hasil['rincian_menir']['setelah'] = await rincian(
-                    db, str(result['jasa_id']) if result['jasa_id'] is not None else 'pabrik')
+                hasil[kunci_rincian]['setelah'] = await rincian(
+                    db, str(result['jasa_id']) if result['jasa_id'] is not None else 'pabrik', jenis=jenis)
         except Exception:
-            log.exception('Saldo menir sesudah simpan belum terbaca')
+            log.exception('Saldo %s sesudah simpan belum terbaca', jenis)
     return hasil
 
 
@@ -5534,6 +5536,20 @@ async def rincian_menir_silo(pemilik: str = '', berat_kg: str = '', silo: str = 
     async with SessionLocal() as db:
         try:
             return await rincian(db, pemilik, berat_kg, silo)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+
+
+@router.get("/actions/rincian-reject-silo")
+async def rincian_reject_silo(pemilik: str = '', berat_kg: str = '', silo: str = '',
+                           user: User = Depends(pengguna_aksi)) -> dict:
+    from hmu_identitas import peran as P
+    _require((await _is_g2_operator(user) and not can_see_financials(user))
+             or P.super_saja(user.role))
+    from app.services.rencana_menir_silo import rincian
+    async with SessionLocal() as db:
+        try:
+            return await rincian(db, pemilik, berat_kg, silo, jenis="reject")
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
 

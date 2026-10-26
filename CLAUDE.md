@@ -1246,9 +1246,20 @@ Dua celah yang ditemukan uji terisolasi diperbaiki tanpa mengganti rumus:
 layanan mengunci saldo bersama barang keluar SEBELUM membaca alokasi,
 sehingga dua permintaan600kg tidak memakai950kg menjadi1200kg; pembaca
 `pemilik_silo_g2` juga membaca muatan Menir/Reject terbaru agar menir jasa
-tidak dinyatakan milik pabrik. Reject tetap memakai kontrak serta UI lama.
+tidak dinyatakan milik pabrik. Pada tahap Menir tersebut, Reject tetap memakai kontrak serta UI lama.
 
 Batas lama: pemindahan HSS memiliki audit, tetapi belum ada penangan undo
 otomatis. UI menahan kiriman ulang bila hasil jaringan belum terkonfirmasi;
 ini bukan idempotensi backend. Jangan menjanjikan pembatalan otomatis atau
 retry aman hanya karena audit dan tombol Stok tersedia.
+
+## Masukkan Reject ke silo — formulir (26 Oktober 2026)
+
+Reject memakai renderer Menir dengan label dan sumber baca Reject. Tiga field
+`pemilik`, `silo`, `berat_kg` dan POST lama tetap; rincian respons tambahan
+`rincian_reject` membaca catatan yang sudah tersimpan. GET rincian memakai
+penjaga efektif yang sama dengan simpan. `rencana_menir_silo.rincian` kini
+menerima keyword `jenis`, default Menir tetap kompatibel. Saldo/alokasi tetap
+berasal dari `rencana_hasil_samping`; tidak ada perubahan writer, formula,
+toleransi, kemasan, atau penguncian pada perapian Reject ini. Pembatalan HSS
+otomatis masih belum didukung layanan lama; jangan menyatakan sudah tersedia.
