@@ -4016,38 +4016,44 @@ body.padiflow-ui .lembar--beras-silo .mi-count .fld{font-size:1.5rem;min-height:
 
 .lembar--beras-silo .mi-note.mi-inline-error{color:var(--bahaya)}
 
-/* Menir: penataan khusus; Reject tetap memakai borang lama. */
-body.padiflow-ui .lembar--menir-silo .lembar__isi{max-width:1000px}
-.lembar--menir-silo .mi-hint{font-size:.85rem;color:var(--redup);margin:0 0 20px;line-height:1.6}
-.lembar--menir-silo .mi-layout{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:28px;align-items:start}
-.lembar--menir-silo .hasil-field[hidden],.lembar--menir-silo .mi-quantity-help[hidden]{display:none}
-.lembar--menir-silo .mi-stock{background:var(--panel-2);padding:16px;border-radius:11px;display:grid;gap:12px;min-width:0;margin:0 0 20px;overflow-wrap:anywhere}
-.lembar--menir-silo .mi-stock-head{display:flex;align-items:start;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem}
-.lembar--menir-silo .mi-stock-head small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:4px}
-.lembar--menir-silo .mi-badge{background:var(--panel);border:1px solid var(--garis);border-radius:6px;padding:3px 8px;font-size:.72rem;white-space:normal}
-.lembar--menir-silo .mi-stock-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.lembar--menir-silo .mi-stock-values>div{display:grid;gap:6px;min-width:0}.lembar--menir-silo .mi-stock-values span,.lembar--menir-silo .mi-stock-values small{color:var(--redup);font-size:.74rem;line-height:1.6}
-.lembar--menir-silo .mi-stock-values strong{font-size:1.2rem;font-weight:550;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.lembar--menir-silo .mi-stock details{border-top:1px solid var(--garis);padding-top:10px;font-size:.8rem}.lembar--menir-silo summary{min-height:34px;color:var(--aman);cursor:pointer}
-.lembar--menir-silo .mi-count{display:flex;align-items:center;gap:12px;min-width:0}.lembar--menir-silo .mi-count span{flex-shrink:0;color:var(--redup);font-size:.85rem}
-body.padiflow-ui .lembar--menir-silo .lembar__isi .mi-count input.fld{font-size:1.5rem;min-height:54px;font-weight:550;font-variant-numeric:tabular-nums}
-.lembar--menir-silo .mi-note{margin:0;color:var(--redup);font-size:.77rem;line-height:1.7;overflow-wrap:anywhere}
-.lembar--menir-silo .mi-quantity-help{display:grid;gap:9px;margin:0 0 20px}.lembar--menir-silo #mi-all{justify-self:start;text-align:left;white-space:normal;color:var(--aman);font-size:.8rem;min-height:40px}
-.lembar--menir-silo .mi-result-preview{display:grid;gap:8px;min-width:0;border-left:1px solid var(--garis);padding-left:25px;font-size:.85rem;overflow-wrap:anywhere}
-.lembar--menir-silo .mi-result-preview h3{font-size:1rem;margin:0 0 3px}.lembar--menir-silo .mi-pair{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:.8rem;min-width:0}.lembar--menir-silo .mi-pair span{color:var(--redup)}.lembar--menir-silo .mi-pair strong{text-align:right;font-variant-numeric:tabular-nums;max-width:58%;overflow-wrap:anywhere;font-weight:550}
-.lembar--menir-silo .mi-total{border-block:1px solid var(--garis);padding-block:10px}.lembar--menir-silo .mi-total strong{font-size:1.2rem;color:var(--aman)}
-.lembar--menir-silo .mi-warning{padding:11px 12px;border:0;border-radius:9px;background:var(--hati-muda);color:var(--hati);font-size:.8rem;line-height:1.5;margin:0}.lembar--menir-silo .hasil-actions{margin-top:22px}
-@media(max-width:680px){.lembar--menir-silo .mi-layout{grid-template-columns:minmax(0,1fr);gap:5px}.lembar--menir-silo .mi-result-preview{border-left:0;padding-left:0;border-top:1px solid var(--garis);padding-top:18px}.lembar--menir-silo .mi-stock{padding:13px}.lembar--menir-silo .mi-stock-values strong{font-size:1.08rem}}
+/* Saldo dan ringkasan Menir/Reject; pengemasan beras memakai susunan yang sama. */
+body.padiflow-ui :is(.lembar--menir-silo,.lembar--kemas-beras) .lembar__isi{max-width:1000px}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-hint{font-size:.85rem;color:var(--redup);margin:0 0 20px;line-height:1.6}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-layout{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:28px;align-items:start}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .hasil-field[hidden],:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-quantity-help[hidden]{display:none}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock{background:var(--panel-2);padding:16px;border-radius:11px;display:grid;gap:12px;min-width:0;margin:0 0 20px;overflow-wrap:anywhere}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-head{display:flex;align-items:start;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-head small{display:block;color:var(--redup);font-size:.75rem;line-height:1.6;margin-top:4px}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-badge{background:var(--panel);border:1px solid var(--garis);border-radius:6px;padding:3px 8px;font-size:.72rem;white-space:normal}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values>div{display:grid;gap:6px;min-width:0}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values span,:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values small{color:var(--redup);font-size:.74rem;line-height:1.6}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values strong{font-size:1.2rem;font-weight:550;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock details{border-top:1px solid var(--garis);padding-top:10px;font-size:.8rem}:is(.lembar--menir-silo,.lembar--kemas-beras) summary{min-height:34px;color:var(--aman);cursor:pointer}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-count{display:flex;align-items:center;gap:12px;min-width:0}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-count span{flex-shrink:0;color:var(--redup);font-size:.85rem}
+body.padiflow-ui :is(.lembar--menir-silo,.lembar--kemas-beras) .lembar__isi .mi-count input.fld{font-size:1.5rem;min-height:54px;font-weight:550;font-variant-numeric:tabular-nums}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-note{margin:0;color:var(--redup);font-size:.77rem;line-height:1.7;overflow-wrap:anywhere}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-quantity-help{display:grid;gap:9px;margin:0 0 20px}:is(.lembar--menir-silo,.lembar--kemas-beras) #mi-all{justify-self:start;text-align:left;white-space:normal;color:var(--aman);font-size:.8rem;min-height:40px}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-result-preview{display:grid;gap:8px;min-width:0;border-left:1px solid var(--garis);padding-left:25px;font-size:.85rem;overflow-wrap:anywhere}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-result-preview h3{font-size:1rem;margin:0 0 3px}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-pair{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:.8rem;min-width:0}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-pair span{color:var(--redup)}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-pair strong{text-align:right;font-variant-numeric:tabular-nums;max-width:58%;overflow-wrap:anywhere;font-weight:550}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-total{border-block:1px solid var(--garis);padding-block:10px}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-total strong{font-size:1.2rem;color:var(--aman)}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-warning{padding:11px 12px;border:0;border-radius:9px;background:var(--hati-muda);color:var(--hati);font-size:.8rem;line-height:1.5;margin:0}:is(.lembar--menir-silo,.lembar--kemas-beras) .hasil-actions{margin-top:22px}
+@media(max-width:680px){:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-layout{grid-template-columns:minmax(0,1fr);gap:5px}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-result-preview{border-left:0;padding-left:0;border-top:1px solid var(--garis);padding-top:18px}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock{padding:13px}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values strong{font-size:1.08rem}}
 
-.lembar--menir-silo .mi-source-title{font-size:.85rem;line-height:1.6;margin:8px 0 14px;overflow-wrap:anywhere}
-.lembar--menir-silo .mn-source,.lembar--menir-silo .mn-balance{display:grid;gap:8px;border-top:1px solid var(--garis);padding-top:10px;margin-top:10px}
-.lembar--menir-silo .mn-source small{color:var(--redup);font-size:.77rem;overflow-wrap:anywhere}
-.lembar--menir-silo h4{margin:0}.lembar--menir-silo .mn-pending{border-block:1px solid var(--garis);padding-block:10px}.lembar--menir-silo .mn-pending strong{font-weight:500;color:var(--redup)}
-.lembar--menir-silo .mi-count{flex-wrap:wrap}.lembar--menir-silo .mi-count>.formulir-salah{flex-basis:100%;order:3;margin:0}body.padiflow-ui .lembar--menir-silo .mi-count .fld{width:0;flex:1 1 0}
-.lembar--menir-silo .mi-stock small{display:block}.lembar--menir-silo .hasil-field>.mi-note{margin-top:8px}
-@media(max-width:450px){.lembar--menir-silo .mi-stock-values{grid-template-columns:minmax(0,1fr)}}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-source-title{font-size:.85rem;line-height:1.6;margin:8px 0 14px;overflow-wrap:anywhere}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mn-source,:is(.lembar--menir-silo,.lembar--kemas-beras) .mn-balance{display:grid;gap:8px;border-top:1px solid var(--garis);padding-top:10px;margin-top:10px}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mn-source small{color:var(--redup);font-size:.77rem;overflow-wrap:anywhere}
+:is(.lembar--menir-silo,.lembar--kemas-beras) h4{margin:0}:is(.lembar--menir-silo,.lembar--kemas-beras) .mn-pending{border-block:1px solid var(--garis);padding-block:10px}:is(.lembar--menir-silo,.lembar--kemas-beras) .mn-pending strong{font-weight:500;color:var(--redup)}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-count{flex-wrap:wrap}:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-count>.formulir-salah{flex-basis:100%;order:3;margin:0}body.padiflow-ui :is(.lembar--menir-silo,.lembar--kemas-beras) .mi-count .fld{width:0;flex:1 1 0}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock small{display:block}:is(.lembar--menir-silo,.lembar--kemas-beras) .hasil-field>.mi-note{margin-top:8px}
+@media(max-width:450px){:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values{grid-template-columns:minmax(0,1fr)}}
 
-.lembar--menir-silo .mi-note.mi-inline-error{color:var(--bahaya)}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-note.mi-inline-error{color:var(--bahaya)}
 
-.lembar--menir-silo .mi-stock-values{grid-template-columns:minmax(0,1fr)}
-.lembar--menir-silo .mn-impact{display:grid;gap:6px;padding:12px;background:var(--panel-2);border-radius:9px;font-size:.8rem}.lembar--menir-silo .mn-impact>span{font-size:1.3rem;font-variant-numeric:tabular-nums}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mi-stock-values{grid-template-columns:minmax(0,1fr)}
+:is(.lembar--menir-silo,.lembar--kemas-beras) .mn-impact{display:grid;gap:6px;padding:12px;background:var(--panel-2);border-radius:9px;font-size:.8rem}:is(.lembar--menir-silo,.lembar--kemas-beras) .mn-impact>span{font-size:1.3rem;font-variant-numeric:tabular-nums}
+
+.lembar--kemas-beras .pk-bags,.lembar--kemas-beras .pk-remain{display:grid;gap:9px;padding:14px;border-radius:9px;background:var(--panel-2);font-size:.8rem;min-width:0;overflow-wrap:anywhere;margin-bottom:16px}.lembar--kemas-beras .pk-remain{margin:6px 0}.lembar--kemas-beras .pk-remain h4{margin:0}.lembar--kemas-beras [hidden]{display:none!important}
+body.padiflow-ui .lembar--kemas-beras .lembar__isi #f_jumlah_karung{font-size:1.5rem;min-height:54px;font-weight:550}.lembar--kemas-beras .jumlah-berdampingan{min-width:0}.lembar--kemas-beras .maksimal-kemas{min-width:0;overflow-wrap:anywhere}
+
+.lembar--kemas-beras .jumlah-berdampingan{grid-template-columns:minmax(0,1fr)}
+.lembar--kemas-beras .maksimal-kemas{display:flex;justify-content:space-between;align-items:center;gap:12px;border-left:0;padding:10px 12px}.lembar--kemas-beras .maksimal-kemas span{font-size:12px;letter-spacing:0;text-transform:none;font-weight:400}.lembar--kemas-beras .maksimal-kemas strong{font-size:14px;text-align:right}

@@ -9,6 +9,19 @@ sini.
 > dibubarkan 8 September 2026; pencatatan seluruhnya lewat webapp ini. Yang
 > tersisa satu bot, milik Kantor, untuk Direksi & pengawas — baca saja.
 
+## Pengemasan beras (26 Oktober 2026)
+
+`catat_packing` tetap empat field (`sumber`, `kemasan`, `merk`,
+`jumlah_karung`) dan satu proses sumber. Ringkasan baca saja
+`/api/actions/rincian-packing-beras` memakai `finished_goods.saldo_packing`,
+yaitu pembacaan saldo yang diekstrak tanpa perubahan dari writer lama.
+Saldo ini berbeda dari seluruh stok curah: hasil dikurangi yang sudah
+dikemas/dicatat curah dan dipindahkan ke silo. Akun karung jasa mengikuti
+kontak pelanggan. Saldo karung kurang tetap informasi, bukan penolakan baru.
+Izin ringkasan sama dengan POST packing (termasuk Admin); jangan menyalin
+pembatasan khusus Masukkan ke silo. Hasil samping mempertahankan jalur lama.
+Uji domain/HTTP: `tests/pg/test_form_pengemasan_beras.py`.
+
 ## Tempat kerja
 
 Repo BERSEBELAHAN di satu folder induk (`Hadi Mulya Systems/`): `produksi/`

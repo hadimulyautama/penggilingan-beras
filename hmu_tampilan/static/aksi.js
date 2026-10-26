@@ -600,14 +600,16 @@
     var masukkanBroken = a.konteks_broken_silo;
     var masukkanBeras = a.konteks_beras_silo;
     // Menir dan Reject memakai kontrak tiga field serta alokasi domain yang sama.
+    var kemasBeras = a.konteks_kemas_beras;
     var masukkanMenir = a.konteks_menir_silo || a.konteks_reject_silo;
     var jenisMn = a.konteks_reject_silo ? 'reject' : 'menir', labelMn = a.konteks_reject_silo ? 'Reject' : 'Menir';
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo || masukkanBroken || masukkanBeras || masukkanMenir;
+    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo || masukkanBroken || masukkanBeras || masukkanMenir || kemasBeras;
     var labelSimpan = (tambahGiling || tambahSosoh) ? "Tambahkan silo" : (bebaskanGiling || bebaskanSosoh) ? "Periksa sisa silo" : (selesaiGiling || selesaiSosoh) ? "Periksa penyelesaian" : mulaiSosoh ? "Mulai penyosohan" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     if (unitTransferPk) labelSimpan = unitTransferPk === 'minta' ? 'Minta PK' : 'Catat pengiriman';
     if (masukkanSilo) labelSimpan = 'Masukkan ke silo';
     if (masukkanBroken) labelSimpan = 'Masukkan broken ke silo';
     if (masukkanMenir) labelSimpan = 'Masukkan '+jenisMn+' ke silo';
+    if (kemasBeras) labelSimpan = 'Catat pengemasan';
     if (masukkanBeras) labelSimpan = 'Masukkan beras ke silo';
     var lembar = $("lembar");
     lembar.classList.toggle("lembar--hasil", !!formKhusus);
@@ -626,6 +628,7 @@
     lembar.classList.toggle('lembar--masukkan-silo', !!masukkanSilo);
     lembar.classList.toggle('lembar--broken-silo', !!masukkanBroken);
     lembar.classList.toggle('lembar--beras-silo', !!masukkanBeras);
+    lembar.classList.toggle('lembar--kemas-beras', !!kemasBeras);
     lembar.classList.toggle('lembar--menir-silo', !!masukkanMenir);
     lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
@@ -751,6 +754,46 @@
       var fldBk=$('f_berat_kg').closest('.hasil-field'),siloBk=$('f_silo').closest('.hasil-field');stockBk.after(fldBk);var countBk=document.createElement('div');countBk.className='mi-count';$('f_berat_kg').before(countBk);countBk.appendChild($('f_berat_kg'));countBk.insertAdjacentHTML('beforeend','<span>kg</span>');siloBk.insertAdjacentHTML('afterend','<p class="mi-note">Pada tiap proses sumber, curah dan hasil mesin digunakan sebelum karung dibongkar. Hasil serta proses tidak ditutup.</p>');
       var sideBk=document.createElement('aside');sideBk.id='bk-preview';sideBk.className='mi-result-preview';sideBk.setAttribute('aria-live','polite');layBk.appendChild(sideBk);gambarBroken(null);
       lembar._brokenSilo=perbaruiBroken;lembar.addEventListener('input',perbaruiBroken);lembar.addEventListener('change',perbaruiBroken);perbaruiBroken();
+    }
+
+    var urutKemas=0,timerKemas,risikoKemas=false;
+    function gambarKemas(d){
+      var beras=!d||d.beras;labelSimpan=beras?'Catat pengemasan':'Simpan';
+      lembar.classList.toggle('lembar--kemas-beras',beras);lembar.classList.toggle('lembar--hasil',beras);
+      lembar.querySelector('.lembar__kepala h2').textContent=beras?'Pengemasan beras':belah(a.label).teks;
+      var labelMaks=lembar.querySelector('.maksimal-kemas span');if(labelMaks)labelMaks.textContent=beras?'Maksimal dari saldo beras':'Maksimal kemas';
+      var labelMerk=lembar.querySelector('label[for="f_merk"]');if(labelMerk)labelMerk.textContent=beras?'Merek (opsional)':a.fields.filter(function(f){return f.name==='merk';})[0].label;
+      var tanpaMerk=lembar.querySelector('#f_merk option[value=""]');if(tanpaMerk)tanpaMerk.textContent=beras?'Tanpa merek':'— pilih —';
+      $('pk-stock').hidden=!beras;$('pk-karung').hidden=!beras;$('pk-preview').hidden=!beras;$('pk-hint').hidden=!beras;
+      if(!beras){$('simpan').textContent='Simpan';return;}
+      if(!risikoKemas&&!lembar._menyimpan)$('simpan').textContent='Catat pengemasan';
+      if(!d){$('pk-stock').textContent='Pilih produk untuk melihat saldo yang dapat dikemas.';$('pk-karung').textContent='Pilih sumber dan ukuran untuk melihat stok karung.';$('pk-preview').innerHTML='<h3>Hasil pengemasan</h3><p class="mi-note">Pilih sumber hasil beras terlebih dahulu.</p>';return;}
+      var open=!!lembar.querySelector('#pk-stock details[open]'),p=d.rencana,k=d.kemasan,s=d.saldo;
+      $('pk-stock').innerHTML='<div class="mi-stock-head"><div><strong>'+esc(d.produk)+'</strong><small>'+esc(d.pemilik)+' · '+esc(d.kode)+'</small></div><span class="mi-badge">'+(d.status==='selesai'?'Sosoh selesai':'Sosoh berjalan')+'</span></div><div class="mi-stock-values"><div><span>Saldo dapat dikemas</span><strong>'+esc(kgMasukkan(s.tersedia))+'</strong><small>'+(d.status==='selesai'?'Sisa hasil pada proses dan jenis ini':'Hasil proses belum final')+'</small></div></div><details><summary>Rincian saldo sumber</summary>'+pasanganMasukkan('Hasil tercatat',kgMasukkan(s.hasil))+pasanganMasukkan('Sudah dikemas / dicatat curah',kgMasukkan(s.dialokasikan))+pasanganMasukkan('Sudah masuk silo',kgMasukkan(s.dipindah_silo))+pasanganMasukkan('Tersedia untuk dikemas',kgMasukkan(s.tersedia))+'</details>';
+      if(open)lembar.querySelector('#pk-stock details').open=true;
+      $('pk-karung').innerHTML=k?pasanganMasukkan('Stok karung tercatat',d.karung+' lembar')+'<p class="mi-note">'+esc(k.material+' · '+kgMasukkan(k.ukuran)+' · '+k.merek+' · '+d.pemilik)+'</p>':'Pilih kemasan untuk melihat stok karung.';
+      if($('maks_jumlah_karung'))$('maks_jumlah_karung').textContent=d.maksimal==null?'Pilih ukuran karung':d.maksimal.toLocaleString('id-ID')+' karung';
+      $('pk-preview').innerHTML='<h3>Hasil pengemasan</h3>'+pasanganMasukkan('Jenis dan mutu',d.produk)+pasanganMasukkan('Pemilik',d.pemilik)+(p?pasanganMasukkan('Kemasan',k.material+' '+kgMasukkan(k.ukuran))+pasanganMasukkan('Merek',k.merek)+pasanganMasukkan('Jumlah hasil kemasan',p.jumlah+' karung')+pasanganMasukkan('Total berat',kgMasukkan(p.berat),true)+'<section class="pk-remain"><h4>Setelah dicatat</h4>'+pasanganMasukkan('Sisa hasil belum dikemas',kgMasukkan(p.sisa))+pasanganMasukkan('Karung terpakai',p.jumlah+' lembar')+pasanganMasukkan('Sisa karung tercatat',p.sisa_karung+' lembar')+'</section>'+(p.sisa_karung<0?'<p class="mi-warning">Saldo karung tercatat kurang. Periksa pencatatan stok kemasan yang sesuai pemiliknya.</p>':''):'<p class="mi-note">'+esc(d.pesan||'Pilih kemasan dan isi jumlah karung untuk melihat hasilnya.')+'</p>')+(d.status!=='selesai'?'<p class="mi-warning"><strong>Hasil penyosohan belum final</strong><br>Pengemasan memakai hasil yang sudah tercatat. Proses penyosohan tetap berjalan.</p>':'')+'<p class="mi-note">Pengemasan memindahkan hasil menjadi stok barang jadi. Perkiraan ini belum mengubah stok.</p>';
+    }
+    function perbaruiKemas(e){
+      if(!kemasBeras)return;
+      if(risikoKemas&&$('simpan')){$('simpan').disabled=true;$('simpan').textContent='Perlu diperiksa';}
+      var n=e&&e.target&&e.target.dataset.name;
+      if(n){lembar.querySelectorAll('.formulir-salah').forEach(function(x){x.remove();});lembar.querySelectorAll('[aria-invalid="true"]').forEach(function(x){x.removeAttribute('aria-invalid');x.removeAttribute('aria-describedby');});var errPk=lembar.querySelector('.formulir-gagal');if(errPk&&!risikoKemas)errPk.remove();}
+      if(n==='sumber'){$('f_jumlah_karung').value='';$('f_merk').value='';$('pk-stock').textContent='Memuat saldo sumber…';$('pk-preview').textContent='Memuat ringkasan…';}
+      clearTimeout(timerKemas);var seq=++urutKemas,body=lembar.querySelector('.lembar__isi');
+      if(!nilaiMedan('sumber')){gambarKemas(null);return;}
+      var q=['sumber','kemasan','merk','jumlah_karung'].map(function(k){var v=nilaiMedan(k);return k+'='+encodeURIComponent(k==='jumlah_karung'?v.replace(',','.'):v);}).join('&');
+      timerKemas=setTimeout(function(){ambil(kemasBeras.source+'?'+q).then(function(d){if(seq!==urutKemas||!lembar.open||lembar.querySelector('.lembar__isi')!==body)return;gambarKemas(d);}).catch(function(){if(seq===urutKemas&&lembar.querySelector('.lembar__isi')===body){$('pk-preview').textContent='Ringkasan belum tersedia. Isian tetap utuh; saldo tidak dianggap nol. Penyimpanan tetap diperiksa server.';}});},150);
+    }
+    if(lembar._kemasBeras){lembar.removeEventListener('input',lembar._kemasBeras);lembar.removeEventListener('change',lembar._kemasBeras);}
+    if(kemasBeras){
+      var grupPk=lembar.querySelector('.grup');(a.fields||[]).forEach(function(f){var i=grupPk.querySelector('[data-name="'+f.name+'"]'),isi=i.closest('.jumlah-berdampingan')||i,k=i.type==='hidden'?i.previousElementSibling:null,l=grupPk.querySelector('label[for="f_'+f.name+'"]'),w=document.createElement('div');w.className='hasil-field';grupPk.insertBefore(w,l||k||isi);if(l)w.appendChild(l);if(k){w.insertAdjacentHTML('beforeend','<span class="lbl">'+esc(f.label)+'</span>');w.appendChild(k);}w.appendChild(isi);});
+      var layPk=document.createElement('div');layPk.className='mi-layout';grupPk.before(layPk);layPk.appendChild(grupPk);layPk.insertAdjacentHTML('beforebegin','<p class="mi-hint" id="pk-hint">Pilih kemasan dan jumlah karung dari hasil beras yang tersedia.</p>');
+      var stockPk=document.createElement('section');stockPk.id='pk-stock';stockPk.className='mi-stock';stockPk.setAttribute('aria-label','Saldo hasil beras yang dapat dikemas');grupPk.querySelector('[data-name="sumber"]').closest('.hasil-field').after(stockPk);
+      var bagsPk=document.createElement('section');bagsPk.id='pk-karung';bagsPk.className='pk-bags';grupPk.querySelector('[data-name="merk"]').closest('.hasil-field').after(bagsPk);
+      $('f_jumlah_karung').inputMode='numeric';var sidePk=document.createElement('aside');sidePk.id='pk-preview';sidePk.className='mi-result-preview';sidePk.setAttribute('aria-live','polite');layPk.appendChild(sidePk);gambarKemas(null);
+      lembar._kemasBeras=perbaruiKemas;lembar.addEventListener('input',perbaruiKemas);lembar.addEventListener('change',perbaruiKemas);perbaruiKemas();
     }
 
     var nomorMenir=0,timerMenir,risikoMenir=false;
@@ -2328,7 +2371,7 @@
             perbaruiMasukkan();
             perbaruiBroken();
             perbaruiBeras();
-            perbaruiMenir();
+            perbaruiMenir();perbaruiKemas();
             return;
           }
           // Detail tetap menunjuk proses asal meskipun proses itu baru saja
@@ -2452,7 +2495,7 @@
         perbaruiMasukkan();
         perbaruiBroken();
         perbaruiBeras();
-        perbaruiMenir();
+        perbaruiMenir();perbaruiKemas();
         ambilAcuanJeda();
         aturWaktuJeda();
       }).catch(function () {});
@@ -2640,6 +2683,7 @@
       if ((selesaiSosoh && (lembar._menyimpan || risikoSs)) || (selesaiGiling && (lembar._menyimpan || risikoSg)) || (bebaskanGiling && (lembar._menyimpan || risikoBs)) || (bebaskanSosoh && (lembar._menyimpan || risikoBsp)) || (tambahSosoh && (lembar._menyimpan || risikoTs))) return;
       if(masukkanBroken && (lembar._menyimpan || risikoBroken)) return;
       if(masukkanBeras && (lembar._menyimpan || risikoBeras)) return;
+      if(kemasBeras && (lembar._menyimpan || risikoKemas)) return;
       if(masukkanMenir && (lembar._menyimpan || risikoMenir)) return;
       var sebelumSelesai = dataSelesai;
       lembar._menyimpan = true;
@@ -2696,6 +2740,7 @@
             utama = baris.filter(function (b) { return !/^⚠/.test(b); }).join("\n");
           }
           kabar(utama, "ok", !!formKhusus);
+          if(kemasBeras&&hasil.rincian_packing){var rp=hasil.rincian_packing,receiptPk=document.createElement('div');receiptPk.className='mi-receipt';receiptPk.innerHTML='<strong>Pengemasan tercatat</strong>'+pasanganMasukkan('Jumlah hasil kemasan',rp.jumlah+' karung')+pasanganMasukkan('Total berat',kgMasukkan(rp.berat))+(rp.setelah?pasanganMasukkan('Sumber',rp.setelah.kode+' · '+rp.setelah.produk)+pasanganMasukkan('Pemilik',rp.setelah.pemilik)+pasanganMasukkan('Sisa hasil belum dikemas',kgMasukkan(rp.setelah.saldo.tersedia))+pasanganMasukkan('Sisa karung tercatat',rp.setelah.karung==null?'Belum tersedia':rp.setelah.karung+' lembar'):'<p>Saldo terbaru belum tersedia; periksa Stok.</p>');$('kabar').appendChild(receiptPk);}
           if(masukkanMenir&&hasil['rincian_'+jenisMn]){var nyataMn=hasil['rincian_'+jenisMn],receiptMn=document.createElement('div');receiptMn.className='mi-receipt';receiptMn.innerHTML='<strong>'+labelMn+' tersimpan</strong>'+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataMn.kg))+pasanganMasukkan('Silo tujuan',nyataMn.silo)+(nyataMn.setelah?pasanganMasukkan('Pemilik',nyataMn.setelah.pemilik)+pasanganMasukkan('Sisa stok pemilik',kgMasukkan(nyataMn.setelah.saldo_kg)):'<p>Saldo terbaru belum terbaca; periksa Stok sebelum tindakan berikutnya.</p>')+'<details><summary>Catatan pemindahan</summary>'+esc(nyataMn.codes.join(', '))+'</details>';$('kabar').appendChild(receiptMn);}
           if(masukkanBeras&&hasil.rincian_beras){var nyataBr=hasil.rincian_beras,receiptBr=document.createElement('div');receiptBr.className='mi-receipt';receiptBr.innerHTML='<strong>Beras tersimpan</strong>'+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataBr.kg))+pasanganMasukkan('Silo tujuan',nyataBr.silo)+(nyataBr.karung?pasanganMasukkan('Karung dibongkar',nyataBr.karung+' karung'):'')+(nyataBr.setelah?pasanganMasukkan('Pemilik',nyataBr.setelah.pemilik)+pasanganMasukkan('Sisa sumber terpilih',kgMasukkan(nyataBr.setelah.saldo_kg))+(nyataBr.setelah.karung!=null?pasanganMasukkan('Sisa karung',nyataBr.setelah.karung+' karung'):''):'<p>Saldo terbaru belum terbaca; periksa Stok sebelum tindakan berikutnya.</p>')+'<details><summary>Catatan pemindahan</summary>'+esc(nyataBr.pemindahan.map(function(x){return x.kode;}).join(', '))+'</details>';$('kabar').appendChild(receiptBr);}
           if(masukkanBroken && hasil.rincian_broken){var nyataBk=hasil.rincian_broken,receiptBk=document.createElement('div');receiptBk.className='mi-receipt';receiptBk.innerHTML='<strong>Broken tersimpan</strong>'+pasanganMasukkan('Berat masuk silo',kgMasukkan(nyataBk.kg))+pasanganMasukkan('Silo tujuan',nyataBk.silo)+pasanganMasukkan('Dibongkar dari kemasan',kgMasukkan(nyataBk.dibongkar_kg))+(nyataBk.karung_dibongkar!=null?pasanganMasukkan('Karung utuh dibongkar',nyataBk.karung_dibongkar+' karung'):'')+(nyataBk.kemasan_dibongkar||[]).map(function(j){return pasanganMasukkan('Karung '+kgMasukkan(j.ukuran)+' tetap tersedia',j.saldo_karung+' lembar kosong');}).join('')+(nyataBk.setelah?pasanganMasukkan('Sisa curah',kgMasukkan(nyataBk.setelah.saldo.curah))+pasanganMasukkan('Sisa hasil mesin',kgMasukkan(nyataBk.setelah.saldo.mesin))+pasanganMasukkan('Kemasan tersisa',nyataBk.setelah.saldo.karung+' karung · '+kgMasukkan(nyataBk.setelah.saldo.kemasan))+pasanganMasukkan('Total sisa stok',kgMasukkan(nyataBk.setelah.saldo.total)):'<p>Saldo terbaru belum terbaca; periksa Stok sebelum tindakan berikutnya.</p>')+'<details><summary>Catatan pemindahan</summary>'+esc(nyataBk.kode.join(', '))+'</details>';$('kabar').appendChild(receiptBk);}
@@ -2809,6 +2854,8 @@
           pesanGagal='Pemindahan belum terkonfirmasi. Jangan kirim ulang sebelum memeriksa Stok dan riwayat; layanan ini belum menjamin retry idempoten. Isian tetap utuh.';
           var cekBroken=document.createElement('a');cekBroken.className='btn';cekBroken.href='/stok';cekBroken.textContent='Buka stok dan riwayat broken';lembar.querySelector('.hasil-actions').before(cekBroken);
         }
+        if(kemasBeras){perbaruiKemas();}
+        if(kemasBeras&&(e instanceof TypeError||/Sesi berubah ketika/.test(String(e)))){risikoKemas=true;if(tbl){tbl.disabled=true;tbl.textContent='Perlu diperiksa';}pesanGagal='Pengemasan belum terkonfirmasi. Periksa Stok dan riwayat sebelum mencoba kembali; isian tetap utuh dan tidak dikirim ulang otomatis.';var cekPk=document.createElement('a');cekPk.className='btn';cekPk.href='/stok';cekPk.textContent='Buka Stok dan riwayat';lembar.querySelector('.hasil-actions').before(cekPk);}
         if(masukkanMenir){perbaruiMenir();}
         if(masukkanMenir&&(e instanceof TypeError||/Sesi berubah ketika/.test(String(e)))){risikoMenir=true;if(tbl){tbl.disabled=true;tbl.textContent='Perlu diperiksa';}pesanGagal='Pemindahan belum terkonfirmasi. Periksa Stok dan riwayat sebelum mencoba kembali; isian tetap utuh dan tidak dikirim ulang otomatis.';var cekMn=document.createElement('a');cekMn.className='btn';cekMn.href='/stok';cekMn.textContent='Buka stok dan riwayat '+jenisMn;lembar.querySelector('.hasil-actions').before(cekMn);}
         if(masukkanBeras){perbaruiBeras();}
@@ -2881,6 +2928,7 @@
         if (unitTransferPk && nilai && el.dataset.name === 'jumlah_karung' && (!Number.isInteger(Number(nilai.replace(',', '.'))) || Number(nilai.replace(',', '.')) < 0)) pesan = 'Jumlah karung harus bilangan bulat, nol atau lebih.';
         if (unitTransferPk && nilai && el.dataset.name === 'berat_curah_kg' && Number(nilai.replace(',', '.')) < 0) pesan = 'Bobot curah tidak boleh negatif.';
         if(masukkanSilo&&nilai&&['jumlah_karung','jumlah_karung_partai'].indexOf(el.dataset.name)>=0&&(!Number.isInteger(Number(nilai.replace(',','.')))||Number(nilai.replace(',','.'))<=0))pesan='Isi jumlah karung bulat lebih dari nol.';
+        if(kemasBeras&&nilai&&el.dataset.name==='jumlah_karung'&&(!Number.isInteger(Number(nilai.replace(',','.')))||Number(nilai.replace(',','.'))<=0))pesan='Jumlah karung wajib bilangan bulat lebih dari nol.';
         if((masukkanBeras||masukkanMenir)&&nilai&&el.dataset.name==='berat_kg'&&Number(nilai.replace(',','.'))<=0)pesan='Isi berat lebih dari nol.';
         if(masukkanSilo&&nilai&&el.dataset.name==='berat_kg'&&Number(nilai.replace(',','.'))<=0)pesan='Isi berat lebih dari nol.';
         if (pesan) { kurang.push({el: el, pesan: pesan}); }

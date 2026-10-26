@@ -96,6 +96,50 @@ class PackingResult:
     warning: str | None = None
 
 
+async def saldo_packing(db, proc, kategori, grade, std_id):
+    """Pembacaan saldo yang sama untuk simpan dan ringkasan, tanpa menulis.
+
+    Dipisahkan dari catat_packing agar tampilan tidak menyalin rumusnya.
+    Pemanggil simpan tetap memegang kunci saldo/proses sebelum membaca.
+    """
+    from app.services.stok import jenis_produk, output_sosoh
+
+    # Aturan pemetaannya tak lagi ditulis di sini: ia diangkat jadi
+    # `stok.jenis_produk` 26 September 2026, dan dibaca juga oleh kartu Stok
+    # Produk serta hitungan barang keluar. Empat pembaca yang menyusun sendiri
+    # "apa nama barang ini" akan menyebut angka berbeda tentang beras yang sama.
+    jenis_out = jenis_produk(kategori, grade)
+    keluar = (await output_sosoh(db, proc.id)).get(jenis_out)
+    if keluar is None:
+        raise InventoryError(
+            f"Belum ada hasil sosoh {jenis_out} yang tercatat untuk "
+            f"{proc.kode_proses}. Catat hasil penyosohannya dulu — packing "
+            "memindahkan beras yang sudah keluar mesin, bukan menciptakannya.")
+    sudah = await _packed_kg(db, proc.id, kategori, std_id)
+    # Bekatul punya jalan KEDUA — "Catat bekatul (curah)" — dan yang sudah
+    # dibukukan di sana tak boleh dikarungi lagi. `_packed_kg` sendirian cuma
+    # melihat karung, jadi tanpa baris ini 1.000 kg yang sudah dicatat curah
+    # masih bisa dikarungi utuh, dan stok bekatul jadi dua kali lipat.
+    if kategori == "bekatul":
+        sudah = await _bekatul_dibukukan(db, proc.id)
+    if kategori == "broken":
+        sudah = await _broken_dibukukan(db, proc.id)
+    # Beras yang menjadi bahan silo sudah keluar dari saldo curah. Kunci
+    # proses (_proc_by_kode) juga dipakai pemindahan FIFO dan catat hasil,
+    # sehingga dua operator tidak dapat memakai saldo yang sama.
+    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc
+    dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
+        (proc.id, jenis_out), 0.0) if jenis_out in BERAS_JENIS else 0.0
+    tersedia = float(keluar) - sudah - dipindah
+    from app.services.stok import _UKURAN_KEMASAN_OTOMATIS, hasil_samping_bisa_dikemas
+    if jenis_out in _UKURAN_KEMASAN_OTOMATIS:
+        sumber = next((b for b in await hasil_samping_bisa_dikemas(db)
+                       if b.kode_proses == proc.kode_proses and b.jenis == jenis_out), None)
+        tersedia = min(tersedia, sumber.sisa_kg if sumber else 0.0)
+    return dict(jenis=jenis_out, hasil=float(keluar), dialokasikan=sudah,
+                dipindah_silo=dipindah, tersedia=tersedia)
+
+
 async def catat_packing(
     db: AsyncSession, *, user, kode_pol: str | None, kategori: str | None,
     grade: str | None = None, brand_nama: str | None = None,
@@ -147,40 +191,9 @@ async def catat_packing(
     #
     # Kalimatnya menyebut berapa yang tersedia: yang ditolak tanpa angka akan
     # mencoba lagi dengan tebakan.
-    from app.services.stok import jenis_produk, output_sosoh
-
-    # Aturan pemetaannya tak lagi ditulis di sini: ia diangkat jadi
-    # `stok.jenis_produk` 26 September 2026, dan dibaca juga oleh kartu Stok
-    # Produk serta hitungan barang keluar. Empat pembaca yang menyusun sendiri
-    # "apa nama barang ini" akan menyebut angka berbeda tentang beras yang sama.
-    jenis_out = jenis_produk(kategori, grade)
-    keluar = (await output_sosoh(db, proc.id)).get(jenis_out)
-    if keluar is None:
-        raise InventoryError(
-            f"Belum ada hasil sosoh {jenis_out} yang tercatat untuk "
-            f"{proc.kode_proses}. Catat hasil penyosohannya dulu — packing "
-            "memindahkan beras yang sudah keluar mesin, bukan menciptakannya.")
-    sudah = await _packed_kg(db, proc.id, kategori, std_id)
-    # Bekatul punya jalan KEDUA — "Catat bekatul (curah)" — dan yang sudah
-    # dibukukan di sana tak boleh dikarungi lagi. `_packed_kg` sendirian cuma
-    # melihat karung, jadi tanpa baris ini 1.000 kg yang sudah dicatat curah
-    # masih bisa dikarungi utuh, dan stok bekatul jadi dua kali lipat.
-    if kategori == "bekatul":
-        sudah = await _bekatul_dibukukan(db, proc.id)
-    if kategori == "broken":
-        sudah = await _broken_dibukukan(db, proc.id)
-    # Beras yang menjadi bahan silo sudah keluar dari saldo curah. Kunci
-    # proses (_proc_by_kode) juga dipakai pemindahan FIFO dan catat hasil,
-    # sehingga dua operator tidak dapat memakai saldo yang sama.
-    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc
-    dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
-        (proc.id, jenis_out), 0.0) if jenis_out in BERAS_JENIS else 0.0
-    tersedia = float(keluar) - sudah - dipindah
-    from app.services.stok import _UKURAN_KEMASAN_OTOMATIS, hasil_samping_bisa_dikemas
-    if jenis_out in _UKURAN_KEMASAN_OTOMATIS:
-        sumber = next((b for b in await hasil_samping_bisa_dikemas(db)
-                       if b.kode_proses == proc.kode_proses and b.jenis == jenis_out), None)
-        tersedia = min(tersedia, sumber.sisa_kg if sumber else 0.0)
+    saldo = await saldo_packing(db, proc, kategori, grade, std_id)
+    jenis_out, keluar = saldo['jenis'], saldo['hasil']
+    sudah, dipindah, tersedia = saldo['dialokasikan'], saldo['dipindah_silo'], saldo['tersedia']
     if berat > tersedia + 0.000001:
         raise InventoryError(
             f"{proc.kode_proses} tinggal {tersedia:,.0f} kg {jenis_out} yang "
