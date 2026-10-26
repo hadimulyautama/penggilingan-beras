@@ -1653,6 +1653,8 @@ async def act_batal_perintah_keluar(req: BatalPerintahReq,
 
 
 class MuatReq(BaseModel):
+    kiriman_id: int | None = None
+    pelanggan_id: int | None = None
     perintah: str = ""
     dasar: str = ""
     sebab: str = ""
@@ -1686,6 +1688,15 @@ def _galat_muatan(e: bk.BarangKeluarError, pesan: str) -> HTTPException:
 def _wajib_periksa_muat(dasar: str) -> None:
     if not dasar:
         raise HTTPException(409, "Periksa ringkasan muatan terbaru sebelum konfirmasi. Tutup dan buka kembali formulir.")
+
+
+def _periksa_konteks_muat(req,rec):
+    # Field baru dibawa formulir berkonteks. Payload lama tetap sah, sementara
+    # perintah+item+dasar pada endpoint lama selalu diperiksa seperti semula.
+    if 'kiriman_id' in req.model_fields_set and req.kiriman_id != rec.kiriman_id:
+        raise HTTPException(400,'Kiriman tidak sesuai dengan perintah pelanggan yang dipilih.')
+    if 'pelanggan_id' in req.model_fields_set and req.pelanggan_id != rec.pelanggan_id:
+        raise HTTPException(400,'Pelanggan penerima tidak sesuai dengan perintah yang dipilih.')
 
 
 class AktualCepatReq(BaseModel):
@@ -1734,6 +1745,9 @@ async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> d
         u = await db.get(User, user.id)
         try:
             _wajib_periksa_muat(req.dasar)
+            rec = await bk._kunci_muat(db,_id(req.perintah),dasar=req.dasar)
+            await bk._periksa_dasar_muat(db,rec,req.dasar)
+            _periksa_konteks_muat(req,rec)
             r = await bk.muat_semua(db, user=u, rec_id=_id(req.perintah), dasar=req.dasar)
         except bk.BarangKeluarError as e:
             raise _galat_muatan(e, "Gagal mencatat muatan.")
@@ -1744,7 +1758,7 @@ async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> d
                      "sambil menempelkan kode timbang keluar."}
 
 
-class MuatBarisReq(BaseModel):
+class MuatBarisReq(MuatReq):
     perintah: str = ""
     baris: str = ""
     jumlah: float | None = None
@@ -1770,6 +1784,12 @@ async def act_muat_barang(req: MuatBarisReq,
         if it is None or it.outgoing_record_id != _id(req.perintah):
             raise HTTPException(400, "Barang itu bukan bagian dari perintah yang dipilih.")
         _wajib_periksa_muat(req.dasar)
+        try:
+            rec_konteks=await bk._kunci_muat(db,it.outgoing_record_id,dasar=req.dasar)
+            await bk._periksa_dasar_muat(db,rec_konteks,req.dasar)
+        except bk.BarangKeluarError as e:
+            raise _galat_muatan(e,"Tidak bisa memeriksa konteks muatan.")
+        _periksa_konteks_muat(req,rec_konteks)
         if it.item_type == "finished_goods" and not float(req.jumlah).is_integer():
             raise HTTPException(400, "Total yang sudah dimuat dalam karung wajib bilangan bulat.")
         # Yang berkarung diketik dalam KARUNG, yang curah dalam kg — sama dengan

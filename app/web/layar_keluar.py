@@ -170,6 +170,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             perintah = float(it.berat_perintah_kg or 0)
             dimuat = float(it.berat_kg or 0)
             isi.append({
+                "id": it.id,
                 "nama": nama.get(it.id, "?"),
                 "pemilik": pemilik_item.get(it.jasa_id, "Milik pabrik"),
                 "kunci": f"{rec.id}|{it.id}|{dasar_perintah.get(rec.id, '')}",

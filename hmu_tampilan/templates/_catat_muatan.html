@@ -1,0 +1,16 @@
+<link rel="stylesheet" href="/static/catat-muatan.css?v={{ VERSI }}">
+<section class="catat-muatan" data-catat-muatan data-perintah="{{ perintah or '' }}" data-boleh="{{ '1' if boleh_catat else '0' }}" data-item="{{ item_awal }}" data-semua="{{ semua_awal }}">
+  <a href="/pekerjaan">‹ Pekerjaan</a>
+  <h1>Catat muatan</h1>
+  <p class="bantu">Satu armada, rincian barang dan jumlah muatan tetap terpisah per pelanggan.</p>
+  <p data-kabar role="status" hidden></p>
+  <div data-galat class="nota nota--buruk" role="alert" hidden></div>
+  <div data-pemulihan hidden>
+    <p>Isian tetap tersedia. Periksa muatan terbaru sebelum mengonfirmasi ulang.</p>
+    <button type="button" class="btn" data-periksa-terbaru>Periksa muatan terbaru</button>
+  </div>
+  <div data-isi-muatan></div>
+  <noscript>Aktifkan JavaScript untuk memeriksa dan mencatat muatan.</noscript>
+</section>
+<script type="application/json" id="muatan-awal">{{ awal | tojson }}</script>
+<script src="/static/catat-muatan.js?v={{ VERSI }}" defer></script>

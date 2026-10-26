@@ -22,7 +22,7 @@
 {% if BOLEH_PERINTAH or PORTAL_READ_ONLY %}{% if k.rec.status == 'selesai' %}<a class="btn" href="/barang-keluar/{{ k.rec.id }}/retur">Retur barang</a>{% endif %}
 {% for r in retur_terkait %}<p><a href="/retur/pengajuan/{{ r.id }}">Pengajuan retur #{{ r.id }}</a> · {{ (r.status_pemeriksaan or 'tertahan').replace('_',' ').title() }}</p><p>{{ 'Sudah diterima ke stok' if r.customer_return_id else 'Dibatalkan; stok tidak bertambah' if r.status_pemeriksaan=='dibatalkan' else 'Pengajuan tersimpan; belum diterima ke stok' }}{% if r.customer_return_id %} · <a href="/retur/{{ r.customer_return_id }}">Penerimaan retur</a>{% endif %}</p>{% else %}<p>Belum ada retur terkait.</p>{% endfor %}
 {% else %}<p>Penerimaan retur mengikuti kewenangan Admin.</p>{% endif %}</section>{% endmacro %}{{ dt.tabs('pengiriman') }}
-{{ dt.buka('ringkasan') }}<section class="kirim-detail__bagian"><h2>Tindakan saat ini</h2>  {% if k.rec.status == 'dimuat' %}
+{{ dt.buka('ringkasan') }}{% if BOLEH_MUAT and k.rec.status == 'perintah' %}<p><a class="btn" href="/muatan?perintah={{ k.rec.id }}">Catat muatan kiriman per pelanggan</a></p>{% endif %}<section class="kirim-detail__bagian"><h2>Tindakan saat ini</h2>  {% if k.rec.status == 'dimuat' %}
   <section class="keluar-periksa{{ ' keluar-periksa--selisih' if k.selisih_timbang is not none and k.selisih_timbang|abs > (k.batas_selisih|default(100)) }}" aria-label="Pemeriksaan sebelum verifikasi">
     <strong>Periksa sebelum verifikasi</strong>
     {% if k.tiket_timbang %}<p>{{ k.tiket_timbang.kode }} · {{ k.rec.no_polisi or 'Plat belum dicatat' }}</p>
@@ -69,6 +69,7 @@
         <thead><tr><th scope="col">Barang</th><th scope="col">Perintah</th><th scope="col">{{ 'Jumlah aktual' if k.cepat else 'Dimuat aktual' }}</th><th scope="col">Sisa perintah</th></tr></thead>
         <tbody>{% for b in k.isi %}<tr>
           <th scope="row"><span class="kirim-detail__nomor">{{ loop.index }}.</span> {{ b.nama }}<small>{{ b.pemilik }}</small>
+            {% if BOLEH_MUAT and k.rec.status == 'perintah' %}<div class="kirim-detail__item-aksi"><a class="btn btn--kecil" href="/muatan?perintah={{ k.rec.id }}&amp;item={{ b.id }}">Catat total muatan untuk {{ k.rec.nama_pembeli }}</a></div>{% endif %}
             {% if k.boleh_ubah %}<div class="kirim-detail__item-aksi">
               <a class="btn btn--kecil" href="/barang-keluar/{{ k.rec.id }}?buka=ubah_item_perintah&nilai={{ b.kunci|urlencode }}">Ubah jumlah</a>
               {% if not b.dimuat and k.isi|length > 1 %}<a class="btn btn--kecil" href="/barang-keluar/{{ k.rec.id }}?buka=hapus_item_perintah&nilai={{ b.kunci|urlencode }}">Hapus item</a>{% endif %}
