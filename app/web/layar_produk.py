@@ -404,12 +404,14 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
         sisa_rows=[r for r in sisa_rows if svc.jenis_produk(r[1],r[2])==jenis]
     def kemas_href(sku_id,std_id,owner):
         return '/stok-produk/kemas-ulang?'+urlencode(dict(sku_id=sku_id,**({'std_id':std_id} if std_id else {}),**({'jasa_id':owner} if owner else {})))
-    def baris(*, owner, bentuk, berat, jumlah=0, ukuran=0, merk="", bahan="", p=None):
+    def baris(*, owner, bentuk, berat, jumlah=0, ukuran=0, merk="", bahan="", p=None,
+              curah_id=None):
         token = "pabrik" if owner is None else str(owner)
         aksi = ("masukkan_beras_silo" if jenis in svc.BERAS_JENIS else
                 {"broken":"masukkan_broken_silo","menir":"masukkan_menir_silo",
                  "reject":"masukkan_reject_silo"}.get(jenis))
-        sumber = (f"sku:{p['sku_id']}|{token}" if p and ukuran else f"curah|{token}")
+        sumber = (f"curah:{curah_id}|{token}" if curah_id is not None else
+                  f"sku:{p['sku_id']}|{token}" if p and ukuran else f"curah|{token}")
         nilai = (f"{jenis}|{'pabrik' if owner is None else 'jasa'}" if jenis in svc.BERAS_JENIS else
                  f"pemilik|{token}" if jenis == "broken" else token)
         params = {"buka":aksi,"nilai":nilai}
@@ -421,7 +423,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
         rows.append(dict(bentuk=bentuk,kg=berat,karung=jumlah,ukuran=ukuran,merk=merk,
                          bahan=bahan,href=href,pindah=pindah,
                          kemas_baru=(detail_href+"&"+urlencode({"buka":"catat_packing","nilai":f"curah@{jenis}@{token}"})) if not p and not jumlah and berat>0.5 and boleh_kemas else None,
-                         kemas=kemas_href(p["sku_id"],p["std_id"],owner) if p and jumlah and boleh_kemas else None,
+                         kemas=kemas_href(p["sku_id"],p["std_id"],owner) if p and (jumlah or curah_id) and boleh_kemas else None,
                          sumber=sumber if jenis in svc.BERAS_JENIS else None))
 
     if otomatis:
@@ -451,6 +453,10 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
                 if abs(curah_belum)>0.5:
                     baris(owner=owner,bentuk="Curah · belum dikemas",berat=curah_belum)
     for fg,_,_ in sisa_rows:
+        if jenis in svc.BERAS_JENIS:
+            baris(owner=fg.jasa_id, bentuk="Curah tercatat", berat=float(fg.berat_total_kg),
+                  curah_id=fg.id, p={"sku_id":fg.product_sku_id,"std_id":fg.rice_quality_standard_id})
+            continue
         rows.append(dict(bentuk='Curah tercatat',kg=float(fg.berat_total_kg),karung=0,ukuran=0,merk='',bahan='',href=None,pindah=None,sumber=None,
             kemas=kemas_href(fg.product_sku_id,fg.rice_quality_standard_id,fg.jasa_id) if boleh_kemas else None))
     return await render_laci(request, "stok_produk_detail.html",

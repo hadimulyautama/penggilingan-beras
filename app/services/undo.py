@@ -1150,6 +1150,8 @@ async def _undo_beras_masuk_silo(db: AsyncSession, log: ActivityLog, *, actor_id
 
     if log.aksi != "beras_masuk_silo" or not log.old_value:
         raise UndoError("Input lama belum menyimpan rincian pembatalan. Mintakan koreksi ke Admin.")
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     data = json.loads(log.old_value)
     moves = (await db.execute(select(BerasKeSilo).where(
         BerasKeSilo.id.in_(data["moves"])).with_for_update())).scalars().all()
@@ -1187,13 +1189,15 @@ async def _undo_beras_masuk_silo(db: AsyncSession, log: ActivityLog, *, actor_id
     for item in data["stok"]:
         item = dict(item)
         rid = item.pop("id")
+        # Cuplikan sebelum dukungan curah belum membawa penanda bentuk.
+        item.setdefault("curah_kemas_ulang", False)
         row = (await db.execute(select(FinishedGoodsStock).where(
             FinishedGoodsStock.id == rid).with_for_update())).scalar_one_or_none()
         # ID stok lama dapat dipakai ulang setelah pembersihan data. Cocokkan
         # ASAL dan pemiliknya, bukan nomor baris saja; stok lain tidak boleh naik.
         identitas = ("source_type", "source_id", "product_sku_id",
                      "rice_quality_standard_id", "jasa_id", "warehouse_id",
-                     "kemasan_mengurangi_stok")
+                     "kemasan_mengurangi_stok", "curah_kemas_ulang")
         cocok = row is not None and all(
             getattr(row, k) == item[k] for k in identitas)
         if not cocok:
