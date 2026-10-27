@@ -44,7 +44,7 @@ def _skema_head():
             (TF,str(TF/'.venv/bin/python'),['upgrade','0038_kunci_baris_64']),
             (ROOT,sys.executable,['upgrade','head']),(TF,str(TF/'.venv/bin/python'),['upgrade','head'])]
     else:
-        assert rev=='0048_lintasan_transfer','Profil harus baru atau di head kompatibel; tidak menstempel ulang data.'
+        assert rev in ('0048_lintasan_transfer','0049_pekerjaan_cetak'),'Profil harus baru atau di head kompatibel; tidak menstempel ulang data.'
         steps=[(ROOT,sys.executable,['upgrade','head']),(TF,str(TF/'.venv/bin/python'),['upgrade','head'])]
     for n,(cwd,python,args) in enumerate(steps):
         r=subprocess.run([python,'-m','alembic',*args],cwd=cwd,env={**os.environ,'DATABASE_URL':url},capture_output=True,text=True,timeout=180)
@@ -149,7 +149,7 @@ async def test_http_timbang_koreksi_referensi_dan_keluar_sekali(pg,asal):
                 assert view['status']=='done' and recap['total_keluar']==249.5
                 import json
                 (OUT/'bukti-native.json').write_text(json.dumps(dict(
-                    migrasi_padiflow='0116_retur_supplier_keluar',migrasi_teraflow='0048_lintasan_transfer',
+                    migrasi_padiflow=await db.scalar(text('SELECT version_num FROM alembic_version')),migrasi_teraflow=await db.scalar(text('SELECT version_num FROM alembic_version_timbangan')),
                     timbang1_kg=5000,timbang2_awal_kg=5280,timbang2_koreksi_kg=5249.5,
                     hasil_tiket_kg=249.5,manual_setelah_koreksi=True,ledger_keluar=1,outgoing_items=0,cetak_fisik=0,
                     riwayat_transaksi_read_only=True,rekap_keluar_kg=str(recap['total_keluar']),
