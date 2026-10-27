@@ -287,8 +287,16 @@ PENANGAN: dict[str, Callable[[AsyncSession, Peristiwa], Awaitable[None]]] = {
 }
 
 #: Tabel proyeksi yang dikosongkan lalu diisi ulang saat membangun dari nol.
+async def _retur_supplier_keluar(db, e):
+    from app.models.retur_supplier import ReturSupplierKeluar
+    db.add(ReturSupplierKeluar(peristiwa_id=e.id,retur_supplier_id=e.muatan['retur_supplier_id'],
+        kode=e.muatan['kode'],snapshot=e.muatan,input_by=e.pelaku_id,waktu=e.waktu))
+    await db.flush()
+
+PENANGAN['retur_supplier_keluar']=_retur_supplier_keluar
+from app.models.retur_supplier import ReturSupplierKeluar
 TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk,
-                  ProyeksiPindahTumpukanSilo)
+                  ProyeksiPindahTumpukanSilo,ReturSupplierKeluar)
 
 
 async def terapkan_ke_proyeksi(db: AsyncSession, e: Peristiwa) -> None:

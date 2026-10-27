@@ -32,6 +32,9 @@ async def sumber(db, intake, *, jumlah_partai=None):
     saldo = await _sisa_tumpukan_intake(db, intake.id)
     pemilik = await nama_pemilik(db, intake.jasa_id) if intake.jasa_id else 'Milik pabrik'
     batch = await db.get(PkPurchaseBatch, intake.pk_purchase_batch_id) if intake.pk_purchase_batch_id else None
+    if batch is not None and saldo is not None:
+        from app.services.retur_supplier_reservasi import terikat
+        saldo=max(0,float(Decimal(str(saldo))-await terikat(db,sumber=f'pk:{batch.id}')))
     transfer = await db.get(InternalTransfer, intake.internal_transfer_id) if intake.internal_transfer_id else None
     proc = await db.get(MillingProcess, transfer.milling_process_id) if transfer else None
     kode = batch.kode_batch if batch else proc.kode_proses if proc else f'Tumpukan #{intake.id}'

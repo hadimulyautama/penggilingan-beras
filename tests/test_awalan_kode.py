@@ -22,7 +22,7 @@ ARTI = {"GB": "pembelian gabah", "PGR": "pengeringan", "LOT": "giling",
         "PKP": "beli kemasan", "JAS": "pesanan jasa",
         "BKS": "pindah broken ke silo",
         "GKR": "gabah kering dikemas", "GKS": "bongkar gabah kering ke silo",
-        "BRS": "pindah beras ke silo"}
+        "BRS": "pindah beras ke silo", "RSP": "pengajuan retur ke supplier", "RKO": "retur supplier keluar"}
 
 
 def test_codegen_memakai_awalan_yang_diumumkan():

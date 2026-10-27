@@ -541,6 +541,8 @@ async def sisa_tumpukan_banyak(db: AsyncSession, intakes) -> dict[int, Decimal |
     batch_ids = [i.pk_purchase_batch_id for i in intakes if i.pk_purchase_batch_id]
     batches = {b.id: b for b in (await db.execute(select(PkPurchaseBatch).where(
         PkPurchaseBatch.id.in_(batch_ids)))).scalars().all()} if batch_ids else {}
+    from app.services.retur_supplier_stok import keluar_banyak
+    retur_supplier=await keluar_banyak(db,[f'pk:{bid}' for bid in batch_ids])
     hasil = {}
     for i in intakes:
         k, kg = gerak.get(i.id, (0, Decimal(0)))
@@ -551,6 +553,10 @@ async def sisa_tumpukan_banyak(db: AsyncSession, intakes) -> dict[int, Decimal |
                            else bobot_per_karung(batch, jumlah=batch.jumlah_karung - k) - kg)
         else:
             hasil[i.id] = None if i.berat_kg is None else Decimal(str(i.berat_kg)) - kg + Decimal(str(penyesuaian.get(i.id, 0)))
+        if i.pk_purchase_batch_id and hasil[i.id] is not None:
+            retur_kg=retur_supplier.get(f'pk:{i.pk_purchase_batch_id}',(Decimal(0),0))[0]
+            hasil[i.id]-=retur_kg
+            if retur_kg and -Decimal('.000001')<=hasil[i.id]<0:hasil[i.id]=Decimal(0)
     return hasil
 
 
@@ -1729,6 +1735,18 @@ async def _catat_pindah(
             .where(Peristiwa.kunci_kiriman == kunci_kiriman))).scalars().first()
         if ada is not None:
             return ada, None
+    # Pengajuan supplier belum mengurangi fisik, tetapi bagian yang sudah
+    # dialokasikan tidak boleh ikut dipindah ke bahan proses. Pemakaian
+    # yang tidak dialokasikan tetap memakai perhitungan karung/kg lama.
+    if batch is not None:
+        from app.services.retur_supplier_reservasi import terikat
+        alokasi_retur=await terikat(db,sumber=f'pk:{batch.id}')
+        if alokasi_retur>0:
+            saldo_retur=await _sisa_tumpukan_intake(db,intake.id)
+            perlu_retur=(bobot_per_karung(batch,jumlah=jumlah_karung) if jumlah_karung is not None
+                         else Decimal(str(kirim)) if kirim is not None else None)
+            if saldo_retur is None or perlu_retur is None or perlu_retur>Decimal(str(saldo_retur))-alokasi_retur+Decimal('.000001'):
+                raise Gudang2Error('Sebagian sumber dialokasikan pada Retur ke Supplier. Pilih bagian yang belum dialokasikan atau batalkan pengajuannya secara sah.')
     kode = await next_tumpukan_move_code(db)
     pemakaian = None
     if jumlah_karung is not None:
@@ -2066,7 +2084,9 @@ async def _sisa_broken_row(db: AsyncSession, byproduct_stock_id: int) -> float:
         select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
         .where(BrokenKeSilo.byproduct_stock_id == byproduct_stock_id)
     )).scalar_one()
-    return float(row.berat_kg) - float(dipindah)
+    from app.services.retur_supplier_stok import keluar as keluar_supplier
+    retur=(await keluar_supplier(db,sumber=f'broken:{row.id}'))[0]
+    return float(row.berat_kg) - float(dipindah) - float(retur)
 
 
 async def pindah_broken_ke_silo(
@@ -2110,6 +2130,8 @@ async def pindah_broken_ke_silo(
         .where(BrokenKeSilo.byproduct_stock_id == byproduct_stock_id)
     )).scalar_one()
     sisa = float(row.berat_kg) - float(sudah)
+    from app.services.retur_supplier_reservasi import terikat
+    sisa -= float(await terikat(db,sumber=f'broken:{row.id}'))
     if sisa <= 0:
         raise Gudang2Error("Broken ini sudah habis dipindah.")
     # TOLERANSI_PINDAH_KG — penjelasan panjangnya di `pindah_tumpukan_ke_silo`.
@@ -2489,6 +2511,8 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
     direct_plan: list[tuple[int, float]] = []
     for row_id, gross in direct_rows:
         available = await _sisa_broken_row(db, row_id)
+        from app.services.retur_supplier_reservasi import terikat
+        available=max(0,available-float(await terikat(db,sumber=f'broken:{row_id}')))
         take = min(left, available)
         if take > 0.5:
             direct_plan.append((row_id, take))
@@ -2793,6 +2817,9 @@ async def masukkan_beras_ke_silo(
             from app.penggilingan.inventory.models import CustomerReturnItem
             tertaut_retur = await db.scalar(select(CustomerReturnItem.id).where(
                 CustomerReturnItem.finished_goods_stock_id == row.id).limit(1))
+            from app.models.retur_supplier import ReturSupplierItem
+            if tertaut_retur is None:
+                tertaut_retur=await db.scalar(select(ReturSupplierItem.id).where(ReturSupplierItem.finished_goods_stock_id==row.id).limit(1))
             if tertaut_retur is None:
                 await db.delete(row)
         await log_activity(
@@ -3047,10 +3074,13 @@ async def _sisa_karung_setelah_keluar(db, intake, nilai):
         PkGudang2Intake.jasa_id.is_(None) if intake.jasa_id is None else PkGudang2Intake.jasa_id == intake.jasa_id)
         .order_by(PkGudang2Intake.waktu_masuk,PkGudang2Intake.id))).all()
     saldo = await sisa_tumpukan_banyak(db,sumber)
+    from app.services.retur_supplier_reservasi import terikat_banyak
+    alokasi_supplier=await terikat_banyak(db,[f'pk:{it.pk_purchase_batch_id}' for it in sumber if it.pk_purchase_batch_id and it.jasa_id is None])
     sisa_keluar = Decimal(str(keluar))
     for it in sumber:
         kotor = saldo[it.id]
-        ambil = min(max(kotor or Decimal(0),Decimal(0)),sisa_keluar)
+        alokasi=alokasi_supplier.get(f'pk:{it.pk_purchase_batch_id}',Decimal(0))
+        ambil = min(max((kotor or Decimal(0))-alokasi,Decimal(0)),sisa_keluar)
         sisa_keluar -= ambil
         if it.id == intake.id:
             return float(kotor - ambil)

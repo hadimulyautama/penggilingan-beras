@@ -209,6 +209,9 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
         timbang = await masuk.rincian_timbang(db,tid)
         berat_diterima,keterangan_berat = masuk.bobot_diterima(catatan)
         qc_penerimaan = await masuk.hasil_qc(db,catatan)
+        from app.models.retur_supplier import ReturSupplier
+        retur_supplier_terkait=[] if is_customer_read(request) else (await db.scalars(
+            select(ReturSupplier).where(ReturSupplier.penerimaan_tiket_id==tid).order_by(ReturSupplier.id.desc()))).all()
     kembali = konteks_aman(request.query_params.get('kembali_kerja')) or '/barang-masuk'
     proses = [(kode, url + ('&' if '?' in url else '?') + urlencode({'kembali_kerja':kembali})) for kode,url in proses]
     # Tab hanya memilih penyajian. Parameter pembuka formulir dan konteks asal
@@ -220,6 +223,9 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
         tiket=t,jenis=jenis,menunggu=pending,catatan=catatan,lokasi=lokasi,proses=proses,petugas=petugas,
         timbang=timbang,berat_diterima=berat_diterima,keterangan_berat=keterangan_berat,
         qc_penerimaan=qc_penerimaan,
+        akses_retur_supplier=not is_customer_read(request) and bool(t.get('supplier_id')) and any(c['status']!='ditolak' and c['jasa_id'] is None for c in catatan),
+        boleh_retur_supplier=can_see_financials(akun.user),
+        retur_supplier_terkait=retur_supplier_terkait,
         pemilik_penerimaan=' · '.join(dict.fromkeys(c['pemilik'] for c in catatan)),
         kepemilikan_penerimaan=data[0]['kepemilikan'] if data else '',
         lama=svc._lama,buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''),**b.lencana())

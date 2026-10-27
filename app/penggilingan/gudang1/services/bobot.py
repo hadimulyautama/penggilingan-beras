@@ -165,8 +165,9 @@ def dari_batch(b) -> Bobot:
     """Bobot sebuah batch gabah / PK luar (atau None → tak diketahui)."""
     if b is None:
         return Bobot(None, TAK_DIKETAHUI, 1)
-    return dari_nilai(getattr(b, "berat_total_kg", None), getattr(b, "sumber_berat", None),
+    nilai=dari_nilai(getattr(b, "berat_total_kg", None), getattr(b, "sumber_berat", None),
                       getattr(b, "berat_perkiraan_kg", None))
+    return kurang(nilai,getattr(b,'retur_supplier_keluar_kg',0) or 0)
 
 
 def dari_batches(bs: Iterable) -> Bobot:

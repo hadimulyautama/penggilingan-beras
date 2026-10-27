@@ -1,0 +1,10 @@
+<section class="rsp-kartu">
+ <h2>Penerimaan asal</h2>
+ <dl class="rsp-fakta">
+  <div><dt>Tiket masuk</dt><dd><a href="/barang-masuk/{{ penerimaan.id }}">{{ penerimaan.kode }}</a></dd></div>
+  <div><dt>Supplier</dt><dd>{{ penerimaan.nama_supplier }}</dd></div>
+  <div><dt>Tanggal penerimaan</dt><dd>{{ penerimaan.timbang1_waktu|jam('%d/%m/%Y · %H:%M') if penerimaan.timbang1_waktu else 'Tidak tercatat' }}</dd></div>
+  <div><dt>Nota pembelian</dt><dd>{{ penerimaan.nota or 'Tidak tersedia pada catatan asal' }}</dd></div>
+ </dl>
+ <p>Barang dan pemilik mengikuti setiap catatan penerimaan. Tiket masuk dan tiket retur keluar adalah transaksi yang berbeda.</p>
+</section>

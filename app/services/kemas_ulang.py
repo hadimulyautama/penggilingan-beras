@@ -22,7 +22,10 @@ async def pilihan(db, sku_id, std_id, jasa_id, user_id):
     bebas=max(0,stok['kg']-pesan)
     hasil=[]
     for row,jumlah,berat in sumber:
-        per=D(row.berat_total_kg)/D(row.jumlah_karung)
+        from app.services.retur_supplier_reservasi import karung_terikat
+        jumlah=max(0,jumlah-await karung_terikat(db,f'beras:{row.id}'))
+        sisa_n=row.jumlah_karung-int(row.retur_supplier_keluar_karung)
+        per=(D(row.berat_total_kg)-D(row.retur_supplier_keluar_kg))/D(sisa_n) if sisa_n else D(0)
         if per<=0:continue
         jumlah=min(jumlah,int(D(bebas)//per))
         if jumlah<=0:continue
@@ -36,7 +39,10 @@ async def pilihan(db, sku_id, std_id, jasa_id, user_id):
         FinishedGoodsStock.curah_kemas_ulang.is_(True),FinishedGoodsStock.berat_total_kg>0)
         .order_by(FinishedGoodsStock.id))).scalars().all()
     for row in rows:
-        hasil.append(dict(id=row.id,jumlah=float(row.berat_total_kg),unit=1,curah=True,
+        from app.services.retur_supplier_reservasi import terikat
+        bebas_curah=max(D(0),D(row.berat_total_kg)-D(row.retur_supplier_keluar_kg)-await terikat(db,sumber=f'beras:{row.id}'))
+        if bebas_curah<=0:continue
+        hasil.append(dict(id=row.id,jumlah=float(bebas_curah),unit=1,curah=True,
             kunci=sidik(user_id,row.id,row.jasa_id,row.product_sku_id,row.rice_quality_standard_id,str(row.berat_total_kg)),
             label=f'Sisa curah #{row.id} · {float(row.berat_total_kg):g} kg tersedia'))
     return hasil

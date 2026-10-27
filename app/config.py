@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
+    # Tautan antaraplikasi saja; tidak menjadi sumber tiket atau angka timbang.
+    # Kosong ditampilkan sebagai konfigurasi belum tersedia, bukan URL tebakan.
+    teraflow_web_url: str = ""
 
     # Database
     database_url: str = "postgresql+asyncpg://milluser:millpass@localhost:5432/penggilingan"

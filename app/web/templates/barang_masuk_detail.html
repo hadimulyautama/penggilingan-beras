@@ -27,6 +27,8 @@
 </header>
 {% if tiket.status_tiket=='TERBUKA' %}<p class="terima-peringatan">Berat belum final · tiket masih terbuka dan mengikuti pembaruan Timbangan.</p>{% elif tiket.status_tiket=='DITUTUP_PAKSA' %}<p class="terima-peringatan">Tiket ditutup paksa. {{ timbang.tutup_paksa_alasan or 'Alasan tidak tercatat.' }}</p>{% endif %}
 {% if catatan %}<p><a class="btn btn--kecil" href="/barang-masuk/{{ tiket.id }}/serah-terima">Serah Terima Penerimaan</a></p>{% endif %}
+{% if akses_retur_supplier %}<p><a class="btn" href="/barang-masuk/{{ tiket.id }}/retur-supplier">{{ 'Retur ke Supplier' if boleh_retur_supplier else 'Lihat pengajuan Retur ke Supplier' }}</a></p>{% endif %}
+{% if retur_supplier_terkait %}<details class="terima-panel"><summary>Pengajuan Retur ke Supplier terkait</summary><ul>{% for r in retur_supplier_terkait %}<li><a href="/retur-supplier/{{ r.id }}">{{ r.kode }}</a> · {{ 'Selesai di gudang' if r.status=='selesai_gudang' else r.status }}</li>{% endfor %}</ul></details>{% endif %}
 <nav class="penerimaan-tabs" role="tablist" aria-label="Bagian detail penerimaan">{% for key,label in [('ringkasan','Ringkasan'),('tiket','Tiket & bobot'),('qc','QC'),('riwayat','Lokasi & riwayat')] %}<a id="terima-tab-{{ key }}" href="{{ tab_href(key) }}" role="tab" aria-selected="{{ 'true' if tab_detail == key else 'false' }}" aria-controls="terima-panel-{{ key }}" tabindex="{{ 0 if tab_detail == key else -1 }}">{{ label }}</a>{% endfor %}</nav>
 <section id="terima-panel-ringkasan" role="tabpanel" aria-labelledby="terima-tab-ringkasan"{% if tab_detail != 'ringkasan' %} hidden{% endif %}>
  <section class="terima-panel penerimaan-tindakan"><div class="terima-judul"><h2>Tindakan saat ini</h2></div>

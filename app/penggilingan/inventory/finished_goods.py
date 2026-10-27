@@ -587,7 +587,9 @@ async def hitung_stok_broken_curah(
             .where(milik(BrokenKeSilo))
         )
     ).scalar_one())
-    return masuk - keluar - terpakai
+    from app.services.retur_supplier_stok import keluar as keluar_supplier
+    retur=await keluar_supplier(db,tipe='byproduct_curah',jenis='broken') if jasa_id is None else (0,0)
+    return masuk - keluar - terpakai - float(retur[0])
 
 
 async def hitung_stok_byproduct_curah(
@@ -733,7 +735,9 @@ async def hitung_stok_finished_goods(
     else:
         oq = oq.where(OutgoingItem.rice_quality_standard_id == standard_id)
     ok, okg = (await db.execute(oq)).one()
-    return {"karung": int(mk) - int(ok), "kg": float(mkg) - float(okg)}
+    from app.services.retur_supplier_stok import keluar as keluar_supplier
+    rk,rn=await keluar_supplier(db,tipe='finished_goods',sku=sku_id,std=standard_id) if jasa_id is None else (0,0)
+    return {"karung": int(mk) - int(ok) - int(rn), "kg": float(mkg) - float(okg) - float(rk)}
 
 
 async def sisa_karung_per_sumber(
@@ -777,18 +781,26 @@ async def sisa_karung_per_sumber(
     else:
         keluar_q = keluar_q.where(OutgoingItem.rice_quality_standard_id == standard_id)
     keluar = max(0, int((await db.execute(keluar_q)).scalar_one()))
+    from app.services.retur_supplier_stok import keluar_banyak
+    from app.services.retur_supplier_reservasi import terikat_banyak
+    keys=[f'beras:{r.id}' for r in rows]
+    retur=await keluar_banyak(db,keys) if jasa_id is None else {}
+    alokasi_retur=await terikat_banyak(db,keys,karung=True) if jasa_id is None else {}
     hasil: list[tuple[FinishedGoodsStock, int, float]] = []
     for row in rows:
-        terpakai = min(max(int(row.jumlah_karung), 0), keluar)
+        rkg,rn=retur.get(f'beras:{row.id}',(0,0))
+        stok_n=max(int(row.jumlah_karung)-int(rn),0)
+        alokasi=int(alokasi_retur.get(f'beras:{row.id}',0))
+        terpakai = min(max(0,stok_n-alokasi), keluar)
         keluar -= terpakai
-        tersedia = max(int(row.jumlah_karung) - terpakai, 0)
+        tersedia = max(stok_n - terpakai, 0)
         if proses_id is not None and (
                 row.source_type != "polishing" or row.source_id != proses_id):
             continue
         if tersedia:
-            per_karung = (float(row.berat_total_kg) / row.jumlah_karung
-                          if row.jumlah_karung else 0.0)
-            hasil.append((row, tersedia, per_karung * tersedia))
+            per_karung = ((float(row.berat_total_kg)-float(rkg)) / stok_n
+                          if stok_n else 0.0)
+            hasil.append((row, tersedia, max(0,float(row.berat_total_kg)-float(rkg)-per_karung*terpakai)))
     return hasil
 
 

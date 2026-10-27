@@ -368,6 +368,9 @@ async def _ambil_termasuk_batal(db: AsyncSession, model, id_: int):
 
 
 async def _undo_purchase(db: AsyncSession, batch_id: int) -> str:
+    from app.services.retur_supplier_reservasi import pastikan_boleh_batal_sumber
+    try:await pastikan_boleh_batal_sumber(db,f'gabah:{batch_id}')
+    except ValueError as exc:raise UndoError(str(exc)) from exc
     b = await _ambil_termasuk_batal(db, PurchaseBatch, batch_id)
     if b is None:
         raise UndoError("Batch sudah tidak ada.")
@@ -936,6 +939,9 @@ async def _undo_verify_output(db: AsyncSession, proc_id: int) -> str:
 
 # ── PK luar (Gudang 2) ──
 async def _undo_pk_purchase(db: AsyncSession, batch_id: int) -> str:
+    from app.services.retur_supplier_reservasi import pastikan_boleh_batal_sumber
+    try:await pastikan_boleh_batal_sumber(db,f'pk:{batch_id}')
+    except ValueError as exc:raise UndoError(str(exc)) from exc
     b = await _ambil_termasuk_batal(db, PkPurchaseBatch, batch_id)
     if b is None:
         raise UndoError("PK luar sudah tidak ada.")
@@ -1026,6 +1032,10 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: b
     it = await _ambil_termasuk_batal(db, PkGudang2Intake, intake_id)
     if it is None:
         raise UndoError("Pemasukan PK sudah tidak ada.")
+    if it.pk_purchase_batch_id:
+        from app.services.retur_supplier_reservasi import pastikan_boleh_batal_sumber
+        try:await pastikan_boleh_batal_sumber(db,f'pk:{it.pk_purchase_batch_id}')
+        except ValueError as exc:raise UndoError(str(exc)) from exc
     if it.dibatalkan_pada is not None:
         raise UndoError("Pemasukan PK itu sudah dibatalkan sebelumnya.")
     if it.sumber_tipe == 'retur':

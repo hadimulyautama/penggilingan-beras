@@ -25,15 +25,23 @@ def berat_karung_nyata(row, jumlah):
     kilogram pada pemindahan parsial, sehingga karung terakhir tetap menutup
     berat batch tepat, termasuk 20 karung nominal 50 kg yang nyata 998 kg.
     """
-    if not row.jumlah_karung or row.berat_total_kg <= 0:
+    karung=row.jumlah_karung-int(getattr(row,'retur_supplier_keluar_karung',0) or 0)
+    kg=Decimal(str(row.berat_total_kg))-Decimal(str(getattr(row,'retur_supplier_keluar_kg',0) or 0))
+    if not karung or kg <= 0:
         return Decimal('0')
-    return (Decimal(str(row.berat_total_kg))*jumlah/row.jumlah_karung).quantize(
+    return (kg*jumlah/karung).quantize(
         Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
 async def sumber_karung_beras(db, sku_id, std_id, jasa_id=None, *, kunci=False, proses_id=None):
     rows = await sisa_karung_per_sumber(db, sku_id, std_id, jasa_id=jasa_id,
         source_type=None, kunci=kunci, proses_id=proses_id)
+    from app.services.retur_supplier_reservasi import karung_terikat
+    bebas=[]
+    for row,n,berat in rows:
+        n=max(0,n-await karung_terikat(db,f'beras:{row.id}'))
+        if n:bebas.append((row,n,float(berat_karung_nyata(row,n))))
+    rows=bebas
     stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jasa_id)
     saldo = max(Decimal('0'), min(Decimal(str(stok['kg'])),
         sum((berat_karung_nyata(row, n) for row, n, _ in rows), Decimal('0'))))
@@ -130,7 +138,9 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
                 or row.jasa_id != jasa_id or sku is None or sku.kategori != kategori_sku
                 or row.rice_quality_standard_id != (std.id if std else None)):
             raise Gudang2Error("Stok curah tidak cocok dengan jenis beras dan pemilik yang dipilih.")
-        if berat_kg > float(row.berat_total_kg):
+        from app.services.retur_supplier_reservasi import terikat
+        bebas_curah=Decimal(str(row.berat_total_kg))-Decimal(str(row.retur_supplier_keluar_kg))-await terikat(db,sumber=f'beras:{row.id}')
+        if berat_kg > float(bebas_curah):
             raise Gudang2Error(
                 f"Stok curah tercatat tinggal {float(row.berat_total_kg):,.2f} kg; "
                 f"tak cukup untuk {berat_kg:,.2f} kg.".replace(",", "."))

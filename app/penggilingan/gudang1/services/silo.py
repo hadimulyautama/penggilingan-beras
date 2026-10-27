@@ -601,10 +601,14 @@ async def masuk_silo(
         batch = (
             await db.execute(
                 select(PurchaseBatch).where(PurchaseBatch.kode_batch == kode_batch)
+                .with_for_update().execution_options(populate_existing=True)
             )
         ).scalars().first()
         if batch is None:
             raise SiloError(f"Batch {kode_batch} tidak ditemukan.")
+        from app.services.retur_supplier_reservasi import pastikan_sumber_bebas
+        try:await pastikan_sumber_bebas(db,f'gabah:{batch.id}')
+        except ValueError as exc:raise SiloError(str(exc)) from exc
         if batch.kondisi_gabah != "kering":
             raise SiloError(
                 f"Batch {kode_batch} gabah basah — harus dikeringkan dulu, "

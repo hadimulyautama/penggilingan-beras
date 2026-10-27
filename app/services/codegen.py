@@ -59,6 +59,15 @@ async def _next_sequence(db: AsyncSession, prefix: str, count_stmt=None,
     return f"{prefix}-{tgl:%Y%m%d}-{seq:02d}"
 
 
+async def next_retur_supplier_code(db: AsyncSession) -> str:
+    """Pengajuan pengembalian pembelian, terpisah dari REJ dan retur pelanggan."""
+    return await _next_sequence(db, "RSP")
+
+
+async def next_retur_supplier_keluar_code(db: AsyncSession) -> str:
+    return await _next_sequence(db, "RKO")
+
+
 async def _ambil_urut(db: AsyncSession, awalan: str, tgl: date) -> int:
     """Nomor berikutnya untuk awalan & tanggal ini — satu perintah, atomik."""
     dialek = db.bind.dialect.name if db.bind is not None else "postgresql"

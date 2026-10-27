@@ -70,6 +70,8 @@ from app.penggilingan.inventory.models import (
 )
 from app.models.akun import ProduksiAkun
 from app.models.jasa import Jasa
+from app.models.retur_supplier import (ReturSupplier, ReturSupplierItem,
+    ReturSupplierAktual, ReturSupplierPemeriksaan, ReturSupplierKeluar)
 from app.models.peristiwa import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPindahTumpukanSilo,
                                   ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk)
 from app.models.system import ActivityLog, KodeUrut, Notification, NotificationRead, SetelanPabrik
@@ -164,3 +166,6 @@ from app.models.skema_produksi import pasang as _pasang_skema_produksi
 _pasang_skema_produksi(Base.metadata)
 
 from app.models.portal import PortalAccount, PortalNotificationRead, PortalOwnershipEvent
+
+from app.models.retur_supplier import pasang_saldo_sumber as _pasang_saldo_retur_supplier
+_pasang_saldo_retur_supplier()

@@ -431,6 +431,36 @@ async def retur_detail_tiket(
             raise HTTPException(409, str(exc)) from exc
 
 
+@router.get('/retur-supplier/tiket/{tid}/detail')
+async def retur_supplier_detail_tiket(tid:int,
+        x_operator_akun:int=Header(alias='X-Operator-Akun'),
+        x_internal_token:str|None=Header(default=None),
+        x_produksi_lihat:str|None=Header(default=None)):
+    _pastikan_token(x_internal_token)
+    from types import SimpleNamespace
+    from hmu_identitas.model import Akun
+    from hmu_identitas import peran as P, pintu
+    from app.models import User, Warehouse
+    from app.services.retur_supplier_detail import kontrak
+    from fastapi.encoders import jsonable_encoder
+    from fastapi.responses import JSONResponse
+    async with SessionLocal() as db:
+        akun=await db.get(Akun,x_operator_akun)
+        user=await db.get(User,akun.user_id) if akun else None
+        if not akun or akun.status!='aktif' or not user or user.status!='aktif' or not pintu.boleh_masuk(user.role,pintu.PRODUKSI):
+            raise HTTPException(403,'Akun tidak memiliki akses PadiFlow.')
+        role=P.peran_efektif(user.role,x_produksi_lihat)
+        wid=user.default_warehouse_id
+        _,wh=P.urai(x_produksi_lihat)
+        if P.operator_saja(role) and wh and P.boleh_ganti_gudang(user.role):
+            wid=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi==wh,Warehouse.aktif.is_(True)))
+        efektif=SimpleNamespace(id=user.id,role=role,default_warehouse_id=wid)
+        try:data=await kontrak(db,tid,efektif)
+        except PermissionError as exc:raise HTTPException(403,str(exc)) from exc
+        except ValueError as exc:raise HTTPException(409,str(exc)) from exc
+        return JSONResponse(jsonable_encoder(data),headers={'Cache-Control':'private, no-store'})
+
+
 @router.get('/masuk/tiket/{tid}/detail')
 async def masuk_detail_tiket(
     tid: int, x_operator_akun: int = Header(alias='X-Operator-Akun'),

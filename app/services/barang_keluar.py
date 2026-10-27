@@ -299,7 +299,19 @@ async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
                     else OutgoingItem.jasa_id == jasa_id)
     elif gkr_id is not None:
         q = q.where(OutgoingItem.gabah_kering_lot_id == gkr_id)
-    return float((await db.execute(q)).scalar_one())
+    dipesan = float((await db.execute(q)).scalar_one())
+    # Alokasi supplier menahan ketersediaan pabrik, bukan stok fisik.
+    # Pengajuan belum menjadi OutgoingItem dan tidak boleh dihitung sebagai
+    # barang yang sudah dimuat. Pemanggil lama tetap memakai satu penjaga.
+    if jasa_id is None:
+        from app.services.retur_supplier_reservasi import terikat
+        if sku_id is not None:
+            dipesan += float(await terikat(db, sku_id=sku_id, std_id=std_id))
+        elif jenis is not None:
+            dipesan += float(await terikat(db, jenis=jenis))
+        elif silo_id is None:
+            dipesan += float(await terikat(db, pk=True))
+    return dipesan
 
 
 def baris_dari_item(it: OutgoingItem, *, jumlah_karung=None, berat_kg=None
@@ -447,12 +459,19 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
             db, gkr_id=b.gabah_kering_lot_id)
     else:
         raise BarangKeluarError(f"Jenis barang tak dikenal: {b.tipe}.")
+    # Mengabaikan perintah sendiri saat muat tidak memberi hak mengambil
+    # bagian yang sudah dialokasikan untuk retur supplier.
+    if abaikan_pesanan and b.jasa_id is None:
+        from app.services.retur_supplier_reservasi import terikat as alokasi_supplier
+        if b.tipe=='finished_goods':dipesan=float(await alokasi_supplier(db,sku_id=b.sku_id,std_id=b.std_id))
+        elif b.tipe=='byproduct_curah':dipesan=float(await alokasi_supplier(db,jenis=b.jenis))
+        elif b.tipe=='pk_g2' and b.silo_id is None:dipesan=float(await alokasi_supplier(db,pk=True))
     if b.tipe == 'finished_goods':
         from app.models import ProductSku
         sku = await db.get(ProductSku, b.sku_id)
         if sku and sku.kategori in {'broken','menir','reject','bekatul'}:
             total = float(await hitung_stok_byproduct_total(db, sku.kategori, jasa_id=b.jasa_id))
-            terikat = 0 if abaikan_pesanan else await _sudah_dipesan(db, jenis=sku.kategori, jasa_id=b.jasa_id)
+            terikat = (float(await alokasi_supplier(db,jenis=sku.kategori)) if b.jasa_id is None else 0) if abaikan_pesanan else await _sudah_dipesan(db, jenis=sku.kategori, jasa_id=b.jasa_id)
             return min(ada-dipesan, total-terikat), nama
     return ada - dipesan, nama
 

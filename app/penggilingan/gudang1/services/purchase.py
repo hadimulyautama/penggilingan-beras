@@ -551,6 +551,11 @@ async def undo_purchase_batch(db: AsyncSession, *, batch_id: int, user: User) ->
 
     Kembalikan True jika berhasil dibatalkan.
     """
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    from app.models.retur_supplier import ReturSupplierItem
+    await _kunci_saldo_keluar(db)
+    if await db.scalar(select(ReturSupplierItem.id).where(ReturSupplierItem.purchase_batch_id==batch_id).limit(1)):
+        return False  # FK dan riwayat sumber dipertahankan, termasuk pengajuan batal.
     batch = await db.get(PurchaseBatch, batch_id)
     if batch is None:
         return False

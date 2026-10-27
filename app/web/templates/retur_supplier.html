@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block judul %}Retur ke Supplier{% endblock %}
+{% block isi %}
+{% import '_stok.html' as st %}
+<link rel="stylesheet" href="/static/retur_supplier.css?v={{ VERSI }}&rsp=3">
+<div class="rsp" data-rsp-form-root data-tid="{{ penerimaan.id }}" data-actor="{{ pemilik_draf }}" data-key="{{ kunci }}">
+ <a class="rsp-kembali" href="{{ kembali }}">← Kembali ke penerimaan</a>
+ <ol class="rsp-tahap" aria-label="Tahap retur"><li aria-current="step">1 Penerimaan</li><li>2 Barang & jumlah</li><li>3 Periksa</li><li>4 Tiket TeraFlow</li></ol>
+ <header class="rsp-kepala"><small>Barang Masuk · Retur ke Supplier</small><h1>{{ penerimaan.nama_supplier }}</h1><p>{{ penerimaan.kode }} · Catatan penerimaan sudah diterima</p></header>
+ <div class="rsp-pesan" data-rsp-pesan role="alert" hidden></div>
+ <button type="button" class="btn" data-rsp-status hidden>Periksa status pengajuan</button>
+ <section data-rsp-stage="1">
+  <div class="rsp-grid"><div class="rsp-stack">
+   <section class="rsp-kartu"><h2>Pengembalian ke supplier</h2><p>Pilih barang dari penerimaan ini dan tentukan bagian yang akan dikembalikan. Pengajuan belum mencatat barang keluar atau mengurangi stok.</p>
+    {% if boleh_tulis %}<button class="btn btn--utama" type="button" data-rsp-mulai>Retur ke Supplier</button>{% else %}<p>Akses hanya melihat. Pembuatan, pengaitan tiket, dan pembatalan mengikuti izin Admin penerimaan retur.</p>{% endif %}
+   </section>
+   <section class="rsp-kartu"><h2>Barang yang sudah diterima</h2>{% for x in opsi %}<article class="rsp-item"><h3>{{ x.nama }} · {{ x.kode }}</h3><p>{{ x.pemilik }} · {{ x.lokasi }}</p><dl class="rsp-fakta"><div><dt>Jumlah penerimaan tercatat</dt><dd>{{ st.kg_rinci(x.diterima_kg) ~ ' kg' if x.diterima_kg is not none else 'Belum tersedia' }}{% if x.diterima_jumlah is not none %} · {{ x.diterima_jumlah }} karung{% endif %}</dd></div><div><dt>Stok fisik saat ini</dt><dd>{{ st.kg_rinci(x.stok_kg) ~ ' kg' if x.stok_kg is not none else 'Belum dapat dipastikan' }}{% if x.satuan=='karung' and x.stok_jumlah is not none %} · {{ x.stok_jumlah }} karung{% endif %}</dd></div></dl>{% if x.alasan_tidak_bisa %}<p>{{ x.alasan_tidak_bisa }}</p>{% endif %}</article>{% endfor %}</section>
+   {% if pengajuan %}<section class="rsp-kartu"><h2>Pengajuan terkait penerimaan ini</h2><ul>{% for r in pengajuan %}<li><a href="/retur-supplier/{{ r.id }}">{{ r.kode }}</a> · {{ r.status }} · {{ r.waktu|jam('%d/%m/%Y %H:%M') }}</li>{% endfor %}</ul></section>{% endif %}
+  </div><aside>{% include '_retur_supplier_sumber.html' %}</aside></div>
+ </section>
+ {% if boleh_tulis %}
+ <section data-rsp-stage="2" hidden>
+  <h2 tabindex="-1" data-rsp-focus>Pilih barang yang diretur</h2>
+  <form data-rsp-isian novalidate>
+   <input type="hidden" name="_csrf" value="{{ CSRF }}">
+   <div class="rsp-grid"><div class="rsp-stack">
+    <section class="rsp-kartu"><h2>Barang & jumlah retur</h2><p>Berkarung memakai jumlah karung utuh. Curah memakai kg. Bobot mengikuti partai asal, bukan ukuran contoh.</p>
+    {% for x in opsi %}<article class="rsp-item" data-rsp-item="{{ x.kunci }}">
+     <label class="rsp-pilih"><input type="checkbox" name="pilih" value="{{ x.kunci }}"{% if x.alasan_tidak_bisa or x.maksimum<=0 %} disabled{% endif %}><span><strong>{{ x.nama }}</strong><small>{{ x.kode }} · {{ x.pemilik }} · {{ x.lokasi }}</small></span></label>
+     <dl class="rsp-fakta"><div><dt>Maksimum retur saat ini</dt><dd data-rsp-max>{{ x.maksimum }} {{ x.satuan }}</dd></div></dl>
+     {% if x.alasan_tidak_bisa %}<p data-rsp-batas>{{ x.alasan_tidak_bisa }}</p>{% endif %}
+     <label class="rsp-field">{{ 'Jumlah karung retur' if x.satuan=='karung' else 'Berat retur (kg)' }}<input name="jumlah:{{ x.kunci }}" type="text" inputmode="{{ 'numeric' if x.satuan=='karung' else 'decimal' }}" autocomplete="off" disabled data-rsp-qty aria-describedby="rsp-info-{{ loop.index }}"></label>
+     <p id="rsp-info-{{ loop.index }}">{% if x.satuan=='karung' and x.per_kg is not none %}Bobot mengikuti data partai: {{ st.kg_rinci(x.per_kg) }} kg/karung.{% else %}Jumlah dicatat dalam kg sesuai layanan sumber.{% endif %}</p>
+     <dl class="rsp-fakta"><div><dt>Bobot pengajuan</dt><dd data-rsp-weight>Belum diisi</dd></div><div><dt>Sisa tersedia setelah dialokasikan</dt><dd data-rsp-sisa>Belum diisi</dd></div></dl>
+     <details><summary>Rincian batas retur</summary><dl class="rsp-fakta"><div><dt>Stok fisik</dt><dd data-rsp-physical>{{ st.kg_rinci(x.stok_kg) ~ ' kg' if x.stok_kg is not none else 'Belum dapat dipastikan' }}</dd></div><div><dt>Alokasi pengajuan retur aktif lain</dt><dd data-rsp-reserved>{{ st.kg_rinci(x.terikat_kg) }} kg</dd></div><div><dt>Retur selesai sebelumnya</dt><dd>Tahap ini belum mencatat penyelesaian retur.</dd></div></dl><p>Batas juga memperhitungkan perintah lain pada sumber bersama. Sisa setelah dialokasikan bukan bukti stok sudah keluar.</p></details>
+    </article>{% endfor %}</section>
+    <section class="rsp-kartu"><h2>Alasan pengembalian</h2><label class="rsp-field">Alasan retur · wajib<textarea name="alasan" rows="3" maxlength="2000" required></textarea></label><label class="rsp-field">Catatan tambahan · opsional<textarea name="catatan" rows="3" maxlength="4000"></textarea></label></section>
+   </div><aside class="rsp-stack"><section class="rsp-kartu"><h2>Ringkasan pengajuan</h2><div data-rsp-total aria-live="polite">Belum ada barang dipilih.</div></section>{% include '_retur_supplier_sumber.html' %}</aside></div>
+   <div class="rsp-actions"><button class="btn" type="button" data-rsp-back="1">Kembali</button><button class="btn btn--utama" type="submit">Periksa pengajuan →</button></div>
+  </form>
+ </section>
+ <section data-rsp-stage="3" hidden><h2 tabindex="-1">Periksa pengajuan retur</h2><div class="rsp-grid"><div class="rsp-stack"><section class="rsp-kartu"><h2>Barang yang akan dikembalikan</h2><div data-rsp-review></div></section><section class="rsp-kartu"><h2>Alasan & catatan</h2><p data-rsp-reason></p><p data-rsp-note></p></section><p class="rsp-peringatan">Pengajuan belum mencatat barang keluar. Saldo dan hubungan penerimaan diperiksa kembali saat disimpan.</p></div><aside>{% include '_retur_supplier_sumber.html' %}</aside></div><div class="rsp-actions"><button class="btn" type="button" data-rsp-back="2">Ubah pengajuan</button><button class="btn btn--utama" type="button" data-rsp-save>Simpan pengajuan & pilih tiket</button></div></section>
+ {% endif %}
+ <p class="rsp-catatan">Pengajuan tidak mengurangi stok fisik. Pengurangan stok hanya melalui pemeriksaan dan konfirmasi barang keluar. Tidak ada jurnal pembelian atau transaksi Kledo otomatis.</p>
+ <noscript>Aktifkan JavaScript untuk pemeriksaan pengajuan bertahap. Membuka halaman ini tidak mengubah data.</noscript>
+ <script type="application/json" data-rsp-data>{{ opsi_json|tojson }}</script>
+</div>
+<script src="/static/retur_supplier.js?v={{ VERSI }}&rsp=3"></script>
+{% endblock %}

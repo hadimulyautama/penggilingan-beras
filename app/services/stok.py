@@ -1699,6 +1699,25 @@ async def stok_produk(db: AsyncSession, *,
         if tipe == "byproduct_curah":
             keluar_curah[j] = keluar_curah.get(j, 0.0) + float(kg)
 
+    if jasa_id is None:
+        # Peristiwa keluar supplier ikut kartu stok; tidak menjadi penjualan
+        # atau menimpa jumlah penerimaan. Suku curah dan karung tetap terpisah.
+        from app.models.retur_supplier import ReturSupplier,ReturSupplierItem,ReturSupplierAktual,ReturSupplierKeluar
+        for tipe,kat,mutu,jp,kode,tgl,kg,supplier in (await db.execute(
+            select(ReturSupplierItem.tipe_pool,ProductSku.kategori,RiceQualityStandard.kode,
+                ReturSupplierItem.jenis_produk,ReturSupplierKeluar.kode,ReturSupplierKeluar.waktu,
+                ReturSupplierAktual.bobot_kg,ReturSupplier.sumber)
+            .select_from(ReturSupplierAktual).join(ReturSupplierItem,ReturSupplierItem.id==ReturSupplierAktual.item_id)
+            .join(ReturSupplierKeluar,ReturSupplierKeluar.retur_supplier_id==ReturSupplierItem.retur_supplier_id)
+            .join(ReturSupplier,ReturSupplier.id==ReturSupplierItem.retur_supplier_id)
+            .outerjoin(ProductSku,ProductSku.id==ReturSupplierItem.product_sku_id)
+            .outerjoin(RiceQualityStandard,RiceQualityStandard.id==ReturSupplierItem.rice_quality_standard_id)
+            .where(ReturSupplierItem.tipe_pool.in_(('finished_goods','fg_curah','byproduct_curah')),ReturSupplierAktual.bobot_kg>0))).all():
+            j=jenis_produk(kat or jp,None if tipe=='byproduct_curah' else mutu)
+            if j:
+                keluar.setdefault(j,[]).append(RincianProduk(kode=kode,kg=float(kg),waktu=tgl,ket='Retur supplier · '+supplier['supplier']))
+                if tipe=='byproduct_curah':keluar_curah[j]=keluar_curah.get(j,0)+float(kg)
+
     pindah_silo: dict[str, float] = {}
     for jenis_silo, kg in (await db.execute(
         select(HasilSampingKeSilo.jenis,
@@ -1795,7 +1814,7 @@ async def stok_produk(db: AsyncSession, *,
 
     sisa_kemas = {}
     for kat, mutu, berat in (await db.execute(
-        select(ProductSku.kategori,RiceQualityStandard.kode,func.sum(FinishedGoodsStock.berat_total_kg))
+        select(ProductSku.kategori,RiceQualityStandard.kode,func.sum(FinishedGoodsStock.berat_total_kg-FinishedGoodsStock.retur_supplier_keluar_kg))
         .join(ProductSku,ProductSku.id==FinishedGoodsStock.product_sku_id)
         .outerjoin(RiceQualityStandard,RiceQualityStandard.id==FinishedGoodsStock.rice_quality_standard_id)
         .where(FinishedGoodsStock.curah_kemas_ulang.is_(True),milik_proc(FinishedGoodsStock))

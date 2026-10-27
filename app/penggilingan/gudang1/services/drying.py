@@ -200,7 +200,7 @@ async def dryer_load_kg(db: AsyncSession) -> float:
     """Total kg gabah di dalam dryer = batch menunggu (loose) + lot aktif."""
     lot_kg = (
         await db.execute(
-            select(func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0))
+            select(func.coalesce(func.sum(PurchaseBatch.berat_total_kg-PurchaseBatch.retur_supplier_keluar_kg), 0))
             .select_from(DryingLot)
             .join(DryingLotBatch, DryingLotBatch.drying_lot_id == DryingLot.id)
             .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
@@ -531,11 +531,16 @@ async def masuk_dryer(
     missing: list[str] = []
     for kode in kodes:
         b = (
-            await db.execute(select(PurchaseBatch).where(PurchaseBatch.kode_batch == kode))
+            await db.execute(select(PurchaseBatch).where(PurchaseBatch.kode_batch == kode)
+                             .with_for_update().execution_options(populate_existing=True))
         ).scalars().first()
         (batches if b else missing).append(b if b else kode)  # type: ignore[arg-type]
     if missing:
         raise DryingError("Batch tidak ditemukan: " + ", ".join(missing))
+    from app.services.retur_supplier_reservasi import pastikan_sumber_bebas
+    for b in batches:
+        try:await pastikan_sumber_bebas(db,f'gabah:{b.id}')
+        except ValueError as exc:raise DryingError(str(exc)) from exc
 
     dryer = await pilih_dryer(db, dryer_id)
     occupied = await active_drying_lot(db, dryer.id)
