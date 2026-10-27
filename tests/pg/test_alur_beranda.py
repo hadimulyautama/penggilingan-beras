@@ -97,7 +97,12 @@ async def test_beranda_akses_status_dan_foto(pg, pengeringan):
         async with await _klien(pg,peran=role,gudang='Gudang 1') as c:
             r=await c.get('/')
             assert r.status_code==200 and 'data-alur-gudang="g1"' in r.text
-            assert ('data-alur-gudang="g2"' in r.text)==(role!='operator')
+            from bs4 import BeautifulSoup
+            g2=BeautifulSoup(r.text,'html.parser').select_one('[data-alur-gudang="g2"]')
+            assert g2 is not None
+            assert bool(g2.select_one('[aria-disabled="true"]'))==(role=='operator')
+            if role=='operator':
+                assert not g2.select('.alur-masuk,.alur-mesin,.alur-stok,a')
             assert 'data-dryer-id=' in r.text and 'Mengeringkan' in r.text
             assert 'alur-dryer alur-alat--terisi' in r.text
             assert 'Simulasi tampilan' not in r.text

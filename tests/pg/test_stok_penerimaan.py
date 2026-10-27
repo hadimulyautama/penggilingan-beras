@@ -118,7 +118,7 @@ async def test_koreksi_hasil_giling_saldo_rendemen_audit_dan_batal(pg,pabrik):
 AKSI=[
  ('verify-output',{'kode_proses':'','berat_output':1},'admin'),
  ('qc-giling',{'kode_proses':''},'admin'),('qc-pk-luar',{'kode_batch':''},'admin'),
- ('minta-pk-g1',{'kode_proses':''},'g2'),
+ ('minta-pk-g1',{'kode_proses':''},'minta'),
  ('pindah-tumpukan-silo',{'tumpukan':'','silo':''},'fisik'),
  ('catat-packing',{'hasil':'','kemasan':'','jumlah_karung':1},'packing'),
  ('catat-bekatul',{'kode_pol':'','berat_kg':0},'packing'),
@@ -144,8 +144,7 @@ async def test_izin_semua_endpoint_stok(pg,stok_lengkap,role,gudang,lihat):
         c.headers['X-CSRF-Token']=cap_formulir(c)
         for endpoint,payload,jenis in AKSI:
             boleh=(role in {'admin','superadmin'} if jenis=='admin' else
-                   role=='operator' and gudang=='Gudang 2' if jenis=='g2' else
-                   role=='superadmin' or role=='operator' and gudang=='Gudang 2' if jenis=='fisik' else
+                   role=='superadmin' or role=='operator' and gudang=='Gudang 2' if jenis in {'fisik','minta'} else
                    role in {'admin','superadmin'} or gudang=='Gudang 2')
             r=await c.post('/api/actions/'+endpoint,json=payload)
             assert r.status_code in ({400,422} if boleh else {403}),(role,gudang,endpoint,r.status_code,r.text)
