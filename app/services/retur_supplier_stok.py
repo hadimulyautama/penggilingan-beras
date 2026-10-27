@@ -7,10 +7,16 @@ proyeksi peristiwa barang keluar tercatat.
 from decimal import Decimal
 from sqlalchemy import select,func
 from app.models.retur_supplier import ReturSupplierItem as I,ReturSupplierAktual as A,ReturSupplierKeluar as K
+from app.models.retur_supplier_koreksi import ReturSupplierSelisih as S
+
+
+def efektif(kolom):
+    """Mutasi awal ditambah selisih; bukan pembalikan dan pengeluaran ulang."""
+    return getattr(A,kolom)+select(func.coalesce(func.sum(getattr(S,kolom)),0)).where(S.item_id==I.id).correlate(I).scalar_subquery()
 
 
 def kueri():
-    return select(func.coalesce(func.sum(A.bobot_kg),0),func.coalesce(func.sum(A.jumlah),0)).select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id)
+    return select(func.coalesce(func.sum(efektif('bobot_kg')),0),func.coalesce(func.sum(efektif('jumlah')),0)).select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id)
 
 
 async def keluar(db,*,sumber=None,tipe=None,sku=None,std=None,jenis=None):
@@ -30,5 +36,5 @@ async def curah_beras(db,row):
 
 async def keluar_banyak(db,keys):
     if not keys:return {}
-    q=select(I.kunci_sumber,func.sum(A.bobot_kg),func.sum(A.jumlah)).select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id).where(I.kunci_sumber.in_(keys)).group_by(I.kunci_sumber)
+    q=select(I.kunci_sumber,func.sum(efektif('bobot_kg')),func.sum(efektif('jumlah'))).select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id).where(I.kunci_sumber.in_(keys)).group_by(I.kunci_sumber)
     return {k:(Decimal(str(kg)),Decimal(str(n))) for k,kg,n in (await db.execute(q)).all()}

@@ -122,12 +122,13 @@ def pasang_saldo_sumber():
     from sqlalchemy import select,func
     from sqlalchemy.orm import column_property
     I,A,K=ReturSupplierItem,ReturSupplierAktual,ReturSupplierKeluar
+    from app.services.retur_supplier_stok import efektif
     from app.penggilingan.gudang1.models import PurchaseBatch
     from app.penggilingan.inventory.models import FinishedGoodsStock
     for model,fk in ((PurchaseBatch,I.purchase_batch_id),(FinishedGoodsStock,I.finished_goods_stock_id)):
-        model.retur_supplier_keluar_kg=column_property(select(func.coalesce(func.sum(A.bobot_kg),0))
+        model.retur_supplier_keluar_kg=column_property(select(func.coalesce(func.sum(efektif('bobot_kg')),0))
             .select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id)
             .where(fk==model.id).correlate_except(A,I,K).scalar_subquery())
-    FinishedGoodsStock.retur_supplier_keluar_karung=column_property(select(func.coalesce(func.sum(A.jumlah),0))
+    FinishedGoodsStock.retur_supplier_keluar_karung=column_property(select(func.coalesce(func.sum(efektif('jumlah')),0))
         .select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id)
         .where(I.finished_goods_stock_id==FinishedGoodsStock.id,I.satuan=='karung').correlate_except(A,I,K).scalar_subquery())

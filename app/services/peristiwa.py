@@ -294,8 +294,30 @@ async def _retur_supplier_keluar(db, e):
     await db.flush()
 
 PENANGAN['retur_supplier_keluar']=_retur_supplier_keluar
+async def _retur_supplier_perubahan(db,e):
+    from app.models.retur_supplier_koreksi import ReturSupplierPerubahan as P,ReturSupplierSelisih as S,ReturSupplierEfektif as E
+    m=e.muatan
+    db.add(P(peristiwa_id=e.id,retur_supplier_id=m['retur_supplier_id'],versi=m['versi_sesudah'],jenis=m['jenis'],snapshot=m,input_by=e.pelaku_id,waktu=e.waktu))
+    await db.flush()
+    for x in m.get('items',[]):
+        if m['jenis']=='jumlah':db.add(S(peristiwa_id=e.id,item_id=x['item_id'],bobot_kg=Decimal(x['bobot_baru'])-Decimal(x['bobot_lama']),jumlah=Decimal(x['jumlah_baru'])-Decimal(x['jumlah_lama'])))
+    state=await db.get(E,m['retur_supplier_id'])
+    if state is None:
+        state=E(retur_supplier_id=m['retur_supplier_id'],versi=0,dibatalkan=False,wajib_manual=False)
+        db.add(state)
+    # Efektif menyimpan juga penahanan pemeriksaan yang belum menjadi mutasi.
+    # Replay versi yang sama/lama tidak boleh menghapus kewajiban manual itu.
+    if state.versi<m['versi_sesudah']:
+        state.versi=m['versi_sesudah']
+        if m['jenis']=='keterangan':state.keterangan=m['keterangan_baru']
+        if m['jenis']=='batal':state.dibatalkan=True;state.keberadaan=m['keberadaan']
+    await db.flush()
+
+PENANGAN['retur_supplier_koreksi']=_retur_supplier_perubahan
+PENANGAN['retur_supplier_batal_administratif']=_retur_supplier_perubahan
 from app.models.retur_supplier import ReturSupplierKeluar
-TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk,
+from app.models.retur_supplier_koreksi import ReturSupplierSelisih,ReturSupplierPerubahan
+TABEL_PROYEKSI = (ReturSupplierSelisih,ReturSupplierPerubahan,ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk,
                   ProyeksiPindahTumpukanSilo,ReturSupplierKeluar)
 
 

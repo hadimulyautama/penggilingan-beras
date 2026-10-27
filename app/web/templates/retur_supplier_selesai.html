@@ -9,6 +9,7 @@
 <a class="rsp-kembali" href="{{ kembali }}">← Kembali ke pengajuan</a>
 <ol class="rsp-tahap" aria-label="Tahap penyelesaian"><li{% if not hasil %} aria-current="step"{% endif %}>1 Pemeriksaan</li><li>2 Konfirmasi keluar</li><li{% if hasil %} aria-current="step"{% endif %}>3 Barang keluar tercatat</li></ol>
 <header class="rsp-kepala"><small>Retur ke Supplier · {{ rec.kode }}</small><h1>{{ 'Barang keluar sudah tercatat' if hasil else 'Periksa retur ke supplier' }}</h1><p>{{ rec.sumber.supplier }} · {{ rec.sumber.kode_tiket }}</p><p>{{ 'Selesai di gudang; belum merupakan bukti diterima supplier.' if hasil else 'Stok belum keluar melalui pengajuan ini.' }}</p></header>
+{% if rec.status=='selesai_gudang' %}<p class="rsp-peringatan">Halaman ini menyimpan pengajuan dan pencatatan keluar awal. <a href="/riwayat-retur-supplier/{{ rec.id }}">Buka jumlah efektif terbaru, koreksi dan pembatalan pada riwayat retur</a>.</p>{% endif %}
 <div class="rsp-pesan" role="alert" data-rsf-pesan hidden></div><button class="btn" type="button" data-rsf-status hidden>Periksa status terbaru</button>
 {% if hasil %}
 {% if tiket_berubah %}<p class="rsp-peringatan">Data tiket berubah setelah pencatatan keluar. Snapshot pencatatan tetap utuh dan stok tidak dihitung ulang. Periksa riwayat koreksi TeraFlow melalui pengajuan terkait.</p>{% endif %}

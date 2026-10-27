@@ -61,4 +61,17 @@ async def kontrak(db, tid, user):
     if selesai:
         hasil['penyelesaian']=dict(kode=selesai.kode,waktu=selesai.waktu.isoformat(),
             total_kg=selesai.snapshot['total_kg'],metode_verifikasi=selesai.snapshot['verifikasi']['metode'])
+        from app.models.retur_supplier_koreksi import ReturSupplierEfektif
+        from app.services.retur_supplier_stok import efektif
+        from app.models.retur_supplier import ReturSupplierAktual
+        state=await db.get(ReturSupplierEfektif,rec.id)
+        if state and state.versi:
+            rows=(await db.execute(select(ReturSupplierItem.id,efektif('jumlah'),efektif('bobot_kg'))
+                .join(ReturSupplierAktual,ReturSupplierAktual.item_id==ReturSupplierItem.id)
+                .where(ReturSupplierItem.retur_supplier_id==rec.id))).all()
+            # Tambahan opsional; kontrak pengajuan dan penyelesaian AWAL
+            # tetap sama untuk pembaca TeraFlow lama.
+            hasil['pencatatan_efektif']=dict(versi=state.versi,total_kg=str(sum((kg for _,_,kg in rows),layanan.D(0))),
+                dibatalkan_administratif=state.dibatalkan,keberadaan=state.keberadaan,
+                items=[dict(item_id=i,jumlah=str(n),bobot_kg=str(kg)) for i,n,kg in rows])
     return hasil

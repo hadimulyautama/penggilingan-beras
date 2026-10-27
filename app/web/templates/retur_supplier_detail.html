@@ -9,6 +9,7 @@
  <a class="rsp-kembali" href="{{ kembali }}">← Kembali ke penerimaan</a>
  <ol class="rsp-tahap" aria-label="Tahap retur"><li>1 Penerimaan</li><li>2 Barang & jumlah</li><li>3 Periksa</li><li aria-current="step">4 Tiket TeraFlow</li></ol>
  <header class="rsp-kepala"><small>Barang Masuk · Retur ke Supplier</small><h1>{{ rec.kode }}</h1><p>{{ rec.sumber.supplier }} · penerimaan <a href="{{ kembali }}">{{ rec.sumber.kode_tiket }}</a></p><p>{{ 'Selesai di gudang' if rec.status=='selesai_gudang' else 'Pengajuan dibatalkan' if rec.status=='dibatalkan' else 'Tiket terhubung' if rec.timbangan_transaksi_id else 'Pengajuan tersimpan' }}</p></header>
+{% if rec.status=='selesai_gudang' %}<p class="rsp-peringatan">Halaman ini menyimpan pengajuan dan pencatatan keluar awal. <a href="/riwayat-retur-supplier/{{ rec.id }}">Buka jumlah efektif terbaru, koreksi dan pembatalan pada riwayat retur</a>.</p>{% endif %}
  <div class="rsp-pesan" data-rsp-pesan role="alert" hidden></div>
  {% if rec.timbangan_transaksi_id and rec.status!='dibatalkan' %}<p><a class="btn btn--utama" href="/retur-supplier/{{ rec.id }}/penyelesaian">{{ 'Lihat barang keluar tercatat' if rec.status=='selesai_gudang' else 'Pemeriksaan & penyelesaian retur' }}</a></p>{% endif %}
  <div class="rsp-grid"><div class="rsp-stack">

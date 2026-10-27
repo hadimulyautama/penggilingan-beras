@@ -72,6 +72,7 @@ async def detail(identitas:int,request:Request,tab:str='ringkasan',akun=Depends(
         return await tampil(request,'riwayat_retur_supplier_gagal.html',kembali=PATH+'?'+konteks(request),status_code=503)
     return await tampil(request,'riwayat_retur_supplier_detail.html',**data,tab=tab,tabs=TABS,
         statuses=svc.STATUS,kembali=PATH+'?'+konteks(request),
+        boleh_koreksi_selesai=bool(data['ledger'] and data['rec'].status=='selesai_gudang' and P.admin_keatas(efektif.role) and not(data['state'] and data['state'].dibatalkan)),
         tab_href=lambda t:PATH+f'/{identitas}?'+konteks(request)+'&tab='+t,
         tera_url=settings.teraflow_web_url.rstrip('/'),
         boleh_lanjut=data['rec'].status=='diajukan' and not data['ledger'] and

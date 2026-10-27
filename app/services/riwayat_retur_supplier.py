@@ -17,6 +17,7 @@ from app.models.retur_supplier import (ReturSupplier as R, ReturSupplierItem as 
     ReturSupplierAktual as A, ReturSupplierPemeriksaan as C, ReturSupplierKeluar as K)
 from app.services import retur_supplier as s
 from app.services.retur_supplier_selesai import versi_tiket
+from app.models.retur_supplier_koreksi import ReturSupplierSelisih as S,ReturSupplierEfektif as E,ReturSupplierPerubahan as Perubahan
 
 STATUS = {'ticket':'Menunggu tiket', 'weigh':'Menunggu timbang kedua',
     'check':'Menunggu pemeriksaan', 'correction':'Perlu koreksi',
@@ -24,6 +25,7 @@ STATUS = {'ticket':'Menunggu tiket', 'weigh':'Menunggu timbang kedua',
     'done':'Barang keluar tercatat', 'cancel':'Dibatalkan',
     'stale':'Perlu pemeriksaan ulang', 'blocked':'Tiket perlu diperiksa',
     'unknown':'Status tiket terkini belum dapat dipastikan'}
+STATUS['cancel_after']='Pembatalan administratif · keluar tetap tercatat'
 UKURAN_HALAMAN = 20
 
 
@@ -69,8 +71,8 @@ async def tiket_banyak(db,ids):
         return {},True
 
 
-def keadaan(rec,last,keluar,tiket,*,gagal=False):
-    if keluar:return 'done'
+def keadaan(rec,last,keluar,tiket,*,gagal=False,state=None):
+    if keluar:return 'cancel_after' if state and state.dibatalkan else 'done'
     if rec.status=='dibatalkan':return 'cancel'
     if not rec.timbangan_transaksi_id:return 'ticket'
     if gagal or not tiket:return 'unknown'
@@ -121,15 +123,16 @@ async def daftar(db,user,*,q='',awal='',akhir='',status='',supplier=None,gudang=
         func.string_agg(I.snapshot['nama'].as_string()+' '+I.snapshot['kode'].as_string(),' ').label('barang'),
         func.sum(A.bobot_kg).label('aktual'),func.count(A.item_id).label('na')).outerjoin(A,A.item_id==I.id).group_by(I.retur_supplier_id).subquery()
     terbaru=select(C.retur_supplier_id.label('rid'),func.max(C.id).label('id')).group_by(C.retur_supplier_id).subquery()
-    rows=(await db.execute(select(R,agg.c.n,agg.c.pengajuan,agg.c.gudang,agg.c.barang,agg.c.aktual,agg.c.na,C,K)
+    delta=select(I.retur_supplier_id.label('rid'),func.sum(S.bobot_kg).label('kg')).join(S,S.item_id==I.id).group_by(I.retur_supplier_id).subquery()
+    rows=(await db.execute(select(R,agg.c.n,agg.c.pengajuan,agg.c.gudang,agg.c.barang,agg.c.aktual,agg.c.na,C,K,func.coalesce(delta.c.kg,0),E)
         .join(agg,agg.c.rid==R.id).outerjoin(terbaru,terbaru.c.rid==R.id).outerjoin(C,C.id==terbaru.c.id)
-        .outerjoin(K,K.retur_supplier_id==R.id).where(R.id.in_(dasar.with_only_columns(R.id)))
+        .outerjoin(K,K.retur_supplier_id==R.id).outerjoin(delta,delta.c.rid==R.id).outerjoin(E,E.retur_supplier_id==R.id).where(R.id.in_(dasar.with_only_columns(R.id)))
         .order_by(R.waktu.desc(),R.id.desc()))).all()
     tickets,gagal=await tiket_banyak(db,{r[0].timbangan_transaksi_id for r in rows if r[0].timbangan_transaksi_id})
     hasil=[]
-    for r,n,proposal,warehouse,barang,actual,na,last,ledger in rows:
+    for r,n,proposal,warehouse,barang,actual,na,last,ledger,koreksi,state in rows:
         t=tickets.get(r.timbangan_transaksi_id)
-        st=keadaan(r,last,ledger,t,gagal=gagal)
+        st=keadaan(r,last,ledger,t,gagal=gagal,state=state)
         if status and status!=st:continue
         kode_historis=(ledger.snapshot if ledger else last.snapshot if last else {}).get('kode_tiket')
         hay=' '.join(str(v or '') for v in [r.kode,r.sumber.get('supplier'),r.sumber.get('kode_tiket'),r.sumber.get('nota'),
@@ -137,7 +140,7 @@ async def daftar(db,user,*,q='',awal='',akhir='',status='',supplier=None,gudang=
         if q.strip().casefold() not in hay.casefold():continue
         kg=ledger.snapshot.get('total_kg') if ledger else None
         hasil.append(dict(rec=r,jumlah_item=n,pengajuan=proposal,gudang=warehouse,
-            aktual=actual if na==n else None,keluar=D(kg) if kg is not None else None,ledger=ledger,status=st))
+            aktual=actual if na==n else None,keluar=D(kg)+D(koreksi) if kg is not None else None,ledger=ledger,status=st,versi=state.versi if state else 0))
     total=len(hasil);pages=max(1,(total+UKURAN_HALAMAN-1)//UKURAN_HALAMAN)
     halaman=min(halaman,pages)
     return dict(rows=hasil[(halaman-1)*UKURAN_HALAMAN:halaman*UKURAN_HALAMAN],total=total,halaman=halaman,pages=pages,
@@ -198,6 +201,10 @@ async def detail(db,identitas,user):
     latest=await db.scalar(select(C).where(C.retur_supplier_id==rec.id).order_by(C.id.desc()).limit(1))
     ledger=await db.scalar(select(K).where(K.retur_supplier_id==rec.id))
     actual={a.item_id:a for a in (await db.scalars(select(A).where(A.item_id.in_([i.id for i in items])))).all()}
+    state=await db.get(E,rec.id)
+    changes=(await db.scalars(select(Perubahan).where(Perubahan.retur_supplier_id==rec.id).order_by(Perubahan.versi))).all()
+    sums={i:(D(kg),D(n)) for i,kg,n in (await db.execute(select(S.item_id,func.sum(S.bobot_kg),func.sum(S.jumlah)).where(S.item_id.in_([i.id for i in items])).group_by(S.item_id))).all()}
+    efektif={i.id:dict(jumlah=actual[i.id].jumlah+sums.get(i.id,(D(0),D(0)))[1],bobot_kg=actual[i.id].bobot_kg+sums.get(i.id,(D(0),D(0)))[0]) for i in items if i.id in actual}
     tickets,gagal=await tiket_banyak(db,{rec.timbangan_transaksi_id} if rec.timbangan_transaksi_id else set())
     t=tickets.get(rec.timbangan_transaksi_id)
     audits=(await db.scalars(select(ActivityLog).where(ActivityLog.table_name=='retur_supplier',ActivityLog.record_id==rec.id).order_by(ActivityLog.id))).all()
@@ -208,17 +215,20 @@ async def detail(db,identitas,user):
     verifier=(ledger.snapshot.get('verifikasi') if ledger else rec.verifikasi) or {}
     uids={rec.input_by,rec.tiket_dihubungkan_oleh,rec.dibatalkan_oleh,verifier.get('oleh')}
     uids.update(a.changed_by for a in audits);uids.update(c.input_by for c in checks)
+    uids.update(c.input_by for c in changes)
+    uids.update(c.snapshot.get('verifikasi',{}).get('pemeriksa') for c in changes)
     if ledger:uids.add(ledger.input_by)
     users=dict((await db.execute(select(User.id,User.nama).where(User.id.in_([v for v in uids if v])))).all())
     koreksi,akses_koreksi=await koreksi_tiket(db,user,t.get('kode') if t else snap.get('kode_tiket') if snap else None)
     try:waktu_verifikasi=datetime.fromisoformat(verifier.get('waktu',''))
     except (ValueError,TypeError):waktu_verifikasi=None
-    barang=[dict(item=i,aktual=actual.get(i.id),keluar=out.get(i.id),stok_href=stok_href(i)) for i in items]
+    barang=[dict(item=i,aktual=actual.get(i.id),keluar=out.get(i.id),efektif=efektif.get(i.id) if ledger else None,stok_href=stok_href(i)) for i in items]
     return dict(rec=rec,barang=barang,total_pengajuan=sum((i.bobot_kg for i in items),D(0)),
         total_aktual=sum((a.bobot_kg for a in actual.values()),D(0)) if len(actual)==len(items) else None,
         ledger=ledger,snap=snap,verifikasi=verifier,waktu_verifikasi=waktu_verifikasi,checks=checks,users=users,
+        state=state,perubahan=changes,total_efektif=sum((v['bobot_kg'] for v in efektif.values()),D(0)) if ledger and len(efektif)==len(items) else None,
         koreksi_tiket=koreksi,akses_koreksi=akses_koreksi,
         audit=[dict(aksi=a.aksi or a.action,oleh=a.changed_by,waktu=a.waktu_perubahan,alasan=a.alasan_perubahan,
             sebelum=baca_json(a.old_value),sesudah=baca_json(a.new_value)) for a in audits],
-        tiket=t,gagal_tiket=gagal,status=keadaan(rec,latest,ledger,t,gagal=gagal),
+        tiket=t,gagal_tiket=gagal,status=keadaan(rec,latest,ledger,t,gagal=gagal,state=state),
         tiket_berubah=bool(snap and t and snap.get('versi_tiket')!=versi_tiket(t)))
