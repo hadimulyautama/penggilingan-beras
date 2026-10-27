@@ -174,3 +174,74 @@ jobs:
         with:
           name: hasil-dua-aplikasi
           path: bukti/dua-aplikasi/junit.xml
+
+  retur-dua-aplikasi:
+    name: Integrasi HTTP retur PadiFlow dan TeraFlow terpin
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: uji
+          POSTGRES_DB: uji_tf_retur_ci
+        ports: ["56639:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      UJI_PG_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:56639/uji_tf_retur_ci
+      DATABASE_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:56639/uji_tf_retur_ci
+      UJI_TF_ROOT: ${{ github.workspace }}/timbangan
+      UJI_RETUR_OUT: ${{ github.workspace }}/bukti/retur-dua-aplikasi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: padiflow
+      # Pin paket retur yang diuji; source82 tanpa perubahan retur tidak
+      # membuktikan kontrak detail baru. Job pengiriman di atas tetap memakai82.
+      - uses: actions/checkout@v4
+        with:
+          repository: hadimulyautama/timbangan
+          ref: 3fd6d838aed67da916dc99bdd7a29397ac262468
+          path: timbangan
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            padiflow/requirements*.txt
+            timbangan/requirements.txt
+      - name: Periksa seluruh source paket retur terpin
+        run: |
+          python - <<'PYTHON'
+          import hashlib,json
+          from pathlib import Path
+          root=Path('timbangan')
+          manifest=json.loads((root/'CI_RETUR_SOURCE_MANIFEST.json').read_text())
+          assert manifest['profile']=='retur-ci'
+          assert manifest['release_version']=='83'
+          assert manifest['base_commit']=='0200668a8eab721f4d991ede6e0808d4d656c411'
+          assert len(manifest['delta_manifest'])==7
+          assert len(manifest['source_manifest'])==172
+          for file,digest in manifest['source_manifest'].items():
+              assert hashlib.sha256((root/file).read_bytes()).hexdigest()==digest,file
+          print('172 hash source paket retur cocok, termasuk tujuh delta teruji.')
+          PYTHON
+      - name: Pasang dua interpreter terpisah untuk retur
+        run: |
+          python -m pip install -r padiflow/requirements.txt -r padiflow/requirements-dev.txt
+          python -m venv timbangan/.venv
+          timbangan/.venv/bin/pip install -r timbangan/requirements.txt
+      - name: Migrasi nyata dan integrasi HTTP retur
+        working-directory: padiflow
+        run: >-
+          python -m pytest -q -m dua_aplikasi tests/pg/test_retur_dua_app.py
+          --junitxml=../bukti/retur-dua-aplikasi/junit.xml
+      - name: Simpan bukti integrasi retur
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hasil-retur-dua-aplikasi
+          path: bukti/retur-dua-aplikasi/

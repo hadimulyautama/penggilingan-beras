@@ -402,3 +402,30 @@ async def retur_muatan_tiket(
             return await baca_muatan(db, tid)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
+
+
+@router.get('/retur/tiket/{tid}/detail')
+async def retur_detail_tiket(
+    tid: int, x_operator_akun: int = Header(alias='X-Operator-Akun'),
+    x_internal_token: str | None = Header(default=None),
+) -> dict:
+    """Baca saja, dengan izin yang sama seperti rincian retur PadiFlow.
+
+    Token layanan tidak menggantikan izin manusia. Akun lokal Timbangan tidak
+    boleh mengaku sebagai Admin PadiFlow hanya melalui label perannya sendiri.
+    """
+    _pastikan_token(x_internal_token)
+    from hmu_identitas.model import Akun
+    from hmu_core import User
+    from app.peran import can_see_financials
+    from app.services.retur_detail_timbang import baca
+    from fastapi.responses import JSONResponse
+    async with SessionLocal() as db:
+        akun = await db.get(Akun, x_operator_akun)
+        user = await db.get(User, akun.user_id) if akun else None
+        if not akun or akun.status != 'aktif' or not user or user.status != 'aktif' or not can_see_financials(user):
+            raise HTTPException(403, 'Akun tidak memiliki izin membaca rincian retur PadiFlow.')
+        try:
+            return JSONResponse(await baca(db, tid), headers={'Cache-Control': 'private, no-store'})
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
