@@ -302,6 +302,11 @@
       bukaAksi(id, semula);
     })) return;
 
+    if (id === "verifikasi_keluar") {
+      var verifikasiId = nilaiBaris().split("|")[0];
+      location.assign("/verifikasi-pengiriman" + (/^[1-9]\d*$/.test(verifikasiId) ? "?perintah=" + encodeURIComponent(verifikasiId) : ""));
+      return;
+    }
     if (id === "selesai_muat") {
       var selesaiId = nilaiBaris().split("|")[0];
       location.assign("/selesai-muat" + (/^[1-9]\d*$/.test(selesaiId) ? "?perintah=" + encodeURIComponent(selesaiId) + "&buka=1" : ""));
@@ -3614,7 +3619,7 @@
     var id = tag && tag.dataset.buka;
     if (!id) { return; }
     // Hak muat mencakup operator pengganti walaupun aksi tidak di katalog.
-    if (id === "muat_barang" || id === "muat_semua" || id === "selesai_muat") { bukaAksi(id); return; }
+    if (id === "muat_barang" || id === "muat_semua" || id === "selesai_muat" || id === "verifikasi_keluar") { bukaAksi(id); return; }
     /* ── Katalog dimuat juga saat dibuka lewat ?buka= ──
        Sejak perbaikan QA UI-01 (produksi 6be8636), `muat()` hanya dipanggil
        di layar yang punya `#layar` — Catat pekerjaan lain. Di Beranda,

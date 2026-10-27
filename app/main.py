@@ -122,6 +122,8 @@ from app.web.muatan import router as muatan_router
 app.include_router(muatan_router)
 from app.web.selesai_muatan import router as selesai_muatan_router
 app.include_router(selesai_muatan_router)
+from app.web.verifikasi_pengiriman import router as verifikasi_pengiriman_router
+app.include_router(verifikasi_pengiriman_router)
 app.include_router(retur_router)
 app.include_router(retur_asal_router)
 app.include_router(jasa_router)

@@ -1661,7 +1661,11 @@ class MuatReq(BaseModel):
 
 
 @router.get("/actions/pratinjau-muat")
-async def pratinjau_muat(perintah: str, user: User = Depends(pengguna_aksi)) -> dict:
+async def pratinjau_muat(perintah: str, user: User = Depends(pengguna_aksi), tujuan: str = "muat") -> dict:
+    if tujuan == 'verifikasi':
+        wajib(can_see_financials(user))
+        from app.web.verifikasi_pengiriman import baca
+        async with SessionLocal() as db:return await baca(db,_id(perintah))
     from app.web.api import _is_g1_operator, _is_g2_operator
     wajib(can_see_financials(user) or await _is_g1_operator(user) or await _is_g2_operator(user))
     from app.penggilingan.inventory.models import OUT_PERINTAH
@@ -1850,6 +1854,9 @@ async def act_selesai_muat(req: SelesaiMuatReq, user: User = Depends(pengguna_ak
 
 
 class VerifikasiKeluarReq(BaseModel):
+    dasar: str | None = None
+    kiriman_id: int | None = None
+    perintah_ids: list[int] | None = None
     perintah: str = ""
     tiket: str | None = None
     #: Wajib hanya bila selisih timbang melewati ambang — yang memutuskan
@@ -1872,11 +1879,14 @@ async def act_verifikasi_keluar(req: VerifikasiKeluarReq,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
+            if req.dasar is not None:
+                from app.services.pemeriksaan_pengiriman import periksa_konteks
+                await periksa_konteks(db,req)
             rec, catatan = await bk.verifikasi(
                 db, user=u, rec_id=_id(req.perintah), timbangan_transaksi_id=tid,
-                sebab_selisih=req.sebab_selisih)
+                sebab_selisih=req.sebab_selisih,dasar=req.dasar)
         except bk.BarangKeluarError as e:
-            raise galat(e, "Gagal memverifikasi barang keluar.")
+            raise _galat_muatan(e, "Gagal memverifikasi barang keluar.")
         kode = rec.kode
     return {"ok": True,
             "pesan": f"✓ {kode} ditutup." + (f" {catatan}" if catatan else "")}

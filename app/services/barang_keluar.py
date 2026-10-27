@@ -80,11 +80,42 @@ GUDANG_ITEM = {"finished_goods": G2, "byproduct_curah": G2, "pk_langsung": G1,
 #: dibaca — dan yang berhenti dibaca sama saja dengan tak ada.
 AMBANG_SELISIH_KG = 100.0
 AMBANG_SELISIH_PERSEN = 2.0
+BATAS_OTOMATIS_PERSEN = 0.2
 
 
 def ambang_selisih(total_kg: float) -> float:
     """Berapa kg selisih yang masih dianggap wajar untuk muatan sebesar ini."""
     return max(AMBANG_SELISIH_KG, float(total_kg) * AMBANG_SELISIH_PERSEN / 100)
+
+
+def batas_verifikasi_otomatis(total_kg):
+    """Batas lama ±0,2%; Decimal yang sama dipakai layanan dan pratinjau."""
+    from decimal import Decimal
+    return Decimal(str(total_kg))*Decimal(str(BATAS_OTOMATIS_PERSEN))/100
+
+
+def angka_verifikasi(total_kg, berat_tiket):
+    """Perbandingan satu armada; tidak mengalokasikan beda ke item/penerima."""
+    beda=None if berat_tiket is None else float(berat_tiket)-float(total_kg)
+    batas=ambang_selisih(total_kg)
+    return dict(total_aktual_kg=float(total_kg),berat_tiket_kg=berat_tiket,
+        selisih_kg=beda,batas_otomatis_kg=float(batas_verifikasi_otomatis(total_kg)),
+        ambang_manual_kg=batas,sebab_wajib=beda is not None and abs(beda)>batas,
+        otomatis_persen=BATAS_OTOMATIS_PERSEN,manual_persen=AMBANG_SELISIH_PERSEN,manual_min_kg=AMBANG_SELISIH_KG)
+
+
+def periksa_angka_otomatis(tiket, total):
+    from decimal import Decimal
+    if any(tiket[k] is None for k in ('berat_barang_kg','timbang2_kg','total_tara_kg')):
+        raise VerifikasiOtomatisDitahan("Berat timbang kedua setelah tara belum lengkap; periksa manual.")
+    nyata,target=Decimal(str(tiket['berat_barang_kg'])),Decimal(str(total))
+    batas=batas_verifikasi_otomatis(total)
+    if not nyata.is_finite() or not target.is_finite() or nyata<=0 or Decimal(str(tiket['timbang2_kg']))<=0 or Decimal(str(tiket['total_tara_kg']))<0:
+        raise VerifikasiOtomatisDitahan("Berat timbang atau tara tidak sah; periksa manual.")
+    if abs(nyata-target)>batas:
+        raise VerifikasiOtomatisDitahan(f"Selisih {abs(nyata-target):g} kg melewati batas verifikasi otomatis {batas:g} kg (±0,2% dari muatan aktual). Periksa manual.")
+    return float(nyata)
+
 
 
 #: ── Muatan kecil tak perlu tiket timbang keluar ──
@@ -1753,7 +1784,7 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
                      timbangan_transaksi_id: int | None = None,
                      sebab_selisih: str | None = None,
                      tanggal=None, jam=None, otomatis: bool = False,
-                     sidik_sumber: str | None = None) -> tuple[OutgoingRecord, str]:
+                     sidik_sumber: str | None = None, dasar: str | None = None) -> tuple[OutgoingRecord, str]:
     """Admin menutup memakai tiket armada yang sudah dipilih. → (rec, catatan)
 
     Perintah dan kedatangan armada tidak saling menunggu. Tiket boleh dipilih
@@ -1780,7 +1811,15 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
     SELISIH BESAR wajib bersebab (keputusan pemilik 30 September 2026): boleh
     tetap ditutup, tetapi ditandai. Ambangnya `ambang_selisih()`.
     """
-    rec = await _kunci(db, rec_id, keadaan=OUT_DIMUAT)
+    try:
+        rec = await _kunci(db, rec_id, keadaan=OUT_DIMUAT)
+    except BarangKeluarError:
+        if dasar is not None:
+            from app.services.pemeriksaan_pengiriman import periksa_dasar
+            terbaru=await db.get(OutgoingRecord,rec_id)
+            if terbaru is None:raise MuatanBerubah("Kiriman sudah tidak tersedia. Baca data terbaru.") from None
+            await periksa_dasar(db,terbaru,dasar)
+        raise
     anggota = [r for r in await anggota_kiriman(db, rec, kunci=True) if r.status != OUT_BATAL]
     if any(r.status != OUT_DIMUAT for r in anggota):
         raise BarangKeluarError("Selesaikan muat setiap pelanggan dalam kiriman sebelum verifikasi armada bersama.")
@@ -1795,6 +1834,9 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
         timbangan_transaksi_id = rec.timbangan_transaksi_id
     if otomatis and (timbangan_transaksi_id is None or total <= 0):
         raise VerifikasiOtomatisDitahan("Verifikasi otomatis memerlukan tiket armada dan muatan aktual lebih dari nol.")
+    if dasar is not None:
+        from app.services.pemeriksaan_pengiriman import periksa_dasar
+        await periksa_dasar(db,rec,dasar)
     catatan = ""
     sebab_selisih = (sebab_selisih or "").strip()
     if timbangan_transaksi_id is not None:
@@ -1813,25 +1855,16 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
             from decimal import Decimal
             tiket = (await db.execute(text("SELECT berat_barang_kg,timbang2_kg,total_tara_kg FROM timbangan_transaksi WHERE id=:id FOR UPDATE"),
                                       {"id": timbangan_transaksi_id})).mappings().one()
-            if any(tiket[k] is None for k in ("berat_barang_kg", "timbang2_kg", "total_tara_kg")):
-                raise VerifikasiOtomatisDitahan("Berat timbang kedua setelah tara belum lengkap; periksa manual.")
-            nyata = Decimal(str(tiket["berat_barang_kg"]))
-            target = Decimal(str(total))
-            batas = target * Decimal("0.002")
-            if not nyata.is_finite() or not target.is_finite() or nyata <= 0 or Decimal(str(tiket["timbang2_kg"])) <= 0 or Decimal(str(tiket["total_tara_kg"])) < 0:
-                raise VerifikasiOtomatisDitahan("Berat timbang atau tara tidak sah; periksa manual.")
-            if abs(nyata - target) > batas:
-                raise VerifikasiOtomatisDitahan(
-                    f"Selisih {abs(nyata-target):g} kg melewati batas verifikasi otomatis {batas:g} kg (±0,2% dari muatan aktual). Periksa manual.")
-            berat_tiket = float(nyata)
-        beda = berat_tiket - total
+            berat_tiket=periksa_angka_otomatis(tiket,total)
+        angka=angka_verifikasi(total,berat_tiket)
+        beda=angka["selisih_kg"]
         catatan = (f"Timbangan {_kg(berat_tiket)} kg · dimuat menurut catatan "
                    f"{_kg(total)} kg")
         catatan += (" · sama persis." if abs(beda) < 0.5
                     else f" · beda {_kg(abs(beda))} kg "
                          f"({'timbangan lebih' if beda > 0 else 'catatan lebih'}).")
         catatan = f"{kode_tiket}: {catatan}"
-        ambang = ambang_selisih(total)
+        ambang=angka["ambang_manual_kg"]
         if abs(beda) > ambang:
             # DITOLAK SEKARANG, bukan diterima lalu ditandai diam-diam: satu-
             # satunya orang yang masih tahu sebabnya adalah yang sedang
@@ -1863,7 +1896,7 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
                     + (f" · total kiriman {_kg(total)} kg" if rec.kiriman_id else "")
                     + (" + tiket timbang" if timbangan_transaksi_id else "")
                     + (" · otomatis ±0,2% setelah tara" if otomatis else ""),
-                alasan="Verifikasi otomatis: selisih setelah tara dalam ±0,2% muatan aktual." if otomatis else None)
+                alasan="Verifikasi otomatis: selisih setelah tara dalam ±0,2% muatan aktual." if otomatis else sebab_selisih or None)
         await db.flush()
     try:
         await db.commit()

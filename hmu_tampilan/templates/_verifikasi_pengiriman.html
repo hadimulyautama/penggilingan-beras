@@ -1,0 +1,14 @@
+<link rel="stylesheet" href="/static/catat-muatan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/verifikasi-pengiriman.css?v={{ VERSI }}">
+<section class="catat-muatan verifikasi-pengiriman" data-verifikasi-pengiriman>
+  <a href="/barang-keluar">‹ Pengiriman</a>
+  <h1>Verifikasi pengiriman</h1>
+  <p class="bantu">Periksa total satu armada. Rincian pelanggan berasal dari catatan muatan PadiFlow.</p>
+  <p data-kabar role="status" hidden></p>
+  <div data-galat class="nota nota--buruk" role="alert" hidden></div>
+  <button type="button" class="btn" data-terbaru hidden>Periksa data terbaru</button>
+  <div data-isi-verifikasi></div>
+  <noscript>Aktifkan JavaScript untuk memeriksa dan memverifikasi pengiriman.</noscript>
+</section>
+<script type="application/json" id="verifikasi-awal">{{ awal | tojson }}</script>
+<script src="/static/verifikasi-pengiriman.js?v={{ VERSI }}" defer></script>
