@@ -155,6 +155,7 @@ async def test_admin_tetap_tanpa_gudang_dan_menerima_kabar_yang_sah(pg, akses, p
     async with await _klien(pg,akses[profil],f'akses_{profil}') as c:
         r = await c.get('/kabar')
         assert 'PESAN-AKSES-admin' in r.text and 'PESAN-AKSES-umum' in r.text
-        assert 'PESAN-AKSES-g1' not in r.text and 'PESAN-AKSES-g2' not in r.text
-        assert (await c.get('/api/kabar/jumlah')).json()['belum'] == 2
+        for gudang in ('g1','g2','lintas'):
+            assert (f'PESAN-AKSES-{gudang}' in r.text)==(profil=='super')
+        assert (await c.get('/api/kabar/jumlah')).json()['belum'] == (5 if profil=='super' else 2)
 

@@ -110,7 +110,8 @@ async def test_gerbang_akses_semua_sumber_dan_post(pg,siap,peran,view,izin):
   if view:c.cookies.set(NAMA_KUKI,view)
   for url in ['/api/actions/drying-done','/api/actions/silo-g1','/api/actions/ringkasan-pindah-silo?kode_lot='+siap['kode']]:
    r=await c.get(url);assert r.status_code==(200 if izin else 403),r.text
-  assert any(x['id']=='pindah_silo' for x in (await c.get('/api/actions/menu')).json())==izin
+  aksi=next(x for x in (await c.get('/api/actions/menu')).json() if x['id']=='pindah_silo')
+  assert aksi['boleh']==izin
   assert (await post(c,'pindah-silo',{'kode_lot':siap['kode'],'silo':'A'})).status_code==(200 if izin else 403)
 
 @pytest.mark.parametrize('pemilik',['sama','berbeda','pabrik'])

@@ -84,7 +84,7 @@ async def test_semua_gerbang_efektif(pg,silos,peran,view,izin):
   if view:c.cookies.set(NAMA_KUKI,view)
   for url in ['/api/actions/silo-siap-giling','/api/actions/ringkasan-mulai-giling?silo=A']:
    assert (await c.get(url)).status_code==(200 if izin else 403)
-  assert any(x['id']=='mulai_giling' for x in (await c.get('/api/actions/menu')).json())==izin
+  assert next(x['boleh'] for x in (await c.get('/api/actions/menu')).json() if x['id']=='mulai_giling')==izin
   assert (await post(c,'mulai-giling',{'silo':'A'})).status_code==(200 if izin else 403)
 
 @pytest.mark.parametrize('nama',[[],['C'],['TIDAK ADA'],['A','C']])

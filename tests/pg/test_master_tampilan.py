@@ -14,6 +14,26 @@ from tests.pg.formulir import cap_formulir
 pytestmark = pytest.mark.asyncio
 
 
+async def test_katalog_g2_tanpa_gudang1_aktif_tetap_tersedia_dan_tulis_dijaga(pg, pabrik):
+    from app.models import Warehouse
+    from app.penggilingan.gudang1.services.silo import silos_g1,_g1_warehouse_id,SiloError
+    async with pg() as db:
+        wh=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g1'))
+        wh.aktif=False
+        await db.commit()
+        assert await silos_g1(db)==[]
+        with pytest.raises(SiloError,match='Data gudang 1 belum ada'):
+            await _g1_warehouse_id(db)
+        g2=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g2'))
+    async with await _klien(pg,role=P.OPERATOR,gudang_id=g2) as c:
+        r=await c.get('/api/actions/menu')
+        assert r.status_code==200
+        menu={a['id']:a for a in r.json()}
+        assert menu['pindah_silo']['boleh'] is False
+        assert menu['mulai_penyosohan']['boleh'] is True
+        assert (await c.get('/api/actions/silo-g1')).status_code==403
+
+
 async def test_superadmin_minta_lot_dari_http(pg, pabrik):
     async with await _klien(pg, role=P.SUPERADMIN) as c:
         menu = (await c.get('/api/actions/menu')).json()

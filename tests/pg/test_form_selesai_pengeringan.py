@@ -121,7 +121,7 @@ async def test_akses_menu_konteks_sumber_dan_aksi(pg,pengeringan,peran,view,izin
   if view:c.cookies.set(NAMA_KUKI,view)
   for url,params in [('/api/actions/drying-active',{}),('/api/actions/ringkasan-selesai-pengeringan',{'kode_lot':pengeringan['kode']})]:
    r=await c.get(url,params=params);assert r.status_code==(200 if izin else 403),r.text
-  menu=(await c.get('/api/actions/menu')).json();assert any(x['id']=='selesai_pengeringan' for x in menu)==izin
+  menu=(await c.get('/api/actions/menu')).json();assert next(x['boleh'] for x in menu if x['id']=='selesai_pengeringan')==izin
   r=await post(c,'selesai-pengeringan',{'kode_lot':pengeringan['kode'],'kadar_air':15});assert r.status_code==(200 if izin else 403),r.text
 
 async def test_konteks_tidak_menulis_titipan_ref_mesin_tidak_hapus_tes(pg,pengeringan):

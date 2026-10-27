@@ -74,9 +74,13 @@ async def silos_g1(db: AsyncSession) -> list[Silo]:
     boleh menambahnya — jadi tak ada satu pun tempat yang boleh menyebut
     "A dan B" sebagai kebenaran.
     """
-    wid = await _g1_warehouse_id(db)
+    # Daftar baca juga dipakai katalog induk oleh Gudang 2. Gudang 1 yang
+    # belum tersedia menghasilkan daftar kosong; penjaga operasi tulis tetap
+    # memakai _g1_warehouse_id/silo_g1_by_id dan menolak tujuan tak sah.
     return list((await db.execute(
-        select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
+        select(Silo).join(Warehouse, Silo.warehouse_id == Warehouse.id)
+        .where(Warehouse.kode_fungsi == "g1", Warehouse.aktif.is_(True),
+               Silo.aktif.is_(True)).order_by(Silo.nama_silo)
     )).scalars().all())
 
 

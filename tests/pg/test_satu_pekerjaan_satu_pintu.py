@@ -215,27 +215,22 @@ async def test_kedua_belas_yang_dicabut_tetap_terkirim_di_menu(pg, pabrik):
         assert menu[aksi]["kartu"] is True, f"{aksi} masih digambar di katalog"
 
 
-async def test_admin_tak_menerima_spesifikasi_pindah_tumpukan_silo(pg, pabrik):
-    """⚠⚠ Aturan 2: Admin tak boleh memindahkan tumpukan ke silo, dan itu
-    harus berarti spesifikasinya TAK ADA di menu Admin sama sekali — bukan
-    cuma tombolnya yang hilang dari katalog. Spesifikasi yang tetap terkirim
-    bisa dibuka lewat deep-link `?buka=pindah_tumpukan_silo`, dan gerbang
-    yang cuma berdiri di tombol bukan penjagaan.
+async def test_admin_menerima_spesifikasi_pindah_terkunci_operator_g2_aktif(pg, pabrik):
+    """v476 mengirim katalog induk yang sama, izin perpindahan tetap khusus.
 
-    Operator Gudang 2 SEBALIKNYA tetap menerimanya — itulah satu-satunya
-    yang berubah dari sebelas aksi `g2` yang lain."""
+    Keberadaan spesifikasi tidak memberi wewenang menulis; izin aksi pada
+    katalog tetap mengikuti peran sebenarnya.
+    """
     from app.models import User
     from app.web.api import actions_menu
 
     async with pg() as db:
         admin = await db.get(User, pabrik["admin"])
-        menu_admin = {a["id"] for a in await actions_menu(user=admin)}
+        menu_admin = {a["id"]:a for a in await actions_menu(user=admin)}
         op2 = await db.get(User, pabrik["op2"])
-        menu_op2 = {a["id"] for a in await actions_menu(user=op2)}
-    assert "pindah_tumpukan_silo" not in menu_admin, (
-        "Admin masih menerima spesifikasi pindah_tumpukan_silo")
-    assert "pindah_tumpukan_silo" in menu_op2, (
-        "operator Gudang 2 kehilangan pindah_tumpukan_silo dari menunya sendiri")
+        menu_op2 = {a["id"]:a for a in await actions_menu(user=op2)}
+    assert menu_admin['pindah_tumpukan_silo']['boleh'] is False
+    assert menu_op2['pindah_tumpukan_silo']['boleh'] is True
 
 
 async def test_super_admin_menerima_spesifikasi_pindah_tumpukan_silo(pg, pabrik):
