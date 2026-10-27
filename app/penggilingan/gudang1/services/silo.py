@@ -227,7 +227,11 @@ async def _row_bobot(db: AsyncSession, row: SiloStorage, *, sebelum_sumber: int 
     if row.drying_lot_id:
         b = await _lot_bobot(db, row.drying_lot_id)
     elif row.purchase_batch_id:
-        b = dari_batch(await db.get(PurchaseBatch, row.purchase_batch_id))
+        # Batch yang baru dibuat dalam sesi ini belum memuat saldo retur
+        # turunan. Muat eksplisit dalam konteks async, sekaligus segarkan
+        # ledger retur sebelum menghitung isi fisik silo.
+        b = dari_batch(await db.get(PurchaseBatch, row.purchase_batch_id,
+                                    populate_existing=True))
     elif row.tipe_masuk == "dari_gabah_kering":
         from app.models import GabahKeringBongkar
         kg = (await db.execute(

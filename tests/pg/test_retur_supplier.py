@@ -335,8 +335,82 @@ async def test_curah_presisi_keluar_tanpa_menimpa_penerimaan(pg,asal,jenis):
         assert (row.berat_kg if jenis=='broken' else row.berat_total_kg)==998
         if jenis=='gabah':
             from app.penggilingan.gudang1.services.bobot import dari_batch
+            from sqlalchemy import event
             assert D(str(dari_batch(row).kg))==D('872.75')
+            # Perubahan lokasi/status tidak boleh membuang saldo retur yang
+            # dibaca fungsi bobot sinkron, maupun mengembalikan berat ke 998.
+            row.status_batch='di_silo'
+            await db.flush()
+            for tahap in ('flush','commit'):
+                if tahap=='commit':await db.commit()
+                sql=[]
+                def catat(*args):sql.append(args[2])
+                event.listen(db.bind.sync_engine,'before_cursor_execute',catat)
+                try:
+                    assert D(str(dari_batch(row).kg))==D('872.75')
+                    assert row.berat_total_kg==D('998')
+                finally:
+                    event.remove(db.bind.sync_engine,'before_cursor_execute',catat)
+                assert sql==[],tahap
         if jenis=='curah':assert await _sudah_dipesan(db,sku_id=asal['sku'])==0
+
+
+@pytest.mark.parametrize('commit',[False,True])
+async def test_saldo_silo_batch_baru_dalam_sesi_yang_sama(pg,asal,commit):
+    from app.models import Silo,SiloStorage
+    from app.penggilingan.gudang1.services.silo import _row_bobot
+    async with pg() as db:
+        _,batch,_=await buat_sumber(db,asal,'gabah')
+        wh=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g1'))
+        silo=Silo(nama_silo='Silo Uji Saldo Retur',warehouse_id=wh,status='terisi')
+        db.add(silo);await db.flush()
+        batch.status_batch='di_silo'
+        row=SiloStorage(silo_id=silo.id,purchase_batch_id=batch.id,
+            tipe_masuk='langsung_kering',tanggal_masuk=now_local(),
+            input_by=asal['uid'],status='terisi',dikemas_kg=D('25.25'))
+        db.add(row);await db.flush()
+        if commit:await db.commit()
+        before=await sidik_stok(db)
+        # db.get dapat mengembalikan identitas batch yang belum pernah memuat
+        # column_property. Pembaca async harus memuatnya sebelum dari_batch.
+        assert (await db.get(PurchaseBatch,batch.id)) is batch
+        for _ in range(2):
+            assert D(str((await _row_bobot(db,row)).kg))==D('972.75')
+        assert await sidik_stok(db)==before
+
+
+async def test_silo_menyegarkan_retur_baru_pada_batch_yang_sudah_dimuat(pg,asal):
+    from app.models import Silo,SiloStorage
+    from app.services import retur_supplier_selesai as f
+    from app.penggilingan.gudang1.services.silo import _row_bobot
+    async with pg() as db:
+        tid,batch,key=await buat_sumber(db,asal,'gabah')
+        for kg in ('100.25','25'):
+            req=[dict(kunci=key,jumlah=kg)]
+            check=await s.periksa(db,tid,user(asal),req,'Uji retur bertahap','')
+            rec=await s.simpan(db,user=user(asal),tid=tid,jumlah=req,
+                alasan='Uji retur bertahap',catatan='',kunci=uuid4().hex,dasar=check['dasar'])
+            t=await tiket(db,asal['sid'],'RETUR_SUPPLIER','RETUR_KELUAR')
+            await s.hubungkan(db,user=user(asal),identitas=rec.id,tiket_id=t)
+            await db.execute(text("UPDATE timbangan_transaksi SET timbang2_kg=5000::numeric+:kg,"
+                "berat_barang_kg=:kg,status_tiket='SELESAI' WHERE id=:id"),dict(id=t,kg=D(kg)))
+            await db.commit()
+            item=await db.scalar(select(ReturSupplierItem).where(ReturSupplierItem.retur_supplier_id==rec.id))
+            snap=await f.periksa(db,identitas=rec.id,user=user(asal),jumlah=[dict(item_id=item.id,jumlah=kg)])
+            assert snap['status']=='terverifikasi_otomatis',snap
+            await db.commit()
+            await f.catat_keluar(db,identitas=rec.id,user=user(asal),dasar=snap['dasar'],konfirmasi=True)
+            await db.commit()
+        wh=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g1'))
+        silo=Silo(nama_silo='Silo Retur Bertahap',warehouse_id=wh,status='terisi')
+        db.add(silo);await db.flush()
+        row=SiloStorage(silo_id=silo.id,purchase_batch_id=batch.id,tipe_masuk='langsung_kering',
+            tanggal_masuk=now_local(),input_by=asal['uid'],status='terisi',dikemas_kg=0)
+        db.add(row);await db.commit()
+        before=await sidik_stok(db)
+        assert D(str((await _row_bobot(db,row)).kg))==D('872.75')
+        assert batch.berat_total_kg==D('998')
+        assert await sidik_stok(db)==before
 
 
 async def test_satu_item_nol_alokasi_seluruhnya_dilepas(pg,asal):

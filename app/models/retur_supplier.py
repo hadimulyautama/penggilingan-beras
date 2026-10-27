@@ -126,9 +126,17 @@ def pasang_saldo_sumber():
     from app.penggilingan.gudang1.models import PurchaseBatch
     from app.penggilingan.inventory.models import FinishedGoodsStock
     for model,fk in ((PurchaseBatch,I.purchase_batch_id),(FinishedGoodsStock,I.finished_goods_stock_id)):
+        # Status/lokasi batch gabah berubah saat digabung ke pengering atau
+        # silo. Flush perubahan itu tidak mengubah ledger retur, tetapi secara
+        # bawaan membuang column_property ini. Pembaca bobot sinkron lalu
+        # mencoba SELECT terselubung dan gagal MissingGreenlet.
+        # Pertahankan snapshot retur gabah saat batch di-flush. Rumus SQL tetap
+        # sama; pembacaan sumber retur memakai populate_existing agar mutasi
+        # ledger/koreksi berikutnya tetap terbaca, tanpa mengubah penerimaan.
         model.retur_supplier_keluar_kg=column_property(select(func.coalesce(func.sum(efektif('bobot_kg')),0))
             .select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id)
-            .where(fk==model.id).correlate_except(A,I,K).scalar_subquery())
+            .where(fk==model.id).correlate_except(A,I,K).scalar_subquery(),
+            expire_on_flush=model is not PurchaseBatch)
     FinishedGoodsStock.retur_supplier_keluar_karung=column_property(select(func.coalesce(func.sum(efektif('jumlah')),0))
         .select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id)
         .where(I.finished_goods_stock_id==FinishedGoodsStock.id,I.satuan=='karung').correlate_except(A,I,K).scalar_subquery())
