@@ -45,6 +45,7 @@ from app.web.draf_keluar import router as draf_keluar_router
 from app.web.layar_retur import router as retur_router
 from app.web.layar_retur_asal import router as retur_asal_router
 from app.web.retur_supplier import router as retur_supplier_router
+from app.web.riwayat_retur_supplier import router as riwayat_retur_supplier_router
 from app.web.layar_produk import router as produk_router
 from app.web.layar_riwayat import router as riwayat_router
 from app.web.layar_sosoh import router as sosoh_router
@@ -128,6 +129,7 @@ app.include_router(verifikasi_pengiriman_router)
 app.include_router(retur_router)
 app.include_router(retur_asal_router)
 app.include_router(retur_supplier_router)
+app.include_router(riwayat_retur_supplier_router)
 app.include_router(jasa_router)
 app.include_router(serah_terima_router)
 app.include_router(sosoh_router)

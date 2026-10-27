@@ -1,0 +1,5 @@
+{% import '_stok.html' as st %}
+{% macro kg(v) -%}{% set n=v|float(none) %}{{ st.kg_rinci(n) ~ ' kg' if n is not none else 'Belum tersedia' }}{%- endmacro %}
+{% macro jumlah(n,satuan,bobot) -%}{% set nn=n|float(none) %}{% if nn is none %}Belum dicatat{% else %}{{ st.kg_rinci(nn) }} {{ satuan }}{% if satuan=='karung' %} · {{ kg(bobot) }}{% endif %}{% endif %}{%- endmacro %}
+{% macro nilai(label,v) %}<div><dt>{{ label }}</dt><dd>{{ v }}</dd></div>{% endmacro %}
+{% macro status(kode,statuses) %}<span class="rsh-status rsh-status--{{ kode }}">{{ statuses.get(kode,'Status perlu diperiksa') }}</span>{% endmacro %}

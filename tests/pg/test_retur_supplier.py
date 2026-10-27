@@ -402,7 +402,7 @@ def api_uji(pg,x,*,role=P.ADMIN,portal=False):
     async def akun(request:Request):
         if portal:request.state.portal_scope=object()
         request.state.view='meja'
-        a=SimpleNamespace(user=user(x,role),nama='Uji Lokal',peran=role,sesi_pendek=False)
+        a=SimpleNamespace(user=user(x,role),nama='Uji Lokal',peran=role,sesi_pendek=False,is_admin=P.admin_keatas(role))
         request.state.akun=a
         return a
     app.dependency_overrides[butuh_akun]=akun

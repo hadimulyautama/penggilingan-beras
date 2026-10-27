@@ -42,12 +42,14 @@ async def life(app):
         state['tid']=await db.scalar(text("SELECT min(id) FROM timbangan_transaksi WHERE arah='MASUK'"))
     yield
 app=FastAPI(lifespan=life);app.include_router(web.router)
+from app.web.riwayat_retur_supplier import router as riwayat_router
+app.include_router(riwayat_router)
 app.mount('/static',hmu_tampilan.StatisBerlapis(Path(web.__file__).parent/'static'),name='static')
 async def akun(request:Request):
     role=request.cookies.get('uji-role',P.ADMIN);wh=request.cookies.get('uji-wh','g2')
     async with SessionLocal() as db:wid=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi==wh))
     u=SimpleNamespace(id=state['uid'],role=role,default_warehouse_id=wid)
-    a=SimpleNamespace(user=u,nama='Akun Uji Lokal',peran=role,sesi_pendek=False)
+    a=SimpleNamespace(user=u,nama='Akun Uji Lokal',peran=role,sesi_pendek=False,is_admin=P.admin_keatas(role))
     request.state.akun=a;request.state.view='meja' if role==P.ADMIN else 'polesan'
     return a
 app.dependency_overrides[butuh_akun]=akun

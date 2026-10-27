@@ -10,8 +10,8 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.mark.parametrize('role,gudang,proses,qcs,audit',[
-    ('superadmin',None,4,5,True),('admin',None,4,5,True),
-    ('operator','Gudang 1',3,3,False),('operator','Gudang 2',1,2,False),
+    ('superadmin',None,5,5,True),('admin',None,5,5,True),
+    ('operator','Gudang 1',4,3,False),('operator','Gudang 2',2,2,False),
 ])
 async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
     async with await _klien(pg,peran=role,gudang=gudang) as c:

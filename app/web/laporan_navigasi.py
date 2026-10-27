@@ -14,6 +14,7 @@ PROSES = (
     ("giling", "Penggilingan", "/riwayat-giling", "g1"),
     ("sosoh", "Penyosohan", "/riwayat-sosoh", "g2"),
     ("transfer", "Transfer", "/riwayat-transfer", "g1"),
+    ("retur-supplier", "Retur ke Supplier", "/riwayat-retur-supplier", "semua"),
 )
 QC = (
     ("gabah-basah", "Gabah basah", "/riwayat-qc/gabah-basah", "g1"),
@@ -27,11 +28,12 @@ QC = (
 async def pilihan(akun):
     from app.web.portal.security import CustomerReader
     if isinstance(akun.user,CustomerReader):
-        return {"laporan":[("laporan","Laporan","/laporan",None)],"proses":list(PROSES),"qc":list(QC),"audit":[("audit","Transfer kepemilikan","/audit",None)]}
+        return {"laporan":[("laporan","Laporan","/laporan",None)],"proses":[x for x in PROSES if x[3]!='semua'],"qc":list(QC),"audit":[("audit","Transfer kepemilikan","/audit",None)]}
     # Gerbang yang sama dengan halaman lama, memakai peran/gudang efektif.
     from app.web.api import _is_g1_operator, _is_g2_operator
     izin = {"g1": await _is_g1_operator(akun.user),
             "g2": await _is_g2_operator(akun.user)}
+    izin['semua']=izin['g1'] or izin['g2']
     return {"laporan": [("laporan", "Laporan", "/laporan", None)],
             "proses": [x for x in PROSES if izin[x[3]]],
             "qc": [x for x in QC if izin[x[3]]],

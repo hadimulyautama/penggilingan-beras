@@ -116,6 +116,8 @@ async def test_http_timbang_koreksi_referensi_dan_keluar_sekali(pg,asal):
             async with pg() as db:
                 check=await f.periksa(db,identitas=r.id,user=user(asal),jumlah=[dict(item_id=i.id,jumlah='5')]);await db.commit()
                 assert check['status']=='siap_manual',check
+                from app.services import riwayat_retur_supplier as history
+                assert (await history.detail(db,r.id,user(asal)))['status']=='manual'
                 await f.manual(db,identitas=r.id,user=user(asal),dasar=check['dasar'],catatan='Koreksi tiket resmi dan hasil terkini sudah diperiksa',konfirmasi=True);await db.commit()
                 await f.catat_keluar(db,identitas=r.id,user=user(asal),dasar=check['dasar'],konfirmasi=True);await db.commit()
             for _ in range(2):
@@ -128,3 +130,28 @@ async def test_http_timbang_koreksi_referensi_dan_keluar_sekali(pg,asal):
                 assert await db.scalar(text('SELECT count(*) FROM retur_supplier_keluar'))==1
                 assert await db.scalar(text('SELECT count(*) FROM outgoing_items'))==0
                 assert await db.scalar(text('SELECT count(*) FROM timbangan_cetak'))==0
+                from hmu_identitas import peran as P
+                view=await history.detail(db,r.id,user(asal))
+                assert view['akses_koreksi']=='dibatasi' and view['koreksi_tiket']==[]
+                u=await db.get(User,asal['uid']);u.role=P.SUPERADMIN;await db.commit()
+                # Baca audit hanya setelah identitas Super + profil TF aktif
+                # sah. Mode lihat sebagai Admin kembali menutup audit TF.
+                view=await history.detail(db,r.id,user(asal,P.SUPERADMIN))
+                assert view['akses_koreksi']=='tersedia' and len(view['koreksi_tiket'])==1
+                changes=view['koreksi_tiket'][0]['nilai']
+                assert any(x['field']=='timbang2_kg' and float(x['sebelum'])==5280 and float(x['sesudah'])==5249.5 for x in changes)
+                assert all(x['field'] in ('timbang1_kg','timbang2_kg','berat_barang_kg','total_tara_kg','tara_lain_kg') for x in changes)
+                assert (await history.detail(db,r.id,user(asal)))['akses_koreksi']=='dibatasi'
+                await db.rollback()
+                await db.execute(text('SET TRANSACTION READ ONLY'))
+                view=await history.detail(db,r.id,user(asal,P.SUPERADMIN))
+                recap=await history.daftar(db,user(asal,P.SUPERADMIN))
+                assert view['status']=='done' and recap['total_keluar']==249.5
+                import json
+                (OUT/'bukti-native.json').write_text(json.dumps(dict(
+                    migrasi_padiflow='0116_retur_supplier_keluar',migrasi_teraflow='0048_lintasan_transfer',
+                    timbang1_kg=5000,timbang2_awal_kg=5280,timbang2_koreksi_kg=5249.5,
+                    hasil_tiket_kg=249.5,manual_setelah_koreksi=True,ledger_keluar=1,outgoing_items=0,cetak_fisik=0,
+                    riwayat_transaksi_read_only=True,rekap_keluar_kg=str(recap['total_keluar']),
+                    audit_koreksi_tf_super_saja=True,field_koreksi_terbatas=True,
+                    panel_selesai=True,gangguan_integrasi_tidak_palsu_sukses=True),indent=2))
