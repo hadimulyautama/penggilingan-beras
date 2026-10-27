@@ -9,7 +9,7 @@ from decimal import Decimal
 from sqlalchemy import select, text
 
 from app.database import now_local
-from app.models import (CustomerReturn, KemasanTara, OutgoingItem, OutgoingRecord,
+from app.models import (CustomerReturn, CustomerReturnItem, KemasanTara, OutgoingItem, OutgoingRecord,
                         PackageSize, PackagingMaterial, ProductSku)
 from app.penggilingan.inventory.models import ReturPemeriksaanLog, ReturRincian
 from app.services.retur import angka
@@ -83,6 +83,21 @@ async def sisa_asal(db, pengiriman_id, *, kecuali=None):
             if r.customer_return_id:
                 terpakai[identitas]['diterima_karung'] += m['jumlah_karung']
                 terpakai[identitas]['diterima_kg'] += Decimal(m['berat_kg'])
+    # Penerimaan historis yang memiliki tautan item eksplisit tetapi tidak
+    # mempunyai pengajuan juga menghabiskan batas. Yang sudah terwakili JSON
+    # pengajuan diterima tidak dijumlahkan kedua kalinya; jangan cocokkan SKU.
+    terwakili=select(ReturRincian.customer_return_id).where(
+        ReturRincian.outgoing_record_id==pengiriman_id,
+        ReturRincian.status_pemeriksaan!='dibatalkan',ReturRincian.customer_return_id.is_not(None))
+    # Subkueri memakai snapshot pembacaan penerimaan yang sama. Jika pekerja
+    # menerima pengajuan di sela pembacaan GET, penerimaan baru tidak dihitung
+    # lagi sebagai penerimaan historis yang terpisah dari pengajuan itu.
+    q=select(CustomerReturnItem).where(CustomerReturnItem.outgoing_item_id.in_(terpakai),
+        CustomerReturnItem.customer_return_id.not_in(terwakili))
+    for i in (await db.scalars(q)).all():
+        saldo=terpakai[i.outgoing_item_id]
+        saldo['karung']+=i.jumlah_karung;saldo['diterima_karung']+=i.jumlah_karung
+        saldo['kg']+=Decimal(str(i.berat_total_kg));saldo['diterima_kg']+=Decimal(str(i.berat_total_kg))
     return items, terpakai
 
 

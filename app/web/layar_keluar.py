@@ -101,6 +101,12 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             if not baris:
                 raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
             sebelum_berikut = None
+            rec=baris[0][0]
+            if rec.status in (OUT_SELESAI,OUT_BATAL) and request.query_params.get('rincian_perintah')!='1':
+                from app.web.riwayat_kiriman import baca
+                perjalanan=await baca(db,rec,scope=request.state.portal_scope if is_customer_read(request) else None,boleh_retur=boleh_perintah)
+                return await render_laci(request,'riwayat_kiriman.html',layar='barang_keluar',perjalanan=perjalanan,
+                    filter_query=urlencode({'q':q,'status':status,'sejak':sejak,**({'sebelum':sebelum} if sebelum else {})}))
         else:
             if status == OUT_PERINTAH and not is_customer_read(request):
                 aktif = await svc.menunggu_muat(db, akun.user, pencarian=q,
@@ -110,7 +116,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                                       batas=500, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid, **customer_scope)
                      if not status or status in OUT_HIDUP else [])
             riwayat = (await svc.daftar(db, status=(status,) if status else (OUT_SELESAI, OUT_BATAL),
-                                        batas=51, sebelum_id=sebelum, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid, **customer_scope)
+                                        batas=51, gabung_riwayat=not is_customer_read(request), sebelum_id=sebelum, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid, **customer_scope)
                        if not status or status not in OUT_HIDUP else [])
             sebelum_berikut = riwayat[49][0].id if len(riwayat) > 50 else None
             baris = aktif + riwayat[:50]
@@ -120,7 +126,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                      if items and all(i.jasa_id in ids for i in items)]
         # Data timbang ditampilkan bersama detail perintah, tanpa kueri per kartu.
         from sqlalchemy import bindparam, text
-        ids = [r.timbangan_transaksi_id for r, _ in baris if r.timbangan_transaksi_id]
+        ids = [r.timbangan_transaksi_id for r, _ in baris if r.timbangan_transaksi_id and not (is_customer_read(request) and r.kiriman_id)]
         tiket_timbang = {}
         if ids:
             rows = (await db.execute(text("""
@@ -192,6 +198,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         if rec.status == OUT_PERINTAH and (not rec.kiriman_id and svc.boleh_keluar_cepat(items)):
             kata = "Menunggu penyerahan · <200 kg"
         kartu.append({
+            "riwayat_nama": ' · '.join(p['rec'].nama_pembeli or 'Pelanggan belum tercatat' for p in bersama) if bersama else rec.nama_pembeli,
+            "riwayat_total": total_armada,
+            "riwayat_jumlah": len(bersama) if bersama else 1,
+            "riwayat_item": sum(len(p['barang']) for p in bersama) if bersama else len(isi),
             "boleh_ubah": boleh_perintah and rec.status in OUT_HIDUP,
             "rec": rec, "isi": isi, "keadaan": kata, "warna": warna,
             "kiriman_bersama": bersama, "total_armada_dimuat": total_armada,
@@ -256,7 +266,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         request, "pengiriman.html", layar="barang_keluar", kartu=kartu,
         detail=transaksi_id is not None,
         retur_terkait=retur_terkait,
-        pencarian=q, status_filter=status, sejak_filter=sejak,
+        pencarian=q, status_filter=status, sejak_filter=sejak, sebelum=sebelum,
         filter_query=urlencode({"q": q, "status": status, "sejak": sejak}),
         kartu_aktif=[k for k in kartu if k["rec"].status in OUT_HIDUP],
         riwayat=sorted((k for k in kartu if k["rec"].status not in OUT_HIDUP),

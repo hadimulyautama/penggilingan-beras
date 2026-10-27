@@ -2336,7 +2336,8 @@ async def balik_batal(db: AsyncSession, *, rec_id: int) -> str:
 async def daftar(db: AsyncSession, *, status: tuple[str, ...] | None = None,
                  batas: int = 50, transaksi_id: int | None = None,
                  sebelum_id: int | None = None, pencarian: str = "", sejak=None,
-                 pelanggan_jasa_id: int | None = None, allowed_ids: frozenset[int] | None = None) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
+                 pelanggan_jasa_id: int | None = None, allowed_ids: frozenset[int] | None = None,
+                 gabung_riwayat: bool = False) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
     """Transaksi barang keluar beserta isinya — untuk halaman & kartunya."""
     q = select(OutgoingRecord).order_by(OutgoingRecord.id.desc()).limit(batas)
     if allowed_ids is not None:
@@ -2348,9 +2349,11 @@ async def daftar(db: AsyncSession, *, status: tuple[str, ...] | None = None,
                   .where(OutgoingItem.jasa_id.in_(milik))))
     if pencarian:
         from sqlalchemy import or_
+        from app.models import KirimanKeluar
         pola = "%" + pencarian.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         q = q.where(or_(*(kol.ilike(pola, escape="\\") for kol in
-                          (OutgoingRecord.kode, OutgoingRecord.nama_pembeli, OutgoingRecord.no_polisi))))
+                          (OutgoingRecord.kode, OutgoingRecord.nama_pembeli, OutgoingRecord.no_polisi)),
+                          OutgoingRecord.kiriman_id.in_(select(KirimanKeluar.id).where(KirimanKeluar.no_polisi.ilike(pola,escape="\\")))))
     if sejak:
         from datetime import datetime, time
         q = q.where(OutgoingRecord.waktu_perintah >= datetime.combine(sejak, time.min))
@@ -2358,6 +2361,14 @@ async def daftar(db: AsyncSession, *, status: tuple[str, ...] | None = None,
         q = q.where(OutgoingRecord.status.in_(status))
     if transaksi_id is not None:
         q = q.where(OutgoingRecord.id == transaksi_id)
+    if gabung_riwayat and transaksi_id is None:
+        # Pilih perjalanan SETELAH filter tetapi SEBELUM pagination. Menyatukan
+        # potongan 50 perintah di browser membuat satu truk muncul di dua halaman.
+        from sqlalchemy import case
+        cocok=q.with_only_columns(OutgoingRecord.id,OutgoingRecord.kiriman_id).order_by(None).limit(None).subquery()
+        wakil=select(func.max(cocok.c.id)).group_by(cocok.c.kiriman_id,
+            case((cocok.c.kiriman_id.is_(None),cocok.c.id),else_=None))
+        q=select(OutgoingRecord).where(OutgoingRecord.id.in_(wakil)).order_by(OutgoingRecord.id.desc()).limit(batas)
     if sebelum_id is not None:
         q = q.where(OutgoingRecord.id < sebelum_id)
     recs = list((await db.execute(q)).scalars().all())

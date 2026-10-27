@@ -117,7 +117,7 @@ async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)
         gudang = await db.get(Warehouse, retur.warehouse_id) if retur.warehouse_id else None
         items = (await db.execute(text("""
             SELECT i.*, COALESCE(s.kategori,o.item_type,'Barang lama') AS kategori, m.nama AS kemasan, z.ukuran_kg,
-                   b.nama AS merek, q.kode AS mutu
+                   b.nama AS merek, q.kode AS mutu, o.item_type AS tipe_asal, w.nama_gudang AS gudang_item
             FROM customer_return_items i
             LEFT JOIN outgoing_items o ON o.id=i.outgoing_item_id
             LEFT JOIN product_skus s ON s.id=i.product_sku_id
@@ -125,6 +125,8 @@ async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)
             LEFT JOIN package_sizes z ON z.id=s.package_size_id
             LEFT JOIN brands b ON b.id=s.brand_id
             LEFT JOIN rice_quality_standards q ON q.id=i.rice_quality_standard_id
+            LEFT JOIN finished_goods_stock f ON f.id=i.finished_goods_stock_id
+            LEFT JOIN warehouses w ON w.id=f.warehouse_id
             WHERE i.customer_return_id=:id ORDER BY i.id
         """), {"id": retur.id})).mappings().all()
         tiket = (await db.execute(text("""
@@ -142,7 +144,11 @@ async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)
                                                i["rice_quality_standard_id"]))) for i in items]
         from app.services.jasa import nama_pemilik_banyak
         pemilik = await nama_pemilik_banyak(db, {i['jasa_id'] for i in items if i['jasa_id']})
-        items = [dict(i, pemilik=pemilik.get(i['jasa_id'], 'Milik pabrik')) for i in items]
+        from app.services.barang_keluar import GUDANG_ITEM
+        from app.models import Warehouse
+        lokasi=dict((await db.execute(select(Warehouse.kode_fungsi,Warehouse.nama_gudang))).all())
+        items = [dict(i, pemilik=pemilik.get(i['jasa_id'], 'Milik pabrik'),
+            gudang_item=i['gudang_item'] or lokasi.get(GUDANG_ITEM.get(i['tipe_asal']),gudang.nama_gudang if gudang else 'Gudang tidak tercatat')) for i in items]
     return await render_laci(request, "retur_detail.html", layar="barang_keluar",
                              retur=retur, items=items, tiket=tiket,
                              pengajuan_id=rincian.id if rincian else None,

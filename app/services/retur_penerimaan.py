@@ -36,7 +36,16 @@ async def _koreksi_terbukti(db, rincian):
     sekarang = pengajuan.cuplikan(rincian)
     if tertahan['tiket_id'] != sekarang['tiket_id']:
         return True
-    if tertahan['muatan'] != sekarang['muatan']:
+    # Catatan/nama bukan koreksi fisik. Jika bobot tiket berubah tanpa jejak
+    # koreksi Pos Timbang, menyunting label barang tidak boleh membukakan
+    # verifikasi manual. Format angka JSON juga bukan perubahan jumlah.
+    kolom=('outgoing_item_id','item_type','sku_id','quality_id','jasa_id',
+           'jumlah_karung','berat_kg','packaging_material_id','package_size_id','tara_toleransi_kg')
+    angka={'jumlah_karung','berat_kg','tara_toleransi_kg'}
+    def data_fisik(muatan):
+        return [tuple(Decimal(str(m[k])) if k in angka and m.get(k) is not None else m.get(k)
+                      for k in kolom) for m in muatan]
+    if data_fisik(tertahan['muatan']) != data_fisik(sekarang['muatan']):
         return True
     kunci = ('timbang1_kg', 'timbang2_kg', 'berat_tiket_kg')
     berubah = any(tertahan['hasil'].get(k) != sekarang['hasil'].get(k) for k in kunci)

@@ -18,7 +18,7 @@
   // Validasi browser juga harus dapat memfokuskan isian wajib di tab lain.
   root.addEventListener('invalid',function(e){var p=e.target.closest('[role=tabpanel]');if(p)tampil(p.id);},true);
   // Penjaga pengiriman ulang lokal melengkapi lock/idempotensi server lama.
-  root.querySelectorAll('form').forEach(function(f){f.addEventListener('submit',function(e){if(f.dataset.mengirim){e.preventDefault();return;}f.dataset.mengirim='1';f.querySelectorAll('button[type=submit]').forEach(function(b){b.disabled=true;});});});
+  root.querySelectorAll('form').forEach(function(f){if(f.hasAttribute('data-retur-form'))return;f.addEventListener('submit',function(e){if(f.dataset.mengirim){e.preventDefault();return;}f.dataset.mengirim='1';f.querySelectorAll('button[type=submit]').forEach(function(b){b.disabled=true;});});});
   if(window.PINDAH)PINDAH.pasang(window,'hashchange',fragmen);else window.addEventListener('hashchange',fragmen);
   fragmen();
 })();

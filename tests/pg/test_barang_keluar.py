@@ -947,7 +947,7 @@ async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
         detail = await c.get(f"/barang-keluar/{lama.rec.id}")
     assert detail.status_code == 200
     h = detail.text
-    assert "Diperintah" in h and "Dimuat" in h and "Diverifikasi" in h
+    assert "Diperintahkan" in h and "Selesai muat" in h and "Diverifikasi" in h
     assert h.count("Admin Uji") >= 2, \
         "nama pemerintah & pemverifikasi tak tergambar di jejaknya"
     assert "Op Polesan" in h, "nama pemuat tak tergambar di jejaknya"
@@ -2463,6 +2463,7 @@ async def test_riwayat_barang_keluar_tabel_dan_detail_tiket(pg, gudang):
     async with c:
         daftar = await c.get("/barang-keluar")
         detail = await c.get(f"/barang-keluar/{rid}")
+        perintah_lama = await c.get(f"/barang-keluar/{rid}?rincian_perintah=1")
         hilang = await c.get("/barang-keluar/9999999")
     assert daftar.status_code == detail.status_code == 200
     assert hilang.status_code == 404
@@ -2474,11 +2475,12 @@ async def test_riwayat_barang_keluar_tabel_dan_detail_tiket(pg, gudang):
     assert f'href="/barang-keluar/{rid}"' in riwayat
     assert kode in riwayat and "KLR-RIWAYAT" in riwayat
     assert "KLR-RIWAYAT" in detail.text
-    assert 'class="kirim-detail__tabel"' in detail.text
-    assert "Dimuat aktual" in detail.text and "Sisa perintah" in detail.text
-    assert "Riwayat petugas" in detail.text
+    assert 'class="rk-panel rk-customer"' in detail.text
+    assert 'class="kirim-detail__tabel"' in perintah_lama.text
+    assert "Dikirim aktual" in detail.text and "Tidak terkirim" in detail.text
+    assert "Petugas perintah pelanggan" in detail.text
     assert 'class="padat padat--' not in detail.text
-    assert "Berat truk kosong" in detail.text and "Berat barang" in detail.text
+    assert "Kendaraan kosong" in detail.text and "Berat barang" in detail.text
     assert "buka=verifikasi_keluar" not in detail.text
     assert aktif.rec.kode not in detail.text
     Path("/tmp/hmu-keluar-daftar.html").write_text(h)

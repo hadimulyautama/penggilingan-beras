@@ -15,7 +15,7 @@ pytestmark=pytest.mark.asyncio
 async def potret(c,url,nama):
     folder=Path(os.environ['BUKTI_DETAIL_KIRIM']) if os.environ.get('BUKTI_DETAIL_KIRIM') else None
     for tab in ('ringkasan','barang','tiket','riwayat'):
-        r=await c.get(url,params={'tab_detail':tab})
+        r=await c.get(url,params={'tab_detail':tab,**({'rincian_perintah':'1'} if nama in ('pengiriman-selesai','pengiriman-operator') else {})})
         assert r.status_code==200,r.text
         assert r.text.count('role="tab"')==4
         assert f'id="tab-{tab}" aria-controls="panel-{tab}" aria-selected="true"' in r.text
