@@ -1979,7 +1979,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # mengetik ulang angka yang sudah tertulis di kartunya akan diketik
             # asal-asalan sambil berdiri di samping truk. Yang berselisih dicatat
             # per barang lewat aksi di bawahnya.
-            {"id": "muat_semua", "label": "\U0001F69A Muat semua sesuai perintah",
+            {"akses": "catat", "id": "muat_semua", "label": "\U0001F69A Muat semua sesuai perintah",
              "post": "/api/actions/muat-semua", "pratinjau_muat": "semua",
              "hint": "Lengkapi seluruh barang sampai jumlah perintah, termasuk "
                      "yang baru dimuat sebagian, lalu selesaikan muatan. "
@@ -1989,7 +1989,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "source": "/api/actions/perintah-terbuka",
                   "kosong": "Tidak ada perintah muat yang menunggu."},
              ]},
-            {"id": "muat_barang", "label": "📦 Catat muatan per barang",
+            {"akses": "catat", "id": "muat_barang", "label": "📦 Catat muatan per barang",
              "post": "/api/actions/muat-barang", "pratinjau_muat": "baris",
              "hint": "Isi TOTAL yang sudah naik ke truk, bukan tambahannya. "
                      "Sudah 20 karung lalu tambah 10: isi 30. "
@@ -2003,7 +2003,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "jumlah", "label": "Total yang sudah dimuat (karung atau kg sesuai barang)",
                   "type": "number", "wajib": True},
              ]},
-            {"id": "selesai_muat", "label": "\u2714\uFE0F Selesai muat — truk berangkat",
+            {"akses": "g2", "id": "selesai_muat", "label": "\u2714\uFE0F Selesai muat — truk berangkat",
              "post": "/api/actions/selesai-muat", "pratinjau_muat": "aktual",
              "hint": "Sisa perintah yang tak dimuat HANGUS, dan selisihnya "
                      "terbaca Admin saat verifikasi.",
@@ -2014,7 +2014,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "sebab", "label": "Alasan barang tidak terkirim (jika muatan kurang)",
                   "type": "text"},
              ]},
-            {"id": "catat_packing", "label": "📦 Catat packing barang jadi",
+            {"akses": "g2", "id": "catat_packing", "label": "📦 Catat packing barang jadi",
              "konteks_kemas_beras": {"source": "/api/actions/rincian-packing-beras"},
              "post": "/api/actions/catat-packing",
              "hint": "Mengurangi stok karung dan menambah stok barang jadi. "
@@ -2047,7 +2047,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
                   "maksimal_karung": True},
              ]},
-            {"id": "catat_curah", "label": "Jadikan curah",
+            {"akses": "g2", "id": "catat_curah", "label": "Jadikan curah",
              "post": "/api/actions/catat-curah",
              "hint": "Seluruh sisa beras pada lot dan mutu ini dicatat sebagai stok curah, "
                      "tanpa memakai karung. Pekerjaan packing untuk sisa ini selesai. "
@@ -2057,7 +2057,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "source": "/api/actions/beras-belum-dikemas?hanya_beras=true",
                   "kosong": "Tidak ada sisa beras hasil sosoh yang menunggu packing."},
              ]},
-            {"id": "catat_bekatul", "label": "🌾 Catat bekatul (curah)",
+            {"akses": "g2", "id": "catat_bekatul", "label": "🌾 Catat bekatul (curah)",
              "post": "/api/actions/catat-bekatul",
              # ⚠ Kalimat lamanya berbunyi "ia tidak dipacking" dan sudah BASI
              # sejak 28 September 2026: bekatul boleh dikarungi (karung bekas
@@ -2085,7 +2085,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # justru BUTUH langkah ini tetap ada & terjangkau lewat katalog
             # (`MENU["catat_broken"]`, dibuka kartu lewat `?buka=` — lihat
             # `_kartu_beras_curah`).
-            {"id": "catat_broken", "label": "🌾 Catat broken (curah)",
+            {"akses": "g2", "id": "catat_broken", "label": "🌾 Catat broken (curah)",
              "post": "/api/actions/catat-broken",
              "hint": "Langkah WAJIB sebelum broken bisa dimasukkan ke silo "
                      "broken untuk disosoh ulang. Yang dikarungi (dijual "
@@ -2100,7 +2100,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
 
     if fin:
         aksi += [
-            {"id": "keluar_cepat", "label": "Konfirmasi barang keluar",
+            {"akses": "admin", "id": "keluar_cepat", "label": "Konfirmasi barang keluar",
              "post": "/api/actions/konfirmasi-keluar-cepat", "pratinjau_muat": "cepat",
              "hint": "Total perintah di bawah 200 kg: tanpa langkah muat operator dan tanpa wajib tiket timbang. Isi jumlah aktual tiap barang, lalu konfirmasi penyerahan.",
              "fields": [
@@ -2117,7 +2117,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # `act_pindah_kepemilikan_produk`) — sejalan dengan "harga keluar
             # dari Pos Produksi": keputusan kepemilikan berdekatan dengan
             # uang, bukan pekerjaan operator.
-            {"id": "pindah_kepemilikan_produk",
+            {"akses": "admin", "id": "pindah_kepemilikan_produk",
              "label": "⇄ Pindah kepemilikan ke pabrik",
              "post": "/api/actions/pindah-kepemilikan-produk",
              "hint": "Boleh sebagian. Satuannya mengikuti pilihan — karung "
@@ -2151,7 +2151,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # pelanggan yang ada di database." `kombo` kotak teks yang
             # menyaring daftar `pelanggan-kledo` yang SAMA sambil diketik —
             # lihat catatan panjangnya di `aksi.js` (`f.type === "kombo"`).
-            {"id": "pindah_kepemilikan_karung",
+            {"akses": "admin", "id": "pindah_kepemilikan_karung",
              "label": "⇄ Pindah kepemilikan ke pelanggan",
              "post": "/api/actions/pindah-kepemilikan-karung",
              "hint": "Boleh sebagian — FIFO dari pembelian pabrik yang "
@@ -2166,7 +2166,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "kosong": "Tidak ada pelanggan terdaftar."},
                  {"name": "jumlah", "label": "Jumlah lembar", "type": "number"},
              ]},
-            {"id": "beli_kemasan", "label": "🛒 Beli karung",
+            {"akses": "admin", "id": "beli_kemasan", "label": "🛒 Beli karung",
              "post": "/api/actions/beli-kemasan",
              "hint": "Catat jumlah lembar karung yang masuk gudang.",
              "fields": [
@@ -2194,7 +2194,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # tampilan yang dipakai seluruh layar lain. Bentuk ini sudah
             # terbukti di app ini; borang bertabel bisa menyusul kelak tanpa
             # mengubah satu kolom pun.
-            {"id": "perintah_keluar", "label": "\U0001F4CB Buat perintah barang keluar",
+            {"akses": "admin", "id": "perintah_keluar", "label": "\U0001F4CB Buat perintah barang keluar",
              "post": "/api/actions/perintah-keluar",
              "hint": "Perintah BELUM mengurangi stok — barangnya berpindah saat "
                      "operator memuatnya. Barang lain ditambahkan setelah ini.",
@@ -2235,7 +2235,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # kosong sampai ada yang dipilih: daftar yang menawarkan barang
             # seluruh pelanggan sekali salah pilih menyerahkan barang ke orang
             # lain.
-            {"id": "ambil_jasa", "label": "\u25C7 Pengambilan barang jasa",
+            {"akses": "admin", "id": "ambil_jasa", "label": "\u25C7 Pengambilan barang jasa",
              "post": "/api/actions/ambil-jasa",
              "hint": "Barang titipan kembali ke pemiliknya — pembelinya tak "
                      "ditanya. Satu truk satu perintah; pengambilan bertahap "
@@ -2269,7 +2269,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "kosong": "Pilih pelanggannya dulu — daftar barangnya "
                             "mengikuti seluruh pesanan aktifnya."},
              ] + _bidang_kirim()},
-            {"id": "tutup_jasa", "label": "\u25C7 Tutup pesanan jasa",
+            {"akses": "admin", "id": "tutup_jasa", "label": "\u25C7 Tutup pesanan jasa",
              "post": "/api/actions/tutup-jasa",
              "hint": "Hanya bila tak ada lagi barang pesanan itu di pabrik — "
                      "dan pesanan yang belum pernah menerima barang tak bisa "
@@ -2279,7 +2279,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "type": "remote", "source": "/api/actions/jasa-berjalan",
                   "kosong": "Tidak ada pesanan jasa yang berjalan."},
              ]},
-            {"id": "batalkan_jasa", "label": "\U0001F6AB Batalkan pesanan jasa",
+            {"akses": "admin", "id": "batalkan_jasa", "label": "\U0001F6AB Batalkan pesanan jasa",
              "post": "/api/actions/batalkan-jasa",
              "hint": "Hanya pesanan yang BELUM pernah menerima barang. Yang "
                      "barangnya sudah ada diselesaikan lewat pengambilan.",
@@ -2290,7 +2290,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "sebab", "label": "Sebab membatalkan", "type": "text",
                   "wajib": True},
              ]},
-            {"id": "ubah_item_perintah", "label": "Ubah total perintah",
+            {"akses": "admin", "id": "ubah_item_perintah", "label": "Ubah total perintah",
              "post": "/api/actions/ubah-item-perintah",
              "konfirmasi": {"judul": "Periksa perubahan perintah",
                  "teks": "{baris}\nTotal perintah baru: {jumlah}.\nAlasan: {alasan}\nMuatan aktual dan stok tetap. Operator harus memeriksa kembali.", "ya": "Ya, ubah perintah"},
@@ -2300,7 +2300,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "jumlah", "label": "Total perintah baru (karung untuk barang berkemasan; kg untuk curah/PK/gabah)", "type": "number", "wajib": True},
                  {"name": "alasan", "label": "Alasan perubahan", "type": "text", "wajib": True},
              ]},
-            {"id": "hapus_item_perintah", "label": "Hapus item dari perintah",
+            {"akses": "admin", "id": "hapus_item_perintah", "label": "Hapus item dari perintah",
              "post": "/api/actions/hapus-item-perintah",
              "konfirmasi": {"judul": "Hapus item dari perintah?",
                  "teks": "{baris}\nAlasan: {alasan}\nItem ini dihapus dari perintah. Muatan aktual dan stok tetap.", "ya": "Ya, hapus item"},
@@ -2309,7 +2309,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "baris", "label": "Barang yang dihapus", "type": "remote", "source": "/api/actions/item-perintah-ubah"},
                  {"name": "alasan", "label": "Alasan penghapusan", "type": "text", "wajib": True},
              ]},
-            {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke transaksi",
+            {"akses": "admin", "id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke transaksi",
              "post": "/api/actions/tambah-barang-keluar",
              "hint": "Mengubah perintah saja. Muatan aktual dan stok tidak berubah "
                      "sampai operator mengonfirmasi barang yang benar-benar dimuat.",
@@ -2327,7 +2327,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
                   "kosong": "Tidak ada barang yang bisa dikeluarkan."},
              ]},
-            {"id": "pilih_tiket_armada", "label": "Pilih tiket armada",
+            {"akses": "admin", "id": "pilih_tiket_armada", "label": "Pilih tiket armada",
              "post": "/api/actions/pilih-tiket-armada",
              "hint": "Perintah boleh dibuat sebelum armada datang. Setelah timbang pertama, pilih tiketnya; plat mengikuti Timbangan.",
              "fields": [
@@ -2337,7 +2337,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "induk": "perintah", "source": "/api/actions/tiket-armada",
                   "kosong": "Tidak ada tiket armada yang belum ditautkan untuk pelanggan ini."},
              ]},
-            {"id": "lepas_tiket_armada", "label": "Lepas tiket armada",
+            {"akses": "admin", "id": "lepas_tiket_armada", "label": "Lepas tiket armada",
              "post": "/api/actions/lepas-tiket-armada",
              "hint": "Hanya melepas hubungan tiket dan plat pada perintah ini. Muatan aktual, stok, identitas serta hasil timbang tetap. Tiket dapat dipilih lagi sesuai pelanggan atau dihapus lewat Pos Timbang sesuai wewenang.",
              "konfirmasi": {"judul": "Lepas tiket armada?", "teks": "{perintah}\nAlasan: {alasan}\nTiket kembali bebas. Muatan aktual dan stok tetap.", "ya": "Ya, lepas tiket"},
@@ -2345,7 +2345,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "perintah", "label": "Perintah dan tiket terpasang", "type": "remote", "source": "/api/actions/perintah-armada-tertaut"},
                  {"name": "alasan", "label": "Alasan melepas tiket", "type": "text", "wajib": True},
              ]},
-            {"id": "koreksi_plat_pengiriman", "label": "Koreksi plat pengiriman",
+            {"akses": "admin", "id": "koreksi_plat_pengiriman", "label": "Koreksi plat pengiriman",
              "post": "/api/actions/koreksi-plat-pengiriman",
              "hint": "Perbaiki plat truk sebelum verifikasi. Muatan tetap sama dan alasan koreksi dicatat.",
              "fields": [
@@ -2354,7 +2354,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "no_polisi", "label": "Nomor polisi yang benar", "type": "text", "wajib": True},
                  {"name": "alasan", "label": "Alasan koreksi", "type": "text", "wajib": True},
              ]},
-            {"id": "batal_perintah_keluar", "label": "\U0001F6AB Batalkan perintah keluar",
+            {"akses": "admin", "id": "batal_perintah_keluar", "label": "\U0001F6AB Batalkan perintah keluar",
              "post": "/api/actions/batal-perintah-keluar",
              "fields": [
                  {"name": "perintah", "label": "Perintah yang dibatalkan",
@@ -2363,7 +2363,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "sebab", "label": "Sebab membatalkan", "type": "text",
                   "wajib": True},
              ]},
-            {"id": "verifikasi_keluar", "label": "\u2705 Verifikasi barang keluar",
+            {"akses": "admin", "id": "verifikasi_keluar", "label": "\u2705 Verifikasi barang keluar",
              "post": "/api/actions/verifikasi-keluar",
              "hint": "Tiket armada yang sudah dipilih dipakai otomatis; tidak perlu memasukkan kode timbang lagi. "
                      "Timbang kedua harus selesai di Pos Timbang. Jika selisih bobot besar, tulis sebabnya.",
@@ -2380,7 +2380,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "sebab_selisih",
                   "label": "Sebab selisih (bila bedanya besar)", "type": "text"},
              ]},
-            {"id": "auto_taut_keluar", "label": "\U0001f517 Tautkan otomatis barang keluar",
+            {"akses": "admin", "id": "auto_taut_keluar", "label": "\U0001f517 Tautkan otomatis barang keluar",
              "post": "/api/actions/auto-taut-keluar",
              "hint": "Mencocokkan tiket timbang keluar yang menganggur ke "
                      "pesanan yang menunggu verifikasi — pembeli, tanggal, "

@@ -85,6 +85,10 @@ def _dibaca():
 
 async def _cakupan(user):
     from sqlalchemy import or_
+    # Super Admin membaca gabungan seluruh penerima, termasuk kabar operator.
+    # Cakupan yang sama dipakai daftar, badge, buka, dan status baca pribadi.
+    if P.super_saja(user.role):
+        return []
     peran, gudang = await keranjang(user)
     if gudang == P.TANPA:
         # Satu pagar untuk daftar, badge, histori, buka, dan status pribadi.

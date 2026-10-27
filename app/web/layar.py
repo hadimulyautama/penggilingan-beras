@@ -1,28 +1,8 @@
-"""Siapa melihat layar yang mana — empat view, satu penentu.
+"""Satu tampilan induk; peran efektif menentukan data dan tindakan yang diizinkan.
 
-Sampai sekarang aplikasi ini punya DUA tampilan yang menyamar sebagai empat:
-"admin ke atas" dan "selebihnya". Akibatnya dua pasang orang melihat layar
-yang bukan miliknya.
-
-  · **Super Admin dan Admin** melihat layar yang sama persis, padahal daftar
-    peran di halaman Pengguna sudah lama menuliskan bedanya: Super Admin
-    "semua di atas, DITAMBAH mengelola orang, akun, dan alat". Yang tertulis
-    di daftar peran tetapi tak terlihat di layar bukan aturan — ia niat.
-
-  · **Operator selepan dan operator polesan** juga melihat layar yang sama,
-    dan layar itu dibentuk untuk selepan: Beranda menyebut gabah masuk,
-    pengeringan, silo gabah, stok PK — empat angka yang tak satu pun berasal
-    dari gudang tempat operator polesan bekerja. Halaman Stok lebih jauh lagi:
-    seluruh isinya lot giling Gudang 1.
-
-Yang menentukan view HANYA di sini. Satu tempat, karena tiap layar yang
-menebak sendiri perannya adalah satu tempat lagi yang bisa menebak berbeda —
-dan yang berbeda diam-diam tak akan ada yang menyadarinya.
-
-**Ini soal TAMPILAN, bukan wewenang.** Gerbang yang menolak sungguhan tetap
-di rutenya masing-masing (`butuh_admin`, `can_see_financials`, `wajib(...)`).
-Yang dikerjakan modul ini cuma memilih apa yang ditawarkan; menyembunyikan
-pintu tak pernah menjadi kunci.
+Empat kode view tetap dipakai untuk cakupan gudang dan simulasi peran.
+Struktur layar memakai susunan Super Admin; bagian tanpa izin terkunci.
+Gerbang di endpoint tetap memeriksa pelaku sebelum membaca atau menulis.
 """
 from __future__ import annotations
 
@@ -109,18 +89,8 @@ async def view_untuk(user: User | None) -> str:
     return P.view(user.role, P.SEMUA)
 
 
-# ───────────────────────── Petak Beranda per view ─────────────────────────
-#
-# Beranda adalah layar yang paling sering dibuka dan paling jarang dibaca
-# sampai habis: orang melihatnya beberapa detik, lalu bertindak. Maka empat
-# angka pertamanya harus angka PEKERJAANNYA SENDIRI. Operator polesan yang
-# disambut "Gabah masuk 41.200 kg" membaca kabar dari gudang sebelah, lalu
-# belajar bahwa baris teratas Beranda bukan untuknya — dan sesudah itu ia tak
-# membacanya lagi.
-#
-# Bentuk petaknya SATU untuk semua view. Yang berganti isinya, bukan
-# gambarnya: layar yang tata letaknya ikut berbeda per peran adalah empat
-# layar yang harus dirawat empat kali.
+# Ringkasan memakai dua blok yang sama. Nilai gudang yang tidak dapat dibaca
+# tidak ditanyakan ke database dan diganti penanda akses terkunci.
 
 
 def _ribuan(n) -> str:
@@ -246,60 +216,20 @@ def _petak_stok(a: dict, gid: str, label: str) -> dict:
 
 
 async def petak_beranda(db, view: str, o: dict, angka: dict | None = None) -> list[dict]:
-    """Blok-blok petak Beranda untuk view ini.
+    """Dua blok yang sama bagi semua peran; nilai mengikuti izin gudang.
 
-    `angka` = keluaran `services.beranda.angka_gudang`, bila pemanggil sudah
-    memilikinya (view meja menghitungnya juga untuk papan di bawah petak).
-
-    Satu blok = satu judul + empat angka, dua kolom. Operator selalu dapat
-    SATU blok tanpa judul: ia cuma punya satu gudang, dan judul yang menamai
-    satu-satunya isi layar tidak membedakan apa pun.
-
-    Jumlah petaknya selalu GENAP. Petaknya digambar dua kolom, jadi blok
-    berisi satu petak tampil sebagai kotak setengah lebar dengan lubang di
-    sebelahnya — dan lubang itu terbaca sebagai sesuatu yang gagal dimuat.
+    Placeholder tidak menjalankan kueri gudang yang tidak boleh dibaca.
+    Dengan begitu penyamaan bentuk tidak memperluas akses data operator.
     """
-    if view == SELEPAN:
-        return [{"judul": None, "sel": _petak_g1(o)}]
-    if view == POLESAN:
-        return [{"judul": None, "sel": await _petak_g2(db)}]
-    if view == ADMIN:
-        # Admin tidak menjalankan mesin. Yang ia butuh dari lantai cuma dua
-        # pertanyaan per gudang: apa yang MASUK hari ini, dan berapa yang
-        # TERSIMPAN. Sisanya — mesin mana yang menyala — sudah ada di daftar
-        # "Sedang berjalan" tepat di bawahnya, dan menyebutnya dua kali
-        # membuat baris teratas berhenti jadi ringkasan.
-        #
-        # Stok PK-nya dari `services.beranda.angka_gudang` — perhitungan yang
-        # SAMA dengan Beranda Meja, bukan petak ke-4 tiap gudang.
-        #
-        # Dulu dua petak itu dipetik BERDASARKAN POSISI (`g1[3]`, `g2[3]`) lalu
-        # keduanya diberi label "Stok PK". Petak ke-4 Gudang 1 memang stok PK;
-        # petak ke-4 Gudang 2 adalah TUMPUKAN. Jadi Admin membaca angka
-        # tumpukan dengan nama stok: layar yang sama, akun yang sama, detik
-        # yang sama — Beranda Pos Produksi "Stok PK G2 0 kg", Beranda Meja
-        # "Stok PK 10.000 kg". Yang benar 10.000 (silo A 6.000 + silo B 4.000).
-        # QA 24 September 2026 (c) butir 3.
-        #
-        # Dan bahayanya bukan nol itu: tumpukan yang kebetulan kosong terlihat
-        # masuk akal. Saat tumpukan berisi, angkanya tetap salah tanpa nol yang
-        # mencurigakan.
-        from app.services.beranda import angka_gudang
+    def terkunci(label):
+        return [_sel(nama, "—", ket="Tidak memiliki akses gudang ini")
+                for nama in label]
 
-        g1, g2 = _petak_g1(o), await _petak_g2(db)
-        # Angkanya dititipkan pemanggil bila ia sudah menghitungnya untuk papan
-        # di bawahnya — satu perhitungan per halaman, bukan dua.
-        a = angka if angka is not None else await angka_gudang(db)
-        return [{"judul": None, "sel": [
-            g1[0], _petak_stok(a, "g1", "Stok PK G1"),
-            g2[0], _petak_stok(a, "g2", "Stok PK G2"),
-        ]}]
-    if view == SUPER:
-        # Seluruh pabrik, dua blok bernama. Pemilik satu-satunya yang memang
-        # perlu melihat keduanya sekaligus — dan satu-satunya yang tak bisa
-        # bertanya kepada siapa pun kalau salah satunya luput.
-        return [
-            {"judul": "Gudang 1 — Selepan", "sel": _petak_g1(o)},
-            {"judul": "Gudang 2 — Penyosohan", "sel": await _petak_g2(db)},
-        ]
-    return []
+    g1 = (_petak_g1(o) if gudang1(view) else terkunci(
+        ("Gabah masuk", "Pengeringan", "Silo terisi", "Stok PK")))
+    g2 = (await _petak_g2(db) if gudang2(view) else terkunci(
+        ("PK masuk", "Penyosohan", "Silo terisi", "Tumpukan PK")))
+    if view == TAMU:
+        return []
+    return [dict(judul="Gudang 1 — Selepan", sel=g1, terkunci=not gudang1(view)),
+            dict(judul="Gudang 2 — Penyosohan", sel=g2, terkunci=not gudang2(view))]

@@ -417,15 +417,17 @@ def _medan_unit_transfer(tahap):
 
 @router.get("/actions/menu")
 async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Daftar aksi cepat + spesifikasi field, ditentukan SERVER per role."""
-    from hmu_identitas import peran as P
+    """Katalog induk yang sama; tiap aksi membawa izin peran efektif."""
+    from app.web.akses import hak, matriks
 
-    fin = can_see_financials(user)
-    g1 = await _is_g1_operator(user)
-    g2 = await _is_g2_operator(user)
-    #: Jaring pengaman Super Admin untuk `pindah_tumpukan_silo` (keputusan
-    #: pemilik 5 Oktober 2026) — lihat catatan panjang di blok itu, di bawah.
-    super_ = P.super_saja(user.role)
+    izin = hak(user.role, g1=await _is_g1_operator(user),
+               g2=await _is_g2_operator(user))
+    # Satu katalog induk untuk semua akun internal. Field tidak membawa data
+    # transaksi; picker baru dibaca setelah aksi yang diizinkan dibuka.
+    fin = g1 = g2 = True
+    # Bendera berikut hanya merakit spesifikasi induk, bukan wewenang pelaku.
+    # Izin aktual ada pada `izin` dan setiap POST tetap mempunyai gerbangnya.
+    super_ = True
     KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
                ["kering", "Kering (→ PK KL)"]]
     METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
@@ -469,7 +471,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         # keduanya, aksi.js menebak kalimat dari nama field, dan tebakan itu
         # bisa keliru berat.
         actions += [
-            {"id": "gabah_masuk", "label": "🌾 Gabah masuk",
+            {"akses": "g1", "id": "gabah_masuk", "label": "🌾 Gabah masuk",
              "post": "/api/actions/gabah-masuk",
              "hint": "Pilih tiket timbang yang masih aktif — supplier, bobot, & plat "
                      "otomatis dari timbangan (tak perlu diketik ulang). "
@@ -484,7 +486,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Belum ada tujuan yang tersedia untuk tiket ini."},
              ]},
             *[
-                {
+                {"akses": "g1",
                     "id": f"qc_gabah_{kondisi}",
                     "label": f"🔬 QC gabah {kondisi}",
                     "post": "/api/actions/qc-gabah/" + kondisi,
@@ -514,7 +516,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 }
                 for kondisi in ("basah", "kering")
             ],
-            {"id": "qc_gabah_tutup", "label": "🔒 Tutup proses QC gabah",
+            {"akses": "g1", "id": "qc_gabah_tutup", "label": "🔒 Tutup proses QC gabah",
              "post": "/api/actions/tutup-qc-gabah", "pratinjau_qc": True,
              "hint": "Tutup setelah minimal satu catatan QC tersimpan. Setelah ditutup, data QC truk ini tidak bisa ditambah lagi.",
              "fields": [{"name": "kode_batch", "label": "Proses QC yang belum lengkap",
@@ -522,7 +524,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                          "kosong": "Belum ada proses QC yang bisa ditutup."},
                         {"name": "alasan", "label": "Alasan menutup sebelum lima pemeriksaan",
                          "type": "text", "wajib": True}]},
-            {"id": "pindah_tumpukan", "label": "📦 Tempatkan gabah",
+            {"akses": "g1", "id": "pindah_tumpukan", "label": "📦 Tempatkan gabah",
              "post": "/api/actions/pindah-tumpukan",
              "hint": "Gabah yang belum ada di dryer maupun silo — yang sedang "
                      "menumpuk, dan yang penempatannya gagal. Gabah basah "
@@ -535,7 +537,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "options": TUJUAN_BASAH + [o for o in TUJUAN_KERING
                                              if o not in TUJUAN_BASAH]},
              ]},
-            {"id": "mulai_pengeringan", "label": "🔥 Mulai pengeringan",
+            {"akses": "g1", "id": "mulai_pengeringan", "label": "🔥 Mulai pengeringan",
              "post": "/api/actions/mulai-pengeringan",
              "hint": "Gabungkan SEMUA gabah yang menunggu di mesin itu menjadi 1 "
                      "pengeringan (PGR-…). Gabah di mesin lain tidak ikut. "
@@ -575,7 +577,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                          "adalah setelan di mesin.",
                  "ya": "Sudah disetel — nyalakan",
              }},
-            {"id": "kadar_air", "label": "💧 Catat kadar air pengeringan",
+            {"akses": "g1", "id": "kadar_air", "label": "💧 Catat kadar air pengeringan",
              "ringkasan_kadar": {"source": "/api/actions/ringkasan-kadar-air", "proses": "kode_lot"},
              "post": "/api/actions/kadar-air",
              "hint": "Beberapa titik dengan alat tes — yang dipakai rata-ratanya. "
@@ -620,7 +622,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "aksi": "ubah_target", "label": "Ubah target kadar air",
                   "bawa": "kode_lot"},
              ]},
-            {"id": "ubah_target", "label": "🎯 Ubah target kadar air",
+            {"akses": "g1", "id": "ubah_target", "label": "🎯 Ubah target kadar air",
              "konteks_target": {"source": "/api/actions/ringkasan-kadar-air", "proses": "kode_lot"},
              "post": "/api/actions/ubah-target",
              "hint": "Garis selesai pengeringan. Menggesernya mengubah kapan "
@@ -645,7 +647,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                          "ikut menentukan gabahnya dijual sebagai apa.",
                  "ya": "Ya, ubah targetnya",
              }},
-            {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
+            {"akses": "g1", "id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
              "konteks_selesai_pengeringan": {"source": "/api/actions/ringkasan-selesai-pengeringan", "proses": "kode_lot"},
              "post": "/api/actions/selesai-pengeringan",
              "hint": "Isikan kadar air yang TERTERA DI MESIN saat dimatikan — "
@@ -665,7 +667,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kadar_air", "label": "Kadar air di mesin (%)",
                   "type": "number", "wajib": True},
              ]},
-            {"id": "mulai_pendinginan_ulang", "label": "❄️ Dinginkan lagi",
+            {"akses": "g1", "id": "mulai_pendinginan_ulang", "label": "❄️ Dinginkan lagi",
              "post": "/api/actions/mulai-pendinginan-ulang",
              "hint": "Mulai pendinginan ulang. Gabah belum boleh dipindah ke silo sampai dinyatakan dingin lagi.",
              "konfirmasi": {"judul": "Mulai pendinginan ulang?",
@@ -673,7 +675,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  "ya": "Mulai pendinginan ulang"},
              "fields": [{"name": "kode_lot", "label": "Lot yang sudah dinyatakan dingin",
                  "type": "remote", "source": "/api/actions/drying-done"}]},
-            {"id": "selesai_pendinginan", "label": "❄️ Pendinginan selesai",
+            {"akses": "g1", "id": "selesai_pendinginan", "label": "❄️ Pendinginan selesai",
              "post": "/api/actions/selesai-pendinginan",
              "hint": "Nyatakan gabah sudah dingin & mesin bebas dipakai lagi — gabah "
                      "boleh tetap di dalamnya menunggu silo kosong. Dari sinilah "
@@ -683,7 +685,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/cooling-active",
                   "kosong": "Tidak ada pengeringan yang sedang didinginkan."},
              ]},
-            {"id": "pindah_silo", "label": "🏗️ Pindah ke silo",
+            {"akses": "g1", "id": "pindah_silo", "label": "🏗️ Pindah ke silo",
              "konteks_pindah_silo": {"source": "/api/actions/ringkasan-pindah-silo"},
              "post": "/api/actions/pindah-silo",
              "hint": "Hanya pengeringan yang sudah dinyatakan selesai pendinginan.", "fields": [
@@ -700,7 +702,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # pilihan tunggal, dan bukan pula tupel tertulis-tangan A/B/AB
             # seperti penyosohan: silo Gudang 1 lebih dari dua dan bisa
             # bertambah lewat Pengaturan → Alat. Daftarnya dari master.
-            {"id": "mulai_giling", "label": "⚙️ Mulai penggilingan",
+            {"akses": "g1", "id": "mulai_giling", "label": "⚙️ Mulai penggilingan",
              "konteks_mulai_giling": {"source": "/api/actions/ringkasan-mulai-giling"},
              "post": "/api/actions/mulai-giling",
              "hint": "Bentuk 1 LOT (LOT-…) dari SELURUH isi silo yang dicentang "
@@ -712,7 +714,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/silo-siap-giling",
                   "kosong": "Tidak ada silo berisi gabah kering yang siap digiling."},
              ]},
-            {"id": "hasil_giling", "label": "📈 Catat hasil penggilingan",
+            {"akses": "g1", "id": "hasil_giling", "label": "📈 Catat hasil penggilingan",
              "ringkasan_giling": {"source": "/api/actions/ringkasan-hasil-giling",
                                   "proses": "kode_proses", "total": "berat_kumulatif"},
              "post": "/api/actions/hasil-giling", "fields": [
@@ -727,7 +729,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # Stok. Yang ditolak penutupannya, bukan pencatatannya: prosesnya
             # tak disentuh sampai angkanya ada, jadi kartunya tetap di Sedang
             # berjalan sampai dilengkapi.
-            {"id": "selesai_giling", "label": "🏁 Selesai penggilingan",
+            {"akses": "g1", "id": "selesai_giling", "label": "🏁 Selesai penggilingan",
              "konteks_selesai_giling": {"source": "/api/actions/ringkasan-selesai-giling", "proses": "kode_proses"},
              "hint": "Catat sisa setiap silo melalui Bebaskan silo terlebih dahulu. "
                      "Isi 0 hanya jika benar-benar kosong. Penyelesaian tidak mengosongkan silo.",
@@ -747,7 +749,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # bisa diisi gabah baru, TANPA menutup prosesnya: yang menutup
             # tetap "Selesai giling", di sanalah hasil akhir & pagar
             # rendemen berdiri. Sebangun "Selesai penyosohan" Gudang 2.
-            {"id": "tutup_silo_giling", "label": "📤 Bebaskan silo",
+            {"akses": "g1", "id": "tutup_silo_giling", "label": "📤 Bebaskan silo",
              "konteks_bebaskan_giling": {"proses": "kode_proses", "source": "/api/actions/ringkasan-bebaskan-silo-giling"},
              "hint": "Mesin lanjut dari silo lain — proses TIDAK ditutup. "
                      "Isi 0 jika silo sudah kosong. "
@@ -777,7 +779,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # proses, silo lainnya juga dipergunakan untuk mix bahan baku
             # jika dibutuhkan." `start_milling` menerima beberapa silo,
             # tetapi hanya saat MULAI — pintu ini membuka jalan mid-proses.
-            {"id": "tambah_silo_giling", "label": "➕ Tambah silo untuk mix bahan",
+            {"akses": "g1", "id": "tambah_silo_giling", "label": "➕ Tambah silo untuk mix bahan",
              "konteks_tambah_giling": {"proses": "kode_proses", "source": "/api/actions/ringkasan-tambah-silo-giling"},
              "hint": "Silo lain ikut jadi bahan proses ini — harus silo yang "
                      "belum dipakai proses lain, dan sepemilik dengan bahan "
@@ -796,7 +798,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # pilihan yang sama-sama merusak catatan — membiarkannya
             # "berjalan" padahal mati, atau menutupnya lalu memulai proses
             # baru, yang membuat satu muatan terhitung dua kali.
-            {"id": "hentikan_proses", "label": "⏸️ Hentikan sementara",
+            {"akses": "g1", "id": "hentikan_proses", "label": "⏸️ Hentikan sementara",
              "post": "/api/actions/hentikan-proses",
              "hint": "Mesin rusak, listrik padam, jam kerja habis. Prosesnya tidak "
                      "ditutup — bisa dilanjutkan nanti atau besok, dan jam "
@@ -820,7 +822,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "sebab_lain", "label": "Bila 'Lainnya': tulis sebabnya",
                   "type": "text", "optional": True},
              ]},
-            {"id": "lanjutkan_proses", "label": "▶️ Lanjutkan proses",
+            {"akses": "g1", "id": "lanjutkan_proses", "label": "▶️ Lanjutkan proses",
              "post": "/api/actions/lanjutkan-proses",
              "hint": "Mesin jalan lagi. Lama tertahannya tercatat berikut sebabnya.",
              "fields": [
@@ -852,7 +854,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # Gudang 2 yang meminta tetap DIBERI TAHU — kartunya di Transit
             # layarnya, tanpa tombol: ia menunggu barang, bukan mengerjakan
             # sesuatu.
-            {"id": "kirim_permintaan_pk", "label": "🚚 Kirim PK ke Gudang 2",
+            {"akses": "g1", "id": "kirim_permintaan_pk", "label": "🚚 Kirim PK ke Gudang 2",
              "post": "/api/actions/kirim-permintaan-pk",
              "unit_transfer_pk": "kirim",
              "hint": "Catat yang BENAR-BENAR dimuat. Barangnya berpindah "
@@ -883,7 +885,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         # `can_see_financials` tak membedakan Admin dari Super Admin, jadi
         # yang menyempitkannya kembali ke Super Admin saja adalah `super_`.
         actions += [
-            {"id": "pindah_tumpukan_silo", "label": "📤 Masukkan ke silo",
+            {"akses": "fisik_g2", "id": "pindah_tumpukan_silo", "label": "📤 Masukkan ke silo",
              "post": "/api/actions/pindah-tumpukan-silo",
              "konteks_masukkan_silo": {"source": "/api/actions/rincian-masukkan-silo", "proses": "tumpukan"},
              "hint": "Pilih sumber stok. Satuan mengikuti bentuk stok yang tercatat.",
@@ -912,7 +914,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # ingin ia katakan cuma "berapa yang masuk silo sekarang".
             # Sumbernya kini OTOMATIS: curah dulu, lalu karung dibongkar bila
             # kurang — lihat `gudang2.service.masukkan_broken_ke_silo`.
-            {"id": "masukkan_broken_silo", "label": "📤 Masukkan broken ke silo",
+            {"akses": "fisik_g2", "id": "masukkan_broken_silo", "label": "📤 Masukkan broken ke silo",
              "post": "/api/actions/masukkan-broken-silo",
              "konteks_broken_silo": {"source": "/api/actions/rincian-broken-silo", "proses": "proses"},
              "hint": "Isi berat broken yang benar-benar masuk silo. Sumber diambil otomatis menurut urutan stok.",
@@ -928,7 +930,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
                   "type": "number", "wajib": True},
              ]},
-            {"id": "masukkan_menir_silo", "label": "📤 Masukkan menir ke silo",
+            {"akses": "fisik_g2", "id": "masukkan_menir_silo", "label": "📤 Masukkan menir ke silo",
              "konteks_menir_silo": {"source": "/api/actions/rincian-menir-silo"},
              "post": "/api/actions/masukkan-menir-silo",
              "hint": "Hanya stok menir yang tersedia; pemilik stok dibawa ke silo.",
@@ -941,7 +943,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "auto_satu": True, "kosong": "Belum ada silo yang menerima menir."},
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)", "type": "number"},
              ]},
-            {"id": "masukkan_reject_silo", "label": "📤 Masukkan reject ke silo",
+            {"akses": "fisik_g2", "id": "masukkan_reject_silo", "label": "📤 Masukkan reject ke silo",
              "konteks_reject_silo": {"source": "/api/actions/rincian-reject-silo"},
              "post": "/api/actions/masukkan-reject-silo",
              "hint": "Hanya stok reject yang tersedia; pemilik stok dibawa ke silo.",
@@ -968,7 +970,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # sumbernya kemudian dipilih berdasarkan merek dan kemasan.
             # Daftar silo tetap gabungan, lalu server menolak kombinasi
             # komoditas yang tidak sesuai.
-            {"id": "masukkan_beras_silo", "label": "📤 Masukkan beras ke silo",
+            {"akses": "fisik_g2", "id": "masukkan_beras_silo", "label": "📤 Masukkan beras ke silo",
              "post": "/api/actions/masukkan-beras-silo",
              "konteks_beras_silo": {"source": "/api/actions/rincian-beras-silo", "proses": "jenis"},
              "hint": "Jenis beras dan pemilik mengikuti kartu yang dipilih. "
@@ -1003,7 +1005,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # tiga kemungkinan. Silo Gudang 2 bisa bertambah lewat Pengaturan →
             # Alat, dan silo ketiga itu tak akan pernah muncul di tupel yang
             # diketik seseorang bertahun lalu — juga tak ikut dalam "A+B".
-            {"id": "mulai_penyosohan", "label": "🏭 Mulai penyosohan",
+            {"akses": "g2", "id": "mulai_penyosohan", "label": "🏭 Mulai penyosohan",
              "post": "/api/actions/mulai-penyosohan",
              "konteks_mulai_penyosohan": {"source": "/api/actions/ringkasan-mulai-penyosohan"},
              "hint": "Boleh beberapa silo sekaligus — hasilnya satu proses "
@@ -1014,7 +1016,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/silo-bahan-g2",
                   "kosong": "Tidak ada silo Gudang 2 berisi bahan yang siap disosoh."},
              ]},
-            {"id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
+            {"akses": "g2", "id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
              "post": "/api/actions/hasil-penyosohan",
              "ringkasan_hasil": {"source": "/api/actions/ringkasan-hasil-penyosohan",
                                  "proses": "kode_proses", "jenis": "jenis",
@@ -1040,7 +1042,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # awalnya hanya menggunakan 1 silo, tidak bisa menambahkan silo
             # lainnya." `mulai_penyosohan` menerima beberapa silo, tetapi
             # hanya saat MULAI.
-            {"id": "tambah_silo_penyosohan", "label": "➕ Tambah silo (mix bahan)",
+            {"akses": "g2", "id": "tambah_silo_penyosohan", "label": "➕ Tambah silo (mix bahan)",
              "hint": "Silo yang dibebaskan bisa dipakai lagi, termasuk saat kosong. "
                      "Bahan boleh diisi setelah silo ditambahkan kembali. Pilih silo yang "
                      "belum dipakai proses lain, dan sepemilik dengan bahan "
@@ -1055,7 +1057,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/silo-bahan-g2",
                   "kosong": "Tidak ada silo yang bisa ditambahkan atau digunakan kembali."},
              ]},
-            {"id": "hentikan_penyosohan", "label": "⏸️ Hentikan sementara",
+            {"akses": "g2", "id": "hentikan_penyosohan", "label": "⏸️ Hentikan sementara",
              "post": "/api/actions/hentikan-proses",
              "hint": "Mesin rusak, listrik padam, jam kerja habis. Prosesnya tidak "
                      "ditutup — bisa dilanjutkan nanti atau besok, dan jam "
@@ -1071,7 +1073,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "sebab_lain", "label": "Bila 'Lainnya': tulis sebabnya",
                   "type": "text", "optional": True},
              ]},
-            {"id": "lanjutkan_penyosohan", "label": "▶️ Lanjutkan penyosohan",
+            {"akses": "g2", "id": "lanjutkan_penyosohan", "label": "▶️ Lanjutkan penyosohan",
              "post": "/api/actions/lanjutkan-proses",
              "hint": "Mesin jalan lagi. Lama tertahannya tercatat berikut sebabnya.",
              "fields": [
@@ -1079,7 +1081,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "remote", "source": "/api/actions/sosoh-berhenti",
                   "kosong": "Tidak ada penyosohan yang sedang berhenti."},
              ]},
-            {"id": "selesai_penyosohan", "label": "📤 Bebaskan silo penyosohan",
+            {"akses": "g2", "id": "selesai_penyosohan", "label": "📤 Bebaskan silo penyosohan",
              "post": "/api/actions/selesai-penyosohan", "pratinjau_silo": "sosoh",
              "konteks_bebaskan_sosoh": {"source": "/api/actions/ringkasan-bebaskan-silo-sosoh", "proses": "kode_proses"},
              "hint": "Lepas ikatan silo dari proses; sisanya tetap tercatat. Penyosohan dan pencatatan hasil tetap berjalan. Hanya silo dengan sisa 0 kg yang kosong dan siap diisi ulang.",
@@ -1106,48 +1108,30 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Semua silo proses ini sudah ditandai selesai."},
                  {"name": "sisa", "label": "Sisa fisik di silo", "type": "number", "wajib": True},
              ]},
-            {"id": "akhiri_penyosohan", "label": "🏁 Selesaikan penyosohan",
+            {"akses": "g2", "id": "akhiri_penyosohan", "label": "🏁 Selesaikan penyosohan",
              "post": "/api/actions/akhiri-penyosohan", "pratinjau_proses": "sosoh",
              "konteks_selesai_sosoh": {"source": "/api/actions/ringkasan-selesai-penyosohan"},
              "hint": "Nyatakan seluruh bahan selesai melewati mesin dan semua hasil sudah dicatat. Bebaskan setiap silo dan catat sisanya terlebih dahulu.",
              "fields": [{"name": "kode_proses", "label": "Proses penyosohan",
                 "type": "remote", "source": "/api/actions/polishing-active"}]},
         ]
-        # "Minta lot ini" — permintaan, bukan izin (pemilik 24 September 2026).
-        #
-        # SESUDAH pekerjaan harian, bukan sebelumnya: yang memimpin daftar
-        # seharusnya yang paling sering dikerjakan. Dan hanya untuk OPERATOR —
-        # Admin yang juga memegang Gudang 2 tak membutuhkannya, sebab ia bisa
-        # memindahkan langsung; permintaan kepada diri sendiri cuma satu baris
-        # tambahan yang harus ditutup sendiri. Rutenya menjaga hal yang sama;
-        # yang di sini cuma berhenti menawarkan.
-        #
-        # PUNYA DAFTARNYA SENDIRI sejak 26 September 2026. Kalimat di sini
-        # dulu berbunyi "tak punya daftar pilihan sendiri: ia SELALU dibuka
-        # dari kartu lot di layar Stok, yang sudah menyebut lot mana" — dan
-        # alasan itu salah dua kali. Penguncian-dari-kartu di `aksi.js` hanya
-        # berlaku untuk isian bertipe PILIHAN, jadi isian teksnya tak pernah
-        # terisi walau kartunya mengirim `nilai`; dan katalog "Catat pekerjaan
-        # lain" membuka aksi yang sama tanpa membawa apa pun. Akibatnya
-        # orangnya harus MENGETIK kode lot sambil berdiri memegang telepon
-        # satu tangan — laporan pemilik, dengan fotonya.
-        if not fin:
-            actions += [
-                {"id": "minta_pk_g1", "label": "🙋 Minta lot PK Gudang 1",
-                 "post": "/api/actions/minta-pk-g1",
-                 "unit_transfer_pk": "minta",
-                 "hint": "Memberitahu Admin bahwa bahan ini Anda perlukan. "
-                         "Admin yang menyetujui dan menetapkan tujuannya.",
-                 "fields": [
-                     {"name": "kode_proses", "label": "Lot PK yang Anda perlukan",
-                      "type": "remote", "source": "/api/actions/pk-g1-tersedia",
-                      "kosong": "Tidak ada lot PK Gudang 1 yang masih bersisa "
-                                "dan belum diminta."},
-                 ] + _medan_unit_transfer('minta')},
-                # Aksi "Muat & kirim PK" DIPINDAH ke blok `if g1:` pada 27
-                # September 2026 — lihat komentar di sana. Gudang 2 yang
-                # MEMINTA, Gudang 1 yang MENGIRIM sesudah Admin menyetujui.
-            ]
+        # Satu katalog induk; izin Minta lot berasal dari peran efektif.
+        actions += [
+            {"akses": "minta_pk", "id": "minta_pk_g1", "label": "🙋 Minta lot PK Gudang 1",
+             "post": "/api/actions/minta-pk-g1",
+             "unit_transfer_pk": "minta",
+             "hint": "Memberitahu Admin bahwa bahan ini Anda perlukan. "
+                     "Admin yang menyetujui dan menetapkan tujuannya.",
+             "fields": [
+                 {"name": "kode_proses", "label": "Lot PK yang Anda perlukan",
+                  "type": "remote", "source": "/api/actions/pk-g1-tersedia",
+                  "kosong": "Tidak ada lot PK Gudang 1 yang masih bersisa "
+                            "dan belum diminta."},
+             ] + _medan_unit_transfer('minta')},
+            # Aksi "Muat & kirim PK" DIPINDAH ke blok `if g1:` pada 27
+            # September 2026 — lihat komentar di sana. Gudang 2 yang
+            # MEMINTA, Gudang 1 yang MENGIRIM sesudah Admin menyetujui.
+        ]
     BUTIR = [["", "— pilih penilaian —"]] + [
         [k,f"{label} ({NILAI_KUALITATIF[k]})"] for k,label in LABEL_KUALITATIF.items()]
     JENIS_PK = [["", "— belum ditentukan —"], ["ks", "KS"], ["kl", "KL"],
@@ -1155,7 +1139,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     if fin:
         # Tugas pokok staff (keuangan & QC lintas gudang).
         actions += [
-            {"id": "rekonsiliasi_timbang", "label": "🔎 Cocokkan tiket timbang dengan catatan",
+            {"akses": "admin", "id": "rekonsiliasi_timbang", "label": "🔎 Cocokkan tiket timbang dengan catatan",
              "post": "/api/actions/rekonsiliasi-timbang",
              "hint": "Tiket timbang yang belum tercatat, selisih nota dengan hasil "
                      "timbang, dan catatan yang masih menunggu bobot.", "fields": []},
@@ -1168,7 +1152,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # mengesahkan angka yang sudah benar. Nama tombolnya disamakan
             # dengan tombol di kartu layar Stok, yang memanggil aksi yang SAMA;
             # dua nama untuk satu pekerjaan membuat orang mengira ada dua.
-            {"id": "verify_output", "label": "🩹 Perbaiki hasil giling",
+            {"akses": "admin", "id": "verify_output", "label": "🩹 Perbaiki hasil giling",
              "post": "/api/actions/verify-output",
              "hint": "Untuk membetulkan berat PK yang salah catat. Yang mencatat "
                      "hasil giling operator, lewat \"Perbarui hasil giling\"; "
@@ -1181,7 +1165,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             # Korban lama P6-03 atau revisi tiket yang disengaja: keduanya
             # tampak sama dari data, jadi yang memutuskan admin, per proses.
-            {"id": "betulkan_bobot_giling", "label": "🩹 Betulkan bobot masuk giling",
+            {"akses": "admin", "id": "betulkan_bobot_giling", "label": "🩹 Betulkan bobot masuk giling",
              "post": "/api/actions/betulkan-bobot-giling",
              "hint": "Giling selesai yang bobot masuknya tak cocok dengan bobot bahannya "
                      "sekarang. Dibetulkan ke bobot bahan, rendemen dihitung ulang — "
@@ -1190,7 +1174,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "remote", "source": "/api/actions/giling-tak-cocok",
                   "kosong": "Tak ada giling yang bobot masuknya tak cocok."},
              ]},
-            {"id": "qc_giling", "label": "🔬 QC hasil giling",
+            {"akses": "admin", "id": "qc_giling", "label": "🔬 QC hasil giling",
              "post": "/api/actions/qc-giling",
              "hint": "Boleh dicatat berulang selama giling berjalan — contoh dari "
                      "beras yang baru keluar mesin. Angka dirata-rata; butir kuning, "
@@ -1212,7 +1196,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "options": BUTIR},
                  {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
              ]},
-            {"id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
+            {"akses": "admin", "id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
              "post": "/api/actions/catat-pk-luar",
              "hint": "Pilih tiket timbang PK yang masih aktif — supplier, bobot & plat "
                      "otomatis dari timbangan. Langsung tertumpuk. Mutunya dicatat "
@@ -1250,13 +1234,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"type": "tombol_aksi", "aksi": "tolak_pk_luar",
                   "bawa": "timbangan_transaksi_id", "label": "⛔ Tolak PK luar"},
              ]},
-            {"id": "catat_beras_timbang_masuk", "label": "📦 Terima beras sebagai stok",
+            {"akses": "admin", "id": "catat_beras_timbang_masuk", "label": "📦 Terima beras sebagai stok",
              "post": "/api/actions/catat-produk-timbang-masuk",
              "hint": "Masuk ke stok bertumpuk sebagai Beras Medium, karung putih polos tanpa merek 50 kg.",
              "fields": [{"name": "timbangan_transaksi_id", "label": "Tiket timbang beras",
                          "type": "remote", "source": "/api/actions/produk-timbang-masuk-aktif?jenis=BERAS_MASUK",
                          "kosong": "Tidak ada tiket beras masuk yang menunggu."}]},
-            {"id": "catat_broken_timbang_masuk", "label": "📦 Terima broken sebagai stok",
+            {"akses": "admin", "id": "catat_broken_timbang_masuk", "label": "📦 Terima broken sebagai stok",
              "post": "/api/actions/catat-produk-timbang-masuk",
              "hint": "Masuk ke stok bertumpuk dan otomatis dikemas dalam karung putih polos tanpa merek 50 kg.",
              "fields": [{"name": "timbangan_transaksi_id", "label": "Tiket timbang broken",
@@ -1268,7 +1252,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # ini TETAP terkirim (GRUP_KARTU, lihat daftar di bawah) supaya
             # `bukaAksi` masih bisa membukanya dari sana; yang hilang cuma
             # baris katalognya sendiri.
-            {"id": "tolak_pk_luar", "label": "⛔ Tolak PK luar",
+            {"akses": "admin", "id": "tolak_pk_luar", "label": "⛔ Tolak PK luar",
              "post": "/api/actions/tolak-pk-luar",
              "hint": "PK yang datang tidak diterima — kembali ke truknya. Satu-satunya "
                      "yang wajib diisi alasannya; jenis PK & kadar air tak ditanya, "
@@ -1280,7 +1264,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Tidak ada tiket timbang PK yang aktif."},
                  {"name": "alasan", "label": "Alasan menolak (wajib)", "type": "text"},
              ]},
-            {"id": "qc_pk_luar", "label": "🔬 Catat kualitas PK luar",
+            {"akses": "admin", "id": "qc_pk_luar", "label": "🔬 Catat kualitas PK luar",
              "post": "/api/actions/qc-pk-luar",
              "hint": "PK yang masuk sudah pasti diterima — ini hanya mencatat "
                      "kualitasnya. Setiap simpan menjadi putaran baru tanpa batas. "
@@ -1308,13 +1292,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # pindah ke silo adalah langkah terpisah milik operator
             # (`pindah_tumpukan_silo`). Jangan pasang lagi medan ini di sini;
             # lihat catatan panjang di `masukkan_pk_luar`.
-            {"id": "masukkan_pk", "label": "📥 Masukkan PK diterima",
+            {"akses": "admin", "id": "masukkan_pk", "label": "📥 Masukkan PK diterima",
              "post": "/api/actions/masukkan-pk", "fields": [
                  {"name": "kode_batch", "label": "PK yang menunggu dimasukkan", "type": "remote",
                   "source": "/api/actions/pk-intake-pending",
                   "kosong": "Tidak ada PK masuk yang menunggu."},
              ]},
-            {"id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
+            {"akses": "admin", "id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
              "post": "/api/actions/transfer-pk", "fields": [
                  {"name": "kode_proses", "label": "PK dari proses", "type": "remote",
                   "source": "/api/actions/pk-transfer",
@@ -1331,7 +1315,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # ACC, kirim, dan tutup: ketiganya SELALU dibuka dari kartunya,
             # yang sudah menyebut lot dan pemintanya. Medan `permintaan`
             # dikunci nilainya oleh kartu itu (`aksi.js`).
-            {"id": "acc_permintaan_pk", "label": "✅ Setujui permintaan PK",
+            {"akses": "admin", "id": "acc_permintaan_pk", "label": "✅ Setujui permintaan PK",
              "post": "/api/actions/acc-permintaan-pk",
              "hint": "Tujuan ditetapkan sekarang, bukan nanti: yang tahu gudang "
                      "mana yang kosong adalah Anda, bukan yang memuat. "
@@ -1346,7 +1330,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat", "label": "Berat yang disetujui (kg)",
                   "type": "number", "wajib": True},
              ]},
-            {"id": "tutup_permintaan_pk", "label": "🔒 Tutup permintaan PK",
+            {"akses": "admin", "id": "tutup_permintaan_pk", "label": "🔒 Tutup permintaan PK",
              "post": "/api/actions/tutup-permintaan-pk",
              "hint": "Angka Anda yang berlaku. Bila berbeda dari yang dicatat "
                      "Gudang 1, perpindahannya ikut dibetulkan — dan angka "
@@ -1358,7 +1342,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat", "label": "Berat akhir (kg)", "type": "number",
                   "wajib": True},
              ]},
-            {"id": "tolak_permintaan_pk", "label": "🚫 Tolak permintaan PK",
+            {"akses": "admin", "id": "tolak_permintaan_pk", "label": "🚫 Tolak permintaan PK",
              "post": "/api/actions/tolak-permintaan-pk",
              "hint": "Sebabnya terbaca operator yang meminta. Permintaan yang "
                      "hilang tanpa kabar akan diajukan lagi besok.",
@@ -1380,7 +1364,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     actions += aksi_undo.spesifikasi(boleh=g1 or g2 or fin)
 
     if fin:
-        actions.append({"id": "sesuaikan_stok_pk_lama", "label": "Penyesuaian stok PK beli luar lama",
+        actions.append({"akses": "admin", "id": "sesuaikan_stok_pk_lama", "label": "Penyesuaian stok PK beli luar lama",
             "post": "/api/actions/sesuaikan-stok-pk-lama",
             "hint": "Khusus batch lama tanpa jumlah karung. Isi selisih bertanda, tanggal dan alasan; bukti masuk serta laporan lama tetap tersimpan.",
             "fields": [
@@ -1402,17 +1386,6 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         # membuat orang bertanya yang mana yang benar; dan katalog memang
         # untuk yang tak berwujud benda di gudang.
         a["kartu"] = a["grup"] == GRUP_KARTU
-    # `undo` dibuang dari katalog HANYA bagi yang punya List audit — di sana
-    # ia lengkap dengan daftar apa yang akan hilang, dan dua pintu untuk satu
-    # pekerjaan berarti yang satu tak pernah ikut diperbarui.
-    #
-    # Operator TIDAK punya List audit (jejak lengkap berikut tombol
-    # pembatalnya bukan miliknya), jadi bagi mereka katalog inilah satu-
-    # satunya jalan. Membuangnya untuk semua orang berarti yang paling sering
-    # salah ketik justru kehilangan cara memperbaikinya — dan itu ketahuan
-    # hanya karena simulasi memeriksanya sebagai operator.
-    if fin:
-        actions = [a for a in actions if a["id"] != "undo"]
     # Mutu bisa dimatikan seluruhnya lewat Pengaturan. Disaring DI SINI, di
     # satu tempat, bukan di tiap cabang yang menyusun daftarnya: aksi QC
     # bertambah lebih sering daripada penyaringnya diperiksa ulang.
@@ -1427,6 +1400,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # tempat yang harus sepakat.
     if actions:
         actions[0]["urut_grup"] = URUT_GRUP
+    for a in actions:
+        akses = a.get("akses", "catat" if a["id"] == "undo" else "")
+        if not akses:
+            raise ValueError(f"Aksi belum memiliki aturan akses: {a['id']}")
+        a["akses"] = akses
+        a["boleh"] = izin.get(akses, False)
+        a["izin_peran"] = matriks(akses)
+        a["alasan_akses"] = "" if a["boleh"] else "Tidak diizinkan untuk peran atau gudang kerja Anda."
     return actions
 
 
@@ -4046,17 +4027,9 @@ class MintaPkReq(UnitTransferPkReq):
 
 @router.post("/actions/minta-pk-g1")
 async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) -> dict:
-    """Operator Gudang 2 meminta satu lot PK Gudang 1 dipindah kepadanya.
-
-    Gerbangnya di RUTE, bukan cuma pada tombolnya: menyembunyikan pintu bukan
-    penjagaan — alamatnya bisa diketik, dan lembar yang masih terbuka di layar
-    orang lain masih bisa mengirim.
-
-    Yang boleh: operator yang sedang bekerja di Gudang 2. Admin tidak — ia bisa
-    memindahkan langsung, dan permintaan kepada diri sendiri cuma satu baris
-    tambahan yang harus ditutup sendiri.
-    """
-    _require(await _is_g2_operator(user) and not can_see_financials(user))
+    """Operator G2 atau Super Admin meminta lot; persetujuan tetap terpisah."""
+    from hmu_identitas import peran as P
+    _require(P.super_saja(user.role) or (await _is_g2_operator(user) and not can_see_financials(user)))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih lot PK dulu.")
     berat = _bobot_unit_transfer(req)

@@ -1,7 +1,7 @@
 {% macro tab_pekerjaan(aktif, tindakan, berjalan, lain, total_tindakan=none, total_jalan=none) -%}
-<nav class="saring kerja-tab{{ ' kerja-tab--tiga' if VIEW in V_MEJA }}" aria-label="Tab pekerjaan">
+<nav class="saring kerja-tab{{ ' kerja-tab--tiga' if TAMPILAN_INDUK or VIEW in V_MEJA }}" aria-label="Tab pekerjaan">
 <a class="pil{{ ' pil--on' if aktif=='tindakan' }}" href="{{ tindakan }}"{% if aktif=='tindakan' %} aria-current="page"{% endif %}><span class="kerja-tab__nama">Perlu tindakan</span>{% if total_tindakan is not none %} <span class="pil__jml">{{ total_tindakan }}</span>{% endif %}</a>
 <a class="pil{{ ' pil--on' if aktif=='berjalan' }}" href="{{ berjalan }}"{% if aktif=='berjalan' %} aria-current="page"{% endif %}><span class="kerja-tab__nama">Berjalan</span>{% if total_jalan is not none %} <span class="pil__jml">{{ total_jalan }}</span>{% endif %}</a>
-{% if VIEW in V_MEJA %}<a class="pil{{ ' pil--on' if aktif=='lain' }}" href="{{ lain }}"{% if aktif=='lain' %} aria-current="page"{% endif %}><span class="kerja-tab__nama">Pekerjaan lain</span></a>{% endif %}
+{% if TAMPILAN_INDUK or VIEW in V_MEJA %}<a class="pil{{ ' pil--on' if aktif=='lain' }}" href="{{ lain }}"{% if aktif=='lain' %} aria-current="page"{% endif %}><span class="kerja-tab__nama">Pekerjaan lain</span></a>{% endif %}
 </nav>
 {%- endmacro %}

@@ -63,7 +63,8 @@ async def test_kelompok_dan_endpoint_setiap_peran(pg,master,peran,gd):
             for path,data in [('/pengaturan/nama',{'nama':'x'}),('/pengaturan/fitur-mutu',{'aktif':'0'}),('/pengaturan/sebab-jeda',{'jenis':'giling','tambah':'uji'}),('/pengaturan/kledo-kontak',{})]:
                 r=await kirim(c,path,data)
                 assert r.status_code==(303 if path.endswith('/nama') else 403)
-            assert 'Pencatatan mutu' not in page.text and 'List audit' not in page.text
+            assert 'Pencatatan mutu' in page.text and 'List audit' in page.text
+            assert 'href="/audit"' not in page.text and 'href="/pengaturan/mutu"' not in page.text
 
 
 async def test_admin_sementara_tetap_bisa_kelola_lalu_terkunci_setelah_ada_super(pg,master):

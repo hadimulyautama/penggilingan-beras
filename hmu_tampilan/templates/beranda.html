@@ -97,7 +97,7 @@
   {% set ns = namespace(href="", nama=blok.judul) %}
   {% for g in gudang %}{% if blok.judul == g.nama ~ " — " ~ g.fungsi %}{% set ns.href = "/gudang/" ~ g.id %}{% endif %}{% endfor %}
   {% if not ns.nama %}{% set ns.nama = "Gudang 1 — Selepan" if VIEW == "selepan" else ("Gudang 2 — Penyosohan" if VIEW == "polesan" else "Ringkasan gudang") %}{% endif %}
-  <section class="beranda-gudang-padat" aria-label="{{ ns.nama }}">
+  <section class="beranda-gudang-padat{{ ' akses-terkunci' if blok.terkunci }}" aria-label="{{ ns.nama }}">
     <h2>{% if ns.href %}<a href="{{ ns.href }}">{{ ns.nama }} <span aria-hidden="true">→</span></a>{% else %}{{ ns.nama }}{% endif %}</h2>
     <dl>
       {% for s in blok.sel %}<div{% if s.nada %} class="beranda-angka--{{ s.nada }}"{% endif %}>

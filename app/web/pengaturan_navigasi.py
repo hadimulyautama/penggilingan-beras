@@ -1,5 +1,6 @@
 """Alamat rincian Pengaturan; tidak menerima alamat kembali bebas."""
 HALAMAN = {
+    'akses': ('Akses pengguna', 'Daftar akses'),
     'akun': ('Akun & perangkat', 'Nama & kata sandi'),
     'peran': ('Akun & perangkat', 'Gudang kerja dan tampilan peran'),
     'sesi': ('Akun & perangkat', 'Sesi perangkat'),

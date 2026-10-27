@@ -67,7 +67,8 @@ async def test_lihat_sebagai_operator_menurunkan_tab_dan_api(pg,qc):
         r=await c.get('/laporan-riwayat?tab=proses')
         assert r.status_code==200 and r.url.path=='/riwayat-sosoh'
         nav=r.text.split('aria-label="Bagian Laporan dan Riwayat"')[1].split('</nav>')[0]
-        assert '>Audit<' not in nav
+        assert '>Audit<' in nav and 'aria-disabled="true"' in nav
+        assert 'href="/audit"' not in nav
         assert (await c.get('/audit')).status_code==403
         assert (await c.get('/riwayat-giling')).status_code==403
         assert (await c.get('/api/laporan/pembelian_gabah')).status_code==403

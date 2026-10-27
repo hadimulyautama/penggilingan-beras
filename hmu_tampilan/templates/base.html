@@ -80,7 +80,7 @@
 <body class="padiflow-ui {{ 'terik' if TERIK }}">
 <div class="bingkai">
 {% block pita %}
-{% if VIEW in ('selepan', 'polesan') %}<div class="pita-samar" role="status">GUDANG {{ '1 · SELEPAN' if VIEW == 'selepan' else '2 · PENYOSOHAN' }} · {{ akun.nama }}</div>{% endif %}
+{% if TAMPILAN_INDUK or VIEW in ('selepan', 'polesan') %}<div class="pita-samar" role="status">{% if VIEW in ('selepan', 'polesan') %}GUDANG {{ '1 · SELEPAN' if VIEW == 'selepan' else '2 · PENYOSOHAN' }}{% else %}SEMUA GUDANG{% endif %} · {{ akun.nama }}</div>{% endif %}
 {% if MOCKUP %}<div class="pita-uji">MOCKUP · DATA CONTOH, BUKAN DATA PABRIK</div>{% endif %}
 {# Jalan pulangnya ikut di pita, bukan disembunyikan di Pengaturan:
    yang sedang menyamar sebagai operator mungkin tak lagi melihat menu
@@ -252,7 +252,7 @@
       {% for grup_menu in ['Menu Utama', 'Operasional', 'Data & Pengaturan'] %}
         {% set ns_seksi = namespace(ada=false) %}
         {% for kunci, _alamat, _nama, _ket, peran_min, _ikon in TAB %}
-          {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kunci not in MENU_TERSEMBUNYI|default(()) and kelompok_menu.get(kunci) == grup_menu %}
+          {% if (TAMPILAN_INDUK or not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kunci not in MENU_TERSEMBUNYI|default(()) and kelompok_menu.get(kunci) == grup_menu %}
             {% set ns_seksi.ada = true %}
           {% endif %}
         {% endfor %}
@@ -260,7 +260,7 @@
         <section class="laci-seksi" aria-label="{{ grup_menu }}">
           <h2 class="laci-seksi__judul">{{ grup_menu }}</h2>
           {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
-            {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kunci not in MENU_TERSEMBUNYI|default(()) and kelompok_menu.get(kunci) == grup_menu %}
+            {% if (TAMPILAN_INDUK or not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kunci not in MENU_TERSEMBUNYI|default(()) and kelompok_menu.get(kunci) == grup_menu %}
         {# ── SUB-MENU: pintu yang diklik MEMBUKA, bukan menuju ──
            Keputusan pemilik 2 Oktober 2026: "bisa tidak antrian tunggu jika di
            klik muncul dropdown sub menu?" Sebabnya kalimat sebelumnya:
@@ -314,6 +314,13 @@
            selalu submenu Semua." `request.url.query` genap/kosong untuk
            "Stok" (path polos, tanpa `?`) — jadi baris ini tak mengubah
            perilakunya sama sekali di sana. #}
+        {% if TAMPILAN_INDUK and peran_min and VIEW not in peran_min %}
+        <span class="pintu akses-terkunci" aria-disabled="true" title="Tidak memiliki akses untuk peran ini">
+          <span class="pintu__ikon" aria-hidden="true">{{ ikon_portal(ikon)|trim }}</span>
+          <span class="pintu__isi"><span class="pintu__nama">{{ nama }}</span></span>
+          <small>Terkunci</small>
+        </span>
+        {% else %}
         {% set jalan_kini = (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) if request else "" %}
         {% set sub = SUBMENU.get(kunci) %}
         {% set ns = namespace(grup_aktif=(layar == kunci or MENU_AKTIF == kunci or (kunci == 'stok' and layar.startswith('stok')))) %}
@@ -433,6 +440,7 @@
             {% endfor %}
           </div>
         </details>
+        {% endif %}
         {% endif %}
             {% endif %}
           {% endfor %}

@@ -85,7 +85,7 @@ async def siapkan(request, nama, konteks):
     view = getattr(request.state, 'view', 'tamu')
     pid = pelanggan_diminta(request) if pemilik == 'jasa' else None
     gudang = request.query_params.get('gudang', '')
-    if (view not in MEJA and view!='pelanggan') or gudang not in {'g1', 'g2'}:
+    if gudang not in {'g1', 'g2'}:
         gudang = ''
     pelanggan = []
     kelompok = []
@@ -170,6 +170,5 @@ async def siapkan(request, nama, konteks):
         milik=[dict(nama=n, kunci=k, href=href(milik=k))
                for k, n in [('pabrik', 'Pabrik'), ('jasa', 'Titipan jasa')]],
         lokasi_pil=[dict(nama=n, kunci=k, href=href(lokasi=k))
-                    for k, n in [('', 'Semua gudang'), ('g1', 'Gudang 1'), ('g2', 'Gudang 2')]]
-                   if view in MEJA or view=='pelanggan' else [],
+                    for k, n in [('', 'Semua gudang'), ('g1', 'Gudang 1'), ('g2', 'Gudang 2')]],
     )

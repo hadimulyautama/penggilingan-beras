@@ -13,7 +13,7 @@
 </nav>
 <details class="kerja-saringan"><summary class="btn btn--kecil">Filter · {{ jenis or 'Semua jenis' }} · {{ {'jasa':'Jasa','pabrik':'Pabrik'}.get(request.query_params.get('kepemilikan'),'Semua pemilik') }} · {{ {'g1':'G1','g2':'G2'}.get(gudang,'Semua gudang') }}</summary>
 {{ milik.saring() }}
-{% if VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
+{% if TAMPILAN_INDUK or VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
 <form method="get" action="/barang-masuk" class="saring">
 <input type="hidden" name="status" value="{{ status }}">
 {% for key in ['kepemilikan','gudang','cari','pemasok','pelanggan_id','kembali_jasa'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}

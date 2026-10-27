@@ -152,6 +152,7 @@ def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
                  if boleh_lihat_gudang(view, GUDANG_PROSES[k]))
 
 
+@router.get("/pengaturan/akses")
 @router.get("/pengaturan")
 @router.get("/pengaturan/akun")
 @router.get("/pengaturan/peran")
@@ -210,8 +211,14 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         judul = 'Lihat sebagai' if _P.admin_keatas(peran_asli) else 'Kerja di gudang'
     elif bagian == 'sistem' and not tuan:
         judul = 'Informasi versi'
+    from app.web.akses import daftar_umum, PERAN_KOLOM
+    from app.web.api import actions_menu
+    akses_aksi = await actions_menu(akun.user) if bagian in ('', 'akses') else []
     return render(
         request, "pengaturan.html",
+        akses_umum=daftar_umum(), akses_aksi=akses_aksi,
+        akses_kolom=PERAN_KOLOM,
+
         BAGIAN=bagian, kelompok_pengaturan=kelompok, judul_pengaturan=judul,
         akun_peran_label=_P.LABEL.get(_P.normal(peran_asli), 'Peran tidak dikenal'),
         PILIHAN_TAMPILAN=request.cookies.get(NAMA_KUKI, ''),
@@ -241,9 +248,10 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         # penyaring itu tak mengubah apa pun — blok setelan memang hanya untuk
         # admin ke atas, yang memegang kedua gudang — tetapi aturannya jadi
         # tertulis di tempat yang benar, bukan tersimpan sebagai kebetulan.
-        PROSES=_proses_view(view),
+        PROSES=_proses_view(V_SUPER),
         blok_setelan=tuan,
         blok_mode_uji=settings.mode_uji and view == V_SUPER,
+        mode_uji_tersedia=settings.mode_uji,
         JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),
     )
 

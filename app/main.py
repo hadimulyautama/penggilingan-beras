@@ -442,6 +442,13 @@ async def beranda(request: Request):
             petak = await petak_beranda(db, view, o, angka=angka)
             from app.services.alur_beranda import bangun as bangun_alur
             alur_gudang = await bangun_alur(db, view, o)
+            # Bentuk mengikuti tampilan induk, tanpa menanyakan data gudang
+            # yang tidak diizinkan untuk peran efektif ini.
+            from app.web.layar import GUDANG
+            isi_alur = {g['id']: g for g in alur_gudang}
+            alur_gudang = [isi_alur.get(gid, dict(
+                id=gid, nama=nama, fungsi=fungsi, terkunci=True))
+                for gid, nama, fungsi in GUDANG] if view != 'tamu' else []
             muat['ringkasan'] = True
     except Exception:
         log.exception("Beranda: ringkasan gagal dimuat")
@@ -485,8 +492,7 @@ async def beranda(request: Request):
         # peran adalah templat yang bisa menebak salah di app sebelah
         # (`tests/test_paket.py::test_beranda_gudang_menyerahkan_pintu_keputusan_ke_app`).
         semua_gudang=view in V_MEJA,
-        # Petaknya disusun `app.web.layar` menurut view — Beranda tak lagi
-        # punya satu bentuk yang dipakai bersama oleh empat peran.
+        # Susunan dua gudang sama; data tanpa izin menjadi placeholder.
         petak=petak, alur_gudang=alur_gudang,
         berjalan=jalan.berjalan, transit=jalan.transit,
         lama=svc._lama,
@@ -601,14 +607,7 @@ async def halaman_aksi_lain(request: Request):
     akun = await akun_opsional(request)
     if akun is None:
         return RedirectResponse("/masuk", status_code=303)
-    # Operator selepan dan polesan tak punya halaman ini. Pintunya sudah
-    # dicabut dari laci, tetapi alamatnya tetap bisa diketik atau tersimpan
-    # sebagai pintasan — dan halaman yang katanya tak ada tetapi tetap
-    # terbuka adalah halaman yang tetap ada. Dialihkan, bukan ditolak:
-    # seluruh pekerjaannya memang ada di antrean, jadi ke sanalah orangnya
-    # diantar.
-    if getattr(request.state, "view", "") in (SELEPAN, POLESAN):
-        return RedirectResponse("/aksi" + ("?" + request.url.query if request.url.query else ""), status_code=303)
+    # Semua peran memakai katalog yang sama; kontrolnya mengikuti izin.
     from urllib.parse import urlencode
     from app.web.layar_pekerjaan import konteks_aman, siapkan_daftar_pekerjaan, daftar_tab_pekerjaan, pilihan
     from app.services.kelompok_kerja import JENIS_KERJA

@@ -4102,3 +4102,15 @@ body.padiflow-ui .lembar--kemas-beras .lembar__isi #f_jumlah_karung{font-size:1.
 .editor-perintah .draf-kelompok-kepala > .btn,
 .editor-perintah .draf-item > header > .btn { width:auto; flex:0 0 auto; }
 .editor-perintah textarea { field-sizing:content; }
+
+/* Susunan tampilan sama; kontrol terkunci menjelaskan batas akses. */
+.akses-terkunci { opacity:.65; cursor:not-allowed; }
+.akses-terkunci small { display:block; color:var(--redup); }
+fieldset.akses-bidang { border:0; padding:0; margin:0; min-width:0; display:grid; gap:24px; }
+.akses-tabel { overflow-x:auto; }
+.akses-tabel table { border-collapse:collapse; width:100%; min-width:620px; font-size:.875rem; }
+.akses-tabel th,.akses-tabel td { padding:10px; text-align:left; border-bottom:1px solid var(--garis); vertical-align:top; }
+.akses-tabel th { font-weight:600; }
+
+.akses-tabel th[scope="row"] { position:sticky; left:0; background:var(--panel); z-index:1; }
+.akses-tabel th[aria-current="true"] { color:var(--utama); }

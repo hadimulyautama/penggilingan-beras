@@ -259,10 +259,10 @@
 
       function kartuAksi(a) {
         var b = belah(a.label);
-        return '<button class="tindakan" data-aksi="' + esc(a.id) + '">' +
+        return '<button class="tindakan" data-aksi="' + esc(a.id) + '"' + (a.boleh === false ? ' disabled aria-disabled="true" title="' + esc(a.alasan_akses) + '"' : '') + '>' +
           (b.ikon ? '<span class="tindakan__ikon tindakan__ikon--emoji">' + esc(b.ikon) + "</span>" : "") +
           '<span class="tindakan__isi"><span class="tindakan__nama">' + esc(b.teks) + "</span>" +
-        (a.hint ? '<span class="tindakan__ket">' + esc(a.hint) + "</span>" : "") +
+        ((a.boleh === false || a.hint) ? '<span class="tindakan__ket">' + esc(a.boleh === false ? a.alasan_akses : a.hint) + "</span>" : "") +
           "</span>" +
           '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" ' +
           'stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>';
@@ -298,6 +298,12 @@
   var terakhirMuat = 0;
 
   function bukaAksi(id, semula) {
+    var a = MENU[id];
+    if (!a) return;
+    if (a.boleh === false) {
+      kabar(a.alasan_akses || "Anda tidak memiliki akses untuk tindakan ini.");
+      return;
+    }
     if (lembarSedangTerbuka() && !bolehBuang($("lembar"), function () {
       bukaAksi(id, semula);
     })) return;
@@ -318,8 +324,6 @@
       return;
     }
 
-    var a = MENU[id];
-    if (!a) return;
 
     if (kembaliSelesaiSosoh && id !== 'akhiri_penyosohan' &&
         !(id === 'selesai_penyosohan' && semula && semula._dariSelesaiSosoh)) kembaliSelesaiSosoh = null;

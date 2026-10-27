@@ -129,16 +129,15 @@ _G1_SAJA = ("Gabah masuk", "Pengeringan")
 _G2_SAJA = ("PK masuk", "Penyosohan")
 
 
-async def test_beranda_selepan_tak_berubah():
-    """Pemilik menyebutnya sendiri: "sejauh ini optimal untuk gudang
-    selepan". Yang optimal tidak diperbaiki hanya karena tetangganya sedang
-    dibuat."""
+async def test_beranda_selepan_mengikuti_induk_dengan_g2_terkunci():
+    """Keputusan 27 Oktober: susunan sama, data gudang lain tetap terkunci."""
     o = {"gabah_hari_ini": {"total_kg": 41200, "batch": 3},
          "pengeringan": [1], "silo": [{"terisi": True}, {"terisi": False}],
          "giling": [1], "stok_pk": {"total": 8000, "maks": 30000}}
     blok = await petak_beranda(None, SELEPAN, o)
-    assert len(blok) == 1 and blok[0]["judul"] is None
-    assert _label(blok) == ["Gabah masuk", "Pengeringan", "Silo terisi", "Stok PK"]
+    assert len(blok) == 2 and blok[0]["judul"] == "Gudang 1 — Selepan"
+    assert blok[1]["terkunci"] and all(p["nilai"] == "—" for p in blok[1]["sel"])
+    assert _label(blok[:1]) == ["Gabah masuk", "Pengeringan", "Silo terisi", "Stok PK"]
 
 
 async def test_beranda_polesan_tak_menyebut_gudang_sebelah(monkeypatch):
@@ -153,10 +152,10 @@ async def test_beranda_polesan_tak_menyebut_gudang_sebelah(monkeypatch):
 
     monkeypatch.setattr(layar, "_petak_g2", palsu)
     blok = await petak_beranda(None, POLESAN, {})
-    label = _label(blok)
-    assert len(blok) == 1
-    for dilarang in _G1_SAJA:
-        assert dilarang not in label, dilarang
+    assert len(blok) == 2
+    assert blok[0]["terkunci"]
+    assert all(p["nilai"] == "—" for p in blok[0]["sel"])
+    assert not blok[1]["terkunci"]
 
 
 async def test_beranda_meja_memuat_kedua_gudang(monkeypatch):
@@ -207,13 +206,13 @@ async def test_stok_pk_admin_dari_layanan_bukan_dari_posisi_petak(monkeypatch):
     o = {"gabah_hari_ini": {"total_kg": 1, "batch": 1}, "pengeringan": [],
          "silo": [], "giling": [], "stok_pk": {"total": 1, "maks": 0}}
 
-    blok = await petak_beranda(None, ADMIN, o, angka=ANGKA)
-    petak = {p["label"]: p["nilai"] for p in blok[0]["sel"]}
-    assert petak["Stok PK G2"] == "10.000", "petak Admin memungut tumpukan, bukan stok"
-    assert petak["Stok PK G1"] == "1"
+    # Tampilan induk memakai dua blok gudang. Helper stok tetap tidak boleh
+    # menyebut tumpukan sebagai total stok.
+    assert layar._petak_stok(ANGKA, "g2", "Stok PK G2")["nilai"] == "10.000"
+    assert layar._petak_stok(ANGKA, "g1", "Stok PK G1")["nilai"] == "1"
 
 
-async def test_super_dan_admin_tidak_lagi_sama(monkeypatch):
+async def test_super_dan_admin_memakai_tampilan_induk_yang_sama(monkeypatch):
     """Daftar peran sudah lama menuliskan bedanya; layarnya belum pernah
     menunjukkannya."""
     from app.web import layar
@@ -226,7 +225,7 @@ async def test_super_dan_admin_tidak_lagi_sama(monkeypatch):
     o = {"gabah_hari_ini": {}, "pengeringan": [], "silo": [], "giling": [],
          "stok_pk": {}}
     assert (await petak_beranda(None, SUPER, o)
-            != await petak_beranda(None, ADMIN, o, angka=ANGKA))
+            == await petak_beranda(None, ADMIN, o, angka=ANGKA))
     # Super Admin melihat kedua gudang sebagai blok BERNAMA — dua baris
     # tanpa judul memaksa orang menebak angka mana milik gudang mana.
     assert all(b["judul"] for b in await petak_beranda(None, SUPER, o))
@@ -258,14 +257,14 @@ def test_penyaring_gudang_sama_di_stok_dan_di_berjalan():
     from app.web import layar_stok,layar_pekerjaan
     from pathlib import Path
     kode=inspect.getsource(layar_stok.halaman_stok)
-    assert 'GUDANG if view in MEJA else ()' in kode
+    assert 'saring = GUDANG' in kode
     src=inspect.getsource(layar_pekerjaan.halaman_pekerjaan)
     assert "pilihan(request, 'gudang', {'g1','g2'})" in src
     assert 'daftar_tab_pekerjaan(' in src
     assert 'x.gudang == gudang' in inspect.getsource(layar_pekerjaan.daftar_tab_pekerjaan)
     for nama in ('pekerjaan.html','barang_masuk.html'):
         t=(Path(__file__).resolve().parents[1]/'hmu_tampilan/templates'/nama).read_text()
-        assert 'if VIEW in V_MEJA' in t and 'filter_gudang' in t
+        assert 'TAMPILAN_INDUK or VIEW in V_MEJA' in t and 'filter_gudang' in t
 
 
 def test_saringan_stok_ikut_ke_seluruh_blok_halamannya():
@@ -361,7 +360,7 @@ def test_orang_dan_alat_milik_view_super():
     assert "akun.is_admin" not in rute
 
     teks = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
-    assert "{% if blok_kelola %}" in teks
+    assert "{% if blok_kelola or TAMPILAN_INDUK %}" in teks
     assert "VIEW == V_SUPER" not in teks, "templat bersama menebak peran lagi"
 
 
@@ -387,7 +386,7 @@ def test_blok_sistem_tak_bisa_mengunci_semua_orang():
     # tanpa keterangan terbaca sebagai aplikasi yang berubah-ubah.
     assert "kelola_darurat=view != V_SUPER" in rute
     teks = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
-    assert "{% if kelola_darurat %}" in teks
+    assert "{% if kelola_darurat and blok_kelola %}" in teks
     # Hitungannya hanya akun AKTIF: Super Admin yang dinonaktifkan tak bisa
     # membuka pintu apa pun, jadi menganggapnya ada sama saja mengunci.
     from app.web import security
@@ -507,13 +506,14 @@ def test_katalog_dicabut_dari_selepan():
         assert v in view["aksi_lain"], v
 
 
-def test_alamat_katalog_ikut_ditutup_bukan_cuma_pintunya():
+def test_alamat_katalog_terbuka_bagi_semua_peran_dengan_izin_tindakan():
     """Halaman yang katanya tak ada tetapi tetap terbuka adalah halaman yang
     tetap ada — alamatnya bisa diketik, atau tersimpan sebagai pintasan."""
     from app import main
 
     sumber = inspect.getsource(main.halaman_aksi_lain)
-    assert "in (SELEPAN, POLESAN)" in sumber and 'RedirectResponse("/aksi"' in sumber
+    assert "in (SELEPAN, POLESAN)" not in sumber
+    assert '"aksi_lain.html"' in sumber
 
 
 def test_membatalkan_tidak_ikut_terbuang():

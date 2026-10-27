@@ -1,0 +1,19 @@
+<section aria-labelledby="daftar-akses">
+  <h2 id="daftar-akses">Daftar akses</h2>
+  <p class="bantu">Semua pengguna memakai tampilan yang sama. Kontrol tanpa izin terkunci. Super Admin mempunyai seluruh akses. Izin yang berlaku mengikuti peran dan gudang kerja yang sedang dipilih.</p>
+  <p class="bantu">Di ponsel, geser tabel ke samping untuk melihat semua peran.</p>
+  <div class="akses-tabel" role="region" aria-label="Akses tiap peran" tabindex="0">
+    <table>
+      <thead><tr><th scope="col">Bagian</th>{% for kode, nama in akses_kolom %}<th scope="col"{% if kode == VIEW %} aria-current="true"{% endif %}>{{ nama }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for baris in akses_umum %}<tr><th scope="row">{{ baris.nama }}</th>{% if baris.teks %}{% for teks in baris.teks %}<td>{{ teks }}</td>{% endfor %}{% else %}{% for boleh in baris.izin %}<td>{{ 'Diizinkan' if boleh else 'Terkunci' }}</td>{% endfor %}{% endif %}</tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <p class="bantu">Operator dapat berganti gudang untuk saling menggantikan. Bila belum ada Super Admin aktif, pengelolaan sistem sementara dapat dijalankan Admin. Status proses, kepemilikan dan ketersediaan barang tetap diperiksa sebelum tindakan disimpan.</p>
+  <details class="lipat">
+    <summary>Rincian akses tindakan · {{ akses_aksi|length }}</summary>
+    <div class="akses-tabel" role="region" aria-label="Akses setiap tindakan" tabindex="0">
+      <table><thead><tr><th scope="col">Tindakan</th>{% for kode, nama in akses_kolom %}<th scope="col">{{ nama }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for aksi in akses_aksi %}<tr><th scope="row">{{ aksi.label }}</th>{% for boleh in aksi.izin_peran %}<td>{{ 'Diizinkan' if boleh else 'Terkunci' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+    </div>
+  </details>
+</section>

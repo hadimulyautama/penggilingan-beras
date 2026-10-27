@@ -2,8 +2,8 @@
 {% from "_versi.html" import peringatan, baris as baris_versi %}
 {% from "_pengaturan_ikon.html" import ikon %}
 {% import "_kata_pengaturan.html" as kata with context %}
-{% macro pintu(url, judul, isi, gambar) -%}
-<a class="pg-pintu" href="{{ url }}"><span class="pg-pintu__ikon">{{ ikon(gambar) }}</span><span class="pg-pintu__isi"><strong>{{ judul }}</strong><small>{{ isi }}</small></span><span class="pg-panah" aria-hidden="true">›</span></a>
+{% macro pintu(url, judul, isi, gambar, boleh=true) -%}
+<{{ "a" if boleh else "span" }} class="pg-pintu{{ ' akses-terkunci' if not boleh }}" {% if boleh %}href="{{ url }}"{% else %}aria-disabled="true" title="Tidak memiliki akses untuk peran ini"{% endif %}><span class="pg-pintu__ikon">{{ ikon(gambar) }}</span><span class="pg-pintu__isi"><strong>{{ judul }}</strong><small>{{ isi }}</small></span><span class="pg-panah" aria-hidden="true">›</span></{{ "a" if boleh else "span" }}>
 {%- endmacro %}
 {% block judul %}Pengaturan{% endblock %}
 {% block isi %}
@@ -15,7 +15,7 @@
 {% if BAGIAN|default('') %}
   <a class="pg-kembali" href="/pengaturan">← Kembali ke Pengaturan</a>
   <p class="pg-lingkup">Pengaturan / {{ kelompok_pengaturan }}</p><h1 id="pg-judul">{{ judul_pengaturan }}</h1>
-  <div class="pg-rincian">{% include "_pengaturan_formulir.html" %}</div>
+  <div class="pg-rincian">{% if BAGIAN == 'akses' %}{% include "_daftar_akses.html" %}{% else %}{% include "_pengaturan_formulir.html" %}{% endif %}</div>
 {% else %}
   <header class="pg-intro"><h1 id="pg-judul">Pengaturan</h1><p>Akun, perangkat, dan pengaturan kerja.</p></header>
   <div class="pg-akun"><span class="pg-akun__ikon">{{ ikon('user') }}</span><div><strong>{{ akun.nama }}</strong><p>{{ akun_peran_label|default('') }}</p></div></div>
@@ -23,31 +23,32 @@
   <div class="pg-kelompok">
     <section class="pg-grup" aria-labelledby="pg-akun"><header><span>{{ ikon('user') }}</span><div><h2 id="pg-akun">Akun &amp; perangkat</h2><p>Pribadi · perangkat ini</p></div></header>
       {{ pintu('/pengaturan/akun', 'Nama & kata sandi', 'Nama pada catatan pekerjaan', 'user') }}
-      {% if blok_lihat_sebagai %}{{ pintu('/pengaturan/peran', 'Lihat sebagai', 'Pratinjau tampilan peran yang diizinkan', 'eye') }}
-      {% elif blok_kerja_gudang %}{{ pintu('/pengaturan/peran', 'Kerja di gudang', 'Pilih gudang yang sedang dikerjakan', 'warehouse') }}{% endif %}
+      {{ pintu('/pengaturan/peran', 'Peran & gudang', 'Lihat sebagai atau pilih gudang kerja', 'eye', blok_kerja_gudang) }}
       {{ pintu('/pengaturan/sesi', 'Sesi perangkat', 'Keluar atau ganti pengguna', 'device') }}
     </section>
-    {% if blok_setelan %}
+    {% if blok_setelan or TAMPILAN_INDUK %}
     <section class="pg-grup" aria-labelledby="pg-operasional"><header><span>{{ ikon('sliders') }}</span><div><h2 id="pg-operasional">Operasional</h2><p>Berlaku untuk proses produksi</p></div></header>
-      {{ pintu('/pengaturan/sebab-berhenti', 'Sebab berhenti proses', 'Pilihan sebab sesuai proses yang tersedia', 'pause') }}
-      {{ pintu('/pengaturan/mutu', 'Pencatatan mutu / QC', 'Formulir dan pengingat mutu', 'clipboard') }}
+      {{ pintu('/pengaturan/sebab-berhenti', 'Sebab berhenti proses', 'Pilihan sebab sesuai proses yang tersedia', 'pause', blok_setelan) }}
+      {{ pintu('/pengaturan/mutu', 'Pencatatan mutu / QC', 'Formulir dan pengingat mutu', 'clipboard', blok_setelan) }}
     </section>
     {% endif %}
-    {% if blok_kelola %}
+    {% if blok_kelola or TAMPILAN_INDUK %}
     <section class="pg-grup" aria-labelledby="pg-pengelolaan"><header><span>{{ ikon('users') }}</span><div><h2 id="pg-pengelolaan">Pengelolaan</h2><p>Orang, alat, dan gudang</p></div></header>
-      {% if kelola_darurat %}<p class="pg-darurat">Belum ada akun Super Admin aktif, jadi pengelolaan sementara masih di tangan {{ kata.pemegang_sementara() }}.</p>{% endif %}
-      {{ pintu('/pengguna', 'Kelola pengguna', 'Orang, akun, peran, dan sandi', 'users') }}
-      {{ pintu('/pengaturan/alat', 'Alat: dryer & silo', 'Target dan sebab berhenti per dryer', 'factory') }}
-      {{ pintu('/pengaturan/gudang', 'Gudang', 'Nama, alamat, dan geotag', 'warehouse') }}
+      {% if kelola_darurat and blok_kelola %}<p class="pg-darurat">Belum ada akun Super Admin aktif, jadi pengelolaan sementara masih di tangan {{ kata.pemegang_sementara() }}.</p>{% endif %}
+      {{ pintu('/pengguna', 'Kelola pengguna', 'Orang, akun, peran, dan sandi', 'users', blok_kelola) }}
+      {{ pintu('/pengaturan/alat', 'Alat: dryer & silo', 'Target dan sebab berhenti per dryer', 'factory', blok_kelola) }}
+      {{ pintu('/pengaturan/gudang', 'Gudang', 'Nama, alamat, dan geotag', 'warehouse', blok_kelola) }}
     </section>
     {% endif %}
     <section class="pg-grup" aria-labelledby="pg-sistem"><header><span>{{ ikon('plug') }}</span><div><h2 id="pg-sistem">Sistem &amp; koneksi</h2><p>Informasi aplikasi{% if tuan %} dan koneksi{% endif %}</p></div></header>
-      {% if blok_setelan %}{{ pintu('/pengaturan/kledo', 'Kontak Kledo', 'Perbarui kontak pelanggan & vendor', 'refresh') }}{% endif %}
-      {% if tuan %}{{ pintu('/audit', 'List audit', 'Catatan, pelaku, waktu, dan filter', 'history') }}{% endif %}
-      {{ pintu('/pengaturan/sistem', 'Batas ubah & versi' if tuan else 'Informasi versi', 'Informasi dan aturan aplikasi', 'info') }}
-      {% if blok_mode_uji %}{{ pintu('/pengaturan/mode-uji', 'Mode uji', 'Hapus data uji — tiket timbang tetap tersimpan', 'flask') }}{% endif %}
+      {{ pintu('/pengaturan/kledo', 'Kontak Kledo', 'Perbarui kontak pelanggan & vendor', 'refresh', blok_setelan) }}
+      {{ pintu('/audit', 'List audit', 'Catatan, pelaku, waktu, dan filter', 'history', tuan) }}
+      {{ pintu('/pengaturan/akses', 'Daftar akses', 'Hak tiap peran dan rincian setiap tindakan', 'users') }}
+      {{ pintu('/pengaturan/sistem', 'Batas ubah & versi', 'Informasi dan aturan aplikasi', 'info') }}
+      {% if blok_mode_uji or mode_uji_tersedia %}{{ pintu('/pengaturan/mode-uji', 'Mode uji', 'Hapus data uji — tiket timbang tetap tersimpan', 'flask', blok_mode_uji) }}{% endif %}
     </section>
   </div>
+  {% include "_daftar_akses.html" %}
 {% endif %}
 </section>
 {% endblock %}

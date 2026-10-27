@@ -54,16 +54,9 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     from app.web.layar import GUDANG, MEJA, NAMA_GUDANG, POLESAN, SUPER, gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
-    # ── Penyaring gudang (celah ke-5, setengahnya tertinggal) ──
-    #
-    # Aturannya SATU dan sudah ditulis di layar Sedang berjalan: pilnya milik
-    # view yang memegang KEDUA gudang (`GUDANG if view in MEJA else ()`).
-    # Halaman ini dulu memasok daftar kosong dengan alasan "Pos Produksi
-    # memberi tiap orang SATU gudang lewat view" — benar untuk operator, salah
-    # untuk Admin & Super Admin, dan justru dua view itulah yang mendapat
-    # pilnya di /berjalan. Satu app, satu nama kontrak, dua jawaban (QA 24
-    # September 2026 (c) butir 7).
-    saring = GUDANG if view in MEJA or view=='pelanggan' else ()
+    # Susunan filter sama untuk semua pengguna. Tiap pembaca di bawah
+    # tetap memeriksa cakupan gudang sebelum menanyakan data.
+    saring = GUDANG
     gudang = request.query_params.get("gudang") or ""
     if gudang not in {g for g, _, _ in saring}:
         gudang = ""                       # nilai karangan dari URL diabaikan
@@ -147,7 +140,7 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # tombolnya BUKAN penjagaan: rutenya dijaga sendiri
         # (`api.act_minta_pk_g1` menuntut operator Gudang 2), dan yang di sini
         # cuma menghindari menawarkan pintu yang akan ditolak.
-        boleh_minta=view == POLESAN,
+        boleh_minta=view in (POLESAN, SUPER),
         # ── "Masukkan ke silo" di tiap kartu Tumpukan — operator Gudang 2
         #    ATAU Super Admin (keputusan pemilik 5 Oktober 2026) ──
         #
@@ -209,7 +202,7 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     from app.web.layar import GUDANG, MEJA, POLESAN, SUPER, gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
-    saring = GUDANG if view in MEJA or view=='pelanggan' else ()
+    saring = GUDANG
     gudang = request.query_params.get("gudang") or ""
     if gudang not in {g for g, _, _ in saring}:
         gudang = ""
@@ -228,7 +221,7 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         # harus bisa meminta PK jasa yang masih menumpuk di Gudang 1. Aksi
         # permintaan tidak memindahkan stok; persetujuan dan pengiriman tetap
         # mengikuti alur empat langkah yang sama.
-        boleh_ubah=False, boleh_minta=view == POLESAN,
+        boleh_ubah=False, boleh_minta=view in (POLESAN, SUPER),
         # PK jasa yang berdiri sebagai tumpukan di Gudang 2 juga harus bisa
         # dimasukkan ke silo melalui alur yang sama dengan PK pabrik. Aksi
         # tetap dibatasi pada operator Gudang 2 dan Super Admin; Admin biasa
@@ -311,7 +304,7 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         SARING_GUDANG=(), gudang="", lot=[], tempat=[], produk=[], samping=[],
         total=0, JASA_SAJA=jasa_saja, mutu_aktif=mutu_aktif,
         boleh_ubah=akun.is_admin and view != POLESAN,
-        boleh_minta=view == POLESAN,
+        boleh_minta=view in (POLESAN, SUPER),
         boleh_pindah_tumpukan=view in (POLESAN, SUPER),
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",

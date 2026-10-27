@@ -31,7 +31,7 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         menu=(await c.get('/api/actions/menu')).json()
         ada={a['id']:a for a in menu}
         katalog_ids={a['id'] for a in menu if not a.get('kartu')}
-        assert katalog_ids=={'beli_kemasan','transfer_pk','rekonsiliasi_timbang','auto_taut_keluar','sesuaikan_stok_pk_lama'}
+        assert katalog_ids=={'beli_kemasan','transfer_pk','rekonsiliasi_timbang','auto_taut_keluar','sesuaikan_stok_pk_lama','undo'}
         for id_ in (('masukkan_beras_silo','tutup_jasa','batalkan_jasa') if role=='superadmin' else ('tutup_jasa','batalkan_jasa')):
             assert ada[id_]['kartu'] and ada[id_]['fields'] and ada[id_]['post']
         for path in ('/aksi-lain','/aksi-lain?buka=beli_kemasan&nilai=25'):
@@ -83,7 +83,11 @@ async def test_operator_tetap_berpintu_lama(pg, gudang):
         if gudang=='g2':
             assert 'buka=catat_packing' in r.text and 'buka=catat_bekatul' in r.text
         for path in ('/aksi-lain?buka=tutup_jasa&nilai=1','/pekerjaan/catat-lain'):
-            r=await c.get(path);assert r.status_code==303 and urlsplit(r.headers['location']).path=='/aksi'
+            r=await c.get(path)
+            if path.startswith('/aksi-lain'):
+                assert r.status_code==303 and urlsplit(r.headers['location']).path=='/pekerjaan/catat-lain'
+            else:
+                assert r.status_code==200
         for path,data in [('/api/actions/tutup-jasa',{'jasa_id':1}),('/api/actions/batalkan-jasa',{'jasa_id':1,'sebab':'uji'}),('/api/actions/beli-kemasan',{'karung':'woven|25','jumlah':1})]:
             r=await c.post(path,json=data,headers={'X-CSRF-Token':cap_formulir(c)})
             assert r.status_code==403,(path,r.status_code,r.text)

@@ -1318,3 +1318,16 @@ memicu CI penuh secara otomatis. Jangan memulai CI penuh hanya karena perubahan
 kecil atau deployment. Gunakan tes lokal yang relevan dan proporsional; hasil CI
 yang sudah lulus boleh dipakai untuk kode runtime yang identik tanpa mengulang
 hanya karena pemindahan ke main. Laporkan pemeriksaan yang benar-benar dijalankan.
+
+## Tampilan induk — keputusan pemilik 27 Oktober 2026
+
+Semua pengguna internal memakai susunan layar Super Admin. Menu, tab dan
+katalog tindakan yang tidak diizinkan tetap terlihat terkunci; data tetap
+mengikuti cakupan peran/gudang efektif. Jangan menyamakan nilai VIEW semua
+orang menjadi Super Admin: VIEW masih dipakai gerbang baca dan penyamaran.
+
+`app/web/akses.py` dan atribut `akses` tiap spesifikasi membentuk matriks
+Pengaturan. Setiap aksi katalog wajib punya aturan akses. Super Admin mendapat
+seluruh aksi, termasuk Minta lot dan Batalkan input terakhir, serta seluruh
+Kabar operator/Admin. Status baca Kabar tetap per pengguna. Setiap endpoint
+tetap memeriksa izin dan keadaan barang; tampilan terkunci bukan pengaman.

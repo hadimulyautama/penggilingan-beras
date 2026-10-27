@@ -181,6 +181,14 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     # View ditetapkan `akun_opsional`, satu kali per permintaan. Layar tak
     # pernah menghitungnya sendiri — lihat `app.web.layar`.
     konteks.setdefault("VIEW", getattr(request.state, "view", "tamu"))
+    from app.web.akses import hak_view
+    konteks.setdefault("AKSES", hak_view(konteks["VIEW"]))
+    konteks.setdefault("TAMPILAN_INDUK", True)
+    # Menu aktif yang pernah disembunyikan berdasarkan peran sekarang tetap
+    # punya tempat di kerangka yang sama. Izin rutenya tidak diperluas.
+    konteks["PINTU_MATI"] = tuple(k for k in konteks.get("PINTU_MATI", ())
+                                  if k not in {"kabar", "barang_keluar"})
+    konteks["MENU_TERSEMBUNYI"] = tuple(k for k in MENU_TERSEMBUNYI if k not in {"kabar", "retur"})
     konteks.setdefault("MENUNGGU", 0)
     from app.web.jasa_navigasi import kembali_aman
     konteks['JASA_KEMBALI'] = kembali_aman(request.query_params.get('kembali_jasa'))

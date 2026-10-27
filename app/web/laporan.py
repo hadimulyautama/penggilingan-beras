@@ -149,7 +149,8 @@ async def halaman_laporan(request: Request, akun=Depends(butuh_akun)):
     konteks = {}
     await siapkan(request, konteks)
     return render(request, "laporan.html",
-                  daftar=daftar_untuk(akun.user), periode=PERIODE,
+                  daftar=[dict(kode=l.kode, nama=l.nama, arti=l.arti, berperiode=l.berperiode,
+                               boleh=boleh_lihat(akun.user, l)) for l in _daftar()], periode=PERIODE,
                   **await lencana(akun.user), **konteks)
 
 
