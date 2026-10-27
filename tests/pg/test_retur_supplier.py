@@ -359,6 +359,12 @@ async def test_satu_item_nol_alokasi_seluruhnya_dilepas(pg,asal):
         await f.catat_keluar(db,identitas=r.id,user=user(asal),dasar=snap['dasar'],konfirmasi=True);await db.commit()
         assert await _sudah_dipesan(db,sku_id=asal['sku'])==0
         assert (await hitung_stok_finished_goods(db,asal['sku'],None))==dict(karung=25,kg=1247.5)
+        from app.services import riwayat_retur_supplier as history
+        recap=await history.daftar(db,user(asal),status='done')
+        assert recap['total']==1 and recap['total_keluar']==D('249.5')
+        assert recap['rows'][0]['jumlah_item']==2  # satu ledger, dua item, banyak audit
+        view=await history.detail(db,r.id,user(asal))
+        assert view['barang'][1]['aktual'].jumlah==0 and D(view['barang'][1]['keluar']['bobot_kg'])==0
 
 
 async def test_keluar_bersamaan_dan_gagal_audit_atomik(pg,asal,monkeypatch):
@@ -625,3 +631,4 @@ async def test_detail_barang_masuk_menyediakan_tautan_histori_pengajuan_batal(pg
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
         a=await c.get(f'/barang-masuk/{asal["tid"]}');assert a.status_code==200,a.text
         assert 'Pengajuan Retur ke Supplier terkait' in a.text and f'href="/retur-supplier/{r.id}"' in a.text
+        assert f'href="/riwayat-retur-supplier?penerimaan={asal["tid"]}"' in a.text

@@ -47,8 +47,10 @@ async def test_rekap_seluruh_filter_tidak_ganda_oleh_item_audit_atau_halamaan(pg
 
 async def test_pencarian_dan_filter_bersama_tanggal_wib(pg,asal):
     async with pg() as db:
-        r=await buat(db,asal);r.waktu=datetime(2026,10,26,18,0,tzinfo=timezone.utc);await db.commit()
-        for q in [r.kode.lower(),'supplier uji',r.sumber['kode_tiket'],(await db.get(Item,1)).snapshot['kode']]:
+        r,_,tid=await siap_keluar(db,asal);r.waktu=datetime(2026,10,26,18,0,tzinfo=timezone.utc)
+        r.sumber=dict(r.sumber,nota='NOTA-UJI-PENCARIAN');await db.commit()
+        kode_tiket=await db.scalar(text('SELECT kode FROM timbangan_transaksi WHERE id=:id'),{'id':tid})
+        for q in [r.kode.lower(),'supplier uji',r.sumber['kode_tiket'],(await db.get(Item,1)).snapshot['kode'],kode_tiket,'B UJI','NOTA-UJI-PENCARIAN']:
             d=await h.daftar(db,user(asal),q=q,awal='2026-10-27',akhir='2026-10-27',supplier=asal['sid'],gudang=asal['wh'],penerimaan=asal['tid'])
             assert d['total']==1
         assert (await h.daftar(db,user(asal),awal='2026-10-26',akhir='2026-10-26'))['total']==0
