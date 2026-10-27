@@ -70,6 +70,22 @@ async def test_superadmin_membaca_semua_penerima_kabar():
     assert await _cakupan(NS(role=P.SUPERADMIN)) == []
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role,g2,boleh", [
+    (P.SUPERADMIN, True, True), (P.ADMIN, True, False),
+    (P.OPERATOR, False, False), (P.OPERATOR, True, True),
+])
+async def test_pratinjau_minta_lot_mengikuti_izin_aksinya(monkeypatch, role, g2, boleh):
+    monkeypatch.setattr(api, "_is_g2_operator", AsyncMock(return_value=g2))
+    if boleh:
+        hasil = await api.pratinjau_unit_transfer_pk('minta', user=NS(role=role))
+        assert hasil['teks'] == 'Pilih lot PK.'
+    else:
+        with pytest.raises(HTTPException) as exc:
+            await api.pratinjau_unit_transfer_pk('minta', user=NS(role=role))
+        assert exc.value.status_code == 403
+
+
 def test_izin_baca_pengiriman_sesuai_endpoint():
     from app.web.akses import matriks, PINTU_HAK
     assert matriks(PINTU_HAK['barang_keluar']) == [True, True, False, True]

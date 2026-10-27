@@ -5,7 +5,7 @@ Gudang 1 dan Gudang 2. Sumber halaman: commit 99879c5. Asetnya identik
 dengan paket fcbf068. Operator G2 memakai pilihan gudang pada sesi operator;
 profil akun tidak diubah. SQL tulis diblokir saat pengambilan snapshot.
 
-Dua masalah diperbaiki:
+Tiga masalah diperbaiki:
 
 - Track grid rincian Pengaturan mengikuti lebar minimum tabel akses sehingga
   kontrol Rincian akses melebar hingga 620 px pada ponsel 320/390 px. Track
@@ -13,13 +13,17 @@ Dua masalah diperbaiki:
 - URL aksi tanpa izin tertahan oleh pemeriksaan izin, tetapi pesan memakai
   format keberhasilan “Tersimpan”. Pesan kini memakai format penolakan dan
   menyebut alasan akses. Pemeriksaan izin dan endpoint tidak diubah.
+- API pratinjau unit Minta lot belum menerima Super Admin, sehingga formulir
+  yang sudah terbuka bisa diarahkan ke halaman masuk saat pratinjau dimuat.
+  Izin pratinjau kini mengikuti aksi Minta lot: Super Admin/operator G2;
+  Admin dan operator G1 tetap ditolak. Tidak menyetujui atau memindahkan stok.
 
 Paket tampilan sumber f3fd6b4, disinkronkan melalui scripts/sinkron.py.
 Nomor aset 479 mematahkan cache perangkat.
 
 Validasi sebelum rilis:
 
-- 82 uji paket/visual dan 10 uji akses/vendor aplikasi lulus.
+- 82 uji paket/visual dan 14 uji akses/vendor aplikasi lulus.
 - Uji lama gagal saat kontrol Rincian akses melebar 620 px pada layar 320 px.
 - 736 snapshot URL/peran, 75 spesifikasi aksi untuk tiap peran, 320/390 px:
   2.072 tampilan, termasuk formulir dan penolakan URL aksi.

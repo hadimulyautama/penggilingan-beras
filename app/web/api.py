@@ -3939,7 +3939,8 @@ async def pratinjau_unit_transfer_pk(tahap: str, kode_proses: str = '',
         user: User = Depends(pengguna_aksi)):
     """Bantuan unit saja; tidak menyetujui, mencadangkan, atau memindah stok."""
     if tahap == 'minta':
-        _require(await _is_g2_operator(user) and not can_see_financials(user))
+        from hmu_identitas import peran as P
+        _require(P.super_saja(user.role) or (await _is_g2_operator(user) and not can_see_financials(user)))
     elif tahap == 'kirim':
         _require(await _is_g1_operator(user))
     else:
