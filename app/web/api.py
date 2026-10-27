@@ -3681,7 +3681,6 @@ async def act_catat_produk_timbang_masuk(
 ) -> dict:
     """Terima beras/broken dari tiket sebagai stok bertumpuk, dengan asal tiket."""
     _require(can_see_financials(user))
-    from sqlalchemy import select
     from app.database import input_time
     from app.models import FinishedGoodsStock
     from app.penggilingan.gudang1.services.timbang_link import (
@@ -3703,16 +3702,6 @@ async def act_catat_produk_timbang_masuk(
         kind = ticket.get("jenis_kode")
         if kind not in ("BERAS_MASUK", "BROKEN_MASUK"):
             raise HTTPException(400, "Tiket ini bukan beras atau broken masuk.")
-        if kind == "BERAS_MASUK":
-            sudah_dicatat = await db.scalar(select(FinishedGoodsStock.id).where(
-                FinishedGoodsStock.source_type == "timbangan",
-                FinishedGoodsStock.source_id == ticket["id"]))
-        else:
-            sudah_dicatat = await db.scalar(select(ByproductStock.id).where(
-                ByproductStock.source_type == "timbangan",
-                ByproductStock.source_id == ticket["id"]))
-        if sudah_dicatat:
-            raise HTTPException(409, "Tiket ini sudah tercatat sebagai stok.")
         weight, _, _ = await bobot_awal_dari_tiket(db, ticket)
         if weight is None or weight <= 0:
             raise HTTPException(400, "Berat barang belum tersedia dari Timbangan.")
@@ -3747,6 +3736,10 @@ async def act_catat_produk_timbang_masuk(
         await db.flush()
         await log_activity(db, table_name=table, record_id=row.id, action="INSERT",
                            changed_by=user.id,
+                           # ID tiket tetap terbaca walau baris stok habis.
+                           aksi="produk_timbang_masuk",
+                           field_name="timbangan_transaksi_id",
+                           old_value=str(ticket["id"]),
                            new_value=f"{ticket['kode']} · {float(weight):.2f} kg · {target}")
         await db.commit()
     return {"ok": True, "pesan": f"✓ {ticket['kode']} dicatat di stok bertumpuk: "

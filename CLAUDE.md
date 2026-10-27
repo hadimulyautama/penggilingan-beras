@@ -38,6 +38,22 @@ memiliki bobot berbeda dari rasio batch, batas saldo nyata tetap menang;
 permintaan yang tidak cocok dengan karung utuh ditolak, bukan dibulatkan
 atau diberi bobot tambahan. Uji: `tests/pg/test_beras_silo_berat_nyata.py`.
 
+## Tiket produk masuk hanya diterima sekali (27 Oktober 2026)
+
+Habisnya stok beras/broken tidak membebaskan tiket untuk penerimaan baru.
+`timbang_link._SQL_PRODUK_DITERIMA` dipakai daftar tiket DAN penjaga simpan
+yang mengunci tiket: stok aktif/nol, pemindahan beras, serta audit penerimaan
+menjadi bukti yang sama. Audit baru bertag `produk_timbang_masuk` menyimpan
+`field_name=timbangan_transaksi_id` dan ID tiket pada `old_value`; teks
+`new_value` tetap kalimat penerimaan. Identitas itu tidak bergantung pada
+saldo, ID baris stok, atau kode tiket yang mungkin dikoreksi kemudian.
+
+Audit lama dibaca memakai kode tiket utuh sebelum pemisah ` · `, bukan ID
+record yang dapat dipakai ulang. Koreksi/pembatalan tidak dianggap truk datang
+lagi. Pencatatan ulang ditolak HTTP 409 sebelum membuat stok atau pesanan
+jasa baru. Tidak ada migrasi, backfill, atau penulisan ulang transaksi lama.
+Uji PostgreSQL/HTTP: `tests/pg/test_tiket_produk_sekali.py`.
+
 ## Tempat kerja
 
 Repo BERSEBELAHAN di satu folder induk (`Hadi Mulya Systems/`): `produksi/`

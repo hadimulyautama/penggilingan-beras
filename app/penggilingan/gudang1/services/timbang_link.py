@@ -145,6 +145,28 @@ SQL_SUMBER_BERAT = (
     "            OR t.berat_acuan_kg - " + SQL_REAL_TIKET + " <= " + SQL_TOLERANSI + ")"
     "      THEN 'nota' ELSE 'timbangan' END)")
 
+# Penerimaan tetap hidup setelah stoknya habis. Jangan menautkannya lewat
+# record_id audit: ID stok lama bisa dipakai ulang. Penerimaan baru menyimpan
+# ID tiket eksplisit; riwayat lama memakai kode tiket UTUH pada format audit
+# penerimaan yang sudah berlaku. Pemindahan beras juga melindungi stok lama
+# tanpa audit penerimaan. Pembatalan/koreksi tidak berarti truk datang lagi,
+# sehingga audit yang ditandai batal pun tetap menjadi jejak penerimaan.
+_SQL_PRODUK_DITERIMA = """
+    EXISTS (SELECT 1 FROM finished_goods_stock f
+             WHERE f.source_type = 'timbangan' AND f.source_id = t.id)
+    OR EXISTS (SELECT 1 FROM byproduct_stock b
+                WHERE b.source_type = 'timbangan' AND b.source_id = t.id)
+    OR EXISTS (SELECT 1 FROM beras_ke_silo m
+                WHERE m.source_type = 'timbangan' AND m.source_id = t.id)
+    OR EXISTS (SELECT 1 FROM activity_logs a
+                WHERE (a.aksi = 'produk_timbang_masuk'
+                       AND a.field_name = 'timbangan_transaksi_id'
+                       AND a.old_value = CAST(t.id AS text))
+                   OR (a.table_name IN ('finished_goods_stock', 'byproduct_stock')
+                       AND a.action = 'INSERT'
+                       AND split_part(a.new_value, ' · ', 1) = t.kode))
+"""
+
 _SQL_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
@@ -189,10 +211,7 @@ _SQL_AKTIF = text("""
                           WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM pk_purchase_batches
                           WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
-       AND NOT EXISTS (SELECT 1 FROM finished_goods_stock f
-                        WHERE f.source_type = 'timbangan' AND f.source_id = t.id)
-       AND NOT EXISTS (SELECT 1 FROM byproduct_stock b
-                        WHERE b.source_type = 'timbangan' AND b.source_id = t.id)
+       AND NOT (""" + _SQL_PRODUK_DITERIMA + """)
      ORDER BY (t.status_tiket = 'TERBUKA') DESC, t.tanggal DESC, t.id DESC
 """)
 
@@ -743,7 +762,7 @@ async def resinkron_bobot_berubah(db: AsyncSession) -> int:
 
 
 class TiketSudahDipakai(Exception):
-    """Tiket timbang sudah ditaut batch lain (gabah atau PK)."""
+    """Tiket timbang sudah diterima sebagai gabah, PK, atau stok produk."""
 
 
 _SQL_KUNCI_TIKET = text("SELECT id FROM timbangan_transaksi WHERE id = :tid FOR UPDATE")
@@ -766,6 +785,10 @@ _SQL_PEMAKAI_TIKET = text("""
         FROM pk_purchase_batches b
         LEFT JOIN users u ON u.id = b.input_by
        WHERE b.timbangan_transaksi_id = :tid AND b.dibatalkan_pada IS NULL
+      UNION ALL
+      SELECT 'produk', t.kode, NULL, NULL
+        FROM timbangan_transaksi t
+       WHERE t.id = :tid AND (""" + _SQL_PRODUK_DITERIMA + """)
     ) x
 """)
 
@@ -787,6 +810,11 @@ async def kunci_tiket_untuk_ditaut(db: AsyncSession, tid: int) -> None:
     baris = (await db.execute(_SQL_PEMAKAI_TIKET, {"tid": tid})).first()
     if baris is not None:
         lingkup, kode_batch, oleh, waktu = baris
+        if lingkup == "produk":
+            raise TiketSudahDipakai(
+                f"Tiket {kode_batch} sudah pernah diterima sebagai stok. "
+                "Barang yang sudah dipindahkan ke silo atau habis dipakai "
+                "tidak dapat dicatat ulang. Periksa riwayat penerimaan.")
         siapa = f" oleh {oleh}" if oleh else ""
         jam = f" pukul {berzona(waktu):%H:%M}" if waktu else ""
         raise TiketSudahDipakai(
