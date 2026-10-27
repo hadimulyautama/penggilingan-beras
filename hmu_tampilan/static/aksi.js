@@ -301,7 +301,7 @@
     var a = MENU[id];
     if (!a) return;
     if (a.boleh === false) {
-      kabar(a.alasan_akses || "Anda tidak memiliki akses untuk tindakan ini.");
+      kabar(a.alasan_akses || "Anda tidak memiliki akses untuk tindakan ini.", "err");
       return;
     }
     if (lembarSedangTerbuka() && !bolehBuang($("lembar"), function () {

@@ -13,7 +13,7 @@
 .pg-pintu__isi{flex:1;min-width:0}.pg-pintu strong{display:block;font-size:14px;line-height:1.5}.pg-pintu small{display:block;font-size:12px;line-height:1.6;color:var(--redup);margin-top:3px}
 .pg-panah{font-size:25px;color:var(--redup);flex-shrink:0}.pg-darurat{margin:0;padding:14px 20px;color:var(--hati);font-size:13px;line-height:1.6}
 .pg-kembali{display:inline-flex;align-items:center;min-height:48px;margin-bottom:10px;color:var(--aksi)}
-.pg-rincian{max-width:780px;display:grid;gap:20px;margin-top:22px}.pg-rincian .kartu{min-width:0}.pg-rincian .grup{min-width:0}.pg-rincian .tindakan{margin:0!important}
+.pg-rincian{max-width:780px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:20px;margin-top:22px}.pg-rincian .kartu{min-width:0}.pg-rincian .grup{min-width:0}.pg-rincian .tindakan{margin:0!important}
 .pg-rincian .fld,.pg-rincian button{min-height:48px}.pg-rincian .lipat summary{min-height:48px;align-items:center}.pg-rincian .bantu{line-height:1.65}
 .pg :is(a,button,input,select):focus-visible{outline:3px solid var(--aksi);outline-offset:3px}
 .pg :is(p,small,strong,label){overflow-wrap:anywhere}.pg :is(input,select){max-width:100%}
