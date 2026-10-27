@@ -6,3 +6,5 @@
 @media(max-width:800px){.laporan-nav__jenis{flex-wrap:wrap;overflow:visible}.laporan-nav__jenis a{white-space:normal}}
 
 .rsh th:nth-child(1){width:24%}.rsh th:nth-child(2){width:25%}.rsh th:nth-child(3){width:18%}.rsh th:nth-child(n+4){width:11%}.rsh td:nth-child(n+4){font-variant-numeric:tabular-nums}
+/* Caption tabel tetap tersedia bagi pembaca layar tanpa mengulang judul. */
+.rsh .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
