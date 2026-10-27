@@ -24,6 +24,8 @@ Tiga hal yang dijaga, dan ketiganya pernah jadi lubang di rancangan:
      rajin akan menolak gabah pabrik yang selama ini sah.
 """
 from __future__ import annotations
+
+from tests.pg.kontak import pelanggan_kledo
 from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import datetime, timezone
@@ -64,7 +66,7 @@ def _sekarang():
 async def _pelanggan(db, nama: str) -> int:
     from app.models import Pelanggan
 
-    p = Pelanggan(nama_pelanggan=nama)
+    p = pelanggan_kledo(nama_pelanggan=nama)
     db.add(p)
     await db.flush()
     return p.id

@@ -14,7 +14,7 @@ from tests.pg.formulir import cap_formulir
 from tests.pg.test_teraflow_kiriman import (_skema_head,servers,akun,profil,benih,
     test_http_satu_tiket_muatan_aktual_dan_verifikasi_bersama as alur_lama)
 
-pytestmark=pytest.mark.asyncio
+pytestmark=[pytest.mark.asyncio,pytest.mark.dua_aplikasi]
 
 @pytest.mark.parametrize('pelanggan,luring',[(1,False),(2,False),(2,True)])
 async def test_alur_dua_app_dan_hasil_verifikasi_otomatis_baca_saja(pg,gudang,pelanggan,luring):

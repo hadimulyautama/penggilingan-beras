@@ -11,6 +11,9 @@
 # sendiri.
 name: uji
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: ["**"]
@@ -18,7 +21,12 @@ on:
 
 jobs:
   uji:
+    name: Uji ${{ matrix.profil }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profil: [satuan, postgresql-0, postgresql-1]
 
     services:
       postgres:
@@ -69,5 +77,100 @@ jobs:
       - name: Periksa selisih model ↔ migrasi
         run: alembic check
 
-      - name: Uji penuh (termasuk tests/pg)
-        run: pytest -q
+      - name: Uji satu aplikasi tanpa mengurangi cakupan
+        env:
+          PROFIL_CI: ${{ matrix.profil }}
+        run: |
+          python - <<'PYTHON'
+          import os,subprocess,sys
+          from pathlib import Path
+          profil=os.environ['PROFIL_CI']
+          if profil=='satuan':
+              paths=['tests','--ignore=tests/pg']
+          else:
+              # Dua daftar berkas saling lepas; gabungannya seluruh tests/pg.
+              files=sorted(set(Path('tests/pg').rglob('test_*.py')) | set(Path('tests/pg').rglob('*_test.py')))
+              paths=[str(p) for p in files[int(profil[-1])::2]]
+          Path('bukti').mkdir(exist_ok=True)
+          Path('bukti/berkas-'+profil+'.txt').write_text('\n'.join(paths)+'\n')
+          raise SystemExit(subprocess.call([sys.executable,'-m','pytest',*paths,'-q','-m','not dua_aplikasi','--junitxml=bukti/satu-aplikasi.xml']))
+          PYTHON
+
+      - name: Simpan hasil satu aplikasi
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hasil-${{ matrix.profil }}
+          path: bukti/
+
+  dua-aplikasi:
+    name: Integrasi HTTP PadiFlow dan TeraFlow82 terpin
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: uji
+          POSTGRES_DB: uji_tf_kiriman_ci
+        ports: ["56627:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      UJI_PG_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:56627/uji_tf_kiriman_ci
+      DATABASE_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:56627/uji_tf_kiriman_ci
+      UJI_TF_ROOT: ${{ github.workspace }}/timbangan
+      UJI_KIRIMAN_OUT: ${{ github.workspace }}/bukti/dua-aplikasi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: padiflow
+      # Main TeraFlow belum mewakili paket yang diterbitkan. Snapshot ini
+      # identik170hash rilis82 dan dipublikasikan dengan izin pemilik hanya
+      # untuk CI. Pin SHA, jangan mengikuti cabang/main yang terus bergerak.
+      - uses: actions/checkout@v4
+        with:
+          repository: hadimulyautama/timbangan
+          ref: 0200668a8eab721f4d991ede6e0808d4d656c411
+          path: timbangan
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            padiflow/requirements*.txt
+            timbangan/requirements.txt
+      - name: Periksa source TeraFlow terpin
+        run: |
+          python - <<'PYTHON'
+          import json,hashlib
+          from pathlib import Path
+          root=Path('timbangan')
+          manifest=json.loads((root/'CI_SOURCE_MANIFEST.json').read_text())
+          assert manifest['release']=='TeraFlow82'
+          assert len(manifest['source_manifest'])==170
+          for file,digest in manifest['source_manifest'].items():
+              assert hashlib.sha256((root/file).read_bytes()).hexdigest()==digest,file
+          print('170hash source sama dengan paket TeraFlow82 teruji.')
+          PYTHON
+      - name: Pasang dua interpreter terpisah
+        run: |
+          python -m pip install -r padiflow/requirements.txt -r padiflow/requirements-dev.txt -r padiflow/tests/pg/requirements-dua-aplikasi.txt
+          python -m venv timbangan/.venv
+          timbangan/.venv/bin/pip install -r timbangan/requirements.txt
+      - name: Pasang Chromium untuk PWA dan luring
+        run: python -m playwright install --with-deps chromium
+      - name: Migrasi nyata dan sembilan integrasi HTTP
+        working-directory: padiflow
+        run: >-
+          python -m pytest -q -m dua_aplikasi
+          tests/pg/test_teraflow_kiriman.py tests/pg/test_integrasi_verifikasi473.py
+          --junitxml=../bukti/dua-aplikasi/junit.xml
+      - name: Simpan hasil dua aplikasi
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hasil-dua-aplikasi
+          path: bukti/dua-aplikasi/junit.xml

@@ -16,6 +16,8 @@ BERBEDA tetap ditolak sekeras sebelumnya; pabrik tercampur jasa juga.
 """
 from __future__ import annotations
 
+from tests.pg.kontak import pelanggan_kledo
+
 from datetime import date
 
 import pytest
@@ -70,8 +72,8 @@ async def dunia(pg, pemakai):
         u.default_warehouse_id = g1.id
         u.role = "superadmin"
 
-        catur = Pelanggan(nama_pelanggan="Catur")
-        budi = Pelanggan(nama_pelanggan="Budi")
+        catur = pelanggan_kledo(nama_pelanggan="Catur")
+        budi = pelanggan_kledo(nama_pelanggan="Budi")
         db.add_all([catur, budi])
         await db.flush()
         jasa1 = Jasa(kode="JAS-2610-301", pelanggan_id=catur.id, status="berjalan")

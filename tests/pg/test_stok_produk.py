@@ -12,6 +12,8 @@ situ. Aksesnya semua orang KECUALI operator Gudang 1.
 """
 from __future__ import annotations
 
+from tests.pg.kontak import pelanggan_kledo
+
 from datetime import date
 
 import pytest
@@ -51,7 +53,7 @@ async def _keluarkan(pg, uid_admin, uid_op, *, sku_id, std_id, karung,
     from app.services import barang_keluar as bk
 
     async with pg() as db:
-        klien = Pelanggan(nama_pelanggan=pembeli)
+        klien = pelanggan_kledo(nama_pelanggan=pembeli)
         db.add(klien)
         await db.flush()
         r = await bk.buat_perintah(
@@ -524,7 +526,7 @@ async def test_bekatul_jasa_tetap_di_stok_pemilik_sampai_dipindah(pg, sosoh):
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
-        pel = Pelanggan(nama_pelanggan="Pak Jasa")
+        pel = pelanggan_kledo(nama_pelanggan="Pak Jasa")
         db.add(pel)
         await db.flush()
         jasa = Jasa(kode="JAS-2610-099", pelanggan_id=pel.id, status="berjalan",
@@ -896,7 +898,7 @@ async def test_barang_keluar_dipilih_dari_stok_yang_ada(pg, sosoh):
     # diuji di `tests/pg/test_barang_keluar.py`.
     async with pg() as db:
         from app.models import Pelanggan
-        klien = Pelanggan(nama_pelanggan="Toko Uji")
+        klien = pelanggan_kledo(nama_pelanggan="Toko Uji")
         db.add(klien)
         await db.flush()
         await db.commit()

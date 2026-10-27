@@ -10,6 +10,8 @@ sama dipakai `tests/pg/test_permintaan_pk.py`), bukan `Baris` buatan tangan.
 """
 from __future__ import annotations
 
+from tests.pg.kontak import pelanggan_kledo
+
 import httpx
 import pytest
 
@@ -195,7 +197,7 @@ async def test_verifikasi_muatan_tidak_menambah_kategori_keputusan(
             FinishedGoodsStock.product_sku_id,
             FinishedGoodsStock.rice_quality_standard_id).limit(1))).first()
         adm = await db.get(User, pabrik["adm"])
-        klien = Pelanggan(nama_pelanggan="Toko Uji")
+        klien = pelanggan_kledo(nama_pelanggan="Toko Uji")
         db.add(klien)
         await db.flush()
         r = await bk.buat_perintah(

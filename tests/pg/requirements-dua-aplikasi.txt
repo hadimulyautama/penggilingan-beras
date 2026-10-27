@@ -1,0 +1,3 @@
+# Browser untuk skenario PWA/offline, bukan dependensi runtime PadiFlow.
+# Versi sama dengan browser pengujian lokal yang meluluskan skenario ini.
+playwright==1.62.0

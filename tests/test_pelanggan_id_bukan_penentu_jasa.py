@@ -49,7 +49,10 @@ _KECUALI = {
      'if isinstance(pelanggan_id, list) else Jasa.pelanggan_id == pelanggan_id)'),
     # Pengiriman membandingkan pembeli tiket dengan pembeli transaksi.
     ("services/barang_keluar.py", "_armada_dari_tiket",
-     'if tiket["pelanggan_id"] is not None and tiket["pelanggan_id"] != pelanggan_id:'),
+     'if pelanggan_id is not None and tiket["pelanggan_id"] is not None and tiket["pelanggan_id"] != pelanggan_id:'),
+    # Penulisan identitas tiket satu pelanggan setelah tiket bebas/valid.
+    # Kiriman gabungan tidak diwakili salah satu pelanggan (parameter None).
+    ("services/barang_keluar.py", "_armada_dari_tiket", 'if pelanggan_id is not None:'),
     ("web/internal.py", "_cocokkan_pengiriman_tiket",
      'if tiket["pelanggan_id"] is not None and rec.pelanggan_id is not None:'),
     # Detail menerima saringan pelanggan yang sudah disahkan rutenya;
@@ -153,3 +156,17 @@ def test_pengecualian_tetap_tepat_setelah_nomor_baris_bergeser(monkeypatch, tmp_
     temuan = _temuan()
     assert len(temuan) == 1
     assert 'if tiket.get("pelanggan_id")' in temuan[0][2]
+
+
+def test_pengecualian_armada_tidak_menyembunyikan_penentu_jasa_baru(monkeypatch,tmp_path):
+    path=tmp_path/'services/barang_keluar.py';path.parent.mkdir(parents=True)
+    path.write_text('''async def _armada_dari_tiket():
+    if pelanggan_id is not None and tiket["pelanggan_id"] is not None and tiket["pelanggan_id"] != pelanggan_id:
+        raise ValueError()
+    if pelanggan_id is not None:
+        pass
+    jasa = tiket.get("jasa_id") if tiket.get("pelanggan_id") else None
+''')
+    monkeypatch.setattr(__import__(__name__,fromlist=['AKAR']),'AKAR',tmp_path)
+    temuan=_temuan()
+    assert len(temuan)==1 and 'if tiket.get("pelanggan_id") else None' in temuan[0][2]

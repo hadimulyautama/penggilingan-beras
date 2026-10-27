@@ -4,6 +4,8 @@ Pemilik dan saldo tetap diperiksa untuk penjualan serta pengambilan jasa.
 Riwayat pengeluaran silo lama tetap harus dapat dibaca dan dibatalkan.
 """
 from __future__ import annotations
+
+from tests.pg.kontak import pelanggan_kledo
 from tests.pg.formulir import cap_formulir
 
 from datetime import date
@@ -45,8 +47,8 @@ async def pabrik(pg, pemakai):
         u.default_warehouse_id = g2.id
         u.role = "superadmin"      # satu orang menempuh semua jalan di uji ini
 
-        bu_sri = Pelanggan(nama_pelanggan="Bu Sri")
-        pak_budi = Pelanggan(nama_pelanggan="Pak Budi")
+        bu_sri = pelanggan_kledo(nama_pelanggan="Bu Sri")
+        pak_budi = pelanggan_kledo(nama_pelanggan="Pak Budi")
         db.add_all([bu_sri, pak_budi])
         await db.flush()
         jasa_a = Jasa(kode="JAS-2610-010", pelanggan_id=bu_sri.id, status="berjalan")
@@ -99,9 +101,9 @@ async def _pindah_ke_silo(pg, user_id: int, intake_id: int, silo_nama: str,
 async def _perintah_lama(db, *, user, jasa_id, baris):
     """Data perintah sebelum larangan PK G2, bukan jalur penerbitan baru.
 
-    Pemuat dan pembaca saldo tetap memakai layanan sungguhan. Menghapus
-    penjaga riwayat hanya karena formulir baru ditutup bisa mengembalikan
-    barang yang sudah dikirim ke angka stok.
+    Pembaca saldo tetap memakai layanan sungguhan. Muatan historis dibuat
+    sebagai benih terpisah; jalur muat sekarang memang melarang PK dalam silo.
+    Jangan melonggarkan layanan untuk membuat keadaan historis lewat alur baru.
     """
     from app.services import barang_keluar as bk
     if all(b.silo_id is None for b in baris):
@@ -132,6 +134,21 @@ async def _perintah_lama(db, *, user, jasa_id, baris):
         items.append(it)
     await db.commit()
     return SimpleNamespace(rec=rec, baris=items)
+
+
+async def _muatan_historis(db,*,user,rec_id):
+    """Benih sebelum larangan, untuk pembaca riwayat; bukan jalur muat baru."""
+    import math
+    from app.models import OutgoingRecord,OutgoingItem
+    from app.database import now_local
+    rec=await db.get(OutgoingRecord,rec_id)
+    assert rec.kode.startswith('OUT-LAMA-') and rec.status=='perintah'
+    items=list((await db.scalars(select(OutgoingItem).where(OutgoingItem.outgoing_record_id==rec_id))).all())
+    assert items and all(i.item_type=='pk_g2' and i.silo_id is not None for i in items)
+    for i in items:
+        i.berat_kg=i.berat_perintah_kg;i.jumlah_karung=math.ceil(i.berat_kg/50)
+    rec.status='dimuat';rec.dimuat_oleh=user.id;rec.waktu_muat=now_local()
+    await db.commit()
 
 
 @pytest.mark.parametrize("tempat", ["tumpukan", "silo"])
@@ -294,7 +311,7 @@ async def test_riwayat_ambil_sebagian_dari_silo_mengurangi_stok_persis(pg, pabri
         rec_id = r.rec.id
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-        await bk.muat_semua(db, user=u, rec_id=rec_id)
+        await _muatan_historis(db,user=u,rec_id=rec_id)
 
     async with pg() as db:
         assert await hitung_stok_silo(db, pabrik["silo_c"], pemilik="jasa") == 6_000
@@ -331,7 +348,9 @@ async def test_pk_g2_tak_bisa_ditambahkan_ke_perintah_lama(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-        await bk.muat_semua(db, user=u, rec_id=rec_id)
+        with pytest.raises(bk.BarangKeluarError,match="bahan proses"):
+            await bk.muat_semua(db,user=u,rec_id=rec_id)
+        await _muatan_historis(db,user=u,rec_id=rec_id)
 
     async with pg() as db:
         assert await hitung_stok_silo(db, pabrik["silo_c"], pemilik="jasa") == 8_000
@@ -359,7 +378,7 @@ async def test_riwayat_defisit_toleransi_silo_tidak_memotong_stok_pemilik_beriku
         rec_id = perintah.rec.id
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-        await bk.muat_semua(db, user=u, rec_id=rec_id)
+        await _muatan_historis(db,user=u,rec_id=rec_id)
 
     async with pg() as db:
         assert await hitung_stok_silo(db, pabrik["silo_c"]) == 0
@@ -412,7 +431,7 @@ async def test_pabrik_tak_bisa_menjual_pk_g2_titipan(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-        klien = Pelanggan(nama_pelanggan="Toko Beras Uji")
+        klien = pelanggan_kledo(nama_pelanggan="Toko Beras Uji")
         db.add(klien)
         await db.flush()
         with pytest.raises(bk.BarangKeluarError) as e:

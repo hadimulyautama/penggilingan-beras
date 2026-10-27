@@ -8,6 +8,8 @@ maupun `finished_goods_stock` sama sekali — gabah tetap BAHAN.
 """
 from __future__ import annotations
 
+from tests.pg.kontak import pelanggan_kledo
+
 from datetime import date
 
 import pytest
@@ -54,7 +56,7 @@ async def pabrik(pg, pemakai, pemasok):
         u = await db.get(User, pemakai.id)
         u.default_warehouse_id = g1.id
         u.role = "superadmin"
-        pel = Pelanggan(nama_pelanggan="Bu Sri")
+        pel = pelanggan_kledo(nama_pelanggan="Bu Sri")
         db.add(pel)
         await db.flush()
         jasa = Jasa(kode="JAS-2610-020", pelanggan_id=pel.id, status="berjalan")
@@ -307,7 +309,7 @@ async def test_pesanan_lain_tak_bisa_mengambil_gabah_kering_pesanan_ini(pg, pabr
     r = await _keluarkan(pg, pabrik, silo_storage_id=row_id, berat_kg=2_800)
 
     async with pg() as db:
-        pel2 = Pelanggan(nama_pelanggan="Pak Budi")
+        pel2 = pelanggan_kledo(nama_pelanggan="Pak Budi")
         db.add(pel2)
         await db.flush()
         jasa2 = Jasa(kode="JAS-2610-021", pelanggan_id=pel2.id, status="berjalan")

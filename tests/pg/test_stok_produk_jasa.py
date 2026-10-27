@@ -14,6 +14,8 @@ None` sendiri — persis pola PK. Titipan tampil di halaman khususnya sendiri
 """
 from __future__ import annotations
 
+from tests.pg.kontak import pelanggan_kledo
+
 from datetime import date
 
 import pytest
@@ -50,7 +52,7 @@ async def sosoh_jasa(pg, pemakai):
             await db.flush()
         u = await db.get(User, pemakai.id)
         u.default_warehouse_id = g2.id
-        pel = Pelanggan(nama_pelanggan="Bu Sri")
+        pel = pelanggan_kledo(nama_pelanggan="Bu Sri")
         db.add(pel)
         await db.flush()
         jasa = Jasa(kode="JAS-2610-001", pelanggan_id=pel.id, status="berjalan")

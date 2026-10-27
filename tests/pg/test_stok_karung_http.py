@@ -10,6 +10,8 @@ ditolak, sama dengan `/stok-produk`), gerbang `can_see_financials` pada aksi
 WAJIB cocok persis dengan `nilai=` yang akan dikirim tombol kartu.
 """
 from __future__ import annotations
+
+from tests.pg.kontak import pelanggan_kledo
 from tests.pg.formulir import cap_formulir
 
 from datetime import date
@@ -138,7 +140,7 @@ async def test_operator_ditolak_admin_berhasil_pindah_kepemilikan_karung(pg):
             uid = u.id
             await db.commit()
         await _beli(db, models, pemakai_id=uid, lembar=200, kode="PKP-UJIH-02")
-        pel = Pelanggan(nama_pelanggan="Toko Makmur")
+        pel = pelanggan_kledo(nama_pelanggan="Toko Makmur")
         db.add(pel)
         await db.commit()
         await db.refresh(pel)
