@@ -3,7 +3,7 @@
 {% block isi %}
 {% import '_riwayat_retur_supplier.html' as r %}
 <link rel="stylesheet" href="/static/retur_supplier.css?v={{ VERSI }}&rsp=3">
-<link rel="stylesheet" href="/static/riwayat_retur_supplier.css?v={{ VERSI }}&rsh=3">
+<link rel="stylesheet" href="/static/riwayat_retur_supplier.css?v={{ VERSI }}&rsh=4">
 <div class="rsp rsh">
  <a class="rsp-kembali" href="{{ kembali }}">← Kembali ke daftar riwayat</a>
  <header class="rsp-kepala"><small>Laporan & Riwayat · Retur ke Supplier</small><h1>{{ rec.kode }}</h1><p>{{ rec.sumber.supplier }} · {{ rec.waktu|jam('%d/%m/%Y · %H:%M') }}</p>{{ r.status(status,statuses) }}</header>

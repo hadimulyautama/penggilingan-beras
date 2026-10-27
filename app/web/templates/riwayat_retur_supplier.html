@@ -3,7 +3,7 @@
 {% block isi %}
 {% import '_riwayat_retur_supplier.html' as r %}
 <link rel="stylesheet" href="/static/retur_supplier.css?v={{ VERSI }}&rsp=3">
-<link rel="stylesheet" href="/static/riwayat_retur_supplier.css?v={{ VERSI }}&rsh=3">
+<link rel="stylesheet" href="/static/riwayat_retur_supplier.css?v={{ VERSI }}&rsh=4">
 <div class="rsp rsh">
  <header class="rsp-kepala"><small>Laporan & Riwayat · Retur ke Supplier</small><h1>Riwayat Retur ke Supplier</h1><p>Pengajuan, pemeriksaan, dan barang keluar dalam satu penelusuran.</p></header>
  {% if filter.penerimaan %}<section class="rsp-peringatan" aria-label="Cakupan penerimaan">Riwayat dibatasi pada penerimaan {% if data and data.asal %}<a href="/barang-masuk/{{ data.asal.id }}">{{ data.asal.kode }}</a>{% else %}yang dipilih{% endif %}. <a href="{{ href(penerimaan='',halaman=1) }}">Lihat semua penerimaan yang diizinkan</a></section>{% endif %}
