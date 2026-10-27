@@ -92,26 +92,27 @@
     {% include "_stok_pk_qc.html" %}
   {% endif %}
 
+  {# Satu panel sticky: panel terpisah saling menutupi pada layar ponsel. #}
+  {% if (g1 and not t.berjalan and (boleh_minta or boleh_ubah or TAMPILAN_INDUK)) or (not g1 and ((t.bobot_final and (boleh_pindah_tumpukan or TAMPILAN_INDUK)) or (boleh_ubah and mutu_aktif and t.qc_kode))) %}
+  <section class="pk-detail__actions" aria-label="Tindakan stok">
   {% if g1 and (boleh_minta or TAMPILAN_INDUK) and not t.berjalan %}
-    <section class="pk-detail__actions">
       {% if t.diminta_siap %}<span class="pk-detail__action-state">Disetujui Admin · Gudang 1 menyiapkan pengiriman</span>
       {% elif t.diminta_oleh %}<span class="pk-detail__action-state">Sudah diminta {{ t.diminta_oleh }}{% if t.diminta_keadaan %} · {{ t.diminta_keadaan }}{% endif %}</span>
       {% elif not boleh_minta %}<button class="btn" disabled title="Memerlukan operator Gudang 2 atau Super Admin">Minta lot ini</button>
       {% else %}<a class="btn" href="{{ detail_href }}&amp;buka=minta_pk_g1&amp;nilai={{ t.kode|urlencode }}">Minta lot ini</a>{% endif %}
-    </section>
   {% endif %}
   {% if g1 and (boleh_ubah or TAMPILAN_INDUK) and not t.berjalan %}
-    <section class="pk-detail__actions">
       {% if boleh_ubah %}
       <a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=verify_output&amp;nilai={{ t.kode|urlencode }}">{{ "Catat hasil giling" if t.belum_dicatat else "Perbaiki hasil giling" }}</a>
       {% if mutu_aktif %}<a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=qc_giling&amp;nilai={{ t.kode|urlencode }}">{{ "Catat QC berikutnya" if t.mutu else "Catat QC" }}</a>{% endif %}
       {% else %}<button class="btn btn--kecil" disabled>Perbaiki hasil giling</button>{% if mutu_aktif %}<button class="btn btn--kecil" disabled>Catat QC</button>{% endif %}{% endif %}
-    </section>
   {% endif %}
   {% if not g1 and (boleh_pindah_tumpukan or TAMPILAN_INDUK) and t.bobot_final %}
-    <section class="pk-detail__actions">{% if boleh_pindah_tumpukan %}<a class="btn" href="{{ detail_href }}&amp;buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">Masukkan ke silo</a>{% else %}<button class="btn" disabled>Masukkan ke silo</button>{% endif %}</section>
+    {% if boleh_pindah_tumpukan %}<a class="btn" href="{{ detail_href }}&amp;buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">Masukkan ke silo</a>{% else %}<button class="btn" disabled>Masukkan ke silo</button>{% endif %}
   {% endif %}
   {% if not g1 and boleh_ubah and mutu_aktif and t.qc_kode %}
-    <section class="pk-detail__actions"><a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=qc_pk_luar&amp;nilai={{ t.qc_kode|urlencode }}">{{ "Catat QC berikutnya" if t.mutu else "Catat QC" }}</a></section>
+    <a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=qc_pk_luar&amp;nilai={{ t.qc_kode|urlencode }}">{{ "Catat QC berikutnya" if t.mutu else "Catat QC" }}</a>
+  {% endif %}
+  </section>
   {% endif %}
 </main>
