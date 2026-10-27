@@ -1,4 +1,6 @@
 """Penyerahan <200 kg atomik, tanpa operator/tiket, berdasarkan aktual."""
+
+from tests.pg.kontak import pelanggan_kledo
 import asyncio
 from decimal import Decimal
 import pytest
@@ -111,7 +113,7 @@ async def test_pemisahan_pabrik_dan_dua_pesanan_pemilik(pg,gudang):
     from app.penggilingan.inventory.models import FinishedGoodsStock
     from app.penggilingan.inventory.finished_goods import hitung_stok_finished_goods
     async with pg() as db:
-        a=Pelanggan(nama_pelanggan='Pemilik A');b=Pelanggan(nama_pelanggan='Pemilik B');db.add_all([a,b]);await db.flush()
+        a=pelanggan_kledo(nama_pelanggan='Pemilik A');b=pelanggan_kledo(nama_pelanggan='Pemilik B');db.add_all([a,b]);await db.flush()
         jobs=[Jasa(kode=f'JAS-CEPAT-{n}',pelanggan_id=p.id,status='berjalan') for n,p in enumerate([a,a,b])]
         db.add_all(jobs);await db.flush()
         ids=[j.id for j in jobs]
@@ -181,7 +183,7 @@ async def test_pemilik_diperiksa_ulang_sebelum_penyerahan(pg,gudang):
     from app.database import now_local
     from app.penggilingan.inventory.models import FinishedGoodsStock
     async with pg() as db:
-        a=Pelanggan(nama_pelanggan='Pemilik A');b=Pelanggan(nama_pelanggan='Pemilik B')
+        a=pelanggan_kledo(nama_pelanggan='Pemilik A');b=pelanggan_kledo(nama_pelanggan='Pemilik B')
         db.add_all([a,b]);await db.flush()
         j=Jasa(kode='JAS-CEPAT-PEMILIK',pelanggan_id=a.id,status='berjalan');db.add(j);await db.flush()
         db.add(FinishedGoodsStock(product_sku_id=gudang['sku'],rice_quality_standard_id=gudang['std'],source_type='retur',jumlah_karung=4,berat_total_kg=100,jasa_id=j.id,waktu=now_local(),input_by=gudang['op']))

@@ -12,18 +12,29 @@ from app.services import barang_keluar as bk
 from tests.pg.test_barang_keluar import gudang,_stok,_pelanggan
 from tests.pg.test_kiriman_pelanggan import _buat,_muat
 
-pytestmark=pytest.mark.asyncio
+pytestmark=[pytest.mark.asyncio,pytest.mark.dua_aplikasi]
 ROOT=Path(__file__).resolve().parents[2];TF=Path(os.environ.get('UJI_TF_ROOT',str(ROOT.parent/'timbangan')))
 OUT=Path(os.environ.get('UJI_KIRIMAN_OUT',str(ROOT.parent/'output/teraflow-kiriman-gabungan-20261026')))
 OUT.mkdir(parents=True,exist_ok=True)
+
+
+def _profil_url():
+    # Suite biasa tidak membawa source dan interpreter aplikasi sebelah.
+    # CI memilih marker ini di job tersendiri; lokal tanpa profil ditandai
+    # skipped dengan alasan, bukan menjalankan migrasi dua rantai di uji_ci.
+    if not os.environ.get('UJI_TF_ROOT'):
+        pytest.skip('Profil dua_aplikasi memerlukan UJI_TF_ROOT dan DB lokal khusus56627/uji_tf_kiriman_*.')
+    url=os.environ.get('UJI_PG_URL','')
+    assert '@127.0.0.1:56627/uji_tf_kiriman_' in url, 'DB dua aplikasi wajib loopback56627 dengan awalan uji_tf_kiriman_.'
+    return url
 
 
 @pytest.fixture(scope='session')
 def _skema_head():
     # Kedua aplikasi berbagi fondasi 0026. Timbangan mengambil alih sesudah
     # fondasi itu, sebelum migrasi PadiFlow menambah kolom kompatibilitas.
-    url=os.environ['UJI_PG_URL']
-    assert '@127.0.0.1:56627/uji_tf_kiriman_' in url
+    url=_profil_url()
+    assert (TF/'app/timbangan/main.py').is_file() and (TF/'.venv/bin/python').is_file(), 'Source/interpreter TeraFlow belum disiapkan.'
     env={**os.environ,'DATABASE_URL':url}
     steps=[(ROOT,sys.executable,['upgrade','0063_sebab_selisih_timbang']),
            (TF,str(TF/'.venv/bin/python'),['stamp','0026_timbangan_hapus_pengawas']),

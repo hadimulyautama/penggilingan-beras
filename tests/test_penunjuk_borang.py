@@ -117,9 +117,28 @@ def test_daftar_tipe_ini_sama_dengan_aksi_js():
     berbeda membuat pagar ini meluluskan aksi yang sebenarnya tak bisa
     dikunci — pagar yang salah lebih buruk daripada tak ada pagar."""
     js = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
-    i = js.index("function bukaAksi")
-    potongan = js[i:i + 2000]
-    tipe = set(re.findall(r'f0\.type !== "([a-z_]+)"', potongan))
+    tipe = _tipe_kunci(js)
     assert tipe == set(BISA_DIKUNCI), (
         f"aksi.js mengunci {sorted(tipe)}, pagar ini menyangka "
         f"{sorted(BISA_DIKUNCI)}")
+
+
+def _tipe_kunci(js):
+    # Tombol yang berpindah ke formulir khusus boleh bertambah di awal
+    # bukaAksi. Jendela 2000karakter berhenti sebelum guard saat verifikasi
+    # dipindah pada473. Batas fungsi tetap ketat, bukan mencari seluruh file.
+    awal=re.search(r'^  function bukaAksi\([^\n]+\{',js,re.M)
+    assert awal, 'Fungsi bukaAksi tidak ditemukan'
+    akhir=re.search(r'^  (?:async )?function \w+\(',js[awal.end():],re.M)
+    body=js[awal.end():awal.end()+akhir.start()] if akhir else js[awal.end():]
+    body=re.sub(r'/\*.*?\*/|//[^\n]*','',body,flags=re.S)
+    guard=re.search(r'if\s*\((f0\.type\s*!==.*?)\)\s*\{\s*continue;\s*\}',body,re.S)
+    return set(re.findall(r'f0\.type\s*!==\s*[\"\']([a-z_]+)[\"\']',guard[1])) if guard else set()
+
+
+def test_pagar_tipe_tetap_menangkap_guard_hilang_dan_tidak_tergantung_panjang():
+    guard='if (f0.type !== "select" && f0.type !== "remote" && f0.type !== "remote_banyak") { continue; }'
+    def contoh(body):return '  function bukaAksi(id) {\n'+body+'\n  }\n  function lain() { '+guard+' }'
+    assert _tipe_kunci(contoh('/*'+('x'*6000)+'*/\n'+guard))==set(BISA_DIKUNCI)
+    assert _tipe_kunci(contoh('/*'+guard+'*/'))==set()
+    assert _tipe_kunci(contoh(guard.replace(' && f0.type !== "remote_banyak"','')))=={'select','remote'}

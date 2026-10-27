@@ -1,4 +1,6 @@
 """Regresi koreksi, pratinjau pembatalan, dan perangkat bersama — PostgreSQL nyata."""
+
+from tests.pg.kontak import pelanggan_kledo
 import asyncio
 import re
 from datetime import timedelta
@@ -225,7 +227,7 @@ async def test_perintah_dibatalkan_tidak_lagi_menghalangi_koreksi(pg,pabrik):
     from app.services import barang_keluar as bk
     from app.penggilingan.gudang1.services.milling import alasan_koreksi_hasil_giling
     async with pg() as db:
-        u=await db.get(User,uid);pel=Pelanggan(nama_pelanggan='Pemilik perintah uji');db.add(pel);await db.flush()
+        u=await db.get(User,uid);pel=pelanggan_kledo(nama_pelanggan='Pemilik perintah uji');db.add(pel);await db.flush()
         r=await bk.buat_perintah(db,user=u,baris=[bk.BarisPerintah(tipe='pk_langsung',milling_process_id=p.id,berat_kg=100)],pelanggan_id=pel.id)
         assert await alasan_koreksi_hasil_giling(db,p.id)
         await bk.batalkan(db,user=u,rec_id=r.rec.id,sebab='Barang belum dimuat; perintah salah')
