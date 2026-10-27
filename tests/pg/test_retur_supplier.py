@@ -706,3 +706,22 @@ async def test_detail_barang_masuk_menyediakan_tautan_histori_pengajuan_batal(pg
         a=await c.get(f'/barang-masuk/{asal["tid"]}');assert a.status_code==200,a.text
         assert 'Pengajuan Retur ke Supplier terkait' in a.text and f'href="/retur-supplier/{r.id}"' in a.text
         assert f'href="/riwayat-retur-supplier?penerimaan={asal["tid"]}"' in a.text
+
+async def test_http_kontrol_pengajuan_tetap_terlihat_dan_terkunci_untuk_pembaca(pg,asal):
+    import httpx
+    from bs4 import BeautifulSoup
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api_uji(pg,asal,role=P.OPERATOR)),base_url='http://uji') as c:
+        page=await c.get(f'/barang-masuk/{asal["tid"]}/retur-supplier')
+        assert page.status_code==200
+        soup=BeautifulSoup(page.text,'html.parser');button=soup.select_one('[data-rsp-mulai]')
+        assert button is not None and button.has_attr('disabled')
+    async with pg() as db:r=await buat(db,asal);await db.commit();rid=r.id
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api_uji(pg,asal,role=P.OPERATOR)),base_url='http://uji') as c:
+        page=await c.get(f'/retur-supplier/{rid}');assert page.status_code==200
+        soup=BeautifulSoup(page.text,'html.parser')
+        for label in ('Hubungkan tiket','Batalkan pengajuan'):
+            button=next((b for b in soup.select('button') if b.get_text(strip=True)==label),None)
+            assert button is not None
+            assert button.has_attr('disabled') or (button.find_parent('fieldset') is not None and button.find_parent('fieldset').has_attr('disabled'))
+        assert (await c.post(f'/retur-supplier/{rid}/tiket',json={'tiket_id':1})).status_code==403
+        assert (await c.post(f'/retur-supplier/{rid}/batalkan',json={'alasan':'Uji penolakan izin'})).status_code==403

@@ -455,3 +455,18 @@ async def test_tara_campuran_mengikuti_kemasan_dan_jumlah_koreksi(pg,keluar_dua)
         c,_=await terapkan(db,x,payload(x))
         assert [D(i['tara_per_karung_kg']) for i in c['items']]==[D('.1'),D('.2')]
         assert D(c['toleransi_kg'])==D('.6')
+
+async def test_http_pembaca_melihat_koreksi_dan_pembatalan_terkunci(pg,keluar_dua,monkeypatch):
+    import httpx
+    from bs4 import BeautifulSoup
+    from app.web import riwayat_retur_supplier as hist,retur_supplier_koreksi as web
+    from tests.pg.test_retur_supplier import api_uji
+    x=keluar_dua;monkeypatch.setattr(hist,'SessionLocal',pg);monkeypatch.setattr(web,'SessionLocal',pg)
+    app=api_uji(pg,x,role=ROLE.OPERATOR);app.include_router(hist.router);app.include_router(web.router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
+        page=await c.get(f'/riwayat-retur-supplier/{x["rid"]}');assert page.status_code==200
+        soup=BeautifulSoup(page.text,'html.parser')
+        for label in ('Koreksi pencatatan','Pembatalan setelah keluar'):
+            button=next((b for b in soup.select('button') if b.get_text(strip=True)==label),None)
+            assert button is not None and button.has_attr('disabled')
+        assert (await c.get(f'/retur-supplier/{x["rid"]}/tindakan?jenis=jumlah')).status_code==403

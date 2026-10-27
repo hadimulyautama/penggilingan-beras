@@ -188,3 +188,25 @@ async def test_keputusan_akhir_dan_data_permintaan_lama(pg,pabrik,keadaan):
         assert 'Belum tercatat' in r.text and 'Belum terbentuk' in r.text
         assert 'buka=acc_permintaan_pk' not in r.text and 'buka=kirim_permintaan_pk' not in r.text
         if keadaan=='ditolak':assert 'Tujuan belum dapat dipakai &lt;uji&gt;' in r.text
+
+async def test_operator_g1_melihat_tutup_terkunci_dan_post_tetap_ditolak(pg,pabrik):
+    from bs4 import BeautifulSoup
+    from tests.pg.formulir import cap_formulir
+    pid=await _minta(pg,pabrik,berat=1000)
+    await _acc(pg,pabrik,pid,berat=1000)
+    await _kirim(pg,pabrik,pid,berat=1000)
+    async with await _klien(pg,peran='operator',gudang='Gudang 1') as c:
+        c.headers['X-CSRF-Token']=cap_formulir(c)
+        page=await c.get(f'/permintaan-pk/{pid}')
+        assert page.status_code==200
+        soup=BeautifulSoup(page.text,'html.parser')
+        controls=soup.select('[data-aksi-permintaan="tutup_permintaan_pk"]')
+        assert controls
+        assert all(n.get('aria-disabled')=='true' and not n.has_attr('href') for n in controls)
+        assert (await c.post('/api/actions/tutup-permintaan-pk',json={'permintaan':str(pid),'berat':1000})).status_code==403
+    assert (await _status(pg,pid))[0]=='dikirim'
+    for role in ('admin','superadmin'):
+        async with await _klien(pg,peran=role) as c:
+            soup=BeautifulSoup((await c.get(f'/permintaan-pk/{pid}')).text,'html.parser')
+            controls=soup.select('[data-aksi-permintaan="tutup_permintaan_pk"]')
+            assert controls and all(n.name=='a' and 'buka=tutup_permintaan_pk' in n.get('href','') for n in controls)

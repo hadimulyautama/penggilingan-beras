@@ -55,6 +55,7 @@ async def tampilkan(request, akun, *, transfer_id=None, permintaan_id=None):
     detail_url=request.url.replace(path=alamat)
     if konteks_kembali:detail_url=detail_url.include_query_params(kembali_kerja=konteks_kembali)
     return await render_laci(request,'detail_transfer.html',d=d,tab_transfer=tab,tindakan=tindakan,
+        izin_tindakan={id_:a.get('boleh',False) for id_,a in menu.items()},
         kembali=kembali,layar='riwayat_transfer' if t else 'pekerjaan',breadcrumb_detail=d['kode'],
         boleh_koreksi=akun.is_admin and t is not None,penghalang_koreksi=penghalang,
         catatan_penghalang=catatan_penghalang,hasil_awal=float(t.berat_kg) if t else None,
