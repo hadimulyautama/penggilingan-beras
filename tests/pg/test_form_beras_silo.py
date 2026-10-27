@@ -48,7 +48,7 @@ async def test_pratinjau_tidak_mengarang_rencana_untuk_isian_salah(pg,sosoh,kg):
         assert await db.scalar(select(func.count()).select_from(BerasKeSilo))==0
 
 
-@pytest.mark.parametrize('kg,valid',[(250,True),(250.009,True),(250.011,False),(251,False)])
+@pytest.mark.parametrize('kg,valid',[(250,True),(250.009,False),(250.011,False),(251,False)])
 async def test_toleransi_kelipatan_kemasan_identik_dengan_layanan(pg,sosoh,kg,valid):
     await _kemas_grade(pg,sosoh,grade='medium',jumlah_karung=40)
     async with pg() as db:

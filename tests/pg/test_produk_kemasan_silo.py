@@ -23,6 +23,9 @@ async def test_tabel_kemasan_curah_dan_tombol_per_sumber_tanpa_rincian_barang_ke
     async with pg() as db:
         user=await db.get(User,sosoh_jasa['user'])
         user.role=SUPERADMIN
+        # Kontrak pembeli kini mensyaratkan kontak Kledo, termasuk data uji.
+        from app.models import Pelanggan
+        (await db.get(Pelanggan,sosoh_jasa['pelanggan_id'])).kledo_contact_id=91827
         await db.commit()
         for kode,ukuran,jumlah in [(sosoh_jasa['kode_pabrik'],25,4),
                                    (sosoh_jasa['kode_pabrik'],50,3),

@@ -419,7 +419,7 @@ async def test_undo_stok_habis_id_dipakai_ulang_dan_berat_aktual(pg, sosoh):
         rid, sku = stok.id, stok.product_sku_id
         await db.commit()
         await masukkan_beras_ke_silo(db, user=u, jenis="medium",
-            sumber_stok=f"sku:{sku}", nama_silo="C", berat_kg=300)
+            sumber_stok=f"sku:{sku}", nama_silo="C", berat_kg=275)
         lain = FinishedGoodsStock(id=rid, product_sku_id=sku,
             source_type="timbangan", source_id=999, jumlah_karung=10,
             berat_total_kg=500, waktu=now_local(), input_by=u.id)

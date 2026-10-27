@@ -2671,8 +2671,6 @@ async def masukkan_beras_ke_silo(
     ukuran, dan pemilik yang dipilih. Curah maupun kemasan dapat dipilih.
     Setiap sumber dicatat terpisah di buku pemindahan.
     """
-    from app.penggilingan.inventory.models import ProductSku
-    from hmu_core import PackageSize
     from app.services.stok import BERAS_JENIS
 
     g2_wid = await _g2_warehouse_id(db)
@@ -2774,7 +2772,7 @@ async def masukkan_beras_ke_silo(
         row.berat_total_kg = Decimal(str(row.berat_total_kg)) - Decimal(str(ambil_kg))
     # Kurangi hanya karung yang dipilih. Asal tiap baris stok tetap ditandai
     # di BerasKeSilo, termasuk stok timbang/retur yang bukan hasil penyosohan.
-    for row, ambil in baris_karung:
+    for row, ambil, ambil_kg in baris_karung:
         cuplikan["stok"].append({
             "id": row.id, "product_sku_id": row.product_sku_id,
             "rice_quality_standard_id": row.rice_quality_standard_id,
@@ -2785,16 +2783,9 @@ async def masukkan_beras_ke_silo(
             "input_by": row.input_by, "jasa_id": row.jasa_id,
             "kemasan_mengurangi_stok": row.kemasan_mengurangi_stok,
         })
-        sku_row = await db.get(ProductSku, row.product_sku_id)
-        size = (await db.execute(
-            select(PackageSize.ukuran_kg)
-            .where(PackageSize.id == sku_row.package_size_id)
-        )).scalar_one()
-        cuplikan["stok"][-1]["berat_total_kg"] = min(
-            float(row.berat_total_kg), float(size) * ambil)
+        cuplikan["stok"][-1]["berat_total_kg"] = ambil_kg
         row.jumlah_karung -= ambil
-        row.berat_total_kg = max(
-            0.0, float(row.berat_total_kg) - float(size) * ambil)
+        row.berat_total_kg = Decimal(str(row.berat_total_kg)) - Decimal(str(ambil_kg))
         if row.jumlah_karung <= 0:
             # Rincian retur menaut baris stok ini untuk jejak penerimaan.
             # Menghapusnya saat karung terakhir habis melanggar FK dan
@@ -2808,7 +2799,7 @@ async def masukkan_beras_ke_silo(
             db, table_name="finished_goods_stock", record_id=row.id,
             action="UPDATE", changed_by=user.id, aksi="beras_bongkar_karung",
             new_value=(f"{ambil} karung SKU {row.product_sku_id} · "
-                       f"{float(size):g} kg dipindah ke silo").replace(",", "."),
+                       f"{ambil_kg:g} kg nyata dipindah ke silo").replace(",", "."),
         )
 
         await db.flush()
@@ -2851,7 +2842,7 @@ async def masukkan_beras_ke_silo(
         dibongkar_dari_karung_kg=dibongkar_kg,
         kode=", ".join(codes),
         pemindahan_ids=tuple(cuplikan["moves"]),
-        karung_dibongkar=sum(n for _, n in baris_karung),
+        karung_dibongkar=sum(n for _, n, _ in baris_karung),
         jasa_id=jasa_id,
     )
 

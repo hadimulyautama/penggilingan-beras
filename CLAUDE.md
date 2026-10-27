@@ -22,6 +22,22 @@ Izin ringkasan sama dengan POST packing (termasuk Admin); jangan menyalin
 pembatasan khusus Masukkan ke silo. Hasil samping mempertahankan jalur lama.
 Uji domain/HTTP: `tests/pg/test_form_pengemasan_beras.py`.
 
+## Beras kemasan ke silo: berat nyata (27 Oktober 2026)
+
+Ukuran SKU adalah label nominal, bukan pengganti bobot tersimpan. Pembelian
+998 kg yang dicatat sebagai 20 karung nominal 50 kg tetap hanya boleh
+dipindahkan sebanyak 998 kg. Picker, pratinjau, writer, audit, dan cuplikan
+pembatalan memakai alokasi yang sama dari `rencana_beras`: karung utuh FIFO
+dengan bobot proporsional `berat_total_kg / jumlah_karung`, dibulatkan dua
+desimal; sisa pembulatan tetap di batch sampai karung terakhir diambil.
+Pengeluaran yang sudah sah tetap mengurangi batas saldo kg dan karung.
+Payload langsung atau jalur proses lama juga tidak boleh menambah kg.
+
+Tidak ada backfill atau koreksi transaksi historis. Jika pengeluaran lama
+memiliki bobot berbeda dari rasio batch, batas saldo nyata tetap menang;
+permintaan yang tidak cocok dengan karung utuh ditolak, bukan dibulatkan
+atau diberi bobot tambahan. Uji: `tests/pg/test_beras_silo_berat_nyata.py`.
+
 ## Tempat kerja
 
 Repo BERSEBELAHAN di satu folder induk (`Hadi Mulya Systems/`): `produksi/`

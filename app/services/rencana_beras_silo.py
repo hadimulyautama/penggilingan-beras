@@ -7,8 +7,9 @@ untuk menyatakan saldo yang belum habis sebagai nol setelah penyimpanan.
 from sqlalchemy import select
 from app.models import (FinishedGoodsStock, ProductSku, PackageSize, Brand,
                         PackagingMaterial, PolishingProcess, PolishingSiloUsage, Jasa)
-from app.penggilingan.inventory.finished_goods import get_standard, sisa_karung_per_sumber
-from app.penggilingan.gudang2.rencana_beras import curah_beras_sumber, rencana_beras
+from app.penggilingan.inventory.finished_goods import get_standard
+from app.penggilingan.gudang2.rencana_beras import (
+    curah_beras_sumber, rencana_beras, sumber_karung_beras, berat_karung_nyata)
 from app.penggilingan.gudang2 import service as g2
 
 
@@ -82,11 +83,12 @@ async def rincian(db, jenis, sumber, berat=None, silo=''):
         material = await db.get(PackagingMaterial, sku.packaging_material_id)
         merek = brand.nama if brand else 'Tanpa merek'
         bahan = material.nama if material else 'Bahan kemasan belum tercatat'
-        for row, n, _ in await sisa_karung_per_sumber(db, sku.id, std_id, jasa_id=owner, source_type=None):
+        stock_rows, saldo_nyata = await sumber_karung_beras(db, sku.id, std_id, owner)
+        for row, n, _ in stock_rows:
             rows.append(dict(**await identitas(db, row.source_id if row.source_type == 'polishing' else None,
-                                              row.source_type, row.source_id, row.id), kg=n*ukuran, karung=n))
+                                              row.source_type, row.source_id, row.id), kg=float(berat_karung_nyata(row,n)), karung=n))
         karung = sum(r['karung'] for r in rows)
-        saldo = sum(r['kg'] for r in rows)
+        saldo = float(saldo_nyata)
     else:
         raise ValueError('Pilih curah atau merek dan ukuran kemasan yang sah.')
     out = dict(jenis=grade, jenis_label=nama_produk(grade), pemilik=await nama_pemilik(db, owner) if owner else 'Milik pabrik',
@@ -107,10 +109,11 @@ async def rincian(db, jenis, sumber, berat=None, silo=''):
     except (ValueError, g2.Gudang2Error) as e:
         out['pesan'] = str(e);return out
     used = []
-    stocks = [r for r,_ in p['baris_karung']] or [r for r,_ in p['baris_curah']]
+    stocks = [r for r,_,_ in p['baris_karung']] or [r for r,_ in p['baris_curah']]
     for i, (pid,st,sid,sku_id,w) in enumerate(p['rencana_pindah']):
         row_id = stocks[i].id if i < len(stocks) else None
-        used.append(dict(**await identitas(db,pid,st,sid,row_id),kg=w,karung=round(w/ukuran) if ukuran else None))
+        used.append(dict(**await identitas(db,pid,st,sid,row_id),kg=w,
+                         karung=p['baris_karung'][i][1] if ukuran else None))
     if silo and dest:
         aktif = set((await db.scalars(select(PolishingSiloUsage.polishing_process_id)
             .where(PolishingSiloUsage.silo_id==dest.id,
@@ -122,6 +125,6 @@ async def rincian(db, jenis, sumber, berat=None, silo=''):
             out['peringatan_tujuan']='Beras berasal dari '+', '.join(codes)+', yang masih memakai silo tujuan. Pilih silo lain.'
     n = sum(v['karung'] for v in used) if ukuran else None
     out['rencana'] = dict(kg=kg, karung=n, silo=silo,
-                         sisa_kg=max(0.0,saldo-(n*ukuran if ukuran else kg)),
+                         sisa_kg=max(0.0,saldo-kg),
                          sisa_karung=karung-n if ukuran else None, fifo=used)
     return out

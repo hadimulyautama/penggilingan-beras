@@ -4,16 +4,61 @@ Pemeriksaan dan FIFO yang sebelumnya berada di masukkan_beras_ke_silo
 dipakai juga oleh pratinjau. Kunci tetap diambil pada jalur simpan; pembaca
 tidak menjalankan pembukuan, audit, penggabungan pemilik, atau mutasi silo.
 """
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import select
 from app.models import PolishingProcess, PolishingOutputLog, FinishedGoodsStock, ProductSku
 from app.penggilingan.inventory.finished_goods import (
-    _packed_kg, _proc_by_kode, get_standard, sisa_karung_per_sumber)
+    _packed_kg, _proc_by_kode, get_standard, sisa_karung_per_sumber,
+    hitung_stok_finished_goods)
 from hmu_core import PackageSize
 from app.services.stok import _dipindah_silo_proc, output_sosoh
 
 
 def kunci_query(q, kunci):
     return q.with_for_update() if kunci else q
+
+
+def berat_karung_nyata(row, jumlah):
+    """Bagian berat stok tersimpan; ukuran nominal SKU tidak menambah kg.
+
+    NUMERIC disimpan dua desimal. Sisa di baris asal menyerap pembulatan sen
+    kilogram pada pemindahan parsial, sehingga karung terakhir tetap menutup
+    berat batch tepat, termasuk 20 karung nominal 50 kg yang nyata 998 kg.
+    """
+    if not row.jumlah_karung or row.berat_total_kg <= 0:
+        return Decimal('0')
+    return (Decimal(str(row.berat_total_kg))*jumlah/row.jumlah_karung).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+async def sumber_karung_beras(db, sku_id, std_id, jasa_id=None, *, kunci=False, proses_id=None):
+    rows = await sisa_karung_per_sumber(db, sku_id, std_id, jasa_id=jasa_id,
+        source_type=None, kunci=kunci, proses_id=proses_id)
+    stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jasa_id)
+    saldo = max(Decimal('0'), min(Decimal(str(stok['kg'])),
+        sum((berat_karung_nyata(row, n) for row, n, _ in rows), Decimal('0'))))
+    return rows, saldo
+
+
+def ambil_karung_nyata(rows, perlu):
+    """Rencanakan karung utuh FIFO dan kg nyata yang sama untuk writer/preview."""
+    left = Decimal(str(perlu))
+    plan = []
+    for row, tersedia, _ in rows:
+        if left <= Decimal('0.000001'):
+            break
+        if row.berat_total_kg <= 0 or row.jumlah_karung <= 0:
+            continue
+        n = min(tersedia, int((left+Decimal('0.005'))*row.jumlah_karung/
+                              Decimal(str(row.berat_total_kg))))
+        while n > 0 and berat_karung_nyata(row, n) > left+Decimal('0.000001'):
+            n -= 1
+        if n <= 0:
+            break
+        kg = berat_karung_nyata(row, n)
+        plan.append((row, n, float(kg)))
+        left -= kg
+    return plan, float(left)
 
 
 async def curah_beras_sumber(db, jenis, jasa_id=None, *, kunci=False):
@@ -50,7 +95,7 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
     kategori_sku = "beras_b" if jenis == "beras_b" else "beras_putih"
     std = await get_standard(db, jenis)
     alokasi: dict[int, float] = {}
-    baris_karung: list[tuple[FinishedGoodsStock, int]] = []
+    baris_karung: list[tuple[FinishedGoodsStock, int, float]] = []
     baris_curah: list[tuple[FinishedGoodsStock, float]] = []
     rencana_pindah: list[tuple[int | None, str, int | None, int | None, float]] = []
     dibongkar_kg = 0.0
@@ -98,8 +143,6 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
         rencana_pindah.append((proc_id, row.source_type, row.source_id,
                                row.product_sku_id, berat_kg))
     elif sumber_stok == "legacy":
-        from math import ceil
-
         proc = await _proc_by_kode(db, kode_pol)
         if proc is None:
             raise Gudang2Error("Proses penyosohan yang dipilih tidak ditemukan.")
@@ -135,22 +178,13 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
             ukuran = float(ukuran_raw)
             if ukuran <= 0:
                 continue
-            sisa = await sisa_karung_per_sumber(
-                db, sku_id, std.id if std else None,
-                jasa_id=jasa_id, proses_id=proc.id, kunci=kunci)
-            tersedia = sum(jumlah for _, jumlah, _ in sisa)
-            butuh_karung = min(tersedia, ceil(perlu / ukuran))
-            ambil = butuh_karung
-            for row, row_sisa, _ in sisa:
-                jumlah = min(ambil, row_sisa)
-                if jumlah:
-                    baris_karung.append((row, jumlah))
-                    rencana_pindah.append((proc.id, "polishing", proc.id,
-                                           row.product_sku_id, jumlah * ukuran))
-                    ambil -= jumlah
-                    if not ambil:
-                        break
-            kg_karung = butuh_karung * ukuran
+            sisa, saldo = await sumber_karung_beras(db, sku_id, std.id if std else None,
+                jasa_id, proses_id=proc.id, kunci=kunci)
+            plan, _ = ambil_karung_nyata(sisa, min(perlu, float(saldo)))
+            kg_karung = sum(kg for _, _, kg in plan)
+            for row, jumlah, kg in plan:
+                baris_karung.append((row, jumlah, kg))
+                rencana_pindah.append((proc.id, "polishing", proc.id,row.product_sku_id,kg))
             perlu = max(0.0, perlu - kg_karung)
             dibongkar_kg += kg_karung
         if perlu > 0.5:
@@ -174,45 +208,35 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
         if not ukuran or float(ukuran) <= 0:
             raise Gudang2Error("Ukuran kemasan beras tidak valid.")
         ukuran = float(ukuran)
-        jumlah_karung = round(berat_kg / ukuran)
-        berat_pilihan = jumlah_karung * ukuran
-        if jumlah_karung <= 0 or abs(berat_pilihan - berat_kg) > 0.01:
-            raise Gudang2Error(
-                f"Berat dari kemasan {ukuran:g} kg harus kelipatan ukuran tersebut.")
-        sumber = await sisa_karung_per_sumber(
-            db, sku_id, std.id if std else None, jasa_id=jasa_id,
-            source_type=None, kunci=kunci)
+        sumber, saldo = await sumber_karung_beras(db, sku_id, std.id if std else None,
+            jasa_id, kunci=kunci)
         tersedia = sum(jumlah for _, jumlah, _ in sumber)
-        if jumlah_karung > tersedia:
+        if Decimal(str(berat_kg)) > saldo:
             raise Gudang2Error(
-                f"Stok kemasan yang dipilih tinggal {tersedia} karung; "
-                f"tak cukup untuk {jumlah_karung} karung.")
-        perlu_karung = jumlah_karung
-        for row, sisa, _ in sumber:
-            ambil = min(perlu_karung, sisa)
-            if ambil <= 0:
-                continue
+                f"Stok kemasan yang dipilih tinggal {tersedia} karung dengan berat nyata "
+                f"{float(saldo):,.2f} kg; tak cukup untuk {berat_kg:,.2f} kg.".replace(',', '.'))
+        plan, sisa_perlu = ambil_karung_nyata(sumber, berat_kg)
+        if abs(sisa_perlu) > 0.000001:
+            raise Gudang2Error(
+                "Berat harus sesuai isi karung utuh berdasarkan berat nyata stok. "
+                f"Ukuran {ukuran:g} kg adalah label nominal, bukan pengganti berat timbang.")
+        for row, ambil, kg in plan:
             proc_id = row.source_id if row.source_type == "polishing" else None
             if row.source_type == "polishing" and proc_id is None:
                 raise Gudang2Error(
                     "Asal proses untuk stok kemasan ini tidak tercatat; "
                     "stok tidak dipindahkan agar riwayat tetap utuh.")
-            baris_karung.append((row, ambil))
+            baris_karung.append((row, ambil, kg))
             rencana_pindah.append((proc_id, row.source_type, row.source_id,
-                                   row.product_sku_id, ambil * ukuran))
+                                   row.product_sku_id, kg))
             if proc_id is not None:
-                alokasi[proc_id] = alokasi.get(proc_id, 0.0) + ambil * ukuran
-            perlu_karung -= ambil
-            if perlu_karung <= 0:
-                break
-        if perlu_karung:
-            raise Gudang2Error("Stok kemasan berubah. Muat ulang daftar lalu coba lagi.")
-        dibongkar_kg = berat_pilihan
+                alokasi[proc_id] = alokasi.get(proc_id, 0.0) + kg
+        dibongkar_kg = sum(kg for _, _, kg in plan)
     else:
         raise Gudang2Error("Pilih curah atau merek dan ukuran kemasan yang tersedia.")
 
     if (not rencana_pindah
-            or abs(sum(item[4] for item in rencana_pindah) - berat_kg) > 0.01):
+            or abs(sum(item[4] for item in rencana_pindah) - berat_kg) > 0.000001):
         raise Gudang2Error("Alokasi sumber stok tidak cocok dengan berat yang diminta.")
 
     return dict(alokasi=alokasi, baris_karung=baris_karung,

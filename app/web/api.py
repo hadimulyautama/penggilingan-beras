@@ -973,7 +973,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "konteks_beras_silo": {"source": "/api/actions/rincian-beras-silo", "proses": "jenis"},
              "hint": "Jenis beras dan pemilik mengikuti kartu yang dipilih. "
                      "Pilih stok curah atau kemasan yang ingin dipindahkan, lalu masukkan beratnya. "
-                     "Untuk kemasan, berat harus kelipatan ukuran karung.",
+                     "Untuk kemasan, pindahkan karung utuh dengan berat nyata stok; "
+                     "ukuran nominal karung tidak menggantikan hasil timbang.",
              "fields": [
                  {"name": "jenis", "label": "Jenis beras", "type": "remote",
                   "source": "/api/actions/beras-jenis-silo",
@@ -5704,7 +5705,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
     from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.inventory.finished_goods import (
-        _packed_kg, get_standard, sisa_karung_per_sumber)
+        _packed_kg, get_standard)
     from app.services.jasa import nama_pemilik
     from app.services.stok import BERAS_JENIS, _dipindah_silo_proc, output_sosoh
     from hmu_core import Brand, PackageSize, PackagingMaterial
@@ -5807,9 +5808,9 @@ async def beras_sumber_tersedia(induk: str | None = None,
                           PackageSize.ukuran_kg)
             )).all()
             for sku_id, brand, material, ukuran in skus:
-                sisa = await sisa_karung_per_sumber(
-                    db, sku_id, std.id if std else None, jasa_id=owner,
-                    source_type=None)
+                from app.penggilingan.gudang2.rencana_beras import sumber_karung_beras
+                sisa, saldo_nyata = await sumber_karung_beras(
+                    db, sku_id, std.id if std else None, owner)
                 karung = sum(jumlah for _, jumlah, _ in sisa)
                 if karung <= 0:
                     continue
@@ -5818,7 +5819,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
                 keluar.append({
                     "value": f"sku:{sku_id}|{owner_token}",
                     "label": (f"{label}{owner_suffix} · {karung} karung · "
-                              f"{_kg(karung * float(ukuran))} tersedia"),
+                              f"{_kg(float(saldo_nyata))} tersedia"),
                 })
     return keluar
 
