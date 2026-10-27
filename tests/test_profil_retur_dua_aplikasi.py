@@ -16,7 +16,7 @@ def test_profil_retur_tanpa_db_dilaporkan(monkeypatch):
 ])
 def test_profil_retur_menolak_db_salah(monkeypatch,url):
     monkeypatch.setenv('UJI_PG_URL',url)
-    with pytest.raises(AssertionError,match='loopback56639'):_profil_url()
+    with pytest.raises(AssertionError,match='loopback pada port uji'):_profil_url()
 
 @pytest.mark.parametrize('nama',['uji_tf_retur_ci','uji_detail_retur_duaapp'])
 def test_profil_retur_ci_dan_lokal_lama_diterima(monkeypatch,nama):
