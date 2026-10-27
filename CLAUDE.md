@@ -1292,3 +1292,13 @@ menerima keyword `jenis`, default Menir tetap kompatibel. Saldo/alokasi tetap
 berasal dari `rencana_hasil_samping`; tidak ada perubahan writer, formula,
 toleransi, kemasan, atau penguncian pada perapian Reject ini. Pembatalan HSS
 otomatis masih belum didukung layanan lama; jangan menyatakan sudah tersedia.
+
+
+## CI manual — keputusan pemilik 27 Oktober 2026
+
+Workflow GitHub Actions hanya dijalankan melalui `workflow_dispatch` atas
+perintah eksplisit pengguna untuk menjalankan CI. Push dan pull request tidak
+memicu CI penuh secara otomatis. Jangan memulai CI penuh hanya karena perubahan
+kecil atau deployment. Gunakan tes lokal yang relevan dan proporsional; hasil CI
+yang sudah lulus boleh dipakai untuk kode runtime yang identik tanpa mengulang
+hanya karena pemindahan ke main. Laporkan pemeriksaan yang benar-benar dijalankan.

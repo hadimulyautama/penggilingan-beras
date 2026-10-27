@@ -1,4 +1,4 @@
-# Uji penuh + uji Postgres, tiap push dan pull request.
+# Uji penuh + uji Postgres, hanya atas perintah manual pengguna.
 #
 # Temuan QA UJI-02, 11 September 2026. Bug khusus Postgres dan balapan harus
 # tertangkap di sini, bukan di pos timbang: SQLite mengubah NaN jadi NULL, tak
@@ -15,9 +15,7 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: ["**"]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   uji:
