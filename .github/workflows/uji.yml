@@ -157,9 +157,11 @@ jobs:
           PYTHON
       - name: Pasang dua interpreter terpisah
         run: |
-          python -m pip install -r padiflow/requirements.txt -r padiflow/requirements-dev.txt
+          python -m pip install -r padiflow/requirements.txt -r padiflow/requirements-dev.txt -r padiflow/tests/pg/requirements-dua-aplikasi.txt
           python -m venv timbangan/.venv
           timbangan/.venv/bin/pip install -r timbangan/requirements.txt
+      - name: Pasang Chromium untuk PWA dan luring
+        run: python -m playwright install --with-deps chromium
       - name: Migrasi nyata dan sembilan integrasi HTTP
         working-directory: padiflow
         run: >-
