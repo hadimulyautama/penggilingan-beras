@@ -28,6 +28,15 @@ async def keluar_dua(pg,asal,request):
         b=FinishedGoodsStock(product_sku_id=asal['sku'],source_type='timbangan',source_id=asal['tid'],jumlah_karung=10,berat_total_kg=499,warehouse_id=asal['wh'],input_by=asal['uid'],waktu=now_local())
         if mode=='pecahan':b.jumlah_karung=30;b.berat_total_kg=998
         if mode=='curah':b.jumlah_karung=0;b.curah_kemas_ulang=True
+        if mode=='campuran':
+            from app.models import ProductSku,PackageSize,KemasanTara
+            size=await db.scalar(select(PackageSize.id).where(PackageSize.ukuran_kg==50))
+            original_sku=await db.get(ProductSku,asal['sku'])
+            sku=ProductSku(kategori='beras_putih',aktif=True,package_size_id=size,packaging_material_id=original_sku.packaging_material_id)
+            db.add(sku);await db.flush();b.product_sku_id=sku.id
+            tara=await db.scalar(select(KemasanTara).where(KemasanTara.package_size_id==size,KemasanTara.packaging_material_id==sku.packaging_material_id))
+            if tara:tara.tara_per_karung_kg=D('.2')
+            else:db.add(KemasanTara(package_size_id=size,packaging_material_id=sku.packaging_material_id,tara_per_karung_kg=D('.2')))
         db.add(b);await db.flush()
         p=[dict(kunci=f'beras:{asal["fid"]}',jumlah='3'),dict(kunci=f'beras:{b.id}',jumlah='2')]
         check=await s.periksa(db,asal['tid'],user(asal),p,'Kembalikan mutu','Catatan awal')
@@ -413,3 +422,36 @@ async def test_kontrak_penerimaan_parsial_penuh_pembatalan_tanpa_mutasi_kedua(pg
         for table in before:
             if table not in ('peristiwa',):assert before[table]==after[table]
         assert (await hitung_stok_finished_goods(db,x['sku'],None))['kg']==1247.5
+
+
+async def test_pk_998_30_memakai_bobot_partai_dan_tara_karung_aktual(pg,asal):
+    from app.models import KemasanTara,PackageSize
+    from tests.pg.test_retur_supplier import buat_sumber
+    async with pg() as db:
+        tid,a,key=await buat_sumber(db,asal,'pk',bags=30)
+        tara=await db.scalar(select(KemasanTara).join(PackageSize).where(PackageSize.ukuran_kg==50));assert tara
+        tara.tara_per_karung_kg=D('.1')
+        req=[dict(kunci=key,jumlah='3')]
+        c=await s.periksa(db,tid,user(asal),req,'Koreksi partai PK uji','')
+        r=await s.simpan(db,user=user(asal),tid=tid,jumlah=req,alasan=c['alasan'],catatan='',kunci=uuid4().hex,dasar=c['dasar'])
+        ticket=await tiket(db,asal['sid'],'RETUR_SUPPLIER','RETUR_KELUAR');await s.hubungkan(db,user=user(asal),identitas=r.id,tiket_id=ticket)
+        await db.execute(text("UPDATE timbangan_transaksi SET timbang2_kg=5099.8,berat_barang_kg=99.8,status_tiket='SELESAI' WHERE id=:id"),dict(id=ticket));await db.commit()
+        i=await db.scalar(select(I).where(I.retur_supplier_id==r.id))
+        c=await f.periksa(db,identitas=r.id,user=user(asal),jumlah=[dict(item_id=i.id,jumlah='3',kemasan_tara_id=tara.id)]);await db.commit()
+        await f.catat_keluar(db,identitas=r.id,user=user(asal),dasar=c['dasar'],konfirmasi=True);await db.commit()
+        p=dict(identitas=r.id,kunci=uuid4().hex,jenis='jumlah',jumlah=[dict(item_id=i.id,jumlah='4')],alasan='Kesalahan jumlah PK telah diperiksa',konfirmasi=True)
+        c=await k.periksa(db,user=user(asal),**p);await db.commit()
+        assert c['status']=='perlu_koreksi' and D(c['toleransi_kg'])==D('.4')
+        assert abs(D(c['total_baru'])-D(998)*4/30)<D('.000001')
+        assert abs(D(c['items'][0]['mutasi_kg'])+D(998)/30)<D('.000001')
+        _,choices=await s.siapkan(db,tid,user(asal))
+        assert choices[0]['stok_kg']==D('898.2') and choices[0]['stok_jumlah']==27
+
+
+@pytest.mark.parametrize('keluar_dua',['campuran'],indirect=True)
+async def test_tara_campuran_mengikuti_kemasan_dan_jumlah_koreksi(pg,keluar_dua):
+    x=keluar_dua
+    async with pg() as db:
+        c,_=await terapkan(db,x,payload(x))
+        assert [D(i['tara_per_karung_kg']) for i in c['items']]==[D('.1'),D('.2')]
+        assert D(c['toleransi_kg'])==D('.6')
