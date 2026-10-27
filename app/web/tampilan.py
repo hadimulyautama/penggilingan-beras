@@ -181,8 +181,12 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     # View ditetapkan `akun_opsional`, satu kali per permintaan. Layar tak
     # pernah menghitungnya sendiri — lihat `app.web.layar`.
     konteks.setdefault("VIEW", getattr(request.state, "view", "tamu"))
-    from app.web.akses import hak_view
+    from app.web.akses import hak_view, PINTU_HAK
     konteks.setdefault("AKSES", hak_view(konteks["VIEW"]))
+    # Pintu tanpa batas VIEW juga harus mengikuti izin baca endpoint.
+    # Contohnya Pengiriman: operator G1 melihat tempatnya, tetapi terkunci.
+    konteks["NAV_TERKUNCI"] = tuple(kunci for kunci, hak in PINTU_HAK.items()
+                                    if not konteks["AKSES"].get(hak, False))
     konteks.setdefault("TAMPILAN_INDUK", True)
     # Menu aktif yang pernah disembunyikan berdasarkan peran sekarang tetap
     # punya tempat di kerangka yang sama. Izin rutenya tidak diperluas.

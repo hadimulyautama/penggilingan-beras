@@ -31,11 +31,11 @@ def _jaga_url(url):
         parsed=urlsplit(url)
         nama=parsed.path.removeprefix('/')
         sah=(parsed.scheme=='postgresql+asyncpg' and parsed.hostname=='127.0.0.1'
-             and parsed.port==56639 and not parsed.query and not parsed.fragment
+             and parsed.port==int(os.environ.get('UJI_RETUR_PORT','56639')) and not parsed.query and not parsed.fragment
              and (nama=='uji_detail_retur_duaapp' or re.fullmatch(r'uji_tf_retur_[a-z0-9_]+',nama)))
     except ValueError:
         sah=False
-    assert sah, 'DB retur dua aplikasi wajib loopback56639 dan nama uji_tf_retur_* atau uji_detail_retur_duaapp, tanpa query.'
+    assert sah, 'DB retur dua aplikasi wajib loopback pada port uji (bawaan56639) dan nama uji_tf_retur_* atau uji_detail_retur_duaapp, tanpa query.'
     return url
 
 
@@ -169,3 +169,46 @@ async def test_http_retur_selesai_tanpa_padi_lalu_penerimaan_baca_saja(pg):
                 assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock))==1
                 assert await db.scalar(text('SELECT count(*) FROM timbangan_transaksi'))==1
                 assert await db.scalar(text('SELECT count(*) FROM timbangan_cetak'))==0
+
+            # Identitas sama, izin baca berubah menurut mode; tiket dan stok utuh.
+            async with pg() as db:
+                u=await db.get(User,uid);u.role=P.SUPERADMIN;await db.commit()
+            for mode in ('operator:g1','operator:g2','admin'):
+                c.cookies.set('produksi_lihat',mode)
+                r=await c.get(f'/timbangan/transaksi/{tid}')
+                assert r.status_code==200
+                if mode.startswith('operator:'):
+                    assert 'Rincian PadiFlow dibatasi oleh izin akun' in r.text
+                    assert 'OUT-RETUR-UJI' not in r.text and '250,00 kg' in r.text
+                else:assert 'Diterima otomatis' in r.text and 'OUT-RETUR-UJI' in r.text
+                async with httpx.AsyncClient(base_url=pf) as pc:
+                    response=await pc.get(f'/internal/retur/tiket/{tid}/detail',headers={'X-Internal-Token':'uji-lintas-kiriman','X-Operator-Akun':str(aid),'X-Produksi-Lihat':mode})
+                    assert response.status_code==(403 if mode.startswith('operator:') else 200)
+            # Browser nyata membaca dua app lokal; jaringan selain loopback diblokir.
+            if os.environ.get('UJI_RETUR_BROWSER')=='1':
+                from playwright.async_api import async_playwright
+                async with async_playwright() as browser_api:
+                    browser=await browser_api.chromium.launch()
+                    for mode,width in [('operator:g2',390),('admin',1280)]:
+                        ctx=await browser.new_context(viewport={'width':width,'height':900})
+                        async def jaringan(route):
+                            if route.request.url.startswith((tf,pf)):await route.continue_()
+                            else:await route.abort()
+                        await ctx.route('**/*',jaringan)
+                        cookies=[{'name':k.name,'value':k.value,'url':tf} for k in c.cookies.jar if k.name!='produksi_lihat']
+                        cookies.append({'name':'produksi_lihat','value':mode,'url':tf})
+                        await ctx.add_cookies(cookies)
+                        page=await ctx.new_page();await page.goto(f'{tf}/timbangan/transaksi/{tid}')
+                        await page.get_by_text('Rincian PadiFlow dibatasi oleh izin akun' if mode.startswith('operator:') else 'Diterima otomatis',exact=False).first.wait_for()
+                        assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                        await page.locator('#pembuka').wait_for(state='hidden')
+                        await page.screenshot(path=str(OUT/f'lihat-{width}.png'),full_page=True)
+                        await ctx.close()
+                    await browser.close()
+            async with pg() as db:
+                assert (await db.get(User,uid)).role==P.SUPERADMIN
+                assert await db.scalar(select(func.count()).select_from(CustomerReturn))==1
+                assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock))==1
+                assert await db.scalar(text('SELECT count(*) FROM timbangan_transaksi'))==1
+                assert await db.scalar(text('SELECT count(*) FROM timbangan_cetak'))==0
+            (OUT/'mode-live.json').write_text(json.dumps(dict(super_ke_operator_g1_dibatasi=True,super_ke_operator_g2_dibatasi=True,super_ke_admin_tersedia=True,stok_tidak_berubah=True,akun_asli_tetap_super=True,browser=[390,1280] if os.environ.get('UJI_RETUR_BROWSER')=='1' else []),indent=2))

@@ -83,8 +83,8 @@ body.padiflow-ui :is(.laci__identitas .bar__sub,.bawah__peran) { color: var(--pd
 body.padiflow-ui :is(.desktop-chrome__top,.desktop-chrome__crumbrow,.bar) { color: var(--pd-ink); background: var(--pd-sheet); border-color: var(--pd-line); }
 body.padiflow-ui .desktop-chrome__top { padding: 14px 22px; }
 body.padiflow-ui .desktop-chrome__crumbrow { padding: 12px 22px; min-height: 44px; }
-body.padiflow-ui :is(.desktop-chrome__shortcuts a,.desktop-chrome__company) { font: 400 12px/1.55 var(--pd-font); }
-body.padiflow-ui .desktop-chrome__shortcuts a { padding: 9px 10px; min-height: 38px; border-radius: 9px; background: var(--pd-sheet); border-color: var(--pd-line); }
+body.padiflow-ui :is(.desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]),.desktop-chrome__company) { font: 400 12px/1.55 var(--pd-font); }
+body.padiflow-ui .desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]) { padding: 9px 10px; min-height: 38px; border-radius: 9px; background: var(--pd-sheet); border-color: var(--pd-line); }
 body.padiflow-ui :is(.desktop-breadcrumb,.desktop-back) { font: 400 13px/1.55 var(--pd-font); }
 body.padiflow-ui .desktop-breadcrumb :is(strong,span:not([aria-hidden])) { font-weight: 600; }
 body.padiflow-ui :is(.desktop-chrome__notice,.desktop-language summary,.desktop-theme button,.pd-theme) { min-width: 42px; height: 42px; border: 1px solid var(--pd-line); border-radius: 9px; background: var(--pd-sheet); color: var(--pd-ink); }

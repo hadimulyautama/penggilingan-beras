@@ -1102,16 +1102,16 @@ body.terik .pintu-sub__satu--kini { background: #e9eef3; color: #202832; }
   }
   .desktop-chrome__shortcuts, .desktop-chrome__tools { display: flex; align-items: center; gap: 8px; }
   .desktop-chrome__shortcuts { min-width: 0; }
-  .desktop-chrome__shortcuts a {
+  .desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]) {
     display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 12px;
     border: 1px solid var(--kulit-batas); border-radius: 9px; background: var(--kulit-kartu);
     color: var(--tinta); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap;
   }
-  .desktop-chrome__shortcuts a:hover { background: var(--panel-2); }
-  .desktop-chrome__shortcuts a span { color: var(--aksi); font-size: 17px; font-weight: 600; }
-  .desktop-chrome__shortcuts a:nth-child(2) span { color: #25855e; }
-  .desktop-chrome__shortcuts a:nth-child(3) span { color: #bd8127; }
-  .desktop-chrome__shortcuts a:nth-child(4) span { color: #c45e49; }
+  .desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]):hover { background: var(--panel-2); }
+  .desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]) span { color: var(--aksi); font-size: 17px; font-weight: 600; }
+  .desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]):nth-child(2) span { color: #25855e; }
+  .desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]):nth-child(3) span { color: #bd8127; }
+  .desktop-chrome__shortcuts :is(a,span[aria-disabled="true"]):nth-child(4) span { color: #c45e49; }
   .desktop-chrome__tools { flex: 0 0 auto; }
   .desktop-chrome__company { max-width: 210px; overflow: hidden; color: var(--tinta); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   .desktop-language { position: relative; }

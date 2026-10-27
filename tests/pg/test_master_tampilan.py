@@ -92,6 +92,14 @@ async def test_kerangka_menu_dan_pengaturan_sama_bagi_semua_peran(pg, pabrik):
             assert soup.find(id='daftar-akses')
             hasil.append([n.get_text(' ',strip=True) for n in soup.select('.laci-seksi .pintu__nama')])
             assert 'Kabar' in hasil[-1]
+            pengiriman=soup.select('a.pintu[href="/barang-keluar"], .desktop-chrome a[href="/barang-keluar"]')
+            if role==P.OPERATOR and gudang==g1:
+                assert not pengiriman
+                assert (await c.get('/barang-keluar')).status_code==403
+                assert soup.select('.desktop-chrome [aria-disabled="true"]')
+                assert any('Pengiriman' in n.get_text() for n in soup.select('.pintu[aria-disabled="true"]'))
+            else:
+                assert len(pengiriman)==2
             assert 'Super Admin' in r.text and 'Operator G1' in r.text
             akses=await c.get('/pengaturan/akses')
             assert akses.status_code==200 and 'id="daftar-akses"' in akses.text
