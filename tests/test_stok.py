@@ -107,9 +107,11 @@ def test_koreksi_stok_hanya_untuk_admin_keatas():
     # selepan: `boleh_ubah` dan `boleh_minta` dua-duanya salah).
     assert teks.count("boleh_ubah") >= 3
     assert "{% if boleh_ubah or boleh_minta or boleh_pindah_tumpukan %}" in teks
-    assert "{% if g1 and boleh_ubah and not t.berjalan %}" in teks
+    assert "{% if g1 and (boleh_ubah or TAMPILAN_INDUK) and not t.berjalan %}" in teks
     # Tak ditawarkan selama mesin masih giling: angkanya belum final di sana.
-    assert "boleh_ubah and not t.berjalan" in teks
+    assert "(boleh_ubah or TAMPILAN_INDUK) and not t.berjalan" in teks
+    assert '{% if boleh_ubah %}' in teks
+    assert 'disabled>Perbaiki hasil giling</button>' in teks
 
 
 def test_tiap_lot_menyebut_pemasok_bobot_dan_tanggalnya():

@@ -40,7 +40,7 @@ def _spesifikasi() -> dict[str, tuple[str, str]]:
     """{id aksi: (nama medan pertama, tipenya)} dari katalog `api.py`."""
     s = (AKAR / "app/web/api.py").read_text()
     keluar: dict[str, tuple[str, str]] = {}
-    for m in re.finditer(r'\{"id": "([a-z0-9_]+)", "label": "', s):
+    for m in re.finditer(r'\{(?:"akses": "[a-z0-9_]+",\s*)?"id": "([a-z0-9_]+)", "label": "', s):
         i = s.find('"fields"', m.end())
         if i < 0 or i - m.end() > 2000:
             continue

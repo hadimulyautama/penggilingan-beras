@@ -353,7 +353,7 @@ def test_gudang2_punya_kartunya_sendiri():
     assert "pass    #" not in untuk, "cabang Gudang 2 tak lagi kosong"
 
 
-def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
+def test_katalog_dikelompokkan_dan_undo_tetap_tersedia():
     """Tiga puluh kata kerja berjajar sama besar menuntut orang membaca
     semuanya untuk menemukan satu. Dan `undo` punya rumahnya sendiri di List
     audit — dua pintu untuk satu pekerjaan berarti yang satu tak pernah ikut
@@ -419,11 +419,11 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     menu = inspect.getsource(api.actions_menu)
     assert 'a["grup"] = _GRUP_AKSI.get' in menu
     assert 'a["kartu"] = a["grup"] == GRUP_KARTU' in menu
-    # `undo` dibuang HANYA bagi yang punya List audit. Operator tak punya
-    # layar itu, jadi katalog inilah satu-satunya jalannya membatalkan —
-    # membuangnya untuk semua orang berarti yang paling sering salah ketik
-    # justru kehilangan cara memperbaikinya.
-    assert 'if fin:\n        actions = [a for a in actions if a["id"] != "undo"]' in menu
+    # v476 memberi seluruh peran internal katalog induk, termasuk undo bagi
+    # Admin/Super Admin. Izin aktual tetap ditandai pada setiap spesifikasi.
+    assert 'actions += aksi_undo.spesifikasi(' in menu
+    assert 'actions = [a for a in actions if a["id"] != "undo"]' not in menu
+    assert 'a["boleh"] = izin.get(akses, False)' in menu
 
     aksi_js = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
     assert "DATA.urutGrup" in aksi_js

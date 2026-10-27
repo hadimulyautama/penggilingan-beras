@@ -94,6 +94,12 @@ async def _menu_g2(monkeypatch):
 
     monkeypatch.setattr(api, "SessionLocal", lambda: _Db())
 
+    async def tujuan_palsu(_kondisi):
+        return []
+
+    # Katalog induk v476 juga merakit spesifikasi G1 yang terkunci.
+    monkeypatch.setattr(api, "_pilihan_tujuan_gabah", tujuan_palsu)
+
     async def sebab_palsu(db):
         return {k: list(v) for k, v in jeda.SEBAB.items()}
 
@@ -107,7 +113,10 @@ async def _menu_g2(monkeypatch):
     from app.web import aksi_inventory
     monkeypatch.setattr(aksi_inventory, "spesifikasi", lambda **k: [])
 
-    return await api.actions_menu(SimpleNamespace(id=1, role="operator", nama="Uji"))
+    menu = await api.actions_menu(SimpleNamespace(id=1, role="operator", nama="Uji"))
+    # Uji di modul ini memeriksa pekerjaan yang dapat dijalankan operator G2.
+    # Kesamaan seluruh katalog dan aksi terkunci diuji test_master_tampilan.
+    return [a for a in menu if a["boleh"]]
 
 
 async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):

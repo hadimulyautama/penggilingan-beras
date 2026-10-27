@@ -338,17 +338,17 @@ def test_gerbang_permintaan_pk_dua_arah():
     assert not can_transfer_pk(_Op()), "operator mendadak boleh memindahkan PK"
 
 
-def test_tombol_minta_hanya_untuk_view_polesan():
-    """Operator selepan tak boleh melihatnya (bukan pekerjaannya), Admin tak
-    membutuhkannya."""
+def test_tombol_minta_aktif_untuk_polesan_dan_super_lainnya_terkunci():
+    """Katalog induk v476 terlihat oleh semua; izin minta tetap khusus."""
     import pathlib
 
     from app.web import layar_stok
 
-    assert "boleh_minta=view == POLESAN" in inspect.getsource(layar_stok.halaman_stok)
+    assert "boleh_minta=view in (POLESAN, SUPER)" in inspect.getsource(layar_stok.halaman_stok)
     tpl = (pathlib.Path(__file__).resolve().parents[1]
            / "hmu_tampilan/templates/_stok_pk_detail.html").read_text()
-    assert "{% if g1 and boleh_minta and not t.berjalan %}" in tpl
+    assert "{% if g1 and (boleh_minta or TAMPILAN_INDUK) and not t.berjalan %}" in tpl
+    assert '{% elif not boleh_minta %}<button class="btn" disabled' in tpl
     # Yang sudah diminta menyebut KEADAANNYA, bukan menawarkan tombol kedua.
     # Urutannya penting, jadi diuji sebagai rantai: yang sudah disetujui punya
     # kalimatnya sendiri, sisanya yang sudah diminta, baru yang belum.

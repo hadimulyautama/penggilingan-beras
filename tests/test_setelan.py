@@ -117,7 +117,7 @@ def _render_pengaturan(*, tuan: bool, blok_kelola: bool = False):
         blok_mode_uji=False)
 
 
-def test_tombol_list_audit_hanya_untuk_admin_ke_atas():
+def test_tombol_list_audit_aktif_hanya_untuk_admin_ke_atas():
     """⭐ Permintaan pemilik 7 Oktober 2026: "List Audit jangan tampilkan
     lagi di side-bar tetapi buat tombol di halaman pengaturan." Gerbangnya
     `tuan` (admin ke atas) — SAMA PERSIS gerbang rute `/audit`
@@ -125,8 +125,13 @@ def test_tombol_list_audit_hanya_untuk_admin_ke_atas():
     Admin-saja begitu Super Admin pertama diangkat (lihat catatan panjang
     di templatnya)."""
     tanpa = _render_pengaturan(tuan=False)
-    assert "List audit" not in tanpa
+    # v476 mempertahankan pintu audit pada susunan induk, dengan keadaan
+    # terkunci bagi operator. Tautan aktif tetap hanya milik Admin ke atas.
+    assert "List audit" in tanpa
     assert 'href="/audit"' not in tanpa
+    from bs4 import BeautifulSoup
+    judul=BeautifulSoup(tanpa,'html.parser').find('strong',string='List audit')
+    assert judul.find_parent('span',class_='pg-pintu')['aria-disabled']=='true'
 
     dengan = _render_pengaturan(tuan=True)
     assert "List audit" in dengan
@@ -278,7 +283,8 @@ def test_setelan_dikelompokkan_per_proses():
     # gudang pemiliknya, disaring dengan view; isinya dijaga
     # `test_setelan_penyosohan_ada_di_pos_produksi`.
     rute = kode_saja(pengaturan.halaman_pengaturan)
-    assert "PROSES=_proses_view(view)" in rute
+    assert "PROSES=_proses_view(V_SUPER)" in rute
+    assert "blok_setelan=tuan" in rute
     assert "penyosohan" not in rute, "setelan Gudang 2 diurus dari Meja"
 
     # Dilipat: daftar sebab tumbuh — itu memang gunanya — dan daftar yang
