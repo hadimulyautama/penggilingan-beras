@@ -12,6 +12,7 @@ def hak(peran, *, g1=False, g2=False):
     super_ = P.super_saja(peran)
     operator = P.operator_saja(peran)
     return dict(g1=admin or operator and g1, g2=admin or operator and g2,
+                pengiriman=admin or operator and g2,
                 admin=admin, super=super_, catat=admin or operator and (g1 or g2),
                 fisik_g2=super_ or operator and g2,
                 minta_pk=super_ or operator and g2)
@@ -21,6 +22,9 @@ def hak_view(view):
     peran = {P.V_SUPER: P.SUPERADMIN, P.V_ADMIN: P.ADMIN,
              P.V_SELEPAN: P.OPERATOR, P.V_POLESAN: P.OPERATOR}.get(view)
     return hak(peran, g1=view == P.V_SELEPAN, g2=view == P.V_POLESAN)
+
+
+PINTU_HAK = {"barang_keluar": "pengiriman"}
 
 
 PERAN_KOLOM = ((P.V_SUPER, "Super Admin"), (P.V_ADMIN, "Admin"),
@@ -36,6 +40,7 @@ def daftar_umum():
     return [dict(nama=nama, izin=matriks(kunci)) for nama, kunci in (
         ("Pekerjaan dan riwayat Gudang 1", "g1"),
         ("Pekerjaan dan riwayat Gudang 2", "g2"),
+        ("Daftar Pengiriman", "pengiriman"),
         ("Laporan keuangan, koreksi, keputusan dan audit", "admin"),
         ("Kelola pengguna, akun, gudang dan alat", "super"),
         ("Ubah setelan kerja dan mutu", "admin"),

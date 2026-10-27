@@ -68,3 +68,8 @@ async def test_tombol_terkunci_tetap_ditolak_endpoint_minta(monkeypatch, role, g
 async def test_superadmin_membaca_semua_penerima_kabar():
     from app.services.kabar import _cakupan
     assert await _cakupan(NS(role=P.SUPERADMIN)) == []
+
+
+def test_izin_baca_pengiriman_sesuai_endpoint():
+    from app.web.akses import matriks, PINTU_HAK
+    assert matriks(PINTU_HAK['barang_keluar']) == [True, True, False, True]

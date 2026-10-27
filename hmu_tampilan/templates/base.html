@@ -138,7 +138,9 @@
       <a href="/berjalan"><span aria-hidden="true">◷</span>Proses</a>
       {% endif %}
       <a href="/stok"><span aria-hidden="true">▦</span>Stok</a>
-      <a href="/barang-keluar"><span aria-hidden="true">⇥</span>Pengiriman</a>
+      {% if 'barang_keluar' in NAV_TERKUNCI|default(()) %}
+      <span class="akses-terkunci" aria-disabled="true" title="Pengiriman tersedia untuk Admin dan Operator Gudang 2"><span aria-hidden="true">⇥</span>Pengiriman <small>Terkunci</small></span>
+      {% else %}<a href="/barang-keluar"><span aria-hidden="true">⇥</span>Pengiriman</a>{% endif %}
     </nav>
     <div class="desktop-chrome__tools">
       <span class="desktop-chrome__company">PT Hadi Mulya Utama</span>
@@ -314,7 +316,7 @@
            selalu submenu Semua." `request.url.query` genap/kosong untuk
            "Stok" (path polos, tanpa `?`) — jadi baris ini tak mengubah
            perilakunya sama sekali di sana. #}
-        {% if TAMPILAN_INDUK and peran_min and VIEW not in peran_min %}
+        {% if TAMPILAN_INDUK and ((peran_min and VIEW not in peran_min) or kunci in NAV_TERKUNCI|default(())) %}
         <span class="pintu akses-terkunci" aria-disabled="true" title="Tidak memiliki akses untuk peran ini">
           <span class="pintu__ikon" aria-hidden="true">{{ ikon_portal(ikon)|trim }}</span>
           <span class="pintu__isi"><span class="pintu__nama">{{ nama }}</span></span>
