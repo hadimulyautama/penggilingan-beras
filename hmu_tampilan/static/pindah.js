@@ -140,20 +140,28 @@
   /* ── Mengambil, dan hanya sekali untuk alamat yang sama ── */
   function ambil(alamat) {
     if (sedang[alamat]) { return sedang[alamat]; }
+    var bolehSimpan = true;
     var janji = fetch(alamat, {
       credentials: "same-origin",
+      cache: "no-store",
       headers: { "X-Pindah": "1" }
     }).then(function (r) {
-      /* Dialihkan ke halaman masuk, atau ditolak: serahkan pada peramban.
-         Sesi yang habis harus terlihat sebagai sesi yang habis, bukan
-         sebagai halaman kosong. */
-      if (!r.ok || r.redirected) { return null; }
+      /* Detail stok dapat habis sesudah kartunya dilihat. Halaman pemulihan
+         404 yang ditandai server tetap boleh dipasang, agar refresh setelah
+         simpan mengganti kartu lama dan navigasi tidak jatuh ke JSON mentah.
+         Galat tidak disimpan: kunjungan berikutnya harus bertanya lagi.
+         Redirect sesi, JSON API, dan galat tanpa penanda tetap memakai
+         penjagaan navigasi utuh yang semula. */
+      var pulih = r.status === 404 && r.headers.get("X-Pindah-Halaman") === "1"
+        && (r.headers.get("Content-Type") || "").split(";")[0].trim() === "text/html";
+      if (r.redirected || (!r.ok && !pulih)) { return null; }
+      if (pulih) { bolehSimpan = false; delete simpan[alamat]; }
       return r.text();
     }).catch(function () {
       return null;              // jaringan putus — biarkan peramban mencoba
     }).then(function (teks) {
       delete sedang[alamat];
-      if (teks) { simpan[alamat] = teks; }
+      if (teks && bolehSimpan) { simpan[alamat] = teks; }
       return teks;
     });
     sedang[alamat] = janji;

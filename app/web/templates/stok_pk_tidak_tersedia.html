@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block judul %}Stok PK tidak tersedia{% endblock %}
+{% block isi %}
+<section class="kartu" data-stok-pk-tidak-tersedia>
+  <h1>Stok PK tidak tersedia</h1>
+  <p>{{ pesan }}</p>
+  <p class="bantu">Daftar stok terbaru mengikuti keadaan barang saat ini. Pilih kembali stok yang masih tersedia untuk melanjutkan pekerjaan.</p>
+  <a class="btn btn--utama" href="{{ stok_terbaru }}" data-utuh>Lihat stok terbaru</a>
+</section>
+{# Konfirmasi simpan yang baru selesai tetap dapat dipasang oleh aksi.js. #}
+<div class="kabar" id="kabar" role="status"></div>
+{% endblock %}

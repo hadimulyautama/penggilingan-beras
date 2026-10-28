@@ -31,6 +31,30 @@ from app.web.tampilan import render_laci
 router = APIRouter(tags=["webapp"])
 
 
+async def _pk_tidak_tersedia(request: Request, pesan: str):
+    """Detail yang kedaluwarsa tetap punya jalan ke stok terbaru.
+
+    Stok aktif memang menghilang setelah habis/dipindahkan. HTTP 404 tetap
+    berlaku, tetapi halaman web tidak boleh berubah menjadi JSON mentah.
+    Penanda eksplisit membolehkan PINDAH memasang halaman pemulihan ini
+    tanpa menyimpan galat dalam cache atau menampilkan kartu lama lagi.
+    """
+    from app.web.stok_navigasi import alamat, kembali_aman
+
+    q = request.query_params
+    kembali = kembali_aman(q.get("kembali_stok")) or alamat(
+        pemilik="jasa" if q.get("jasa") == "1" else "pabrik",
+        gudang=q.get("gudang_filter") if q.get("gudang_filter") in {"g1", "g2"} else "",
+    )
+    response = await render_laci(
+        request, "stok_pk_tidak_tersedia.html", status_code=404,
+        layar="stok", pesan=pesan, kembali=kembali, stok_terbaru=kembali,
+    )
+    response.headers["X-Pindah-Halaman"] = "1"
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 @router.get("/stok")
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     # Satu pintu navigasi, tetapi tetap memakai pembaca dan gerbang lama.
@@ -247,38 +271,43 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
     gudang = request.query_params.get("gudang", "")
     jasa_saja = request.query_params.get("jasa") == "1"
     if gudang not in {"g1", "g2"}:
-        raise HTTPException(404, "Lokasi stok PK tidak dikenal.")
+        return await _pk_tidak_tersedia(request, "Tautan stok PK tidak valid. Buka daftar stok terbaru.")
 
     view = getattr(request.state, "view", "tamu")
+    if not ((gudang == "g1" and (gudang1(view) or gudang2(view)))
+            or (gudang == "g2" and gudang2(view))):
+        return await _pk_tidak_tersedia(request, "Stok PK tidak tersedia untuk gudang kerja Anda.")
+    if gudang == "g2":
+        try:
+            intake_id = int(request.query_params.get("id", ""))
+        except (TypeError, ValueError):
+            return await _pk_tidak_tersedia(request, "Tautan stok PK tidak valid. Buka daftar stok terbaru.")
     async with SessionLocal() as db:
-        if gudang == "g1" and (gudang1(view) or gudang2(view)):
+        if gudang == "g1":
             daftar = await svc.pk_gudang1(db)
             identitas = request.query_params.get("kode", "")
             kartu = next((x for x in daftar
                           if x.kode == identitas
                           and bool(x.jasa_id) == jasa_saja), None)
-        elif gudang == "g2" and gudang2(view):
+        else:
             daftar = await svc.pk_gudang2(db)
-            try:
-                intake_id = int(request.query_params.get("id", ""))
-            except (TypeError, ValueError):
-                raise HTTPException(404, "Kode stok PK tidak dikenal.")
             kartu = next((x for x in daftar
                           if x.intake_id == intake_id
                           and bool(x.jasa_id) == jasa_saja), None)
-        else:
-            raise HTTPException(404, "Stok PK tidak tersedia untuk gudang ini.")
+        if kartu is not None:
+            from app.services.qc_gabah_asal import dari_pk
+            qc_gabah_asal = await dari_pk(db, kode=kartu.kode if gudang == "g1" else None,
+                                         intake_id=kartu.intake_id if gudang == "g2" else None)
+            mutu_aktif = await fitur_mutu(db)
+            riwayat_qc = (await svc.riwayat_qc_pk(
+                db, kode=kartu.kode if gudang == "g1" else None,
+                intake_id=kartu.intake_id if gudang == "g2" else None,
+            )) if mutu_aktif else {"rows": [], "hasil_terbaru_saja": False}
 
-        if kartu is None:
-            raise HTTPException(404, "Stok PK tidak ditemukan atau sudah habis.")
-        from app.services.qc_gabah_asal import dari_pk
-        qc_gabah_asal = await dari_pk(db, kode=kartu.kode if gudang == "g1" else None,
-                                     intake_id=kartu.intake_id if gudang == "g2" else None)
-        mutu_aktif = await fitur_mutu(db)
-        riwayat_qc = (await svc.riwayat_qc_pk(
-            db, kode=kartu.kode if gudang == "g1" else None,
-            intake_id=kartu.intake_id if gudang == "g2" else None,
-        )) if mutu_aktif else {"rows": [], "hasil_terbaru_saja": False}
+    if kartu is None:
+        return await _pk_tidak_tersedia(
+            request, "Stok PK ini tidak lagi tersedia di daftar. Barang mungkin sudah dipindahkan, dipakai, atau habis.",
+        )
 
     kembali = "/stok-pk-jasa" if jasa_saja else "/stok"
     params_detail = {
