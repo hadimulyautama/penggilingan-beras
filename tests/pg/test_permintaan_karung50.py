@@ -92,15 +92,28 @@ async def test_kirim_kosong_klien_lama_dan_koreksi_admin(pg,pabrik):
         assert await saldo_pk(db,pabrik['proses_id'])==5500
 
 @pytest.mark.parametrize('role',[P.OPERATOR,P.ADMIN,P.SUPERADMIN,P.PERAN_PENSIUN[0]])
-async def test_izin_efektif_dan_pratinjau(pg,pabrik,role):
+@pytest.mark.parametrize('operator',['op1','op2'])
+async def test_izin_efektif_dan_pratinjau(pg,pabrik,role,operator):
     async with pg() as db:
-        u=await db.get(User,pabrik['op1']);u.role=role;await db.commit()
-    async with await _klien(pg,pabrik['op1'],'peran-unit',mode='operator' if role==P.OPERATOR else 'admin') as c:
+        u=await db.get(User,pabrik[operator]);u.role=role;await db.commit()
+    async with await _klien(pg,pabrik[operator],'peran-unit',mode='operator' if role==P.OPERATOR else 'admin') as c:
         # Identitas staf lama bukan izin admin. Peran efektif tetap diproses sesi.
+        # Minta lot menerima Super Admin/operator G2; pratinjau dan POST
+        # harus sejalan tanpa membuka akses Admin atau operator G1.
+        boleh_minta=role==P.SUPERADMIN or (role==P.OPERATOR and operator=='op2')
+        boleh_kirim=role in [P.ADMIN,P.SUPERADMIN] or (role==P.OPERATOR and operator=='op1')
         kirim=await c.get('/api/actions/pratinjau-unit-transfer-pk/kirim')
         minta=await c.get('/api/actions/pratinjau-unit-transfer-pk/minta')
-        assert minta.status_code in [403,401]
-        assert kirim.status_code == 200 if role in [P.OPERATOR,P.ADMIN,P.SUPERADMIN] else kirim.status_code in [401,403]
+        assert minta.status_code==200 if boleh_minta else minta.status_code in [403,401]
+        assert kirim.status_code==200 if boleh_kirim else kirim.status_code in [403,401]
+        async with pg() as db:
+            assert await db.scalar(select(func.count()).select_from(PermintaanPk))==0
+            assert await saldo_pk(db,pabrik['proses_id'])==6000
+        buat=await post(c,'minta-pk-g1',kode_proses=pabrik['lot'],cara='karung',jumlah_karung=1)
+        assert buat.status_code==200 if boleh_minta else buat.status_code in [403,401]
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(PermintaanPk))==int(boleh_minta)
+        assert await saldo_pk(db,pabrik['proses_id'])==6000
 
 async def test_permohonan_dan_pengiriman_bersamaan(pg,pabrik):
     async with await _klien(pg,pabrik['op2'],'ganda-minta',mode='operator') as c:

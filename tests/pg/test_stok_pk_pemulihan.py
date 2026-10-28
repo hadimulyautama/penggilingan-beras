@@ -1,5 +1,4 @@
 """Detail PK yang kehilangan saldo tetap HTML, aman, dan dapat dipulihkan."""
-from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
 
 import pytest
@@ -44,7 +43,7 @@ def pemulihan(response):
 
 
 @pytest.mark.parametrize('gudang',['g1','g2'])
-async def test_detail_lama_setelah_pindah_saldo_tidak_menampilkan_json_atau_aksi(pg,dunia,gudang):
+async def test_detail_lama_setelah_pindah_saldo_tidak_menampilkan_json_atau_aksi(pg,dunia,gudang,tmp_path):
     params={'gudang':gudang,'gudang_filter':gudang}
     if gudang=='g1':params['kode']='LOT-KODE-01'
     else:params['id']=str(dunia['beli_intake_id'])
@@ -76,7 +75,7 @@ async def test_detail_lama_setelah_pindah_saldo_tidak_menampilkan_json_atau_aksi
                 headers={'X-CSRF-Token':cap_formulir(c)})
             assert tulis.status_code==400 and 'detail' in tulis.json()
         async with pg() as db:assert await sidik(db)==before
-        if gudang=='g2':Path('/private/tmp/padiflow-pk-pemulihan.html').write_text(r.text)
+        if gudang=='g2':(tmp_path/'padiflow-pk-pemulihan.html').write_text(r.text,encoding='utf-8')
 
 
 @pytest.mark.parametrize('params',[

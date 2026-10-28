@@ -197,12 +197,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: padiflow
-      # Pin paket retur yang diuji; source82 tanpa perubahan retur tidak
-      # membuktikan kontrak detail baru. Job pengiriman di atas tetap memakai82.
+      # Snapshot94 meneruskan mode Lihat sebagai ke API PadiFlow. Paket83
+      # belum membawa kontrak ini. Job pengiriman di atas tetap memakai82.
       - uses: actions/checkout@v4
         with:
           repository: hadimulyautama/timbangan
-          ref: 3fd6d838aed67da916dc99bdd7a29397ac262468
+          ref: 810da88266949f328855516db08581c9399e87ff
           path: timbangan
       - uses: actions/setup-python@v5
         with:
@@ -217,15 +217,14 @@ jobs:
           import hashlib,json
           from pathlib import Path
           root=Path('timbangan')
-          manifest=json.loads((root/'CI_RETUR_SOURCE_MANIFEST.json').read_text())
+          manifest=json.loads(Path('padiflow/tests/ci/teraflow94-manifest.json').read_text())
           assert manifest['profile']=='retur-ci'
-          assert manifest['release_version']=='83'
-          assert manifest['base_commit']=='0200668a8eab721f4d991ede6e0808d4d656c411'
-          assert len(manifest['delta_manifest'])==7
-          assert len(manifest['source_manifest'])==172
+          assert manifest['release_version']=='94'
+          assert manifest['commit']=='810da88266949f328855516db08581c9399e87ff'
+          assert len(manifest['source_manifest'])==193
           for file,digest in manifest['source_manifest'].items():
               assert hashlib.sha256((root/file).read_bytes()).hexdigest()==digest,file
-          print('172 hash source paket retur cocok, termasuk tujuh delta teruji.')
+          print('193 hash source TeraFlow94 cocok, termasuk penerusan mode baca.')
           PYTHON
       - name: Pasang dua interpreter terpisah untuk retur
         run: |
