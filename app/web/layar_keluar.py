@@ -69,21 +69,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                             "Pilih gudang kerja melalui menu Kerja di gudang.")
     if request.query_params.get("buka") == "perintah_keluar":
         return RedirectResponse("/barang-keluar/baru", 303)
-    # ── Tombol MUAT hanya untuk yang bukan Admin, dan ini keputusan sadar ──
-    #
-    # `_is_g2_operator` sengaja menjawab True untuk Admin ("Admin selalu
-    # boleh"), dan rutenya memang menerimanya — itu jalan darurat yang tak saya
-    # tutup: sore hari tanpa operator, muatan tetap harus bisa dicatat.
-    #
-    # Tetapi MENAWARKANNYA di halaman ini hal lain. Seluruh sebab rantai ini
-    # ada adalah pemisahan tangan: yang memerintah bukan yang memuat, dan yang
-    # memuat bukan yang memverifikasi. Admin yang disodori tombol "Muat semua"
-    # tepat di sebelah tombol "Verifikasi" akan menekan keduanya, dan
-    # verifikasinya jadi verifikasi atas pekerjaannya sendiri — rantainya utuh
-    # di basis data, kosong artinya.
-    #
-    # Jadi: rutenya tetap terbuka, tombolnya tidak ditawarkan.
-    boleh_muat = (not boleh_perintah
+    # Super Admin melihat seluruh alur, termasuk tugas muat (28 Oktober).
+    # Admin tetap memakai tampilan penerbitan/verifikasi yang sudah berlaku.
+    from hmu_identitas import peran as P
+    boleh_muat = (P.super_saja(akun.user.role) or not boleh_perintah
                   and (await _is_g2_operator(akun.user)
                        or await _is_g1_operator(akun.user)))
 
@@ -324,8 +313,8 @@ def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "", cep
     t: list[tuple] = []
     if rec.status == OUT_PERINTAH and cepat and boleh_perintah:
         t.append(("keluar_cepat", n, "Konfirmasi barang keluar", True))
-    elif rec.status == OUT_PERINTAH and boleh_muat:
-        t.append(("muat_semua", n, "Muat semua sesuai perintah", True))
+    if rec.status == OUT_PERINTAH and boleh_muat:
+        t.append(("muat_semua", n, "Muat semua sesuai perintah", not t))
         t.append(("muat_barang", n, "Catat per barang", False))
         t.append(("selesai_muat", n, "Selesai muat", False))
     if rec.status == OUT_DIMUAT and boleh_perintah:

@@ -3033,7 +3033,8 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
     return keluar
 
 
-async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str) -> list[Baris]:
+async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str,
+                             termasuk_cepat: bool = False) -> list[Baris]:
     """Perintah muat operator. Verifikasi Admin berada di halaman Barang Keluar."""
     from app.penggilingan.inventory.models import OUT_PERINTAH
     from app.services import barang_keluar as bk
@@ -3042,7 +3043,7 @@ async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str) -> list[Baris]:
     keluar: list[Baris] = []
     for rec, items in await bk.daftar(db, status=(keadaan,), batas=30):
         # Penyerahan kecil dikonfirmasi Admin langsung di Barang Keluar.
-        if not rec.kiriman_id and bk.boleh_keluar_cepat(items):
+        if not termasuk_cepat and not rec.kiriman_id and bk.boleh_keluar_cepat(items):
             continue
         # Gudang mana yang harus melihatnya dihitung dari BARANGNYA, bukan
         # dipilih Admin: perintah yang mendarat di layar yang salah akan berdiri
@@ -3626,6 +3627,18 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
         b.berjalan += g2.berjalan
         b.transit += g2.transit
         b.jumlah_produk = g2.jumlah_produk
+
+    # Super Admin melihat tugas muat kedua gudang, termasuk perintah yang
+    # juga dapat diserahkan lewat jalur cepat. Satu perintah cukup satu kartu
+    # walau barangnya lintas gudang atau sudah masuk dari daftar G1.
+    from hmu_identitas import peran as P
+    if P.super_saja(user.role):
+        sudah = {x.nilai for x in b.menunggu if x.aksi == "muat_semua"}
+        for gudang_muat in ("g1", "g2"):
+            for kartu in await _kartu_barang_keluar(db, gudang=gudang_muat, termasuk_cepat=True):
+                if kartu.nilai not in sudah:
+                    b.menunggu.append(kartu)
+                    sudah.add(kartu.nilai)
 
     # ── Pintu "Stok Produk": semua, KECUALI operator Gudang 1 ──
     #

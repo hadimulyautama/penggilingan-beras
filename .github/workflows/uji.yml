@@ -160,11 +160,12 @@ jobs:
           timbangan/.venv/bin/pip install -r timbangan/requirements.txt
       - name: Pasang Chromium untuk PWA dan luring
         run: python -m playwright install --with-deps chromium
-      - name: Migrasi nyata dan sembilan integrasi HTTP
+      - name: Migrasi nyata, integrasi HTTP dan navigasi muat browser
         working-directory: padiflow
         run: >-
           python -m pytest -q -m dua_aplikasi
           tests/pg/test_teraflow_kiriman.py tests/pg/test_integrasi_verifikasi473.py
+          tests/pg/test_muat_navigasi_browser.py
           --junitxml=../bukti/dua-aplikasi/junit.xml
       - name: Simpan hasil dua aplikasi
         if: always()

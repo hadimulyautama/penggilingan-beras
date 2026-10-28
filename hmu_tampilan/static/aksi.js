@@ -299,8 +299,12 @@
 
   function bukaAksi(id, semula) {
     var a = MENU[id];
-    if (!a) return;
-    if (a.boleh === false) {
+    // Tautan muat membuka halaman tersendiri sebelum katalog sempat dimuat.
+    // Halaman tujuan tetap memeriksa izin di server; aksi formulir lain
+    // tetap memerlukan spesifikasi katalog.
+    if (!a && id !== "muat_barang" && id !== "muat_semua" &&
+        id !== "selesai_muat" && id !== "verifikasi_keluar") return;
+    if (a && a.boleh === false) {
       kabar(a.alasan_akses || "Anda tidak memiliki akses untuk tindakan ini.", "err");
       return;
     }
