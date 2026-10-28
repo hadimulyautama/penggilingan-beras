@@ -80,7 +80,8 @@
 <body class="padiflow-ui {{ 'terik' if TERIK }}">
 <div class="bingkai">
 {% block pita %}
-{% if TAMPILAN_INDUK or VIEW in ('selepan', 'polesan') %}<div class="pita-samar" role="status">{% if VIEW in ('selepan', 'polesan') %}GUDANG {{ '1 · SELEPAN' if VIEW == 'selepan' else '2 · PENYOSOHAN' }}{% else %}SEMUA GUDANG{% endif %} · {{ akun.nama }}</div>{% endif %}
+{# Identitas dan peran cukup di kaki sidebar; pita khusus di bawah tetap
+   menyediakan jalan kembali ketika pengguna sedang melihat sebagai. #}
 {% if MOCKUP %}<div class="pita-uji">MOCKUP · DATA CONTOH, BUKAN DATA PABRIK</div>{% endif %}
 {# Jalan pulangnya ikut di pita, bukan disembunyikan di Pengaturan:
    yang sedang menyamar sebagai operator mungkin tak lagi melihat menu

@@ -11,6 +11,9 @@ body.padiflow-ui .laci__logo--gelap {filter:brightness(2.5) saturate(.65)}
   body.padiflow-ui .laci__isi .pd-close {
     top: calc(20px + env(safe-area-inset-top, 0px));
   }
+  /* Pita Lihat sebagai sudah menyediakan area aman di atas header.
+     Judul mengikuti posisi tombol agar inset tidak dihitung dua kali. */
+  body.padiflow-ui form.pita-samar ~ .isi .bar__merek { top: 10px; }
 }
 
 /* Setelah pita mode uji dihapus, .isi menjadi anak pertama. Aturan lama
