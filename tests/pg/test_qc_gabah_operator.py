@@ -56,17 +56,34 @@ async def test_kartu_dan_post_qc_mengikuti_gudang_efektif(pg, gabah, role, gudan
                         'betulkan_bobot_giling', 'qc_pk_luar', 'qc_giling') for k in daftar.meja)
 
 
-async def test_fitur_mutu_nonaktif_menutup_kartu_dan_post_operator(pg, gabah):
+@pytest.mark.parametrize('role,gudang', [
+    ('operator', 'Gudang 1'), ('admin', None), ('superadmin', None),
+])
+async def test_fitur_mutu_nonaktif_menutup_kartu_dan_post_operator(pg, gabah, role, gudang):
     async with pg() as db:
         db.add(SetelanPabrik(kunci='fitur_mutu', nilai='0'))
         await db.commit()
-    async with await _klien(pg, peran='operator', gudang='Gudang 1') as c:
+    async with await _klien(pg, peran=role, gudang=gudang) as c:
         r = await c.get('/pekerjaan?asal=mutu')
-        assert r.status_code == 200 and 'GB-OP-basah' not in r.text
-        r = await c.post('/api/actions/qc-gabah/basah',
-            json=payload('basah'),
-            headers={'X-CSRF-Token': cap_formulir(c)})
-        assert r.status_code == 400 and 'dimatikan' in r.text
+        assert r.status_code == 200
+        menu = (await c.get('/api/actions/menu')).json()
+        assert not {'qc_gabah_basah', 'qc_gabah_kering', 'qc_gabah_tutup'} & {a['id'] for a in menu}
+        for kondisi in ('basah', 'kering'):
+            assert 'GB-OP-' + kondisi not in r.text
+            gagal = await c.post('/api/actions/qc-gabah/' + kondisi,
+                json=payload(kondisi), headers={'X-CSRF-Token': cap_formulir(c)})
+            assert gagal.status_code == 400 and 'dimatikan' in gagal.text
+        async with pg() as db:
+            assert await db.scalar(select(func.count()).select_from(PurchaseBatchQcSample)) == 0
+            setelan = await db.get(SetelanPabrik, 'fitur_mutu')
+            setelan.nilai = '1'
+            await db.commit()
+        r = await c.get('/pekerjaan?asal=mutu')
+        assert r.status_code == 200
+        for kondisi in ('basah', 'kering'):
+            assert 'GB-OP-' + kondisi in r.text
+        menu = {a['id']: a for a in (await c.get('/api/actions/menu')).json()}
+        assert all(menu[id_]['boleh'] for id_ in ('qc_gabah_basah', 'qc_gabah_kering', 'qc_gabah_tutup'))
     async with pg() as db:
         assert await db.scalar(select(func.count()).select_from(PurchaseBatchQcSample)) == 0
 

@@ -615,12 +615,9 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     jalan = (AKAR / "app/services/berjalan.py").read_text()
     assert "if mutu_aktif else 1" in jalan, "kartu QC giling tak ikut padam"
     assert "if await fitur_mutu(db) else []" in jalan, "kartu QC PK luar tak ikut padam"
-    # Impornya ada di FUNGSI yang memakainya — pernah tidak, dan /keputusan
-    # menjawab 500 sementara seluruh tes tetap hijau. Tiga sejak 24 September
-    # 2026: `untuk_gudang1` ikut membacanya, karena kartu giling yang sedang
-    # berjalan kini menawarkan "Catat mutu sekarang" dan menyebut rata-ratanya —
-    # keduanya harus ikut padam saat pencatatan mutu dimatikan.
-    assert jalan.count("from app.services.setelan import fitur_mutu") == 3
+    # Jumlah/lokasi impor bukan kontrak fitur. Kartu dan POST QC saat fitur
+    # padam, lalu kartu yang pulih saat menyala, diuji lewat HTTP untuk
+    # operator G1, Admin dan Super Admin di test_qc_gabah_operator.py.
     assert "if (boleh_qc and qc_aktif) else []" in jalan, \
         "tombol QC di kartu giling tak ikut padam / tak bergerbang peran"
 
