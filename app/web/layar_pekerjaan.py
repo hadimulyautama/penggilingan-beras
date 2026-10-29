@@ -184,24 +184,31 @@ async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
         gudang=gudang,nama_saring=sorted({x.judul or x.kode for x in pending} if status=='belum' else {x['nama'] for x in riwayat}),**b.lencana())
 
 
-@router.get('/barang-masuk/{tid:int}')
-async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
+async def sumber_detail_barang_masuk(db, tid, request, akun):
+    """Gerbang dan catatan asal untuk detail serta PDF; tidak menyusun aksi."""
     from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
     from app.web.api import _is_g1_operator,_is_g2_operator
+    g1,g2 = (True,True) if is_customer_read(request) else (await _is_g1_operator(akun.user),await _is_g2_operator(akun.user))
+    data = await masuk.riwayat(db,g1=g1,g2=g2,tid=tid,
+        jasa_ids=request.state.portal_scope.jasa_ids if is_customer_read(request) else None)
+    t = await ambil_tiket(db,tid)
+    if t is None and data:
+        t = await masuk.tiket_riwayat(db,tid)
+    if not t or t.get('arah')!='MASUK':
+        raise HTTPException(404,'Tiket masuk tidak ditemukan.')
+    jenis = masuk.jenis_tiket(t['jenis_kode'])
+    from app.peran import can_see_financials
+    boleh = g1 if jenis.startswith('gabah') else g2 if jenis!='lain' else can_see_financials(akun.user)
+    if not is_customer_read(request) and not boleh:
+        raise HTTPException(403,'Tiket ini berada di gudang lain.')
+    return data, t, jenis
+
+
+@router.get('/barang-masuk/{tid:int}')
+async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
+    from app.peran import can_see_financials
     async with SessionLocal() as db:
-        g1,g2 = (True,True) if is_customer_read(request) else (await _is_g1_operator(akun.user),await _is_g2_operator(akun.user))
-        data = await masuk.riwayat(db,g1=g1,g2=g2,tid=tid,
-            jasa_ids=request.state.portal_scope.jasa_ids if is_customer_read(request) else None)
-        t = await ambil_tiket(db,tid)
-        if t is None and data:
-            t = await masuk.tiket_riwayat(db,tid)
-        if not t or t.get('arah')!='MASUK':
-            raise HTTPException(404,'Tiket masuk tidak ditemukan.')
-        jenis = masuk.jenis_tiket(t['jenis_kode'])
-        from app.peran import can_see_financials
-        boleh = g1 if jenis.startswith('gabah') else g2 if jenis!='lain' else can_see_financials(akun.user)
-        if not is_customer_read(request) and not boleh:
-            raise HTTPException(403,'Tiket ini berada di gudang lain.')
+        data, t, jenis = await sumber_detail_barang_masuk(db, tid, request, akun)
         b = await svc.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
         pending = [x for x in bagi(b).masuk if x.kode==t['kode']]
         catatan = data[0]['catatan'] if data else []
@@ -262,3 +269,18 @@ async def detail_permintaan(permintaan_id: int, request: Request,
                if request.query_params.get('kembali_kabar') else '/pekerjaan')
     return await render_laci(request, 'permintaan_detail.html', layar='pekerjaan',
                              permintaan=p, lot=lot, kembali=kembali)
+
+
+@router.get('/barang-masuk/{tid:int}/laporan.pdf')
+async def laporan_penerimaan_pdf(tid:int, request:Request, akun=Depends(butuh_akun)):
+    from fastapi.responses import Response
+    from app.services.laporan_penerimaan import baca
+    from app.web.pdf_penerimaan import buat_pdf
+    async with SessionLocal() as db:
+        data, tiket, jenis = await sumber_detail_barang_masuk(db, tid, request, akun)
+        dokumen = await baca(db, tiket, jenis, data[0]['catatan'] if data else [],
+                             pembuat=akun.user.nama,scope=getattr(request.state,'portal_scope',None))
+    return Response(buat_pdf(dokumen), media_type='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="laporan-penerimaan-{tid}.pdf"',
+        'Cache-Control':'no-store, private', 'Vary':'Cookie',
+        'X-Content-Type-Options':'nosniff'})

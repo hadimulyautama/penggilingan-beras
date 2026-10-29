@@ -47,7 +47,7 @@ async def rincian_timbang(db, tid):
                        t.total_tara_kg,t.tara_lain_kg,t.berat_barang_kg,
                        t.berat_acuan_kg,t.selisih_kg,t.selisih_persen,
                        t.batas_bawah_kg,t.batas_atas_kg,t.status_kontrol,
-                       t.status_transaksi,t.keterangan,t.catatan,t.tutup_paksa_alasan,
+                       t.status_transaksi,t.keterangan,t.catatan,t.tutup_paksa_alasan,t.void_alasan,
                        a.nama AS petugas1,b.nama AS petugas2
                   FROM timbangan_transaksi t
                   LEFT JOIN timbangan_akun a ON a.id=t.timbang1_petugas_id
@@ -98,7 +98,7 @@ async def hasil_qc(db, catatan):
     for c in catatan:
         if c['model'] not in ('gabah','pk'):
             continue
-        g=dict(kode=c['kode'],putaran=[],status='Belum diperiksa')
+        g=dict(kode=c['kode'],putaran=[],status='Belum diperiksa',jenis=c['model'],rata=None,putaran_lama=[])
         if c['model']=='gabah':
             b=await db.get(PurchaseBatch,c['id'])
             q=await db.scalar(select(PurchaseBatchQc).where(PurchaseBatchQc.purchase_batch_id==c['id']))
@@ -123,6 +123,14 @@ async def hasil_qc(db, catatan):
                         fields.append(('Lamur',('Ya' if q.lamur else 'Tidak')+f' · {q.jumlah_sak_lamur or 0} sak' if q.lamur is not None else 'Belum dicatat'))
                     g['status']='Catatan QC lama · rincian putaran belum tersedia'
                     g['putaran'].append(dict(nomor=None,waktu=q.created_at,petugas=nama.nama if nama else 'Tidak tercatat',hasil=fields))
+            g['jenis']='gabah_'+b.kondisi_gabah
+            if q:
+                # Nilai parent diperbarui layanan QC gabah dari kedua bacaan
+                # seluruh catatan; sama dengan detail QC, tanpa rumus baru.
+                g['rata']=dict(air=b.kadar_air_awal_persen,
+                    n_air=sum(v is not None for r,_ in rows for v in (r.kadar_air_1,r.kadar_air_2)),
+                    hijau=kondisi(q.biji_hijau),densiti=kondisi(q.densiti),
+                    lamur=q.lamur,sak=q.jumlah_sak_lamur)
             jenis='gabah-'+b.kondisi_gabah
         else:
             rows=(await db.execute(select(PkPurchaseQcLog,User.nama)
@@ -134,7 +142,11 @@ async def hasil_qc(db, catatan):
                 fields.extend(rincian_kualitatif(s,termasuk_kosong=True))
                 fields.append(('Catatan lab',s.catatan_lab or 'Belum dicatat'))
                 g['putaran'].append(dict(nomor=nomor,waktu=s.waktu,petugas=nama or 'Tidak tercatat',hasil=fields))
-            if rows:g['status']=f'{len(rows)} pemeriksaan'
+                if s.asal_lama:g['putaran_lama'].append(nomor)
+            from app.services.mutu_pk import penilaian_dari_log
+            if rows:
+                g['status']=f'{len(rows)} pemeriksaan'
+                g['rata']=penilaian_dari_log(s for s,_ in rows)
             if not rows:
                 lama=await db.scalar(select(PkPurchaseVerification).where(PkPurchaseVerification.pk_purchase_batch_id==c['id']))
                 if lama and any(getattr(lama,k) is not None for k in ('kadar_air','broken_persen','penyusutan_persen','butir_kuning','gabah','merang','catatan_lab')):
@@ -145,6 +157,11 @@ async def hasil_qc(db, catatan):
                     # verified_by/waktu_verifikasi adalah jejak harga lama,
                     # bukan bukti siapa/kapan QC dilakukan.
                     g['putaran'].append(dict(nomor=None,waktu=None,petugas='Tidak tercatat',hasil=fields))
+                    from types import SimpleNamespace
+                    g['rata']=penilaian_dari_log([SimpleNamespace(
+                        kadar_air=lama.kadar_air,broken_persen=lama.broken_persen,
+                        susut_persen=lama.penyusutan_persen,butir_kuning=lama.butir_kuning,
+                        gabah=lama.gabah,merang=lama.merang)])
             jenis='pk-luar'
         g['url']=f"/riwayat-qc/{jenis}/{c['kode']}" if rows else None
         kelompok.append(g)
