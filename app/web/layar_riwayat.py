@@ -1014,8 +1014,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                              akun=Depends(butuh_akun), referensi: str | None = None):
     """Ringkasan QC dan detail satu batch/proses dengan gerbang yang sama.
 
-    Detail disaring di basis data sebelum pembatas daftar diterapkan. Lot
-    lama atau putaran di luar 200 pencatatan terbaru tetap dapat dibuka.
+    Batas daftar adalah 200 batch/proses, bukan putaran pembentuk rata-rata.
+    Detail disaring di basis data dan tetap dapat membuka batch/proses lama.
     """
     from app.models import User
     if jenis not in QC_PAGES:
@@ -1028,14 +1028,15 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
 
     grouped: dict[str, dict] = {}
-    penilaian = None
     qc_detail = {}
 
     def tambah(ref: str, waktu, nomor: int | None, detail: list[tuple[str, str]],
                *, asal: str | None = None, plat: str | None = None, qc_pk=None,
                bacaan_gabah=None):
         kartu = grouped.setdefault(ref, {"ref": ref, "rounds": [],
-                                        "asal_set": set(), "plat_set": set()})
+                                        "asal_set": set(), "plat_set": set(), "log_pk": []})
+        if qc_pk is not None:
+            kartu["log_pk"].append(qc_pk)
         if asal:
             kartu["asal_set"].add(asal)
         if plat:
@@ -1048,6 +1049,17 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     async with SessionLocal() as db:
         if jenis in ("gabah-basah", "gabah-kering"):
             kondisi = "basah" if jenis == "gabah-basah" else "kering"
+            # Batas daftar berlaku pada batch, bukan baris pengukuran. Semua
+            # putaran batch terpilih harus tetap ikut ringkasan dan detail.
+            batch_terbaru = (select(PurchaseBatch.id)
+                .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+                .join(PurchaseBatchQcSample, PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
+                .where(PurchaseBatch.kondisi_gabah == kondisi,
+                       PurchaseBatch.dibatalkan_pada.is_(None),
+                       PurchaseBatch.id.in_(request.state.portal_scope.ids(PurchaseBatch)) if is_customer_read(request) else True)
+                .group_by(PurchaseBatch.id)
+                .order_by(func.max(PurchaseBatchQcSample.created_at).desc(), PurchaseBatch.id.desc())
+                .limit(200))
             hasil = (await db.execute(
                 select(PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample,
                        Supplier.nama_supplier, User.nama)
@@ -1058,9 +1070,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .where(PurchaseBatch.kondisi_gabah == kondisi,
                        PurchaseBatch.dibatalkan_pada.is_(None),
                        PurchaseBatch.id.in_(request.state.portal_scope.ids(PurchaseBatch)) if is_customer_read(request) else True,
-                       PurchaseBatch.kode_batch == referensi if referensi is not None else True)
+                       PurchaseBatch.kode_batch == referensi if referensi is not None else
+                       PurchaseBatch.id.in_(batch_terbaru))
                 .order_by(PurchaseBatchQcSample.created_at.desc(),
-                          PurchaseBatchQcSample.id.desc()).limit(None if referensi is not None else 200)
+                          PurchaseBatchQcSample.id.desc())
             )).all()
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _, _ in hasil})
@@ -1092,6 +1105,13 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                              f"Supplier: {nama_supplier}" if nama_supplier else None),
                        plat=batch.no_polisi_truk,
                        bacaan_gabah=(sample.kadar_air_1, sample.kadar_air_2))
+                # Parent adalah hasil layanan catat_qc_gabah dari KEDUA bacaan
+                # seluruh putaran; dipakai juga detail/Stok. Lamur tetap total,
+                # sedangkan kondisi kategori tetap tersedia sebagai hasil asli.
+                grouped[batch.kode_batch]["rata_gabah"] = dict(
+                    air=batch.kadar_air_awal_persen,
+                    lamur=_qc.jumlah_sak_lamur if kondisi == "basah" else None)
+
         elif jenis == "pk-luar":
             from app.models import PkPurchaseQcLog, User
             batch_terbaru = (select(PkPurchaseQcLog.pk_purchase_batch_id)
@@ -1109,7 +1129,6 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .order_by(PkPurchaseQcLog.waktu.desc(), PkPurchaseQcLog.id.desc())
             )).all()
             if referensi:
-                penilaian = penilaian_dari_log(qc for _, qc, _, _ in hasil)
                 if hasil:
                     batch = hasil[0][0]
                     qc_detail = dict(gudang="Gudang 2", titipan=bool(batch.jasa_id),
@@ -1145,7 +1164,6 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
             )).all()
             if referensi:
-                penilaian = penilaian_dari_log(qc for _, qc, _ in hasil)
                 if hasil:
                     process = hasil[0][0]
                     qc_detail = dict(gudang="Gudang 1", titipan=bool(process.jasa_id),
@@ -1205,6 +1223,12 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
 
     rows = list(grouped.values())
     for kartu in rows:
+        log_pk = kartu.pop("log_pk")
+        kartu["penilaian"] = penilaian_dari_log(log_pk) if log_pk else None
+        if "rata_gabah" in kartu:
+            kartu["rata_gabah"]["n_air"] = sum(
+                v is not None for r in kartu["rounds"] for v in r["bacaan_gabah"])
+        kartu["terakhir"] = max((r["waktu"] for r in kartu["rounds"] if r["waktu"]), default=None)
         kartu["asal"] = " · ".join(sorted(kartu.pop("asal_set"))) or None
         kartu["plat"] = " · ".join(sorted(kartu.pop("plat_set"))) or None
         kartu["rounds"].sort(key=lambda putaran: (
@@ -1222,7 +1246,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             raise HTTPException(404, "Catatan QC untuk batch atau proses ini tidak ditemukan.")
         from app.web.detail_qc import konteks
         return await render_laci(request, "riwayat_qc_detail.html", judul=judul,
-                                 k=rows[0], jenis=jenis, penilaian=penilaian,
+                                 k=rows[0], jenis=jenis, penilaian=rows[0]["penilaian"],
                                  qc_detail=qc_detail, **konteks(request, jenis, rows[0]))
 
     return await render_laci(request, "riwayat_qc.html", judul=judul,

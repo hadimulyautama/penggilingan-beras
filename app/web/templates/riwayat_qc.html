@@ -17,15 +17,24 @@
     <div class="tabel-standar tabel-standar--grid" style="--tabel-kolom:minmax(180px,1.2fr) minmax(160px,1fr) minmax(115px,.8fr) minmax(220px,1.5fr) 100px 24px">
       <div class="tabel-standar__scroll">
         <div class="tabel-standar__kepala" role="row">
-          <span>Batch / proses · waktu</span><span>Asal bahan</span><span>Nomor polisi</span><span>Hasil QC terakhir</span><span>Putaran QC</span><span aria-hidden="true"></span>
+          <span>Batch / proses · waktu</span><span>Asal bahan</span><span>Nomor polisi</span><span>Rata-rata QC</span><span>Putaran QC</span><span aria-hidden="true"></span>
         </div>
       {% for row in rows %}
         <div class="tabel-standar__item">
           <a class="tabel-standar__baris" href="/riwayat-qc/{{ jenis }}/{{ row.ref|urlencode }}" aria-label="Detail QC {{ row.ref }}">
-            <span data-sel="utama"><strong class="tabel-standar__kode">{{ row.ref }}</strong>{% if row.rounds and row.rounds[-1].waktu %}<small class="tabel-standar__sekunder">{{ row.rounds[-1].waktu|jam("%d/%m/%Y · %H:%M") }}</small>{% endif %}</span>
+            <span data-sel="utama"><strong class="tabel-standar__kode">{{ row.ref }}</strong>{% if row.terakhir %}<small class="tabel-standar__sekunder">{{ row.terakhir|jam("%d/%m/%Y · %H:%M") }}</small>{% endif %}</span>
             <span data-sel="tambahan">{{ row.asal or '—' }}</span>
             <span data-sel="tambahan">{{ row.plat or '—' }}</span>
-            <span data-sel="hasil">{% if row.rounds %}{% for label, value in row.rounds[-1].detail %}{% if loop.index <= 2 %}<span class="tabel-standar__hasil"><b>{{ label }}</b> {{ value }}</span>{% endif %}{% endfor %}{% else %}—{% endif %}</span>
+            <span data-sel="hasil" aria-label="Rata-rata QC {{ row.ref }}">
+              <small class="tabel-standar__sekunder">Rata-rata QC</small>
+              {% if row.penilaian %}
+                {% for r in row.penilaian.rows %}<span class="tabel-standar__hasil"><b>{{ r.label }}</b> {{ r.hasil }} <small>({{ r.n }} pengukuran)</small></span>{% endfor %}
+                <span class="tabel-standar__hasil"><b>Nilai kualitas</b> {% if row.penilaian.nilai is not none %}{{ '%.2f'|format(row.penilaian.nilai)|replace('.', ',') }} / 100 · kelas {{ row.penilaian.kelas }}{% else %}Belum dinilai{% endif %}</span>
+              {% elif row.rata_gabah is defined %}
+                <span class="tabel-standar__hasil"><b>Kadar air</b> {{ '%.2f'|format(row.rata_gabah.air)|replace('.', ',') ~ '%' if row.rata_gabah.air is not none else 'Belum dinilai' }} <small>({{ row.rata_gabah.n_air }} pengukuran)</small></span>
+                {% if jenis=='gabah-basah' %}<span class="tabel-standar__hasil"><b>Total sak berlamur</b> {{ row.rata_gabah.lamur ~ ' sak' if row.rata_gabah.lamur is not none else 'Belum dinilai' }}</span>{% endif %}
+              {% else %}Belum dinilai{% endif %}
+            </span>
             <span data-sel="status"><span class="tabel-standar__status">{{ row.rounds|length }} putaran</span></span>
             <span class="tabel-standar__panah" aria-hidden="true">›</span>
           </a>
@@ -33,7 +42,7 @@
       {% endfor %}
       </div>
     </div>
-    {% if rows|length >= 200 %}<p class="bantu">Menampilkan 200 catatan terbaru.</p>{% endif %}
+    {% if rows|length >= 200 %}<p class="bantu">Menampilkan 200 batch atau proses terbaru; seluruh putaran masing-masing tetap dihitung.</p>{% endif %}
   {% endif %}
 </section>
 {% endblock %}
