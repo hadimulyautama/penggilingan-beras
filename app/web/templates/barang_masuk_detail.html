@@ -19,7 +19,10 @@
 <a class="penerimaan-kembali" href="{{ kembali }}">← Kembali ke Barang Masuk</a>
 <header class="penerimaan-kepala">
  <div class="penerimaan-kepala__atas"><span>Barang Masuk · {{ nama_gudang }}</span><span class="penerimaan-status">{{ 'Diterima' if diterima else 'Ditolak' if catatan else 'Belum diterima' }}</span></div>
- <p><a class="btn btn--kecil" download href="/barang-masuk/{{ tiket.id }}/laporan.pdf">Unduh PDF</a></p>
+ <p><a class="btn btn--kecil" download href="/barang-masuk/{{ tiket.id }}/laporan.pdf">Unduh PDF</a>
+ <button class="btn btn--kecil" type="button" id="bagikan-pdf" data-penerimaan-share="/barang-masuk/{{ tiket.id }}/laporan.pdf" disabled>Bagikan PDF</button>
+ <a class="btn btn--kecil" href="/barang-masuk/{{ tiket.id }}/laporan.pdf?unduh=0" target="_blank" rel="noopener">Lihat PDF</a></p>
+ <p id="status-bagikan" class="terima-bantu" role="status" aria-live="polite">Gunakan Unduh PDF atau Lihat PDF. Menyiapkan pilihan berbagi…</p>
  <h1>{{ nama_jenis }}</h1><p>{{ tiket.kode }}</p><p>Pihak pada tiket: {{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Pihak belum tercatat' }}</p>{% if catatan and kepemilikan_penerimaan != 'pabrik' %}<p>Pemilik catatan: {{ pemilik_penerimaan }}</p>{% endif %}
  <div class="penerimaan-bobot"><span>{{ 'Bobot diterima' if catatan else 'Bobot tiket saat ini' }}</span><strong>{{ kg(berat_diterima) if berat_diterima is not none else keterangan_berat if catatan else kg(tiket.berat_hpp_kg) }}</strong><small>{{ 'Bobot penerimaan, bukan saldo stok saat ini.' if catatan else 'Belum diterima · bobot tiket belum menjadi catatan stok.' }}</small>
  {% if catatan %}<small>Sumber bobot: {{ catatan|map(attribute='sumber_berat')|unique|join(' · ') }}</small>{% endif %}
@@ -57,5 +60,6 @@
 </section>
 </div>
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<script src="/static/pdf-penerimaan.js?v={{ VERSI }}&bagikan=1" defer></script>
 {% endblock %}
 {% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}<script src="/static/detail_penerimaan.js?v={{ VERSI }}" defer></script>{% endblock %}

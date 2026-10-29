@@ -20,6 +20,21 @@ def test_read_controls_and_document_share_survive():
     assert soup.find('a')['href']=='/pelanggan/riwayat-giling/2/laporan'
 
 
+def test_penerimaan_share_hanya_memakai_endpoint_portal_yang_diizinkan():
+    html='''<button id="bagikan-pdf" data-penerimaan-share="/barang-masuk/5/laporan.pdf" disabled>Bagikan PDF</button>
+      <script src="/static/pdf-penerimaan.js?v=482&bagikan=1" defer></script>
+      <script src="https://other.example/static/pdf-penerimaan.js"></script>
+      <a href="/barang-masuk/5/laporan.pdf?unduh=0" target="_blank">Lihat PDF</a>'''
+    soup=BeautifulSoup(read_only(html,'/barang-masuk/5'),'html.parser')
+    assert soup.button['data-penerimaan-share']=='/pelanggan/barang-masuk/5/laporan.pdf'
+    assert soup.a['href']=='/pelanggan/barang-masuk/5/laporan.pdf?unduh=0'
+    assert len(soup.find_all('script'))==1
+    assert soup.script['src'].startswith('/static/pdf-penerimaan.js?')
+    for invalid in ('https://other.example/barang-masuk/5/laporan.pdf','/api/aksi'):
+        unsafe=BeautifulSoup(read_only(html.replace('/barang-masuk/5/laporan.pdf"',invalid+'"'),'/barang-masuk/5'),'html.parser')
+        assert unsafe.find(id='bagikan-pdf') is None
+
+
 def test_return_comparison_does_not_disappear_with_the_form():
     html='''<form method="post" action="/barang-keluar/4/retur"><p>Dikirim 30 sak</p>
       <input name="jumlah" value="5"><button>Simpan</button><input name="_csrf" type="hidden" value="secret"></form>'''

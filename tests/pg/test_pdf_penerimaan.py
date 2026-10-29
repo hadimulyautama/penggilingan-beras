@@ -71,6 +71,8 @@ async def test_pdf_endpoint_satu_halaman_lengkap_dan_tidak_menulis(pg,penerimaan
         halaman=await c.get(f'/barang-masuk/{x["tid"]}')
         assert halaman.status_code==200 and f'/barang-masuk/{x["tid"]}/laporan.pdf' in halaman.text
         assert 'Unduh PDF' in halaman.text
+        assert 'Bagikan PDF' in halaman.text and 'Lihat PDF' in halaman.text
+        assert f'data-penerimaan-share="/barang-masuk/{x["tid"]}/laporan.pdf"' in halaman.text
         bukti('detail-penerimaan.html',halaman.content)
         r=await c.get(f'/barang-masuk/{x["tid"]}/laporan.pdf')
         pdf,teks=isi(r)
@@ -84,6 +86,16 @@ async def test_pdf_endpoint_satu_halaman_lengkap_dan_tidak_menulis(pg,penerimaan
         for n in range(1,6):assert f'Catatan asli putaran {n}' in teks
         async with pg() as db:assert await sidik(db)==awal
         bukti('pk-lima-putaran.pdf',r.content)
+
+
+async def test_pratinjau_inline_tetap_pdf_dan_tidak_menulis(pg,penerimaan):
+    async with await _klien(pg,peran='superadmin') as c:
+        async with pg() as db:awal=await sidik(db)
+        r=await c.get(f'/barang-masuk/{penerimaan["tid"]}/laporan.pdf?unduh=0')
+        assert r.status_code==200 and r.headers['content-type']=='application/pdf'
+        assert r.headers['content-disposition'].startswith('inline;')
+        assert PdfReader(BytesIO(r.content)).metadata.title=='Laporan Penerimaan Barang'
+        async with pg() as db:assert await sidik(db)==awal
 
 
 @pytest.mark.parametrize('kind',['GABAH_BASAH','GABAH_KERING','BERAS_MASUK','BROKEN_MASUK'])
@@ -257,11 +269,16 @@ async def test_portal_unduh_sendiri_url_asing_ditolak_dan_tidak_ada_perubahan(pg
         async with pg() as db:awal=await sidik(db)
         page=await c.get(f'/pelanggan/barang-masuk/{tids[0]}')
         assert f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf' in page.text
+        assert f'data-penerimaan-share="/pelanggan/barang-masuk/{tids[0]}/laporan.pdf"' in page.text
+        assert '/static/pdf-penerimaan.js?' in page.text
         pdf,teks=isi(await c.get(f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf'))
         assert 'Pelanggan/pemilik:' in teks and portal.owners[0].nama_pelanggan in teks
         assert portal.owners[1].nama_pelanggan not in teks
         assert (await c.get(f'/pelanggan/barang-masuk/{tids[1]}/laporan.pdf')).status_code==404
         assert (await c.get(f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf?pelanggan_id={portal.owners[1].id}')).status_code==404
+        inline=await c.get(f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf?unduh=0')
+        assert inline.status_code==200 and inline.headers['content-disposition'].startswith('inline;')
+        assert (await c.get(f'/pelanggan/barang-masuk/{tids[1]}/laporan.pdf?unduh=0')).status_code==404
         async with pg() as db:assert await sidik(db)==awal
 
 

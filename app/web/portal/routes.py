@@ -78,7 +78,7 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     elif path=='/barang-masuk':result=await work.halaman_barang_masuk(req,account)
     elif m:=re.fullmatch(r'/barang-masuk/(\d+)/laporan\.pdf',path):
         tid=int(m[1]);await own_ticket(scope,tid)
-        result=await work.laporan_penerimaan_pdf(tid,req,account)
+        result=await work.laporan_penerimaan_pdf(tid,req,account,unduh=integer(q.get('unduh')) if q.get('unduh') else 1)
     elif m:=re.fullmatch(r'/barang-masuk/(\d+)',path):
         tid=int(m[1]);await own_ticket(scope,tid)
         result=await work.detail_barang_masuk(tid,req,account)

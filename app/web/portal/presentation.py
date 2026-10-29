@@ -30,7 +30,7 @@ def read_only(html, base, *, origin=None):
         el.decompose()
     for script in list(s.find_all('script')):
         source=urlsplit(script.get('src',''))
-        if source.netloc or source.scheme or source.path!='/static/saring-kerja.js':script.decompose()
+        if source.netloc or source.scheme or source.path not in ('/static/saring-kerja.js','/static/pdf-penerimaan.js'):script.decompose()
     for form in list(s.find_all('form')):
         action=urlsplit(form.get('action') or base).path
         if form.get('method','get').lower()=='get':
@@ -83,6 +83,11 @@ def read_only(html, base, *, origin=None):
         else:frame.decompose()
     # Let the safe portal script preserve native PDF share/download behavior.
     share=s.find(id='bagikan-pdf')
+    if share and share.get('data-penerimaan-share'):
+        target=destination(share['data-penerimaan-share'])
+        if target and re.fullmatch(r'/pelanggan/barang-masuk/\d+/laporan\.pdf',target):
+            share['data-penerimaan-share']=target
+        else:share.decompose();share=None
     if share and s.find('iframe'):
         share['data-pdf-share']=s.find('iframe')['src'];share.attrs.pop('disabled',None)
         status=s.find(id='status-bagikan')

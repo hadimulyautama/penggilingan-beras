@@ -272,7 +272,7 @@ async def detail_permintaan(permintaan_id: int, request: Request,
 
 
 @router.get('/barang-masuk/{tid:int}/laporan.pdf')
-async def laporan_penerimaan_pdf(tid:int, request:Request, akun=Depends(butuh_akun)):
+async def laporan_penerimaan_pdf(tid:int, request:Request, akun=Depends(butuh_akun), unduh:int=1):
     from fastapi.responses import Response
     from app.services.laporan_penerimaan import baca
     from app.web.pdf_penerimaan import buat_pdf
@@ -281,6 +281,6 @@ async def laporan_penerimaan_pdf(tid:int, request:Request, akun=Depends(butuh_ak
         dokumen = await baca(db, tiket, jenis, data[0]['catatan'] if data else [],
                              pembuat=akun.user.nama,scope=getattr(request.state,'portal_scope',None))
     return Response(buat_pdf(dokumen), media_type='application/pdf', headers={
-        'Content-Disposition': f'attachment; filename="laporan-penerimaan-{tid}.pdf"',
+        'Content-Disposition': f'{"inline" if unduh == 0 else "attachment"}; filename="laporan-penerimaan-{tid}.pdf"',
         'Cache-Control':'no-store, private', 'Vary':'Cookie',
         'X-Content-Type-Options':'nosniff'})
