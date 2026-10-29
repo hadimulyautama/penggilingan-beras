@@ -3257,6 +3257,65 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     return _cap_gudang(b, "g2")
 
 
+async def _kartu_qc_gabah(db: AsyncSession) -> list[Baris]:
+    """Tugas QC gabah yang sama untuk operator G1 dan Admin saat fitur aktif."""
+    kartu = []
+    from app.models import PurchaseBatchQc, PurchaseBatchQcSample
+
+    jumlah_qc = (select(func.count(PurchaseBatchQcSample.id))
+                 .select_from(PurchaseBatchQcSample)
+                 .join(PurchaseBatchQc, PurchaseBatchQc.id ==
+                       PurchaseBatchQcSample.purchase_batch_qc_id)
+                 .where(PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+                 .correlate(PurchaseBatch).scalar_subquery())
+    rows = (await db.execute(
+        select(PurchaseBatch, Supplier.nama_supplier, jumlah_qc.label("jumlah_qc"))
+        .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
+        .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id ==
+              PurchaseBatch.id, isouter=True)
+        .where(PurchaseBatch.dibatalkan_pada.is_(None),
+               PurchaseBatchQc.ditutup_pada.is_(None),
+               PurchaseBatch.kondisi_gabah.in_(("basah", "kering")), jumlah_qc < 5)
+        .order_by(PurchaseBatch.id.desc())
+    )).all()
+    pemilik_qc = await nama_pemilik_banyak(
+        db, {batch.jasa_id for batch, _, _ in rows if batch.jasa_id})
+    for batch, pemasok, jumlah in rows:
+        kondisi = batch.kondisi_gabah
+        pemilik = (pemilik_qc.get(batch.jasa_id)
+                   if batch.jasa_id else pemasok) or "?"
+        berat = _kg(float(batch.berat_total_kg or 0)).removesuffix(" kg")
+        if kondisi == "basah":
+            kartu.append(Baris(
+                kode=batch.kode_batch, isi=f"QC gabah basah · {jumlah}/5 pencatatan",
+                keadaan="", aksi="qc_gabah_basah", nilai=batch.kode_batch,
+                sejak=batch.created_at, fase="baru",
+                judul="Mutu gabah basah belum dicatat",
+                utama=(berat, "kg"),
+                sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
+                pilihan=([("qc_gabah_basah", f"Catat QC ke-{jumlah + 1} dari 5",
+                           "Satu pemeriksaan · dua pembacaan kadar air", batch.kode_batch)]
+                         + ([ ("qc_gabah_tutup", "Tutup proses QC",
+                               f"Selesaikan sekarang dengan {jumlah} pencatatan", batch.kode_batch)]
+                            if jumlah else [])),
+            ))
+        else:
+            kartu.append(Baris(
+                kode=batch.kode_batch, isi=f"QC gabah kering · {jumlah}/5 pencatatan",
+                keadaan="", aksi="qc_gabah_kering", nilai=batch.kode_batch,
+                sejak=batch.created_at, fase="baru",
+                judul="Mutu gabah kering belum dicatat",
+                utama=(berat, "kg"),
+                sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
+                pilihan=([("qc_gabah_kering", f"Catat QC ke-{jumlah + 1} dari 5",
+                           "Satu pemeriksaan · dua pembacaan kadar air", batch.kode_batch)]
+                         + ([ ("qc_gabah_tutup", "Tutup proses QC",
+                               f"Selesaikan sekarang dengan {jumlah} pencatatan", batch.kode_batch)]
+                            if jumlah else [])),
+            ))
+    return kartu
+
+
 async def untuk_staff(db: AsyncSession) -> Berjalan:
     """Yang tertahan menunggu keputusan staff/Direksi — bukan pekerjaan fisik.
 
@@ -3272,62 +3331,8 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     mutu_aktif = await fitur_mutu(db)
     b = Berjalan(mutu_aktif=mutu_aktif)
 
-    # QC gabah menjadi pekerjaan di meja Mutu & QC, sejajar dengan QC giling
-    # dan PK luar. Satu kartu per truk membuka formulir untuk batch itu.
     if mutu_aktif:
-        from app.models import PurchaseBatchQc, PurchaseBatchQcSample
-
-        jumlah_qc = (select(func.count(PurchaseBatchQcSample.id))
-                     .select_from(PurchaseBatchQcSample)
-                     .join(PurchaseBatchQc, PurchaseBatchQc.id ==
-                           PurchaseBatchQcSample.purchase_batch_qc_id)
-                     .where(PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
-                     .correlate(PurchaseBatch).scalar_subquery())
-        rows = (await db.execute(
-            select(PurchaseBatch, Supplier.nama_supplier, jumlah_qc.label("jumlah_qc"))
-            .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
-            .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id ==
-                  PurchaseBatch.id, isouter=True)
-            .where(PurchaseBatch.dibatalkan_pada.is_(None),
-                   PurchaseBatchQc.ditutup_pada.is_(None),
-                   PurchaseBatch.kondisi_gabah.in_(("basah", "kering")), jumlah_qc < 5)
-            .order_by(PurchaseBatch.id.desc())
-        )).all()
-        pemilik_qc = await nama_pemilik_banyak(
-            db, {batch.jasa_id for batch, _, _ in rows if batch.jasa_id})
-        for batch, pemasok, jumlah in rows:
-            kondisi = batch.kondisi_gabah
-            pemilik = (pemilik_qc.get(batch.jasa_id)
-                       if batch.jasa_id else pemasok) or "?"
-            berat = _kg(float(batch.berat_total_kg or 0)).removesuffix(" kg")
-            if kondisi == "basah":
-                b.meja.append(Baris(
-                    kode=batch.kode_batch, isi=f"QC gabah basah · {jumlah}/5 pencatatan",
-                    keadaan="", aksi="qc_gabah_basah", nilai=batch.kode_batch,
-                    sejak=batch.created_at, fase="baru",
-                    judul="Mutu gabah basah belum dicatat",
-                    utama=(berat, "kg"),
-                    sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
-                    pilihan=([("qc_gabah_basah", f"Catat QC ke-{jumlah + 1} dari 5",
-                               "Satu pemeriksaan · dua pembacaan kadar air", batch.kode_batch)]
-                             + ([ ("qc_gabah_tutup", "Tutup proses QC",
-                                   f"Selesaikan sekarang dengan {jumlah} pencatatan", batch.kode_batch)]
-                                if jumlah else [])),
-                ))
-            else:
-                b.meja.append(Baris(
-                    kode=batch.kode_batch, isi=f"QC gabah kering · {jumlah}/5 pencatatan",
-                    keadaan="", aksi="qc_gabah_kering", nilai=batch.kode_batch,
-                    sejak=batch.created_at, fase="baru",
-                    judul="Mutu gabah kering belum dicatat",
-                    utama=(berat, "kg"),
-                    sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
-                    pilihan=([("qc_gabah_kering", f"Catat QC ke-{jumlah + 1} dari 5",
-                               "Satu pemeriksaan · dua pembacaan kadar air", batch.kode_batch)]
-                             + ([ ("qc_gabah_tutup", "Tutup proses QC",
-                                   f"Selesaikan sekarang dengan {jumlah} pencatatan", batch.kode_batch)]
-                                if jumlah else [])),
-                ))
+        b.meja += await _kartu_qc_gabah(db)
 
     # Tiket berjenis tak dikenal — satu-satunya baris FISIK di fungsi ini, dan
     # ia di sini karena jalan keluarnya memang kerja meja: memetakan jenisnya,
@@ -3577,7 +3582,7 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
     from app.web.api import _is_g1_operator, _is_g2_operator
 
     b = Berjalan()
-    # Boleh mencatat mutu = boleh melihat uang (admin ke atas). Dihitung sekali:
+    # QC hasil giling tetap Admin; QC gabah juga tugas operator G1. Sekali:
     # kartu giling yang sama disusun lewat dua cabang di bawah.
     boleh_qc = can_see_financials(user)
     if await _is_g1_operator(user):
@@ -3589,6 +3594,11 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
         # dikeluarkan dari antrean tanpa pernah sampai ke tempat barunya —
         # hilang dari kedua layar sekaligus.
         b.transit += g.transit
+        if not can_see_financials(user):
+            from app.services.setelan import fitur_mutu
+            b.mutu_aktif = await fitur_mutu(db)
+            if b.mutu_aktif:
+                b.meja += await _kartu_qc_gabah(db)
     if can_see_financials(user):
         s = await untuk_staff(db)
         # Pencatatan mutu bisa dimatikan seluruhnya di Pengaturan. Yang membaca
