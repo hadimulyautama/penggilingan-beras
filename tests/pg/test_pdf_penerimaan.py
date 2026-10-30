@@ -76,6 +76,7 @@ async def test_pdf_endpoint_satu_halaman_lengkap_dan_tidak_menulis(pg,penerimaan
         bukti('detail-penerimaan.html',halaman.content)
         r=await c.get(f'/barang-masuk/{x["tid"]}/laporan.pdf')
         pdf,teks=isi(r)
+        bukti('pk-lima-putaran.pdf',r.content)
         assert len(pdf.pages)==1
         for kata in ('Supplier Uji','Supplier:','14.000,00 kg','14.200,00 kg','14.184,00 kg',
                      '200 karung','0,075 kg/karung','Rata-rata','13,0%','21,0%','7,0%',
@@ -85,7 +86,6 @@ async def test_pdf_endpoint_satu_halaman_lengkap_dan_tidak_menulis(pg,penerimaan
         assert 'Gudang' not in teks and 'Milik pabrik' not in teks and 'harga' not in teks.lower()
         for n in range(1,6):assert f'Catatan asli putaran {n}' in teks
         async with pg() as db:assert await sidik(db)==awal
-        bukti('pk-lima-putaran.pdf',r.content)
 
 
 async def test_pratinjau_inline_tetap_pdf_dan_tidak_menulis(pg,penerimaan):
@@ -116,7 +116,7 @@ async def test_jenis_lain_gabah_dua_bacaan_dan_tanpa_qc_palsu(pg,contoh,kind):
             assert 'KA 1' in teks and 'KA 2' in teks and '7,00%' in teks and '4 pembacaan' in teks
             assert 'Biji hijau' in teks and 'Densiti' in teks
             assert ('Lamur / sak' in teks)==(kind=='GABAH_BASAH')
-        else:assert 'QC penerimaan jenis barang ini belum tersedia' in teks and 'Nilai kualitas:' not in teks
+        else:assert 'QC penerimaan jenis barang ini belum tersedia' in teks and 'Nilai mutu:' not in teks
         bukti(kind.lower()+'.pdf',r.content)
 
 
@@ -197,7 +197,7 @@ async def test_penolakan_tidak_menjadi_bobot_diterima(pg,penerimaan):
     async with await _klien(pg,peran='admin') as c:
         _,teks=isi(await c.get(f'/barang-masuk/{penerimaan["tid"]}/laporan.pdf'))
         assert 'DITOLAK' in teks and 'PK ditolak sesuai pemeriksaan nyata' in teks
-        assert 'Diterima: Tidak diterima' in teks
+        assert 'BERAT BARANG DITERIMA Tidak diterima' in ' '.join(teks.split())
 
 
 async def test_partai_kecil_seluruh_titik_dan_bukan_bruto_tara_palsu(pg,contoh):
@@ -229,7 +229,7 @@ async def test_bobot_diterima_bukan_saldo_dan_tara_tidak_dibaca_dari_master_baru
             await db.commit()
         _,akhir=isi(await c.get(f'/barang-masuk/{penerimaan["tid"]}/laporan.pdf'))
         for teks in (awal,akhir):
-            assert 'Diterima: 14.000,00 kg' in teks and '0,075 kg/karung' in teks
+            assert 'BERAT BARANG DITERIMA 14.000,00 kg' in ' '.join(teks.split()) and '0,075 kg/karung' in teks
             assert '14.184,00 kg' in teks and '88,00 kg' not in teks
 
 
@@ -249,8 +249,8 @@ async def test_nilai_belum_diketahui_tidak_dianggap_nol(pg,contoh):
         await db.commit()
     async with await _klien(pg,peran='admin') as c:
         _,teks=isi(await c.get(f'/barang-masuk/{contoh["tid"]}/laporan.pdf'))
-        assert 'Diterima: Belum diukur' in teks and 'Belum tercatat' in teks
-        assert 'Diterima: 0,00 kg' not in teks
+        assert 'BERAT BARANG DITERIMA Belum diukur' in ' '.join(teks.split()) and 'Belum tercatat' in teks
+        assert 'BERAT BARANG DITERIMA 0,00 kg' not in ' '.join(teks.split())
 
 
 async def test_portal_unduh_sendiri_url_asing_ditolak_dan_tidak_ada_perubahan(pg,portal):
@@ -272,7 +272,7 @@ async def test_portal_unduh_sendiri_url_asing_ditolak_dan_tidak_ada_perubahan(pg
         assert f'data-penerimaan-share="/pelanggan/barang-masuk/{tids[0]}/laporan.pdf"' in page.text
         assert '/static/pdf-penerimaan.js?' in page.text
         pdf,teks=isi(await c.get(f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf'))
-        assert 'Pelanggan/pemilik:' in teks and portal.owners[0].nama_pelanggan in teks
+        assert 'Pemilik barang:' in teks and portal.owners[0].nama_pelanggan in teks
         assert portal.owners[1].nama_pelanggan not in teks
         assert (await c.get(f'/pelanggan/barang-masuk/{tids[1]}/laporan.pdf')).status_code==404
         assert (await c.get(f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf?pelanggan_id={portal.owners[1].id}')).status_code==404
@@ -313,7 +313,7 @@ async def test_portal_tidak_menerbitkan_dokumen_seluruh_tiket_berpemilik_campura
 async def test_belum_diterima_tidak_dianggap_ditolak(pg,contoh):
     async with await _klien(pg,peran='admin') as c:
         r=await c.get(f'/barang-masuk/{contoh["tid"]}/laporan.pdf');_,teks=isi(r)
-        assert 'BELUM FINAL' in teks and 'Diterima: Belum diterima' in teks
+        assert 'BELUM FINAL' in teks and 'BERAT BARANG DITERIMA Belum diterima' in ' '.join(teks.split())
         assert 'Belum ada batch penerimaan' in teks and 'DITOLAK' not in teks
 
 
@@ -378,6 +378,6 @@ async def test_kapasitas_desain_dua_batch_lima_putaran_di_penyaji(pg,penerimaan)
     d['berat']=14100  # Nilai fixture layout, bukan perhitungan layanan baru.
     d['qc'].append(dict(kode=kedua['kode'],jenis='pk',status='Belum diperiksa',putaran=[],rata=None))
     data=buat_pdf(d);pdf=PdfReader(BytesIO(data))
+    bukti('uji-layout-dua-batch.pdf',data)
     assert len(pdf.pages)==1
     teks=pdf.pages[0].extract_text();assert 'BATCH-LAYOUT-KEDUA' in teks and 'Belum diperiksa' in teks
-    bukti('uji-layout-dua-batch.pdf',data)

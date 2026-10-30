@@ -58,7 +58,7 @@ async def baca(db, tiket, jenis, catatan, *, pembuat, scope=None):
                and berat is not None and not ket
                and (timbang['berat_barang_kg'] is not None or timbang['netto_timbangan_kg'] is not None))
     return dict(tiket=tiket,jenis=jenis,catatan=catatan,pihak=pihak,
-        label_pihak='Pelanggan/pemilik' if all(k[0]=='pelanggan' for k in pihak) else 'Supplier' if all(k[0]=='supplier' for k in pihak) else 'Pihak penerimaan',
+        label_pihak='Pemilik barang' if all(k[0]=='pelanggan' for k in pihak) else 'Supplier' if all(k[0]=='supplier' for k in pihak) else 'Pihak penerimaan',
         pesanan=list(dict.fromkeys(c['pesanan'] for c in catatan if c['pesanan'])),
         berat=berat,keterangan_berat=ket if catatan else 'Belum diterima',timbang=timbang,final=final,
         status='Diterima' if diterima else 'Ditolak' if catatan else 'Belum diterima',
