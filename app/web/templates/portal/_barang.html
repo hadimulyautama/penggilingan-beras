@@ -1,0 +1,21 @@
+{% macro barang(rows, kg) %}
+<div class="pelanggan-daftar">
+{% for r in rows %}<article class="pelanggan-barang">
+  <div class="pelanggan-baris"><div><h3>{{ r.nama_pelanggan }}</h3><p class="pelanggan-redup">{{ r.lokasi }}</p></div><strong class="pelanggan-berat">{{ kg(r.kg) if r.kg is not none else 'Belum diukur' }}</strong></div>
+  {% if r.kode %}<p class="pelanggan-kode">{{ r.kode }}</p>{% endif %}
+  {% if not r.final %}<p class="pelanggan-penanda pelanggan-penanda--hati">Bobot belum final</p>{% endif %}
+  {% if r.kg is not none and r.kg < 0 %}<p class="pelanggan-redup">Saldo perlu diperiksa petugas.</p>{% endif %}
+  {% if r.href %}<a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian barang →</a>{% endif %}
+</article>{% endfor %}
+</div>
+{% endmacro %}
+
+{% macro tunggu(rows, tampilkan_berat=true) %}
+<div class="pelanggan-daftar">
+{% for r in rows %}<article class="pelanggan-barang">
+  <div class="pelanggan-baris"><div><h3>{{ r.nama }}</h3><p class="pelanggan-redup">{{ r.lokasi }}{% if r.lokasi %} · {% endif %}Menunggu proses</p></div>{% if r.berat and tampilkan_berat %}<strong class="pelanggan-berat">{{ r.berat }}</strong>{% endif %}</div>
+  {% if tampilkan_berat %}<p class="pelanggan-redup">{{ r.isi }}</p>{% endif %}
+  {% if r.rincian %}<details class="pelanggan-rincian"><summary>Lihat bahan di lokasi ini</summary><ul>{% for anak in r.rincian %}<li>{{ anak|join(' · ') }}</li>{% endfor %}</ul></details>{% endif %}
+</article>{% endfor %}
+</div>
+{% endmacro %}

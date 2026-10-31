@@ -3,12 +3,9 @@ import re
 from urllib.parse import urlsplit, urlencode, parse_qsl
 
 MENU = (
-    ('ringkasan','Ringkasan','ringkasan'), ('pekerjaan','Pekerjaan Saya','pekerjaan'),
-    ('stok','Stok Saya','stok'), ('barang-masuk','Barang Masuk','masuk'),
-    ('barang-keluar','Pengiriman & Retur','keluar'), ('riwayat-giling','Riwayat Barang','riwayat'),
-    ('riwayat-qc/gabah-basah','Riwayat QC','qc'), ('laporan','Laporan','laporan'),
-    ('kabar','Berita & Notifikasi','kabar'))
-READS = re.compile(r'^/(?:ringkasan|pekerjaan|stok|stok-pk-jasa|stok-produk-jasa(?:/detail)?|stok-karung-jasa|stok/pk/detail|barang-masuk(?:/\d+(?:/serah-terima(?:\.pdf)?|/laporan\.pdf)?)?|barang-keluar(?:/\d+(?:/serah-terima(?:\.pdf)?)?)?|retur(?:/\d+|/tiket/\d+|/pengajuan/\d+)?|proses-aktif/(?:pengeringan|pendinginan|giling|sosoh)/[\w-]+|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:/\d+(?:/laporan(?:\.pdf)?)?)?|riwayat-qc/[\w-]+(?:/[\w-]+)?|jasa/pelanggan/\d+|jasa/\d+(?:/nota(?:\.pdf)?)?|laporan|serah-terima|audit|kabar)$')
+    ('ringkasan','Beranda','ringkasan'), ('jasa-saya','Jasa Saya','pekerjaan'),
+    ('barang-saya','Barang Saya','stok'), ('laporan','Dokumen','laporan'))
+READS = re.compile(r'^/(?:ringkasan|jasa-saya|barang-saya|pekerjaan|stok|stok-pk-jasa|stok-produk-jasa(?:/detail)?|stok-karung-jasa|stok/pk/detail|barang-masuk(?:/\d+(?:/serah-terima(?:\.pdf)?|/laporan\.pdf)?)?|barang-keluar(?:/\d+(?:/serah-terima(?:\.pdf)?)?)?|retur(?:/\d+|/tiket/\d+|/pengajuan/\d+)?|proses-aktif/(?:pengeringan|pendinginan|giling|sosoh)/[\w-]+|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:/\d+(?:/laporan(?:\.pdf)?)?)?|riwayat-qc/[\w-]+(?:/[\w-]+)?|jasa/pelanggan/\d+|jasa/\d+(?:/nota(?:\.pdf)?)?|laporan|serah-terima|audit|kabar)$')
 
 
 def portal_url(value):
@@ -24,11 +21,11 @@ def portal_url(value):
 
 
 def active_menu(path):
+    path=path.removeprefix('/pelanggan').rstrip('/') or '/ringkasan'
     if path=='/serah-terima' or '/serah-terima' in path:return 'laporan'
-    if path.startswith('/jasa'):return 'ringkasan'
-    if path.startswith('/stok'):return 'stok'
+    if re.fullmatch(r'/jasa/\d+/nota(?:\.pdf)?',path):return 'laporan'
+    if path.startswith(('/jasa','/barang-masuk','/pekerjaan','/riwayat-')):return 'pekerjaan'
+    if path.startswith(('/stok','/barang-saya','/barang-keluar','/retur')):return 'stok'
     if path.startswith('/proses-aktif'):return 'pekerjaan'
-    if path.startswith('/retur'):return 'keluar'
-    if path.startswith('/riwayat-qc'):return 'qc'
-    if path.startswith('/riwayat-') or path=='/audit':return 'riwayat'
+    if path=='/audit':return 'laporan'
     return next((k for p,n,k in MENU if '/'+p==path),'ringkasan')

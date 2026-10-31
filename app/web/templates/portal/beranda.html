@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% from 'portal/_barang.html' import barang,tunggu %}
+{% from '_ikon_portal.html' import ikon_portal %}
+{% block isi %}
+<div class="pelanggan-halaman">
+<header class="pelanggan-sapaan"><p class="pelanggan-alis">Beranda</p><h1>Halo, {{ request.state.portal_scope.reader.nama }}.</h1><p class="pelanggan-redup">Ini perkembangan barang Anda di HMU.</p></header>
+<section class="pelanggan-status" aria-label="Status barang Anda">
+  <span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p>
+  <p class="pelanggan-petunjuk">{{ ikon_portal('berjalan') }} <span>Proses dan pencatatan ditangani petugas. Tidak ada tindakan yang perlu dilakukan di portal.</span></p>
+  <a class="pelanggan-utama" href="/pelanggan/jasa-saya">Lihat perjalanan jasa <span aria-hidden="true">→</span></a>
+</section>
+<div class="pelanggan-grid">
+<section class="pelanggan-panel"><div class="pelanggan-judul"><h2>Barang di pabrik</h2><a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat semua</a></div>
+{% if transit %}{{ tunggu(transit[:2]) }}{% elif bahan %}{{ barang(bahan[:3],kg) }}{% elif hasil %}<p class="pelanggan-redup">Hasil yang masih tercatat di pabrik ditampilkan di bagian Hasil tercatat.</p>{% else %}<p class="pelanggan-redup">Belum ada saldo bahan tercatat saat ini. Riwayat jasa Anda tetap tersedia.</p>{% endif %}
+{% if transit or bahan %}<p class="pelanggan-catatan">Bahan di silo atau mesin masih berada di pabrik. Berat pada tahap berbeda tidak dijumlahkan.</p>{% endif %}
+</section>
+<section class="pelanggan-panel"><div class="pelanggan-judul"><h2>Hasil tercatat</h2></div>
+{% if hasil %}{{ barang(hasil[:3],kg) }}<p class="pelanggan-catatan">Hasil tercatat belum memastikan barang siap diambil. Hubungi petugas untuk memastikan pengambilan.</p>{% else %}<h3>Belum ada saldo hasil tercatat.</h3><p class="pelanggan-redup">{% if transit or bahan %}Bahan Anda masih di pabrik. Hasil akan tampil setelah dicatat petugas.{% else %}Lihat perjalanan jasa dan dokumen untuk memeriksa hasil serta pengeluaran sebelumnya.{% endif %}</p>{% endif %}
+<a class="pelanggan-tautan" href="/pelanggan/barang-saya#hasil">Lihat rincian hasil →</a>
+</section>
+<section class="pelanggan-panel pelanggan-kabar"><div class="pelanggan-judul"><h2>Kabar terbaru</h2><a class="pelanggan-tautan" href="/pelanggan/kabar">Lihat semua</a></div>
+{% for n in kabar_terbaru %}<article class="pelanggan-berita"><span class="pelanggan-ikon">{{ ikon_portal('kabar') }}</span><div><h3>{{ n.judul or 'Pembaruan barang Anda' }}</h3><p>{{ n.pesan }}</p><p class="pelanggan-waktu">{{ n.waktu|jam('%d/%m/%Y · %H:%M') }}</p></div></article>{% else %}<p class="pelanggan-redup">Belum ada pembaruan untuk barang Anda. Kabar akan tampil setelah dicatat.</p>{% endfor %}
+</section>
+</div>
+</div>
+{% endblock %}

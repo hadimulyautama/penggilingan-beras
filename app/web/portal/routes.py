@@ -11,7 +11,7 @@ from app.database import SessionLocal
 from .security import require_customer
 from .scope import load_scope, own_model, own_ticket, own_order, own_outgoing, missing, MODELS
 from .navigation import READS, portal_url
-from .presentation import shell
+from .presentation import render_customer
 
 router=APIRouter(prefix='/pelanggan',tags=['portal-pelanggan'])
 
@@ -69,11 +69,14 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
         if match[1]=='barang-masuk':await own_ticket(scope,ident)
         else:await own_outgoing(scope,ident)
         result=await serah_terima.detail(ident,req,account)
-    elif path=='/ringkasan' and not scope.jasa_ids and not scope.resources['timbangan_transaksi']:
-        return shell(req,'<h1>Ringkasan</h1><section class="kartu"><h2>Belum ada barang atau pesanan</h2><p>Penerimaan dan pekerjaan milik Anda akan tampil setelah tercatat di produksi.</p></section>')
-    elif path=='/ringkasan':
-        req=native_request(request,f'/jasa/pelanggan/{reader.pelanggan_id}',scope)
-        result=await jasa.detail_pelanggan(reader.pelanggan_id,req,account)
+    elif path in ('/ringkasan','/jasa-saya','/barang-saya'):
+        from .beranda import halaman
+        bagian={'/ringkasan':'beranda','/jasa-saya':'jasa','/barang-saya':'barang'}[path]
+        # Tautan tab beranda lama tetap mengarah ke isi yang sesuai.
+        if path=='/ringkasan' and q.get('tab') in ('penerimaan','proses','pengambilan','stok'):
+            bagian='barang' if q['tab'] in ('stok','pengambilan') else 'jasa'
+            req=native_request(request,'/barang-saya' if bagian=='barang' else '/jasa-saya',scope)
+        result=await halaman(req,bagian)
     elif path=='/pekerjaan':result=await work.halaman_pekerjaan(req,account)
     elif path=='/barang-masuk':result=await work.halaman_barang_masuk(req,account)
     elif m:=re.fullmatch(r'/barang-masuk/(\d+)/laporan\.pdf',path):
@@ -95,7 +98,8 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
         result=await stock.halaman_detail_stok_pk(req,account)
     elif m:=re.fullmatch(r'/jasa/pelanggan/(\d+)',path):
         if int(m[1])!=reader.pelanggan_id:missing()
-        result=await jasa.detail_pelanggan(reader.pelanggan_id,req,account)
+        from .beranda import halaman
+        result=await halaman(req,'barang' if q.get('tab') in ('stok','pengambilan') else 'jasa')
     elif m:=re.fullmatch(r'/jasa/(\d+)(/nota(?:\.pdf)?)?',path):
         await own_order(scope,int(m[1]))
         if m[2]=='/nota.pdf':result=await jasa.rekap_pdf(int(m[1]),req,unduh=integer(q.get('unduh')) or 0,akun=account)
@@ -188,7 +192,9 @@ async def reports(request):
             for row in (await db.scalars(select(model).where(model.id.in_(scope.ids(model))).order_by(model.id.desc()))).all():
                 finished=(row.waktu_selesai_pendinginan is not None if kind=='pengeringan' else row.status=='selesai')
                 if finished:rows.append(dict(kind=kind,code=getattr(row,col),id=row.id))
-    return await render_laci(request,'portal/reports.html',reports=rows,orders=orders,serah_terima=serah[:10])
+    from .beranda import bahasa_status
+    return render_customer(request,'portal/reports.html',reports=rows,orders=orders,
+        serah_terima=serah[:10],status_pelanggan=bahasa_status,page_title='Dokumen')
 
 
 async def ownership(request):

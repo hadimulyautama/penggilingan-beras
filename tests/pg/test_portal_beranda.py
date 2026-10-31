@@ -1,0 +1,89 @@
+"""Perjalanan pelanggan baru memakai data nyata, pembatasan lama, dan dokumen asli."""
+import pytest
+from bs4 import BeautifulSoup
+
+from tests.pg.test_portal_pelanggan import portal,client  # noqa: F401
+from tests.pg.test_riwayat_qc_detail import qc  # noqa: F401
+from tests.pg.test_gabung_jasa import dunia,_isi_silo_g1  # noqa: F401
+
+pytestmark=pytest.mark.asyncio
+
+
+async def test_beranda_mendahulukan_barang_dan_bukan_tugas_operator(pg,portal):
+    async with client(portal.accounts[0]) as c:
+        r=await c.get('/pelanggan/')
+        assert r.status_code==200
+        s=BeautifulSoup(r.text,'html.parser')
+        assert s.select_one('main h1').get_text().startswith('Halo, Pemilik Portal A')
+        assert s.select_one('.pelanggan-status h2')
+        assert 'perlu tindakan' not in s.select_one('main').get_text().lower()
+        assert 'Barang di pabrik' in r.text and 'Hasil tercatat' in r.text
+        for selector in ('.portal-sidebar nav','.portal-bawah'):
+            nav=s.select_one(selector)
+            assert [a.get_text(strip=True) for a in nav.select('a')]==['Beranda','Jasa Saya','Barang Saya','Dokumen']
+            assert nav.select_one('[aria-current=page]').get_text(strip=True)=='Beranda'
+        assert 'Rahasia Pelanggan B' not in r.text and 'Kabar rahasia B' not in r.text
+
+
+async def test_jasa_barang_dan_tautan_lama_tetap_terbaca_tanpa_mutasi(pg,portal):
+    async with client(portal.accounts[0]) as c:
+        for path in ('/pelanggan/jasa-saya','/pelanggan/barang-saya',
+                     '/pelanggan/ringkasan?tab=stok','/pelanggan/ringkasan?tab=proses',
+                     f'/pelanggan/jasa/pelanggan/{portal.owners[0].id}'):
+            r=await c.get(path)
+            assert r.status_code==200,path
+            s=BeautifulSoup(r.text,'html.parser')
+            assert not s.select('[data-post],[hx-post],[data-aksi],dialog')
+            assert all(a['href'].startswith(('/pelanggan','#')) for a in s.select('a[href]'))
+            assert 'LOT-RAHASIA-B' not in r.text and 'Rahasia seluruh pabrik' not in r.text
+            assert all(f['action']=='/pelanggan/keluar' for f in s.select('form[method=post]'))
+        page=await c.get('/pelanggan/jasa-saya')
+        assert 'GB-QC-BASAH' in page.text and 'LOT-QC-DETAIL' in page.text
+        assert f'/pelanggan/jasa/{portal.orders[0].id}/nota' in page.text
+        assert (await c.get('/pelanggan/barang-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404
+        assert (await c.get('/pelanggan/jasa-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404
+
+
+async def test_pelanggan_tanpa_data_tetap_diberi_petunjuk(pg,portal):
+    async with client(portal.accounts[2]) as c:
+        for path in ('/pelanggan/','/pelanggan/jasa-saya','/pelanggan/barang-saya'):
+            r=await c.get(path)
+            assert r.status_code==200
+            assert 'Rahasia' not in r.text and 'LOT-QC-DETAIL' not in r.text
+        home=(await c.get('/pelanggan/')).text
+        assert 'Belum ada barang atau pesanan' in home
+        assert 'hubungi petugas' in home
+
+
+async def test_pendinginan_belum_selesai_tidak_disebut_proses_selesai(pg,portal):
+    from app.models import DryingLot
+    async with pg() as db:
+        dry=await db.get(DryingLot,portal.process[0]['pengeringan'])
+        dry.waktu_selesai_pendinginan=None
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        home=await c.get('/pelanggan/')
+        assert 'Sedang diproses' in home.text and 'Pendinginan' in home.text
+        jasa=await c.get('/pelanggan/jasa-saya')
+        assert '/pelanggan/proses-aktif/pendinginan/PGR-PORTAL-0' in jasa.text
+
+
+async def test_transit_tampil_di_beranda_dan_barang_tanpa_data_pelanggan_lain(pg,dunia):
+    from app.models.portal import PortalAccount
+    await _isi_silo_g1(pg,dunia,huruf='A',kode='GB-UX-SILO',kg=10000,jasa_id=dunia['jasa1'])
+    async with pg() as db:
+        akun_uji=[PortalAccount(username='ux-transit-'+str(pid),pelanggan_id=pid,
+            password_hash='unused-test-hash',active=True,token_version=1)
+            for pid in (dunia['catur'],dunia['budi'])]
+        db.add_all(akun_uji);await db.commit()
+    async with client(akun_uji[0]) as c:
+        for path in ('/pelanggan/','/pelanggan/jasa-saya','/pelanggan/barang-saya'):
+            r=await c.get(path)
+            assert r.status_code==200
+            assert 'Silo A' in r.text and '10.000' in r.text
+        home=BeautifulSoup((await c.get('/pelanggan/')).text,'html.parser')
+        assert 'Menunggu proses' in home.select_one('.pelanggan-status').get_text()
+    async with client(akun_uji[1]) as c:
+        for path in ('/pelanggan/','/pelanggan/jasa-saya','/pelanggan/barang-saya'):
+            r=await c.get(path)
+            assert r.status_code==200 and 'GB-UX-SILO' not in r.text and 'Silo A' not in r.text

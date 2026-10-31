@@ -1,8 +1,33 @@
 # Portal pelanggan
 
 Portal terintegrasi di `/pelanggan`, dengan login `/pelanggan/masuk`.
-Desktop dan ponsel memakai URL yang sama. Sidebar ponsel dibuka melalui Menu.
+Desktop dan ponsel memakai URL yang sama. Identitas dan pengaturan ponsel dibuka melalui Akun.
 Tema memakai cookie `produksi_terik` serta aset dan token warna produksi.
+
+## Pengalaman pelanggan (31 Oktober 2026)
+
+Navigasi utama terdiri dari **Beranda**, **Jasa Saya**, **Barang Saya**, dan
+**Dokumen**. Ponsel menyediakan empat tujuan tersebut pada navigasi bawah;
+tombol Akun membuka identitas, pemasangan aplikasi, dan keluar. Kabar serta
+pilihan tema tetap ada di header.
+
+`/pelanggan/ringkasan` dan `/pelanggan/` membuka beranda khusus pelanggan.
+`/pelanggan/jasa-saya` memuat penerimaan, perkembangan proses, pemeriksaan
+mutu, dan referensi rekap jasa. `/pelanggan/barang-saya` memisahkan bahan,
+transit, hasil, serta pengambilan/pengiriman dan retur. Dokumen di
+`/pelanggan/laporan` mempertahankan PDF produksi dan bukti serah terima.
+URL detail lama dan tautan tab beranda lama tetap dilayani.
+
+Pembaca `portal/beranda.py` memakai `jasa_pelanggan.pelanggan(...,
+read_scope=scope)` dan `berjalan.untuk(..., read_scope=scope)`. Transit tetap
+berasal dari `Berjalan.transit`, termasuk pemeriksaan sumber silo/mesin.
+Bidang aksi operator tidak diproyeksikan ke kartu pelanggan.
+
+Tidak ada saldo baru atau penjumlahan bobot lintas tahap. Bobot yang belum
+diukur tetap berbeda dari nol; hasil tercatat tidak dianggap izin siap
+ambil. Pendinginan yang belum selesai tetap ditampilkan sebagai proses.
+Portal memberi tahu bahwa proses dan pencatatan ditangani petugas, tanpa
+menagih pelanggan untuk menyelesaikan tugas operator.
 
 ## Identitas dan batas data
 

@@ -21,3 +21,75 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 
 
 .portal-login {height:auto;overflow:visible;overscroll-behavior-y:auto}.login-brand{display:flex;align-items:center;justify-content:space-between;gap:12px}.login-card .login-brand button{min-width:44px;min-height:44px;background:var(--pd-sheet);color:var(--pd-ink)}
+
+/* Pengalaman pelanggan: satu status utama, empat tujuan, rincian bertahap. */
+.portal-customer .portal-sidebar{width:220px}
+.portal-customer .portal-workspace{margin-left:220px}
+.portal-customer .portal-sidebar .pintu__ikon{color:var(--pd-green);background:var(--pd-green-bg)}
+.portal-bawah{display:none}
+.pelanggan-halaman{max-width:1100px;margin:0 auto;overflow-wrap:anywhere}
+.pelanggan-sapaan{margin-bottom:22px}
+.pelanggan-sapaan h1{margin:4px 0 8px}
+.pelanggan-alis{margin:0;color:var(--pd-muted);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+.pelanggan-redup{color:var(--pd-muted);font-size:13px;margin:5px 0 0;line-height:1.6}
+.pelanggan-status{padding:26px;background:var(--pd-soft);border:1px solid var(--pd-line);border-radius:18px;margin-bottom:20px}
+.portal-customer .pelanggan-status h2{font-size:24px;line-height:1.3;letter-spacing:-.4px;margin:12px 0 9px}
+.pelanggan-status>p{max-width:75ch;margin:0;font-size:14px}
+.pelanggan-status .pelanggan-petunjuk{display:flex;gap:9px;align-items:flex-start;border-top:1px solid var(--pd-line);margin:18px 0 0;padding-top:14px;font-size:13px}
+.pelanggan-petunjuk svg{flex-shrink:0;margin-top:3px;color:var(--pd-green)}
+.pelanggan-penanda{display:inline-flex;align-items:center;max-width:100%;background:var(--pd-green-bg);color:var(--pd-green);padding:4px 9px;border-radius:7px;font-size:12px;font-weight:600}
+.pelanggan-penanda--hati{background:var(--pd-amber-bg);color:var(--pd-amber)}
+.portal-customer .pelanggan-utama{display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:46px;padding:12px 18px;margin-top:18px;border:1px solid var(--pd-green);border-radius:10px;color:var(--pd-bg);background:var(--pd-green);font-size:14px;font-weight:600;text-decoration:none}
+.portal-customer .pelanggan-utama:hover{filter:brightness(.95)}
+.pelanggan-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px}
+.pelanggan-panel{min-width:0;background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:16px;padding:21px;margin-bottom:16px}
+.pelanggan-grid .pelanggan-panel{margin-bottom:0}
+.portal-customer .pelanggan-panel h2{font-size:18px;margin:0 0 14px}
+.portal-customer .pelanggan-panel h3{font-size:15px;margin:0}
+.pelanggan-judul{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.portal-customer .pelanggan-judul h2{margin:0}
+.portal-customer .pelanggan-tautan{display:inline-flex;align-items:center;min-height:44px;color:var(--pd-green);font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:3px;padding:5px 0;max-width:100%}
+.pelanggan-baris{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.pelanggan-baris>div{min-width:0;flex:1}
+.pelanggan-berat{font-size:18px;line-height:1.4;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pelanggan-barang{padding:16px 0;border-bottom:1px solid var(--pd-line)}
+.pelanggan-barang:last-child{border-bottom:0;padding-bottom:0}
+.pelanggan-barang p{margin:5px 0 0}
+.pelanggan-barang .pelanggan-penanda{margin-top:8px}
+.pelanggan-kode{color:var(--pd-muted);font-size:12px}
+.pelanggan-catatan{margin:16px 0 0;padding:12px;background:var(--pd-bg);border-radius:9px;font-size:12px;line-height:1.6;color:var(--pd-muted)}
+.pelanggan-kabar{grid-column:1/-1}
+.pelanggan-berita{display:flex;gap:12px;padding:15px 0;border-top:1px solid var(--pd-line)}
+.pelanggan-berita:first-of-type{border-top:0;padding-top:0}
+.pelanggan-berita:last-child{padding-bottom:0}
+.pelanggan-berita p{margin:5px 0 0}
+.pelanggan-ikon{color:var(--pd-green);padding-top:3px;flex-shrink:0}
+.pelanggan-waktu{color:var(--pd-muted);font-size:12px}
+.pelanggan-perjalanan{margin:0 0 0 7px;padding:0 0 0 22px;list-style:none;border-left:2px solid var(--pd-line)}
+.pelanggan-perjalanan li{position:relative;padding:8px 0 22px}
+.pelanggan-perjalanan li:last-child{padding-bottom:0}
+.pelanggan-perjalanan li:before{content:"";position:absolute;left:-29px;top:13px;width:12px;height:12px;border:2px solid var(--pd-sheet);border-radius:50%;background:var(--pd-green)}
+.pelanggan-perjalanan p{margin:5px 0 0}
+.pelanggan-rincian{margin:16px 0;color:var(--pd-ink)}
+.pelanggan-rincian summary{cursor:pointer;min-height:44px;padding:10px 0;font-size:13px;font-weight:600;color:var(--pd-green)}
+.pelanggan-rincian li{margin-bottom:8px}
+.pelanggan-pintasan{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 20px}
+.pelanggan-pintasan a{display:inline-flex;align-items:center;min-height:44px;padding:9px 12px;border:1px solid var(--pd-line);border-radius:9px;color:var(--pd-ink);background:var(--pd-sheet);font-size:13px;text-decoration:none}
+.pelanggan-halaman :is([id]){scroll-margin-top:95px}
+.pelanggan-dokumen-aksi{display:flex;gap:18px;flex-wrap:wrap}
+@media(max-width:900px){
+ .portal-customer .portal-workspace{margin-left:0}
+ .portal-customer .portal-sidebar{width:min(290px,88vw)}
+ .portal-customer .portal-content.isi{padding:24px 18px calc(110px + env(safe-area-inset-bottom,0px))}
+ .portal-bawah{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;position:fixed;bottom:0;left:0;right:0;z-index:30;padding:7px 8px calc(9px + env(safe-area-inset-bottom,0px));background:var(--pd-sheet);border-top:1px solid var(--pd-line)}
+ .portal-bawah a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:56px;border-radius:9px;padding:7px 3px;color:var(--pd-muted);font-size:12px;text-decoration:none;text-align:center;line-height:1.35}
+ .portal-bawah a[aria-current=page]{background:var(--pd-soft);color:var(--pd-green);font-weight:600}
+ .portal-bawah svg{width:20px;height:20px}
+ .portal-bawah a:focus-visible{outline:3px solid var(--pd-blue);outline-offset:-3px}
+ .pelanggan-grid{grid-template-columns:minmax(0,1fr)}
+ .pelanggan-status{padding:21px}
+ .portal-customer .pelanggan-status h2{font-size:23px}
+ .pelanggan-panel{padding:18px}
+ .portal-customer .pelanggan-utama{display:flex;width:100%}
+}
+@media(max-width:360px){.portal-customer .portal-content.isi{padding-left:12px;padding-right:12px}.pelanggan-status,.pelanggan-panel{padding:16px}.pelanggan-berat{font-size:16px}.portal-bawah a{font-size:11px}.portal-topbar .portal-top-actions{gap:5px}}

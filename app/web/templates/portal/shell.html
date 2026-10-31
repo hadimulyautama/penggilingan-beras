@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/tabel-standar.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/padiflow-brand.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-scroll1">
+<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-ux1">
 <script src="/static/portal-pelanggan.js?v={{ VERSI }}" defer></script>
 </head><body class="padiflow-ui portal-customer {{ 'terik' if light }}">
 <a class="portal-skip" href="#isi-pelanggan">Lewati ke isi</a>
@@ -16,12 +16,13 @@
 <aside class="portal-sidebar" id="sidebar-pelanggan" aria-label="Menu portal pelanggan">
 <a class="portal-brand" href="/pelanggan/"><img class="logo-light" src="/static/padiflow-logo-terang.png" alt="PadiFlow"><img class="logo-dark laci__logo--gelap" src="/static/padiflow-logo-gelap.png" alt="PadiFlow"></a>
 <p class="portal-kicker">PORTAL PELANGGAN</p>
-<nav>{% for path,label,key in MENU %}<a class="pintu {{ 'pintu--kini' if active==key }}" href="/pelanggan/{{ path }}" {% if active==key %}aria-current="page"{% endif %}><span class="pintu__ikon">{{ ikon_portal({'ringkasan':'beranda','masuk':'barang_masuk','keluar':'barang_keluar','riwayat':'laporan_riwayat','qc':'mutu','laporan':'laporan_riwayat'}.get(key,key)) }}</span><span>{{ label }}</span></a>{% endfor %}</nav>
+<nav aria-label="Navigasi utama desktop">{% for path,label,key in MENU %}<a class="pintu {{ 'pintu--kini' if active==key }}" href="/pelanggan/{{ path }}" {% if active==key %}aria-current="page"{% endif %}><span class="pintu__ikon">{{ ikon_portal({'ringkasan':'beranda','laporan':'laporan_riwayat'}.get(key,key)) }}</span><span>{{ label }}</span></a>{% endfor %}</nav>
 <div class="portal-account"><strong>{{ reader.nama }}</strong><p>Pelanggan jasa</p>{% include 'portal/_pasang.html' %}<form method="post" action="/pelanggan/keluar"><input type="hidden" name="_csrf" value="{{ CSRF }}"><button class="btn" type="submit">Keluar</button></form></div>
 </aside>
-<div class="portal-workspace"><header class="portal-topbar"><button type="button" class="btn portal-menu" aria-controls="sidebar-pelanggan" aria-expanded="false">☰ <span>Menu</span></button><span>{{ reader.nama }}</span><div class="portal-top-actions"><a class="btn" href="/pelanggan/kabar" aria-label="Berita dan notifikasi">{{ ikon_portal('kabar') }}</a><button type="button" class="btn" data-theme-toggle aria-label="{{ 'Aktifkan mode gelap' if light else 'Aktifkan mode terang' }}">{{ '☾' if light else '☀' }}</button></div></header>
+<div class="portal-workspace"><header class="portal-topbar"><button type="button" class="btn portal-menu" aria-controls="sidebar-pelanggan" aria-expanded="false">☰ <span>Akun</span></button><span>{{ reader.nama }}</span><div class="portal-top-actions"><a class="btn" href="/pelanggan/kabar" aria-label="Kabar terbaru">{{ ikon_portal('kabar') }}</a><button type="button" class="btn" data-theme-toggle aria-label="{{ 'Aktifkan mode gelap' if light else 'Aktifkan mode terang' }}">{{ '☾' if light else '☀' }}</button></div></header>
 <main class="isi portal-content" id="isi-pelanggan" tabindex="-1">{{ content }}</main></div>
+<nav class="portal-bawah" aria-label="Navigasi utama ponsel">{% for path,label,key in MENU %}<a href="/pelanggan/{{ path }}" {% if active==key %}aria-current="page"{% endif %}>{{ ikon_portal({'ringkasan':'beranda','laporan':'laporan_riwayat'}.get(key,key)) }}<span>{{ label }}</span></a>{% endfor %}</nav>
 <!-- Native page styles are loaded above this final shared theme contract. -->
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-scroll1">
+<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-ux1">
 </body></html>
