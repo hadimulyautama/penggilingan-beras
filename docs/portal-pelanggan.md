@@ -35,7 +35,12 @@ pemeriksaan mutu, dan cuplikan riwayat. `/pelanggan/riwayat-proses` memuat
 proses selesai dengan tanggal, filter jenis dan tautan detail/hasil asli;
 pendinginan yang belum selesai tidak masuk riwayat selesai.
 `/pelanggan/barang-masuk` hanya menampilkan catatan penerimaan aktual,
-termasuk data lama tanpa tiket. Tiket antrean, penolakan, dan PK berstatus
+termasuk data lama tanpa tiket. Daftarnya memakai komponen yang sama dengan
+Produksi (`_daftar_penerimaan.html`): identitas/kode, status, jenis, armada,
+bobot diterima, dan waktu penerimaan. Pencarian dan filter jenis diterapkan
+sebelum paginasi 25 baris. Metadata tiket hanya dibaca jika ID tiket juga
+lolos cakupan pelanggan; bobot berasal dari `bobot_diterima` native.
+Tiket antrean, penolakan, dan PK berstatus
 baru tidak masuk. Gabah berstatus baru sudah diterima dan tetap ditampilkan.
 `/pelanggan/barang-keluar` menjadi menu Pengambilan barang, dengan batas
 kepemilikan per `OutgoingItem.jasa_id`; penjualan kepada orang yang sama

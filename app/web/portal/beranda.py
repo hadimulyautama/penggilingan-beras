@@ -134,6 +134,10 @@ async def halaman(request, bagian='beranda'):
         # Barang masuk berarti penerimaan aktual, bukan tiket antrean.
         # Catatan penolakan tidak menjadi riwayat barang yang diterima.
         d['penerimaan']=penerimaan_diterima(d['penerimaan'])
+        daftar_masuk={}
+        if bagian=='masuk':
+            from .masuk import daftar
+            daftar_masuk=await daftar(db,scope,d['penerimaan'],request)
         komoditas=await baca_barang(db,scope,d) if bagian in ('beranda','barang') else []
         # Status "selesai" pada pengeringan hanya menutup fase kering.
         # Pendinginan masih berjalan sampai waktunya benar-benar dicatat.
@@ -194,4 +198,4 @@ async def halaman(request, bagian='beranda'):
     return render_customer(request,f'portal/{bagian}.html',d=d,bahan=bahan,hasil=hasil,
         transit=transit,progres=progres,utama=status_utama(d,transit),komoditas=komoditas,
         nama_proses=NAMA_PROSES,status_pelanggan=bahasa_status,status_penerimaan=status_penerimaan,kg=jasa_pelanggan.kg_rinci,
-        riwayat=riwayat,jenis_riwayat=jenis,page_title=judul_halaman[bagian])
+        riwayat=riwayat,jenis_riwayat=jenis,daftar_masuk=daftar_masuk,page_title=judul_halaman[bagian])

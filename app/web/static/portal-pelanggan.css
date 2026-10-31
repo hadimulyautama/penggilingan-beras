@@ -117,3 +117,6 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 @media(max-width:360px){.portal-customer .portal-content.isi{padding-left:12px;padding-right:12px}.pelanggan-status,.pelanggan-panel{padding:16px}.pelanggan-berat{font-size:16px}.portal-bawah :is(a,button){font-size:11px}.portal-topbar .portal-top-actions{gap:5px}}
 
 .portal-bawah button{border:0;background:transparent;font:inherit;cursor:pointer}.portal-bawah .portal-menu-bawah{width:auto;min-width:0;font-size:12px}.portal-menu-bawah>span:first-child{font-size:22px;line-height:20px}
+
+.pelanggan-penerimaan{width:100%}.pelanggan-filter-masuk{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:18px 0}.pelanggan-filter-masuk label{display:grid;gap:6px;font-size:13px}.pelanggan-filter-masuk input,.pelanggan-filter-masuk select{max-width:100%;min-height:44px}.pelanggan-penerimaan .masuk-daftar{margin-top:12px}@media(max-width:600px){.pelanggan-filter-masuk label{width:100%}.pelanggan-filter-masuk input,.pelanggan-filter-masuk select{width:100%}}
+.portal-customer .portal-content .pelanggan-filter-masuk{display:flex}.portal-customer .portal-content .pelanggan-filter-masuk>button{width:auto;flex:0 0 auto}@media(max-width:600px){.portal-customer .portal-content .pelanggan-filter-masuk>button{width:100%}}

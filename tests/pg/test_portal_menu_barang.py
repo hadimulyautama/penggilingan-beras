@@ -63,6 +63,55 @@ async def test_barang_masuk_menu_sendiri_tanpa_penolakan_dan_pk_belum_diterima(p
             assert 'Belum diterima' not in body and 'Sudah diterima' in body
 
 
+async def test_daftar_masuk_memakai_baris_produksi_dan_bobot_penerimaan_asli(pg,portal):
+    from sqlalchemy import text
+    from app.services.barang_masuk import riwayat
+    async with pg() as db:
+        tid=await db.scalar(text("""INSERT INTO timbangan_transaksi
+            (kode,tanggal,arah,jenis_kode,cara_timbang,pelanggan_id,jasa,jasa_id,
+             nomor_polisi,timbang1_kg,timbang1_waktu,status_tiket,status_transaksi)
+            VALUES ('TB-PORTAL-DAFTAR',CURRENT_DATE,'MASUK','GABAH_KERING','DUA_KALI',
+             :p,true,:j,'AD 2468 LIST',15000,NOW(),'SELESAI','AKTIF') RETURNING id"""),
+            {'p':portal.owners[0].id,'j':portal.orders[0].id})
+        batch=await db.scalar(select(PurchaseBatch).where(PurchaseBatch.kode_batch=='GB-QC-KERING'))
+        batch.timbangan_transaksi_id=tid;await db.commit()
+        native=(await riwayat(db,g1=True,g2=True,tid=tid,jasa_ids={portal.orders[0].id}))[0]
+        assert native['berat_diterima']==10000
+    async with client(portal.accounts[0]) as c:
+        page=await c.get('/pelanggan/barang-masuk?cari=2468')
+        assert page.status_code==200
+        s=BeautifulSoup(page.text,'html.parser');rows=s.select('.masuk-daftar .masuk-baris')
+        assert len(rows)==1
+        row=rows[0]
+        assert row.select_one('.masuk-identitas small').get_text()=='TB-PORTAL-DAFTAR'
+        assert row.select_one('.masuk-armada').get_text()=='AD 2468 LIST'
+        assert row.select_one('.masuk-bobot').get_text(strip=True)=='10.000 kg'
+        assert row['href']==f'/pelanggan/barang-masuk/{tid}'
+        assert 'SELESAI' not in row.get_text() and 'Sudah diterima' in row.get_text()
+        pk=BeautifulSoup((await c.get('/pelanggan/barang-masuk?jenis=pk')).text,'html.parser')
+        assert len(pk.select('.masuk-baris'))==1 and 'PKB-QC-DETAIL' in pk.main.get_text()
+    async with client(portal.accounts[1]) as c:
+        assert 'TB-PORTAL-DAFTAR' not in (await c.get('/pelanggan/barang-masuk')).text
+
+
+async def test_daftar_masuk_paginasi_tetap_memuat_catatan_lama(pg,portal):
+    async with pg() as db:
+        for n in range(26):
+            db.add(PurchaseBatch(kode_batch=f'GB-DAFTAR-LAMA-{n:02}',jasa_id=portal.orders[0].id,
+                kondisi_gabah='kering',berat_total_kg=None if n==0 else 100,
+                tanggal_pembelian=now_local().date(),waktu_pembelian=now_local(),input_by=1,
+                status_batch='baru',sumber_berat='menunggu' if n==0 else 'manual'))
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        a=BeautifulSoup((await c.get('/pelanggan/barang-masuk')).text,'html.parser')
+        b=BeautifulSoup((await c.get('/pelanggan/barang-masuk?halaman=2')).text,'html.parser')
+        assert len(a.select('.masuk-baris'))==25 and len(b.select('.masuk-baris'))==4
+        codes=[r.select_one('.masuk-identitas small').get_text() for s in (a,b) for r in s.select('.masuk-baris')]
+        assert len(set(codes))==29 and 'GB-DAFTAR-LAMA-00' in codes
+        row=next(r for s in (a,b) for r in s.select('.masuk-baris') if 'GB-DAFTAR-LAMA-00' in r.get_text())
+        assert 'Belum diukur' in row.select_one('.masuk-bobot').get_text() and '0 kg' not in row.get_text()
+
+
 async def test_pengambilan_bukan_penjualan_dan_rencana_bukan_jumlah_aktual(pg,portal):
     async with pg() as db:
         for code,status,jid,kg in [('OUT-JASA-SELESAI','selesai',portal.orders[0].id,120),
