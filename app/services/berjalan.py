@@ -196,6 +196,9 @@ class Baris:
     pemilik_ids: tuple[int | None, ...] | None = None
     pemilik_tampil: str | None = None
     kepemilikan: str = "periksa"
+    #: Kartu tempat belum mempunyai kode transaksi/proses. Portal menelusuri
+    #: sumber isinya melalui ID ini; nama silo/mesin bukan bukti kepemilikan.
+    ruang_baca: tuple[str, int] | None = None
 
 
 @dataclass
@@ -1793,6 +1796,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         kondisi = {x.kondisi_gabah for x in isi_mesin}
         b.transit.append(Baris(
             kode="", pemilik_ids=tuple({x.jasa_id for x in isi_mesin}),
+            ruang_baca=("dryer", mesin.id),
             isi=f"{len(isi_mesin)} batch di {mesin.nama} · {bt.teks()}",
             keadaan="nyalakan mesinnya",
             aksi="mulai_pengeringan", fase="dryer",
@@ -2139,6 +2143,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         asal_silo = await _asal(db, set(bid_silo))
         b.transit.append(Baris(
             kode=silo.nama_silo, pemilik_ids=tuple({r.jasa_id for r in baris_silo}), isi=f"gabah kering · {bs.teks()}",
+            ruang_baca=("silo_gabah", silo.id),
             keadaan="mulai giling bila siap", aksi="mulai_giling",
             nilai=huruf, fase="silo",
             judul=silo.nama_silo,
@@ -2375,7 +2380,7 @@ _DI_MANA = {
 }
 
 
-async def untuk_gudang2(db: AsyncSession) -> Berjalan:
+async def untuk_gudang2(db: AsyncSession, *, read_scope=None) -> Berjalan:
     """Pekerjaan Gudang 2: PK yang datang dari luar, dan penyosohan.
 
     Sampai sekarang seluruh alur ini hanya bisa dijangkau lewat katalog
@@ -2466,7 +2471,7 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
 
     # ── Silo Gudang 2 berisi PK, menunggu disosoh ──
-    b.transit += await _kartu_silo_g2(db, asal_silo)
+    b.transit += await _kartu_silo_g2(db, asal_silo, read_scope=read_scope)
 
     # ── Beras yang sudah keluar mesin tetapi belum dipacking ──
     #
@@ -2790,7 +2795,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
     return keluar
 
 
-async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
+async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None) -> list[Baris]:
     """Silo Gudang 2 yang berisi PK — menunggu disosoh."""
     from app.models import Silo
     from app.penggilingan.gudang2.models import PolishingProcess
@@ -2844,6 +2849,10 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         .order_by(PolishingProcess.id.desc())
     )).scalars().first()
     sedang = bool(dipakai) or bool(kode_jalan)
+    # Ketersediaan mesin boleh diketahui pelanggan. Nomor proses pelanggan
+    # lain yang sedang memakai mesin tidak ikut diumumkan pada kartu silonya.
+    if read_scope is not None and kode_jalan not in read_scope.codes:
+        kode_jalan = None
     wid2 = await _g2_warehouse_id(db)
     for silo in (await db.execute(
         select(Silo).where(Silo.warehouse_id == wid2, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
@@ -2867,6 +2876,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         pemasok = _pemasok_ringkas(asal)
         keluar.append(Baris(
             kode=silo.nama_silo, pemilik_ids=tuple(await pemilik_silo_g2(db, silo.id)), isi=f"Bahan campuran · {_kg(kg)}",
+            ruang_baca=("silo_pk", silo.id),
             # Tiga keadaan, tiga kalimat. Silo yang sisanya sudah dicatat
             # BUKAN silo yang sedang menunggu mesin: yang membacanya perlu tahu
             # bahwa angka ini sisa isian yang baru saja ditutup, bukan muatan
@@ -3701,7 +3711,7 @@ async def untuk_pelanggan(db, pelanggan_id, *, scope=None):
     from app.models import Jasa
     ids=set((await db.scalars(select(Jasa.id).where(Jasa.pelanggan_id==pelanggan_id))).all())
     b = Berjalan()
-    sources = [await untuk_gudang1(db, boleh_qc=False), await untuk_gudang2(db)]
+    sources = [await untuk_gudang1(db, boleh_qc=False), await untuk_gudang2(db, read_scope=scope)]
     from app.services.identitas_pekerjaan import lengkapi
     await lengkapi(db,[r for source in sources for name in ('menunggu','berjalan','transit','meja') for r in getattr(source,name)])
     for name in ('menunggu', 'berjalan', 'transit', 'meja'):
@@ -3716,7 +3726,11 @@ async def untuk_pelanggan(db, pelanggan_id, *, scope=None):
                 continue
             # Keep native action identifiers for classification/progress only.
             # Read-only HTML removes the actual transaction controls.
-            if scope and row.kode not in scope.codes:
+            if scope and row.ruang_baca:
+                from app.services.transit_pelanggan import boleh_baca_ruang
+                if not await boleh_baca_ruang(db, scope, row.ruang_baca):
+                    continue
+            elif scope and row.kode not in scope.codes:
                 from sqlalchemy import text
                 own_ticket=await db.scalar(text('SELECT EXISTS(SELECT 1 FROM timbangan_transaksi WHERE kode=:kode AND pelanggan_id=:pid AND jasa=TRUE)'),{'kode':row.kode,'pid':pelanggan_id})
                 if not own_ticket:continue
