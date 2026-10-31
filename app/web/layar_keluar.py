@@ -11,7 +11,8 @@ keduanya menyusun menurut BARANG, bukan menurut TRUK.
 
 Barang Keluar memuat pekerjaan pengiriman dan riwayatnya. Verifikasi Admin
 berlangsung di sini; pengiriman tidak digandakan di Menunggu Keputusan.
-Transaksi selesai dan batal masuk tabel riwayat, dengan halaman detail sendiri.
+Transaksi selesai masuk tabel riwayat. Catatan batal tetap dapat ditelusuri
+melalui filter status yang dipilih secara eksplisit dan halaman detailnya.
 """
 from __future__ import annotations
 
@@ -109,7 +110,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                 aktif = (await svc.daftar(db, status=(status,) if status else OUT_HIDUP,
                                       batas=500, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid, **customer_scope)
                      if not status or status in OUT_HIDUP else [])
-            riwayat = (await svc.daftar(db, status=(status,) if status else (OUT_SELESAI, OUT_BATAL),
+            riwayat = (await svc.daftar(db, status=(status,) if status else (OUT_SELESAI,),
                                         batas=51, gabung_riwayat=not is_customer_read(request), sebelum_id=sebelum, pencarian=q, sejak=tanggal,pelanggan_jasa_id=pid, **customer_scope)
                        if not status or status not in OUT_HIDUP else [])
             sebelum_berikut = riwayat[49][0].id if len(riwayat) > 50 else None

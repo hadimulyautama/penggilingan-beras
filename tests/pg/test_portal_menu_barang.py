@@ -116,6 +116,8 @@ async def test_pengambilan_bukan_penjualan_dan_rencana_bukan_jumlah_aktual(pg,po
     async with pg() as db:
         for code,status,jid,kg in [('OUT-JASA-SELESAI','selesai',portal.orders[0].id,120),
             ('OUT-JASA-RENCANA','perintah',portal.orders[0].id,0),
+            ('OUT-JASA-BATAL','batal',portal.orders[0].id,0),
+            ('OUT-BATAL-RAHASIA','batal',portal.orders[1].id,0),
             ('OUT-JUAL-ORANG-SAMA','selesai',None,999)]:
             r=OutgoingRecord(kode=code,pelanggan_id=portal.owners[0].id,tanggal=now_local().date(),
                 waktu=now_local(),input_by=1,status=status)
@@ -132,8 +134,12 @@ async def test_pengambilan_bukan_penjualan_dan_rencana_bukan_jumlah_aktual(pg,po
         assert s.select_one('.tabel-standar__status--selesai').get_text()=='Selesai'
         assert 'OUT-JASA-RENCANA' in body and 'Menunggu dimuat' in body
         assert 'OUT-JUAL-ORANG-SAMA' not in body and '999' not in body
+        assert 'OUT-JASA-BATAL' not in body and 'OUT-BATAL-RAHASIA' not in body
         active=s.select_one('.keluar-baris__angka').get_text(' ',strip=True)
         assert 'Rencana 500 kg' in active and 'Dimuat Belum dimuat' in active
+        cancelled=await c.get('/pelanggan/barang-keluar?status=batal')
+        assert cancelled.status_code==200 and 'OUT-JASA-BATAL' in cancelled.text
+        assert 'OUT-JASA-SELESAI' not in cancelled.text and 'OUT-BATAL-RAHASIA' not in cancelled.text
 
 
 async def test_pengambilan_kiriman_bersama_hanya_muatan_jasa_pelanggan_sendiri(pg,portal):

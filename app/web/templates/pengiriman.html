@@ -38,7 +38,7 @@
 {% if not detail %}
 <section aria-labelledby="judul-riwayat-keluar" class="keluar-ringkas__bagian">
   <h2 id="judul-riwayat-keluar">Riwayat Barang Keluar</h2>
-  <p class="bantu">Perintah selesai dan dibatalkan. Pilih baris untuk melihat rincian dan tiket timbang terkait.</p>
+  <p class="bantu">{% if status_filter == 'batal' %}Perintah yang dibatalkan.{% else %}Perintah selesai. Catatan pembatalan tersedia melalui filter Dibatalkan.{% endif %} Pilih baris untuk melihat rincian dan tiket timbang terkait.</p>
   {% if riwayat %}
   {% include '_pengiriman_riwayat_daftar.html' %}
   {% if sebelum_berikut %}<a class="btn btn--kecil" href="/barang-keluar?sebelum={{ sebelum_berikut }}&{{ filter_query }}#judul-riwayat-keluar">Riwayat sebelumnya</a>{% endif %}

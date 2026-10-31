@@ -58,3 +58,47 @@ async def test_draf_terisi_dan_filter_tidak_mengubah_transaksi(pg, gudang):
             (folder / 'admin-filter.html').write_text(kosong.text)
             (Path('/tmp/daftar-keluar-session.json')).write_text(json.dumps({'cookies': {x.name: x.value for x in c.cookies.jar}, 'draf': str(ident), 'perintah': oid}))
     assert await _stok(pg, gudang) == stok
+
+
+async def test_batal_tidak_memenuhi_paginasi_riwayat_normal(pg, gudang):
+    from sqlalchemy import select
+    from app.database import now_local
+    from app.models import OutgoingItem, OutgoingRecord
+
+    # Lebih banyak catatan batal daripada kapasitas halaman. Menyaring di
+    # templat setelah LIMIT akan menghilangkan pengiriman selesai yang lama.
+    async with pg() as db:
+        ids = []
+        for n in range(53):
+            rec = OutgoingRecord(kode=f'OUT-RAPI-{n:03}', status='selesai' if n == 0 else 'batal',
+                nama_pembeli='Pelanggan uji riwayat', tanggal=now_local().date(),
+                waktu=now_local(), input_by=gudang['adm'])
+            db.add(rec)
+            await db.flush()
+            ids.append(rec.id)
+            db.add(OutgoingItem(outgoing_record_id=rec.id, item_type='finished_goods',
+                product_sku_id=gudang['sku'], rice_quality_standard_id=gudang['std'],
+                berat_kg=25 if n == 0 else 0, berat_perintah_kg=25,
+                jumlah_karung=1 if n == 0 else 0, jumlah_karung_perintah=1))
+        await db.commit()
+        before = (await db.execute(select(OutgoingRecord.id, OutgoingRecord.status)
+                                  .order_by(OutgoingRecord.id))).all()
+    stok = await _stok(pg, gudang)
+    for uid, nama in [(gudang['adm'], 'riwayat-admin'), (gudang['op'], 'riwayat-op')]:
+        async with await _klien(pg, uid, nama) as c:
+            for query in ('', '?q=OUT-RAPI', '?status=selesai'):
+                page = await c.get('/barang-keluar' + query)
+                assert page.status_code == 200
+                assert 'OUT-RAPI-000' in page.text
+                assert 'OUT-RAPI-052' not in page.text
+                assert 'Riwayat sebelumnya' not in page.text
+            cancelled = await c.get('/barang-keluar?status=batal')
+            assert cancelled.status_code == 200
+            assert 'OUT-RAPI-052' in cancelled.text
+            assert 'OUT-RAPI-000' not in cancelled.text
+            assert 'Riwayat sebelumnya' in cancelled.text
+            assert (await c.get(f'/barang-keluar/{ids[-1]}')).status_code == 200
+    async with pg() as db:
+        assert (await db.execute(select(OutgoingRecord.id, OutgoingRecord.status)
+                                .order_by(OutgoingRecord.id))).all() == before
+    assert await _stok(pg, gudang) == stok
