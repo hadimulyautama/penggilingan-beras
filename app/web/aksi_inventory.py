@@ -2627,14 +2627,18 @@ async def _barang_jasa_pelanggan_rows(db: AsyncSession, pelanggan_id: int) -> li
     from app.models import Jasa
     from app.models.jasa import BERJALAN
 
-    jids = (await db.execute(
-        select(Jasa.id).where(Jasa.pelanggan_id == pelanggan_id,
-                              Jasa.status == BERJALAN)
-    )).scalars().all()
+    pesanan = (await db.execute(
+        select(Jasa.id, Jasa.kode).where(Jasa.pelanggan_id == pelanggan_id,
+                                        Jasa.status == BERJALAN).order_by(Jasa.id)
+    )).all()
     out: list[dict] = []
-    for jid in jids:
+    for jid, kode in pesanan:
         for baris in await _barang_jasa_rows(db, jid):
-            out.append({**baris, "value": f"{baris['value']}@{jid}"})
+            # Dua pesanan bisa mempunyai SKU dan kemasan yang sama. Kode
+            # asal membuat pilihan itu dapat dibedakan, tanpa menggabungkan
+            # saldo atau mengubah identitas kepemilikan setiap baris.
+            out.append({**baris, "value": f"{baris['value']}@{jid}",
+                        "label": baris["label"] + (f" · {kode}" if len(pesanan) > 1 else "")})
     return out
 
 
@@ -2656,10 +2660,69 @@ class AmbilJasaReq(BaseModel):
     #: dan `buat_perintah` yang memvalidasinya.
     pelanggan: str = ""
     barang: list[BarisReq] | None = None
+    metode: str | None = None
     no_polisi: str = ""
     tiket_armada: str | None = None
     nama_ekspedisi: str = ""
     catatan: str = ""
+
+
+async def _baris_pengambilan_jasa(db, req: AmbilJasaReq):
+    """Pilihan pemilik harus cocok dengan pemilik tiap sumber, termasuk draf.
+
+    Layanan lama menjaga semua baris milik satu pelanggan. Halaman baru juga
+    mengikatnya ke pelanggan yang dipilih, supaya mengganti pelanggan atau
+    memulihkan draf tidak pernah menerbitkan barang pelanggan sebelumnya.
+    """
+    from app.models import Jasa
+    from app.models.jasa import BERJALAN
+    if not (req.pelanggan or "").isdigit():
+        raise HTTPException(400, "Pilih pelanggan yang barangnya diambil.")
+    rows = [b for b in (req.barang or []) if b.pilih.strip() or b.jumlah is not None]
+    if not 1 <= len(rows) <= 12:
+        raise HTTPException(400, "Isi 1 sampai 12 barang milik pelanggan.")
+    if any(not b.pilih.strip() or b.jumlah is None for b in rows):
+        raise HTTPException(400, "Lengkapi barang dan jumlah pada setiap baris.")
+    baris = [await _satu_baris(db, b.pilih, b.jumlah) for b in rows]
+    jids = {b.jasa_id for b in baris}
+    if None in jids:
+        raise HTTPException(400, "Pilih barang jasa milik pelanggan, bukan stok pabrik.")
+    pesanan = list((await db.scalars(select(Jasa).where(Jasa.id.in_(jids)))).all())
+    if len(pesanan) != len(jids) or any(
+        j.pelanggan_id != int(req.pelanggan) or j.status != BERJALAN for j in pesanan
+    ):
+        raise HTTPException(400, "Barang tidak sesuai pemilik yang dipilih atau pesanan sudah ditutup. Pilih ulang barangnya.")
+    return baris
+
+
+@router.post("/actions/pratinjau-pengambilan-jasa")
+async def pratinjau_pengambilan_jasa(req: AmbilJasaReq,
+                                    user: User = Depends(pengguna_aksi)):
+    """Saldo pemilik dibaca tanpa reservasi; penerbitan memeriksa ulang."""
+    wajib(can_see_financials(user))
+    # Jumlah kosong masih sah ketika memilih barang. Nilai satu hanya untuk
+    # membaca konversi kg/satuan, tidak disimpan sebagai jumlah pengambilan.
+    isi = req.model_copy(update={"barang": [b.model_copy(update={"jumlah": b.jumlah if b.jumlah is not None else 1})
+        for b in (req.barang or []) if b.pilih.strip()]})
+    async with SessionLocal() as db:
+        baris = await _baris_pengambilan_jasa(db, isi)
+        sumber = {}
+        try:
+            for pilihan, b in zip(isi.barang, baris):
+                if pilihan.pilih in sumber:
+                    continue
+                fisik, nama = await bk.tersedia(db, b, abaikan_pesanan=True)
+                tersedia, _ = await bk.tersedia(db, b)
+                satu_kg, _ = await bk._berat_baris(db, replace(b,
+                    jumlah_karung=1 if b.tipe == "finished_goods" else None,
+                    berat_kg=1 if b.tipe != "finished_goods" else None))
+                sumber[pilihan.pilih] = dict(nama=nama,
+                    lokasi="Gudang 1" if bk.GUDANG_ITEM.get(b.tipe) == bk.G1 else "Gudang 2",
+                    fisik=fisik, terikat=fisik-tersedia, tersedia=tersedia,
+                    kg_per_unit=satu_kg, satuan="karung" if b.tipe == "finished_goods" else "kg")
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Saldo barang jasa tidak dapat diperiksa.")
+    return {"sumber": sumber}
 
 
 @router.post("/actions/ambil-jasa")
@@ -2683,20 +2746,18 @@ async def act_ambil_jasa(req: AmbilJasaReq,
         raise HTTPException(400, "Pilih pelanggan yang barangnya diambil.")
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
-        baris = await _baris_dari_borang(db, req)
-        if any(b.jasa_id is None for b in baris):
-            raise HTTPException(400, "Pilih barang titipan dari daftar pelanggan yang bersangkutan.")
+        baris = await _baris_pengambilan_jasa(db, req)
         try:
             r = await bk.buat_perintah(
                 db, user=u, baris=baris, pelanggan_id=int(req.pelanggan),
-                metode=None, no_polisi=(req.no_polisi or None),
+                metode=req.metode or None, no_polisi=(req.no_polisi or None),
                 tiket_armada_id=_id(req.tiket_armada) if (req.tiket_armada or "").strip() else None,
                 nama_ekspedisi=(req.nama_ekspedisi or None),
                 catatan=(req.catatan or None))
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal membuat perintah pengambilan.")
         kode, pembeli = r.rec.kode, r.rec.nama_pembeli
-    return {"ok": True,
+    return {"ok": True, "tujuan": f"/barang-keluar/{r.rec.id}",
             "pesan": f"✓ Perintah pengambilan *{kode}* terbit untuk {pembeli}. "
                      "Operator memuatnya dari Antrian tunggu, lalu Admin "
                      "memverifikasi dengan tiket timbang keluar."}

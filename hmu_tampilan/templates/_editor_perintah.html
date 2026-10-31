@@ -1,7 +1,9 @@
-<section class="editor-perintah" data-editor-perintah="{{ draf_id }}">
+{% set jasa = pengambilan_jasa|default(false) %}
+{% if jasa %}<link rel="stylesheet" href="/static/pengambilan-jasa.css?v={{ VERSI }}">{% endif %}
+<section class="editor-perintah{% if jasa %} editor-perintah--jasa{% endif %}" data-editor-perintah="{{ draf_id }}" data-jenis="{{ 'jasa' if jasa else 'pabrik' }}">
   <a href="/barang-keluar">‹ Pengiriman</a>
-  <h1>Buat perintah pengiriman</h1>
-  <p class="bantu">Satu armada dapat membawa barang untuk beberapa pelanggan. Tambahkan barang di dalam kelompok pelanggan yang menerimanya.</p>
+  <h1>{{ 'Pengambilan barang jasa' if jasa else 'Buat perintah pengiriman' }}</h1>
+  <p class="bantu">{% if jasa %}Pilih pemilik, tentukan barang dan jumlah yang diambil, lalu buat perintah muat. Barang dapat berasal dari beberapa pesanan pelanggan yang sama.{% else %}Satu armada dapat membawa barang untuk beberapa pelanggan. Tambahkan barang di dalam kelompok pelanggan yang menerimanya.{% endif %}</p>
   <p id="draf-status" role="status">Memuat daftar pilihan…</p>
   <div id="draf-galat" class="nota nota--buruk" role="alert" hidden></div>
   <a id="draf-periksa" href="/barang-keluar" hidden>Periksa daftar Pengiriman sebelum mengulang</a>
@@ -15,28 +17,38 @@
   <form id="draf-form" novalidate>
     <div class="draf-layout"><div class="draf-isian">
       <section class="draf-bagian" aria-labelledby="judul-pelanggan-barang">
-        <h2 id="judul-pelanggan-barang">Pelanggan dan barangnya</h2>
+        <h2 id="judul-pelanggan-barang">{{ '1. Pemilik dan barang yang diambil' if jasa else 'Pelanggan dan barangnya' }}</h2>
         <div id="draf-kelompok"></div>
-        <button type="button" id="draf-tambah-pelanggan" class="btn">+ Tambah pelanggan</button>
+        <button type="button" id="draf-tambah-pelanggan" class="btn"{% if jasa %} hidden{% endif %}>+ Tambah pelanggan</button>
       </section>
       <section class="draf-bagian" aria-labelledby="judul-armada-bersama">
-        <h2 id="judul-armada-bersama">Armada kiriman bersama</h2>
+        <h2 id="judul-armada-bersama">{{ '2. Armada dan catatan' if jasa else 'Armada kiriman bersama' }}</h2>
+        {% if jasa %}<details id="jasa-armada"{% if awal.isi.get("metode") or awal.isi.get("tiket_armada") or awal.isi.get("no_polisi") or awal.isi.get("nama_ekspedisi") or awal.isi.get("catatan") %} open{% endif %}><summary>Isi armada atau catatan (opsional)</summary>{% endif %}
         <label for="draf-metode">Cara kirim <small>— opsional</small></label>
         <select class="fld" id="draf-metode" name="metode"><option value="">— belum ditentukan —</option><option value="diantar">Diantar</option><option value="diambil">Diambil sendiri</option><option value="ekspedisi">Ekspedisi</option></select>
         <label for="draf-armada">Tiket timbang armada <small>— boleh menyusul</small></label>
         <select class="fld" id="draf-armada" name="tiket_armada"><option value="">Pilih nanti · tiket menyusul</option></select>
-        <p class="bantu">Satu tiket memeriksa total muatan seluruh pelanggan. Pilih tiket setelah armada selesai timbang pertama.</p>
+        <p class="bantu">{% if jasa %}Tiket boleh menyusul. Muatan tetap dicatat dan diperiksa melalui alur Pengiriman.{% else %}Satu tiket memeriksa total muatan seluruh pelanggan. Pilih tiket setelah armada selesai timbang pertama.{% endif %}</p>
+        {% if jasa %}
+        <label for="draf-nopol">Nomor polisi <small>— jika belum ada tiket</small></label>
+        <input class="fld" id="draf-nopol" name="no_polisi" maxlength="20" autocomplete="off">
+        {% endif %}
         <label for="draf-ekspedisi">Ekspedisi <small>— bila ada</small></label>
         <input class="fld" id="draf-ekspedisi" name="nama_ekspedisi" maxlength="100">
+        {% if jasa %}
+        <label for="draf-catatan">Catatan pengambilan <small>— bila ada</small></label>
+        <textarea class="fld" id="draf-catatan" name="catatan" maxlength="300" rows="2"></textarea>
+        {% endif %}
+        {% if jasa %}</details>{% endif %}
       </section>
     </div>
     <aside class="draf-ringkasan draf-bagian" aria-labelledby="judul-ringkasan-kiriman">
-      <h2 id="judul-ringkasan-kiriman">Ringkasan satu kiriman</h2>
+      <h2 id="judul-ringkasan-kiriman">{{ '3. Ringkasan pengambilan' if jasa else 'Ringkasan satu kiriman' }}</h2>
       <div id="draf-ringkasan" aria-live="polite"></div>
       <p class="bantu" id="draf-saldo-status"></p>
       <p class="bantu">Stok fisik belum berkurang. Draf belum mengikat saldo. Setelah perintah dibuat, saldo dicadangkan; stok berpindah saat muatan dicatat.</p>
     </aside></div>
-    <div class="draf-tindakan"><a class="btn" href="/barang-keluar">Batal</a><button type="submit" class="btn" id="draf-terbitkan" disabled>Buat perintah pengiriman</button></div>
+    <div class="draf-tindakan"><a class="btn" href="/barang-keluar">Kembali ke Pengiriman</a><button type="submit" class="btn" id="draf-terbitkan" disabled>{{ 'Buat perintah pengambilan' if jasa else 'Buat perintah pengiriman' }}</button></div>
   </form>
 </section>
 <script type="application/json" id="draf-awal">{{ awal | tojson }}</script>

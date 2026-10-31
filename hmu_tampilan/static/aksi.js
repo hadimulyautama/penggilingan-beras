@@ -303,7 +303,7 @@
     // Halaman tujuan tetap memeriksa izin di server; aksi formulir lain
     // tetap memerlukan spesifikasi katalog.
     if (!a && id !== "muat_barang" && id !== "muat_semua" &&
-        id !== "selesai_muat" && id !== "verifikasi_keluar") return;
+        id !== "selesai_muat" && id !== "verifikasi_keluar" && id !== "ambil_jasa") return;
     if (a && a.boleh === false) {
       kabar(a.alasan_akses || "Anda tidak memiliki akses untuk tindakan ini.", "err");
       return;
@@ -320,6 +320,11 @@
     if (id === "selesai_muat") {
       var selesaiId = nilaiBaris().split("|")[0];
       location.assign("/selesai-muat" + (/^[1-9]\d*$/.test(selesaiId) ? "?perintah=" + encodeURIComponent(selesaiId) + "&buka=1" : ""));
+      return;
+    }
+    if (id === "ambil_jasa") {
+      var pemilikId = nilaiBaris().split("|")[0];
+      location.assign("/barang-keluar/pengambilan-jasa" + (/^[1-9]\d*$/.test(pemilikId) ? "?pelanggan_id=" + encodeURIComponent(pemilikId) : ""));
       return;
     }
     if (id === "muat_barang" || id === "muat_semua") {

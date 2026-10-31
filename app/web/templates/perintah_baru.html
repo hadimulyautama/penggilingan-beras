@@ -1,3 +1,3 @@
 {% extends 'base.html' %}
-{% block judul %}Perintah baru{% endblock %}
+{% block judul %}{{ 'Pengambilan barang jasa' if pengambilan_jasa|default(false) else 'Perintah baru' }}{% endblock %}
 {% block isi %}{% include '_editor_perintah.html' %}{% endblock %}

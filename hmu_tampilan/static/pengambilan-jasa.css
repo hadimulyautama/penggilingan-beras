@@ -1,0 +1,25 @@
+/* Halaman pengambilan memakai editor perintah yang sama. Di ponsel satu
+   pemilik tidak memerlukan kotak kelompok dan tombol hapus pelanggan. */
+.editor-perintah--jasa .draf-kelompok-kepala { display:none; }
+.editor-perintah--jasa .draf-kelompok { margin:0; padding:0; border:0; background:transparent; }
+.editor-perintah--jasa .draf-kelompok > label { display:block; margin-bottom:6px; font-weight:600; }
+.editor-perintah--jasa .draf-item { border:1px solid var(--garis); border-radius:12px; padding:16px; margin:12px 0; }
+.editor-perintah--jasa .draf-item:first-child { padding-top:16px; }
+.editor-perintah--jasa .draf-item > label { display:block; font-weight:600; }
+.editor-perintah--jasa .draf-item .ulang__pilihan { display:block; font-weight:400; }
+.editor-perintah--jasa .draf-jumlah { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; margin-top:6px; }
+.editor-perintah--jasa .draf-satuan { min-width:45px; }
+.editor-perintah--jasa [data-ganti-pemilik] { margin:12px 0; }
+.editor-perintah--jasa [data-ganti-pemilik] button { margin:4px; }
+.editor-perintah--jasa .draf-pelanggan textarea { font-size:16px; }
+.editor-perintah--jasa .draf-sumber .bantu { margin-bottom:0; }
+.editor-perintah--jasa #draf-nopol { text-transform:uppercase; }
+@media (max-width:600px) {
+  .editor-perintah--jasa .draf-item { padding:12px; }
+  .editor-perintah--jasa .draf-item:first-child { padding-top:12px; }
+  .editor-perintah--jasa .draf-item header { align-items:center; }
+  .editor-perintah--jasa .draf-pasang { gap:8px; font-size:.9rem; }
+  .editor-perintah--jasa .draf-pasang strong { max-width:65%; }
+  .editor-perintah--jasa .draf-tindakan { padding-bottom:env(safe-area-inset-bottom,0px); }
+}
+.editor-perintah--jasa #jasa-armada > label { display:block; margin:16px 0 6px; font-weight:600; }

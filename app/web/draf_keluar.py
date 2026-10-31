@@ -11,7 +11,8 @@ from app.database import SessionLocal
 from app.models import DrafKeluar, User
 from app.peran import can_see_financials
 from app.services import barang_keluar as bk
-from app.web.aksi_inventory import PerintahKeluarReq, _kelompok_dari_borang, _id
+from app.web.aksi_inventory import (PerintahKeluarReq, AmbilJasaReq,
+                                   _kelompok_dari_borang, _baris_pengambilan_jasa, _id)
 from app.web.aksi_umum import wajib
 from app.web.deps import pengguna_aksi
 from app.web.security import butuh_akun
@@ -45,10 +46,15 @@ def _hasil(d):
     return dict(revisi=d.revisi, isi=d.isi, tujuan=f'/barang-keluar/{d.perintah_id}' if d.perintah_id else None)
 
 @router.get('/barang-keluar/baru')
+@router.get('/barang-keluar/pengambilan-jasa')
 @router.get('/barang-keluar/draf/{identitas}')
 async def halaman(request: Request, identitas: UUID | None = None, akun=Depends(butuh_akun)):
     wajib(can_see_financials(akun.user))
+    pengambilan = request.url.path == '/barang-keluar/pengambilan-jasa'
     awal = dict(revisi=0, isi={})
+    if pengambilan:
+        pid = request.query_params.get('pelanggan_id', '')
+        awal['isi'] = {'jenis': 'jasa', 'pelanggan': pid if pid.isdigit() else ''}
     if identitas:
         async with SessionLocal() as db:
             d = await _ambil(db, identitas, akun.user)
@@ -57,7 +63,9 @@ async def halaman(request: Request, identitas: UUID | None = None, akun=Depends(
             if d.perintah_id:
                 return RedirectResponse(f'/barang-keluar/{d.perintah_id}',303)
             awal = _hasil(d)
-    return await render_laci(request, 'perintah_baru.html', draf_id=str(identitas or uuid4()), awal=awal)
+            pengambilan = d.isi.get('jenis') == 'jasa'
+    return await render_laci(request, 'perintah_baru.html', draf_id=str(identitas or uuid4()),
+                            awal=awal, pengambilan_jasa=pengambilan)
 
 @router.put('/api/actions/draf-perintah/{identitas}')
 async def simpan(identitas: UUID, req: SimpanDraf, user: User = Depends(pengguna_aksi)):
@@ -98,12 +106,22 @@ async def terbitkan(identitas: UUID, req: TerbitDraf, user: User = Depends(pengg
         if d.revisi != req.revisi:
             raise HTTPException(409, dict(pesan='Draf berubah. Periksa ulang sebelum menerbitkan.', **_hasil(d)))
         try:
-            isi = PerintahKeluarReq.model_validate(d.isi)
-            kelompok = await _kelompok_dari_borang(db, isi)
-            hasil = await bk.buat_kiriman(db, user=await db.get(User,user.id), kelompok=kelompok,
-                metode=isi.metode,
-                tiket_armada_id=_id(isi.tiket_armada) if isi.tiket_armada else None,
-                nama_ekspedisi=isi.nama_ekspedisi or None, simpan=False)
+            if d.isi.get('jenis') == 'jasa':
+                isi = AmbilJasaReq.model_validate(d.isi)
+                baris = await _baris_pengambilan_jasa(db, isi)
+                hasil = [await bk.buat_perintah(db, user=await db.get(User,user.id), baris=baris,
+                    pelanggan_id=int(isi.pelanggan),
+                    metode=isi.metode or None, no_polisi=isi.no_polisi or None,
+                    tiket_armada_id=_id(isi.tiket_armada) if isi.tiket_armada else None,
+                    nama_ekspedisi=isi.nama_ekspedisi or None,
+                    catatan=isi.catatan or None, simpan=False)]
+            else:
+                isi = PerintahKeluarReq.model_validate(d.isi)
+                kelompok = await _kelompok_dari_borang(db, isi)
+                hasil = await bk.buat_kiriman(db, user=await db.get(User,user.id), kelompok=kelompok,
+                    metode=isi.metode,
+                    tiket_armada_id=_id(isi.tiket_armada) if isi.tiket_armada else None,
+                    nama_ekspedisi=isi.nama_ekspedisi or None, simpan=False)
         except ValidationError:
             raise HTTPException(400, 'Periksa pilihan barang dan jumlah. Karung harus bilangan bulat positif.')
         except bk.BarangKeluarError as e:

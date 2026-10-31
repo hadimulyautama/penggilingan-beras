@@ -69,6 +69,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                             "Pilih gudang kerja melalui menu Kerja di gudang.")
     if request.query_params.get("buka") == "perintah_keluar":
         return RedirectResponse("/barang-keluar/baru", 303)
+    if request.query_params.get("buka") == "ambil_jasa":
+        pid = request.query_params.get("pelanggan_id") or request.query_params.get("nilai", "")
+        return RedirectResponse("/barang-keluar/pengambilan-jasa" +
+                                ("?" + urlencode({"pelanggan_id": pid}) if pid.isdigit() else ""), 303)
     # Super Admin melihat seluruh alur, termasuk tugas muat (28 Oktober).
     # Admin tetap memakai tampilan penerbitan/verifikasi yang sudah berlaku.
     from hmu_identitas import peran as P
