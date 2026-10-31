@@ -50,9 +50,9 @@ def test_tidak_ada_penjumlahan_lintas_tahap_dan_saldo_negatif_tetap_terlihat():
 @pytest.mark.parametrize('path,active',[
     ('/pelanggan/','ringkasan'),('/pelanggan/ringkasan','ringkasan'),
     ('/pelanggan/jasa-saya','pekerjaan'),('/pelanggan/barang-saya','stok'),
-    ('/pelanggan/barang-keluar/5','pengambilan'),('/pelanggan/retur/2','stok'),
+    ('/pelanggan/barang-keluar/5','pengambilan'),('/pelanggan/retur/2','pengambilan'),
     ('/pelanggan/jasa/3/nota','laporan'),('/pelanggan/jasa/3/nota.pdf','laporan'),
-    ('/pelanggan/riwayat-qc/gabah-basah','pekerjaan'),('/pelanggan/riwayat-giling/4','pekerjaan'),
+    ('/pelanggan/riwayat-qc/gabah-basah','stok'),('/pelanggan/riwayat-giling/4','riwayat'),
     ('/pelanggan/serah-terima','laporan'),('/jasa/pelanggan/1','pekerjaan')])
 def test_menu_aktif_mengikuti_konteks_pelanggan(path,active):
     assert active_menu(path)==active
