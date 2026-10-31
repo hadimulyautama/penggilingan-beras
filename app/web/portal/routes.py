@@ -104,7 +104,7 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
         await own_order(scope,int(m[1]))
         if m[2]=='/nota.pdf':result=await jasa.rekap_pdf(int(m[1]),req,unduh=integer(q.get('unduh')) or 0,akun=account)
         elif m[2]:result=await jasa.nota(int(m[1]),req,account)
-        else:result=RedirectResponse(f'/pelanggan/jasa/pelanggan/{reader.pelanggan_id}#pesanan-{m[1]}',303)
+        else:result=RedirectResponse(f'/pelanggan/jasa/{m[1]}/nota',303)
     elif m:=re.fullmatch(r'/proses-aktif/([\w-]+)/([\w-]+)',path):
         await own_model(scope,m[1],m[2],by_code=True)
         result=await active.detail_proses_aktif(m[1],m[2],req,account)
@@ -179,11 +179,13 @@ async def history_list(request,kind):
 
 
 async def reports(request):
-    from app.web.tampilan import render_laci
     scope=request.state.portal_scope
     async with SessionLocal() as db:
         from app.models import Jasa
-        orders=(await db.scalars(select(Jasa).where(Jasa.id.in_(scope.jasa_ids)).order_by(Jasa.id.desc()))).all()
+        # Pesanan asal yang digabung bukan dokumen tambahan. Tampilkan rekap
+        # utama sekali; URL rekap lama tetap dilayani oleh pembaca produksi.
+        orders=(await db.scalars(select(Jasa).where(Jasa.id.in_(scope.jasa_ids),
+            Jasa.status!='digabung').order_by(Jasa.id.desc()))).all()
         from app.services.serah_terima import daftar as daftar_serah
         serah=await daftar_serah(db,scope=scope)
         rows=[]

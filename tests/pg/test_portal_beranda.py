@@ -40,7 +40,7 @@ async def test_jasa_barang_dan_tautan_lama_tetap_terbaca_tanpa_mutasi(pg,portal)
             assert all(f['action']=='/pelanggan/keluar' for f in s.select('form[method=post]'))
         page=await c.get('/pelanggan/jasa-saya')
         assert 'GB-QC-BASAH' in page.text and 'LOT-QC-DETAIL' in page.text
-        assert f'/pelanggan/jasa/{portal.orders[0].id}/nota' in page.text
+        assert '/pelanggan/laporan' in page.text
         assert (await c.get('/pelanggan/barang-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404
         assert (await c.get('/pelanggan/jasa-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404
 
@@ -133,3 +133,39 @@ async def test_kemajuan_pengeringan_sama_dengan_perhitungan_produksi(pg,pengerin
             assert s and 'Kemajuan menuju target kadar air' in s.get_text()
             assert s.select_one('progress')['value']=='0.5'
             assert '50%' in s.get_text() and '15.5%' in s.get_text() and '13%' in s.get_text()
+
+
+async def test_dokumen_hanya_menampilkan_rekap_utama_pada_rantai_gabungan(pg,dunia):
+    from app.models import Jasa,User
+    from app.models.portal import PortalAccount
+    from app.services.jasa import gabung_jasa
+    async with pg() as db:
+        tujuan=Jasa(kode='JAS-UX-GABUNGAN',pelanggan_id=dunia['catur'])
+        terpisah=Jasa(kode='JAS-UX-TERPISAH',pelanggan_id=dunia['catur'])
+        akun=PortalAccount(username='ux-rekap-gabungan',pelanggan_id=dunia['catur'],
+            password_hash='unused-test-hash',active=True,token_version=1)
+        db.add_all([tujuan,terpisah,akun]);await db.flush()
+        user=await db.get(User,dunia['user'])
+        await gabung_jasa(db,user=user,dari_id=dunia['jasa1'],ke_id=dunia['jasa2'])
+        await gabung_jasa(db,user=user,dari_id=dunia['jasa2'],ke_id=tujuan.id)
+        await db.commit()
+    async with client(akun) as c:
+        response=await c.get('/pelanggan/laporan')
+        assert response.status_code==200
+        s=BeautifulSoup(response.text,'html.parser')
+        rekap=s.find('h2',string='Rekap barang jasa').find_parent('section')
+        assert [h.get_text(strip=True) for h in rekap.select('h3')]==['JAS-UX-TERPISAH','JAS-UX-GABUNGAN']
+        assert len(rekap.select(f'a[href="/pelanggan/jasa/{tujuan.id}/nota"]'))==1
+        assert 'JAS-2610-301' not in rekap.get_text() and 'JAS-2610-302' not in rekap.get_text()
+        assert 'JAS-2610-303' not in response.text  # milik pelanggan lain
+        perjalanan=await c.get('/pelanggan/jasa-saya')
+        assert perjalanan.status_code==200
+        assert 'Referensi jasa' not in perjalanan.text and 'JAS-2610-301' not in perjalanan.text
+        # Nomor asal masih sah sebagai jejak dokumen lama, bukan kartu tambahan.
+        assert (await c.get(f'/pelanggan/jasa/{dunia["jasa1"]}/nota')).status_code==200
+        pintasan=await c.get(f'/pelanggan/jasa/{tujuan.id}')
+        assert pintasan.status_code==303
+        assert pintasan.headers['location']==f'/pelanggan/jasa/{tujuan.id}/nota'
+    async with pg() as db:
+        assert (await db.get(Jasa,dunia['jasa1'])).status=='digabung'
+        assert (await db.get(Jasa,dunia['jasa2'])).digabung_ke_id==tujuan.id

@@ -13,7 +13,9 @@ pilihan tema tetap ada di header.
 
 `/pelanggan/ringkasan` dan `/pelanggan/` membuka beranda khusus pelanggan.
 `/pelanggan/jasa-saya` memuat penerimaan, perkembangan proses, pemeriksaan
-mutu, dan referensi rekap jasa. `/pelanggan/barang-saya` memisahkan bahan,
+mutu. Rekap jasa berada di Dokumen, satu rekap per pesanan utama; daftar
+pesanan asal yang sudah digabung tidak ditampilkan pada perjalanan jasa.
+`/pelanggan/barang-saya` memisahkan bahan,
 transit, hasil, serta pengambilan/pengiriman dan retur. Dokumen di
 `/pelanggan/laporan` mempertahankan PDF produksi dan bukti serah terima.
 URL detail lama dan tautan tab beranda lama tetap dilayani.
