@@ -67,3 +67,30 @@ async def test_pemanggil_layanan_tidak_mengabaikan_pelanggan_yang_disebut(pg,pab
    await bk.buat_perintah(db,user=await db.get(User,pabrik['user']),pelanggan_id=pabrik['pelanggan_b'],jasa_id=pabrik['jasa_a'],baris=[bk.BarisPerintah(tipe='pk_g2',berat_kg=1000)])
   await db.rollback()
   assert await db.scalar(select(func.count()).select_from(OutgoingRecord))==0
+
+async def test_dua_pesanan_curah_saldo_reservasi_dan_gagal_tanpa_parsial(pg,pabrik):
+ from app.services import barang_keluar as bk
+ async with pg() as db:
+  j=Jasa(kode='JAS-UJI-LINTAS-CURAH',pelanggan_id=pabrik['pelanggan_a'],status='berjalan')
+  db.add(j);await db.commit();kedua=j.id
+ ids=[pabrik['jasa_a'],kedua]
+ for i,jid in enumerate(ids):await _masuk_tumpukan(pg,pabrik['user'],f'PKB-LINTAS-CURAH-{i}',2000,jid)
+ async with await _klien(pg,pabrik['user'],'uji-lintas-curah') as c:
+  body={'pelanggan':str(pabrik['pelanggan_a']),'barang':[{'pilih':f'g2:tumpukan@{ids[0]}','jumlah':1000},{'pilih':f'g2:tumpukan@{ids[1]}','jumlah':2500}]}
+  r=await c.post('/api/actions/ambil-jasa',json=body,headers={'X-CSRF-Token':cap_formulir(c)})
+  assert r.status_code==400,r.text
+  async with pg() as db:
+   assert await db.scalar(select(func.count()).select_from(OutgoingRecord))==0
+   for jid in ids:assert await hitung_stok_tumpukan(db,jasa_id=jid)==2000
+  body['barang'][1]['jumlah']=1000
+  assert (await c.post('/api/actions/ambil-jasa',json=body,headers={'X-CSRF-Token':cap_formulir(c)})).status_code==200
+ async with pg() as db:
+  rec=await db.scalar(select(OutgoingRecord));items=(await db.scalars(select(OutgoingItem))).all()
+  mapping={x.jasa_id:x.id for x in items};uid=pabrik['user']
+  for jid,jumlah in [(ids[0],400),(ids[1],600),(ids[0],350),(ids[0],350)]:
+   await bk.catat_muatan(db,user=await db.get(User,uid),item_id=mapping[jid],rec_id=rec.id,berat_kg=jumlah)
+  assert await hitung_stok_tumpukan(db,jasa_id=ids[0])==1650
+  assert await hitung_stok_tumpukan(db,jasa_id=ids[1])==1400
+  for jid in ids:
+   available,_=await bk.tersedia(db,bk.BarisPerintah(tipe='pk_g2',jasa_id=jid))
+   assert available==1000

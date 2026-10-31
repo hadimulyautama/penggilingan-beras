@@ -1589,6 +1589,7 @@ async def pratinjau_terakhir(
 
 async def undo_last(
     db: AsyncSession, *, actor, cakupan: Cakupan | None, log_id: int | None = None,
+    alasan: str | None = None,
 ) -> str:
     """Batalkan tindakan yang DITAMPILKAN — bukan "yang terakhir" lagi.
 
@@ -1692,7 +1693,7 @@ async def undo_last(
     await log_activity(
         db, table_name="undo", record_id=rid, action="UNDO",
         changed_by=actor.id, new_value=f"undo {t}#{rid}",
-        aksi="undo",
+        aksi="undo", alasan=alasan,
     )
     await db.commit()
     return msg

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block judul %}Koreksi · {{ rec.kode }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/perbaikan-pengiriman.css?v={{ VERSI }}&pp=2">
+<section class="pp-halaman" data-koreksi-selesai data-id="{{ rec.id }}" data-actor="{{ actor_id }}" data-key="{{ kunci }}" data-jasa="{{ 1 if jasa else 0 }}">
+<p><a href="/barang-keluar/{{ rec.id }}/perbaikan" data-utuh>← Kembali ke perbaikan pengiriman</a></p>
+<h1>Koreksi pengiriman terverifikasi</h1><p>{{ rec.kode }} · {{ rec.nama_pembeli }} · {{ 'Jasa' if jasa else 'Milik pabrik' }} · Versi koreksi {{ versi }}</p>
+<p>Koreksi kesalahan pencatatan setelah verifikasi. Tidak dibatasi input terakhir atau 48 jam. Verifikasi awal tetap tersimpan; stok hanya berubah sebesar selisih terhadap pencatatan efektif terakhir.</p>
+<p><strong>Barang yang benar-benar baru kembali harus melalui retur.</strong> Formulir ini tidak menerima barang kembali atau membatalkan perjalanan fisik.</p>
+<script type="application/json" id="kp-awal">{{ {'barang':barang,'pelanggan_id':rec.pelanggan_id,'nama':rec.nama_pembeli}|tojson }}</script>
+<div class="pp-susunan"><form class="pp-panel" data-form>
+<label for="kp-pelanggan">Pelanggan yang benar</label><select class="fld" id="kp-pelanggan" name="pelanggan_id" required><option value="{{ rec.pelanggan_id }}">{{ rec.nama_pembeli or 'Pelanggan historis' }}</option></select>
+<p>Barang jasa wajib tetap menunjuk sumber pesanan pelanggan yang benar. Penjualan dan pengambilan jasa tidak dapat dicampur.</p>
+<div data-items></div>
+<label for="kp-alasan">Alasan koreksi</label><textarea id="kp-alasan" name="alasan" required maxlength="2000" rows="3"></textarea>
+<label for="kp-selisih">Sebab selisih timbang pada pemeriksaan koreksi</label><textarea id="kp-selisih" name="sebab_selisih" rows="2" maxlength="2000"></textarea><p>Wajib hanya jika selisih total melewati ambang manual layanan pengiriman. Bukan alasan barang tidak terkirim.</p>
+<label class="pp-konfirmasi"><input type="checkbox" name="konfirmasi" required> Saya memastikan ini koreksi kesalahan pencatatan saat pengiriman, berdasarkan pemeriksaan fisik/dokumen; bukan penerimaan barang yang baru kembali.</label>
+<button class="btn" type="submit" data-periksa>Periksa dampak koreksi</button>
+</form><aside class="pp-panel"><h2>Pemeriksaan dampak</h2><div data-rencana><p>Isi koreksi dan periksa dampaknya sebelum menyimpan.</p></div>
+<button class="btn" type="button" data-simpan hidden>Konfirmasi & simpan koreksi</button>
+<p data-pesan role="status" aria-live="polite"></p><button class="btn" type="button" data-status hidden>Periksa status permintaan ini</button>
+<a href="/barang-keluar/{{ rec.id }}/koreksi-selesai" data-utuh>Baca data terbaru dan periksa ulang</a>
+</aside></div>
+{% if koreksi %}<section class="pp-panel"><h2>Audit koreksi tersimpan</h2><p>Verifikasi awal oleh #{{ rec.diverifikasi_oleh or 'belum tercatat' }} · {{ rec.waktu_verifikasi|jam('%d/%m/%Y %H:%M') if rec.waktu_verifikasi else 'Waktu historis belum tercatat' }}</p>
+{% for k in koreksi %}<details><summary>Koreksi {{ k.versi }} · {{ k.waktu|jam('%d/%m/%Y %H:%M') }} · petugas #{{ k.input_by }}</summary><p>{{ k.snapshot.alasan }}</p><p>Pelanggan: {{ k.snapshot.sebelum.nama }} → {{ k.snapshot.sesudah.nama }}</p>
+{% for b in k.snapshot.barang %}<p>Item #{{ b.item_id }} · {{ b.nama_sebelum }}{% if b.ganti_sumber %} → {{ b.nama_sesudah }}{% endif %}: {{ b.sebelum.berat_kg }} → {{ b.sesudah.berat_kg }} kg · karung {{ b.sebelum.jumlah_karung if b.sebelum.jumlah_karung is not none else 'tidak tercatat / tidak berlaku' }} → {{ b.sesudah.jumlah_karung if b.sesudah.jumlah_karung is not none else 'tidak berlaku' }}</p>{% endfor %}
+<p>Alasan selisih: {{ k.snapshot.sebab_selisih or 'Tidak diisi / tidak diwajibkan' }}</p><p><a href="/audit?rentang=semua&amp;cari={{ rec.kode|urlencode }}" data-utuh>Jejak audit terkait</a></p></details>{% endfor %}</section>{% endif %}
+</section>
+{% endblock %}
+{% block kaki %}<script src="/static/koreksi-pengiriman.js?v={{ VERSI }}&kp=2" defer></script>{% endblock %}

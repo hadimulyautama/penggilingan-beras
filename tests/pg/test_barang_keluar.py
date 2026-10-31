@@ -1229,7 +1229,8 @@ async def test_tombol_perintah_ada_di_halaman_barang_keluar(pg, gudang):
     # keluhan pemilik 11 Oktober 2026: aksinya sudah ada lebih dulu lewat
     # laci, tapi tak punya pintu sendiri di halaman ini, jadi tak kelihatan
     # bedanya dari penjualan barang pabrik.
-    assert "/barang-keluar?buka=ambil_jasa" in h, \
+    # Formulir khusus menggantikan laci; alias lama tetap diuji terpisah.
+    assert "/barang-keluar/pengambilan-jasa" in h, \
         "tombol pengambilan jasa tak ada di halamannya"
 
 

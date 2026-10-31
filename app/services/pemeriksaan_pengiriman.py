@@ -9,7 +9,7 @@ from decimal import Decimal
 from sqlalchemy import select,func,text,inspect
 from fastapi import HTTPException
 from app.database import berzona
-from app.models import OutgoingRecord,OutgoingItem,ActivityLog,User
+from app.models import OutgoingRecord,OutgoingItem,ActivityLog,User,KoreksiPengiriman
 from app.services import barang_keluar as bk
 from app.penggilingan.gudang1.services.timbang_link import SQL_REAL_TIKET
 
@@ -108,6 +108,8 @@ async def baca(db,rec):
     angka=bk.angka_verifikasi(total,berat)
     if verified:judul='Terverifikasi otomatis' if jejak and all(j['metode']=='otomatis' for j in jejak) else 'Pengiriman terverifikasi'
     else:judul='Verifikasi masih menunggu' if halangan else 'Perlu pemeriksaan Admin'
+    koreksi=list((await db.scalars(select(KoreksiPengiriman).where(KoreksiPengiriman.outgoing_record_id.in_(ids)).order_by(KoreksiPengiriman.waktu.desc()))).all())
+    if verified and koreksi:judul='Pengiriman terverifikasi · koreksi manual tercatat; verifikasi awal tetap tersimpan'
     # Semua yang memengaruhi pemeriksaan termasuk bobot/tara tiket. Sidik
     # TeraFlow tetap terpisah dan tidak diganti, agar replay callback tetap sah.
     fingerprint=dict(sidik=sidik,pelanggan=[[r.id,r.status,r.pelanggan_id,r.timbangan_transaksi_id,

@@ -100,6 +100,7 @@ async def penerimaan(db, tid, *, scope=None):
 
 
 async def pengeluaran(db, oid, *, scope=None):
+    from app.models import KoreksiPengiriman
     from app.services import barang_keluar as keluar
     from app.web.layar_keluar import _nama_barang, _nama_orang
     rows=await keluar.daftar(db,transaksi_id=oid,batas=1,
@@ -127,12 +128,15 @@ async def pengeluaran(db, oid, *, scope=None):
         ('Dimuat oleh',people.get(rec.dimuat_oleh,'Belum tercatat')),('Diverifikasi oleh',people.get(rec.diverifikasi_oleh,'Belum tercatat'))]
     if ticket:
         identitas += [(label,kg_rinci(ticket[key]) if ticket[key] is not None else 'Belum dicatat') for label,key in [('Netto timbang','netto_timbangan_kg'),('Tara','total_tara_kg'),('Berat barang pada tiket','berat_barang_kg')]]
+    koreksi=(await db.execute(select(KoreksiPengiriman.versi,KoreksiPengiriman.waktu).where(
+        KoreksiPengiriman.outgoing_record_id==oid).order_by(KoreksiPengiriman.versi.desc()).limit(1))).first()
+    versi_note=f' Memuat koreksi pascaverifikasi v{koreksi.versi} ({waktu(koreksi.waktu)}).' if koreksi else ''
     return dict(judul='Serah Terima Pengeluaran',nomor='STK-'+rec.kode,siap=ready,
         pelanggan=scope.reader.nama if scope else rec.nama_pembeli or 'Belum tercatat',label_tanggal='Tanggal verifikasi',
         tanggal=waktu(rec.waktu_verifikasi or rec.waktu) if ready else 'Menunggu verifikasi',
         referensi=rec.kode,pesanan=[j.kode for j in orders],identitas=identitas,
         kolom=['Barang, merek & kemasan','Jumlah sak','Berat aktual'],baris=baris,qc=[],total=kg_rinci(sum(float(it.berat_kg or 0) for it in items)),label_total='Total diserahkan',
-        catatan='Jumlah dan berat memakai muatan aktual, bukan perintah. '+(rec.sebab_selisih or rec.catatan or ''),
+        catatan='Jumlah dan berat memakai muatan aktual, bukan perintah. '+(rec.sebab_selisih or rec.catatan or '')+versi_note,
         status='Tersedia' if ready else 'Dibatalkan' if rec.status=='batal' else 'Menunggu pengeluaran selesai diverifikasi',
         url=f'/barang-keluar/{oid}/serah-terima',kembali=f'/barang-keluar/{oid}',
         serah='Penyerah di pabrik',terima='Pelanggan / penerima')

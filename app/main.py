@@ -121,6 +121,10 @@ app.include_router(produk_router)
 app.include_router(draf_keluar_router)
 app.include_router(kemas_ulang_router)
 app.include_router(keluar_router)
+from app.web.perbaikan_pengiriman import router as perbaikan_pengiriman_router
+app.include_router(perbaikan_pengiriman_router)
+from app.web.koreksi_pengiriman import router as koreksi_pengiriman_router
+app.include_router(koreksi_pengiriman_router)
 from app.web.muatan import router as muatan_router
 app.include_router(muatan_router)
 from app.web.selesai_muatan import router as selesai_muatan_router

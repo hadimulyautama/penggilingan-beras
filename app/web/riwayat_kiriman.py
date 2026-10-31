@@ -6,7 +6,7 @@ Portal dibatasi sebelum anggota kiriman dibaca, bukan disembunyikan lewat CSS.
 from decimal import Decimal
 from sqlalchemy import select,text
 from fastapi import HTTPException
-from app.models import OutgoingRecord,OutgoingItem,ActivityLog,CustomerReturn,Pelanggan,Warehouse,User,RiceQualityStandard
+from app.models import OutgoingRecord,OutgoingItem,ActivityLog,CustomerReturn,Pelanggan,Warehouse,User,RiceQualityStandard,KoreksiPengiriman
 from app.penggilingan.inventory.models import ReturRincian
 from app.services import barang_keluar as bk,retur_pengajuan as retur
 from app.services.jasa import nama_pemilik_banyak
@@ -19,6 +19,7 @@ async def baca(db,rec,*,scope=None,boleh_retur=False):
     # Jangan membaca anggota lain, total armada, ataupun tiket gabungan portal.
     anggota=[rec] if scope else await bk.anggota_kiriman(db,rec)
     ids=[r.id for r in anggota]
+    koreksi=list((await db.scalars(select(KoreksiPengiriman).where(KoreksiPengiriman.outgoing_record_id.in_(ids)).order_by(KoreksiPengiriman.versi.desc()))).all()) if boleh_retur and not scope else []
     items=list((await db.scalars(select(OutgoingItem).where(OutgoingItem.outgoing_record_id.in_(ids)).order_by(OutgoingItem.id))).all())
     if scope and (not items or any(i.jasa_id not in scope.jasa_ids for i in items)):
         raise HTTPException(404,'Pengiriman tidak ditemukan.')
@@ -49,7 +50,7 @@ async def baca(db,rec,*,scope=None,boleh_retur=False):
         close=terakhir(r.id,'barang_keluar_muat');verify=terakhir(r.id,'barang_keluar_verifikasi')
         metode=('otomatis' if verify and ' · otomatis ±0,2% setelah tara' in (verify.new_value or '') else 'manual' if verify else 'tidak tercatat')
         related=[dict(rincian=a,penerimaan=receipts.get(a.customer_return_id),berat=sum((Decimal(m['berat_kg']) for m in a.muatan),Decimal(0))) for a in applications if a.outgoing_record_id==r.id]
-        pelanggan_data.append(dict(rec=r,nama=r.nama_pembeli or pelanggan.get(r.pelanggan_id,'Pelanggan belum tercatat'),barang=barang,aktual=sum((b['aktual'] for b in barang),Decimal(0)),perintah=sum((b['perintah'] for b in barang),Decimal(0)) if all(b['perintah'] is not None for b in barang) else None,tidak_terkirim=sum((b['tidak_terkirim'] for b in barang),Decimal(0)) if all(b['tidak_terkirim'] is not None for b in barang) else None,alasan=close.alasan_perubahan if close else None,metode=metode,retur=related,
+        pelanggan_data.append(dict(rec=r,koreksi=[k for k in koreksi if k.outgoing_record_id==r.id],nama=r.nama_pembeli or pelanggan.get(r.pelanggan_id,'Pelanggan belum tercatat'),barang=barang,aktual=sum((b['aktual'] for b in barang),Decimal(0)),perintah=sum((b['perintah'] for b in barang),Decimal(0)) if all(b['perintah'] is not None for b in barang) else None,tidak_terkirim=sum((b['tidak_terkirim'] for b in barang),Decimal(0)) if all(b['tidak_terkirim'] is not None for b in barang) else None,alasan=close.alasan_perubahan if close else None,metode=metode,retur=related,
             jejak=[dict(label=label,waktu=t,nama=orang.get(uid,'Petugas belum tercatat')) for label,t,uid in [('Diperintahkan' if r.waktu_perintah else 'Pencatatan',r.waktu_perintah or r.waktu,r.diperintah_oleh if r.waktu_perintah else r.input_by),('Selesai muat',r.waktu_muat,r.dimuat_oleh),('Diverifikasi '+metode,r.waktu_verifikasi,r.diverifikasi_oleh)] if t]))
     aktif=[p for p in pelanggan_data if p['rec'].status!='batal']
     total=sum((p['aktual'] for p in aktif),Decimal(0))

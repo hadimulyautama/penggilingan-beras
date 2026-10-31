@@ -10,6 +10,7 @@
 {% if detail %}
 {% set k = kartu[0] %}
 {% include "_pengiriman_detail_tab.html" %}
+{% if BOLEH_PERINTAH %}<p><a class="btn" href="/barang-keluar/{{ k.rec.id }}/perbaikan?{{ filter_query }}" data-utuh>Perbaiki pengiriman</a></p>{% endif %}
 {% else %}
 <link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
 <div class="keluar-halaman keluar-ringkas">
@@ -46,7 +47,7 @@
       {% for k in riwayat %}
         {% set alamat = '/barang-keluar/' ~ k.rec.id ~ ('?' ~ filter_query ~ ('&sebelum=' ~ sebelum if sebelum else '') if pencarian or status_filter or sejak_filter or sebelum else '') %}
         <tr data-detail-keluar="{{ alamat }}" role="row">
-          <td data-sel="utama" role="cell"><a class="tabel-standar__kode" href="{{ alamat }}">{{ k.rec.kode }}</a></td>
+          <td data-sel="utama" role="cell"><a class="tabel-standar__kode" href="{{ alamat }}">{{ k.rec.kode }}</a>{% if BOLEH_PERINTAH %}<small class="tabel-standar__sekunder"><a href="/barang-keluar/{{ k.rec.id }}/perbaikan?{{ filter_query }}{% if sebelum %}&sebelum={{ sebelum }}{% endif %}" data-utuh>Perbaiki pengiriman</a></small>{% endif %}</td>
           <td data-sel="tambahan" role="cell">{{ (k.rec.waktu_perintah or k.rec.waktu) | jam('%d/%m/%Y') }}</td>
           <td data-sel="subjek" role="cell">{{ k.riwayat_nama or '—' }}</td>
           <td data-sel="meta" role="cell">{{ k.rec.no_polisi or '—' }}<span data-hanya-ponsel> · {{ (k.rec.waktu_perintah or k.rec.waktu) | jam('%d/%m/%Y') }}</span></td>

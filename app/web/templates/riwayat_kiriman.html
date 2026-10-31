@@ -1,3 +1,9 @@
 {% extends 'base.html' %}
 {% block judul %}Riwayat pengiriman · {{ perjalanan.rec.kode }}{% endblock %}
-{% block isi %}{% include '_riwayat_kiriman.html' %}{% endblock %}
+{% block isi %}
+{% if boleh_perbaiki %}<p><a class="btn" href="/barang-keluar/{{ perjalanan.rec.id }}/perbaikan?{{ filter_query }}" data-utuh>Perbaiki pengiriman</a></p>{% endif %}
+{% include '_riwayat_kiriman.html' %}
+{% if boleh_perbaiki %}<section><h2>Koreksi pascaverifikasi</h2>{% for p in perjalanan.pelanggan %}
+{% if p.rec.status == 'selesai' %}<p><a class="btn" href="/barang-keluar/{{ p.rec.id }}/koreksi-selesai" data-utuh>Koreksi {{ p.rec.kode }} · {{ p.nama }}</a></p>{% endif %}
+{% for k in p.koreksi %}<details><summary>{{ p.rec.kode }} · koreksi {{ k.versi }} · {{ k.waktu|jam('%d/%m/%Y %H:%M') }}</summary><p>{{ k.snapshot.alasan }}</p><p>Pelanggan {{ k.snapshot.sebelum.nama }} → {{ k.snapshot.sesudah.nama }} · pencatat #{{ k.input_by }}</p>{% for b in k.snapshot.barang %}<p>Item #{{ b.item_id }}: {{ b.sebelum.berat_kg }} → {{ b.sesudah.berat_kg }} kg{% if b.ganti_sumber %} · sumber dikoreksi{% endif %}</p>{% endfor %}<p>Verifikasi awal tetap tercatat; pemeriksaan koreksi: {{ k.snapshot.pemeriksaan.total_aktual_kg }} kg seluruh armada.</p><a href="/barang-keluar/{{ p.rec.id }}/koreksi-selesai" data-utuh>Rincian dan audit koreksi</a></details>{% endfor %}
+{% endfor %}</section>{% endif %}{% endblock %}

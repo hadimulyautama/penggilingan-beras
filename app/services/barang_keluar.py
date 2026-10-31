@@ -2148,6 +2148,11 @@ async def _kunci_untuk_balik(db: AsyncSession, rec_id: int, *, keadaan: str,
     )).scalars().first()
     if rec is None:
         raise BarangKeluarError("Transaksi barang keluar itu sudah tidak ada.")
+    from app.models import KoreksiPengiriman
+    anggota=await anggota_kiriman(db,rec)
+    if await db.scalar(select(KoreksiPengiriman.kunci).where(
+            KoreksiPengiriman.outgoing_record_id.in_([r.id for r in anggota])).limit(1)):
+        raise BarangKeluarError('Kiriman sudah memiliki koreksi pascaverifikasi. Gunakan koreksi berikutnya; pembatalan langkah lama tidak boleh menghapus dasar koreksi.')
     if rec.status == keadaan:
         return rec
     kini, minta = _URUT_LANGKAH.get(rec.status), _URUT_LANGKAH.get(keadaan)

@@ -99,6 +99,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                 from app.web.riwayat_kiriman import baca
                 perjalanan=await baca(db,rec,scope=request.state.portal_scope if is_customer_read(request) else None,boleh_retur=boleh_perintah)
                 return await render_laci(request,'riwayat_kiriman.html',layar='barang_keluar',perjalanan=perjalanan,
+                    boleh_perbaiki=boleh_perintah and not is_customer_read(request),
                     filter_query=urlencode({'q':q,'status':status,'sejak':sejak,**({'sebelum':sebelum} if sebelum else {})}))
         else:
             if status == OUT_PERINTAH and not is_customer_read(request):

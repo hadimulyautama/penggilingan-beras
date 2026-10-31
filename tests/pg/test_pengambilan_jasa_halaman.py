@@ -124,3 +124,40 @@ async def test_pengambilan_lintas_pesanan_sepemilik_tetap_terpisah_per_baris(pg,
         assert sorted(float(x.berat_perintah_kg) for x in items)==[50,75]
     assert await saldo(pg,gudang,d['ja'])==5000
     assert await saldo(pg,gudang,jid2)==5000
+    # Barang identik dari dua pesanan tetap mempunyai saldo dan muatan sendiri.
+    from app.services import barang_keluar as bk
+    by_jasa={x.jasa_id:x.id for x in items}
+    async def muat(jid,jumlah):
+        async with pg() as db:
+            await bk.catat_muatan(db,user=await db.get(User,gudang['op']),
+                item_id=by_jasa[jid],rec_id=rec.id,jumlah_karung=jumlah)
+    await muat(d['ja'],1)
+    await muat(d['ja'],1)  # pengulangan total yang sama tidak memotong lagi
+    await muat(jid2,2)
+    assert await saldo(pg,gudang,d['ja'])==4975
+    assert await saldo(pg,gudang,jid2)==4950
+    await muat(d['ja'],2)
+    await muat(d['ja'],1)  # koreksi penurunan total memulihkan selisih 25 kg
+    assert await saldo(pg,gudang,d['ja'])==4975
+    assert await saldo(pg,gudang,jid2)==4950
+    # Kekurangan ditutup berdasarkan aktual, bukan menjalankan Muat semua.
+    async with pg() as db:
+        await bk.selesai_muat(db,user=await db.get(User,gudang['op']),rec_id=rec.id,sebab='Sisa tetap dititipkan')
+        await bk.verifikasi(db,user=await db.get(User,gudang['adm']),rec_id=rec.id)
+    async with await _klien(pg,gudang['adm'],'lintas-pesanan-riwayat') as c:
+        page=await c.get(f'/barang-keluar/{rec.id}/perbaikan')
+        assert page.status_code==200 and 'Barang jasa' in page.text and 'Retur barang Pemilik A' in page.text
+        from tests.pg.formulir import cap_formulir
+        from app.models import ActivityLog
+        async with pg() as db:
+            log=await db.scalar(select(ActivityLog).where(ActivityLog.aksi=='barang_keluar_verifikasi').order_by(ActivityLog.id.desc()).limit(1))
+        response=await c.post(f'/api/actions/perbaikan-pengiriman/{rec.id}/buka-ulang',
+            json={'log_id':log.id,'alasan':'Periksa kesalahan pencatatan dua pesanan','konfirmasi':True},
+            headers={'X-CSRF-Token':cap_formulir(c)})
+        assert response.status_code==200,response.text
+    assert await saldo(pg,gudang,d['ja'])==4975
+    assert await saldo(pg,gudang,jid2)==4950
+    async with pg() as db:
+        unchanged=list((await db.scalars(select(OutgoingItem))).all())
+        assert {x.id:x.jasa_id for x in unchanged}=={x.id:x.jasa_id for x in items}
+        assert sorted(float(x.berat_kg) for x in unchanged)==[25,50]

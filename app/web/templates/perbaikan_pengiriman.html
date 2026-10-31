@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block judul %}Perbaiki pengiriman · {{ perjalanan.rec.kode }}{% endblock %}
+{% block isi %}
+{% import '_stok.html' as st with context %}
+<link rel="stylesheet" href="/static/perbaikan-pengiriman.css?v={{ VERSI }}&pp=1">
+<main class="pp-halaman">
+<a href="/barang-keluar/{{ perjalanan.rec.id }}?{{ filter_query }}" data-utuh>← Kembali ke pengiriman</a>
+<h1>Perbaiki pengiriman</h1>
+<p>{{ perjalanan.rec.kode }} · {{ perjalanan.plat or 'Armada belum dipilih' }} · {{ perjalanan.jumlah_pelanggan }} pelanggan · {{ st.kg(perjalanan.total) }} kg tercatat</p>
+<p>Gunakan koreksi pencatatan untuk data yang salah. Jika barang benar-benar sudah dikirim lalu kembali, gunakan retur pelanggan asal agar penerimaan dan stok tetap dapat ditelusuri.</p>
+<div class="pp-susunan"><div>
+{% for p in perjalanan.pelanggan %}
+<section class="pp-panel" id="perbaikan-{{ p.rec.id }}">
+<h2>{{ p.nama }}</h2><p>{{ p.rec.kode }} · {{ p.rec.status }} · {{ 'Barang jasa' if p.jasa else 'Barang milik pabrik' }}</p>
+{% for b in p.barang %}<div class="pp-barang"><strong>{{ b.nama }}</strong><span>{{ b.pemilik }} · {{ b.gudang }}</span><span>Perintah {{ st.kg(b.perintah) if b.perintah is not none else 'belum tercatat' }} kg · aktual {{ st.kg(b.aktual) }} kg{% if b.karung_aktual is not none %} · {{ b.karung_aktual }} karung{% endif %}</span></div>{% endfor %}
+<h3>Jumlah atau barang salah</h3>
+{% if p.rec.status == 'selesai' %}<p><a class="btn" href="/barang-keluar/{{ p.rec.id }}/koreksi-selesai" data-utuh>Koreksi pengiriman terverifikasi {{ p.rec.kode }}</a></p><p>Koreksi tersendiri dengan audit sebelum/sesudah dan pemeriksaan saldo. Tidak dibatasi input terakhir atau 48 jam; verifikasi awal tetap tercatat.</p>{% endif %}
+{% if p.rec.status == 'perintah' %}
+<p>Koreksi perintah dan total muatan tetap memakai sumber serta pemilik setiap barang. Input muatan adalah total kumulatif, bukan tambahan.</p>
+<div class="pp-tombol"><a class="btn" href="/barang-keluar/{{ p.rec.id }}?rincian_perintah=1" data-utuh>Ubah perintah / tambah barang</a><a class="btn" href="/barang-keluar/{{ p.rec.id }}/muatan" data-utuh>Koreksi total muatan</a></div>
+{% else %}<p>{% if p.rec.status == 'batal' %}Perintah dibatalkan tetap tersedia sebagai histori. Buat perintah pengganti setelah memeriksa sumber dan saldo.{% elif p.rec.status == 'selesai' %}Gunakan koreksi pascaverifikasi di atas. Tidak perlu membatalkan verifikasi awal, mencari input terakhir, atau memenuhi batas 48 jam.{% else %}Buka kembali langkah yang memenuhi syarat di bagian pemeriksaan. Setelah status kembali ke perintah, koreksi jumlah/barang melalui formulir lama.{% endif %}</p>{% endif %}
+<h3>Pelanggan atau kiriman salah</h3>
+{% if p.rec.status == 'selesai' %}<p>Pelanggan yang salah dapat diperbaiki melalui koreksi pascaverifikasi. Sumber jasa wajib sesuai pemilik sebenarnya; relasi retur dan identitas tiket tetap diperiksa. Identitas sebelum/sesudah tersimpan dalam audit.</p>{% else %}<p>Identitas penerima dan kepemilikan barang tidak diganti pada catatan lama. Batalkan perintah yang salah setelah muatan tercatat nol secara sah, lalu buat perintah pengganti. Barang yang masih di luar gudang tetap memerlukan penanganan pengiriman/retur.</p>{% endif %}
+<div class="pp-tombol">
+{% if p.rec.status in ('perintah','dimuat') %}<a class="btn" href="/barang-keluar/{{ p.rec.id }}?rincian_perintah=1&amp;buka=koreksi_plat_pengiriman&amp;nilai={{ p.rec.id }}" data-utuh>Periksa koreksi nomor polisi</a><a class="btn" href="/barang-keluar/{{ p.rec.id }}?rincian_perintah=1&amp;buka=pilih_tiket_armada&amp;nilai={{ p.rec.id }}" data-utuh>Periksa hubungan tiket/armada</a>{% endif %}
+{% if p.rec.status == 'perintah' %}<a class="btn" href="/barang-keluar/{{ p.rec.id }}?rincian_perintah=1&amp;buka=batal_perintah_keluar&amp;nilai={{ p.rec.id }}" data-utuh>Periksa pembatalan {{ p.rec.kode }}</a>{% endif %}
+{% if p.rec.status == 'batal' %}<a class="btn" href="{{ '/barang-keluar/pengambilan-jasa' if p.jasa else '/barang-keluar/baru' }}" data-utuh>Buat perintah pengganti</a>{% endif %}
+{% if p.rec.status == 'selesai' %}<a class="btn" href="/barang-keluar/{{ p.rec.id }}/retur?tab_detail=barang#tiket-retur" data-utuh>Retur barang {{ p.nama }}</a>{% endif %}
+</div>
+<p><a href="/barang-keluar/{{ p.rec.id }}?rincian_perintah=1" data-utuh>Rincian perintah {{ p.rec.kode }}</a> · <a href="/audit?rentang=semua&amp;cari={{ p.rec.kode|urlencode }}" data-utuh>Jejak audit</a></p>
+</section>
+{% endfor %}
+</div><aside class="pp-panel">
+<h2>Pembatalan langkah lama (opsional)</h2>
+<p>Pembatalan langkah mengikuti urutan input terakhir dan batas 48 jam yang berlaku. Setiap langkah diperiksa ulang saat disimpan. Membuka halaman ini tidak membatalkan transaksi.</p>
+{% if langkah.log %}
+<h3>{{ langkah.label }}</h3><p>{{ langkah.log.new_value }} · {{ langkah.log.waktu_perubahan|jam('%d/%m/%Y %H:%M') }}</p>
+{% if langkah.bersama %}<p><strong>Berlaku untuk seluruh pelanggan dalam kiriman bersama ini.</strong></p>{% endif %}
+{% if langkah.log.aksi == 'barang_keluar_verifikasi' %}<p>Verifikasi dibuka kembali dan tiket bersama dilepas sesuai alur lama. Jumlah muatan dan stok tetap. Periksa kembali tiket sebelum verifikasi berikutnya.</p>
+{% elif langkah.log.aksi == 'barang_keluar_muat' %}<p>Penutupan muat dibatalkan. Jika sebelumnya memakai Muat semua, hanya muatan yang diisi tindakan itu yang dipulihkan ke nilai sebelumnya. Stok mengikuti selisih tersebut.</p>
+{% else %}<p>Muatan item dikembalikan ke total sebelum pencatatan terakhir. Saldo sumber mengikuti selisihnya. Pastikan perubahan sesuai keadaan fisik, bukan penerimaan barang yang baru kembali.</p>{% endif %}
+{% endif %}
+{% if langkah.sebab %}<p role="status">{{ langkah.sebab }}</p><p>Batas ini hanya untuk pembatalan langkah lama. Koreksi pengiriman terverifikasi tersedia pada bagian pelanggan tanpa batas umur/input terakhir. Retur tetap digunakan jika barang benar-benar kembali.</p>
+{% else %}
+<form data-perbaikan-pengiriman data-url="/api/actions/perbaikan-pengiriman/{{ perjalanan.rec.id }}/buka-ulang" data-log="{{ langkah.log.id }}">
+<label for="pp-alasan">Alasan perbaikan</label><textarea id="pp-alasan" name="alasan" required rows="3"></textarea>
+<label class="pp-konfirmasi"><input type="checkbox" name="konfirmasi" required> Saya sudah memeriksa kiriman, audit, dan keadaan fisik barang serta menyetujui dampak langkah di atas.</label>
+<button class="btn" type="submit">{{ langkah.label }}</button>
+<p data-pesan role="status" aria-live="polite"></p>
+<a href="/barang-keluar/{{ perjalanan.rec.id }}/perbaikan?{{ filter_query }}" data-utuh>Baca ulang status dan audit sebelum mengulang</a>
+</form>
+{% endif %}
+</aside></div></main>
+{% endblock %}
+{% block kaki %}<script src="/static/perbaikan-pengiriman.js?v={{ VERSI }}&pp=1" defer></script>{% endblock %}

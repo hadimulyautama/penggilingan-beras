@@ -161,6 +161,9 @@ async def test_portal_http_detail_gabungan_membatasi_data_dan_url_langsung(pg,as
                 assert soup.select_one('.rk-number').get_text(strip=True)=='500 kg'
                 assert len(soup.select('.rk-customer'))==1
         assert (await c.get(f'/pelanggan/barang-keluar/{oid}')).status_code==404
+        assert 'Perbaiki pengiriman' not in r.text
+        assert (await c.get(f'/pelanggan/barang-keluar/{asal["oid"]}/perbaikan')).status_code in (403,404)
+        assert (await c.get(f'/barang-keluar/{asal["oid"]}/perbaikan')).status_code in (302,303,401,403)
         assert (await c.post(f'/pelanggan/barang-keluar/{asal["oid"]}/retur')).status_code in (403,404,405)
 
 async def test_request_langsung_item_pelanggan_lain_ditolak_tanpa_pengajuan(pg,asal):

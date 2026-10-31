@@ -168,5 +168,6 @@ _pasang_skema_produksi(Base.metadata)
 from app.models.portal import PortalAccount, PortalNotificationRead, PortalOwnershipEvent
 
 from app.models.retur_supplier_koreksi import ReturSupplierEfektif, ReturSupplierPerubahan, ReturSupplierSelisih, ReturSupplierDrafKoreksi
+from app.models.koreksi_pengiriman import KoreksiPengiriman
 from app.models.retur_supplier import pasang_saldo_sumber as _pasang_saldo_retur_supplier
 _pasang_saldo_retur_supplier()
