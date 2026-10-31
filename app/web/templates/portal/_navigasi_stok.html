@@ -1,6 +1,8 @@
+{% if not PORTAL_STOCK_DETAIL %}
 <section aria-label="Rincian stok">
 <a class="pelanggan-tautan" href="/pelanggan/barang-saya">← Kembali ke Barang Saya</a>
 <h1>Rincian stok</h1>
 <nav class="pelanggan-pintasan" aria-label="Jenis barang">{% for t in STOK_NAV.tab if t.boleh %}<a href="{{ t.href }}"{% if t.kunci==STOK_NAV.jenis %} aria-current="page"{% endif %}>{{ {'bahan':'Beras pecah kulit (PK)','produk':'Beras & hasil samping','karung':'Karung saya'}.get(t.kunci,t.nama) }}</a>{% endfor %}</nav>
 {% if STOK_NAV.lokasi_pil %}<nav class="pelanggan-pintasan" aria-label="Lokasi stok">{% for g in STOK_NAV.lokasi_pil %}<a href="{{ g.href }}"{% if g.kunci==STOK_NAV.gudang %} aria-current="page"{% endif %}>{{ g.nama }}</a>{% endfor %}</nav>{% endif %}
 </section>
+{% endif %}

@@ -122,3 +122,7 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 .portal-customer .portal-content .pelanggan-filter-masuk{display:flex}.portal-customer .portal-content .pelanggan-filter-masuk>button{width:auto;flex:0 0 auto}@media(max-width:600px){.portal-customer .portal-content .pelanggan-filter-masuk>button{width:100%}}
 
 .pelanggan-pengambilan{width:100%}.pelanggan-pengambilan .keluar-ringkas__bagian{margin:18px 0}
+
+.portal-customer .pelanggan-detail{width:100%;max-width:1100px;margin-inline:auto;min-width:0}.portal-customer .pk-detail__grid{grid-template-columns:minmax(0,1fr)}.pelanggan-detail-kode{font-size:13px;color:var(--pd-muted);overflow-wrap:anywhere}.pelanggan-detail-lipat{min-width:0;margin:14px 0;border:1px solid var(--pd-line);border-radius:12px;background:var(--pd-sheet);overflow:hidden}.pelanggan-detail-lipat>summary{min-height:48px;padding:14px 16px;cursor:pointer;color:var(--pd-ink);font-weight:600;font-size:14px}.portal-customer .pelanggan-detail-lipat>section{border:0;box-shadow:none;margin:0;border-radius:0}.pelanggan-detail-lipat[open]>summary{border-bottom:1px solid var(--pd-line)}
+.portal-customer .pelanggan-detail [role=tab]{white-space:normal;overflow-wrap:anywhere;min-width:0;line-height:1.4;padding:10px 8px}
+@media(max-width:600px){.portal-customer .pelanggan-detail [role=tablist]{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}

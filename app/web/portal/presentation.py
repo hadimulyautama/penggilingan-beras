@@ -44,7 +44,7 @@ def bahasa_pelanggan(s,base=''):
             if key in labels:node.replace_with(value.replace(key,labels[key]))
             elif key in ('Hasil & QC','Lihat hasil & QC','Nilai kualitas QC PK','QC hasil penyosohan'):
                 node.replace_with(value.replace('QC','pemeriksaan mutu'))
-    for a in s.select('a.riwayat-detail__back,a.jasa-kembali'):
+    for a in s.select('a.riwayat-detail__back,a.jasa-kembali,a.pk-detail__back'):
         target,label=tujuan_kembali(base)
         a['href']='/pelanggan'+target
         a.string='← Kembali ke '+label
@@ -93,7 +93,7 @@ def bahasa_pelanggan(s,base=''):
     return s
 
 
-def read_only(html, base, *, origin=None):
+def read_only(html, base, *, origin=None, report_available=None):
     def destination(value):
         parsed=urlsplit(urljoin(base,value))
         if parsed.netloc or parsed.scheme:
@@ -180,7 +180,8 @@ def read_only(html, base, *, origin=None):
         share['data-pdf-share']=s.find('iframe')['src'];share.attrs.pop('disabled',None)
         status=s.find(id='status-bagikan')
         if status:status.string='PDF tersedia untuk dibaca, dibagikan, atau diunduh.'
-    return str(bahasa_pelanggan(s,base))
+    from .detail import ringkas
+    return str(ringkas(bahasa_pelanggan(s,base),base,report_available=report_available))
 
 
 def render_customer(request, name, *, status_code=200, **ctx):
@@ -191,6 +192,7 @@ def render_customer(request, name, *, status_code=200, **ctx):
                VERSI=VERSI,BOLEH_PINDAH=False,boleh_koreksi=False,boleh_perintah=False,
                boleh_muat=False,boleh_ubah=False,boleh_minta=False,boleh_pindah_tumpukan=False,
                boleh_verifikasi=False,boleh_batal=False, MUTU_AKTIF=True, PORTAL_READ_ONLY=True)
+    ctx['PORTAL_STOCK_DETAIL']=bool(ctx.get('detail_kartu')) or name=='stok_produk_detail.html'
     # Defense in depth before HTML creation. No foreign collections enter the DOM.
     for key in ('lot','tempat'):
         if key in ctx:ctx[key]=[x for x in ctx[key] if x.jasa_id in scope.jasa_ids]
@@ -230,7 +232,11 @@ def render_customer(request, name, *, status_code=200, **ctx):
     # Native stock-navigation computes visible groups from these already scoped rows.
     body=env.get_template(name).render(**ctx)
     path=request.url.path+('?' +request.url.query if request.url.query else '')
-    content=read_only(body,path,origin=str(request.base_url))
+    report_available=None
+    if name=='riwayat_detail.html' and ctx.get('jenis')=='sosoh':
+        k=ctx.get('k')
+        report_available=bool(k.get('silo') if isinstance(k,dict) else getattr(k,'silo',None))
+    content=read_only(body,path,origin=str(request.base_url),report_available=report_available)
     return shell(request,content,status_code=status_code,title=ctx.get('page_title') or ctx.get('breadcrumb_detail') or 'Portal pelanggan')
 
 

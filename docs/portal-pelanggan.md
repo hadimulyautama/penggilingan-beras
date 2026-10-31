@@ -290,3 +290,17 @@ proses aktif, penerimaan, pengambilan, atau dokumen, dan tidak ditampilkan ganda
 Laporan sosoh yang belum memiliki rincian pemakaian silo tetap menyediakan
 rincian proses. Unduh PDF baru ditawarkan setelah syarat pembaca PDF native
 terpenuhi, sehingga tidak ada tombol unduh yang menuju 404.
+
+## Detail stok dan proses pelanggan
+
+Detail PK/produk hanya memiliki satu judul dan satu tautan kembali ke Barang
+Saya. Stok saat ini dan ringkasan tetap terbuka; mutu, rumus penilaian, asal
+bahan, dan rincian kemasan tersedia pada bagian yang dapat dibuka. Angka,
+ketidakpastian bobot, catatan, dan penanda perkiraan asal stok tetap berasal
+dari pembaca native. Tidak ada perubahan komponen/layar staf.
+
+Detail proses menonjolkan nama proses, nomor referensi, status dan hasil.
+Tab bahan/hasil/pengukuran/riwayat tetap memakai GET native dan paginasi tetap
+tersedia; tombol ringkasan yang mengulang tab dihilangkan. ID jasa, pemilik
+yang berulang, pengaturan mesin dan petunjuk tindakan operator tidak menjadi
+isi utama pelanggan. Rincian teknis dapat dibuka tanpa menghilangkan data.
