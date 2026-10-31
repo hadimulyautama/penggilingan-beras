@@ -77,6 +77,14 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 .pelanggan-pintasan a{display:inline-flex;align-items:center;min-height:44px;padding:9px 12px;border:1px solid var(--pd-line);border-radius:9px;color:var(--pd-ink);background:var(--pd-sheet);font-size:13px;text-decoration:none}
 .pelanggan-halaman :is([id]){scroll-margin-top:95px}
 .pelanggan-dokumen-aksi{display:flex;gap:18px;flex-wrap:wrap}
+.pelanggan-kemajuan{margin:16px 0}
+.pelanggan-kemajuan label{display:block;color:var(--pd-ink);font-size:13px;margin-bottom:8px}
+.pelanggan-kemajuan progress{display:block;width:100%;height:9px;appearance:none;border:0;border-radius:8px;background:var(--pd-soft);accent-color:var(--pd-green)}
+.pelanggan-kemajuan progress::-webkit-progress-bar{background:var(--pd-soft);border-radius:8px}
+.pelanggan-kemajuan progress::-webkit-progress-value{background:var(--pd-green);border-radius:8px}
+.pelanggan-kemajuan progress::-moz-progress-bar{background:var(--pd-green);border-radius:8px}
+.pelanggan-fakta{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:16px 0}
+.pelanggan-fakta div{min-width:0}.pelanggan-fakta dt{font-size:12px;color:var(--pd-muted)}.pelanggan-fakta dd{font-size:14px;color:var(--pd-ink);margin:4px 0 0}
 @media(max-width:900px){
  .portal-customer .portal-workspace{margin-left:0}
  .portal-customer .portal-sidebar{width:min(290px,88vw)}

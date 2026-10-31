@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% from 'portal/_barang.html' import barang,tunggu %}
 {% from '_ikon_portal.html' import ikon_portal %}
+{% from 'portal/_progres.html' import proses_berjalan %}
 {% block isi %}
 <div class="pelanggan-halaman">
 <header class="pelanggan-sapaan"><p class="pelanggan-alis">Beranda</p><h1>Halo, {{ request.state.portal_scope.reader.nama }}.</h1><p class="pelanggan-redup">Ini perkembangan barang Anda di HMU.</p></header>
@@ -9,6 +10,7 @@
   <p class="pelanggan-petunjuk">{{ ikon_portal('berjalan') }} <span>Proses dan pencatatan ditangani petugas. Tidak ada tindakan yang perlu dilakukan di portal.</span></p>
   <a class="pelanggan-utama" href="/pelanggan/jasa-saya">Lihat perjalanan jasa <span aria-hidden="true">→</span></a>
 </section>
+{% if progres %}{{ proses_berjalan(progres,kg) }}{% endif %}
 <div class="pelanggan-grid">
 <section class="pelanggan-panel"><div class="pelanggan-judul"><h2>Barang di pabrik</h2><a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat semua</a></div>
 {% if transit %}{{ tunggu(transit[:2]) }}{% elif bahan %}{{ barang(bahan[:3],kg) }}{% elif hasil %}<p class="pelanggan-redup">Hasil yang masih tercatat di pabrik ditampilkan di bagian Hasil tercatat.</p>{% else %}<p class="pelanggan-redup">Belum ada saldo bahan tercatat saat ini. Riwayat jasa Anda tetap tersedia.</p>{% endif %}

@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from tests.pg.test_portal_pelanggan import portal,client  # noqa: F401
 from tests.pg.test_riwayat_qc_detail import qc  # noqa: F401
 from tests.pg.test_gabung_jasa import dunia,_isi_silo_g1  # noqa: F401
+from tests.pg.test_proses_aktif_detail import pengeringan,dryer_pabrik  # noqa: F401
 
 pytestmark=pytest.mark.asyncio
 
@@ -87,3 +88,48 @@ async def test_transit_tampil_di_beranda_dan_barang_tanpa_data_pelanggan_lain(pg
         for path in ('/pelanggan/','/pelanggan/jasa-saya','/pelanggan/barang-saya'):
             r=await c.get(path)
             assert r.status_code==200 and 'GB-UX-SILO' not in r.text and 'Silo A' not in r.text
+
+
+async def test_hasil_giling_berjalan_tampil_sementara_tanpa_persen_selesai(pg,portal):
+    from app.models import MillingProcess,MillingProgressLog
+    from app.database import now_local
+    async with pg() as db:
+        mill=await db.get(MillingProcess,portal.process[0]['giling'])
+        mill.status='proses';mill.waktu_selesai=None
+        db.add(MillingProgressLog(milling_process_id=mill.id,berat_kumulatif_kg=2500,
+            waktu_update=now_local(),input_by=mill.created_by))
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        for path in ('/pelanggan/','/pelanggan/jasa-saya'):
+            r=await c.get(path)
+            assert r.status_code==200
+            s=BeautifulSoup(r.text,'html.parser').select_one('.pelanggan-progres')
+            assert s and '2.500' in s.get_text() and 'Hasil sementara' in s.get_text()
+            assert 'bukan persentase selesai' in s.get_text()
+            assert not s.select('progress')
+
+
+async def test_kemajuan_pengeringan_sama_dengan_perhitungan_produksi(pg,pengeringan):
+    from sqlalchemy import select
+    from app.models import Pelanggan,Jasa,DryingLot,PurchaseBatch,User
+    from app.models.portal import PortalAccount
+    from app.penggilingan.gudang1.services import drying
+    async with pg() as db:
+        owner=Pelanggan(nama_pelanggan='Pemilik Pengeringan UX');db.add(owner);await db.flush()
+        order=Jasa(kode='JAS-UX-PGR',pelanggan_id=owner.id);db.add(order);await db.flush()
+        dry=await db.get(DryingLot,pengeringan['id']);dry.jasa_id=order.id
+        batch=await db.scalar(select(PurchaseBatch).where(PurchaseBatch.kode_batch==pengeringan['batch']))
+        batch.jasa_id=order.id;batch.supplier_id=None
+        account=PortalAccount(username='ux-pengeringan',pelanggan_id=owner.id,
+            password_hash='unused-test-hash',active=True,token_version=1)
+        db.add(account);await db.commit()
+        await drying.log_moisture(db,user=await db.get(User,pengeringan['user']),
+            kode_lot=pengeringan['kode'],sampel=[15.5]*4,indikator=16)
+    async with client(account) as c:
+        for path in ('/pelanggan/','/pelanggan/jasa-saya'):
+            r=await c.get(path)
+            assert r.status_code==200
+            s=BeautifulSoup(r.text,'html.parser').select_one('.pelanggan-progres')
+            assert s and 'Kemajuan menuju target kadar air' in s.get_text()
+            assert s.select_one('progress')['value']=='0.5'
+            assert '50%' in s.get_text() and '15.5%' in s.get_text() and '13%' in s.get_text()

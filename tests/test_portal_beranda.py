@@ -1,7 +1,7 @@
 """Status pelanggan tidak mengubah bahan menunggu menjadi proses/hasil siap ambil."""
 import pytest
 
-from app.web.portal.beranda import kelompok_barang,status_utama
+from app.web.portal.beranda import kelompok_barang,status_utama,progres_berjalan
 from app.web.portal.navigation import active_menu,MENU,portal_url
 
 
@@ -62,3 +62,15 @@ def test_hanya_empat_tujuan_utama_dan_tautan_baru_diizinkan():
     assert [label for _,label,_ in MENU]==['Beranda','Jasa Saya','Barang Saya','Dokumen']
     assert portal_url('/jasa-saya')=='/pelanggan/jasa-saya'
     assert portal_url('/barang-saya')=='/pelanggan/barang-saya'
+
+
+def test_kemajuan_asli_terpisah_dari_rendemen_dan_tugas_operator():
+    from types import SimpleNamespace
+    from app.services.berjalan import Baris
+    rows=[Baris(kode='PGR-1',isi='',keadaan='',fase='dryer',maju=0),
+          Baris(kode='LOT-1',isi='',keadaan='',fase='giling',rendemen_sementara=65),
+          Baris(kode='ASING',isi='',keadaan='',fase='giling')]
+    p=progres_berjalan(rows,SimpleNamespace(codes={'PGR-1','LOT-1'}))
+    assert len(p)==2 and p[0]['maju']==0
+    assert p[1]['maju'] is None and p[1]['rendemen']==65
+    assert all('aksi' not in r and 'tombol' not in r for r in p)

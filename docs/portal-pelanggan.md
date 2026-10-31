@@ -29,6 +29,12 @@ ambil. Pendinginan yang belum selesai tetap ditampilkan sebagai proses.
 Portal memberi tahu bahwa proses dan pencatatan ditangani petugas, tanpa
 menagih pelanggan untuk menyelesaikan tugas operator.
 
+Progres berjalan tampil langsung pada Beranda dan Jasa Saya. Pengeringan
+memakai `Baris.maju` (kemajuan menuju target kadar air); penggilingan dan
+penyosohan memakai fakta serta hasil sementara dari kartu produksi yang
+sama. Rendemen tidak digambar sebagai persentase selesai. Detail progres,
+pengukuran, hasil dan jeda tetap dapat dibuka dari setiap kartu.
+
 ## Identitas dan batas data
 
 - Kredensial tersimpan di `portal_accounts`, terpisah dari akun staf.

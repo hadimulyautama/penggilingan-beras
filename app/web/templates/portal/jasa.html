@@ -1,9 +1,11 @@
 {% extends 'base.html' %}
 {% from 'portal/_barang.html' import tunggu %}
+{% from 'portal/_progres.html' import proses_berjalan %}
 {% block isi %}
 <div class="pelanggan-halaman">
 <header class="pelanggan-sapaan"><p class="pelanggan-alis">Jasa Saya</p><h1>Perjalanan jasa Anda</h1><p class="pelanggan-redup">Dari barang diterima sampai diambil kembali.</p></header>
 <section class="pelanggan-status pelanggan-status--ringkas"><span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p><p class="pelanggan-petunjuk">Proses dan pencatatan ditangani petugas. Pantau perkembangannya di sini.</p></section>
+{% if progres %}{{ proses_berjalan(progres,kg) }}{% endif %}
 {% if transit %}<section class="pelanggan-panel" id="menunggu"><h2>Bahan menunggu proses</h2>{{ tunggu(transit) }}<p class="pelanggan-catatan">Menunggu di silo atau mesin belum berarti proses sudah dimulai. Waktu selesai belum tersedia.</p></section>{% endif %}
 <section class="pelanggan-panel" id="penerimaan"><div class="pelanggan-judul"><h2>Barang diterima</h2><a class="pelanggan-tautan" href="/pelanggan/barang-masuk?status=diterima">Semua penerimaan</a></div>
 <ol class="pelanggan-perjalanan">{% for t in d.penerimaan %}<li><h3>{% if t.href %}<a href="{{ t.href }}">{{ t.kode }}</a>{% else %}{{ t.kode }}{% endif %}</h3><p>{{ t.jenis }} · {{ t.status }}</p>{% for c in t.catatan %}<p class="pelanggan-redup">{{ kg(c.berat) if c.berat is not none else 'Belum diukur' }}{% if c.waktu %} · {{ c.waktu|jam('%d/%m/%Y %H:%M') }}{% endif %}</p>{% endfor %}{% if t.lokasi %}<p class="pelanggan-redup">{{ t.lokasi|join(' · ') }}</p>{% endif %}{% if t.id %}<a class="pelanggan-tautan" href="/pelanggan/barang-masuk/{{ t.id }}/laporan.pdf">Lihat bukti penerimaan →</a>{% endif %}</li>{% else %}<li><p class="pelanggan-redup">Belum ada penerimaan tercatat. Jika barang sudah diserahkan, hubungi petugas untuk memeriksa pencatatannya.</p></li>{% endfor %}</ol>

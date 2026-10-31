@@ -1,0 +1,16 @@
+{% macro proses_berjalan(rows,kg) %}
+<section class="pelanggan-panel pelanggan-progres" aria-label="Progres proses berjalan">
+<div class="pelanggan-judul"><h2>Proses sedang berjalan</h2></div>
+{% for r in rows %}<article class="pelanggan-barang">
+  <div class="pelanggan-baris"><h3>{{ r.judul }}</h3><span class="pelanggan-penanda{% if r.status=='Dijeda' %} pelanggan-penanda--hati{% endif %}">{{ r.status }}</span></div>
+  <p class="pelanggan-kode">{{ r.kode }}{% if r.mulai %} · Mulai {{ r.mulai|jam('%d/%m/%Y %H:%M') }}{% endif %}</p>
+  {% if r.catatan %}<p>{{ r.catatan }}</p>{% endif %}
+  {% if r.maju is not none %}<div class="pelanggan-kemajuan"><label for="progres-{{ loop.index }}">Kemajuan menuju target kadar air · {{ '%.0f'|format(r.maju * 100) }}%</label><progress id="progres-{{ loop.index }}" value="{{ r.maju }}" max="1">{{ '%.0f'|format(r.maju * 100) }}%</progress></div>{% endif %}
+  <dl class="pelanggan-fakta">{% for k,v in r.fakta %}<div><dt>{{ k }}{% if k=='Hasil' %} sementara{% endif %}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
+  {% if r.neraca %}<p class="pelanggan-redup">Hasil sementara yang sudah dicatat</p><dl class="pelanggan-fakta">{% for n in r.neraca %}<div><dt>{{ n.nama }}</dt><dd>{{ kg(n.kg) }}</dd></div>{% endfor %}</dl>{% endif %}
+  {% if not r.fakta and not r.neraca %}<p class="pelanggan-redup">{{ r.ringkas or 'Pembaruan hasil belum dicatat petugas.' }}</p>{% endif %}
+  <p class="pelanggan-catatan">Hasil proses masih sementara.{% if r.rendemen is not none %} Rendemen menunjukkan perbandingan hasil terhadap bahan, bukan persentase selesai.{% endif %} Waktu selesai belum dapat dipastikan dari angka ini.</p>
+  <a class="pelanggan-tautan" href="{{ r.href }}">Lihat progres & catatan proses →</a>
+</article>{% endfor %}
+</section>
+{% endmacro %}

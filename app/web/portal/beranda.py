@@ -76,6 +76,27 @@ def baris_transit(rows):
             for r in rows]
 
 
+def progres_berjalan(rows,scope):
+    """Angka kemajuan/hasil dari pembaca produksi; rendemen bukan persen selesai."""
+    from app.services.proses_aktif import alamat_detail
+    hasil=[]
+    for r in rows:
+        href=alamat_detail(r)
+        if r.kode not in scope.codes or not href:
+            continue
+        jenis=href.split('/')[2]
+        neraca=[]
+        if r.neraca:
+            neraca=[dict(nama=x.nama,kg=x.kg) for x in [r.neraca.beras,*r.neraca.samping]]
+        hasil.append(dict(kode=r.kode,judul=NAMA_PROSES.get(jenis,jenis),
+            href=portal_url(href),mulai=r.sejak,status='Dijeda' if r.nota_jenis=='hati' else 'Sedang berjalan',
+            catatan=r.nota if r.nota_jenis=='hati' else None,
+            maju=r.maju if jenis=='pengeringan' else None,
+            fakta=[(k,v) for k,v in r.fakta if k!='Mode'],neraca=neraca,
+            ringkas=r.ringkas,rendemen=r.rendemen_sementara))
+    return hasil
+
+
 async def halaman(request, bagian='beranda'):
     from app.models import OutgoingRecord,CustomerReturn,DryingLot
     from sqlalchemy import select
@@ -109,8 +130,9 @@ async def halaman(request, bagian='beranda'):
         t['proses']=[(code,href) for code,href in t.get('proses',[]) if code in scope.codes]
     bahan,hasil=kelompok_barang(d)
     transit=baris_transit(b.transit)
+    progres=progres_berjalan(b.berjalan,scope)
     judul_halaman={'beranda':'Beranda','jasa':'Jasa Saya','barang':'Barang Saya'}
     return render_customer(request,f'portal/{bagian}.html',d=d,bahan=bahan,hasil=hasil,
-        transit=transit,utama=status_utama(d,transit),kabar_terbaru=kabar[:3],
+        transit=transit,progres=progres,utama=status_utama(d,transit),kabar_terbaru=kabar[:3],
         nama_proses=NAMA_PROSES,status_pelanggan=bahasa_status,kg=jasa_pelanggan.kg_rinci,
         page_title=judul_halaman[bagian])
