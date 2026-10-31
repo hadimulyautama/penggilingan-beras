@@ -1319,7 +1319,7 @@ async def _baris_dari_borang(db, req) -> list["bk.BarisPerintah"]:
         # diam-diam, yang akan membuat perintah kurang satu barang tanpa sebab.
         return [await _satu_baris(db, b.pilih, b.jumlah) for b in req.barang
                 if (b.pilih or "").strip() or b.jumlah is not None]
-    if (req.stok or "").strip():
+    if (getattr(req, "stok", None) or "").strip():
         return [await _satu_baris(db, req.stok, req.jumlah_karung)]
     raise HTTPException(400, "Pilih dulu barang yang akan keluar.")
 
@@ -2684,9 +2684,11 @@ async def act_ambil_jasa(req: AmbilJasaReq,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         baris = await _baris_dari_borang(db, req)
+        if any(b.jasa_id is None for b in baris):
+            raise HTTPException(400, "Pilih barang titipan dari daftar pelanggan yang bersangkutan.")
         try:
             r = await bk.buat_perintah(
-                db, user=u, baris=baris,
+                db, user=u, baris=baris, pelanggan_id=int(req.pelanggan),
                 metode=None, no_polisi=(req.no_polisi or None),
                 tiket_armada_id=_id(req.tiket_armada) if (req.tiket_armada or "").strip() else None,
                 nama_ekspedisi=(req.nama_ekspedisi or None),

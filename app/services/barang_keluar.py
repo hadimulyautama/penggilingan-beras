@@ -807,6 +807,7 @@ async def buat_perintah(
     satu nilai selalu. `outgoing_items.jasa_id` (migrasi 0080) membawa
     kepemilikan SEBENARNYA per baris — itulah yang dibaca `sisa_jasa()`.
     """
+    pelanggan_diminta = pelanggan_id
     await _kunci_saldo_keluar(db)
     if len(baris) > 12:
         raise BarangKeluarError("Maksimal 12 barang per perintah pelanggan.")
@@ -861,6 +862,9 @@ async def buat_perintah(
                 "naik satu truk yang sama: "
                 + ", ".join(nama.get(p, f"#{p}") for p in sorted(pelanggan_set)) + ".")
         pelanggan_id = pelanggan_set.pop()
+    if (any(b.jasa_id is not None for b in baris) and pelanggan_diminta is not None
+            and pelanggan_diminta != pelanggan_id):
+        raise BarangKeluarError("Barang titipan bukan milik pelanggan yang dipilih. Pilih ulang barang pelanggan tersebut.")
     nama_pembeli, pelanggan_id = await _pembeli(db, pelanggan_id)
 
     if no_polisi and tiket_armada_id is None:
