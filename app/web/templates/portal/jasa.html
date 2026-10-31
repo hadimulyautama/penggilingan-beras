@@ -3,7 +3,7 @@
 {% from 'portal/_progres.html' import proses_berjalan %}
 {% block isi %}
 <div class="pelanggan-halaman">
-<header class="pelanggan-sapaan"><p class="pelanggan-alis">Jasa Saya</p><h1>Perjalanan jasa Anda</h1><p class="pelanggan-redup">Dari barang diterima sampai diambil kembali.</p></header>
+<header class="pelanggan-sapaan"><p class="pelanggan-alis">Proses Berjalan</p><h1>Proses Berjalan</h1><p class="pelanggan-redup">Pantau progres dan bahan yang menunggu proses.</p></header>
 <section class="pelanggan-status pelanggan-status--ringkas"><span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p></section>
 {% if progres %}{{ proses_berjalan(progres,kg) }}{% endif %}
 {% if transit %}<section class="pelanggan-panel" id="menunggu"><h2>Bahan menunggu proses</h2>{{ tunggu(transit) }}<p class="pelanggan-catatan">Petugas akan memulai proses sesuai giliran.</p></section>{% endif %}

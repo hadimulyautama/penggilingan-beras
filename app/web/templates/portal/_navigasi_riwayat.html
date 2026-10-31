@@ -1,5 +1,5 @@
 <section aria-label="Rincian riwayat">
-<a class="pelanggan-tautan" href="/pelanggan/jasa-saya">← Kembali ke Jasa Saya</a>
+<a class="pelanggan-tautan" href="/pelanggan/jasa-saya">← Kembali ke Proses Berjalan</a>
 {% if not LAPORAN_NAV.detail %}<h1>{{ 'Pemeriksaan mutu' if LAPORAN_NAV.aktif=='qc' else 'Riwayat proses' if LAPORAN_NAV.aktif=='proses' else 'Dokumen' }}</h1>{% endif %}
 {% if LAPORAN_NAV.pilihan %}<nav class="pelanggan-pintasan" aria-label="Jenis catatan">{% for k,n,alamat,gudang in LAPORAN_NAV.pilihan if alamat in LAPORAN_NAV.boleh_alamat %}<a href="{{ alamat }}"{% if k==LAPORAN_NAV.jenis %} aria-current="page"{% endif %}>{{ n }}</a>{% endfor %}</nav>{% endif %}
 </section>

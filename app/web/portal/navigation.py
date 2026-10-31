@@ -4,7 +4,7 @@ from urllib.parse import urlsplit, urlencode, parse_qsl
 
 MENU = (
     ('ringkasan','Beranda','ringkasan'), ('barang-masuk','Barang masuk','masuk'),
-    ('barang-saya','Barang Saya','stok'), ('jasa-saya','Jasa Saya','pekerjaan'),
+    ('barang-saya','Barang Saya','stok'), ('jasa-saya','Proses Berjalan','pekerjaan'),
     ('riwayat-proses','Riwayat proses','riwayat'),
     ('barang-keluar','Pengambilan barang','pengambilan'), ('laporan','Dokumen','laporan'))
 READS = re.compile(r'^/(?:ringkasan|jasa-saya|barang-saya|riwayat-proses|pekerjaan|stok|stok-pk-jasa|stok-produk-jasa(?:/detail)?|stok-karung-jasa|stok/pk/detail|barang-masuk(?:/\d+(?:/serah-terima(?:\.pdf)?|/laporan\.pdf)?)?|barang-keluar(?:/\d+(?:/serah-terima(?:\.pdf)?)?)?|retur(?:/\d+|/tiket/\d+|/pengajuan/\d+)?|proses-aktif/(?:pengeringan|pendinginan|giling|sosoh)/[\w-]+|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:/\d+(?:/laporan(?:\.pdf)?)?)?|riwayat-qc/[\w-]+(?:/[\w-]+)?|jasa/pelanggan/\d+|jasa/\d+(?:/nota(?:\.pdf)?)?|laporan|serah-terima|audit|kabar)$')

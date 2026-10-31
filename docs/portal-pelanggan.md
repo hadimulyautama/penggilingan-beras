@@ -7,8 +7,8 @@ Tema memakai cookie `produksi_terik` serta aset dan token warna produksi.
 ## Pengalaman pelanggan (1 November 2026)
 
 Navigasi utama terdiri dari **Beranda**, **Barang masuk**, **Barang Saya**,
-**Jasa Saya**, **Riwayat proses**, **Pengambilan barang**, dan **Dokumen**.
-Ponsel menyediakan Beranda, Barang Saya, Jasa Saya, dan tombol Menu pada
+**Proses Berjalan**, **Riwayat proses**, **Pengambilan barang**, dan **Dokumen**.
+Ponsel menyediakan Beranda, Barang Saya, Proses Berjalan, dan tombol Menu pada
 navigasi bawah. Menu membuka seluruh tujuan, identitas, pemasangan aplikasi,
 dan keluar. Pilihan tema tetap ada di header.
 
@@ -58,7 +58,7 @@ ambil. Pendinginan yang belum selesai tetap ditampilkan sebagai proses.
 Portal memberi tahu bahwa proses dan pencatatan ditangani petugas, tanpa
 menagih pelanggan untuk menyelesaikan tugas operator.
 
-Progres berjalan tampil langsung pada Beranda dan Jasa Saya. Pengeringan
+Progres berjalan tampil langsung pada Beranda dan Proses Berjalan. Pengeringan
 memakai `Baris.maju` (kemajuan menuju target kadar air); penggilingan dan
 penyosohan memakai fakta serta hasil sementara dari kartu produksi yang
 sama. Rendemen tidak digambar sebagai persentase selesai. Detail progres,

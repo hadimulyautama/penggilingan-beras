@@ -79,7 +79,7 @@ def status_utama(d, transit):
             return dict(label='Menunggu penerimaan',judul='Tiket barang Anda sudah tercatat.',
                         isi='Petugas belum mencatat penerimaan barang di produksi. Perkembangannya akan tampil setelah penerimaan dicatat.',jenis='penerimaan')
         return dict(label='Penerimaan tercatat',judul='Penerimaan barang Anda sudah tercatat.',
-                    isi='Periksa perjalanan jasa untuk melihat proses dan pengeluaran yang sudah dicatat.',jenis='riwayat')
+                    isi='Buka Riwayat proses atau Pengambilan barang untuk melihat catatan sebelumnya.',jenis='riwayat')
     if d.get('pesanan'):
         return dict(label='Riwayat jasa',judul='Catatan jasa Anda tetap tersedia.',
                     isi='Belum ada saldo barang yang tercatat saat ini. Riwayat proses dan dokumen tetap dapat dibuka.',jenis='riwayat')
@@ -189,7 +189,7 @@ async def halaman(request, bagian='beranda'):
     jenis=request.query_params.get('jenis','')
     if jenis not in NAMA_PROSES:jenis=''
     if jenis:riwayat=[r for r in riwayat if r['jenis']==jenis]
-    judul_halaman={'beranda':'Beranda','jasa':'Jasa Saya','barang':'Barang Saya',
+    judul_halaman={'beranda':'Beranda','jasa':'Proses Berjalan','barang':'Barang Saya',
         'riwayat':'Riwayat proses','masuk':'Barang masuk','pengambilan':'Pengambilan barang'}
     return render_customer(request,f'portal/{bagian}.html',d=d,bahan=bahan,hasil=hasil,
         transit=transit,progres=progres,utama=status_utama(d,transit),komoditas=komoditas,

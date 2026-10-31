@@ -59,7 +59,7 @@ def test_menu_aktif_mengikuti_konteks_pelanggan(path,active):
 
 
 def test_menu_barang_dan_riwayat_memiliki_tujuan_tersendiri():
-    assert [label for _,label,_ in MENU]==['Beranda','Barang masuk','Barang Saya','Jasa Saya','Riwayat proses','Pengambilan barang','Dokumen']
+    assert [label for _,label,_ in MENU]==['Beranda','Barang masuk','Barang Saya','Proses Berjalan','Riwayat proses','Pengambilan barang','Dokumen']
     assert portal_url('/jasa-saya')=='/pelanggan/jasa-saya'
     assert portal_url('/barang-saya')=='/pelanggan/barang-saya'
 

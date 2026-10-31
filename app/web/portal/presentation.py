@@ -34,7 +34,7 @@ def bahasa_pelanggan(s):
                 node.replace_with(value.replace('QC','pemeriksaan mutu'))
     for a in s.select('a.riwayat-detail__back,a.jasa-kembali'):
         a['href']='/pelanggan/jasa-saya'
-        a.string='← Kembali ke Jasa Saya'
+        a.string='← Kembali ke Proses Berjalan'
     for a in s.select('a[href]'):
         if a.get_text(strip=True)=='Buka Pekerjaan':
             a.string='Lihat perkembangan proses';a['href']='/pelanggan/jasa-saya'
