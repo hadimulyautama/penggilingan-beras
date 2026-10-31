@@ -155,17 +155,6 @@ async def halaman(request, bagian='beranda'):
                     if jenis=='transfer' else getattr(r,'waktu_selesai',None)) for r in rows}
                 for r in d['proses']:
                     if r['jenis']==jenis:r['selesai']=dates.get(r['kode'])
-        if bagian=='pengambilan':
-            keluar={r.id:r for r in (await db.scalars(select(OutgoingRecord).where(
-                OutgoingRecord.id.in_(scope.ids(OutgoingRecord))))).all()}
-            for r in d['pengiriman']:
-                if r['id'] not in keluar:continue
-                o=keluar[r['id']]
-                r.update(tanggal=o.tanggal,no_polisi=o.no_polisi)
-                for item in r['item']:
-                    item['nama']={'finished_goods':'Beras & hasil dalam kemasan','byproduct':'Hasil samping',
-                        'byproduct_curah':'Hasil samping curah','pk_langsung':'Beras pecah kulit (PK)',
-                        'pk_g2':'Beras pecah kulit (PK)','gabah_langsung':'Gabah kering'}.get(item['jenis'],'Barang jasa')
     d['proses']=[r for r in d['proses'] if r['kode'] in scope.codes]
     for r in d['proses']:
         if r['jenis']=='pengeringan' and r['kode'] in pendinginan:

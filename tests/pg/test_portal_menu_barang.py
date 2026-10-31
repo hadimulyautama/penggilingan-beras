@@ -128,6 +128,46 @@ async def test_pengambilan_bukan_penjualan_dan_rencana_bukan_jumlah_aktual(pg,po
         s=BeautifulSoup(page.text,'html.parser')
         assert s.select_one('.portal-sidebar [aria-current=page]').get_text(strip=True)=='Pengambilan barang'
         body=s.main.get_text()
-        assert 'OUT-JASA-SELESAI' in body and '120 kg' in body and 'Pengambilan selesai' in body
+        assert 'OUT-JASA-SELESAI' in body and '120 kg' in body
+        assert s.select_one('.tabel-standar__status--selesai').get_text()=='Selesai'
         assert 'OUT-JASA-RENCANA' in body and 'Menunggu dimuat' in body
-        assert 'OUT-JUAL-ORANG-SAMA' not in body and '999' not in body and '500 kg' not in body
+        assert 'OUT-JUAL-ORANG-SAMA' not in body and '999' not in body
+        active=s.select_one('.keluar-baris__angka').get_text(' ',strip=True)
+        assert 'Rencana 500 kg' in active and 'Dimuat Belum dimuat' in active
+
+
+async def test_pengambilan_kiriman_bersama_hanya_muatan_jasa_pelanggan_sendiri(pg,portal):
+    from app.models import Jasa
+    from app.penggilingan.inventory.models import KirimanKeluar
+    async with pg() as db:
+        order=Jasa(kode='JAS-PENGAMBILAN-A2',pelanggan_id=portal.owners[0].id)
+        trip=KirimanKeluar(no_polisi='AD 1234 JASA')
+        db.add_all([order,trip]);await db.flush()
+        own=OutgoingRecord(kode='OUT-JASA-GABUNG-A',pelanggan_id=portal.owners[0].id,
+            kiriman_id=trip.id,tanggal=now_local().date(),waktu=now_local(),input_by=1,
+            no_polisi='AD 1234 JASA',status='selesai')
+        foreign=OutgoingRecord(kode='OUT-JASA-RAHASIA-B',pelanggan_id=portal.owners[1].id,
+            kiriman_id=trip.id,nama_pembeli='Penerima rahasia B',tanggal=now_local().date(),
+            waktu=now_local(),input_by=1,status='selesai')
+        db.add_all([own,foreign]);await db.flush()
+        for record,jid,kg in [(own,portal.orders[0].id,120),(own,order.id,30),
+            (foreign,portal.orders[1].id,98765)]:
+            db.add(OutgoingItem(outgoing_record_id=record.id,item_type='pk_g2',jasa_id=jid,berat_kg=kg))
+        # Entri asing yang lebih baru tidak boleh memenuhi halaman sebelum
+        # filter pemilik dijalankan oleh pembaca Produksi.
+        for n in range(51):
+            r=OutgoingRecord(kode=f'OUT-RAHASIA-{n:02}',pelanggan_id=portal.owners[1].id,
+                tanggal=now_local().date(),waktu=now_local(),input_by=1,status='selesai')
+            db.add(r);await db.flush()
+            db.add(OutgoingItem(outgoing_record_id=r.id,item_type='pk_g2',jasa_id=portal.orders[1].id,berat_kg=300))
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        for path in ('/pelanggan/barang-keluar','/pelanggan/barang-keluar?status=selesai&q=1234'):
+            page=await c.get(path);assert page.status_code==200
+            s=BeautifulSoup(page.text,'html.parser');rows=s.select('table.tabel-standar tbody tr')
+            assert len(rows)==1 and 'OUT-JASA-GABUNG-A' in rows[0].get_text()
+            assert '150 kg' in rows[0].select_one('[data-sel=angka]').get_text()
+            assert 'OUT-JASA-RAHASIA-B' not in page.text and '98765' not in page.text
+            assert 'Penerima rahasia B' not in page.text and 'OUT-RAHASIA-' not in page.text
+            assert '2 barang' in rows[0].get_text()
+        assert (await c.get('/pelanggan/barang-keluar/'+str(foreign.id))).status_code==404

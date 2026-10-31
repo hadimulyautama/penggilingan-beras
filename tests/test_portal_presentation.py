@@ -82,3 +82,12 @@ def test_bahasa_pelanggan_tidak_menyunting_catatan_asli_atau_angka():
     assert s.h2.get_text()=='Status proses'
     assert 'Catat total' not in s.get_text() and not s.select('.giling-pengelolaan')
     assert s.select_one('.catatan-pelanggan').get_text()=='QC sesuai permintaan pelanggan: 1.250,5 kg'
+
+
+def test_tautan_baris_pengambilan_tetap_di_portal_dan_menolak_tujuan_luar():
+    html='''<table><tr data-detail-keluar="/barang-keluar/7?status=selesai"><td>Pengambilan</td></tr>
+    <tr data-detail-keluar="https://other.example/barang-keluar/8"><td>Luar</td></tr></table>'''
+    s=BeautifulSoup(read_only(html,'/barang-keluar'),'html.parser')
+    rows=s.select('tr')
+    assert rows[0]['data-detail-keluar']=='/pelanggan/barang-keluar/7?status=selesai'
+    assert rows[0]['tabindex']=='0' and not rows[1].has_attr('data-detail-keluar')

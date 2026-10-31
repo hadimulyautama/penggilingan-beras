@@ -1,0 +1,19 @@
+  <div class="tabel-standar__scroll" style="margin:16px 0">
+    <table class="tabel-standar" data-ponsel="ringkas" role="table">
+      <thead><tr><th>{{ 'Pengambilan' if PORTAL_READ_ONLY else 'Perintah' }}</th><th>Tanggal</th><th>Pelanggan</th><th>Nomor polisi</th><th class="tabel-standar__angka">Muatan</th><th>Status</th><th>Tiket timbang</th></tr></thead>
+      <tbody>
+      {% for k in riwayat %}
+        {% set alamat = '/barang-keluar/' ~ k.rec.id ~ ('?' ~ filter_query ~ ('&sebelum=' ~ sebelum if sebelum else '') if pencarian or status_filter or sejak_filter or sebelum else '') %}
+        <tr data-detail-keluar="{{ alamat }}" role="row">
+          <td data-sel="utama" role="cell"><a class="tabel-standar__kode" href="{{ alamat }}">{{ k.rec.kode }}</a>{% if BOLEH_PERINTAH %}<small class="tabel-standar__sekunder"><a href="/barang-keluar/{{ k.rec.id }}/perbaikan?{{ filter_query }}{% if sebelum %}&sebelum={{ sebelum }}{% endif %}" data-utuh>Perbaiki pengiriman</a></small>{% endif %}</td>
+          <td data-sel="tambahan" role="cell">{{ (k.rec.waktu_perintah or k.rec.waktu) | jam('%d/%m/%Y') }}</td>
+          <td data-sel="subjek" role="cell">{{ k.riwayat_nama or (request.state.portal_scope.reader.nama if PORTAL_READ_ONLY else '—') }}</td>
+          <td data-sel="meta" role="cell">{{ k.rec.no_polisi or '—' }}<span data-hanya-ponsel> · {{ (k.rec.waktu_perintah or k.rec.waktu) | jam('%d/%m/%Y') }}</span></td>
+          <td data-sel="angka" role="cell" class="tabel-standar__angka">{{ kg(k.riwayat_total) }} kg<small class="tabel-standar__sekunder">{% if not PORTAL_READ_ONLY %}{{ k.riwayat_jumlah }} pelanggan · {% endif %}{{ k.riwayat_item }} barang</small></td>
+          <td data-sel="status" role="cell"><span class="tabel-standar__status tabel-standar__status--{{ k.rec.status }}">{{ k.keadaan }}</span><small class="tabel-standar__sekunder">{{ 'Jasa' if k.jasa else 'Milik pabrik' }}</small></td>
+          <td data-sel="tambahan" role="cell">{{ k.tiket_timbang.kode if k.tiket_timbang else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>

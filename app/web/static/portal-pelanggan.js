@@ -5,6 +5,11 @@
   menus.forEach(menu=>menu.addEventListener('click',()=>{opener=menu;const opened=body.classList.toggle('sidebar-open');menus.forEach(button=>button.setAttribute('aria-expanded',String(opened)));shade.hidden=!opened;if(opened)document.querySelector('.portal-sidebar a')?.focus();}));
   shade?.addEventListener('click',close);document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();opener?.focus();}});
   document.querySelector('[data-theme-toggle]')?.addEventListener('click',e=>{const light=body.classList.toggle('terik');document.cookie=`produksi_terik=${light?'1':'0'}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol==='https:'?'; Secure':''}`;e.currentTarget.textContent=light?'☾':'☀';e.currentTarget.setAttribute('aria-label',light?'Aktifkan mode gelap':'Aktifkan mode terang');});
+  document.querySelectorAll('[data-detail-keluar]').forEach(row=>{
+    function open(){const target=new URL(row.dataset.detailKeluar,location.href);if(target.origin===location.origin&&/^\/pelanggan\/barang-keluar\/\d+$/.test(target.pathname))location.assign(target.href);}
+    row.addEventListener('click',event=>{if(!event.target.closest('a,button,input,select,textarea'))open();});
+    row.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target===row){event.preventDefault();open();}});
+  });
   // Native GET controls remain actual reads, usable without app action scripts.
   document.querySelectorAll('form[method=get] select').forEach(el=>el.addEventListener('change',()=>el.form.requestSubmit()));
   document.querySelectorAll('[data-pdf-share]').forEach(button=>button.addEventListener('click',async()=>{

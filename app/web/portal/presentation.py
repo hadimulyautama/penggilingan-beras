@@ -23,6 +23,7 @@ def bahasa_pelanggan(s):
         'Bobot belum final':'Berat sementara','Saldo per pelanggan':'Jumlah barang Anda',
         'PK luar':'Bahan masuk (PK)','PK hasil giling':'Hasil giling (PK)',
         'Perintah barang keluar':'Pengambilan & pengiriman','Perintah':'Rencana',
+        'Barang Keluar':'Pengambilan barang',
         'Total perintah':'Rencana pengiriman','Sisa perintah':'Belum dimuat',
         'Sumber bobot':'Cara penimbangan','Ikatan silo aktif':'Silo yang sedang dipakai',
         'Tidak ada pekerjaan perlu tindakan':'Tidak ada barang menunggu penanganan'}
@@ -136,6 +137,12 @@ def read_only(html, base, *, origin=None):
     for el in s.find_all(True):
         for attr in list(el.attrs):
             if attr.startswith(('on','hx-')) or attr in ('data-aksi','data-buka','formaction'):del el[attr]
+    for row in s.select('[data-detail-keluar]'):
+        target=destination(row['data-detail-keluar'])
+        if target:
+            row['data-detail-keluar']=target
+            row['tabindex']='0'
+        else:row.attrs.pop('data-detail-keluar',None)
     for button in list(s.find_all('button')):
         if not button.find_parent('form') and button.get('id')!='bagikan-pdf':button.decompose()
     for table in list(s.find_all('table')):
@@ -181,6 +188,9 @@ def render_customer(request, name, *, status_code=200, **ctx):
                 elif hasattr(obj,attr):object.__setattr__(obj,attr,value)
     if name=='pengiriman.html' and ctx.get('detail'):
         ctx['PORTAL_READ_ONLY']=True
+    if name=='pengiriman.html' and not ctx.get('detail'):
+        name='portal/pengambilan.html'
+        ctx['page_title']='Pengambilan barang'
     if name=='jasa_pelanggan_detail.html':
         d=copy.deepcopy(ctx['d']);ctx['d']=d
         # Ringkasan dan tab pengambilan wajib memakai cakupan yang sama
@@ -223,6 +233,13 @@ async def prepare_context(request,name,ctx):
         if key in ctx:ctx[key]=[x for x in ctx[key] if x.jasa_id in scope.jasa_ids]
     if name in ('stok_produk_jasa.html','stok_karung_jasa.html'):
         ctx['daftar']=[x for x in ctx.get('daftar',[]) if x['pelanggan_id']==scope.reader.pelanggan_id]
+    if name=='pengiriman.html' and not ctx.get('detail'):
+        from app.database import SessionLocal
+        from app.models import CustomerReturn
+        from sqlalchemy import select
+        async with SessionLocal() as db:
+            ctx['portal_retur']=(await db.scalars(select(CustomerReturn).where(
+                CustomerReturn.id.in_(scope.ids(CustomerReturn))).order_by(CustomerReturn.id.desc()))).all()
     from app.web.stok_navigasi import siapkan
     await siapkan(request,name,ctx)
 

@@ -69,7 +69,7 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
         if match[1]=='barang-masuk':await own_ticket(scope,ident)
         else:await own_outgoing(scope,ident)
         result=await serah_terima.detail(ident,req,account)
-    elif path in ('/ringkasan','/jasa-saya','/barang-saya','/riwayat-proses','/barang-masuk','/barang-keluar'):
+    elif path in ('/ringkasan','/jasa-saya','/barang-saya','/riwayat-proses','/barang-masuk'):
         from .beranda import halaman
         bagian={'/ringkasan':'beranda','/jasa-saya':'jasa','/barang-saya':'barang',
             '/riwayat-proses':'riwayat','/barang-masuk':'masuk','/barang-keluar':'pengambilan'}[path]
@@ -78,7 +78,10 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
             bagian={'penerimaan':'masuk','proses':'jasa','pengambilan':'pengambilan','stok':'barang'}[q['tab']]
             req=native_request(request,{'masuk':'/barang-masuk','pengambilan':'/barang-keluar',
                 'barang':'/barang-saya','jasa':'/jasa-saya'}[bagian],scope)
-        result=await halaman(req,bagian)
+        if bagian=='pengambilan':
+            result=await outgoing.halaman_barang_keluar(req,account,sebelum=integer(q.get('sebelum')),
+                q=q.get('q',''),status=q.get('status',''),sejak=q.get('sejak',''))
+        else:result=await halaman(req,bagian)
     elif path=='/pekerjaan':result=await work.halaman_pekerjaan(req,account)
     elif m:=re.fullmatch(r'/barang-masuk/(\d+)/laporan\.pdf',path):
         tid=int(m[1]);await own_ticket(scope,tid)

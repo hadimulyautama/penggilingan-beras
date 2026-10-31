@@ -8,7 +8,6 @@
 <section class="pelanggan-panel"><div class="pelanggan-judul"><h2>Barang di pabrik</h2><a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat semua stok</a></div>
 {{ daftar_komoditas(komoditas,kg) }}
 </section>
-<nav class="pelanggan-pintasan" aria-label="Riwayat barang dan proses"><a href="/pelanggan/barang-masuk">Barang masuk</a><a href="/pelanggan/barang-keluar">Pengambilan barang</a><a href="/pelanggan/riwayat-proses">Riwayat proses</a></nav>
 {% if progres %}{{ proses_berjalan(progres,kg) }}{% endif %}
 </div>
 {% endblock %}

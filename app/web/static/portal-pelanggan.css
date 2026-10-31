@@ -120,3 +120,5 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 
 .pelanggan-penerimaan{width:100%}.pelanggan-filter-masuk{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:18px 0}.pelanggan-filter-masuk label{display:grid;gap:6px;font-size:13px}.pelanggan-filter-masuk input,.pelanggan-filter-masuk select{max-width:100%;min-height:44px}.pelanggan-penerimaan .masuk-daftar{margin-top:12px}@media(max-width:600px){.pelanggan-filter-masuk label{width:100%}.pelanggan-filter-masuk input,.pelanggan-filter-masuk select{width:100%}}
 .portal-customer .portal-content .pelanggan-filter-masuk{display:flex}.portal-customer .portal-content .pelanggan-filter-masuk>button{width:auto;flex:0 0 auto}@media(max-width:600px){.portal-customer .portal-content .pelanggan-filter-masuk>button{width:100%}}
+
+.pelanggan-pengambilan{width:100%}.pelanggan-pengambilan .keluar-ringkas__bagian{margin:18px 0}

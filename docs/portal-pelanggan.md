@@ -13,7 +13,8 @@ navigasi bawah. Menu membuka seluruh tujuan, identitas, pemasangan aplikasi,
 dan keluar. Pilihan tema tetap ada di header.
 
 Beranda menampilkan status, **jumlah per komoditas**, dan progres proses.
-Panel Kabar terbaru tidak ditampilkan di beranda. Setiap komoditas dapat
+Panel Kabar terbaru tidak ditampilkan di beranda. Tombol Barang masuk,
+Pengambilan barang, dan Riwayat proses hanya ada pada menu utama. Setiap komoditas dapat
 dibuka ke lokasi/batch, kemudian rincian asal, waktu, kendaraan dan halaman
 barang yang sama seperti sebelumnya. Halaman Barang Saya memakai susunan
 stok yang sama, dengan tautan ke menu pengambilan.
@@ -45,7 +46,10 @@ baru tidak masuk. Gabah berstatus baru sudah diterima dan tetap ditampilkan.
 `/pelanggan/barang-keluar` menjadi menu Pengambilan barang, dengan batas
 kepemilikan per `OutgoingItem.jasa_id`; penjualan kepada orang yang sama
 bukan pengambilan jasa. Rencana belum dimuat tidak menampilkan berat sebagai
-muatan aktual. Detail dan status pengambilan memakai pembaca produksi.
+muatan aktual. Daftar, rincian, status, pencarian/filter, dan paginasi pengambilan memakai
+pembaca Produksi. Daftar aktif serta riwayat memakai komponen tabel yang
+sama dengan Produksi. Muatan kiriman bersama dihitung hanya dari alokasi
+pelanggan yang lolos scope; pelanggan lain dan penjualan biasa tidak ikut.
 `/pelanggan/barang-saya` memuat jumlah per komoditas dan rincian stok.
 Rekap jasa berada di Dokumen, satu rekap per pesanan utama; daftar pesanan
 asal yang sudah digabung tidak ditampilkan pada perjalanan jasa.

@@ -1,14 +1,19 @@
 {% extends 'base.html' %}
+{% import '_stok.html' as st %}{% set kg=st.kg %}
 {% block isi %}
-<div class="pelanggan-halaman">
+<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
+<div class="pelanggan-halaman pelanggan-pengambilan keluar-ringkas">
 <header class="pelanggan-sapaan"><p class="pelanggan-alis">Pengambilan barang</p><h1>Pengambilan barang jasa Anda</h1><p class="pelanggan-redup">Barang milik Anda yang diambil atau dikirim dari pabrik.</p></header>
-<section class="pelanggan-panel"><ol class="pelanggan-perjalanan">
-{% for r in d.pengiriman %}<li><div class="pelanggan-baris"><h2><a href="{{ r.href }}">{{ r.kode }}</a></h2><span class="pelanggan-penanda">{{ {'perintah':'Menunggu dimuat','dimuat':'Sudah dimuat · menunggu verifikasi','selesai':'Pengambilan selesai','batal':'Dibatalkan'}.get(r.status,status_pelanggan(r.status)) }}</span></div>
-<p class="pelanggan-redup">{{ r.tanggal.strftime('%d/%m/%Y') }}{% if r.no_polisi %} · {{ r.no_polisi }}{% endif %}</p>
-{% if r.status=='perintah' %}<p class="pelanggan-redup">Jumlah barang akan tampil setelah pemuatan dicatat.</p>{% else %}{% for x in r.item %}<p>{{ x.nama }} · {{ kg(x.kg) if x.kg is not none else 'Belum ditimbang' }}</p>{% endfor %}{% endif %}
-<a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian pengambilan →</a></li>
-{% else %}<li><p class="pelanggan-redup">Belum ada pengambilan barang jasa yang tercatat.</p></li>{% endfor %}
-</ol></section>
-{% if d.retur %}<details class="pelanggan-rincian"><summary>Barang yang dikembalikan ke pabrik</summary>{% for r in d.retur %}<p><a href="{{ r.href }}">{{ r.kode }}</a> · {{ status_pelanggan(r.status) }}</p>{% endfor %}<a class="pelanggan-tautan" href="/pelanggan/retur">Lihat rincian pengembalian →</a></details>{% endif %}
-<a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat stok yang masih di pabrik →</a></div>
+<form method="get" action="/barang-keluar" class="pelanggan-filter-masuk keluar-filter saring">
+<label>Cari pengambilan<input class="fld" type="search" name="q" value="{{ pencarian }}" placeholder="Cari kode atau plat…"></label>
+<label>Status<select class="fld" name="status">{% for value,label in [('', 'Semua status'),('perintah','Menunggu dimuat'),('dimuat','Menunggu verifikasi'),('selesai','Selesai'),('batal','Dibatalkan')] %}<option value="{{ value }}"{% if status_filter==value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Sejak tanggal<input class="fld" type="date" name="sejak" value="{{ sejak_filter }}"></label><button class="btn" type="submit">Cari</button><a href="/barang-keluar">Reset</a>
+</form>
+<section class="keluar-ringkas__bagian" aria-labelledby="judul-aktif-keluar"><h2 id="judul-aktif-keluar">Pengambilan berjalan</h2>
+{% if kartu_aktif %}{% set daftar_keluar=kartu_aktif %}{% include '_pengiriman_daftar.html' %}{% else %}<p class="pelanggan-redup">Belum ada pengambilan yang sedang berjalan.</p>{% endif %}</section>
+<section class="keluar-ringkas__bagian" aria-labelledby="judul-riwayat-keluar"><h2 id="judul-riwayat-keluar">Riwayat pengambilan</h2><p class="pelanggan-redup">Pengambilan yang selesai atau dibatalkan. Buka kode pengambilan untuk melihat rinciannya.</p>
+{% if riwayat %}{% include '_pengiriman_riwayat_daftar.html' %}{% if sebelum_berikut %}<a class="btn" href="/barang-keluar?sebelum={{ sebelum_berikut }}&{{ filter_query }}#judul-riwayat-keluar">Riwayat sebelumnya</a>{% endif %}{% else %}<p class="pelanggan-redup">Belum ada riwayat pengambilan barang jasa.</p>{% endif %}</section>
+{% if portal_retur %}<details class="pelanggan-rincian"><summary>Barang yang dikembalikan ke pabrik</summary>{% for r in portal_retur %}<p><a href="/retur/{{ r.id }}">{{ r.kode }}</a></p>{% endfor %}<a class="pelanggan-tautan" href="/retur">Lihat rincian pengembalian →</a></details>{% endif %}
+<a class="pelanggan-tautan" href="/barang-saya">Lihat stok yang masih di pabrik →</a></div>
 {% endblock %}

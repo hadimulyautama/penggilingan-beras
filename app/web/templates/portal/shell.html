@@ -8,8 +8,8 @@
 <link rel="stylesheet" href="/static/tabel-standar.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/padiflow-brand.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-masuk2">
-<script src="/static/portal-pelanggan.js?v={{ VERSI }}-masuk2" defer></script>
+<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-pengambilan3">
+<script src="/static/portal-pelanggan.js?v={{ VERSI }}-pengambilan3" defer></script>
 </head><body class="padiflow-ui portal-customer {{ 'terik' if light }}">
 <a class="portal-skip" href="#isi-pelanggan">Lewati ke isi</a>
 <div class="portal-shade" hidden></div>
@@ -24,5 +24,5 @@
 <nav class="portal-bawah" aria-label="Navigasi utama ponsel">{% for path,label,key in MENU if key in ('ringkasan','stok','pekerjaan') %}<a href="/pelanggan/{{ path }}" {% if active==key %}aria-current="page"{% endif %}>{{ ikon_portal({'ringkasan':'beranda'}.get(key,key)) }}<span>{{ label }}</span></a>{% endfor %}<button type="button" class="portal-menu-bawah" aria-controls="sidebar-pelanggan" aria-expanded="false"{% if active not in ('ringkasan','stok','pekerjaan') %} data-current="true"{% endif %}><span aria-hidden="true">☰</span><span>Menu</span></button></nav>
 <!-- Native page styles are loaded above this final shared theme contract. -->
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-masuk2">
+<link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-pengambilan3">
 </body></html>

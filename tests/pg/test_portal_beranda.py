@@ -21,6 +21,7 @@ async def test_beranda_mendahulukan_barang_dan_bukan_tugas_operator(pg,portal):
         assert 'Barang di pabrik' in r.text
         assert s.select_one('#komoditas-gabah > summary')
         assert 'Kabar terbaru' not in s.select_one('main').get_text()
+        assert not s.select('main a[href="/pelanggan/barang-masuk"],main a[href="/pelanggan/barang-keluar"],main a[href="/pelanggan/riwayat-proses"]')
         nav=s.select_one('.portal-sidebar nav')
         assert [a.get_text(strip=True) for a in nav.select('a')]==['Beranda','Barang masuk','Barang Saya','Proses Berjalan','Riwayat proses','Pengambilan barang','Dokumen']
         assert nav.select_one('[aria-current=page]').get_text(strip=True)=='Beranda'
