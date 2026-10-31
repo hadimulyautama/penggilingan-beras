@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block isi %}
+<div class="pelanggan-halaman">
+<header class="pelanggan-sapaan"><p class="pelanggan-alis">Barang masuk</p><h1>Barang yang sudah diterima</h1><p class="pelanggan-redup">Penerimaan barang Anda di pabrik, termasuk barang yang sudah selesai diproses.</p></header>
+<section class="pelanggan-panel"><ol class="pelanggan-perjalanan">
+{% for t in d.penerimaan %}<li><div class="pelanggan-baris"><h2>{% if t.href %}<a href="{{ t.href }}">{{ t.kode }}</a>{% else %}{{ t.kode }}{% endif %}</h2><span class="pelanggan-penanda">Sudah diterima</span></div><p>{{ 'Beras pecah kulit (PK)' if t.jenis=='PK' else t.jenis }}</p>
+{% for c in t.catatan %}<p class="pelanggan-redup">{{ kg(c.berat) if c.berat is not none else 'Belum ditimbang' }}{% if c.waktu %} · {{ c.waktu|jam('%d/%m/%Y %H:%M') }}{% endif %}{% if c.kode %} · {{ c.kode }}{% endif %}</p>{% endfor %}
+{% if t.href %}<a class="pelanggan-tautan" href="{{ t.href }}">Lihat rincian penerimaan →</a>{% endif %}
+{% if t.id %}<a class="pelanggan-tautan" href="/pelanggan/barang-masuk/{{ t.id }}/laporan.pdf">Bukti penerimaan (PDF)</a>{% endif %}</li>
+{% else %}<li><p class="pelanggan-redup">Belum ada barang yang tercatat diterima. Jika barang sudah diserahkan, hubungi petugas untuk memeriksa pencatatannya.</p></li>{% endfor %}
+</ol></section></div>
+{% endblock %}

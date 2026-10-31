@@ -14,6 +14,67 @@ from .auth import csrf_context
 from .navigation import MENU, portal_url, active_menu
 
 
+def bahasa_pelanggan(s):
+    """Ubah label antarmuka saja, tanpa menyunting isi catatan atau angka."""
+    labels={'Pekerjaan':'Perkembangan proses','Perlu tindakan':'Menunggu petugas',
+        'Status & informasi':'Informasi barang','Riwayat QC':'Pemeriksaan mutu',
+        'QC':'Pemeriksaan mutu','Audit':'Riwayat perubahan','Kode lot':'Kode proses',
+        'Bahan dalam lot':'Bahan dalam proses','Pemilik bahan':'Pelanggan',
+        'Bobot belum final':'Berat sementara','Saldo per pelanggan':'Jumlah barang Anda',
+        'PK luar':'Bahan masuk (PK)','PK hasil giling':'Hasil giling (PK)',
+        'Perintah barang keluar':'Pengambilan & pengiriman','Perintah':'Rencana',
+        'Total perintah':'Rencana pengiriman','Sisa perintah':'Belum dimuat',
+        'Sumber bobot':'Cara penimbangan','Ikatan silo aktif':'Silo yang sedang dipakai',
+        'Tidak ada pekerjaan perlu tindakan':'Tidak ada barang menunggu penanganan'}
+    for el in s.select('h1,h2,h3,h4,summary,dt,th,label,nav a,nav span,.kirim-detail__label'):
+        for node in list(el.find_all(string=True)):
+            value=str(node);key=value.strip()
+            if key in labels:node.replace_with(value.replace(key,labels[key]))
+            elif key in ('Hasil & QC','Lihat hasil & QC','Nilai kualitas QC PK','QC hasil penyosohan'):
+                node.replace_with(value.replace('QC','pemeriksaan mutu'))
+    for a in s.select('a.riwayat-detail__back,a.jasa-kembali'):
+        a['href']='/pelanggan/jasa-saya'
+        a.string='← Kembali ke Jasa Saya'
+    for a in s.select('a[href]'):
+        if a.get_text(strip=True)=='Buka Pekerjaan':
+            a.string='Lihat perkembangan proses';a['href']='/pelanggan/jasa-saya'
+    for el in s.select('.penerimaan-tindakan'):
+        el.decompose()
+    for el in s.select('.giling-pengelolaan,.pengeringan-pengelolaan,.proses-detail__aksi'):
+        el.decompose()
+    for bagian in s.select('section#tindakan-proses'):
+        judul=bagian.find('h2');petunjuk=bagian.find('p')
+        if judul and judul.get_text(strip=True)=='Tindakan saat ini':
+            judul.string='Status proses'
+            if petunjuk:petunjuk.string='Lihat status dan hasil yang sudah dicatat pada halaman ini.'
+        elif judul and judul.get_text(strip=True)=='Mesin sedang dijeda':
+            if petunjuk:petunjuk.string='Proses dijeda. Menunggu petugas melanjutkan.'
+    for p in s.select('p.bantu'):
+        teks=p.get_text(' ',strip=True)
+        if teks.startswith(('Sesudah proses ditutup, halaman ini membuka detail riwayat penggilingan.',
+            'Catatan pada Status & informasi tidak dihitung sebagai pekerjaan wajib.',
+            'Alur cepat · di bawah 200 kg.')):
+            p.decompose()
+        elif re.match(r'^\d+ pekerjaan perlu tindakan\.',teks):
+            p.string='Barang berikut menunggu penanganan petugas.'
+    for p in s.select('.kirim-detail p'):
+        if p.get_text(strip=True).startswith('Satu armada dan satu tiket untuk seluruh pelanggan.'):
+            p.decompose()
+    panel=s.select_one('#panel-permintaan')
+    if panel:
+        dipilih=not panel.has_attr('hidden');panel.decompose()
+        for a in s.select('a[role=tab][aria-controls=panel-permintaan]'):a.decompose()
+        if dipilih:
+            utama=s.select_one('#panel-ringkasan')
+            if utama:utama.attrs.pop('hidden',None)
+            for a in s.select('a[role=tab]'):a['aria-selected']='true' if a.get('aria-controls')=='panel-ringkasan' else 'false'
+    for h in s.select('h2'):
+        if h.get_text(strip=True)=='Jejak tahapan':
+            bagian=h.find_parent('section')
+            if bagian:bagian.decompose()
+    return s
+
+
 def read_only(html, base, *, origin=None):
     def destination(value):
         parsed=urlsplit(urljoin(base,value))
@@ -26,6 +87,9 @@ def read_only(html, base, *, origin=None):
             value=urlunsplit(('', '', parsed.path, parsed.query, parsed.fragment))
         return portal_url(value)
     s=BeautifulSoup(html,'html.parser')
+    # Shell pelanggan menyediakan satu landmark utama. Halaman native yang
+    # memakai <main> menjadi bagian di dalamnya, bukan landmark bersarang.
+    for el in s.find_all('main'):el.name='div'
     for el in s.select('dialog,form.stok-nav__filter,.produk-aksi,.saring-kepemilikan,[data-post],[data-kirim]'):
         el.decompose()
     for script in list(s.find_all('script')):
@@ -92,7 +156,7 @@ def read_only(html, base, *, origin=None):
         share['data-pdf-share']=s.find('iframe')['src'];share.attrs.pop('disabled',None)
         status=s.find(id='status-bagikan')
         if status:status.string='PDF tersedia untuk dibaca, dibagikan, atau diunduh.'
-    return str(s)
+    return str(bahasa_pelanggan(s))
 
 
 def render_customer(request, name, *, status_code=200, **ctx):
@@ -133,8 +197,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
             if t.get('proses'):t['proses']=[(code,href) for code,href in t['proses'] if code in scope.codes]
         d['berjalan']=sum(r['status']=='proses' for r in d['proses'])
         for j in d['pesanan']:j['boleh_tutup']=j['boleh_batal']=False
-    env=templates.env.overlay(loader=ChoiceLoader([DictLoader({'base.html':"""{% if STOK_NAV %}{% include '_stok_navigasi.html' %}<div class="stok-isi">{% endif %}
-{% if LAPORAN_NAV %}<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include '_laporan_navigasi.html' %}<div class="laporan-isi">{% endif %}
+    env=templates.env.overlay(loader=ChoiceLoader([DictLoader({'base.html':"""{% if STOK_NAV %}{% include 'portal/_navigasi_stok.html' %}<div class="stok-isi">{% endif %}
+{% if LAPORAN_NAV %}<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include 'portal/_navigasi_riwayat.html' %}<div class="laporan-isi">{% endif %}
 {% if portal_scope_note %}<p class="bantu">{{ portal_scope_note }}</p>{% endif %}{% block isi %}{% endblock %}{% if LAPORAN_NAV %}</div></div>{% endif %}{% if STOK_NAV %}</div>{% endif %}"""}),templates.env.loader]))
     # Native stock-navigation computes visible groups from these already scoped rows.
     body=env.get_template(name).render(**ctx)

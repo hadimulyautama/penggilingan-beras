@@ -3,8 +3,8 @@
 {% for r in rows %}<article class="pelanggan-barang">
   <div class="pelanggan-baris"><div><h3>{{ r.nama_pelanggan }}</h3><p class="pelanggan-redup">{{ r.lokasi }}</p></div><strong class="pelanggan-berat">{{ kg(r.kg) if r.kg is not none else 'Belum diukur' }}</strong></div>
   {% if r.kode %}<p class="pelanggan-kode">{{ r.kode }}</p>{% endif %}
-  {% if not r.final %}<p class="pelanggan-penanda pelanggan-penanda--hati">Bobot belum final</p>{% endif %}
-  {% if r.kg is not none and r.kg < 0 %}<p class="pelanggan-redup">Saldo perlu diperiksa petugas.</p>{% endif %}
+  {% if not r.final %}<p class="pelanggan-penanda pelanggan-penanda--hati">Berat sementara</p>{% endif %}
+  {% if r.kg is not none and r.kg < 0 %}<p class="pelanggan-redup">Jumlah barang perlu diperiksa petugas.</p>{% endif %}
   {% if r.href %}<a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian barang →</a>{% endif %}
 </article>{% endfor %}
 </div>

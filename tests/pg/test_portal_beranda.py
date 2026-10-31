@@ -18,17 +18,20 @@ async def test_beranda_mendahulukan_barang_dan_bukan_tugas_operator(pg,portal):
         assert s.select_one('main h1').get_text().startswith('Halo, Pemilik Portal A')
         assert s.select_one('.pelanggan-status h2')
         assert 'perlu tindakan' not in s.select_one('main').get_text().lower()
-        assert 'Barang di pabrik' in r.text and 'Hasil tercatat' in r.text
-        for selector in ('.portal-sidebar nav','.portal-bawah'):
-            nav=s.select_one(selector)
-            assert [a.get_text(strip=True) for a in nav.select('a')]==['Beranda','Jasa Saya','Barang Saya','Dokumen']
-            assert nav.select_one('[aria-current=page]').get_text(strip=True)=='Beranda'
+        assert 'Barang di pabrik' in r.text
+        assert s.select_one('#komoditas-gabah > summary')
+        assert 'Kabar terbaru' not in s.select_one('main').get_text()
+        nav=s.select_one('.portal-sidebar nav')
+        assert [a.get_text(strip=True) for a in nav.select('a')]==['Beranda','Barang masuk','Barang Saya','Jasa Saya','Riwayat proses','Pengambilan barang','Dokumen']
+        assert nav.select_one('[aria-current=page]').get_text(strip=True)=='Beranda'
+        bawah=s.select_one('.portal-bawah')
+        assert len(bawah.select('a'))==3 and bawah.select_one('button').get_text(strip=True).endswith('Menu')
         assert 'Rahasia Pelanggan B' not in r.text and 'Kabar rahasia B' not in r.text
 
 
 async def test_jasa_barang_dan_tautan_lama_tetap_terbaca_tanpa_mutasi(pg,portal):
     async with client(portal.accounts[0]) as c:
-        for path in ('/pelanggan/jasa-saya','/pelanggan/barang-saya',
+        for path in ('/pelanggan/jasa-saya','/pelanggan/barang-saya','/pelanggan/riwayat-proses','/pelanggan/barang-masuk','/pelanggan/barang-keluar',
                      '/pelanggan/ringkasan?tab=stok','/pelanggan/ringkasan?tab=proses',
                      f'/pelanggan/jasa/pelanggan/{portal.owners[0].id}'):
             r=await c.get(path)
@@ -39,7 +42,7 @@ async def test_jasa_barang_dan_tautan_lama_tetap_terbaca_tanpa_mutasi(pg,portal)
             assert 'LOT-RAHASIA-B' not in r.text and 'Rahasia seluruh pabrik' not in r.text
             assert all(f['action']=='/pelanggan/keluar' for f in s.select('form[method=post]'))
         page=await c.get('/pelanggan/jasa-saya')
-        assert 'GB-QC-BASAH' in page.text and 'LOT-QC-DETAIL' in page.text
+        assert '/pelanggan/barang-masuk' in page.text and 'LOT-QC-DETAIL' in page.text
         assert '/pelanggan/laporan' in page.text
         assert (await c.get('/pelanggan/barang-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404
         assert (await c.get('/pelanggan/jasa-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404

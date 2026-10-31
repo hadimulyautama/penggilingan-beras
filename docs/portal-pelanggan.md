@@ -1,23 +1,50 @@
 # Portal pelanggan
 
 Portal terintegrasi di `/pelanggan`, dengan login `/pelanggan/masuk`.
-Desktop dan ponsel memakai URL yang sama. Identitas dan pengaturan ponsel dibuka melalui Akun.
+Desktop dan ponsel memakai URL yang sama. Identitas dan pengaturan ponsel dibuka melalui Menu.
 Tema memakai cookie `produksi_terik` serta aset dan token warna produksi.
 
-## Pengalaman pelanggan (31 Oktober 2026)
+## Pengalaman pelanggan (1 November 2026)
 
-Navigasi utama terdiri dari **Beranda**, **Jasa Saya**, **Barang Saya**, dan
-**Dokumen**. Ponsel menyediakan empat tujuan tersebut pada navigasi bawah;
-tombol Akun membuka identitas, pemasangan aplikasi, dan keluar. Kabar serta
-pilihan tema tetap ada di header.
+Navigasi utama terdiri dari **Beranda**, **Barang masuk**, **Barang Saya**,
+**Jasa Saya**, **Riwayat proses**, **Pengambilan barang**, dan **Dokumen**.
+Ponsel menyediakan Beranda, Barang Saya, Jasa Saya, dan tombol Menu pada
+navigasi bawah. Menu membuka seluruh tujuan, identitas, pemasangan aplikasi,
+dan keluar. Pilihan tema tetap ada di header.
+
+Beranda menampilkan status, **jumlah per komoditas**, dan progres proses.
+Panel Kabar terbaru tidak ditampilkan di beranda. Setiap komoditas dapat
+dibuka ke lokasi/batch, kemudian rincian asal, waktu, kendaraan dan halaman
+barang yang sama seperti sebelumnya. Halaman Barang Saya memakai susunan
+stok yang sama, dengan tautan ke menu pengambilan.
+
+`portal/barang.py` memakai pembaca bobot gabah, sisa tumpukan PK, produk,
+serta `hitung_stok_silo` dan `komposisi_bahan_silo` Gudang 2. Otorisasi isi
+silo dilakukan sebelum membaca jumlah/asalnya. Jumlah setiap komoditas
+hanya menjumlah saldo lokasi yang masih ada; berat batch asal adalah
+penelusuran dan tidak dijumlah lagi. Bahan yang belum teridentifikasi dan
+berat yang belum diketahui tetap ditandai, tidak ditebak sebagai PK/nol.
+
+Label dan navigasi rincian pelanggan menggunakan bahasa pelanggan; tab audit,
+pengelolaan proses, dan petunjuk pencatatan operator tidak ditawarkan sebagai
+tugas pelanggan. Isi catatan asli dan angka produksi tetap dipertahankan.
 
 `/pelanggan/ringkasan` dan `/pelanggan/` membuka beranda khusus pelanggan.
-`/pelanggan/jasa-saya` memuat penerimaan, perkembangan proses, pemeriksaan
-mutu. Rekap jasa berada di Dokumen, satu rekap per pesanan utama; daftar
-pesanan asal yang sudah digabung tidak ditampilkan pada perjalanan jasa.
-`/pelanggan/barang-saya` memisahkan bahan,
-transit, hasil, serta pengambilan/pengiriman dan retur. Dokumen di
-`/pelanggan/laporan` mempertahankan PDF produksi dan bukti serah terima.
+`/pelanggan/jasa-saya` memuat progres berjalan, bahan menunggu proses,
+pemeriksaan mutu, dan cuplikan riwayat. `/pelanggan/riwayat-proses` memuat
+proses selesai dengan tanggal, filter jenis dan tautan detail/hasil asli;
+pendinginan yang belum selesai tidak masuk riwayat selesai.
+`/pelanggan/barang-masuk` hanya menampilkan catatan penerimaan aktual,
+termasuk data lama tanpa tiket. Tiket antrean, penolakan, dan PK berstatus
+baru tidak masuk. Gabah berstatus baru sudah diterima dan tetap ditampilkan.
+`/pelanggan/barang-keluar` menjadi menu Pengambilan barang, dengan batas
+kepemilikan per `OutgoingItem.jasa_id`; penjualan kepada orang yang sama
+bukan pengambilan jasa. Rencana belum dimuat tidak menampilkan berat sebagai
+muatan aktual. Detail dan status pengambilan memakai pembaca produksi.
+`/pelanggan/barang-saya` memuat jumlah per komoditas dan rincian stok.
+Rekap jasa berada di Dokumen, satu rekap per pesanan utama; daftar pesanan
+asal yang sudah digabung tidak ditampilkan pada perjalanan jasa.
+Dokumen di `/pelanggan/laporan` mempertahankan PDF produksi dan bukti serah terima.
 URL detail lama dan tautan tab beranda lama tetap dilayani.
 
 Pembaca `portal/beranda.py` memakai `jasa_pelanggan.pelanggan(...,
@@ -25,7 +52,7 @@ read_scope=scope)` dan `berjalan.untuk(..., read_scope=scope)`. Transit tetap
 berasal dari `Berjalan.transit`, termasuk pemeriksaan sumber silo/mesin.
 Bidang aksi operator tidak diproyeksikan ke kartu pelanggan.
 
-Tidak ada saldo baru atau penjumlahan bobot lintas tahap. Bobot yang belum
+Jumlah per komoditas memakai saldo lokasi yang masih ada. Bobot yang belum
 diukur tetap berbeda dari nol; hasil tercatat tidak dianggap izin siap
 ambil. Pendinginan yang belum selesai tetap ditampilkan sebagai proses.
 Portal memberi tahu bahwa proses dan pencatatan ditangani petugas, tanpa

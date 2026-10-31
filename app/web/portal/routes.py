@@ -69,16 +69,17 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
         if match[1]=='barang-masuk':await own_ticket(scope,ident)
         else:await own_outgoing(scope,ident)
         result=await serah_terima.detail(ident,req,account)
-    elif path in ('/ringkasan','/jasa-saya','/barang-saya'):
+    elif path in ('/ringkasan','/jasa-saya','/barang-saya','/riwayat-proses','/barang-masuk','/barang-keluar'):
         from .beranda import halaman
-        bagian={'/ringkasan':'beranda','/jasa-saya':'jasa','/barang-saya':'barang'}[path]
+        bagian={'/ringkasan':'beranda','/jasa-saya':'jasa','/barang-saya':'barang',
+            '/riwayat-proses':'riwayat','/barang-masuk':'masuk','/barang-keluar':'pengambilan'}[path]
         # Tautan tab beranda lama tetap mengarah ke isi yang sesuai.
         if path=='/ringkasan' and q.get('tab') in ('penerimaan','proses','pengambilan','stok'):
-            bagian='barang' if q['tab'] in ('stok','pengambilan') else 'jasa'
-            req=native_request(request,'/barang-saya' if bagian=='barang' else '/jasa-saya',scope)
+            bagian={'penerimaan':'masuk','proses':'jasa','pengambilan':'pengambilan','stok':'barang'}[q['tab']]
+            req=native_request(request,{'masuk':'/barang-masuk','pengambilan':'/barang-keluar',
+                'barang':'/barang-saya','jasa':'/jasa-saya'}[bagian],scope)
         result=await halaman(req,bagian)
     elif path=='/pekerjaan':result=await work.halaman_pekerjaan(req,account)
-    elif path=='/barang-masuk':result=await work.halaman_barang_masuk(req,account)
     elif m:=re.fullmatch(r'/barang-masuk/(\d+)/laporan\.pdf',path):
         tid=int(m[1]);await own_ticket(scope,tid)
         result=await work.laporan_penerimaan_pdf(tid,req,account,unduh=integer(q.get('unduh')) if q.get('unduh') else 1)
@@ -130,8 +131,13 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     elif m:=re.fullmatch(r'/riwayat-qc/([\w-]+)(?:/([\w-]+))?',path):
         kind,ref=m[1],m[2]
         if kind not in history.QC_PAGES:missing()
-        if ref:await own_model(scope,kind,ref,by_code=True)
-        result=await history.halaman_riwayat_qc(req,kind,account,ref)
+        obj=await own_model(scope,kind,ref,by_code=True) if ref else None
+        try:result=await history.halaman_riwayat_qc(req,kind,account,ref)
+        except HTTPException as exc:
+            # Batch tanpa putaran mutu tetap punya rincian barang. Daftar
+            # dan detail QC native tetap dipakai saat hasilnya tersedia.
+            if exc.status_code!=404 or obj is None or kind not in ('gabah-basah','gabah-kering','pk-luar'):raise
+            result=await batch_tanpa_qc(req,obj,kind)
     elif path=='/barang-keluar' or (m:=re.fullmatch(r'/barang-keluar/(\d+)',path)):
         oid=int(m[1]) if path!='/barang-keluar' else None
         if oid:await own_outgoing(scope,oid)
@@ -162,6 +168,16 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     result.headers['Vary']='Cookie'
     result.headers['X-Robots-Tag']='noindex, nofollow'
     return result
+
+
+async def batch_tanpa_qc(request,batch,kind):
+    from app.services.barang_masuk import hasil_qc
+    from app.services.jasa_pelanggan import kg_rinci
+    pk=kind=='pk-luar'
+    async with SessionLocal() as db:
+        mutu=await hasil_qc(db,[dict(model='pk' if pk else 'gabah',id=batch.id,kode=batch.kode_batch)])
+    return render_customer(request,'portal/batch.html',batch=batch,mutu=mutu,kg=kg_rinci,
+        jenis='Beras pecah kulit (PK)' if pk else 'Gabah '+batch.kondisi_gabah,page_title='Rincian batch')
 
 
 async def history_list(request,kind):
@@ -211,7 +227,7 @@ async def ownership(request):
     for row in rows:row.bisa_batal=False
     return await render_laci(request,'audit.html',catatan=rows,semua=total,pratinjau=None,
         rentang=q.get('rentang','semua'),kelompok=q.get('kelompok','semua'),cari=q.get('cari',''),RENTANG=audit.RENTANG,KELOMPOK=audit.KELOMPOK,JAM_BATAS=48,pesan='',err='',LAPORAN_NAV=True,
-        portal_scope_note='Hanya catatan dengan tautan pelanggan terverifikasi yang ditampilkan. Catatan kepemilikan lama yang belum tertaut belum tersedia di portal.')
+        portal_scope_note='Riwayat perubahan barang Anda. Sebagian catatan lama mungkin belum tersedia.')
 
 
 def notice_predicate(scope):

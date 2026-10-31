@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block isi %}<div class="pelanggan-halaman">
+<a class="pelanggan-tautan" href="/pelanggan/jasa-saya">← Kembali ke Jasa Saya</a>
+<header class="pelanggan-sapaan"><p class="pelanggan-alis">Rincian batch</p><h1>{{ batch.kode_batch }}</h1></header>
+<section class="pelanggan-panel"><h2>{{ jenis }}</h2><dl class="pelanggan-fakta"><div><dt>Berat penerimaan</dt><dd>{{ kg(batch.berat_total_kg) if batch.berat_total_kg is not none else 'Belum ditimbang' }}</dd></div><div><dt>Tanggal masuk</dt><dd>{{ batch.waktu_pembelian|jam('%d/%m/%Y %H:%M') }}</dd></div><div><dt>Kendaraan</dt><dd>{{ batch.no_polisi_truk or 'Belum tercatat' }}</dd></div></dl></section>
+<section class="pelanggan-panel"><h2>Pemeriksaan mutu</h2>{% for g in mutu %}{% for r in g.putaran %}<article class="pelanggan-barang"><h3>{{ 'Pemeriksaan ' ~ r.nomor if r.nomor else 'Catatan pemeriksaan' }}</h3>{% if r.waktu %}<p class="pelanggan-redup">{{ r.waktu|jam('%d/%m/%Y %H:%M') }}</p>{% endif %}<dl class="pelanggan-fakta">{% for label,value in r.hasil %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>{% endfor %}</dl></article>{% else %}<p class="pelanggan-redup">Belum ada hasil pemeriksaan mutu yang tercatat.</p>{% endfor %}{% endfor %}</section>
+<a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat lokasi dan jumlah barang saat ini →</a>
+</div>{% endblock %}

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block isi %}
+<div class="pelanggan-halaman">
+<header class="pelanggan-sapaan"><p class="pelanggan-alis">Pengambilan barang</p><h1>Pengambilan barang jasa Anda</h1><p class="pelanggan-redup">Barang milik Anda yang diambil atau dikirim dari pabrik.</p></header>
+<section class="pelanggan-panel"><ol class="pelanggan-perjalanan">
+{% for r in d.pengiriman %}<li><div class="pelanggan-baris"><h2><a href="{{ r.href }}">{{ r.kode }}</a></h2><span class="pelanggan-penanda">{{ {'perintah':'Menunggu dimuat','dimuat':'Sudah dimuat · menunggu verifikasi','selesai':'Pengambilan selesai','batal':'Dibatalkan'}.get(r.status,status_pelanggan(r.status)) }}</span></div>
+<p class="pelanggan-redup">{{ r.tanggal.strftime('%d/%m/%Y') }}{% if r.no_polisi %} · {{ r.no_polisi }}{% endif %}</p>
+{% if r.status=='perintah' %}<p class="pelanggan-redup">Jumlah barang akan tampil setelah pemuatan dicatat.</p>{% else %}{% for x in r.item %}<p>{{ x.nama }} · {{ kg(x.kg) if x.kg is not none else 'Belum ditimbang' }}</p>{% endfor %}{% endif %}
+<a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian pengambilan →</a></li>
+{% else %}<li><p class="pelanggan-redup">Belum ada pengambilan barang jasa yang tercatat.</p></li>{% endfor %}
+</ol></section>
+{% if d.retur %}<details class="pelanggan-rincian"><summary>Barang yang dikembalikan ke pabrik</summary>{% for r in d.retur %}<p><a href="{{ r.href }}">{{ r.kode }}</a> · {{ status_pelanggan(r.status) }}</p>{% endfor %}<a class="pelanggan-tautan" href="/pelanggan/retur">Lihat rincian pengembalian →</a></details>{% endif %}
+<a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat stok yang masih di pabrik →</a></div>
+{% endblock %}

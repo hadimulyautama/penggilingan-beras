@@ -4,16 +4,14 @@
 {% block isi %}
 <div class="pelanggan-halaman">
 <header class="pelanggan-sapaan"><p class="pelanggan-alis">Jasa Saya</p><h1>Perjalanan jasa Anda</h1><p class="pelanggan-redup">Dari barang diterima sampai diambil kembali.</p></header>
-<section class="pelanggan-status pelanggan-status--ringkas"><span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p><p class="pelanggan-petunjuk">Proses dan pencatatan ditangani petugas. Pantau perkembangannya di sini.</p></section>
+<section class="pelanggan-status pelanggan-status--ringkas"><span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p></section>
 {% if progres %}{{ proses_berjalan(progres,kg) }}{% endif %}
-{% if transit %}<section class="pelanggan-panel" id="menunggu"><h2>Bahan menunggu proses</h2>{{ tunggu(transit) }}<p class="pelanggan-catatan">Menunggu di silo atau mesin belum berarti proses sudah dimulai. Waktu selesai belum tersedia.</p></section>{% endif %}
-<section class="pelanggan-panel" id="penerimaan"><div class="pelanggan-judul"><h2>Barang diterima</h2><a class="pelanggan-tautan" href="/pelanggan/barang-masuk?status=diterima">Semua penerimaan</a></div>
-<ol class="pelanggan-perjalanan">{% for t in d.penerimaan %}<li><h3>{% if t.href %}<a href="{{ t.href }}">{{ t.kode }}</a>{% else %}{{ t.kode }}{% endif %}</h3><p>{{ t.jenis }} · {{ t.status }}</p>{% for c in t.catatan %}<p class="pelanggan-redup">{{ kg(c.berat) if c.berat is not none else 'Belum diukur' }}{% if c.waktu %} · {{ c.waktu|jam('%d/%m/%Y %H:%M') }}{% endif %}</p>{% endfor %}{% if t.lokasi %}<p class="pelanggan-redup">{{ t.lokasi|join(' · ') }}</p>{% endif %}{% if t.id %}<a class="pelanggan-tautan" href="/pelanggan/barang-masuk/{{ t.id }}/laporan.pdf">Lihat bukti penerimaan →</a>{% endif %}</li>{% else %}<li><p class="pelanggan-redup">Belum ada penerimaan tercatat. Jika barang sudah diserahkan, hubungi petugas untuk memeriksa pencatatannya.</p></li>{% endfor %}</ol>
-</section>
-<section class="pelanggan-panel" id="proses"><div class="pelanggan-judul"><h2>Perkembangan proses</h2></div>
-<ol class="pelanggan-perjalanan">{% for r in d.proses %}<li><div class="pelanggan-baris"><h3>{{ nama_proses.get(r.jenis,r.jenis) }}</h3><span class="pelanggan-penanda">{{ status_pelanggan(r.status) }}</span></div><p class="pelanggan-redup">{{ r.kode }}</p><a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian proses →</a></li>{% else %}<li><p class="pelanggan-redup">Belum ada proses yang tercatat. Menunggu di silo atau mesin ditampilkan terpisah di atas.</p></li>{% endfor %}</ol>
+{% if transit %}<section class="pelanggan-panel" id="menunggu"><h2>Bahan menunggu proses</h2>{{ tunggu(transit) }}<p class="pelanggan-catatan">Petugas akan memulai proses sesuai giliran.</p></section>{% endif %}
+<section class="pelanggan-panel" id="proses"><div class="pelanggan-judul"><h2>Riwayat proses</h2><a class="pelanggan-tautan" href="/pelanggan/riwayat-proses">Lihat semua</a></div>
+<ol class="pelanggan-perjalanan">{% for r in riwayat[:5] %}<li><div class="pelanggan-baris"><h3>{{ nama_proses.get(r.jenis,r.jenis) }}</h3><span class="pelanggan-penanda">{{ status_pelanggan(r.status) }}</span></div><p class="pelanggan-redup">{{ r.kode }}</p><a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian proses →</a></li>{% else %}<li><p class="pelanggan-redup">Belum ada proses yang selesai. Proses yang sedang berjalan tampil di atas.</p></li>{% endfor %}</ol>
 <details class="pelanggan-rincian"><summary>Lihat pemeriksaan mutu</summary><nav class="pelanggan-pintasan" aria-label="Pemeriksaan mutu">{% for k,n in [('gabah-basah','Gabah basah'),('gabah-kering','Gabah kering'),('pk-luar','Bahan masuk (PK)'),('pk-hasil-giling','Hasil giling (PK)')] %}<a href="/pelanggan/riwayat-qc/{{ k }}">{{ n }}</a>{% endfor %}</nav></details>
 </section>
+<nav class="pelanggan-pintasan" aria-label="Barang jasa"><a href="/pelanggan/barang-masuk">Barang masuk</a><a href="/pelanggan/barang-keluar">Pengambilan barang</a></nav>
 <a class="pelanggan-utama" href="/pelanggan/barang-saya">Lihat barang & pengambilan →</a>
 <a class="pelanggan-tautan" href="/pelanggan/laporan">Lihat bukti & laporan →</a>
 </div>

@@ -1,8 +1,9 @@
 (() => {
-  const body=document.body,menu=document.querySelector('.portal-menu'),shade=document.querySelector('.portal-shade');
-  function close(){body.classList.remove('sidebar-open');menu?.setAttribute('aria-expanded','false');if(shade)shade.hidden=true;}
-  menu?.addEventListener('click',()=>{const opened=body.classList.toggle('sidebar-open');menu.setAttribute('aria-expanded',String(opened));shade.hidden=!opened;if(opened)document.querySelector('.portal-sidebar a')?.focus();});
-  shade?.addEventListener('click',close);document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();menu?.focus();}});
+  const body=document.body,menus=[...document.querySelectorAll('.portal-menu,.portal-menu-bawah')],shade=document.querySelector('.portal-shade');
+  function close(){body.classList.remove('sidebar-open');menus.forEach(menu=>menu.setAttribute('aria-expanded','false'));if(shade)shade.hidden=true;}
+  let opener;
+  menus.forEach(menu=>menu.addEventListener('click',()=>{opener=menu;const opened=body.classList.toggle('sidebar-open');menus.forEach(button=>button.setAttribute('aria-expanded',String(opened)));shade.hidden=!opened;if(opened)document.querySelector('.portal-sidebar a')?.focus();}));
+  shade?.addEventListener('click',close);document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();opener?.focus();}});
   document.querySelector('[data-theme-toggle]')?.addEventListener('click',e=>{const light=body.classList.toggle('terik');document.cookie=`produksi_terik=${light?'1':'0'}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol==='https:'?'; Secure':''}`;e.currentTarget.textContent=light?'☾':'☀';e.currentTarget.setAttribute('aria-label',light?'Aktifkan mode gelap':'Aktifkan mode terang');});
   // Native GET controls remain actual reads, usable without app action scripts.
   document.querySelectorAll('form[method=get] select').forEach(el=>el.addEventListener('change',()=>el.form.requestSubmit()));

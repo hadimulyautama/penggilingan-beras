@@ -50,7 +50,7 @@ def test_tidak_ada_penjumlahan_lintas_tahap_dan_saldo_negatif_tetap_terlihat():
 @pytest.mark.parametrize('path,active',[
     ('/pelanggan/','ringkasan'),('/pelanggan/ringkasan','ringkasan'),
     ('/pelanggan/jasa-saya','pekerjaan'),('/pelanggan/barang-saya','stok'),
-    ('/pelanggan/barang-keluar/5','stok'),('/pelanggan/retur/2','stok'),
+    ('/pelanggan/barang-keluar/5','pengambilan'),('/pelanggan/retur/2','stok'),
     ('/pelanggan/jasa/3/nota','laporan'),('/pelanggan/jasa/3/nota.pdf','laporan'),
     ('/pelanggan/riwayat-qc/gabah-basah','pekerjaan'),('/pelanggan/riwayat-giling/4','pekerjaan'),
     ('/pelanggan/serah-terima','laporan'),('/jasa/pelanggan/1','pekerjaan')])
@@ -58,8 +58,8 @@ def test_menu_aktif_mengikuti_konteks_pelanggan(path,active):
     assert active_menu(path)==active
 
 
-def test_hanya_empat_tujuan_utama_dan_tautan_baru_diizinkan():
-    assert [label for _,label,_ in MENU]==['Beranda','Jasa Saya','Barang Saya','Dokumen']
+def test_menu_barang_dan_riwayat_memiliki_tujuan_tersendiri():
+    assert [label for _,label,_ in MENU]==['Beranda','Barang masuk','Barang Saya','Jasa Saya','Riwayat proses','Pengambilan barang','Dokumen']
     assert portal_url('/jasa-saya')=='/pelanggan/jasa-saya'
     assert portal_url('/barang-saya')=='/pelanggan/barang-saya'
 
@@ -74,3 +74,15 @@ def test_kemajuan_asli_terpisah_dari_rendemen_dan_tugas_operator():
     assert len(p)==2 and p[0]['maju']==0
     assert p[1]['maju'] is None and p[1]['rendemen']==65
     assert all('aksi' not in r and 'tombol' not in r for r in p)
+
+
+def test_penerimaan_hanya_barang_diterima_bukan_antrean_atau_penolakan():
+    from app.web.portal.beranda import penerimaan_diterima
+    rows=[dict(jenis='Gabah basah',catatan=[dict(model='gabah',status='baru',berat=None),dict(model='gabah',status='ditolak',berat=100)]),
+          dict(jenis='PK',catatan=[dict(model='pk',status='baru',berat=0)]),
+          dict(jenis='PK',catatan=[dict(model='pk',status='diterima',berat=None)]),
+          dict(jenis='Gabah kering',status='Belum diterima',catatan=[])]
+    result=penerimaan_diterima(rows)
+    assert len(result)==2 and all(r['status']=='Sudah diterima' for r in result)
+    assert all(len(r['catatan'])==1 and r['catatan'][0]['berat'] is None for r in result)
+    assert len(rows[0]['catatan'])==2  # pembaca asal tidak dimutasi

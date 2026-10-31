@@ -68,3 +68,17 @@ def test_customer_cookies_are_secure_behind_railway_tls_termination(monkeypatch)
     assert not secure_cookie(request)
     monkeypatch.setenv('RAILWAY_ENVIRONMENT_ID','test-platform-marker')
     assert secure_cookie(request)
+
+
+def test_bahasa_pelanggan_tidak_menyunting_catatan_asli_atau_angka():
+    html='''<a class="riwayat-detail__back" href="/pekerjaan?tab=berjalan">← Kembali ke Pekerjaan</a>
+    <nav><a href="/riwayat-qc/pk-luar">QC</a></nav>
+    <section id="tindakan-proses"><h2>Tindakan saat ini</h2><p>Catat total PK yang sudah keluar.</p>
+    <details class="giling-pengelolaan"><summary>Pengelolaan proses</summary></details></section>
+    <p class="catatan-pelanggan">QC sesuai permintaan pelanggan: 1.250,5 kg</p>'''
+    s=BeautifulSoup(read_only(html,'/proses-aktif/giling/LOT-1'),'html.parser')
+    assert s.select_one('.riwayat-detail__back')['href']=='/pelanggan/jasa-saya'
+    assert s.nav.get_text()=='Pemeriksaan mutu'
+    assert s.h2.get_text()=='Status proses'
+    assert 'Catat total' not in s.get_text() and not s.select('.giling-pengelolaan')
+    assert s.select_one('.catatan-pelanggan').get_text()=='QC sesuai permintaan pelanggan: 1.250,5 kg'

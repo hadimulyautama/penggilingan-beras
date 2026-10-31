@@ -22,7 +22,7 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 
 .portal-login {height:auto;overflow:visible;overscroll-behavior-y:auto}.login-brand{display:flex;align-items:center;justify-content:space-between;gap:12px}.login-card .login-brand button{min-width:44px;min-height:44px;background:var(--pd-sheet);color:var(--pd-ink)}
 
-/* Pengalaman pelanggan: satu status utama, empat tujuan, rincian bertahap. */
+/* Pengalaman pelanggan: status utama, menu barang/proses, rincian bertahap. */
 .portal-customer .portal-sidebar{width:220px}
 .portal-customer .portal-workspace{margin-left:220px}
 .portal-customer .portal-sidebar .pintu__ikon{color:var(--pd-green);background:var(--pd-green-bg)}
@@ -77,6 +77,20 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 .pelanggan-pintasan a{display:inline-flex;align-items:center;min-height:44px;padding:9px 12px;border:1px solid var(--pd-line);border-radius:9px;color:var(--pd-ink);background:var(--pd-sheet);font-size:13px;text-decoration:none}
 .pelanggan-halaman :is([id]){scroll-margin-top:95px}
 .pelanggan-dokumen-aksi{display:flex;gap:18px;flex-wrap:wrap}
+.pelanggan-komoditas-item{border-top:1px solid var(--pd-line);padding:6px 0}
+.pelanggan-komoditas-item:first-child{border-top:0}
+.pelanggan-komoditas-item>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;cursor:pointer;list-style:none;min-height:64px}
+.pelanggan-komoditas-item>summary::-webkit-details-marker{display:none}
+.pelanggan-komoditas-item>summary:after{content:'+';color:var(--pd-green);font-size:22px}
+.pelanggan-komoditas-item[open]>summary:after{content:'−'}
+.pelanggan-komoditas-item>summary>span:first-child{flex:1;min-width:0}
+.pelanggan-komoditas-item>summary strong{display:block;font-size:17px}
+.pelanggan-komoditas-item>summary small{display:block;margin-top:4px;font-size:12px;color:var(--pd-muted)}
+.pelanggan-komoditas-item .pelanggan-berat{font-size:18px;max-width:48%;white-space:normal;text-align:right}
+.pelanggan-komoditas-rincian{padding:0 0 8px 12px;border-left:2px solid var(--pd-line);margin:0 0 14px}
+.pelanggan-batch{padding:15px 8px;border-top:1px solid var(--pd-line)}
+.pelanggan-batch:first-child{border-top:0}.pelanggan-asal{padding:12px 0;border-top:1px solid var(--pd-line)}
+.pelanggan-asal h4{margin:0;font-size:14px}.pelanggan-asal .pelanggan-fakta{margin:10px 0}
 .pelanggan-kemajuan{margin:16px 0}
 .pelanggan-kemajuan label{display:block;color:var(--pd-ink);font-size:13px;margin-bottom:8px}
 .pelanggan-kemajuan progress{display:block;width:100%;height:9px;appearance:none;border:0;border-radius:8px;background:var(--pd-soft);accent-color:var(--pd-green)}
@@ -90,14 +104,16 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
  .portal-customer .portal-sidebar{width:min(290px,88vw)}
  .portal-customer .portal-content.isi{padding:24px 18px calc(110px + env(safe-area-inset-bottom,0px))}
  .portal-bawah{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;position:fixed;bottom:0;left:0;right:0;z-index:30;padding:7px 8px calc(9px + env(safe-area-inset-bottom,0px));background:var(--pd-sheet);border-top:1px solid var(--pd-line)}
- .portal-bawah a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:56px;border-radius:9px;padding:7px 3px;color:var(--pd-muted);font-size:12px;text-decoration:none;text-align:center;line-height:1.35}
- .portal-bawah a[aria-current=page]{background:var(--pd-soft);color:var(--pd-green);font-weight:600}
+ .portal-bawah :is(a,button){display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:56px;border-radius:9px;padding:7px 3px;color:var(--pd-muted);font-size:12px;text-decoration:none;text-align:center;line-height:1.35}
+ .portal-bawah :is(a[aria-current=page],button[data-current=true]){background:var(--pd-soft);color:var(--pd-green);font-weight:600}
  .portal-bawah svg{width:20px;height:20px}
- .portal-bawah a:focus-visible{outline:3px solid var(--pd-blue);outline-offset:-3px}
+ .portal-bawah :is(a,button):focus-visible{outline:3px solid var(--pd-blue);outline-offset:-3px}
  .pelanggan-grid{grid-template-columns:minmax(0,1fr)}
  .pelanggan-status{padding:21px}
  .portal-customer .pelanggan-status h2{font-size:23px}
  .pelanggan-panel{padding:18px}
  .portal-customer .pelanggan-utama{display:flex;width:100%}
 }
-@media(max-width:360px){.portal-customer .portal-content.isi{padding-left:12px;padding-right:12px}.pelanggan-status,.pelanggan-panel{padding:16px}.pelanggan-berat{font-size:16px}.portal-bawah a{font-size:11px}.portal-topbar .portal-top-actions{gap:5px}}
+@media(max-width:360px){.portal-customer .portal-content.isi{padding-left:12px;padding-right:12px}.pelanggan-status,.pelanggan-panel{padding:16px}.pelanggan-berat{font-size:16px}.portal-bawah :is(a,button){font-size:11px}.portal-topbar .portal-top-actions{gap:5px}}
+
+.portal-bawah button{border:0;background:transparent;font:inherit;cursor:pointer}.portal-bawah .portal-menu-bawah{width:auto;min-width:0;font-size:12px}.portal-menu-bawah>span:first-child{font-size:22px;line-height:20px}
