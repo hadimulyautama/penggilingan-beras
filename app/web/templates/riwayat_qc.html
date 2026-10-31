@@ -28,7 +28,7 @@
             <span data-sel="hasil" aria-label="Rata-rata QC {{ row.ref }}">
               <small class="tabel-standar__sekunder">Rata-rata QC</small>
               {% if row.penilaian %}
-                {% for r in row.penilaian.rows %}<span class="tabel-standar__hasil"><b>{{ r.label }}</b> {{ r.hasil }} <small>({{ r.n }} pengukuran)</small></span>{% endfor %}
+                {% for r in row.penilaian.rows %}<span class="tabel-standar__hasil"><b>{{ r.label }}</b> <span style="{{ gaya_qc(r.label,r.hasil) }}">{{ r.hasil }}</span> <small>({{ r.n }} pengukuran)</small></span>{% endfor %}
                 <span class="tabel-standar__hasil"><b>Nilai kualitas</b> {% if row.penilaian.nilai is not none %}{{ '%.2f'|format(row.penilaian.nilai)|replace('.', ',') }} / 100 · kelas {{ row.penilaian.kelas }}{% else %}Belum dinilai{% endif %}</span>
               {% elif row.rata_gabah is defined %}
                 <span class="tabel-standar__hasil"><b>Kadar air</b> {{ '%.2f'|format(row.rata_gabah.air)|replace('.', ',') ~ '%' if row.rata_gabah.air is not none else 'Belum dinilai' }} <small>({{ row.rata_gabah.n_air }} pengukuran)</small></span>

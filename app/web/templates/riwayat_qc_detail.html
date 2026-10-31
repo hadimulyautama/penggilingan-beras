@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/qc-detail.css?v={{ VERSI }}&qc=3">
 {% macro waktu(r) %}{{ r.waktu|jam('%d/%m/%Y · %H:%M') if r.waktu else 'Waktu tidak tercatat' }}{% endmacro %}
-{% macro hasil_asli(r) %}<dl class="qc-fields">{% for label, value in r.detail %}{% if label=='Kadar air' and r.bacaan_gabah %}{% for bacaan in r.bacaan_gabah %}<div><dt>Kadar air {{ loop.index }}</dt><dd>{{ (bacaan|string|replace('.', ',')) ~ '%' if bacaan is not none else 'Belum diketahui' }}</dd></div>{% endfor %}{% else %}<div><dt>{{ label }}</dt><dd>{{ value|replace('.', ',') if label in ('Kadar air','Broken','Susut','Penyusutan') else value }}</dd></div>{% endif %}{% endfor %}</dl>{% endmacro %}
+{% macro hasil_asli(r) %}<dl class="qc-fields">{% for label, value in r.detail %}{% if label=='Kadar air' and r.bacaan_gabah %}{% for bacaan in r.bacaan_gabah %}<div><dt>Kadar air {{ loop.index }}</dt><dd>{{ (bacaan|string|replace('.', ',')) ~ '%' if bacaan is not none else 'Belum diketahui' }}</dd></div>{% endfor %}{% else %}<div><dt>{{ label }}</dt><dd style="{{ gaya_qc(label,value) }}">{{ value|replace('.', ',') if label in ('Kadar air','Broken','Susut','Penyusutan') else value }}</dd></div>{% endif %}{% endfor %}</dl>{% endmacro %}
 <div class="riwayat-detail qc-detail">
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ judul if kembali == '/riwayat-qc/' ~ jenis else 'halaman asal' }}</a>
   <header class="riwayat-detail__card qc-hero">
@@ -31,7 +31,7 @@
       {% if jenis=='gabah-basah' %}<p>Total sak berlamur: <strong>{{ qc_detail.lamur ~ ' sak' if qc_detail.lamur is not none else 'Belum tercatat' }}</strong></p>{% endif %}
     {% endif %}</section>
     <section class="riwayat-detail__card"><h2>{{ 'Hasil rata-rata tiap komponen' if penilaian else 'Pemeriksaan terakhir' }}</h2>
-      {% if penilaian %}<div class="qc-components">{% for r in penilaian.rows %}<div><span>{{ r.label }}</span><strong>{{ r.hasil }}</strong><small>{{ r.n }} pengukuran · {{ 'skor ' ~ r.skor if r.skor is not none else 'belum ikut perhitungan' }}</small></div>{% endfor %}</div>{% else %}{{ hasil_asli(k.rounds[-1]) }}{% endif %}
+      {% if penilaian %}<div class="qc-components">{% for r in penilaian.rows %}<div><span>{{ r.label }}</span><strong style="{{ gaya_qc(r.label,r.hasil) }}">{{ r.hasil }}</strong><small>{{ r.n }} pengukuran · {{ 'skor ' ~ r.skor if r.skor is not none else 'belum ikut perhitungan' }}</small></div>{% endfor %}</div>{% else %}{{ hasil_asli(k.rounds[-1]) }}{% endif %}
     </section></div>
     <div class="qc-actions qc-summary-actions"><a class="btn qc-primary" href="{{ qc_halaman(tab='putaran') }}">Lihat seluruh putaran</a><a class="btn" href="{{ qc_halaman(tab='perhitungan') }}">Lihat cara hitung</a></div>
     <section class="riwayat-detail__card"><h2>Penelusuran pemeriksaan</h2><dl class="qc-fields"><div><dt>Putaran terakhir</dt><dd>{{ 'QC ' ~ k.rounds[-1].nomor if k.rounds[-1].nomor else 'Catatan lama' }}</dd></div><div><dt>Waktu</dt><dd>{{ waktu(k.rounds[-1]) }}</dd></div><div><dt>Pencatat</dt><dd>{% for l,v in k.rounds[-1].detail if l=='Pencatat' %}{{ v }}{% else %}Tidak tercatat{% endfor %}</dd></div></dl><a href="{{ qc_halaman(tab='asal') }}">Buka asal bahan & catatan →</a></section>
@@ -39,7 +39,7 @@
   {# Macro bersama tetap utuh: angka, rumus dan pedoman sama dengan Stok. #}
   <section id="qc-panel-perhitungan" class="riwayat-detail__card" aria-labelledby="qc-tab-perhitungan"{% if qc_tab!='perhitungan' %} hidden{% endif %}>
     <h2 id="perhitungan-kualitas-pk">{{ 'Perhitungan nilai gabungan' if penilaian else 'Perhitungan kadar air gabah' }}</h2>
-    {% if penilaian %}{{ penilaian_pk(penilaian) }}{% else %}
+    {% if penilaian %}{{ penilaian_pk(penilaian)|qc_berwarna }}{% else %}
     <p>Rata-rata kadar air memakai seluruh pembacaan yang sah: dua pembacaan per pemeriksaan, bukan hanya pemeriksaan terakhir.</p>
     <div class="qc-notice">Jumlah seluruh pembacaan kadar air ÷ jumlah pembacaan yang tercatat.</div>
     <dl class="qc-fields"><div><dt>Jumlah pemeriksaan</dt><dd>{{ k.rounds|length }}</dd></div><div><dt>Jumlah pembacaan</dt><dd>{{ k.rounds|length * 2 }}</dd></div><div><dt>Rata-rata tersimpan</dt><dd>{{ '%.2f'|format(qc_detail.air)|replace('.', ',') ~ '%' if qc_detail.air is not none else 'Belum diketahui' }}</dd></div>{% if jenis=='gabah-basah' %}<div><dt>Total sak berlamur</dt><dd>{{ qc_detail.lamur ~ ' sak' if qc_detail.lamur is not none else 'Belum tercatat' }}</dd></div>{% endif %}</dl>
@@ -59,7 +59,7 @@
       {% for putaran in k.rounds %}<section class="qc-history-round" data-posisi="{{ loop.index }}"{% if loop.index!=qc_nomor %} hidden{% endif %}>
         <div class="qc-history-round__head"><strong>{{ 'QC ' ~ putaran.nomor if putaran.nomor else 'Hasil QC terbaru' }}</strong><time>{{ waktu(putaran) }}</time></div>
         {{ hasil_asli(putaran) }}
-        {% if putaran.penilaian %}<details class="penilaian-pk__putaran"><summary>Nilai kualitas putaran {{ putaran.nomor }} · {% if putaran.penilaian.nilai is not none %}{{ '%.2f'|format(putaran.penilaian.nilai)|replace('.', ',') }} / 100 · {{ putaran.penilaian.kelas }}{% else %}Belum dapat dinilai{% endif %}</summary>{{ penilaian_pk(putaran.penilaian, tunggal=true) }}</details>{% endif %}
+        {% if putaran.penilaian %}<details class="penilaian-pk__putaran"><summary>Nilai kualitas putaran {{ putaran.nomor }} · {% if putaran.penilaian.nilai is not none %}{{ '%.2f'|format(putaran.penilaian.nilai)|replace('.', ',') }} / 100 · {{ putaran.penilaian.kelas }}{% else %}Belum dapat dinilai{% endif %}</summary>{{ penilaian_pk(putaran.penilaian, tunggal=true)|qc_berwarna }}</details>{% endif %}
       </section>{% endfor %}
     </section>
   </div>

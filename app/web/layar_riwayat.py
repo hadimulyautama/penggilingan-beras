@@ -8,6 +8,7 @@ sendiri tetapi berbagi gerbang (`_is_g1_operator`) dan bentuk kursor
 (`?sebelum=<id>`, pola sama `layar_sosoh.py`).
 """
 from __future__ import annotations
+from app.web.qc_warna import NilaiQC, paragraf, warnai_tabel
 
 from app.web.portal.scope import is_customer_read
 
@@ -146,190 +147,9 @@ async def koreksi_riwayat_giling(process_id: int, request: Request,
 
 
 def _pdf_laporan_giling(data: dict) -> bytes:
-    """Susun laporan lengkap satu proses penggilingan sebagai PDF."""
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import mm
-    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                    TableStyle, KeepTogether)
-
-    navy, teal = colors.HexColor("#173042"), colors.HexColor("#0B6D83")
-    muted, pale, border = (colors.HexColor("#52636D"),
-                           colors.HexColor("#EAF2F5"), colors.HexColor("#CCD9DE"))
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="GilingTitle", parent=styles["Title"],
-                              fontName="Helvetica-Bold", fontSize=18, leading=22,
-                              textColor=navy, alignment=TA_LEFT, spaceAfter=3))
-    styles.add(ParagraphStyle(name="GilingSub", parent=styles["BodyText"],
-                              fontSize=8.5, leading=12, textColor=muted,
-                              spaceAfter=10))
-    styles.add(ParagraphStyle(name="GilingSection", parent=styles["Heading2"],
-                              fontName="Helvetica-Bold", fontSize=11, leading=14,
-                              textColor=teal, spaceBefore=9, spaceAfter=5))
-    styles.add(ParagraphStyle(name="GilingCell", parent=styles["BodyText"],
-                              fontSize=7.5, leading=9.5, wordWrap=None))
-    styles.add(ParagraphStyle(name="GilingHead", parent=styles["GilingCell"],
-                              fontName="Helvetica-Bold", textColor=colors.white))
-    styles.add(ParagraphStyle(name="GilingNote", parent=styles["BodyText"],
-                              fontSize=8, leading=10, textColor=muted))
-
-    def p(value, style="GilingCell"):
-        return Paragraph(escape(teks_angka(value if value not in (None, "") else "—")), styles[style])
-
-    def grid(rows, widths):
-        table = Table([[p(cell, "GilingHead" if i == 0 else "GilingCell")
-                        for cell in row] for i, row in enumerate(rows)],
-                      colWidths=widths, repeatRows=1, hAlign="LEFT")
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), navy),
-            ("GRID", (0, 0), (-1, -1), .4, border),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 5),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, pale]),
-        ]))
-        return table
-
-    def stamp(value):
-        if value is None:
-            return "—"
-        if value.tzinfo is not None:
-            value = value.astimezone(ZoneInfo(settings.app_timezone))
-        return value.strftime("%d/%m/%Y %H:%M") + " WIB"
-
-    def kg(value):
-        return angka(value) + ' kg' if value is not None else 'Belum dicatat'
-
-    def duration(start, end):
-        return durasi_teks((end-start).total_seconds()) if start is not None and end is not None else 'Belum tercatat'
-
-    yield_text = (f"{data['yield']:.1f}%".replace(".", ",")
-                  if data["yield"] is not None else "Belum dapat dihitung")
-    story = [Paragraph("Laporan Penggilingan Gabah", styles["GilingTitle"]),
-             Paragraph(f"{escape(data['kode'])} · Dicetak {stamp(datetime.now(ZoneInfo(settings.app_timezone)))}",
-                       styles["GilingSub"])]
-    story.append(grid([
-        ["Ringkasan proses", "Nilai"],
-        ["Pemilik bahan", data["owner"]],
-        ["Kondisi gabah", data["class"]],
-        ["Komposisi bahan", data["composition"]],
-        ["Berat bahan masuk", kg(data["input_kg"])],
-        ["Hasil PK · rendemen", f"{kg(data['output_kg'])} · {yield_text}"],
-        ["Rata-rata QC", data["qc_summary"]],
-        ["Transfer ke Gudang 2", kg(data["transferred_kg"])],
-        ["Sisa PK tersedia", kg(data["available_kg"])],
-    ], [70 * mm, 100 * mm]))
-
-    bagian_silo(story, data.get('pemakaian_silo'), p, grid, 'GilingSection')
-    story += [Paragraph("Bahan masuk per silo", styles["GilingSection"]),
-              Paragraph("Berat saat proses dimulai, berat yang dipakai, dan sisa yang tercatat saat silo dibebaskan.", styles["GilingNote"]),
-              Spacer(1, 4)]
-    rows = [["Silo", "Sumber", "Berat awal", "Dipakai", "Sisa"]]
-    rows += [[x["silo"], x["source"], kg(x["weight"]), kg(x["used"]), kg(x["remaining"])]
-             for x in data["sources"]]
-    if len(rows) == 1:
-        rows.append(["Tidak tercatat", "—", "—", "—", "—"])
-    story.append(grid(rows, [30 * mm, 50 * mm, 31 * mm, 31 * mm, 26 * mm]))
-
-    story += [Paragraph("Asal bahan baku", styles["GilingSection"]),
-              Paragraph("Batch gabah asal beserta supplier atau pemilik, nomor polisi, dan catatan QC saat penerimaan.", styles["GilingNote"]),
-              Spacer(1, 4)]
-    rows = [["Batch", "Supplier / pemilik", "No. polisi", "Kondisi", "Berat batch"]]
-    rows += [[x["code"], x["origin"], x["plate"], x["condition"], kg(x["weight"])]
-             for x in data["batches"]]
-    if len(rows) == 1:
-        rows.append(["Tidak tercatat", "—", "—", "—", "—"])
-    story.append(grid(rows, [34 * mm, 48 * mm, 30 * mm, 26 * mm, 30 * mm]))
-
-    story += [Paragraph("Riwayat pengeringan bahan", styles["GilingSection"]),
-              Paragraph("Hanya batch yang melewati pengeringan yang tercantum di sini; batch kering langsung tetap terlihat pada asal bahan baku.", styles["GilingNote"]),
-              Spacer(1, 4)]
-    rows = [["Lot pengeringan", "Batch asal", "Mulai–selesai pengeringan", "Durasi", "Mulai–selesai pendinginan", "Durasi"]]
-    rows += [[x["code"], x["batches"],
-              f"{stamp(x['dry_start'])} – {stamp(x['dry_end'])}", duration(x["dry_start"], x["dry_end"]),
-              f"{stamp(x['cool_start'])} – {stamp(x['cool_end'])}", duration(x["cool_start"], x["cool_end"])]
-             for x in data["drying_lots"]]
-    if len(rows) == 1:
-        rows.append(["Tidak ada bahan melalui pengeringan", "—", "—", "—", "—", "—"])
-    story.append(grid(rows, [34 * mm, 25 * mm, 34 * mm, 20 * mm, 34 * mm, 19 * mm]))
-
-    story += [Paragraph("Pemantauan kadar air saat pengeringan", styles["GilingSection"]), Spacer(1, 4)]
-    rows = [["Lot", "Waktu", "Pembacaan sampel", "Rata-rata tes", "Indikator mesin"]]
-    rows += [[x["lot"], stamp(x["time"]), x["samples"], x["average"], x["machine"]]
-             for x in data["drying_moisture"]]
-    if len(rows) == 1:
-        rows.append(["Tidak ada catatan pengeringan", "—", "—", "—", "—"])
-    story.append(grid(rows, [30 * mm, 38 * mm, 48 * mm, 27 * mm, 25 * mm]))
-
-    rows = [["Batch / QC", "Waktu", "Kadar air", "Lamur", "Biji hijau", "Densiti"]]
-    rows += [[x["batch"], stamp(x["time"]), x["moisture"], x["lamur"], x["green"], x["density"]]
-             for x in data["raw_qc"]]
-    if len(rows) == 1:
-        rows.append(["Tidak ada catatan QC", "—", "—", "—", "—", "—"])
-    story.append(KeepTogether([
-        Paragraph("QC bahan baku", styles["GilingSection"]),
-        Paragraph("Setiap pencatatan penerimaan ditampilkan utuh, per batch.", styles["GilingNote"]),
-        Spacer(1, 4),
-        grid(rows, [32 * mm, 26 * mm, 29 * mm, 24 * mm, 34 * mm, 23 * mm]),
-    ]))
-
-    rows = [["Waktu", "Kadar air PK", "Broken", "Susut", "Kondisi"]]
-    rows += [[stamp(x["time"]), x["moisture"], x["broken"], x["loss"], x["condition"]]
-             for x in data["qc"]]
-    if len(rows) == 1:
-        rows.append(["Belum ada catatan QC", "—", "—", "—", "—"])
-    story.append(KeepTogether([
-        Paragraph("QC hasil penggilingan", styles["GilingSection"]),
-        Spacer(1, 4),
-        grid(rows, [45 * mm, 33 * mm, 28 * mm, 28 * mm, 34 * mm]),
-    ]))
-
-    story += [Paragraph("Catatan hasil PK selama proses", styles["GilingSection"]), Spacer(1, 4)]
-    rows = [["Waktu catat", "Berat PK kumulatif"]]
-    rows += [[stamp(x["time"]), kg(x["weight"])] for x in data["progress"]]
-    if len(rows) == 1:
-        rows.append(["Belum ada catatan hasil", "—"])
-    story.append(grid(rows, [85 * mm, 83 * mm]))
-
-    story += [Paragraph("Riwayat transfer PK", styles["GilingSection"]), Spacer(1, 4)]
-    rows = [["Kode transfer", "Waktu", "Tujuan", "Berat"]]
-    rows += [[x["code"], stamp(x["time"]), x["destination"], kg(x["weight"])]
-             for x in data["transfers"]]
-    if len(rows) == 1:
-        rows.append(["Belum ada transfer", "—", "—", "—"])
-    story.append(grid(rows, [38 * mm, 48 * mm, 50 * mm, 32 * mm]))
-
-    story += [Paragraph("Waktu proses", styles["GilingSection"]),
-              grid([["Mulai", "Selesai", "Durasi"],
-                    [stamp(data["start"]), stamp(data["end"]), duration(data["start"], data["end"])]],
-                   [56 * mm, 56 * mm, 56 * mm])]
-    if data["verified_at"]:
-        story.append(Paragraph(
-            f"Berat hasil PK diverifikasi {stamp(data['verified_at'])}: {escape(kg(data['verified_weight']))}.",
-            styles["GilingNote"]))
-
-    bagian_jeda(story, data.get("jeda"), p, grid, "GilingSection")
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18 * mm,
-                            rightMargin=18 * mm, topMargin=16 * mm,
-                            bottomMargin=20 * mm, title=f"Laporan Penggilingan {data['kode']}")
-
-    def footer(canvas, document):
-        canvas.saveState()
-        canvas.setStrokeColor(border)
-        canvas.line(18 * mm, 15 * mm, A4[0] - 18 * mm, 15 * mm)
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(muted)
-        canvas.drawString(18 * mm, 10 * mm, f"Laporan {data['kode']}")
-        canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"Halaman {document.page}")
-        canvas.restoreState()
-
-    doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    return buffer.getvalue()
+    """Jalur lama memakai penyaji laporan; pembacaan/otorisasi tetap sama."""
+    from app.web.pdf_giling import buat_pdf
+    return buat_pdf(data)
 
 
 async def _ambil_data_laporan_giling(process_id: int) -> dict:
@@ -338,7 +158,7 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
                             MillingProcessSource, MillingProcessVerification,
                             MillingProgressLog, MillingQcLog, PurchaseBatch,
                             PurchaseBatchQc, PurchaseBatchQcSample, Silo,
-                            SiloStorage, Supplier)
+                            SiloStorage, Supplier, User, Jasa)
     from app.penggilingan.gudang1.services.milling import (
         hitung_rendemen, pk_breakdown_banyak, pk_jenis_banyak, qc_rata_banyak)
     from app.services.jasa import nama_pemilik_banyak
@@ -459,41 +279,50 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
                     "weight": b.berat_total_kg}
                    for b, supplier in batch_rows]
 
-        raw_qc = []
-        if batch_ids:
-            rows = (await db.execute(
-                select(PurchaseBatch.kode_batch, PurchaseBatch.kondisi_gabah,
-                       PurchaseBatchQcSample)
-                .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
-                .join(PurchaseBatchQcSample,
-                      PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
-                .where(PurchaseBatch.id.in_(batch_ids))
-                .order_by(PurchaseBatch.id, PurchaseBatchQcSample.nomor_sampel)
-            )).all()
-            for code, condition, sample in rows:
-                raw_qc.append({
-                    "batch": f"{code} · QC {sample.nomor_sampel}",
-                    "time": sample.created_at,
-                    "moisture": f"{float(sample.kadar_air_1):g}% / {float(sample.kadar_air_2):g}%",
-                    "lamur": (f"{'Ya' if sample.lamur else 'Tidak'} · {sample.jumlah_sak_lamur or 0} sak"
-                              if condition == "basah" else "—"),
-                    "green": sample.biji_hijau.replace("_", " "),
-                    "density": sample.densiti.capitalize(),
-                })
-
-        qc_logs = (await db.execute(select(MillingQcLog)
-                                    .where(MillingQcLog.milling_process_id == process_id)
-                                    .order_by(MillingQcLog.waktu, MillingQcLog.id))).scalars().all()
-        qc = [{"time": row.waktu,
-               "moisture": f"{float(row.kadar_air):g}%" if row.kadar_air is not None else "—",
-               "broken": f"{float(row.broken_persen):g}%" if row.broken_persen is not None else "—",
-               "loss": f"{float(row.susut_persen):g}%" if row.susut_persen is not None else "—",
-               "condition": (row.kondisi or "—").upper()} for row in qc_logs]
+        # Seluruh sampel dan pencatat dimuat borongan; tanpa batas tampilan.
+        qc_headers = {q.purchase_batch_id:q for q in (await db.scalars(
+            select(PurchaseBatchQc).where(PurchaseBatchQc.purchase_batch_id.in_(batch_ids)))).all()} if batch_ids else {}
+        samples = (await db.execute(select(PurchaseBatchQcSample, User.nama)
+            .outerjoin(User,User.id==PurchaseBatchQcSample.input_by)
+            .where(PurchaseBatchQcSample.purchase_batch_qc_id.in_([q.id for q in qc_headers.values()]))
+            .order_by(PurchaseBatchQcSample.nomor_sampel,PurchaseBatchQcSample.id))).all() if qc_headers else []
+        from app.web.pdf_giling import rincian_gabah
+        header_names=dict((await db.execute(select(User.id,User.nama).where(User.id.in_({q.input_by for q in qc_headers.values()})))).all()) if qc_headers else {}
+        raw_qc, raw_summary = rincian_gabah(batch_rows, qc_headers, samples, header_names)
+        qc_named = (await db.execute(select(MillingQcLog,User.nama)
+            .outerjoin(User,User.id==MillingQcLog.input_by)
+            .where(MillingQcLog.milling_process_id==process_id)
+            .order_by(MillingQcLog.waktu,MillingQcLog.id))).all()
+        qc_logs = [q for q,_ in qc_named]
+        from app.services.mutu_pk import penilaian_dari_log, LABEL_KUALITATIF
+        def pct(v):
+            return f"{float(v):g}%".replace('.',',') if v is not None else 'Belum dinilai'
+        qc = [dict(number=i,time=q.waktu,actor=nama or 'Tidak tercatat',
+            moisture=pct(q.kadar_air),broken=pct(q.broken_persen),loss=pct(q.susut_persen),
+            yellow=LABEL_KUALITATIF.get(q.butir_kuning,q.butir_kuning) or 'Belum dinilai',
+            paddy=LABEL_KUALITATIF.get(q.gabah,q.gabah) or 'Belum dinilai',
+            chaff=LABEL_KUALITATIF.get(q.merang,q.merang) or 'Belum dinilai',
+            note=q.catatan_lab,condition=(q.kondisi or 'Belum tercatat').upper())
+            for i,(q,nama) in enumerate(qc_named,1)]
+        from app.services.setelan import fitur_mutu
+        qc_rating = penilaian_dari_log(qc_logs)
+        show_quality = await fitur_mutu(db)
+        # Sopir berasal dari hubungan tiket eksplisit, bukan pencocokan plat.
+        from sqlalchemy import text
+        tids=list({b.timbangan_transaksi_id for b,_ in batch_rows if b.timbangan_transaksi_id})
+        drivers={}
+        if tids and await db.scalar(text("SELECT to_regclass('timbangan_transaksi')")):
+            drivers=dict((await db.execute(text('SELECT id,nama_sopir FROM timbangan_transaksi WHERE id=ANY(:ids)'),{'ids':tids})).all())
+        for item,(batch,_) in zip(batches,batch_rows):
+            item['driver']=drivers.get(batch.timbangan_transaksi_id) or 'Tidak tercatat'
+        jasa_kode=await db.scalar(select(Jasa.kode).where(Jasa.id==process.jasa_id)) if process.jasa_id else None
         progress_logs = (await db.execute(select(MillingProgressLog)
                                           .where(MillingProgressLog.milling_process_id == process_id)
                                           .order_by(MillingProgressLog.waktu_update, MillingProgressLog.id))).scalars().all()
-        progress = [{"time": row.waktu_update, "weight": row.berat_kumulatif_kg}
-                    for row in progress_logs]
+        actor_ids={r.input_by for r in progress_logs}
+        actors=dict((await db.execute(select(User.id,User.nama).where(User.id.in_(actor_ids)))).all()) if actor_ids else {}
+        progress = [{"time": row.waktu_update, "weight": row.berat_kumulatif_kg,
+                     "actor":actors.get(row.input_by,'Tidak tercatat')} for row in progress_logs]
         transfer_rows = (await db.execute(
             select(InternalTransfer, Silo.nama_silo)
             .outerjoin(Silo, Silo.id == InternalTransfer.silo_id)
@@ -523,8 +352,13 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
         pemakaian_silo = (await sumber_giling_banyak(db, [process.id])).get(process.id, [])
         return {
             "pemakaian_silo": pemakaian_silo,
+            "status": process.status, "jasa": jasa_kode,
+            "label_owner": "Pemilik barang" if process.jasa_id else "Asal / supplier",
+            "raw_summary":raw_summary, "qc_rating":qc_rating, "show_quality":show_quality,
+            "verification_status":verification.status_verifikasi if verification else None,
+            "verification_actor":await db.scalar(select(User.nama).where(User.id==verification.verified_by)) if verification and verification.verified_by else None,
             "kode": process.kode_proses,
-            "owner": owner_names.get(process.jasa_id, "Tidak tercatat") if process.jasa_id else "Pabrik",
+            "owner": owner_names.get(process.jasa_id, "Tidak tercatat") if process.jasa_id else " · ".join(dict.fromkeys(b["origin"] or "Tidak tercatat" for b in batches)) or "Tidak tercatat",
             "class": (condition or "Tidak tercatat").upper(),
             "composition": composition,
             "input_kg": process.berat_gabah_masuk_kg,
@@ -555,12 +389,13 @@ async def unduh_laporan_giling(process_id: int, unduh: int = 0,
     from app.web.api import _is_g1_operator
     if not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Laporan Penggilingan hanya untuk Admin ke atas dan operator Gudang 1.")
-    return await laporan_giling_pdf(process_id, unduh)
+    return await laporan_giling_pdf(process_id, unduh, pembuat=akun.user.nama)
 
 
-async def laporan_giling_pdf(process_id: int, unduh: int = 0):
+async def laporan_giling_pdf(process_id: int, unduh: int = 0, *, pembuat: str | None = None):
     """Shared PDF response; caller authorizes the process before invoking it."""
     data = await _ambil_data_laporan_giling(process_id)
+    data["pembuat"] = pembuat or "PadiFlow"
     pdf = _pdf_laporan_giling(data)
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'{"attachment" if unduh else "inline"}; filename="laporan-penggilingan-{data["kode"]}.pdf"'})
@@ -683,7 +518,7 @@ def _pdf_pengeringan(data: dict) -> bytes:
                               fontSize=8, leading=10, textColor=muted))
 
     def para(value, style="ReportCell"):
-        return Paragraph(escape(teks_angka(value if value not in (None, "") else "—")), styles[style])
+        return paragraf(value if value not in (None, "") else "—", styles[style], teks_angka)
 
     def grid(rows, widths):
         table = Table([[para(cell, "ReportHead" if i == 0 else "ReportCell")
@@ -701,7 +536,7 @@ def _pdf_pengeringan(data: dict) -> bytes:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, pale]),
         ]))
-        return table
+        return warnai_tabel(table)
 
     def stamp(value):
         if value is None:
@@ -738,7 +573,7 @@ def _pdf_pengeringan(data: dict) -> bytes:
               Paragraph("Nilai asli setiap pencatatan ditampilkan; kadar air tidak dirata-ratakan pada riwayat ini.", styles["ReportNote"]),
               Spacer(1, 4)]
     rows = [["Batch / QC", "Waktu", "Kadar air", "Lamur", "Biji hijau", "Densiti"]]
-    rows += [[x["batch"], stamp(x["time"]), x["moisture"], x["lamur"], x["green"], x["density"]]
+    rows += [[x["batch"], stamp(x["time"]), x["moisture"], NilaiQC("Lamur",x["lamur"]), NilaiQC("Biji hijau",x["green"]), NilaiQC("Densiti",x["density"])]
              for x in data["qc"]]
     if len(rows) == 1:
         rows.append(["Tidak ada catatan QC", "—", "—", "—", "—", "—"])

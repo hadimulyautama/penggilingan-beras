@@ -15,6 +15,8 @@ from app.database import berzona
 from app.web.pdf_dokumen import PenyajiDokumen
 from app.web.identitas_dokumen import NAMA_PERUSAHAAN
 
+from app.web.qc_warna import NilaiQC, paragraf, warnai_tabel
+
 JUDUL='Laporan Penerimaan Barang'
 
 
@@ -121,8 +123,7 @@ class Laporan(PenyajiDokumen):
 
     def p(self,value,style=None):
         # Label/data tidak ditafsirkan sebagai markup, termasuk catatan lab.
-        teks=str(value).replace('\u2011','-').replace('–','-').replace('—','-')
-        return Paragraph(escape(teks).replace('\n','<br/>'),style or self.normal)
+        return paragraf(value,style or self.normal,lambda t: t.replace("\u2011","-").replace("–","-").replace("—","-"))
 
     def fakta(self,label,value,style=None):
         return Paragraph('<b>'+escape(label)+':</b> '+escape(str(value)).replace('\n','<br/>'),style or self.normal)
@@ -148,7 +149,7 @@ class Laporan(PenyajiDokumen):
             style += [('BACKGROUND',(0,-1),(-1,-1),self.pale),('LINEABOVE',(0,-1),(-1,-1),.6,self.green)]
         style += [('SPAN',a,b) for a,b in spans]
         t.setStyle(TableStyle(style))
-        return t
+        return warnai_tabel(t)
 
     def kop(self,c,doc):
         c.saveState();w,h=A4;left=14*mm
@@ -193,7 +194,7 @@ class Laporan(PenyajiDokumen):
                 super().save()
         out=BytesIO()
         doc=BaseDocTemplate(out,pagesize=A4,leftMargin=14*mm,rightMargin=14*mm,
-            topMargin=37*mm,bottomMargin=17*mm,title=JUDUL,author=self.d['pembuat'])
+            topMargin=37*mm,bottomMargin=17*mm,title=getattr(self,'judul',JUDUL),author=self.d['pembuat'])
         frame=Frame(doc.leftMargin,doc.bottomMargin,doc.width,doc.height,
             leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)
         doc.addPageTemplates(PageTemplate(id='penerimaan',frames=[frame],onPage=self.kop))
@@ -320,7 +321,7 @@ def qc_ke_tabel(story,v,g):
         fields=[]
         for x in rounds:
             story.append(p('Catatan lama | '+waktu(x['waktu'])+' | '+x['petugas'],v.small))
-            fields.extend([label,value] for label,value in x['hasil'])
+            fields.extend([label,NilaiQC(label,value)] for label,value in x['hasil'])
         fields.append(['Rata-rata seluruh putaran','Rincian pengukuran asli tidak tersedia; nilai tersimpan di atas dipertahankan.'])
         story.append(v.tabel([g['kode']+' - parameter','Hasil historis'],fields,[.4,.6],rata=True))
         story += [p('Data QC historis tanpa rincian putaran; pembacaan, pencatat, atau waktu yang tidak tersimpan tidak direka.',v.small),Spacer(1,7)]
@@ -332,16 +333,16 @@ def qc_ke_tabel(story,v,g):
     for x in rounds:
         name=('Catatan lama' if x.get('asal_lama') or x['nomor'] is None else str(x['nomor']))+' / '+waktu(x['waktu'],same_day)
         if len(petugas)>1:name+='\n'+x['petugas']
-        fields=dict(x['hasil']);rows.append([name]+[fields.get(k,'Belum tercatat') for k in labels])
+        fields=dict(x['hasil']);rows.append([name]+[NilaiQC(k,fields.get(k,'Belum tercatat')) if k in ('Butir kuning','Gabah','Merang','Biji hijau','Densiti','Lamur') else fields.get(k,'Belum tercatat') for k in labels])
     spans=[]
     if g['rata']:
         if pk:
-            rows.append(['Rata-rata']+[x['hasil'] for x in g['rata']['rows']])
+            rows.append(['Rata-rata']+[NilaiQC(x['label'],x['hasil']) if x['label'] in ('Butir kuning','Gabah','Merang') else x['hasil'] for x in g['rata']['rows']])
         else:
             r=g['rata']
             rows.append(['Rata-rata',(angka(r['air'])+'%' if r['air'] is not None else 'Belum dinilai')+'\n'+str(r['n_air'])+' pembacaan','',
-                         'Terakhir: '+r['hijau'],'Terakhir: '+r['densiti']]+
-                         ([('Pernah lamur' if r['lamur'] else 'Tidak lamur')+' / '+str(r['sak'])+' sak' if r['lamur'] is not None and r['sak'] is not None else 'Belum tercatat'] if basah else []))
+                         NilaiQC('Biji hijau',r['hijau'],'Terakhir: '+r['hijau']),NilaiQC('Densiti',r['densiti'],'Terakhir: '+r['densiti'])]+
+                         ([NilaiQC('Lamur',r['lamur'],('Pernah lamur' if r['lamur'] else 'Tidak lamur')+' / '+str(r['sak'])+' sak' if r['lamur'] is not None and r['sak'] is not None else 'Belum tercatat')] if basah else []))
             spans=[((1,-1),(2,-1))]
     # Identitas batch juga diulang bersama kepala tabel pada halaman lanjutan.
     headers[0]=g['kode']+'\n'+headers[0]

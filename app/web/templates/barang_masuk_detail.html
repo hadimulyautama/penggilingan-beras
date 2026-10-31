@@ -9,7 +9,7 @@
 {% macro label_tiket(v) -%}{{ {'DUA_KALI':'Dua kali','SEKALI':'Sekali','PARTAI':'Partai kecil','MASUK':'Masuk','KELUAR':'Keluar','RETUR_MASUK':'Retur masuk','TERBUKA':'Terbuka','SELESAI':'Selesai','DITUTUP_PAKSA':'Ditutup paksa','AKTIF':'Aktif','DIBATALKAN':'Dibatalkan','BATAL':'Batal'}.get(v,v) if v is not none and v != '' else 'Belum tercatat' }}{%- endmacro %}
 {% macro pemeriksaan(q) -%}
 <div class="terima-qc__meta"><strong>{{ 'Pemeriksaan ' ~ q.nomor if q.nomor else 'Catatan lama' }}</strong><span>{{ q.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu tidak tercatat' }} · {{ q.petugas }}</span></div>
-<table class="terima-nilai"><thead><tr><th scope="col">Parameter</th><th scope="col">Hasil QC</th></tr></thead><tbody>{% for label,nilai in q.hasil %}<tr><th scope="row">{{ label }}</th><td>{{ nilai }}</td></tr>{% endfor %}</tbody></table>
+<table class="terima-nilai"><thead><tr><th scope="col">Parameter</th><th scope="col">Hasil QC</th></tr></thead><tbody>{% for label,nilai in q.hasil %}<tr><th scope="row">{{ label }}</th><td style="{{ gaya_qc(label,nilai) }}">{{ nilai }}</td></tr>{% endfor %}</tbody></table>
 {%- endmacro %}
 
 {% set diterima = catatan|rejectattr('status','equalto','ditolak')|list %}

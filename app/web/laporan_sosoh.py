@@ -1,5 +1,6 @@
 """Perakitan data dan PDF laporan satu penyosohan yang sudah ditutup."""
 from __future__ import annotations
+from app.web.qc_warna import NilaiQC, GabunganQC, paragraf, warnai_tabel
 
 from datetime import datetime
 from html import escape
@@ -413,7 +414,7 @@ def buat_pdf(data: dict) -> bytes:
         fontSize=7.7, leading=10, textColor=muted))
 
     def p(value, style="SosohCell"):
-        return Paragraph(escape(teks_angka(value if value not in (None, "") else "—")), styles[style])
+        return paragraf(value if value not in (None, "") else "—", styles[style], teks_angka)
 
     def grid(rows, widths, spans=()):
         table = Table([[p(cell, "SosohHead" if r == 0 else "SosohCell")
@@ -432,7 +433,7 @@ def buat_pdf(data: dict) -> bytes:
         for col, first, last in spans:
             table.setStyle(TableStyle([("SPAN", (col, first), (col, last)),
                                        ("VALIGN", (col, first), (col, last), "TOP")]))
-        return table
+        return warnai_tabel(table)
 
     def stamp(value):
         if value is None:
@@ -565,7 +566,7 @@ def buat_pdf(data: dict) -> bytes:
         samples = [x for x in data["raw_qc"] if x["batch"] == code]
         for x in samples:
             rows.append([f"QC {x['qc']}", stamp(x["time"]), x["moisture"],
-                         x["lamur"] if condition == "basah" else "—", x["green"], x["density"]])
+                         NilaiQC("Lamur",x["lamur"] if condition == "basah" else "—"), NilaiQC("Biji hijau",x["green"]), NilaiQC("Densiti",x["density"])])
         if len(rows) == 1:
             rows.append(["Belum ada pencatatan QC", "—", "—", "—", "—", "—"])
         story += [Paragraph(f"QC gabah {condition} · {code} · {item['origin']} · {item['plate']}", styles["SosohSection"]),
@@ -578,7 +579,7 @@ def buat_pdf(data: dict) -> bytes:
         for x in data["external_qc"]:
             rows.append([f"{x['code']} · {x['origin']} · {x['plate']}", stamp(x["time"]),
                 pct(x["moisture"]), pct(x["broken"]), pct(x["loss"]),
-                " / ".join(str(v or "—") for v in [x["yellow"], x["paddy"], x["chaff"]]),
+                GabunganQC([NilaiQC(k,v or "—") for k,v in zip(("Butir kuning","Gabah","Merang"),(x["yellow"],x["paddy"],x["chaff"]))]),
                 x["decision"] or "Belum dicatat"])
         story.append(grid(rows, [38*mm, 27*mm, 16*mm, 18*mm, 16*mm, 36*mm, 16*mm]))
 

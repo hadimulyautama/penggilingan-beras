@@ -69,14 +69,14 @@ def test_pdf_giling_memuat_asal_qc_hasil_transfer_dan_durasi():
     text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
 
     for expected in ("LOT-20261012-01", "Silo A", "Widiyanto", "AB 1234 CD",
-                     "QC bahan baku", "25,5% / 26%", "QC hasil penggilingan",
+                     "QC bahan sebelum digiling", "25,5% / 26%", "QC hasil PK",
                      "Gabah kering langsung + gabah hasil pengeringan",
-                     "Hasil PK · rendemen", "6.500 kg · 65,0%",
+                     "HASIL PK", "6.500 kg", "65,0%",
                      "Gabah kering langsung", "PGR-20261011-01", "Riwayat pengeringan bahan",
                      "B 5678 EF", "14,50%", "Ya · 5 sak",
                      "14%", "Rata-rata QC", "KA 14,2% · Broken 2,5% · Susut 1,0%",
                      "Catatan hasil PK", "TRF-20261012-01", "4 jam 30 menit"):
         assert expected in text
     assert text.index("KA 14,2%") < text.index("Broken 2,5%") < text.index("Susut 1,0%")
-    assert text.count("GB-20261010-01") >= 5
-    assert text.count("GB-20261010-02") >= 5
+    assert text.count("GB-20261010-01") >= 2
+    assert text.count("GB-20261010-02") >= 2

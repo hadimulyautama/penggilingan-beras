@@ -1,5 +1,6 @@
 """PDF serah terima resmi: satu penyaji untuk produksi dan portal pelanggan."""
 from html import escape
+from app.web.qc_warna import NilaiQC, GabunganQC, paragraf, warnai_tabel
 from app.services.serah_terima import waktu
 from app.web.pdf_dokumen import PenyajiDokumen
 
@@ -73,12 +74,11 @@ def buat_pdf(data):
         rows = []
         for sample in group['putaran']:
             label = 'Pemeriksaan ' + str(sample['nomor'] if sample['nomor'] is not None else 'lama')
-            details = '<br/>'.join(escape(str(k)) + ': ' + escape(str(v))
-                                   for k, v in sample['hasil'])
+            details = GabunganQC([part for i,(k,v) in enumerate(sample['hasil']) for part in ((('\n' if i else '')+str(k)+': '),NilaiQC(k,v))], '')
             rows.append([p(label), p(waktu(sample['waktu']) + ' · ' + sample['petugas']),
-                         Paragraph(details, normal)])
-        story.append(grid(['Putaran', 'Waktu & petugas', 'Hasil pemeriksaan'],
-                          rows, [28 * mm, 48 * mm, 98 * mm]))
+                         paragraf(details, normal)])
+        story.append(warnai_tabel(grid(['Putaran', 'Waktu & petugas', 'Hasil pemeriksaan'],
+                          rows, [28 * mm, 48 * mm, 98 * mm])))
 
     return view.pdf(story, judul=data['judul'] + ' · ' + data['nomor'],
                     referensi=data['nomor'])

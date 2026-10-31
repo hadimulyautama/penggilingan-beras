@@ -260,3 +260,8 @@ async def render_laci(request: Request, nama: str, **konteks):
 def redirect(tujuan: str) -> RedirectResponse:
     """Pengalihan setelah POST — 303 supaya peramban beralih ke GET."""
     return RedirectResponse(tujuan, status_code=303)
+
+# Pemetaan presentasi laporan, tidak memengaruhi penilaian maupun stok.
+from app.web.qc_warna import gaya, penilaian_berwarna
+templates.env.globals["gaya_qc"] = gaya
+templates.env.filters["qc_berwarna"] = penilaian_berwarna
