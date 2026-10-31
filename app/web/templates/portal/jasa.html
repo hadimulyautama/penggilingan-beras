@@ -3,16 +3,9 @@
 {% from 'portal/_progres.html' import proses_berjalan %}
 {% block isi %}
 <div class="pelanggan-halaman">
-<header class="pelanggan-sapaan"><p class="pelanggan-alis">Proses Berjalan</p><h1>Proses Berjalan</h1><p class="pelanggan-redup">Pantau progres dan bahan yang menunggu proses.</p></header>
-<section class="pelanggan-status pelanggan-status--ringkas"><span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p></section>
+<header class="pelanggan-sapaan"><h1>Proses Berjalan</h1><p class="pelanggan-redup">Pantau progres dan bahan yang menunggu proses.</p></header>
 {% if progres %}{{ proses_berjalan(progres,kg) }}{% endif %}
 {% if transit %}<section class="pelanggan-panel" id="menunggu"><h2>Bahan menunggu proses</h2>{{ tunggu(transit) }}<p class="pelanggan-catatan">Petugas akan memulai proses sesuai giliran.</p></section>{% endif %}
-<section class="pelanggan-panel" id="proses"><div class="pelanggan-judul"><h2>Riwayat proses</h2><a class="pelanggan-tautan" href="/pelanggan/riwayat-proses">Lihat semua</a></div>
-<ol class="pelanggan-perjalanan">{% for r in riwayat[:5] %}<li><div class="pelanggan-baris"><h3>{{ nama_proses.get(r.jenis,r.jenis) }}</h3><span class="pelanggan-penanda">{{ status_pelanggan(r.status) }}</span></div><p class="pelanggan-redup">{{ r.kode }}</p><a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian proses →</a></li>{% else %}<li><p class="pelanggan-redup">Belum ada proses yang selesai. Proses yang sedang berjalan tampil di atas.</p></li>{% endfor %}</ol>
-<details class="pelanggan-rincian"><summary>Lihat pemeriksaan mutu</summary><nav class="pelanggan-pintasan" aria-label="Pemeriksaan mutu">{% for k,n in [('gabah-basah','Gabah basah'),('gabah-kering','Gabah kering'),('pk-luar','Bahan masuk (PK)'),('pk-hasil-giling','Hasil giling (PK)')] %}<a href="/pelanggan/riwayat-qc/{{ k }}">{{ n }}</a>{% endfor %}</nav></details>
-</section>
-<nav class="pelanggan-pintasan" aria-label="Barang jasa"><a href="/pelanggan/barang-masuk">Barang masuk</a><a href="/pelanggan/barang-keluar">Pengambilan barang</a></nav>
-<a class="pelanggan-utama" href="/pelanggan/barang-saya">Lihat barang & pengambilan →</a>
-<a class="pelanggan-tautan" href="/pelanggan/laporan">Lihat bukti & laporan →</a>
+{% if not progres and not transit %}<section class="pelanggan-panel"><h2>Belum ada proses berjalan</h2><p class="pelanggan-redup">Proses akan tampil setelah dimulai petugas. Proses yang sudah selesai tersedia di menu Riwayat proses.</p></section>{% endif %}
 </div>
 {% endblock %}

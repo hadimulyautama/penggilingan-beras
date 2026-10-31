@@ -5,15 +5,15 @@
 {% if g.belum_diukur %}<p class="pelanggan-redup">{{ g.belum_diukur }} catatan belum ditimbang. Jumlah di atas hanya mencakup berat yang sudah diketahui.</p>{% elif g.sementara %}<p class="pelanggan-redup">Berat sementara, akan diperbarui setelah penimbangan atau proses selesai.</p>{% endif %}
 {% if g.perlu_periksa %}<p class="pelanggan-penanda pelanggan-penanda--hati">Jumlah barang sedang memerlukan pengecekan petugas.</p>{% endif %}
 <div class="pelanggan-komoditas-rincian">
-{% for r in g.rincian %}<article class="pelanggan-batch">
-<div class="pelanggan-baris"><div><h3>{{ r.asal[0].kode if g.kunci=='gabah' and r.asal|length==1 else r.kode if r.kode!='Saldo per pelanggan' else r.nama }}</h3><p class="pelanggan-redup">{{ r.lokasi }}{% if r.status %} · {{ r.status }}{% endif %}</p></div><strong>{{ kg(r.kg) if r.kg is not none else 'Belum ditimbang' }}</strong></div>
+{% for r in g.rincian %}{% set judul=r.asal[0].kode if g.kunci=='gabah' and r.asal|length==1 else r.kode if r.kode!='Saldo per pelanggan' else r.nama %}<article class="pelanggan-batch">
+<div class="pelanggan-baris"><div><h3>{{ judul }}</h3><p class="pelanggan-redup">{{ r.lokasi }}{% if r.status %} · {{ r.status }}{% endif %}</p></div><strong>{{ kg(r.kg) if r.kg is not none else 'Belum ditimbang' }}</strong></div>
 {% if not r.final %}<p class="pelanggan-penanda pelanggan-penanda--hati">Berat sementara</p>{% endif %}
 {% if r.asal %}<details class="pelanggan-rincian"><summary>{{ 'Rincian batch' if g.kunci=='gabah' else 'Rincian asal barang' }} · {{ r.asal|length }}</summary>
-{% for b in r.asal %}<section class="pelanggan-asal"><h4>{{ b.kode }}</h4><dl class="pelanggan-fakta"><div><dt>Jenis barang</dt><dd>{{ b.jenis }}</dd></div><div><dt>Berat {{ 'batch' if g.kunci=='gabah' else 'asal' }}</dt><dd>{{ kg(b.kg) if b.kg is not none else 'Belum ditimbang' }}</dd></div>{% if b.tanggal %}<div><dt>Tanggal masuk</dt><dd>{{ b.tanggal|jam('%d/%m/%Y %H:%M') }}</dd></div>{% endif %}{% if b.kendaraan %}<div><dt>Kendaraan</dt><dd>{{ b.kendaraan }}</dd></div>{% endif %}</dl>{% if b.href %}<a class="pelanggan-tautan" href="{{ b.href }}">Lihat rincian barang →</a>{% endif %}</section>{% endfor %}
-<p class="pelanggan-redup">Berat batch asal adalah rincian penelusuran, bukan tambahan jumlah barang di atas.</p></details>{% endif %}
-{% if r.catatan %}<details class="pelanggan-rincian"><summary>Lihat asal barang</summary><ul>{% for c in r.catatan %}<li>{{ c|join(' · ') }}</li>{% endfor %}</ul><p class="pelanggan-redup">Catatan asal menunjukkan pemasukan sebelumnya. Berat yang masih tersisa mengikuti jumlah barang di atas.</p></details>{% endif %}
-{% if r.href %}<a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian {{ 'proses' if '/proses-aktif/' in r.href else 'barang' }} →</a>{% endif %}
+{% for b in r.asal %}<section class="pelanggan-asal">{% if b.kode!=judul %}<h4>{{ b.kode }}</h4>{% endif %}<dl class="pelanggan-fakta"><div><dt>Jenis barang</dt><dd>{{ b.jenis }}</dd></div><div><dt>Berat {{ 'batch' if g.kunci=='gabah' else 'asal' }}</dt><dd>{{ kg(b.kg) if b.kg is not none else 'Belum ditimbang' }}</dd></div>{% if b.tanggal %}<div><dt>Tanggal masuk</dt><dd>{{ b.tanggal|jam('%d/%m/%Y %H:%M') }}</dd></div>{% endif %}{% if b.kendaraan %}<div><dt>Kendaraan</dt><dd>{{ b.kendaraan }}</dd></div>{% endif %}</dl>{% if b.href %}<a class="pelanggan-tautan" href="{{ b.href }}">Lihat rincian barang →</a>{% endif %}</section>{% endfor %}
+</details>{% endif %}
+{% if r.catatan %}<details class="pelanggan-rincian"><summary>Lihat asal barang</summary><ul>{% for c in r.catatan %}<li>{{ c|join(' · ') }}</li>{% endfor %}</ul></details>{% endif %}
+{% if r.href and not (r.asal|length==1 and r.href==r.asal[0].href) %}<a class="pelanggan-tautan" href="{{ r.href }}">Lihat rincian {{ 'proses' if '/proses-aktif/' in r.href else 'barang' }} →</a>{% endif %}
 </article>{% endfor %}
-</div></details>{% else %}<p class="pelanggan-redup">Belum ada barang yang tercatat di pabrik. Buka Barang masuk, Riwayat proses, atau Pengambilan barang untuk melihat catatan sebelumnya.</p>{% endfor %}
+</div>{% if g.rincian|selectattr('asal')|list or g.rincian|selectattr('catatan')|list %}<p class="pelanggan-redup">Asal barang ditampilkan untuk penelusuran; jumlah stok mengikuti total di atas.</p>{% endif %}</details>{% else %}<p class="pelanggan-redup">Belum ada barang yang tercatat di pabrik. Buka Barang masuk, Riwayat proses, atau Pengambilan barang untuk melihat catatan sebelumnya.</p>{% endfor %}
 </div>
 {% endmacro %}

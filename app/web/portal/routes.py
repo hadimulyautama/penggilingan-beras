@@ -200,7 +200,7 @@ async def history_list(request,kind):
 async def reports(request):
     scope=request.state.portal_scope
     async with SessionLocal() as db:
-        from app.models import Jasa
+        from app.models import Jasa,PolishingSiloUsage,PolishingProcess
         # Pesanan asal yang digabung bukan dokumen tambahan. Tampilkan rekap
         # utama sekali; URL rekap lama tetap dilayani oleh pembaca produksi.
         orders=(await db.scalars(select(Jasa).where(Jasa.id.in_(scope.jasa_ids),
@@ -208,11 +208,16 @@ async def reports(request):
         from app.services.serah_terima import daftar as daftar_serah
         serah=await daftar_serah(db,scope=scope)
         rows=[]
+        # Pembaca PDF sosoh memerlukan rincian pemakaian silo. Proses lama
+        # tanpa rincian itu masih dapat dibuka, tetapi PDF native belum ada.
+        bahan_sosoh=set((await db.scalars(select(PolishingSiloUsage.polishing_process_id).where(
+            PolishingSiloUsage.polishing_process_id.in_(scope.ids(PolishingProcess))))).all())
         for kind in ('pengeringan','giling','sosoh'):
             model,col=MODELS[kind]
             for row in (await db.scalars(select(model).where(model.id.in_(scope.ids(model))).order_by(model.id.desc()))).all():
                 finished=(row.waktu_selesai_pendinginan is not None if kind=='pengeringan' else row.status=='selesai')
-                if finished:rows.append(dict(kind=kind,code=getattr(row,col),id=row.id))
+                if finished:rows.append(dict(kind=kind,code=getattr(row,col),id=row.id,
+                    pdf_tersedia=kind!='sosoh' or row.id in bahan_sosoh))
     from .beranda import bahasa_status
     return render_customer(request,'portal/reports.html',reports=rows,orders=orders,
         serah_terima=serah[:10],status_pelanggan=bahasa_status,page_title='Dokumen')

@@ -2,7 +2,7 @@
 {% import '_stok.html' as st %}
 {% block isi %}
 <div class="pelanggan-halaman pelanggan-penerimaan">
-<header class="pelanggan-sapaan"><p class="pelanggan-alis">Barang masuk</p><h1>Barang masuk</h1><p class="pelanggan-redup">Barang Anda yang sudah diterima di pabrik.</p></header>
+<header class="pelanggan-sapaan"><h1>Barang masuk</h1><p class="pelanggan-redup">Barang Anda yang sudah diterima di pabrik.</p></header>
 {% with riwayat=daftar_masuk.riwayat %}
 <form method="get" action="/barang-masuk" class="pelanggan-filter-masuk saring">
 <label>Jenis barang<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for key,nama in daftar_masuk.jenis_barang %}<option value="{{ key }}"{% if daftar_masuk.jenis==key %} selected{% endif %}>{{ nama }}</option>{% endfor %}</select></label>

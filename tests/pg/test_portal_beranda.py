@@ -43,8 +43,11 @@ async def test_jasa_barang_dan_tautan_lama_tetap_terbaca_tanpa_mutasi(pg,portal)
             assert 'LOT-RAHASIA-B' not in r.text and 'Rahasia seluruh pabrik' not in r.text
             assert all(f['action']=='/pelanggan/keluar' for f in s.select('form[method=post]'))
         page=await c.get('/pelanggan/jasa-saya')
-        assert '/pelanggan/barang-masuk' in page.text and 'LOT-QC-DETAIL' in page.text
-        assert '/pelanggan/laporan' in page.text
+        main=BeautifulSoup(page.text,'html.parser').main
+        assert not main.select('a[href="/pelanggan/barang-masuk"],a[href="/pelanggan/barang-keluar"],a[href="/pelanggan/laporan"],#proses')
+        stock=BeautifulSoup((await c.get('/pelanggan/barang-saya')).text,'html.parser').main
+        assert not stock.select('a[href="/pelanggan/barang-keluar"],a[href="/pelanggan/jasa-saya"]')
+        assert stock.select_one('#stok')
         assert (await c.get('/pelanggan/barang-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404
         assert (await c.get('/pelanggan/jasa-saya?pelanggan_id='+str(portal.owners[1].id))).status_code==404
 
@@ -173,3 +176,21 @@ async def test_dokumen_hanya_menampilkan_rekap_utama_pada_rantai_gabungan(pg,dun
     async with pg() as db:
         assert (await db.get(Jasa,dunia['jasa1'])).status=='digabung'
         assert (await db.get(Jasa,dunia['jasa2'])).digabung_ke_id==tujuan.id
+
+
+async def test_dokumen_sosoh_tanpa_rincian_bahan_tidak_menawarkan_unduhan_gagal(pg,portal):
+    from sqlalchemy import delete
+    from app.models import PolishingSiloUsage
+    pid=portal.process[0]['sosoh']
+    async with pg() as db:
+        await db.execute(delete(PolishingSiloUsage).where(PolishingSiloUsage.polishing_process_id==pid))
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        response=await c.get('/pelanggan/laporan')
+        assert response.status_code==200
+        s=BeautifulSoup(response.text,'html.parser')
+        card=s.find('p',string='POL-PORTAL-0').find_parent('article')
+        assert card.select_one(f'a[href="/pelanggan/riwayat-sosoh/{pid}"]')
+        assert not card.select('a[href*="laporan.pdf"]')
+        assert 'PDF belum tersedia' in card.get_text()
+        assert (await c.get(f'/pelanggan/riwayat-sosoh/{pid}')).status_code==200

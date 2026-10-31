@@ -17,7 +17,8 @@ Panel Kabar terbaru tidak ditampilkan di beranda. Tombol Barang masuk,
 Pengambilan barang, dan Riwayat proses hanya ada pada menu utama. Setiap komoditas dapat
 dibuka ke lokasi/batch, kemudian rincian asal, waktu, kendaraan dan halaman
 barang yang sama seperti sebelumnya. Halaman Barang Saya memakai susunan
-stok yang sama, dengan tautan ke menu pengambilan.
+stok yang sama. Halaman Barang Saya hanya memuat stok, lokasi, asal barang,
+dan rincian stok/karung; perpindahan ke Pengambilan barang melalui menu utama.
 
 `portal/barang.py` memakai pembaca bobot gabah, sisa tumpukan PK, produk,
 serta `hitung_stok_silo` dan `komposisi_bahan_silo` Gudang 2. Otorisasi isi
@@ -31,8 +32,9 @@ pengelolaan proses, dan petunjuk pencatatan operator tidak ditawarkan sebagai
 tugas pelanggan. Isi catatan asli dan angka produksi tetap dipertahankan.
 
 `/pelanggan/ringkasan` dan `/pelanggan/` membuka beranda khusus pelanggan.
-`/pelanggan/jasa-saya` memuat progres berjalan, bahan menunggu proses,
-pemeriksaan mutu, dan cuplikan riwayat. `/pelanggan/riwayat-proses` memuat
+`/pelanggan/jasa-saya` memuat progres berjalan dan bahan menunggu proses.
+Detail mutu tersedia melalui rincian barang/proses. Halaman ini tidak
+mengulang daftar riwayat, stok, penerimaan atau pengambilan. `/pelanggan/riwayat-proses` memuat
 proses selesai dengan tanggal, filter jenis dan tautan detail/hasil asli;
 pendinginan yang belum selesai tidak masuk riwayat selesai.
 `/pelanggan/barang-masuk` hanya menampilkan catatan penerimaan aktual,
@@ -275,3 +277,16 @@ masuk. Ikon dibuat ulang melalui `scripts/buat_ikon_pelanggan.py`.
 Worker `/pelanggan/sw.js` hanya menaungi portal. Halaman, PDF, dan sesi tidak
 disimpan dalam Cache Storage; saat jaringan putus hanya pesan umum yang tampil.
 Pemasangan tidak mengubah pembatasan data server maupun akses app internal.
+
+## Perapian fokus halaman
+
+Halaman Proses Berjalan hanya memuat progres aktif dan bahan menunggu proses;
+riwayat selesai berada pada menu Riwayat proses. Barang Saya tidak memuat
+tombol pengambilan atau proses lain. Dokumen menyediakan buka dokumen dan
+unduh PDF tanpa pilihan baca PDF tambahan yang menduplikasi tujuan. Ikon
+Kabar di header dihilangkan. Tautan kembali mengikuti konteks stok, riwayat,
+proses aktif, penerimaan, pengambilan, atau dokumen, dan tidak ditampilkan ganda.
+
+Laporan sosoh yang belum memiliki rincian pemakaian silo tetap menyediakan
+rincian proses. Unduh PDF baru ditawarkan setelah syarat pembaca PDF native
+terpenuhi, sehingga tidak ada tombol unduh yang menuju 404.

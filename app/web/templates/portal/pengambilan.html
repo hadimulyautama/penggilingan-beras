@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
 <div class="pelanggan-halaman pelanggan-pengambilan keluar-ringkas">
-<header class="pelanggan-sapaan"><p class="pelanggan-alis">Pengambilan barang</p><h1>Pengambilan barang jasa Anda</h1><p class="pelanggan-redup">Barang milik Anda yang diambil atau dikirim dari pabrik.</p></header>
+<header class="pelanggan-sapaan"><h1>Pengambilan barang jasa Anda</h1><p class="pelanggan-redup">Barang milik Anda yang diambil atau dikirim dari pabrik.</p></header>
 <form method="get" action="/barang-keluar" class="pelanggan-filter-masuk keluar-filter saring">
 <label>Cari pengambilan<input class="fld" type="search" name="q" value="{{ pencarian }}" placeholder="Cari kode atau plat…"></label>
 <label>Status<select class="fld" name="status">{% for value,label in [('', 'Semua status'),('perintah','Menunggu dimuat'),('dimuat','Menunggu verifikasi'),('selesai','Selesai'),('batal','Dibatalkan')] %}<option value="{{ value }}"{% if status_filter==value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
@@ -15,5 +15,5 @@
 <section class="keluar-ringkas__bagian" aria-labelledby="judul-riwayat-keluar"><h2 id="judul-riwayat-keluar">Riwayat pengambilan</h2><p class="pelanggan-redup">Pengambilan yang selesai atau dibatalkan. Buka kode pengambilan untuk melihat rinciannya.</p>
 {% if riwayat %}{% include '_pengiriman_riwayat_daftar.html' %}{% if sebelum_berikut %}<a class="btn" href="/barang-keluar?sebelum={{ sebelum_berikut }}&{{ filter_query }}#judul-riwayat-keluar">Riwayat sebelumnya</a>{% endif %}{% else %}<p class="pelanggan-redup">Belum ada riwayat pengambilan barang jasa.</p>{% endif %}</section>
 {% if portal_retur %}<details class="pelanggan-rincian"><summary>Barang yang dikembalikan ke pabrik</summary>{% for r in portal_retur %}<p><a href="/retur/{{ r.id }}">{{ r.kode }}</a></p>{% endfor %}<a class="pelanggan-tautan" href="/retur">Lihat rincian pengembalian →</a></details>{% endif %}
-<a class="pelanggan-tautan" href="/barang-saya">Lihat stok yang masih di pabrik →</a></div>
+</div>
 {% endblock %}

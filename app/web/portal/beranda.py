@@ -63,7 +63,7 @@ def status_utama(d, transit):
     bahan,hasil=kelompok_barang(d)
     if aktif:
         jenis=list(dict.fromkeys(NAMA_PROSES.get(r['jenis'],r['jenis']) for r in aktif))
-        return dict(label='Sedang diproses',judul='Barang Anda sedang diproses.',
+        return dict(label='Sedang diproses',judul='Ada proses yang sedang berjalan.',
                     isi='Tahap yang sedang berjalan: '+', '.join(jenis)+'.',jenis='proses')
     if transit:
         return dict(label='Menunggu proses',judul='Barang Anda masih di pabrik.',
@@ -144,7 +144,7 @@ async def halaman(request, bagian='beranda'):
         pendinginan={r.kode_lot for r in (await db.scalars(select(DryingLot).where(
             DryingLot.id.in_(scope.ids(DryingLot)),DryingLot.status=='selesai',
             DryingLot.waktu_selesai_pendinginan.is_(None)))).all()}
-        if bagian in ('riwayat','jasa'):
+        if bagian=='riwayat':
             from .scope import MODELS
             for jenis in NAMA_PROSES:
                 if jenis=='pendinginan':continue

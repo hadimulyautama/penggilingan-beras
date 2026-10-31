@@ -14,7 +14,18 @@ from .auth import csrf_context
 from .navigation import MENU, portal_url, active_menu
 
 
-def bahasa_pelanggan(s):
+def tujuan_kembali(base):
+    path=urlsplit(base).path.removeprefix('/pelanggan')
+    if path.startswith(('/riwayat-giling','/riwayat-pengeringan','/riwayat-sosoh','/riwayat-transfer')):
+        return '/riwayat-proses','Riwayat proses'
+    if path.startswith(('/riwayat-qc','/stok','/barang-saya')):return '/barang-saya','Barang Saya'
+    if path.startswith('/barang-masuk'):return '/barang-masuk','Barang masuk'
+    if path.startswith(('/barang-keluar','/retur')):return '/barang-keluar','Pengambilan barang'
+    if '/nota' in path:return '/laporan','Dokumen'
+    return '/jasa-saya','Proses Berjalan'
+
+
+def bahasa_pelanggan(s,base=''):
     """Ubah label antarmuka saja, tanpa menyunting isi catatan atau angka."""
     labels={'Pekerjaan':'Perkembangan proses','Perlu tindakan':'Menunggu petugas',
         'Status & informasi':'Informasi barang','Riwayat QC':'Pemeriksaan mutu',
@@ -34,8 +45,14 @@ def bahasa_pelanggan(s):
             elif key in ('Hasil & QC','Lihat hasil & QC','Nilai kualitas QC PK','QC hasil penyosohan'):
                 node.replace_with(value.replace('QC','pemeriksaan mutu'))
     for a in s.select('a.riwayat-detail__back,a.jasa-kembali'):
-        a['href']='/pelanggan/jasa-saya'
-        a.string='← Kembali ke Proses Berjalan'
+        target,label=tujuan_kembali(base)
+        a['href']='/pelanggan'+target
+        a.string='← Kembali ke '+label
+    kembali=set()
+    for a in s.select('a[href]'):
+        if a.get_text(strip=True).startswith('← Kembali'):
+            if a['href'] in kembali:a.decompose()
+            else:kembali.add(a['href'])
     for a in s.select('a[href]'):
         if a.get_text(strip=True)=='Buka Pekerjaan':
             a.string='Lihat perkembangan proses';a['href']='/pelanggan/jasa-saya'
@@ -163,7 +180,7 @@ def read_only(html, base, *, origin=None):
         share['data-pdf-share']=s.find('iframe')['src'];share.attrs.pop('disabled',None)
         status=s.find(id='status-bagikan')
         if status:status.string='PDF tersedia untuk dibaca, dibagikan, atau diunduh.'
-    return str(bahasa_pelanggan(s))
+    return str(bahasa_pelanggan(s,base))
 
 
 def render_customer(request, name, *, status_code=200, **ctx):

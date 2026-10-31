@@ -3,11 +3,7 @@
 {% block isi %}
 <div class="pelanggan-halaman">
 <header class="pelanggan-sapaan"><p class="pelanggan-alis">Barang Saya</p><h1>Stok barang Anda</h1><p class="pelanggan-redup">Buka jenis barang untuk melihat lokasi, batch asal, dan rinciannya.</p></header>
-<nav class="pelanggan-pintasan" aria-label="Bagian barang Anda"><a href="#stok">Stok di pabrik</a><a href="/pelanggan/stok?tab=karung">Karung saya</a><a href="/pelanggan/barang-keluar">Pengambilan barang</a></nav>
 <section class="pelanggan-panel" id="stok"><div class="pelanggan-judul"><h2>Barang di pabrik</h2></div>{{ daftar_komoditas(komoditas,kg) }}</section>
-<details class="pelanggan-rincian"><summary>Rincian kemasan & hasil</summary><nav class="pelanggan-pintasan" aria-label="Rincian stok"><a href="/pelanggan/stok?tab=bahan">Beras pecah kulit (PK)</a><a href="/pelanggan/stok?tab=produk">Beras & hasil samping</a><a href="/pelanggan/stok?tab=karung">Karung saya</a></nav></details>
-<a class="pelanggan-utama" href="/pelanggan/barang-keluar">Lihat pengambilan barang jasa →</a>
-{% if d.retur %}<section class="pelanggan-panel"><div class="pelanggan-judul"><h2>Barang dikembalikan</h2><a class="pelanggan-tautan" href="/pelanggan/retur">Lihat semua</a></div>{% for r in d.retur %}<p><a href="{{ r.href }}">{{ r.kode }}</a> · {{ status_pelanggan(r.status) }}</p>{% endfor %}</section>{% endif %}
-<a class="pelanggan-tautan" href="/pelanggan/jasa-saya">Lihat perkembangan proses →</a>
+<details class="pelanggan-rincian"><summary>Rincian stok & karung</summary><nav class="pelanggan-pintasan" aria-label="Rincian stok"><a href="/pelanggan/stok?tab=bahan">Beras pecah kulit (PK)</a><a href="/pelanggan/stok?tab=produk">Beras & hasil samping</a><a href="/pelanggan/stok?tab=karung">Karung saya</a></nav></details>
 </div>
 {% endblock %}
