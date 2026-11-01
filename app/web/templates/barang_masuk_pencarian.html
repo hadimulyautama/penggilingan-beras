@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block judul %}Barang Masuk{% endblock %}
+{% block isi %}
+<style>@import url('/static/operasional.css?v={{ VERSI }}&antrean-bahan=7');@import url('/static/barang-masuk-pencarian.css?bm=2');</style>
+{% import '_benda.html' as benda with context %}
+{% import '_stok.html' as st %}
+{% import '_kerja_navigasi.html' as nav with context %}
+<section data-bm-page data-cari-tertampil="{{ cari }}" data-pemasok-tertampil="{{ pemasok }}">
+<header class="kerja-kepala"><h1>Barang Masuk</h1>
+<nav class="saring kerja-tab" aria-label="Status penerimaan" data-bm-nav>
+{% for k,n,total in [('belum','Belum diterima',total_belum),('diterima','Diterima',total_diterima)] %}<a class="pil{{ ' pil--on' if status==k }}" href="{{ href(status=k) }}"{% if status==k %} aria-current="page"{% endif %}>{{ n }} <span class="pil__jml">{{ total if total is not none else '—' }}</span></a>{% endfor %}
+</nav>
+<details class="kerja-saringan"><summary class="btn btn--kecil">Filter · {{ dict(jenis_barang).get(jenis,'Semua jenis') }} · {{ {'jasa':'Jasa','pabrik':'Pabrik'}.get(pemilik,'Semua pemilik') }} · {{ {'g1':'G1','g2':'G2'}.get(gudang,'Semua gudang') }}</summary>
+<nav class="saring saring-kepemilikan" aria-label="Saring kepemilikan" data-bm-nav>{% for k,n in [('', 'Semua'),('jasa','Jasa'),('pabrik','Milik pabrik')] %}<a class="pil{{ ' pil--on' if pemilik==k }}" href="{{ href(kepemilikan=k) }}">{{ n }}</a>{% endfor %}</nav>
+{% if TAMPILAN_INDUK or VIEW in V_MEJA %}<div data-bm-nav>{{ nav.filter_gudang(href,gudang) }}</div>{% endif %}
+<form method="get" action="/barang-masuk" class="saring" data-bm-form>
+{% for key in ['status','kepemilikan','gudang','cari','pemasok','pelanggan_id','kembali_jasa'] %}{% if request.query_params.get(key) or key=='status' %}<input type="hidden" name="{{ key }}" value="{{ status if key=='status' else cari if key=='cari' else request.query_params.get(key) }}">{% endif %}{% endfor %}
+<label class="kerja-filter">Jenis barang<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for k,n in jenis_barang %}<option value="{{ k }}"{{ ' selected' if jenis==k }}>{{ n }}</option>{% endfor %}</select></label><button class="btn btn--kecil" type="submit">Tampilkan</button>
+</form></details>
+{% if pelanggan_saring %}<p class="bantu" data-bm-nav>Pelanggan: <strong>{{ pelanggan_saring }}</strong> · <a href="{{ href(pelanggan_id='') }}">Semua pelanggan</a></p>{% endif %}
+<form method="get" action="/barang-masuk" class="bm-cari" role="search" data-bm-form data-bm-search>
+{% for key in ['status','jenis','kepemilikan','gudang','pelanggan_id','kembali_jasa'] %}{% if request.query_params.get(key) or key=='status' %}<input type="hidden" name="{{ key }}" value="{{ status if key=='status' else request.query_params.get(key) }}">{% endif %}{% endfor %}
+<label for="bm-cari">Cari penerimaan</label><div class="bm-cari-baris"><input class="fld" id="bm-cari" name="cari" type="search" placeholder="Nama, kode tiket, atau plat…" value="{{ cari }}" aria-describedby="bm-petunjuk bm-belum-cari"><button class="btn" type="submit">Cari</button></div>
+<label class="kerja-filter bm-nama">Nama pihak<select class="fld" name="pemasok"><option value="">Semua nama</option>{% if pemasok and pemasok not in nama_saring %}<option selected>{{ pemasok }}</option>{% endif %}{% for n in nama_saring %}<option{{ ' selected' if pemasok==n }}>{{ n }}</option>{% endfor %}</select></label>
+<p class="bantu" id="bm-petunjuk">Mencari seluruh data pada tab dan filter aktif, kemudian membaginya per halaman.</p><p id="bm-belum-cari" class="bm-belum-cari" role="status" hidden>Isian berubah. Tekan Cari atau Enter untuk memperbarui hasil.</p>
+</form>
+<p class="bantu bm-cakupan">{{ 'Belum diterima' if status=='belum' else 'Diterima' }} · {{ dict(jenis_barang).get(jenis,'Semua jenis') }} · {{ {'jasa':'Jasa','pabrik':'Milik pabrik'}.get(pemilik,'Semua pemilik') }} · {{ {'g1':'Gudang 1','g2':'Gudang 2'}.get(gudang,'Semua gudang yang diizinkan') }}{% if pemasok %} · {{ pemasok }}{% endif %}</p>
+<p class="bm-jumlah" aria-live="polite">{% if jumlah is not none %}<strong>{{ jumlah }} hasil</strong>{% else %}<strong>Jumlah hasil belum tersedia</strong>{% endif %}{% if cari %} untuk “{{ cari }}” · <span data-bm-nav><a href="{{ href(cari='') }}">Hapus pencarian</a></span>{% endif %}</p>
+</header>
+<div data-bm-error role="alert"{% if not gagal %} hidden{% endif %}>Daftar penerimaan gagal dimuat. Isian dan filter tetap tersedia. <button type="button" class="btn btn--kecil" data-bm-retry>Coba lagi</button></div>
+{% if not gagal %}
+{% if status=='belum' %}<p class="bantu">Bahan yang sudah diterima dan menunggu penempatan ada di <a href="/pekerjaan?jenis=penempatan">Pekerjaan</a>.</p>{% endif %}
+{% if jumlah %}
+{% if status=='belum' %}{{ benda.blok('Tiket timbang masuk',menunggu,alamat=request.url.path,listview=true,tabel='bahan') }}{% else %}{% include '_daftar_penerimaan_pencarian.html' %}{% endif %}
+{% else %}<div class="kosong"><div><h2>Tidak ada penerimaan yang cocok</h2><p class="bantu">Coba kata pencarian atau filter lain. Tab dan cakupan akses tidak diubah.</p></div></div>{% endif %}
+{% if halaman_akhir>1 %}<nav class="saring bm-halaman" aria-label="Halaman penerimaan" data-bm-nav>{% if halaman>1 %}<a class="btn btn--kecil" href="{{ href(halaman=halaman-1) }}">Sebelumnya</a>{% endif %}<span>Halaman {{ halaman }} dari {{ halaman_akhir }} · 25 per halaman</span>{% if halaman<halaman_akhir %}<a class="btn btn--kecil" href="{{ href(halaman=halaman+1) }}">Berikutnya</a>{% endif %}</nav>{% endif %}
+{% endif %}
+</section><dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+{% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}<script src="/static/barang-masuk-pencarian.js?bm=2" defer></script><script src="/static/penerimaan-posisi.js?v={{ VERSI }}&bm=20261101.4" data-posisi-penerimaan="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" defer></script>{% endblock %}

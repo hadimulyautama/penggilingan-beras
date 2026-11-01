@@ -399,7 +399,12 @@ async def test_daftar_panjang_dan_halaman_riwayat_tidak_kehilangan_tiket(pg,leng
     async with await _klien(pg,role='superadmin') as c:
         c.headers['X-CSRF-Token']=cap_formulir(c)
         awal=(await c.get('/barang-masuk')).text
-        assert all(f'TRX-391-PANJANG-{i:02d}' in awal for i in range(28))
+        # Daftar kini terbatasi di server sebelum kartu dibaca. Seluruh tiket
+        # tetap terjangkau melalui halaman berikut dan pencarian lintas halaman.
+        lanjut=(await c.get('/barang-masuk?halaman=2')).text
+        assert all(f'TRX-391-PANJANG-{i:02d}' in awal+lanjut for i in range(28))
+        cari=(await c.get('/barang-masuk?cari=TRX-391-PANJANG-00')).text
+        assert '1 hasil' in cari and 'TRX-391-PANJANG-00' in cari
         for tid in ids:
             r=await c.post('/api/actions/gabah-masuk',json={'timbangan_transaksi_id':tid,'tujuan':'tumpuk'})
             assert r.status_code==200,r.text
@@ -409,5 +414,5 @@ async def test_daftar_panjang_dan_halaman_riwayat_tidak_kehilangan_tiket(pg,leng
         assert 'jenis=gabah_kering' in a and 'halaman=2' in a
         assert all((f'TRX-391-PANJANG-{i:02d}' in a) != (f'TRX-391-PANJANG-{i:02d}' in b) for i in range(28))
         kosong=(await c.get('/barang-masuk?status=diterima&jenis=broken')).text
-        assert 'Belum ada penerimaan tercatat' in kosong and 'Filter' in kosong
+        assert 'Tidak ada penerimaan yang cocok' in kosong and 'Filter' in kosong
         (OUT/'daftar-panjang.json').write_text(json.dumps({'akun':'Uji superadmin','tiket':'TRX-391-PANJANG-00..27','sebelum':{'pending_tambahan':28,'diterima_tambahan':0},'sesudah':{'pending_tambahan':0,'diterima_tambahan':28,'halaman':[25,3]},'filter_jenis':'gabah_kering'}))

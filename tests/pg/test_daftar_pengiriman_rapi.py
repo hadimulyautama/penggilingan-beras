@@ -24,6 +24,11 @@ async def test_daftar_kosong_panduan_dan_filter_tetap_berizin(pg, gudang):
             assert r.text.count('role="tabpanel"') == 3
             assert 'id="panduan-tahap-3"' in r.text
             assert ('href="/barang-keluar/baru"' in r.text) is boleh
+            from bs4 import BeautifulSoup
+            dom=BeautifulSoup(r.text,'html.parser')
+            assert len(dom.select('a[href="/barang-keluar/baru"]'))==(1 if boleh else 0)
+            assert not dom.select('[data-bantuan-kirim] a[href="/barang-keluar/baru"]')
+            assert bool(dom.select('a[href="/barang-keluar/pengambilan-jasa"]')) is boleh
             assert 'name="q"' in r.text and 'name="sejak"' in r.text
             assert 'Belum ada pengiriman berjalan' in r.text
             if os.environ.get('BUKTI_DAFTAR_KELUAR'):

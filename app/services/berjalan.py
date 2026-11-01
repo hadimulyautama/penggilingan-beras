@@ -124,6 +124,9 @@ class Baris:
     #: terbaca sama dengan kartu yang berjalan; dan yang terbaca sama akan
     #: dilewati sama.
     nota_jenis: str | None = None
+    # Metadata baca-saja dari kejadian jeda yang sama dengan kartu lama.
+    status_proses: str | None = None
+    jeda_sejak: datetime | None = None
     #: Yang TERBACA dari angka-angkanya, bukan dari keadaan prosesnya:
     #: gabah belum merata, sensor mesin melenceng. Terpisah dari `nota` karena
     #: keduanya bisa muncul bersamaan — lot yang dijeda pun bisa isinya belum
@@ -1461,13 +1464,13 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
     return keluar
 
 
-async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
+async def _tiket_belum_ditaut(db: AsyncSession, *, tiket=None) -> list[Baris]:
     from app.penggilingan.gudang1.services.timbang_link import (
         adalah_jasa, nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     baris = []
-    for t in await tiket_masuk_aktif(db):
+    for t in (await tiket_masuk_aktif(db) if tiket is None else tiket):
         # Komoditas tiket dibaca dari PETA JENIS, bukan ditebak dari awalan
         # kodenya. Taksonomi jenis di Timbangan berbasis data dan bisa
         # bertambah; menebak dari nama berarti komoditas baru diam-diam
@@ -1568,7 +1571,7 @@ async def _metadata_tiket(db: AsyncSession, ids) -> dict[int, dict]:
     return {int(row.id): dict(row._mapping) for row in hasil}
 
 
-async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
+async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool, tiket=None) -> list[Baris]:
     """Tiket timbang PK luar yang belum dicatat.
 
     **Pindah dari `web/meja_api.py` ke sini 24 September 2026, dan inilah
@@ -1603,7 +1606,7 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
     from app.penggilingan.peta_jenis import is_pk
 
     baris = []
-    for t in await tiket_masuk_aktif(db):
+    for t in (await tiket_masuk_aktif(db) if tiket is None else tiket):
         if not is_pk(t.get("jenis_kode", "")):
             continue
         nama = nama_pihak(t)
@@ -1641,7 +1644,7 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
 
 
 async def _tiket_jenis_tak_dikenal(
-    db: AsyncSession, *, jenis_diizinkan: set[str] | None = None,
+    db: AsyncSession, *, jenis_diizinkan: set[str] | None = None, tiket=None,
 ) -> list[Baris]:
     """Tiket timbang MASUK yang jenisnya BELUM DIPETAKAN produksi — kartu DIAM.
 
@@ -1673,7 +1676,7 @@ async def _tiket_jenis_tak_dikenal(
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     baris = []
-    for t in await tiket_masuk_aktif(db):
+    for t in (await tiket_masuk_aktif(db) if tiket is None else tiket):
         kode_jenis = t.get("jenis_kode") or "?"
         # Pemanggil G2 hanya meminta dua jenis penerimaan produk. Jenis
         # asing dibaca sekali oleh antrean Admin, bukan ikut dipancarkan
@@ -1970,6 +1973,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             nilai=lot.kode_lot, fase="dryer",
             sejak=lot.waktu_mulai_pendinginan,
             judul="Pendinginan",
+            status_proses="Pendinginan",
             sub=f"{lot.kode_lot} · gabah tetap di mesin"
                 + (f" · {_pemasok_ringkas(asal)}" if asal else ""),
             anak=asal,
@@ -2045,6 +2049,8 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 + (" · " + " · ".join(ka) if ka else " · kadar air belum dicatat")
                 + ("".join(" · " + t for t in tambahan)),
             judul=("Pengeringan dijeda" if macet else "Pengeringan"),
+            status_proses="Dijeda" if macet else "Berjalan",
+            jeda_sejak=macet.mulai if macet else None,
             utama=_utama(bl),
             sub=f"{lot.kode_lot} · {len(isi_lot)} batch"
                 + (f" · {_pemasok_ringkas(asal_lot)}" if asal_lot else ""),
@@ -2252,6 +2258,8 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 + f" · {_kg(p.berat_gabah_masuk_kg)} gabah masuk"
                 + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else ""),
             judul=("Giling dijeda" if macet else "Giling"),
+            status_proses="Dijeda" if macet else "Berjalan",
+            jeda_sejak=macet.mulai if macet else None,
             utama=((_kg(p.berat_gabah_masuk_kg).removesuffix(" kg"), "kg")
                    if p.berat_gabah_masuk_kg is not None else None),
             sub=f"{p.kode_proses} · bahan masuk"
@@ -2746,6 +2754,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
             fase="sosoh",
             sejak=pr.waktu_mulai,
             judul=("Penyosohan dijeda" if macet else "Penyosohan"),
+            status_proses="Dijeda" if macet else "Berjalan",
+            jeda_sejak=macet.mulai if macet else None,
             # Angka utama adalah seluruh bahan yang sedang berada di silo
             # proses ini, termasuk PK, beras putih, hasil samping, dan bahan
             # yang belum teridentifikasi. Angka tunggal ini jadi ringkasan
