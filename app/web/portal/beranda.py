@@ -140,6 +140,8 @@ async def halaman(request, bagian='beranda'):
             from .masuk import daftar
             daftar_masuk=await daftar(db,scope,d['penerimaan'],request)
         komoditas=await baca_barang(db,scope,d) if bagian in ('beranda','barang') else []
+        from .karung import kosong
+        karung_kosong_baris=await kosong(db,scope) if bagian=='barang' else []
         # Status "selesai" pada pengeringan hanya menutup fase kering.
         # Pendinginan masih berjalan sampai waktunya benar-benar dicatat.
         pendinginan={r.kode_lot for r in (await db.scalars(select(DryingLot).where(
@@ -209,5 +211,6 @@ async def halaman(request, bagian='beranda'):
         'riwayat':'Riwayat proses','masuk':'Barang masuk','pengambilan':'Pengambilan barang'}
     return render_customer(request,f'portal/{bagian}.html',d=d,bahan=bahan,hasil=hasil,
         transit=transit,progres=progres,utama=status_utama(d,transit),komoditas=komoditas,
+        karung_kosong_baris=karung_kosong_baris,
         nama_proses=NAMA_PROSES,status_pelanggan=bahasa_status,status_penerimaan=status_penerimaan,kg=jasa_pelanggan.kg_rinci,
         riwayat=riwayat,jenis_riwayat=jenis,daftar_masuk=daftar_masuk,catatan=catatan,page_title=judul_halaman[bagian])

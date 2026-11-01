@@ -377,3 +377,25 @@ ID proses atau FK anak yang sudah dibatasi pemilik. Waktu mulai diberi label
 tersendiri; waktu buka halaman tidak digunakan. Detail stok agregat belum
 memiliki waktu pembaruan menyeluruh sehingga menyatakan waktunya belum
 tersedia, bukan memakai tanggal masuk atau waktu proses sebagai pembaruan stok.
+
+Barang saya mempunyai satu ringkasan komoditas dan bagian Karung kosong
+tersendiri. Tiga pintasan Rincian stok & karung dihilangkan. Saldo kemasan
+kosong dibaca dari stok_kemasan_rinci dengan pelanggan_id sesi (satuan lembar),
+tanpa mengubahnya menjadi berat barang. Kombinasi saldo nol tidak ditampilkan;
+defisit tetap tampak. Karung berisi ditampilkan bersama barangnya dari
+ringkasan karung PK dan baris kemasan produk native, termasuk perkiraannya.
+
+Rincian stok menandai sisa saat ini, berat asal/saat diterima dan jumlah
+karung saat diterima secara terpisah. Baris yang belum ditimbang tetap ada,
+dikelompokkan tersendiri ketika ada stok terukur. Satu tautan utama per
+catatan stok; tautan batch asal yang berbeda tetap tersedia. Berat sementara
+tidak diulang dan berat yang belum tersedia tidak menjadi nol.
+
+Detail produk mendahulukan stok saat ini dan kartu kemasan/curah yang dapat
+dibaca di HP. Ringkasan total yang berulang dihilangkan; riwayat jumlah dan
+perkiraan asal stok tetap dapat dibuka. Peringatan hasil belum final tetap
+terlihat di luar lipatan. Detail PK karung mempertahankan sisa, peringatan
+penimbangan, catatan penerimaan dan mutu. Perhitungan sumber, FIFO, PDF,
+transit, serta tampilan operator tidak diubah. Alamat stok lama tetap dapat
+dibaca; judul spesifik dan satu filter lokasi menggantikan tombol kategori
+serta tombol gudang yang berulang di portal pelanggan.

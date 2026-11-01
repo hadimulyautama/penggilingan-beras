@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% import '_stok.html' as st with context %}
+{% block isi %}{% set t=detail_kartu %}{% set b=portal_pk_karung %}
+<main class="pk-detail pelanggan-pk-karung">
+<a class="pk-detail__back" href="/pelanggan/barang-saya">← Kembali ke Barang saya</a>
+<header class="pk-detail__hero"><div class="pk-detail__heading"><h1>{{ t.kode }}</h1><p class="pelanggan-redup">Gudang 2 · Tumpukan</p></div>
+<div class="pk-detail__weight"><span>Stok saat ini</span><strong>{{ st.kg_rinci(b.stok_kg) ~ ' kg' if b.stok_kg is not none else 'Belum ditimbang' }}</strong></div>
+</header>
+<section class="pk-detail__panel"><h2>Karung berisi</h2><p>{{ t.ringkasan_karung|replace(' ~ ',' · sekitar ') }}</p>
+{% if not t.bobot_final and b.stok_kg is not none %}<p class="pelanggan-penanda pelanggan-penanda--hati">Berat sementara</p>{% endif %}
+{% if t.peringatan_karung %}<p class="pelanggan-redup">{{ t.peringatan_karung|replace('Periksa jumlah karung pada surat jalan:','Jumlah karung dan berat saat diterima perlu diperiksa petugas:')|replace(' Pencatatan tetap diterima.','') }}</p>{% endif %}
+</section>
+<details class="pelanggan-detail-lipat"><summary>Catatan barang saat diterima</summary><section class="pk-detail__panel">
+<dl class="pelanggan-fakta"><div><dt>Berat saat diterima</dt><dd>{{ st.kg_rinci(b.masuk_kg) ~ ' kg' if b.masuk_kg is not none else 'Belum ditimbang' }}</dd></div><div><dt>Karung saat diterima</dt><dd>{{ t.jumlah_karung }} karung</dd></div>{% if b.ukuran %}<div><dt>Ukuran karung</dt><dd>{{ st.kg_rinci(b.ukuran) }} kg</dd></div>{% endif %}</dl>
+{% if t.selisih_kiriman %}<p class="pelanggan-redup">{{ t.selisih_kiriman }}</p>{% endif %}
+</section></details>
+{% if mutu_aktif %}{% from '_penilaian_pk.html' import penilaian_pk with context %}
+<details class="pelanggan-detail-lipat"><summary>Pemeriksaan mutu</summary><section class="pk-detail__panel">{{ penilaian_pk(riwayat_qc.penilaian) }}</section>{% include '_stok_pk_qc.html' %}</details>{% endif %}
+</main>{% endblock %}
