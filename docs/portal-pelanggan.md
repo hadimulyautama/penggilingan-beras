@@ -304,3 +304,15 @@ Tab bahan/hasil/pengukuran/riwayat tetap memakai GET native dan paginasi tetap
 tersedia; tombol ringkasan yang mengulang tab dihilangkan. ID jasa, pemilik
 yang berulang, pengaturan mesin dan petunjuk tindakan operator tidak menjadi
 isi utama pelanggan. Rincian teknis dapat dibuka tanpa menghilangkan data.
+
+Detail Barang masuk dan Pengambilan barang memakai pembaca Produksi yang
+sama, lalu dirapikan hanya untuk pelanggan. Satu tautan kembali mengikuti
+menu asal. Tab tidak diulang menjadi tombol di ringkasan; pengambilan selesai
+tidak menawarkan tautan ke tampilan perintah lain untuk transaksi yang sama.
+Dokumen dikelompokkan dan setiap jenis dokumen ditampilkan sekali. Berat
+penerimaan tetap berbeda dari berat pada tiket dan sisa stok. Rencana,
+jumlah dimuat/keluar, selisih, berat yang belum diukur, catatan asli dan
+penanda catatan timbang lama tetap dipertahankan. Identitas pemilik berulang,
+petunjuk operator, panel retur kosong dan ringkasan total berulang disisihkan.
+Rincian kiriman bersama tetap dibatasi sebelum HTML dibuat; total/tiket
+gabungan milik pelanggan lain tidak masuk halaman pelanggan.

@@ -181,7 +181,8 @@ def read_only(html, base, *, origin=None, report_available=None):
         status=s.find(id='status-bagikan')
         if status:status.string='PDF tersedia untuk dibaca, dibagikan, atau diunduh.'
     from .detail import ringkas
-    return str(ringkas(bahasa_pelanggan(s,base),base,report_available=report_available))
+    from .transaksi_detail import ringkas_transaksi
+    return str(ringkas_transaksi(ringkas(bahasa_pelanggan(s,base),base,report_available=report_available),base))
 
 
 def render_customer(request, name, *, status_code=200, **ctx):
