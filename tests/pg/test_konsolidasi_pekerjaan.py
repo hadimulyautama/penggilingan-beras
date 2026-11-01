@@ -155,7 +155,11 @@ async def test_detail_dan_filter_konteks_tetap_dan_get_tidak_menulis(pg,lengkap)
         async with pg() as db:
             sebelum=await db.scalar(select(func.count()).select_from(ActivityLog))
         for path in ('/barang-masuk?jenis=pk&kepemilikan=pabrik&gudang=g2','/pekerjaan?tab=tindakan&jenis=packing&kepemilikan=jasa&gudang=g2','/aksi?buka=catat_pk_luar&nilai='+str(lengkap['tiket']['BERAS_PK']),'/berjalan?gudang=g2','/mutu?buka=qc_giling&nilai=LOT-STOK-PABRIK','/keputusan?kategori=acc_permintaan_pk'):
-            r=await c.get(path);assert r.status_code==200,(path,r.text[-1000:])
+            r=await c.get(path)
+            if path.startswith('/aksi?buka=catat_pk_luar'):
+                assert r.status_code==303 and r.headers['location'].startswith('/barang-masuk/'+str(lengkap['tiket']['BERAS_PK'])+'?')
+                r=await c.get(r.headers['location'])
+            assert r.status_code==200,(path,r.text[-1000:])
         r=await c.get('/barang-masuk?jenis=pk');assert 'TRX-391-BERAS_PK' in r.text and 'TRX-391-GABAH' not in r.text
         async with pg() as db:
             assert await db.scalar(select(func.count()).select_from(ActivityLog))==sebelum
@@ -267,7 +271,9 @@ async def test_pemilik_detail_mengikuti_catatan_bukan_tiket_yang_diedit(pg,lengk
         async with pg() as db:
             await db.execute(text('UPDATE timbangan_transaksi SET jasa=false,pelanggan_id=NULL,jasa_id=NULL WHERE id=:i'),{'i':tid});await db.commit()
         h=(await c.get(f'/barang-masuk/{tid}')).text
-        assert 'identitas-barang__label--jasa' in h and 'JAS-' in h and 'Bu Sri</p>' in h
+        assert 'Pemilik stok' in h and 'JAS-2610-001 Bu Sri' in h
+        from tests.pg.test_penerimaan_ringkas import awal as data_ringkas
+        assert data_ringkas(await c.get(f'/barang-masuk/{tid}'))['catatan'][0]['jasa_id']==lengkap['jasa_id']
         assert 'tab=produk&amp;pemilik=jasa' in h
 
 
@@ -295,7 +301,7 @@ async def test_detail_menampilkan_timbang_lengkap_dan_qc_batch_yang_tepat(pg,len
                 await catat_qc_gabah(db,user=u,kode_batch=b.kode_batch,kadar_air_1=a1,kadar_air_2=a2,biji_hijau='sedikit',densiti='padat')
             awal=await db.scalar(select(func.count()).select_from(ActivityLog))
         h=(await c.get(f'/barang-masuk/{tid}')).text
-        for nilai in ('Hasil QC','Kadar air 1','Kadar air 2','13%','15%','2/5 pemeriksaan','Pemeriksaan 2',
+        for nilai in ('Rata-rata QC','Kadar air 1','Kadar air 2','13%','15%','2/5 pemeriksaan','Pemeriksaan 2',
                       'Timbang pertama','Timbang kedua','12.000 kg','2.200 kg','9.800 kg','9.785 kg',
                       'Total potongan tara','15 kg','Tara lain','5 kg','Petugas Timbang Uji 396',
                       'NOTA-UJI-396','Catatan timbang uji lengkap'):
@@ -305,7 +311,7 @@ async def test_detail_menampilkan_timbang_lengkap_dan_qc_batch_yang_tepat(pg,len
             assert float((await db.get(PurchaseBatch,b.id)).berat_total_kg)==9785
         # Riwayat dan tabel harus tetap dapat dibaca operator gudang asal.
     async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g1']) as c:
-        assert 'Hasil QC' in (await c.get(f'/barang-masuk/{tid}')).text
+        assert 'Rata-rata QC' in (await c.get(f'/barang-masuk/{tid}')).text
     async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g2']) as c:
         assert (await c.get(f'/barang-masuk/{tid}')).status_code==403
 

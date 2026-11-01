@@ -1,4 +1,4 @@
-"""Tab memindahkan penyajian, bukan sumber data penerimaan atau transaksi."""
+"""Tautan tab lama membuka rincian baru tanpa mengganti sumber/penulis data."""
 import json
 import os
 from html.parser import HTMLParser
@@ -63,10 +63,16 @@ async def test_tab_penerimaan_data_sama_formulir_dan_konteks_tetap(pg,lengkap,ki
             for tab in ('ringkasan','tiket','qc','riwayat'):
                 r=await c.get(f'/barang-masuk/{tid}?'+urlencode({'tab_detail':tab,'kembali_kerja':asal}))
                 assert r.status_code==200,r.text
-                assert r.text.count('role="tab"')==4 and r.text.count('role="tabpanel"')==4
-                assert f'id="terima-tab-{tab}"' in r.text and f'aria-controls="terima-panel-{tab}"' in r.text
+                assert 'data-penerimaan-ringkas' in r.text
+                if tab!='ringkasan':assert f'id="terima-panel-{tab}" open' in r.text
+                for judul in ('Data timbang lengkap','Identitas &amp; dokumen asal','QC · seluruh putaran &amp; rata-rata','Jejak penerimaan &amp; hubungan barang'):
+                    assert judul.replace('&amp;','&') in r.text or judul in r.text
                 assert konteks[-1]['kembali']==asal
-                assert tindakan(r.text)==tindakan(lama.render(konteks[-1]))
+                assert all(x in tindakan(r.text) for x in tindakan(lama.render(konteks[-1])))
+                data=json.loads(r.text.split('<script id="penerimaan-awal" type="application/json">')[1].split('</script>')[0])
+                assert data['tiket']['id']==tid
+                if tab=='ringkasan':data_awal=data
+                else:assert data==data_awal
                 assert 'harga_hpp' not in r.text
                 bukti(nama+'-'+status+'-'+tab,r.text)
             async with pg() as db:assert await db.scalar(select(func.count()).select_from(ActivityLog))==awal
@@ -124,7 +130,7 @@ async def test_beberapa_catatan_pemilik_tidak_diganti_bobot_tiket(pg,lengkap):
         for tab in ('ringkasan','riwayat','tiket'):
             r=await c.get(f'/barang-masuk/{tid}?tab_detail={tab}');assert r.status_code==200
             assert '11.800 kg' in r.text and '2 catatan' in r.text
-            assert 'identitas-barang__label--campuran' in r.text
+            assert 'Pemilik stok' in r.text and 'JAS-2610-001' in r.text
             assert 'Bu Sri' in r.text and 'Milik pabrik' in r.text
             assert 'tab=produk&amp;pemilik=jasa' in r.text and 'tab=produk&amp;pemilik=pabrik' in r.text
             bukti('campuran-diterima-'+tab,r.text)

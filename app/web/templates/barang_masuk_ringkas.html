@@ -1,0 +1,2 @@
+{% extends 'barang_masuk.html' %}
+{% block kaki %}{{ super() }}<script src="/static/penerimaan-posisi.js?v={{ VERSI }}&bm=20261101.4" data-posisi-penerimaan="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" defer></script>{% endblock %}

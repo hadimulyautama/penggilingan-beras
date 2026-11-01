@@ -38,6 +38,18 @@ def tautan(request, dasar, **nilai):
     return dasar + '?' + urlencode({k:v for k,v in q.items() if v})
 
 
+def tautan_penerimaan_lama(request):
+    """Pintasan bertiket membawa konteks langsung; tanpa tiket tetap jalur lama."""
+    from app.web.penerimaan_ringkas import AKSI_PENERIMAAN
+    if is_customer_read(request) or request.query_params.get('buka') not in AKSI_PENERIMAAN:return None
+    nilai=request.query_params.get('nilai','').split('|')[0]
+    if not nilai.isdigit():return None
+    from starlette.responses import RedirectResponse
+    q={k:v for k,v in request.query_params.items() if k not in ('buka','nilai')}
+    asal=konteks_aman(request.query_params.get('kembali_kerja')) or request.url.path+'?'+urlencode(q)
+    return RedirectResponse('/barang-masuk/'+nilai+'?'+urlencode(dict(buka=request.query_params['buka'],kembali_kerja=asal)),303)
+
+
 async def siapkan_daftar_pekerjaan(request, user):
     """Daftar yang sama untuk isi pekerjaan dan angka pada tab katalog."""
     async with SessionLocal() as db:
@@ -71,6 +83,7 @@ def daftar_tab_pekerjaan(k, pemilik, gudang, jenis):
 
 @router.get('/pekerjaan')
 async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=None):
+    if (alih:=tautan_penerimaan_lama(request)) is not None:return alih
     b, k, pelanggan_saring = await siapkan_daftar_pekerjaan(request, akun.user)
     tab = pilihan(request, 'tab', {'tindakan', 'berjalan'}, awal or 'tindakan')
     pemilik = pilihan(request, 'kepemilikan', {'jasa','pabrik'})
@@ -128,6 +141,7 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
 
 @router.get('/barang-masuk')
 async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
+    if (alih:=tautan_penerimaan_lama(request)) is not None:return alih
     from app.web.api import _is_g1_operator, _is_g2_operator
     from app.services.kelompok_kerja import dapat_ditindak
     async with SessionLocal() as db:
@@ -174,7 +188,7 @@ async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
     konteks = '/barang-masuk?' + urlencode({q:v for q,v in request.query_params.items() if q not in ('buka','nilai')})
     def detail(tid):
         return f'/barang-masuk/{tid}?'+urlencode({'kembali_kerja':konteks})
-    return render(request, "barang_masuk.html",layar='barang_masuk',status=status,jenis=jenis,
+    return render(request, "barang_masuk.html" if is_customer_read(request) else "barang_masuk_ringkas.html",layar='barang_masuk',status=status,jenis=jenis,
         menunggu=pending,riwayat=riwayat[(halaman-1)*25:halaman*25],
         total_belum=total_belum,total_diterima=total_diterima,jenis_barang=JENIS_BARANG,pelanggan_saring=pelanggan_saring,
         meta_tiket=meta,detail_tiket=detail,
@@ -204,8 +218,8 @@ async def sumber_detail_barang_masuk(db, tid, request, akun):
     return data, t, jenis
 
 
-@router.get('/barang-masuk/{tid:int}')
-async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
+async def konteks_barang_masuk(tid,request,akun):
+    """Pembaca yang sama untuk HTML dan pemeriksaan status; tidak menerima barang."""
     from app.peran import can_see_financials
     async with SessionLocal() as db:
         data, t, jenis = await sumber_detail_barang_masuk(db, tid, request, akun)
@@ -216,26 +230,39 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
         timbang = await masuk.rincian_timbang(db,tid)
         berat_diterima,keterangan_berat = masuk.bobot_diterima(catatan)
         qc_penerimaan = await masuk.hasil_qc(db,catatan)
+        bobot_masuk=dict(kg=t.get('berat_hpp_kg'),sumber=t.get('sumber_berat'))
+        if pending and jenis in ('gabah_basah','gabah_kering','pk'):
+            from app.penggilingan.gudang1.services.timbang_link import bobot_awal_dari_tiket
+            kg,sumber,_ = await bobot_awal_dari_tiket(db,t)
+            bobot_masuk=dict(kg=kg,sumber=sumber)
+        from app.web.penerimaan_ringkas import lengkapi_catatan
+        await lengkapi_catatan(db,catatan)
         from app.models.retur_supplier import ReturSupplier
         retur_supplier_terkait=[] if is_customer_read(request) else (await db.scalars(
             select(ReturSupplier).where(ReturSupplier.penerimaan_tiket_id==tid).order_by(ReturSupplier.id.desc()))).all()
-    kembali = konteks_aman(request.query_params.get('kembali_kerja')) or '/barang-masuk'
-    proses = [(kode, url + ('&' if '?' in url else '?') + urlencode({'kembali_kerja':kembali})) for kode,url in proses]
-    # Tab hanya memilih penyajian. Parameter pembuka formulir dan konteks asal
-    # tetap dibawa agar refresh/tautan lama tidak kehilangan tujuan.
-    tab_detail = pilihan(request, 'tab_detail', ('ringkasan','tiket','qc','riwayat'), 'ringkasan')
-    def tab_href(tab):
-        return request.url.path + '?' + urlencode({**dict(request.query_params), 'tab_detail':tab})
-    return render(request, "barang_masuk_detail.html",tab_detail=tab_detail,tab_href=tab_href,layar='barang_masuk',kembali=kembali,
-        tiket=t,jenis=jenis,menunggu=pending,catatan=catatan,lokasi=lokasi,proses=proses,petugas=petugas,
+    return dict(tiket=t,jenis=jenis,menunggu=pending,catatan=catatan,lokasi=lokasi,proses=proses,petugas=petugas,
         timbang=timbang,berat_diterima=berat_diterima,keterangan_berat=keterangan_berat,
-        qc_penerimaan=qc_penerimaan,
+        qc_penerimaan=qc_penerimaan,bobot_masuk=bobot_masuk,
         akses_retur_supplier=not is_customer_read(request) and bool(t.get('supplier_id')) and any(c['status']!='ditolak' and c['jasa_id'] is None for c in catatan),
-        boleh_retur_supplier=can_see_financials(akun.user),
-        retur_supplier_terkait=retur_supplier_terkait,
+        boleh_retur_supplier=can_see_financials(akun.user),retur_supplier_terkait=retur_supplier_terkait,
         pemilik_penerimaan=' · '.join(dict.fromkeys(c['pemilik'] for c in catatan)),
-        kepemilikan_penerimaan=data[0]['kepemilikan'] if data else '',
-        lama=svc._lama,buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''),**b.lencana())
+        kepemilikan_penerimaan=data[0]['kepemilikan'] if data else ''),b
+
+
+@router.get('/barang-masuk/{tid:int}')
+async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
+    from app.web.penerimaan_ringkas import keadaan,AKSI_PENERIMAAN
+    ctx,b=await konteks_barang_masuk(tid,request,akun)
+    kembali=konteks_aman(request.query_params.get('kembali_kerja')) or '/barang-masuk'
+    ctx['proses']=[(kode,url+('&' if '?' in url else '?')+urlencode({'kembali_kerja':kembali})) for kode,url in ctx['proses']]
+    tab_detail=pilihan(request,'tab_detail',('ringkasan','tiket','qc','riwayat'),'ringkasan')
+    def tab_href(tab):return request.url.path+'?'+urlencode({**dict(request.query_params),'tab_detail':tab})
+    buka=request.query_params.get('buka','');portal=is_customer_read(request)
+    return render(request,'barang_masuk_detail_lama.html' if portal else 'barang_masuk_detail.html',
+        **ctx,tab_detail=tab_detail,tab_href=tab_href,layar='barang_masuk',kembali=kembali,
+        lama=svc._lama,buka=buka,nilai=request.query_params.get('nilai',''),
+        buka_lama=buka if buka not in AKSI_PENERIMAAN else '',
+        awal=None if portal else await keadaan(ctx,b,akun.user),**b.lencana())
 
 
 async def alias_keputusan(request, akun, asal):
