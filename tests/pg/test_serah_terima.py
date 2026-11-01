@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import httpx
 from bs4 import BeautifulSoup
+from tests.pg.dokumen import fakta as fakta_dokumen
 from pypdf import PdfReader
 import pytest
 import pytest_asyncio
@@ -82,11 +83,12 @@ async def test_penerimaan_tidak_ada_pdf_sebelum_qc_lengkap_lalu_layar_pdf_sama(p
         assert (await c.get(path+'.pdf')).status_code==409
         await catat(pg,h,1)
         r=await c.get(path);assert r.status_code==200
-        soup=BeautifulSoup(r.text,'html.parser');assert soup.find('h1').get_text()=='Serah Terima Penerimaan'
+        soup=BeautifulSoup(r.text,'html.parser');assert soup.find('h1').get_text()=='Bukti barang masuk'
         pdf=await c.get(path+'.pdf');text,title=pdf_text(pdf)
         assert 'Serah Terima Penerimaan' in title and 'STP-T-ST-0' in title
-        for value in ['GB-ST-0','5.000 kg','24%','25%','Petugas Serah Terima','5/5 pemeriksaan','Pengesahan serah terima']:
+        for value in ['GB-ST-0','5.000 kg','24%','25%','Petugas Serah Terima','5/5 pemeriksaan']:
             assert value in text and value in soup.get_text(' ',strip=True),value
+        assert 'Pengesahan serah terima' in text and 'Pengesahan' in soup.get_text()
         assert text.count('Pemeriksaan ')==5
         assert 'Rahasia Pelanggan B' not in text
         assert (await c.get(path+'.pdf?unduh=1')).headers['content-disposition'].startswith('attachment;')
@@ -192,7 +194,7 @@ async def test_kedua_dokumen_di_laporan_bersama_dan_seluruh_get_tidak_menulis(pg
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=__import__('app.main',fromlist=['app']).app),base_url='http://uji') as staff:
                 staff.cookies.set(security.NAMA_COOKIE,security.buat_token(account))
                 native=await staff.get(path);assert native.status_code==200
-                assert BeautifulSoup(native.text,'html.parser').select_one('.rekap-jasa').get_text(' ',strip=True)==BeautifulSoup(portal_page.text,'html.parser').select_one('.rekap-jasa').get_text(' ',strip=True)
+                assert fakta_dokumen(native.text)==fakta_dokumen(portal_page.text)
                 assert pdf_text(await staff.get(path+'.pdf'))[0]==text_pdf
     assert await snapshot()==before
     import json

@@ -1002,9 +1002,9 @@ async def test_operator_gudang2_melihat_perintah_muat_sebagai_kartu(pg, gudang):
     from app.services.berjalan import grup_baris
     assert grup_baris(k) == "muat"
     assert b.jumlah_grup()["muat"] == 1
-    # Tiga pilihan, dan "muat semua" paling atas — keadaan yang paling sering.
+    # Pintu pencatatan menuju lembar muatan yang sama; penyelesaian terpisah.
     aksi = [p[0] for p in (k.pilihan or [])]
-    assert aksi[:1] == ["muat_semua"], aksi
+    assert aksi == ["muat_barang", "selesai_muat"], aksi
     assert {"muat_barang", "selesai_muat"} <= set(aksi), aksi
 
 
@@ -1466,7 +1466,7 @@ async def test_kartu_di_halaman_membawa_tombolnya_sendiri(pg, gudang):
     c=await _klien(pg,gudang['op'],'uji_tombol_detail_op',mode='operator')
     async with c:
         h=(await c.get(f'/barang-keluar/{belum.rec.id}')).text
-    assert 'buka=muat_semua' in h and 'buka=selesai_muat' in h
+    assert 'buka=muat_barang' in h and 'buka=selesai_muat' in h
     assert 'buka=verifikasi_keluar' not in h
     assert 'buka=batal_perintah_keluar' not in h
     assert 'Ubah jumlah' not in h
@@ -1507,7 +1507,11 @@ async def test_operator_pun_mendapat_lembarnya(pg, gudang):
     c = await _klien(pg, gudang["op"], "uji_lembar_op", mode="operator")
     async with c:
         h = (await c.get(f"/barang-keluar/{r.rec.id}")).text
-    assert f"/barang-keluar/{r.rec.id}?buka=muat_semua" in h
+        alias=await c.get(f"/barang-keluar/{r.rec.id}?buka=muat_semua")
+        assert alias.status_code==303
+        assert alias.headers["location"]==f"/muatan?perintah={r.rec.id}"
+        assert (await c.get(alias.headers["location"])).status_code==200
+    assert f"/barang-keluar/{r.rec.id}?buka=muat_barang" in h
     assert '<dialog class="lembar" id="lembar">' in h, \
         "operator punya tombol tetapi tak punya lembarnya"
     assert "aksi.js" in h

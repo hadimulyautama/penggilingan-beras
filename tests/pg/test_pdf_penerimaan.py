@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 
 import pytest
+from bs4 import BeautifulSoup
 import pytest_asyncio
 from pypdf import PdfReader
 from sqlalchemy import select,text,delete
@@ -269,8 +270,10 @@ async def test_portal_unduh_sendiri_url_asing_ditolak_dan_tidak_ada_perubahan(pg
         async with pg() as db:awal=await sidik(db)
         page=await c.get(f'/pelanggan/barang-masuk/{tids[0]}')
         assert f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf' in page.text
-        assert f'data-penerimaan-share="/pelanggan/barang-masuk/{tids[0]}/laporan.pdf"' in page.text
-        assert '/static/pdf-penerimaan.js?' in page.text
+        soup=BeautifulSoup(page.text,'html.parser')
+        link=soup.select_one(f'.pelanggan-dokumen-detail a[href="/pelanggan/barang-masuk/{tids[0]}/laporan.pdf?unduh=0"]')
+        assert link is not None and link.get_text(strip=True)=='Laporan penerimaan (PDF)'
+        assert (await c.get(link['href'])).status_code==200
         pdf,teks=isi(await c.get(f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf'))
         assert 'Pemilik barang:' in teks and portal.owners[0].nama_pelanggan in teks
         assert portal.owners[1].nama_pelanggan not in teks

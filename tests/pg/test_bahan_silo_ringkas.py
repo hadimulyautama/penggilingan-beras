@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 import pytest
+from bs4 import BeautifulSoup
+from tests.pg.halaman_interaktif import awal
 from tests.pg.test_riwayat_giling import pabrik, _isi_silo, _klien
 from tests.pg.test_gudang2_operator_pg import gudang2
 from tests.pg.test_riwayat_sosoh import _silo_berisi
@@ -9,7 +11,6 @@ pytestmark = pytest.mark.asyncio
 
 def simpan(nama, r):
     assert r.status_code == 200
-    assert 'class="bahan-silo"' in r.text
     if os.environ.get('UJI_POTRET_RINGKAS'):
         folder = Path('/tmp/pos-kontras340/halaman345')
         folder.mkdir(exist_ok=True)
@@ -32,8 +33,12 @@ async def test_giling_sumber_ulang_aktif_dan_riwayat(pg, pabrik):
     async with await _klien(pg, peran='operator', gudang='Gudang 1') as c:
         r = await c.get('/proses-aktif/giling/' + pr.kode_proses)
         simpan('aktif-giling', r)
-        assert r.text.count('class="bahan-silo__satu"') == 1
-        assert 'Belum dicatat' in r.text and 'Tidak dipisahkan' in r.text
+        data=awal(r,'giling')
+        sumber=BeautifulSoup(data['asal_html'],'html.parser')
+        assert len(sumber.select('.bahan-silo__satu'))==1
+        assert [x['bobot'] for x in data['sumber']]==[3000,2000]
+        assert [x['sisa'] for x in data['sumber']]==[0,None]
+        assert 'Belum dicatat' in sumber.get_text() and 'Tidak dipisahkan' in sumber.get_text()
     async with pg() as db:
         u = await db.get(User, pabrik['user'])
         await tutup_silo_giling(db, user=u, kode_proses=pr.kode_proses, nama_silo='A', sisa_kg=500)
@@ -42,8 +47,14 @@ async def test_giling_sumber_ulang_aktif_dan_riwayat(pg, pabrik):
         assert len(k.pemakaian_silo) == 2
         assert [dict(x['angka'])['Sisa akhir'] for x in k.pemakaian_silo] == ['0 kg','500 kg']
     async with await _klien(pg, peran='admin') as c:
-        simpan('riwayat-giling', await c.get('/riwayat-giling'))
-        simpan('detail-giling', await c.get(f'/riwayat-giling/{pr.id}'))
+        for nama,path in [('riwayat-giling','/riwayat-giling'),('detail-giling',f'/riwayat-giling/{pr.id}')]:
+            r=await c.get(path);simpan(nama,r)
+            # Daftar memiliki salinan desktop dan ponsel; setiap tabel tetap
+            # mengelompokkan dua pemakaian silo yang sama menjadi satu.
+            tables=BeautifulSoup(r.text,'html.parser').select('.bahan-silo')
+            assert tables
+            assert all(len(t.select('.bahan-silo__satu'))==1 for t in tables)
+            assert '500 kg' in r.text
 
 async def test_sosoh_pemakaian_ulang_aktif_dan_riwayat(pg, gudang2):
     from app.penggilingan.gudang2.polishing import mulai_penyosohan, selesai_penyosohan, tambah_silo_penyosohan, catat_output, akhiri_penyosohan
@@ -57,8 +68,10 @@ async def test_sosoh_pemakaian_ulang_aktif_dan_riwayat(pg, gudang2):
     async with await _klien(pg, peran='admin') as c:
         r = await c.get('/proses-aktif/sosoh/' + pr.kode_proses)
         simpan('aktif-sosoh', r)
-        assert r.text.count('class="bahan-silo__satu"') == 1
-        assert 'Belum dicatat' in r.text
+        data=awal(r,'sosoh')
+        assert {x['silo'] for x in data['sumber']}=={'Silo B'}
+        assert [x['awal'] for x in data['sumber']]==[9800,500]
+        assert [x['sisa'] for x in data['sumber']]==[0,None]
     async with pg() as db:
         await catat_output(db, user=u, kode=pr.kode_proses, jenis='medium', berat_kumulatif=1000)
         await selesai_penyosohan(db, user=u, kode=pr.kode_proses, nama_silo='B', sisa_kg=100)

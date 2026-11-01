@@ -1,6 +1,7 @@
 """Penilaian lengkap sama pada stok, transfer, dan detail QC meski stok habis."""
 from pathlib import Path
 import re
+from bs4 import BeautifulSoup
 
 import pytest
 from sqlalchemy import select, delete
@@ -16,7 +17,17 @@ pytestmark=pytest.mark.asyncio
 
 
 def penilaian(html):
-    return re.search(r'<div class="penilaian-pk" data-penilaian-pk="gabungan">(.*?)</section>',html,re.S)[1].strip()
+    node=BeautifulSoup(html,'html.parser').select_one('.penilaian-pk[data-penilaian-pk=gabungan]')
+    assert node is not None
+    # Detail QC menambahkan warna cetak pada sel. Bandingkan isi, struktur,
+    # parameter, dan pedoman, tanpa atribut presentasi khusus halaman.
+    for el in node.select('[style]'):
+        del el['style']
+    for text in list(node.find_all(string=True)):
+        text.replace_with(' '.join(text.split()))
+    # Batasi pada komponen ini, bukan section induk/saudaranya. Spasi indentasi
+    # templat bukan bagian skor, parameter, atau pedoman penilaian.
+    return re.sub(r'>\s+<','><',re.sub(r'\s+',' ',str(node))).strip()
 
 
 async def test_enam_komponen_rumus_dan_pedoman_identik_di_kedua_halaman(pg,dunia):

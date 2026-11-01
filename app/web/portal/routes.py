@@ -103,7 +103,18 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     elif m:=re.fullmatch(r'/jasa/pelanggan/(\d+)',path):
         if int(m[1])!=reader.pelanggan_id:missing()
         from .beranda import halaman
-        result=await halaman(req,'barang' if q.get('tab') in ('stok','pengambilan') else 'jasa')
+        # Tautan lima tab lama tetap menuju bagian portal yang sesuai.
+        # Pemeriksaan ID pelanggan di atas berlaku sebelum membaca bagiannya.
+        target,bagian={
+            'ringkasan':('/ringkasan','beranda'), 'penerimaan':('/barang-masuk','masuk'),
+            'proses':('/jasa-saya','jasa'), 'stok':('/barang-saya','barang'),
+            'pengambilan':('/barang-keluar','pengambilan'),
+        }.get(q.get('tab','ringkasan'),('/ringkasan','beranda'))
+        req=native_request(request,target,scope)
+        if bagian=='pengambilan':
+            result=await outgoing.halaman_barang_keluar(req,account,sebelum=integer(q.get('sebelum')),
+                q=q.get('q',''),status=q.get('status',''),sejak=q.get('sejak',''))
+        else:result=await halaman(req,bagian)
     elif m:=re.fullmatch(r'/jasa/(\d+)(/nota(?:\.pdf)?)?',path):
         await own_order(scope,int(m[1]))
         if m[2]=='/nota.pdf':result=await jasa.rekap_pdf(int(m[1]),req,unduh=integer(q.get('unduh')) or 0,akun=account)

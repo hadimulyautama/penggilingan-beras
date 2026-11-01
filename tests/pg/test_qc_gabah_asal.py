@@ -10,6 +10,7 @@ from tests.pg.test_riwayat_giling import _klien
 from tests.pg.test_stok_pk_qc import dunia, dunia_asal
 from app.models import User, PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample, MillingProcess
 from app.services import qc_gabah_asal
+from tests.pg.halaman_interaktif import awal
 
 pytestmark = pytest.mark.asyncio
 
@@ -61,8 +62,9 @@ async def test_dari_gabah_ke_pk_tanpa_mengubah_angka(pg, dryer_tab, peran):
                 sebelum=await _potret(db)
             r=await c.get(url+('&' if '?' in url else '?')+'tab_detail=bahan')
             assert r.status_code==200,(tahap,r.text[:200])
+            isi=awal(r,'giling')['asal_html'] if tahap=='giling' else r.text
             for teks in ['QC gabah asal','QC 1','QC 2','24%','27%','Ya · 2 sak','Padat',dryer_tab['tambahan'],'QC gabah belum tercatat untuk batch ini.']:
-                assert teks in r.text,(tahap,teks)
+                assert teks in isi,(tahap,teks)
             if tahap in ['pengeringan','pendinginan','sudah-dingin','silo']:
                 assert 'Mode dryer belum tercatat' in r.text
             async with pg() as db:

@@ -10,6 +10,7 @@ from sqlalchemy import select, func
 from tests.pg.test_gudang2_operator_pg import gudang2
 from tests.pg.test_riwayat_giling import _klien
 from tests.pg.formulir import cap_formulir
+from tests.pg.halaman_interaktif import awal
 
 pytestmark = pytest.mark.asyncio
 
@@ -120,7 +121,10 @@ async def test_4400_4600_log200_saldo_laporan_dan_kirim_ulang(pg,hasil,peran,vie
         assert (await kirim(c,pr.kode_proses,berat_kumulatif=4600)).status_code==200
         assert await fakta(pg,pr)==after
         r=await c.get('/proses-aktif/sosoh/'+pr.kode_proses+'?tab_detail=hasil')
-        assert '4.600' in r.text and '200 kg' in r.text
+        data=awal(r,'sosoh')
+        assert next(h['kg'] for h in data['hasil'] if h['jenis']=='medium')==4600
+        assert data['riwayat_hasil'][-1]['kg']==200
+        assert data['riwayat_hasil'][-1]['jenis']=='medium'
 
 
 @pytest.mark.parametrize('isi',[{'berat_kumulatif':4300},{'berat_kumulatif':0},{'berat_kumulatif':-1},{'berat_kumulatif':''},{'berat_kumulatif':'NaN'},{'berat_kumulatif':'Infinity'},{'berat_kumulatif':'4.600,1'},{},{'jenis':'palsu','berat_kumulatif':4600},{'berat_kumulatif':4600,'berat_kg':200}])
@@ -234,7 +238,8 @@ async def test_semua_jenis_lama_tetap_diterima_dan_sumber_laporan_sama(pg,hasil)
         for j in jenis:
             assert (await kirim(c,pr.kode_proses,jenis=j,berat_kumulatif=5000.25)).status_code==200
         r=await c.get('/proses-aktif/sosoh/'+pr.kode_proses+'?tab_detail=hasil')
-        assert r.status_code==200 and '5.000,25' in r.text
+        data=awal(r,'sosoh')
+        assert {h['jenis']:h['kg'] for h in data['hasil']}=={j:5000.25 for j in jenis}
     async with pg() as db:
         totals=await output_sosoh(db,pr.id)
         assert totals=={j:5000.25 for j in jenis}
