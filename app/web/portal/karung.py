@@ -2,14 +2,22 @@
 import re
 
 
-def ringkasan_berisi(teks):
-    """Ambil jumlah dari kalimat native; tidak menghitung jumlah dari kg."""
+def ringkasan_berisi(teks, *, batch=None, sisa_kg=None):
+    """Jumlah tercatat atau ekuivalen dari bobot per karung native, bukan nominal."""
     if not teks:return dict(jumlah=None,label=None,perkiraan=False)
     match=re.match(r'(?:sisa )?(-?\d+ karung|kurang dari 1 karung)',teks)
     if not match:return dict(jumlah=None,label=teks,perkiraan=True)
     jumlah=match[1]
     perkiraan=' ~ ' in teks or ' — ' in teks
-    label='Perkiraan sisa: '+jumlah if perkiraan else jumlah+' tercatat'
+    if perkiraan and batch is not None and sisa_kg is not None:
+        from decimal import Decimal
+        from app.penggilingan.gudang2.karung import bobot_per_karung
+        bobot=bobot_per_karung(batch)
+        if bobot and bobot>0:
+            nilai=Decimal(str(sisa_kg))/bobot
+            if 0<nilai<1:jumlah='kurang dari 1 karung'
+            else:jumlah=f'{nilai:,.2f}'.rstrip('0').rstrip('.').replace(',','_').replace('.',',').replace('_','.')+' karung'
+    label=('Setara '+jumlah if jumlah=='kurang dari 1 karung' else 'Setara sekitar '+jumlah) if perkiraan else jumlah+' tercatat'
     return dict(jumlah=jumlah,label=label,perkiraan=perkiraan)
 
 
@@ -39,4 +47,4 @@ async def siapkan_detail(request,ctx):
         batch=await db.get(PkPurchaseBatch,intake.pk_purchase_batch_id)
         ctx['portal_pk_karung']=dict(stok_kg=None if intake.berat_kg is None else t.tersedia,
             masuk_kg=dari_batch(batch).kg,ukuran=batch.ukuran_karung_kg,
-            **ringkasan_berisi(t.ringkasan_karung))
+            **ringkasan_berisi(t.ringkasan_karung,batch=batch,sisa_kg=None if intake.berat_kg is None else t.tersedia))

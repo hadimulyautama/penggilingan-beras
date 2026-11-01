@@ -1,10 +1,10 @@
 {% import '_stok.html' as st with context %}
-<section class="pelanggan-kemasan-barang">
-<h2>Kemasan barang</h2>
+<section class="pelanggan-kemasan-barang" aria-label="Kemasan barang">
 {% for p in baris_kemasan or [] %}<article class="pelanggan-kemasan-baris">
-<h3>{{ ('Perkiraan karung berisi' if k.jenis in ('broken','menir','reject','bekatul') else 'Karung berisi') if p.ukuran else 'Barang curah' }}{% if p.merk %} · {{ p.merk }}{% endif %}</h3>
-{% if p.ukuran %}<p class="pelanggan-jumlah-berisi">{{ p.karung }} karung</p><p class="pelanggan-ukuran-nominal">Ukuran nominal karung: {{ st.kg_rinci(p.ukuran) }} kg</p>{% endif %}
-{% if not PORTAL_BERAT_TUNGGAL %}<dl class="pelanggan-fakta"><div><dt>Berat kelompok ini</dt><dd>{{ st.kg_rinci(p.kg) ~ ' kg' if p.kg is not none else 'Berat belum ditimbang' }}</dd></div></dl>{% endif %}
-{% if p.bahan %}<details class="pelanggan-rincian pelanggan-bahan-kemasan"><summary>Jenis kemasan</summary><p>{{ p.bahan }}</p></details>{% endif %}
+{% set otomatis=p.bentuk == 'Kemasan otomatis' %}{% set selisih=p.kg is not none and p.kg < 0 and not p.ukuran %}
+<h3>{{ 'Karung berisi' if p.ukuran else ('Selisih berat' if selisih else ('Perkiraan sisa curah' if p.bentuk == 'Curah' and k.jenis in ('broken','menir','reject','bekatul') else 'Barang curah')) }}{% if p.merk %} · {{ p.merk }}{% endif %}</h3>
+{% if p.ukuran %}<p class="pelanggan-jumlah-berisi">{{ 'Setara sekitar ' if otomatis else '' }}{{ st.kg_rinci(p.karung) }} karung{{ ' tercatat' if not otomatis else '' }}</p><p class="pelanggan-ukuran-nominal">Ukuran karung: {{ st.kg_rinci(p.ukuran) }} kg (nominal)</p>{% endif %}
+{% if not PORTAL_BERAT_TUNGGAL %}<dl class="pelanggan-fakta"><div><dt>{{ 'Berat setara karung' if otomatis else ('Selisih catatan kemasan' if selisih else ('Berat dalam karung' if p.ukuran else 'Berat curah')) }}</dt><dd>{{ st.kg_rinci(p.kg) ~ ' kg' if p.kg is not none else 'Berat belum ditimbang' }}</dd></div></dl>{% endif %}
 </article>{% else %}<p class="pelanggan-redup">Rincian kemasan dan barang curah belum tercatat.</p>{% endfor %}
+{% if baris_kemasan|selectattr('ukuran')|list %}<details class="pelanggan-tentang-kemasan"><summary>Tentang jumlah dan ukuran karung</summary><p>Ukuran nominal adalah ukuran kemasan, bukan hasil timbang setiap karung. Berat stok tidak selalu sama dengan jumlah karung dikali ukuran nominal.</p>{% if baris_kemasan|selectattr('bentuk','equalto','Kemasan otomatis')|list %}<p>Jumlah bertanda “setara sekitar” adalah perkiraan dari berat, bukan hitungan fisik karung. Sisa curah perkiraan ditampilkan terpisah.</p>{% endif %}{% for p in baris_kemasan if p.bahan and p.bentuk != 'Kemasan otomatis' %}<p>{{ p.merk ~ ' · ' if p.merk else '' }}{{ st.kg_rinci(p.ukuran) }} kg: {{ p.bahan }}</p>{% endfor %}</details>{% endif %}
 </section>

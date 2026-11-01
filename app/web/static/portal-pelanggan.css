@@ -214,3 +214,16 @@ body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;bord
 .pelanggan-satuan-stok .pelanggan-penanda{margin:8px 0 0}
 .pelanggan-kemasan-baris{min-width:0;overflow-wrap:anywhere}.portal-customer .pk-detail__weight strong{white-space:normal;overflow-wrap:anywhere;text-align:right;min-width:0}.pelanggan-detail-lipat.pelanggan-stok-petunjuk{padding-top:0}
 @media(max-width:540px){.portal-customer .pk-detail__hero>.pelanggan-kemasan-barang,.portal-customer .pk-detail__hero>.pelanggan-satuan-stok{flex:0 0 auto}}
+
+/* Jumlah tercatat, ekuivalen karung dan curah tetap memakai sumber native. */
+.portal-customer .pk-detail__weight{flex-wrap:wrap;max-width:100%;gap:6px 12px}
+.portal-customer .pk-detail__weight>.pelanggan-status-berat{flex:0 0 100%;font-size:12px;font-weight:600;line-height:1.5;color:var(--pd-amber);margin-top:4px}
+.portal-customer .pk-detail__hero .pelanggan-tentang-kemasan{margin:10px 0 0;min-width:0;color:var(--pd-muted);font-size:13px;line-height:1.6}
+.pelanggan-tentang-kemasan>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:7px;color:var(--pd-green);font-weight:500;list-style:none}
+.pelanggan-tentang-kemasan>summary::before{content:'▸'}.pelanggan-tentang-kemasan[open]>summary::before{content:'▾'}
+.portal-customer .pk-detail__hero .pelanggan-tentang-kemasan p{font-size:13px;margin:6px 0;overflow-wrap:anywhere}
+.portal-customer .pk-detail__hero>.pelanggan-kemasan-barang .pelanggan-kemasan-baris:first-child{padding-top:0}
+.portal-customer .pk-detail>.pelanggan-detail-lipat,.portal-customer .pk-detail__grid>.pelanggan-detail-lipat{margin:0}
+.pelanggan-mutu-stok>.pelanggan-detail-lipat{margin:10px 12px;box-shadow:none}
+.pelanggan-mutu-stok .qc-gabah-asal{margin:0;max-width:none}
+@media(max-width:540px){.portal-customer .pk-detail{gap:16px}.portal-customer .pk-detail__weight>.pelanggan-status-berat{text-align:right}.portal-customer .pk-detail__hero{gap:12px}.portal-customer .pk-detail__hero .pelanggan-jumlah-berisi{font-size:18px}}

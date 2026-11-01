@@ -6,6 +6,34 @@ JENIS={'pengeringan':'Pengeringan','pendinginan':'Pendinginan','giling':'Penggil
        'sosoh':'Penyosohan','transfer':'Pemindahan barang'}
 
 
+def satukan_mutu(s,stok):
+    """Satu pintu mutu stok; sumber dan angka pemeriksaan tetap terpisah."""
+    sections=list(stok.select('.pk-detail__quality,section[aria-labelledby=perhitungan-kualitas-pk],section[aria-labelledby=riwayat-qc-pk]'))
+    sections.extend(s.select('.qc-gabah-asal'))
+    groups=[];seen=set()
+    for section in sections:
+        wrapper=section
+        for parent in section.parents:
+            if parent is stok:break
+            if parent.name=='details':wrapper=parent
+        if id(wrapper) in seen:continue
+        seen.add(id(wrapper))
+        summary=wrapper.find('summary',recursive=False) if wrapper.name=='details' else None
+        if 'qc-gabah-asal' in section.get('class',[]):label='Bahan asal'
+        elif 'pk-detail__quality' in section.get('class',[]) or (summary and summary.get_text(strip=True)=='Pemeriksaan mutu'):label='Barang ini'
+        elif section.get('aria-labelledby')=='perhitungan-kualitas-pk':label='Perhitungan nilai mutu'
+        else:label='Riwayat pemeriksaan barang ini'
+        if summary:summary.string=label
+        groups.append(wrapper)
+    if not groups:return
+    box=s.new_tag('details',attrs={'class':'pelanggan-detail-lipat pelanggan-mutu-stok'})
+    summary=s.new_tag('summary');summary.string='Pemeriksaan mutu';box.append(summary)
+    for group in groups:box.append(group.extract())
+    stok.append(box)
+    for empty in list(s.select('.qc-gabah-stok')):
+        if not empty.get_text(strip=True):empty.decompose()
+
+
 def ringkas(s,base,*,report_available=None):
     path=urlsplit(base).path.removeprefix('/pelanggan')
     stok=s.select_one('.pk-detail')
@@ -88,8 +116,10 @@ def ringkas(s,base,*,report_available=None):
                     if 'belum final' in note.get_text(' ',strip=True).lower():
                         hero=stok.select_one('.pk-detail__hero')
                         if hero:
-                            badge=s.new_tag('span',attrs={'class':'pelanggan-penanda pelanggan-penanda--hati pelanggan-peringatan-stok'})
-                            badge.string='Hasil sementara';hero.append(badge)
+                            weight=hero.select_one('.pk-detail__weight')
+                            if weight:
+                                badge=s.new_tag('span',attrs={'class':'pelanggan-status-berat'})
+                                badge.string='Berat sementara';weight.append(badge)
             lipat(ringkasan,'Rincian jumlah stok')
             sumber=stok.select_one('section[aria-labelledby=rincian-produk]')
             if sumber and sumber.find_parent('details'):
@@ -100,6 +130,15 @@ def ringkas(s,base,*,report_available=None):
                 elif text=='Belum dikemas · curah':dt.string='Barang curah'
                 elif text=='Dikemas otomatis':dt.string='Perkiraan berat dalam karung'
                 elif text=='Curah · sisa kemasan':dt.string='Sisa barang curah'
+        weight=stok.select_one('.pk-detail__weight')
+        if weight:
+            label=weight.find('span',recursive=False)
+            if label and label.get_text(strip=True)=='Stok saat ini':label.string='Berat stok'
+            notice=stok.select_one('.pk-detail__notice')
+            if notice and 'belum final' in notice.get_text().lower() and weight.find('strong') and weight.find('strong').get_text(strip=True)!='—' and not weight.select_one('.pelanggan-status-berat'):
+                badge=s.new_tag('span',attrs={'class':'pelanggan-status-berat'})
+                badge.string='Berat sementara';weight.append(badge)
+        satukan_mutu(s,stok)
 
     if proses or riwayat:
         parts=path.split('/')

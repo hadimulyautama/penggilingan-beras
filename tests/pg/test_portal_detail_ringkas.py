@@ -33,10 +33,9 @@ async def test_detail_stok_pk_dan_produk_satu_judul_tanpa_navigasi_ganda(pg,port
             assert len(s.select('main a.pk-detail__back'))==1
             assert 'Rahasia Pelanggan B' not in r.text and 'JAS-PORTAL-0' not in s.main.get_text()
             assert not s.select('[data-post],[data-aksi],dialog')
-            assert s.select_one('.pelanggan-stok-petunjuk summary').get_text()=='Informasi stok'
-            assert not s.select_one('.pelanggan-stok-petunjuk').has_attr('open')
+            assert not s.select('.pelanggan-stok-petunjuk')
             assert 'konfirmasikan' not in s.select_one('.pk-detail__hero').get_text()
-            assert 'Waktu pembaruan stok belum tersedia' in s.select_one('.pelanggan-stok-petunjuk').get_text()
+            assert 'Waktu pembaruan stok belum tersedia' not in s.main.get_text()
 
 
 async def test_detail_giling_dan_sosoh_tab_tetap_terbaca_tanpa_tombol_operator(pg,portal):

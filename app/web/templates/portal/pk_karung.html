@@ -4,11 +4,11 @@
 <main class="pk-detail pelanggan-pk-karung">
 <a class="pk-detail__back" href="/pelanggan/barang-saya">← Kembali ke Barang saya</a>
 <header class="pk-detail__hero"><div class="pk-detail__heading"><h1>{{ t.kode }}</h1><p class="pelanggan-redup">Gudang 2 · Tumpukan</p></div>
-<div class="pk-detail__weight"><span>Stok saat ini</span><strong>{{ st.kg_rinci(b.stok_kg) ~ ' kg' if b.stok_kg is not none else (b.jumlah or 'Berat belum ditimbang') }}</strong></div>
+<div class="pk-detail__weight"><span>{{ 'Berat stok' if b.stok_kg is not none else 'Jumlah karung tercatat' }}</span><strong>{{ st.kg_rinci(b.stok_kg) ~ ' kg' if b.stok_kg is not none else (b.jumlah or 'Belum tercatat') }}</strong>{% if not t.bobot_final and b.stok_kg is not none %}<span class="pelanggan-status-berat">Berat sementara</span>{% endif %}</div>
 <div class="pelanggan-satuan-stok" aria-label="Jumlah karung dan berat">
-{% if b.stok_kg is none %}<p class="pelanggan-belum-timbang">Berat belum ditimbang</p>{% elif b.label %}<p class="pelanggan-jumlah-berisi">{{ b.label }}</p>{% endif %}
-{% if b.ukuran %}<p class="pelanggan-ukuran-nominal">Ukuran nominal karung: {{ st.kg_rinci(b.ukuran) }} kg</p>{% endif %}
-{% if not t.bobot_final and b.stok_kg is not none %}<p class="pelanggan-penanda pelanggan-penanda--hati">Berat sementara</p>{% endif %}
+{% if b.stok_kg is none %}<p class="pelanggan-belum-timbang">Berat total belum ditimbang</p>{% elif b.label %}<p class="pelanggan-jumlah-berisi">{{ b.label }}</p>{% endif %}
+{% if b.ukuran %}<p class="pelanggan-ukuran-nominal">Ukuran karung: {{ st.kg_rinci(b.ukuran) }} kg (nominal)</p>{% endif %}
+{% if b.ukuran or b.perkiraan %}<details class="pelanggan-tentang-kemasan"><summary>Tentang jumlah dan ukuran karung</summary>{% if b.perkiraan %}<p>Jumlah karung adalah perkiraan dari berat stok dan rata-rata berat saat diterima. Jumlah fisik karung bisa berbeda.</p>{% endif %}{% if b.ukuran %}<p>Ukuran nominal adalah ukuran kemasan, bukan hasil timbang setiap karung.</p>{% endif %}</details>{% endif %}
 {% if t.peringatan_karung %}<p class="pelanggan-penanda pelanggan-penanda--hati">Catatan penimbangan perlu diperiksa petugas</p>{% endif %}
 </div></header>
 <details class="pelanggan-detail-lipat"><summary>Catatan barang saat diterima</summary><section class="pk-detail__panel">

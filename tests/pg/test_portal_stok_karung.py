@@ -81,8 +81,73 @@ async def test_dua_ukuran_karung_mempertahankan_berat_setiap_kelompok(pg,portal,
         text=[r.get_text(' ',strip=True) for r in groups]
         assert any('20 karung' in t and '50 kg' in t and '1.000 kg' in t for t in text)
         assert any('4 karung' in t and '25 kg' in t and '100 kg' in t for t in text)
-        out=Path('output/portal-berat-ringkas-20261101');out.mkdir(parents=True,exist_ok=True)
+        out=Path('output/portal-jumlah-curah-20261101');out.mkdir(parents=True,exist_ok=True)
         (out/'multi.html').write_text(response.text)
+
+
+async def test_curah_tanpa_karung_dan_sisa_otomatis_tidak_dianggap_karung_tercatat(pg,portal,stok_karung):
+    from sqlalchemy import delete
+    from app.models import PolishingOutputLog
+    async with pg() as db:
+        await db.execute(delete(FinishedGoodsStock).where(FinishedGoodsStock.jasa_id==portal.orders[0].id))
+        await db.execute(delete(PolishingOutputLog).where(PolishingOutputLog.polishing_process_id==portal.process[0]['sosoh'],PolishingOutputLog.jenis=='medium'))
+        db.add(PolishingOutputLog(polishing_process_id=portal.process[0]['sosoh'],jenis='medium',berat_kg=175.25,waktu_update=now_local(),input_by=1))
+        db.add(PolishingOutputLog(polishing_process_id=portal.process[0]['sosoh'],jenis='broken',berat_kg=275,waktu_update=now_local(),input_by=1))
+        size=await db.scalar(select(PackageSize).where(PackageSize.ukuran_kg==50))
+        mat=await db.scalar(select(PackagingMaterial).where(PackagingMaterial.kode=='laminasi'))
+        brand=await db.scalar(select(Brand).where(Brand.nama=='Cap Mitra A'))
+        sku=ProductSku(kategori='broken',brand_id=brand.id,packaging_material_id=mat.id,package_size_id=size.id)
+        db.add(sku);await db.flush()
+        db.add(FinishedGoodsStock(product_sku_id=sku.id,source_type='polishing',source_id=portal.process[0]['sosoh'],jasa_id=portal.orders[0].id,jumlah_karung=2,berat_total_kg=100,waktu=now_local(),input_by=1,kemasan_mengurangi_stok=False))
+        await db.commit()
+    out=Path('output/portal-jumlah-curah-20261101');out.mkdir(parents=True,exist_ok=True)
+    async with client(portal.accounts[0]) as c:
+        r=await c.get(stok_karung['produk']);assert r.status_code==200
+        s=BeautifulSoup(r.text,'html.parser');hero=s.select_one('.pk-detail__hero')
+        assert '175,25' in hero.get_text() and 'Barang curah' in hero.get_text()
+        assert not hero.select('.pelanggan-jumlah-berisi,.pelanggan-ukuran-nominal')
+        (out/'curah.html').write_text(r.text)
+        r=await c.get('/pelanggan/stok-produk-jasa/detail?jenis=broken');assert r.status_code==200
+        s=BeautifulSoup(r.text,'html.parser');hero=s.select_one('.pk-detail__hero')
+        assert '275' in hero.select_one('.pk-detail__weight').get_text()
+        groups=[x.get_text(' ',strip=True) for x in hero.select('.pelanggan-kemasan-baris')]
+        assert any('Setara sekitar 3 karung' in t and '150 kg' in t for t in groups)
+        assert any('2 karung tercatat' in t and '100 kg' in t for t in groups)
+        assert any('Perkiraan sisa curah' in t and '25 kg' in t and 'karung' not in t for t in groups)
+        assert 'Cap Privat B' not in s.main.get_text()
+        (out/'campuran.html').write_text(r.text)
+
+
+async def test_sisa_pk_pecahan_tetap_ekuivalen_dan_berat_sementara_dekat_angka(pg,portal,stok_karung):
+    from urllib.parse import urlsplit,parse_qs
+    from datetime import datetime,timezone
+    from app.models import PkGudang2Intake,OutgoingItem
+    ident=int(parse_qs(urlsplit(stok_karung['pk_karung_timbang']).query)['id'][0])
+    out=Path('output/portal-jumlah-curah-20261101');out.mkdir(parents=True,exist_ok=True)
+    async with pg() as db:
+        batch=await db.scalar(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch=='PKB-ISI-TIMBANG'))
+        batch.sumber_berat='perkiraan'
+        intake=await db.get(PkGudang2Intake,ident);intake.waktu_masuk=datetime(2000,1,1,tzinfo=timezone.utc)
+        outgoing=(await db.scalars(select(OutgoingItem).where(OutgoingItem.jasa_id==portal.orders[0].id,OutgoingItem.item_type=='pk_g2'))).all()
+        for item in outgoing:item.berat_kg=0
+        item_id=outgoing[0].id;outgoing[0].berat_kg=58.438
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        r=await c.get(stok_karung['pk_karung_timbang']);assert r.status_code==200
+        s=BeautifulSoup(r.text,'html.parser');hero=s.select_one('.pk-detail__hero')
+        assert 'Setara sekitar 1,26 karung' in hero.get_text()
+        assert 'Berat sementara' in hero.select_one('.pk-detail__weight').get_text()
+        assert 'Jumlah fisik karung bisa berbeda' in hero.get_text()
+        assert not hero.select('.pelanggan-kemasan-baris')
+        (out/'pecahan.html').write_text(r.text)
+    async with pg() as db:
+        item=await db.get(OutgoingItem,item_id);item.berat_kg=133.063
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        r=await c.get(stok_karung['pk_karung_timbang']);assert r.status_code==200
+        s=BeautifulSoup(r.text,'html.parser')
+        assert 'Setara kurang dari 1 karung' in s.select_one('.pk-detail__hero').get_text()
+        (out/'kurang-satu.html').write_text(r.text)
 
 
 async def test_barang_saya_memisahkan_karung_kosong_dari_karung_berisi_dan_detail_milik_sendiri(pg,portal,stok_karung):
@@ -94,7 +159,7 @@ async def test_barang_saya_memisahkan_karung_kosong_dari_karung_berisi_dan_detai
         empty=home.select_one('#karung-kosong')
         assert '280' in empty.get_text() and 'lembar kosong' in empty.get_text()
         assert 'Cap Mitra A' in empty.get_text() and 'Cap Privat B' not in home.main.get_text()
-        assert 'Perkiraan sisa: 2 karung' in home.select_one('#komoditas-pk').get_text()
+        assert 'Setara sekitar 2 karung' in home.select_one('#komoditas-pk').get_text()
         for name,path in stok_karung.items():
             response=await c.get(path);assert response.status_code==200,(name,response.text[:200])
             s=BeautifulSoup(response.text,'html.parser')
@@ -105,21 +170,24 @@ async def test_barang_saya_memisahkan_karung_kosong_dari_karung_berisi_dan_detai
             s=BeautifulSoup((await c.get(stok_karung['pk_karung_'+suffix])).text,'html.parser')
             assert s.select_one('h1').get_text()=='Beras pecah kulit (PK)'
             if suffix=='belum':
-                assert 'Berat belum ditimbang' in s.select_one('.pk-detail__hero').get_text()
+                assert 'Berat total belum ditimbang' in s.select_one('.pk-detail__hero').get_text()
                 assert '128 karung' in s.select_one('.pk-detail__weight').get_text()
                 assert '0 kg' not in s.select_one('.pk-detail__weight').get_text()
             else:
                 assert '158,438' in s.select_one('.pk-detail__weight').get_text()
-                assert 'Perkiraan sisa: 2 karung' in s.select_one('.pk-detail__hero').get_text()
+                assert 'Setara sekitar 2 karung' in s.select_one('.pk-detail__hero').get_text()
                 assert '158,4 kg' not in s.select_one('.pk-detail__hero').get_text()
         product=BeautifulSoup((await c.get(stok_karung['produk'])).text,'html.parser')
         packing=product.select_one('.pelanggan-kemasan-barang')
-        assert '20 karung' in packing.get_text() and 'Ukuran nominal karung: 50 kg' in packing.get_text()
+        assert '20 karung' in packing.get_text() and 'Ukuran karung: 50 kg (nominal)' in packing.get_text()
         assert '1.000 kg' not in packing.get_text()
         assert '1.000 kg' in product.select_one('.pk-detail__weight').get_text()
         assert packing.find_parent(class_='pk-detail__hero')
         assert 'konfirmasikan' not in product.select_one('.pk-detail__hero').get_text()
-        assert product.select_one('.pelanggan-peringatan-stok').find_parent(class_='pk-detail__hero')
+        assert product.select_one('.pelanggan-status-berat').find_parent(class_='pk-detail__hero')
+        assert product.select_one('.pelanggan-status-berat').find_parent(class_='pk-detail__weight')
+        assert '20 karung tercatat' in packing.get_text()
+        assert not product.select('.pelanggan-stok-petunjuk')
         assert packing.find_parent('details') is None
         assert not product.select('.stok-produk-kartu summary')
         assert 'Perkiraan asal stok' in product.main.get_text()

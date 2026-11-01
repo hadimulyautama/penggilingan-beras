@@ -161,7 +161,8 @@ async def baca(db,scope,d):
                 if intake.pk_purchase_batch_id in scope.ids(PkPurchaseBatch):
                     from app.penggilingan.gudang2.service import ringkasan_karung
                     from .karung import ringkasan_berisi
-                    karung_berisi=ringkasan_berisi(await ringkasan_karung(db,intake))['label']
+                    batch=await db.get(PkPurchaseBatch,intake.pk_purchase_batch_id)
+                    karung_berisi=ringkasan_berisi(await ringkasan_karung(db,intake),batch=batch,sisa_kg=bobot_kg)['label']
             jenis='pk'
         else:
             jenis=query.get('jenis',['belum_dikenal'])[0]

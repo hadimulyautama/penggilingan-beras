@@ -418,3 +418,27 @@ penyebab/angkanya dapat dibuka pada Rincian jumlah stok. Waktu stok yang
 belum tersedia ada pada Informasi stok; waktu buka halaman tidak dipakai
 sebagai pengganti. Petunjuk umum rencana pengambilan ada sekali pada menu
 Pengambilan barang, tanpa diulang pada setiap detail stok.
+
+Jumlah karung produk yang dicatat diberi label `tercatat`; hanya baris native
+`Kemasan otomatis` yang dilabeli `setara sekitar`. Kategori hasil samping
+sendiri tidak cukup untuk menyebut karung perkiraan karena pencatatan kemasan
+nyata juga dapat berada dalam kategori yang sama. Curah tetap tanpa jumlah
+atau ukuran karung. Kelompok curah dan kemasan ditampilkan terpisah, termasuk
+sisa curah perkiraan dari pembagian otomatis. Selisih negatif catatan kemasan
+diberi judul Selisih berat, bukan dianggap sebagai barang curah negatif.
+
+Untuk PK, ekuivalen karung memakai pembagi bobot per karung native dari batch
+penerimaan. Pecahan tidak lagi dibulatkan menjadi karung utuh di portal:
+angka ekuivalen maksimal dua desimal dengan label setara sekitar; sisa positif
+di bawah satu karung disebut setara kurang dari satu karung. Ini tidak
+menciptakan pencatatan karung fisik atau curah baru. Ukuran nominal tidak
+menjadi pembagi bobot aktual. Penjelasan perbedaan jumlah, ukuran, dan berat
+dapat dibuka pada kartu tanpa mengulang berat. Berat yang belum tersedia
+menampilkan Jumlah karung tercatat dan Berat total belum ditimbang.
+
+Status Berat sementara berada bersama angka berat. Detail stok tidak lagi
+menambahkan panel yang hanya menyatakan waktu pembaruan belum tersedia;
+metadata waktu proses yang memang tercatat tetap tersedia seperti sebelumnya.
+Pemeriksaan mutu stok dikelompokkan dalam satu panel dengan sumber Barang ini
+dan Bahan asal dibedakan. Nilai, perhitungan, putaran, catatan, dan tautan
+pemeriksaan tetap tersedia; nilainya tidak digabung antarjenis sumber.
