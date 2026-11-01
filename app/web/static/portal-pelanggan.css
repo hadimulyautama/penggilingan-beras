@@ -227,3 +227,10 @@ body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;bord
 .pelanggan-mutu-stok>.pelanggan-detail-lipat{margin:10px 12px;box-shadow:none}
 .pelanggan-mutu-stok .qc-gabah-asal{margin:0;max-width:none}
 @media(max-width:540px){.portal-customer .pk-detail{gap:16px}.portal-customer .pk-detail__weight>.pelanggan-status-berat{text-align:right}.portal-customer .pk-detail__hero{gap:12px}.portal-customer .pk-detail__hero .pelanggan-jumlah-berisi{font-size:18px}}
+
+/* Pemuatan navigasi tidak menutupi halaman atau bilah status perangkat. */
+.portal-top-identitas{min-width:0;overflow-wrap:anywhere}
+.portal-customer .portal-top-identitas>.portal-status-navigasi{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;font-size:12px;line-height:1.5;font-weight:400;color:var(--pd-muted);margin-top:4px}
+.portal-status-navigasi button{font:inherit;color:var(--pd-green);background:transparent;border:1px solid var(--pd-line);border-radius:8px;min-height:44px;padding:8px 12px;cursor:pointer}
+.portal-status-navigasi button:focus-visible{outline:2px solid var(--pd-green);outline-offset:2px}
+@media(max-width:900px){.portal-top-identitas{flex:1}.portal-top-identitas>span{display:block;max-width:calc(100vw - 90px);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.portal-top-actions{flex-shrink:0}}
