@@ -11,7 +11,7 @@ from .navigation import portal_url
 from .presentation import render_customer
 
 NAMA_PROSES = {'pengeringan':'Pengeringan', 'pendinginan':'Pendinginan',
-               'giling':'Penggilingan', 'sosoh':'Penyosohan', 'transfer':'Pemindahan antargudang'}
+               'giling':'Penggilingan', 'sosoh':'Penyosohan', 'transfer':'Pemindahan barang'}
 STATUS = {'proses':'Sedang diproses', 'selesai':'Selesai',
           'berjalan':'Masih berlangsung', 'dibatalkan':'Dibatalkan',
           'digabung':'Digabung ke jasa lain', 'pending':'Menunggu petugas',
@@ -182,9 +182,18 @@ async def halaman(request, bagian='beranda'):
     jenis=request.query_params.get('jenis','')
     if jenis not in NAMA_PROSES:jenis=''
     if jenis:riwayat=[r for r in riwayat if r['jenis']==jenis]
+    catatan=None
+    if bagian=='riwayat':
+        from .daftar_catatan import daftar
+        catatan=daftar([dict(jenis=r['jenis'],judul=NAMA_PROSES.get(r['jenis'],r['jenis']),
+            kode=r['kode'],tanggal=r.get('selesai'),label_tanggal='Selesai',href=r['href'],
+            aksi='Lihat hasil',catatan='') for r in riwayat],request,
+            base='/pelanggan/riwayat-proses',pilihan=[('','Semua proses')]+[(k,v) for k,v in NAMA_PROSES.items() if k!='pendinginan'],
+            judul='Riwayat proses',pengantar='Proses yang sudah selesai. Buka untuk melihat bahan dan hasilnya.',
+            label_jenis='Jenis proses',satuan='proses')
     judul_halaman={'beranda':'Beranda','jasa':'Proses Berjalan','barang':'Barang Saya',
         'riwayat':'Riwayat proses','masuk':'Barang masuk','pengambilan':'Pengambilan barang'}
     return render_customer(request,f'portal/{bagian}.html',d=d,bahan=bahan,hasil=hasil,
         transit=transit,progres=progres,utama=status_utama(d,transit),komoditas=komoditas,
         nama_proses=NAMA_PROSES,status_pelanggan=bahasa_status,status_penerimaan=status_penerimaan,kg=jasa_pelanggan.kg_rinci,
-        riwayat=riwayat,jenis_riwayat=jenis,daftar_masuk=daftar_masuk,page_title=judul_halaman[bagian])
+        riwayat=riwayat,jenis_riwayat=jenis,daftar_masuk=daftar_masuk,catatan=catatan,page_title=judul_halaman[bagian])

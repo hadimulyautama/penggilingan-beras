@@ -160,10 +160,10 @@ async def test_dokumen_hanya_menampilkan_rekap_utama_pada_rantai_gabungan(pg,dun
         response=await c.get('/pelanggan/laporan')
         assert response.status_code==200
         s=BeautifulSoup(response.text,'html.parser')
-        rekap=s.find('h2',string='Rekap barang jasa').find_parent('section')
-        assert [h.get_text(strip=True) for h in rekap.select('h3')]==['JAS-UX-TERPISAH','JAS-UX-GABUNGAN']
-        assert len(rekap.select(f'a[href="/pelanggan/jasa/{tujuan.id}/nota"]'))==1
-        assert 'JAS-2610-301' not in rekap.get_text() and 'JAS-2610-302' not in rekap.get_text()
+        rekap=s.select('article[data-jenis=rekap]')
+        assert [r.select_one('.pelanggan-kode').get_text(strip=True) for r in rekap]==['JAS-UX-TERPISAH','JAS-UX-GABUNGAN']
+        assert len(s.select(f'a[href="/pelanggan/jasa/{tujuan.id}/nota"]'))==1
+        assert 'JAS-2610-301' not in s.main.get_text() and 'JAS-2610-302' not in s.main.get_text()
         assert 'JAS-2610-303' not in response.text  # milik pelanggan lain
         perjalanan=await c.get('/pelanggan/jasa-saya')
         assert perjalanan.status_code==200

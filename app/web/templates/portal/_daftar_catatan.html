@@ -1,0 +1,26 @@
+<div class="pelanggan-halaman pelanggan-catatan-halaman">
+<header class="pelanggan-sapaan"><h1>{{ catatan.judul }}</h1><p class="pelanggan-redup">{{ catatan.pengantar }}</p></header>
+<form class="pelanggan-filter-catatan" method="get" action="{{ catatan.base }}" role="search">
+ <label>{{ catatan.label_jenis }}<select name="jenis">{% for nilai,nama in catatan.pilihan %}<option value="{{ nilai }}"{% if nilai==catatan.jenis %} selected{% endif %}>{{ nama }}</option>{% endfor %}</select></label>
+ <label>Cari kode atau nama<input type="search" name="q" value="{{ catatan.q }}" maxlength="120" placeholder="Kode atau nama" autocomplete="off"></label>
+ <button class="btn" type="submit">Cari</button>
+ {% if catatan.tersaring %}<a class="pelanggan-tautan" href="{{ catatan.base }}">Hapus filter</a>{% endif %}
+</form>
+<section class="pelanggan-panel pelanggan-catatan-panel" aria-label="Daftar {{ catatan.judul|lower }}">
+<p class="pelanggan-hitung-catatan" role="status">{{ catatan.total }} {{ catatan.satuan }}{% if catatan.tersaring %} ditemukan{% endif %}</p>
+<div class="pelanggan-daftar-catatan">
+{% for r in catatan.rows %}
+<article class="pelanggan-catatan-baris" data-jenis="{{ r.jenis }}">
+ <div class="pelanggan-catatan-isi"><h2>{{ r.judul }}</h2><p class="pelanggan-kode">{{ r.kode }}</p>
+ {% if r.tanggal %}<p class="pelanggan-waktu">{{ r.label_tanggal }} <time datetime="{{ r.tanggal.isoformat() }}">{{ r.tanggal|jam('%d/%m/%Y %H:%M') }}</time></p>{% else %}<p class="pelanggan-waktu">Tanggal belum tercatat</p>{% endif %}
+ {% if r.catatan %}<p class="pelanggan-redup">{{ r.catatan }}</p>{% endif %}</div>
+ <a class="pelanggan-tautan pelanggan-catatan-buka" href="{{ r.href }}" aria-label="{{ r.aksi }} {{ r.judul }} {{ r.kode }}">{{ r.aksi }} <span aria-hidden="true">→</span></a>
+</article>
+{% else %}<div class="pelanggan-catatan-kosong"><h2>{{ 'Tidak ada hasil yang cocok' if catatan.tersaring else 'Belum ada catatan' }}</h2><p class="pelanggan-redup">{{ 'Coba kode atau nama lain, atau hapus filter.' if catatan.tersaring else kosong }}</p></div>{% endfor %}
+</div>
+{% if catatan.akhir>1 %}<nav class="pelanggan-halaman-catatan" aria-label="Halaman {{ catatan.judul|lower }}">
+ <span>{{ catatan.dari }}–{{ catatan.sampai }} dari {{ catatan.total }}</span><div>
+ {% if catatan.halaman>1 %}<a class="pelanggan-tautan" href="{{ catatan.sebelumnya }}">← Sebelumnya</a>{% endif %}
+ {% if catatan.halaman<catatan.akhir %}<a class="pelanggan-tautan" href="{{ catatan.berikutnya }}">Berikutnya →</a>{% endif %}
+ </div></nav>{% endif %}
+</section></div>

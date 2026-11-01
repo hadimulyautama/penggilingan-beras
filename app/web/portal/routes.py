@@ -62,7 +62,7 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     if path=='/serah-terima' or '/serah-terima' in path:
         from app.web import serah_terima
         if path=='/serah-terima':
-            return await serah_terima.daftar(req,account)
+            return await reports(req)
         match=re.fullmatch(r'/(barang-masuk|barang-keluar)/(\d+)/serah-terima(?:\.pdf)?',path)
         if not match:missing()
         ident=int(match[2])
@@ -217,10 +217,28 @@ async def reports(request):
             for row in (await db.scalars(select(model).where(model.id.in_(scope.ids(model))).order_by(model.id.desc()))).all():
                 finished=(row.waktu_selesai_pendinginan is not None if kind=='pengeringan' else row.status=='selesai')
                 if finished:rows.append(dict(kind=kind,code=getattr(row,col),id=row.id,
+                    tanggal=row.waktu_selesai_pendinginan if kind=='pengeringan' else row.waktu_selesai,
                     pdf_tersedia=kind!='sosoh' or row.id in bahan_sosoh))
-    from .beranda import bahasa_status
-    return render_customer(request,'portal/reports.html',reports=rows,orders=orders,
-        serah_terima=serah[:10],status_pelanggan=bahasa_status,page_title='Dokumen')
+    from .beranda import NAMA_PROSES
+    from .daftar_catatan import daftar
+    dokumen=[dict(jenis='masuk' if r['jenis']=='Penerimaan' else 'pengambilan',
+        judul='Bukti barang masuk' if r['jenis']=='Penerimaan' else 'Bukti pengambilan',
+        kode=r['nomor'],cari=r['referensi'],tanggal=r['urut'],label_tanggal='Tersedia sejak',
+        href=r['url'],aksi='Buka dokumen',catatan='') for r in serah]
+    for j in orders:
+        dokumen.append(dict(jenis='rekap',judul='Rekap barang',kode=j.kode,
+            tanggal=j.created_at,label_tanggal='Jasa dicatat',href=f'/jasa/{j.id}/nota',aksi='Buka dokumen',catatan=''))
+    for r in rows:
+        dokumen.append(dict(jenis='proses',judul='Laporan '+NAMA_PROSES[r['kind']].lower(),kode=r['code'],
+            tanggal=r['tanggal'],label_tanggal='Proses selesai',
+            href=f"/riwayat-{r['kind']}/{r['id']}"+('/laporan.pdf' if r['pdf_tersedia'] else ''),
+            aksi='Buka PDF' if r['pdf_tersedia'] else 'Lihat hasil',
+            catatan='' if r['pdf_tersedia'] else 'PDF belum tersedia. Hasil proses tetap dapat dibuka.'))
+    catatan=daftar(dokumen,request,base='/pelanggan/laporan',
+        pilihan=[('','Semua dokumen'),('masuk','Bukti barang masuk'),('pengambilan','Bukti pengambilan'),('proses','Laporan proses'),('rekap','Rekap barang')],
+        judul='Dokumen',pengantar='Bukti barang masuk, bukti pengambilan, rekap barang, dan laporan proses.',
+        label_jenis='Jenis dokumen',satuan='dokumen')
+    return render_customer(request,'portal/reports.html',catatan=catatan,page_title='Dokumen')
 
 
 async def ownership(request):

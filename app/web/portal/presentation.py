@@ -182,7 +182,9 @@ def read_only(html, base, *, origin=None, report_available=None):
         if status:status.string='PDF tersedia untuk dibaca, dibagikan, atau diunduh.'
     from .detail import ringkas
     from .transaksi_detail import ringkas_transaksi
-    return str(ringkas_transaksi(ringkas(bahasa_pelanggan(s,base),base,report_available=report_available),base))
+    from .dokumen_detail import ringkas as ringkas_dokumen
+    s=ringkas(bahasa_pelanggan(s,base),base,report_available=report_available)
+    return str(ringkas_dokumen(ringkas_transaksi(s,base),base))
 
 
 def render_customer(request, name, *, status_code=200, **ctx):

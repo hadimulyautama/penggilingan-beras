@@ -316,3 +316,18 @@ penanda catatan timbang lama tetap dipertahankan. Identitas pemilik berulang,
 petunjuk operator, panel retur kosong dan ringkasan total berulang disisihkan.
 Rincian kiriman bersama tetap dibatasi sebelum HTML dibuat; total/tiket
 gabungan milik pelanggan lain tidak masuk halaman pelanggan.
+
+Riwayat proses dan Dokumen memakai daftar yang sama: nama yang mudah dibaca,
+kode sekunder, tanggal dari sumber, dan satu tautan utama per catatan. Filter
+jenis serta pencarian kode/nama diterapkan setelah cakupan pemilik, sebelum
+paginasi 25 baris. Urutan terbaru berdasarkan waktu sumber, bukan jenis atau
+nomor urut lintas tabel. Halaman lama tetap dapat dibuka; filter bertahan
+ketika berpindah halaman. Alamat daftar serah terima lama membuka katalog
+Dokumen yang sama sehingga tidak ada daftar tambahan dengan istilah berbeda.
+
+Dokumen hanya menampilkan rekap utama untuk pesanan gabungan dan bukti yang
+dinyatakan tersedia oleh layanan native. Laporan sosoh tanpa rincian bahan
+tetap menawarkan hasil HTML, tanpa tautan PDF yang gagal. Pembaca rekap/bukti
+memiliki satu tautan kembali ke Dokumen dan satu tombol unduh. Nomor terkait
+serta rincian berat dapat dibuka bila diperlukan; bobot, catatan, syarat mutu,
+dan PDF resmi tidak dihitung atau disusun ulang oleh lapisan tampilan ini.
