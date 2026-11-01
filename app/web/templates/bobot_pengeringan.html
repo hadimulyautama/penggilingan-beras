@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% from '_bobot_pengeringan.html' import dua_bobot %}
-{% block kepala_ekstra %}<style>[data-bobot-pengeringan] [hidden]{display:none!important}[data-form-bobot]>label{display:block;margin-top:16px}[data-form-bobot] input:not([type=checkbox]),[data-form-bobot] textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px}</style>{% endblock %}
+
 {% block judul %}Bobot hasil pengeringan{% endblock %}
 {% block isi %}
+<style>[data-bobot-pengeringan] [hidden]{display:none!important}[data-form-bobot]>label{display:block;margin-top:16px}[data-form-bobot] input:not([type=checkbox]),[data-form-bobot] textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px}</style>
 <section class="kartu" style="padding:20px;max-width:760px;margin:auto" data-bobot-pengeringan>
 <h1>Bobot hasil pengeringan · {{ d.kode }}</h1>
 {{ dua_bobot([d.bobot]) }}

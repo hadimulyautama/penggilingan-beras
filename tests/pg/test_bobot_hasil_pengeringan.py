@@ -41,6 +41,10 @@ async def test_riwayat_ringkasan_pdf_dan_bobot_pasti_audit_tanpa_stok(pg,dunia,t
    (tmp_path/('riwayat.html' if url=='/riwayat-pengeringan' else 'detail.html')).write_text(r.text)
   r=await c.get(f'/riwayat-pengeringan/{lid}/bobot');assert r.status_code==200
   (tmp_path/'form.html').write_text(r.text)
+  soup=BeautifulSoup(r.text,'html.parser')
+  assert any('data-bobot-pengeringan' in style.get_text() for style in soup.select('body style'))
+  r=await c.get(f'/riwayat-pengeringan/{lid}/bobot',headers={'X-Pindah':'1'})
+  assert r.status_code==200 and '[data-bobot-pengeringan] [hidden]' in r.text
   r=await c.get(f'/riwayat-pengeringan/{lid}/laporan.pdf');assert r.status_code==200
   (tmp_path/'pengeringan-estimasi.pdf').write_bytes(r.content)
   txt=' '.join(page.extract_text() for page in PdfReader(BytesIO(r.content)).pages)
