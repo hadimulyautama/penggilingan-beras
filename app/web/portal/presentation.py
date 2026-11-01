@@ -273,8 +273,9 @@ def render_customer(request, name, *, status_code=200, **ctx):
 def shell(request,content,*,title='Portal pelanggan',status_code=200):
     from app.web.tampilan import templates,VERSI
     scope=request.state.portal_scope
+    from .live import identitas
     html=templates.env.get_template('portal/shell.html').render(request=request,
-        title=title,content=Markup(content),reader=scope.reader,MENU=MENU,
+        title=title,content=Markup(content),reader=scope.reader,live_identity=identitas(scope.reader),MENU=MENU,
         active=active_menu(request.url.path),CSRF=csrf_context(request),VERSI=VERSI,
         light=request.cookies.get('produksi_terik','1')=='1')
     return HTMLResponse(html,status_code=status_code,headers={'Cache-Control':'no-store, private','Vary':'Cookie','X-Robots-Tag':'noindex, nofollow'})

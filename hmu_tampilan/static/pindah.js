@@ -20,6 +20,7 @@
   "use strict";
 
   var simpan = {};        // alamat -> HTML utuh yang terakhir dilihat
+  var tujuanAmbil = {};
   var sedang = {};        // alamat -> janji yang sedang berjalan (jangan dobel)
   var bingkai = null;
   var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
@@ -83,7 +84,7 @@
      * Dipanggil `aksi.js` saat lembar ditutup — di sanalah ketikan yang
      * ditahan itu benar-benar berhenti ada.
      */
-    lupakanSentuhan: function () { disentuh = false; },
+    lupakanSentuhan: function () { disentuh = false; cobaOtomatis(); },
 
     /* ── Menyegarkan DIAM-DIAM ──
      *
@@ -105,11 +106,8 @@
      */
     diam: function () {
       if (!bingkai) { return; }
-      /* Penanda TETAP ditanya walau orangnya sedang mengetik: yang tak boleh
-         adalah menukar isi layar, bukan mengetahui sinyalnya putus. Dan
-         sejak Tahap C, isinya memang TIDAK PERNAH ditukar diam-diam: bila
-         berubah, pil "perubahan baru" yang muncul — orangnya yang memutuskan
-         kapan tata letak bergerak. */
+      /* Tetap memantau saat ada draf. Penggantian HTML menunggu pagar
+         isian aman, dan perubahan yang tertunda tidak dibuang. */
       statistik.tanya++;
       tanyaPenanda().then(terimaPenanda);
     },
@@ -138,8 +136,8 @@
   }
 
   /* ── Mengambil, dan hanya sekali untuk alamat yang sama ── */
-  function ambil(alamat) {
-    if (sedang[alamat]) { return sedang[alamat]; }
+  function ambil(alamat, paksa) {
+    if (!paksa && sedang[alamat]) { return sedang[alamat]; }
     var bolehSimpan = true;
     var janji = fetch(alamat, {
       credentials: "same-origin",
@@ -154,14 +152,21 @@
          penjagaan navigasi utuh yang semula. */
       var pulih = r.status === 404 && r.headers.get("X-Pindah-Halaman") === "1"
         && (r.headers.get("Content-Type") || "").split(";")[0].trim() === "text/html";
-      if (r.redirected || (!r.ok && !pulih)) { return null; }
+      if (r.redirected) {
+        var target = new URL(r.url, location.href);
+        if (!paksa || target.origin !== location.origin || target.pathname === '/masuk') return null;
+        tujuanAmbil[alamat] = target.pathname + target.search;
+      } else { delete tujuanAmbil[alamat]; }
+      if ((!r.ok && !pulih) || (paksa && !(r.headers.get('Content-Type') || '').includes('text/html'))) return null;
       if (pulih) { bolehSimpan = false; delete simpan[alamat]; }
       return r.text();
     }).catch(function () {
       return null;              // jaringan putus — biarkan peramban mencoba
     }).then(function (teks) {
-      delete sedang[alamat];
-      if (teks && bolehSimpan) { simpan[alamat] = teks; }
+      if (sedang[alamat] === janji) {
+        delete sedang[alamat];
+        if (teks && bolehSimpan) simpan[alamat] = teks;
+      }
       return teks;
     });
     sedang[alamat] = janji;
@@ -195,6 +200,8 @@
   function tukar(doc, baru) {
     document.title = doc.title || document.title;
     bingkai.innerHTML = baru.innerHTML;
+    pembaruanTertunda = false;
+    if (window.SEGAR_AMAN) window.SEGAR_AMAN.ingat();
     tandaiSegar();
     // Isi yang baru dipasang adalah keadaan sekarang: hitungan pil dimulai
     // dari nol, dan penanda berikutnya menjadi titik acuan baru.
@@ -285,44 +292,44 @@
       .catch(function () { tandaiPutus(true); return null; });
   }
 
-  /* ── Satu pintu untuk penanda, dari kanal mana pun ──
-   *
-   * `null` berarti BELUM TAHU (baru dibuka, atau gagal bertanya) — jangan
-   * dihitung sebagai perubahan. Perubahan sungguhan menambah hitungan pil;
-   * layarnya sendiri tak disentuh sampai pil diketuk. Satu-satunya
-   * pengecualian: layar tanpa sasaran ketukan (`data-segar-sendiri`, papan
-   * pantau) boleh menyegar sendiri — tak ada jari yang bisa mendarat salah. */
+  /* Penanda dari SSE dan watchdog masuk ke antrean yang sama. Layar
+     diperbarui otomatis saat aman; draf menahan antreannya sampai selesai. */
   var jumlahPerubahan = 0;
   var statistik = { tanya: 0, dorongan: 0 };
 
+  var pembaruanTertunda = false;
+  var memuatPembaruan = false;
+  var cobaLagi = null;
+  var jedaPembaruan = 1000;
+  function cobaOtomatis() {
+    if (!pembaruanTertunda || memuatPembaruan) return;
+    if (bolehDiam()) { muatPerubahan(); return; }
+    if (!cobaLagi) cobaLagi = setTimeout(function () { cobaLagi = null; cobaOtomatis(); }, 1000);
+  }
   function terimaPenanda(j) {
-    if (!j) { return; }
+    if (!j) return;
     var n = String(j.n);
-    tandaiSegar();
-    if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
-    if (penanda !== null && n !== penanda) {
-      if (document.querySelector("[data-segar-sendiri]")) {
-        if (bolehDiam()) { muatPerubahan(); }
-      } else {
-        jumlahPerubahan++;
-        tawarkanPerubahan();
-      }
+    if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) tawarkanVersi();
+    // Sambungan pertama juga memeriksa ulang HTML yang mungkin dibuka dari
+    // cache/bfcache. Penanda yang tertunda tidak dianggap sudah diterapkan.
+    if (penanda === null || n !== penanda) {
+      pembaruanTertunda = true;
+      if (penanda !== null) { jumlahPerubahan++; tawarkanPerubahan(); }
     }
     penanda = n;
+    cobaOtomatis();
   }
 
   function tawarkanPerubahan() {
     var pil = document.querySelector(".pil-perubahan");
     if (!pil) {
-      pil = document.createElement("button");
-      pil.type = "button";
+      pil = document.createElement("div");
       pil.className = "pil pil-perubahan";
       pil.setAttribute("data-pil", "perubahan");
       pil.setAttribute("role", "status");
-      pil.addEventListener("click", muatPerubahan);
       document.body.appendChild(pil);
     }
-    pil.textContent = jumlahPerubahan + " perubahan baru — ketuk untuk muat";
+    pil.textContent = jumlahPerubahan + " pembaruan tersedia — diperbarui otomatis";
   }
 
   function hapusPilPerubahan() {
@@ -332,18 +339,34 @@
   }
 
   function muatPerubahan() {
-    if (document.querySelector("[data-editor-perintah],[data-kemas-ulang]")) { return; }
+    // Tombol pembaruan juga tidak boleh membuang draf atau mengalahkan
+    // penjagaan editor. Pemeriksaan kedua melindungi ketikan selama fetch.
+    if (!bolehDiam()) { pembaruanTertunda = true; cobaOtomatis(); return; }
     var alamat = location.pathname + location.search;
-    if (!bingkai) { return; }
+    if (!bingkai || memuatPembaruan) return;
+    var mulaiPenanda = penanda;
+    memuatPembaruan = true;
     delete simpan[alamat];
-    ambil(alamat).then(function (teks) {
-      if (!teks) { return; }
-      if (location.pathname + location.search !== alamat) { return; }
-      var gulung = document.querySelector(".isi");
+    ambil(alamat, true).then(function (teks) {
+      if (!teks) { jedaPembaruan = Math.min(jedaPembaruan * 2, 30000); return; }
+      if (location.pathname + location.search !== alamat) return;
+      if (!bolehDiam()) { pembaruanTertunda = true; return; }
+      var terbaru = penanda;
+      var gulung = document.querySelector('.isi');
       var atas = gulung ? gulung.scrollTop : 0;
-      if (!pasang(teks, alamat)) { return; }
-      var g2 = document.querySelector(".isi");
-      if (g2 && atas) { g2.scrollTop = atas; }
+      var terbuka = Array.from(document.querySelectorAll('details')).map(function (el, i) { return el.open ? (el.id || i) : null; });
+      if (!pasang(teks, alamat)) return;
+      jedaPembaruan = 1000;
+      if (tujuanAmbil[alamat]) history.replaceState(history.state, '', tujuanAmbil[alamat]);
+      document.querySelectorAll('details').forEach(function (el, i) { el.open = terbuka.indexOf(el.id || i) >= 0; });
+      var g2 = document.querySelector('.isi');
+      if (g2) g2.scrollTop = atas;
+      if (window.SEGAR_AMAN) window.SEGAR_AMAN.ingat();
+      penanda = terbaru;
+      pembaruanTertunda = terbaru !== mulaiPenanda;
+    }).finally(function () {
+      memuatPembaruan = false;
+      if (pembaruanTertunda && !cobaLagi) cobaLagi = setTimeout(function () { cobaLagi = null; cobaOtomatis(); }, jedaPembaruan);
     });
   }
 
@@ -503,6 +526,7 @@
   }
 
   function bolehDiam() {
+    if (window.SEGAR_AMAN) { return window.SEGAR_AMAN.boleh(); }
     if (disentuh) { return false; }
     if (lembarTerbuka()) { return false; }
     var f = document.activeElement;
@@ -676,8 +700,8 @@
   function mulaiDenyut() {
     if (denyut) { return; }
     denyut = setInterval(function () {
-      // Jalur kedua: hanya bertanya bila kanal dorong sedang tak hidup.
-      if (document.visibilityState === "visible" && jalur !== "sse") { window.PINDAH.diam(); }
+      // Watchdog juga bekerja bila koneksi SSE tampak hidup tetapi macet.
+      if (document.visibilityState === "visible") { window.PINDAH.diam(); }
     }, 10000);
   }
 

@@ -4114,3 +4114,15 @@ fieldset.akses-bidang { border:0; padding:0; margin:0; min-width:0; display:grid
 
 .akses-tabel th[scope="row"] { position:sticky; left:0; background:var(--panel); z-index:1; }
 .akses-tabel th[aria-current="true"] { color:var(--utama); }
+
+/* Tahap stok adalah kelompok baca; saldo dan izin tindakan tetap dari server. */
+.stok-tahap{margin:22px 0;padding-top:18px;border-top:1px solid var(--garis)}
+.stok-tahap__judul{font-size:1.15rem;margin:0 0 8px}.stok-tahap>.bantu{margin:0 0 14px}
+.stok-tahap__baris{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px;margin-bottom:14px}
+.stok-tahap__kartu{padding:16px;border:1px solid var(--garis);border-radius:12px;min-width:0}
+.stok-tahap__kartu h3{font-size:1rem;margin:0 0 6px}.stok-tahap__kartu p{overflow-wrap:anywhere}
+.stok-tahap__bobot{display:flex;flex-direction:column;gap:4px;margin:12px 0}.stok-tahap__bobot span{font-size:.8rem;color:var(--redup)}
+.stok-tahap__bobot strong{font-size:1.25rem;font-variant-numeric:tabular-nums}.stok-tahap__tautan{display:inline-block;min-height:44px;padding:10px 0}
+.stok-tahap .stok-baris__ringkas small{display:block}.stok-tahap .jumlah{margin-top:12px}
+
+.pil-perubahan{pointer-events:none;cursor:default}

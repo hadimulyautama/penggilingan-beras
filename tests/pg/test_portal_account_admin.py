@@ -87,6 +87,9 @@ async def test_admin_denied_even_when_no_superadmin_exists(pg,people):
 
 
 async def test_customer_login_cannot_login_as_staff_or_manage_accounts(pg,people):
+    # ASGITransport tidak menjalankan startup aplikasi yang menyemai gudang.
+    from app.services.seed import seed_master
+    await seed_master()
     sid,p=people
     async with _klien(await _token(pg,sid)) as c:
         assert (await create(c,form(p[0].id,601))).status_code==303

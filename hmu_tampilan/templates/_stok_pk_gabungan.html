@@ -7,7 +7,7 @@
   </div>
   <div class="stok-desktop stok-desktop--gabungan{{ ' stok-desktop--tanpa-mutu' if not mutu_aktif }}">
     <table class="stok-tabel tabel-standar">
-      <thead><tr><th>Lot / kode · tanggal</th><th>Pemilik</th><th>Letak</th><th>Status</th>{% if mutu_aktif %}<th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th>{% endif %}<th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
+      <thead><tr><th>Lot / kode · tanggal</th><th>Pemilik</th><th>Letak</th><th>Status</th>{% if mutu_aktif %}<th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th>{% endif %}<th>Kondisi</th><th class="stok-tabel__angka">{{ 'Saldo hasil tercatat' if stok_tahap|default('')=='hasil' else 'Berat tersedia' }}</th><th></th></tr></thead>
       <tbody>
       {% for l in lot %}
         {% set mutu = namespace(ka="—", broken="—", susut="—") %}
@@ -19,7 +19,7 @@
         <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
           <span class="stok-baris__kode"><span>{{ l.kode }}</span><small>{{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
           <span>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }}</span>
-          <span>Gudang 1</span>
+          <span>Gudang 1{% if l.berjalan %}<small>Hasil sementara · giling masih berjalan</small>{% endif %}</span>
           <span><span class="stok-status {{ 'stok-status--jasa' if l.jasa_id else 'stok-status--pabrik' }}">{{ "Jasa" if l.jasa_id else "Pabrik" }}</span></span>
           {% if mutu_aktif %}<span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
           <span class="stok-kualitas-ringkas">{% if l.nilai_kualitas is not none %}<span>{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} <b>{{ l.kelas_kualitas }}</b></span><small>{{ l.komponen_kualitas }}/{{ JUMLAH_KOMPONEN_QC_PK }} komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>{% endif %}

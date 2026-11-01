@@ -23,6 +23,7 @@ var RANGKA = [
   '/static/padiflow-logo-gelap.png?v=' + VERSI,
   '/static/aksi.js?v=' + VERSI,
   '/static/pindah.js?v=' + VERSI,
+  '/static/segar-aman.js?v=' + VERSI,
   '/static/ikon-180.png?v=' + VERSI,
   '/static/ikon-192.png?v=' + VERSI,
   '/static/ikon-512.png?v=' + VERSI,

@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block judul %}{{ "Stok" if STOK_NAV else "Produk Jasa" }}{% endblock %}
 {% block isi %}
+<section class="stok-tahap stok-tahap--hasil" data-tahap="hasil">
+<h2 class="stok-tahap__judul">Hasil tercatat</h2>
+<p class="bantu">Saldo hasil setelah pemindahan dan pengeluaran yang tercatat. Hasil dari proses berjalan masih sementara.</p>
+
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
 
@@ -79,6 +83,7 @@
   <dialog class="lembar" id="lembar"></dialog>
   <div class="kabar" id="kabar" role="status"></div>
 {% endif %}
+</section>
 {% endblock %}
 
 {% block kaki %}

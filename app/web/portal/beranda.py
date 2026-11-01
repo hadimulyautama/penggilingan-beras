@@ -124,7 +124,7 @@ async def halaman(request, bagian='beranda'):
     from app.models import OutgoingRecord,CustomerReturn,DryingLot
     from sqlalchemy import select
     from app.services import jasa_pelanggan,berjalan
-    from .barang import baca as baca_barang
+    from .barang import baca as baca_barang, per_tahap
     scope=request.state.portal_scope
     async with SessionLocal() as db:
         d=await jasa_pelanggan.pelanggan(db,scope.reader.pelanggan_id,
@@ -209,8 +209,9 @@ async def halaman(request, bagian='beranda'):
             label_jenis='Jenis proses',satuan='proses')
     judul_halaman={'beranda':'Beranda','jasa':'Proses berjalan','barang':'Barang saya',
         'riwayat':'Riwayat proses','masuk':'Barang masuk','pengambilan':'Pengambilan barang'}
-    return render_customer(request,f'portal/{bagian}.html',d=d,bahan=bahan,hasil=hasil,
-        transit=transit,progres=progres,utama=status_utama(d,transit),komoditas=komoditas,
+    templat = 'pelanggan_' + bagian if bagian in ('beranda', 'masuk') else bagian
+    return render_customer(request,f'portal/{templat}.html',d=d,bahan=bahan,hasil=hasil,
+        transit=transit,progres=progres,utama=status_utama(d,transit),komoditas=komoditas,kelompok_stok=per_tahap(komoditas),
         karung_kosong_baris=karung_kosong_baris,
         nama_proses=NAMA_PROSES,status_pelanggan=bahasa_status,status_penerimaan=status_penerimaan,kg=jasa_pelanggan.kg_rinci,
         riwayat=riwayat,jenis_riwayat=jenis,daftar_masuk=daftar_masuk,catatan=catatan,page_title=judul_halaman[bagian])
