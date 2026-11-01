@@ -13,7 +13,7 @@ from app.services import retur_supplier as svc
 from app.services import retur_supplier_detail as pembaca
 from app.web.security import butuh_akun
 from app.web.portal.scope import is_customer_read
-from app.web.tampilan import render
+from app.web.tampilan import render_laci
 
 router=APIRouter(tags=['webapp'])
 
@@ -76,7 +76,7 @@ async def formulir(tid:int,request:Request,akun=Depends(butuh_akun)):
                                      .order_by(ReturSupplier.id.desc()))).all()
     except PermissionError as exc:tidak_boleh(exc)
     except ValueError as exc:raise HTTPException(409,str(exc)) from exc
-    response=render(request,'retur_supplier.html',layar='barang_masuk',penerimaan=t,opsi=opsi,
+    response=await render_laci(request,'retur_supplier.html',layar='barang_masuk',penerimaan=t,opsi=opsi,
         opsi_json=[bersih(x) for x in opsi],pengajuan=daftar,boleh_tulis=P.admin_keatas(akun.user.role),
         kunci=uuid4().hex,pemilik_draf=akun.user.id,kembali=f'/barang-masuk/{tid}')
     response.headers['Cache-Control']='private, no-store'
@@ -146,7 +146,7 @@ async def detail(identitas:int,request:Request,akun=Depends(butuh_akun)):
     except PermissionError as exc:tidak_boleh(exc)
     except ValueError as exc:raise HTTPException(404,str(exc)) from exc
     from app.config import settings
-    response=render(request,'retur_supplier_detail.html',layar='barang_masuk',**data,kandidat=kandidat,
+    response=await render_laci(request,'retur_supplier_detail.html',layar='barang_masuk',**data,kandidat=kandidat,
         boleh_tulis=P.admin_keatas(akun.user.role),tera_url=settings.teraflow_web_url.rstrip('/'),
         kembali=f"/barang-masuk/{data['rec'].penerimaan_tiket_id}")
     response.headers['Cache-Control']='private, no-store'
@@ -219,7 +219,7 @@ async def pemeriksaan_form(identitas:int,request:Request,akun=Depends(butuh_akun
     except PermissionError as exc:tidak_boleh(exc)
     except ValueError as exc:raise HTTPException(409,str(exc)) from exc
     from app.config import settings
-    response=render(request,'retur_supplier_selesai.html',layar='barang_masuk',rec=rec,items=items,
+    response=await render_laci(request,'retur_supplier_selesai.html',layar='barang_masuk',rec=rec,items=items,
         aktual=aktual,tiket=tiket,opsi=opsi,hasil=hasil,terakhir=last,kemasan=kemasan,materials=materials,
         pelaksana=pelaksana.nama if pelaksana else None,boleh_tulis=(P.admin_keatas(akun.user.role) or P.operator_saja(akun.user.role)) and rec.status=='diajukan',boleh_manual=P.admin_keatas(akun.user.role),
         tiket_berubah=bool(hasil and (not tiket or selesai.versi_tiket(tiket)!=hasil.snapshot['versi_tiket'])),

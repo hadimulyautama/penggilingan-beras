@@ -12,7 +12,7 @@ from app.models.retur_supplier_koreksi import ReturSupplierPerubahan as P
 from app.models import Peristiwa,User
 from app.web.retur_supplier import pekerja,json as jawaban
 from app.web.security import butuh_akun
-from app.web.tampilan import render
+from app.web.tampilan import render_laci
 
 router=APIRouter(tags=['webapp'])
 
@@ -58,7 +58,7 @@ async def formulir(identitas:int,request:Request,jenis:str='jumlah',akun=Depends
             data=await svc.data(db,identitas,akun.user)
     except PermissionError as exc:izin(exc)
     except ValueError as exc:raise HTTPException(409,str(exc)) from exc
-    response=render(request,'retur_supplier_koreksi.html',**data,jenis=jenis,kunci=uuid4().hex,
+    response=await render_laci(request,'retur_supplier_koreksi.html',**data,jenis=jenis,kunci=uuid4().hex,
         hasil=None,pemilik_draf=akun.user.id,tera_url=settings.teraflow_web_url.rstrip('/'),
         kembali=f'/riwayat-retur-supplier/{identitas}',layar='laporan_riwayat')
     response.headers['Cache-Control']='private, no-store';return response
@@ -75,7 +75,7 @@ async def hasil(identitas:int,peristiwa_id:int,request:Request,akun=Depends(butu
             pelaku=await db.get(User,rec.input_by)
     except PermissionError as exc:izin(exc)
     except ValueError as exc:raise HTTPException(404,str(exc)) from exc
-    response=render(request,'retur_supplier_koreksi.html',**data,jenis=rec.jenis,kunci='',hasil=rec,
+    response=await render_laci(request,'retur_supplier_koreksi.html',**data,jenis=rec.jenis,kunci='',hasil=rec,
         pelaku=pelaku.nama if pelaku else 'Tidak tercatat',pemilik_draf=akun.user.id,
         tera_url=settings.teraflow_web_url.rstrip('/'),kembali=f'/riwayat-retur-supplier/{identitas}',layar='laporan_riwayat')
     response.headers['Cache-Control']='private, no-store';return response

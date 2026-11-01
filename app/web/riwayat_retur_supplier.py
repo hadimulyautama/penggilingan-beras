@@ -8,8 +8,7 @@ from app.config import settings
 from app.services import riwayat_retur_supplier as svc
 from app.web.retur_supplier import pekerja
 from app.web.security import butuh_akun
-from app.web.tampilan import render
-from app.web.laporan_navigasi import siapkan
+from app.web.tampilan import render_laci
 
 router=APIRouter(tags=['webapp'])
 PATH='/riwayat-retur-supplier'
@@ -26,8 +25,7 @@ def konteks(request,**ganti):
 
 
 async def tampil(request,nama,**data):
-    await siapkan(request,data)
-    response=render(request,nama,**data)
+    response=await render_laci(request,nama,**data)
     response.headers['Cache-Control']='private, no-store'
     return response
 
