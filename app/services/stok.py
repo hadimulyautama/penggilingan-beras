@@ -1526,7 +1526,7 @@ async def stok_produk(db: AsyncSession, *,
         if jasa_id is None:
             return k.jasa_id.is_(None)
         if isinstance(jasa_id, (list, tuple, set, frozenset)):
-            return k.jasa_id.in_(jasa_id)
+            return dalam(db,k.jasa_id,jasa_id)
         return k.jasa_id == jasa_id
 
     # SATU kueri untuk seluruh proses, dan SATU lagi untuk seluruh catatan

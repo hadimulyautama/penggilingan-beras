@@ -40,6 +40,8 @@ perlu menggabungkan apa pun) sebelum menimbang pelanggan.
 """
 from __future__ import annotations
 
+from app.performa import dalam
+
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
@@ -135,7 +137,7 @@ async def nama_pemilik_banyak(db: AsyncSession, jasa_ids) -> dict[int, str]:
     return {jid: f"{kode} {nama}".strip() for jid, kode, nama in (await db.execute(
         select(Jasa.id, Jasa.kode, Pelanggan.nama_pelanggan)
         .join(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
-        .where(Jasa.id.in_(ids))
+        .where(dalam(db,Jasa.id,ids))
     )).all()}
 
 
