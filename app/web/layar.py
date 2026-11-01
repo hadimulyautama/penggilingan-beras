@@ -112,8 +112,8 @@ def _petak_g1(o: dict) -> list[dict]:
     silo = o.get("silo", []) or []
     stok = o.get("stok_pk", {}) or {}
     terisi = sum(1 for s in silo if s.get("terisi"))
-    kering = len(o.get("pengeringan", []) or [])
-    giling = len(o.get("giling", []) or [])
+    kering = o.get("pengeringan_n", len(o.get("pengeringan", []) or []))
+    giling = o.get("giling_n", len(o.get("giling", []) or []))
     maks = stok.get("maks", 0) or 0
     total = stok.get("total", 0) or 0
     return [

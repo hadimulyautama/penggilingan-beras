@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 import json
+from app.performa import baca_sekali, boleh_memo
+
 from dataclasses import dataclass
 from datetime import date, time
 from decimal import Decimal
@@ -138,6 +140,7 @@ def _pesan_integritas(e: IntegrityError, tabel: str, kode: str) -> str:
     return (f"Tersimpan gagal karena aturan basis data: {nama}. "
             "Sebutkan pesan ini ke admin bila berulang.")
 
+@baca_sekali
 async def _g2_warehouse_id(db: AsyncSession) -> int:
     wid = (
         await db.execute(
@@ -250,6 +253,7 @@ async def segarkan_status_silo(db: AsyncSession, silo_id: int | None) -> None:
     silo.status = "terisi" if await hitung_stok_silo(db, silo_id) > 0.001 else "kosong"
 
 
+@baca_sekali
 async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
                            pemilik: str = "semua") -> float:
     """Stok campuran sebuah silo G2 dari seluruh arus masuk dan keluar.
@@ -278,6 +282,13 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
         # milik A dengan stok milik B di tumpukan fisik yang sama.
         return (await hitung_stok_silo(db, silo_id, pemilik="pabrik")
                 + await hitung_stok_silo(db, silo_id, pemilik="jasa"))
+    if boleh_memo():
+        return (await _saldo_silo_halaman(db, pemilik)).get(silo_id, 0.0)
+    # Jalur simpan/pekerja tetap SELECT baru, dengan rumus yang sama.
+    return _jumlah_saldo_silo((await db.execute(select(*_kolom_saldo_silo(silo_id, pemilik)))).one())
+
+
+def _kolom_saldo_silo(silo_id, pemilik):
     # ── SATU kalimat pemilik, EMPAT bagian hitungan ──
     #
     # Dulu saringannya cuma dipasang pada dua yang MASUK; `terpakai` tak
@@ -332,17 +343,14 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
         q_hasil_samping = q_hasil_samping.where(milik(HasilSampingKeSilo))
     q_langsung = select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
         *syarat_langsung)
-    # Tujuh arus adalah agregat independen. Kirim sebagai scalar subquery
-    # dalam satu SELECT agar satu pembacaan saldo tidak memerlukan tujuh
-    # perjalanan ke Postgres (dikalikan dua pemilik dan beberapa penjaga
-    # dalam satu penyimpanan). Saringan pemilik serta cermin batal tetap
-    # menempel pada setiap arus, tanpa cache yang bisa menyimpan saldo lama.
+    return tuple(q.scalar_subquery() for q in (
+        q_langsung, q_tumpukan, q_broken, q_terpakai, q_keluar,
+        q_beras, q_hasil_samping))
+
+
+def _jumlah_saldo_silo(arus):
     (masuk_langsung, masuk_dari_tumpukan, masuk_broken, terpakai,
-     keluar, masuk_beras_putih, masuk_hasil_samping) = (
-        await db.execute(select(*(q.scalar_subquery() for q in (
-            q_langsung, q_tumpukan, q_broken, q_terpakai, q_keluar,
-            q_beras, q_hasil_samping))))
-    ).one()
+     keluar, masuk_beras_putih, masuk_hasil_samping) = arus
     # Toleransi timbang pada barang keluar dapat mengizinkan selisih kecil
     # (maks. 0,5 kg). Jangan biarkan selisih itu menjadi saldo negatif yang
     # mengurangi muatan pemilik berikutnya ketika silo sudah dikosongkan.
@@ -350,6 +358,14 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
                + float(masuk_broken) + float(masuk_beras_putih)
                + float(masuk_hasil_samping)
                - float(terpakai) - float(keluar))
+
+
+@baca_sekali
+async def _saldo_silo_halaman(db, pemilik):
+    # Korelasi Silo.id memakai tujuh suku yang persis sama. Seluruh silo
+    # dikirim dalam satu perjalanan, alih-alih satu perjalanan per silo.
+    rows = (await db.execute(select(Silo.id, *_kolom_saldo_silo(Silo.id, pemilik)))).all()
+    return {row[0]: _jumlah_saldo_silo(row[1:]) for row in rows}
 
 
 async def komposisi_bahan_silo(
@@ -482,6 +498,7 @@ async def komposisi_bahan_silo(
 _SEMUA_PEMILIK_TUMPUKAN = object()
 
 
+@baca_sekali
 async def hitung_stok_tumpukan(db: AsyncSession, *,
                                pemilik: str = "semua",
                                jasa_id=_SEMUA_PEMILIK_TUMPUKAN) -> float:
@@ -587,6 +604,7 @@ async def sesuaikan_stok_pk_lama(db, *, user, intake_id: int, selisih_kg, alasan
     return row
 
 
+@baca_sekali
 async def _sisa_tumpukan_intake(db: AsyncSession, intake_id: int) -> float:
     """Sisa PK sebuah intake tumpukan yang belum dipindah ke silo."""
     intake = await db.get(PkGudang2Intake, intake_id)

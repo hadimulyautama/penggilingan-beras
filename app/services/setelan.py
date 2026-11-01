@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 
+from app.performa import baca_sekali
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +33,7 @@ K_TOL_NOTA = "toleransi_nota_persen"
 TOL_NOTA_BAWAAN = 0.2
 
 
+@baca_sekali
 async def _ambil(db: AsyncSession, kunci: str) -> str | None:
     return (await db.execute(
         select(SetelanPabrik.nilai).where(SetelanPabrik.kunci == kunci)

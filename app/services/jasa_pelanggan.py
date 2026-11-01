@@ -5,6 +5,8 @@ tidak pernah dipakai untuk menebak kepemilikan atau alokasi hasil campuran.
 """
 from urllib.parse import urlencode
 
+from app.performa import baca_sekali
+
 from sqlalchemy import select,text,or_
 
 from app.models import (Jasa, Pelanggan, PurchaseBatch, DryingLot, DryingLotBatch,
@@ -224,11 +226,17 @@ async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None, ringkasan_
     return d
 
 
-async def saring_kartu(db, rows, pid):
-    """Penyaring tampilan saja, SESUDAH daftar dibatasi izin oleh sumbernya."""
+@baca_sekali
+async def _pemilik_kartu(db, pid):
     from sqlalchemy import text
-    ids=set((await db.scalars(select(Jasa.id).where(Jasa.pelanggan_id==pid))).all())
-    kode=set((await db.scalars(text("SELECT kode FROM timbangan_transaksi WHERE arah='MASUK' AND jasa=TRUE AND pelanggan_id=:pid"),{'pid':pid})).all())
+    ids=frozenset((await db.scalars(select(Jasa.id).where(Jasa.pelanggan_id==pid))).all())
+    kode=frozenset((await db.scalars(text("SELECT kode FROM timbangan_transaksi WHERE arah='MASUK' AND jasa=TRUE AND pelanggan_id=:pid"),{'pid':pid})).all())
+    return ids, kode
+
+
+async def saring_kartu(db, rows, pid):
+    """Batas pelanggan dibaca sekali dalam permintaan yang sama."""
+    ids,kode=await _pemilik_kartu(db,pid)
     return [r for r in rows if r.kode in kode or
             bool(({r.jasa_id} | set(r.pemilik_ids or ())) & ids)]
 

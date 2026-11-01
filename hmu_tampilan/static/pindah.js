@@ -23,6 +23,9 @@
   var sedang = {};        // alamat -> janji yang sedang berjalan (jangan dobel)
   var bingkai = null;
   var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
+  var nomorPindah = 0, tujuanPindah = null, nomorSentuhan = 0;
+  document.addEventListener("pointerdown", function () { nomorSentuhan++; }, true);
+  document.addEventListener("keydown", function () { nomorSentuhan++; }, true);
 
   /* Pendengar tingkat dokumen milik HALAMAN, bukan milik aplikasi.
      Skrip halaman dijalankan ulang tiap kali isinya ditukar; kalau
@@ -133,6 +136,7 @@
     if (!a || !a.getAttribute) { return false; }
     var h = a.getAttribute("href");
     if (!h || h.charAt(0) === "#") { return false; }
+    if (a.hash || /\.(pdf|csv)$/i.test(a.pathname)) { return false; }
     if (a.target || a.hasAttribute("download") || a.hasAttribute("data-utuh")) { return false; }
     return a.origin === location.origin;
   }
@@ -141,9 +145,12 @@
   function ambil(alamat) {
     if (sedang[alamat]) { return sedang[alamat]; }
     var bolehSimpan = true;
+    var batas = new AbortController();
+    var pewaktu = setTimeout(function () { batas.abort(); }, 15000);
     var janji = fetch(alamat, {
       credentials: "same-origin",
       cache: "no-store",
+      signal: batas.signal,
       headers: { "X-Pindah": "1" }
     }).then(function (r) {
       /* Detail stok dapat habis sesudah kartunya dilihat. Halaman pemulihan
@@ -160,8 +167,11 @@
     }).catch(function () {
       return null;              // jaringan putus — biarkan peramban mencoba
     }).then(function (teks) {
+      clearTimeout(pewaktu);
       delete sedang[alamat];
       if (teks && bolehSimpan) { simpan[alamat] = teks; }
+      var kunci = Object.keys(simpan);
+      if (kunci.length > 20) { delete simpan[kunci[0]]; }
       return teks;
     });
     sedang[alamat] = janji;
@@ -182,7 +192,10 @@
        diam-diam tak boleh menggerakkan layar di bawah jari. Tanpa dukungan,
        jalurnya persis seperti sebelumnya. */
     if (halus && document.startViewTransition) {
-      var transisi = document.startViewTransition(function () { tukar(doc, baru); });
+      var generasi = nomorPindah;
+      var transisi = document.startViewTransition(function () {
+        if (generasi === nomorPindah) { tukar(doc, baru); }
+      });
       // Ketukan berikutnya boleh melewati animasi yang masih berjalan.
       // `ready` ditolak saat animasi dilewati; pemasangan halaman tetap jalan.
       transisi.ready.catch(function () {});
@@ -193,6 +206,15 @@
   }
 
   function tukar(doc, baru) {
+    // CSS khusus detail harus ikut saat navigasi parsial. Sebelumnya hanya
+    // isi body yang ditukar: detail yang dibuka lewat sidebar/kartu dapat
+    // kehilangan gaya, meskipun reload langsung terlihat benar.
+    Array.prototype.forEach.call(doc.querySelectorAll('head link[rel="stylesheet"][href]'), function (link) {
+      var ada = Array.prototype.some.call(document.querySelectorAll('head link[rel="stylesheet"][href]'), function (lama) {
+        return lama.getAttribute('href') === link.getAttribute('href');
+      });
+      if (!ada) { document.head.appendChild(link.cloneNode(true)); }
+    });
     document.title = doc.title || document.title;
     bingkai.innerHTML = baru.innerHTML;
     tandaiSegar();
@@ -210,6 +232,7 @@
         s.setAttribute(at.name, at.value);
       });
       s.textContent = lama.textContent;
+      if (s.src) { s.async = false; }
       lama.parentNode.replaceChild(s, lama);
     });
     angkatLembar();
@@ -544,32 +567,55 @@
   }
 
   /* ── Perpindahan ── */
+  function sibuk(ya) {
+    if (!bingkai) { return; }
+    bingkai.classList.toggle("menunggu", ya);
+    if (ya) { bingkai.setAttribute("aria-busy", "true"); }
+    else { bingkai.removeAttribute("aria-busy"); }
+  }
+
   function pindah(alamat, dorong) {
+    // Hanya pilihan terakhir yang boleh memasang HTML, termasuk bila
+    // respons lama datang setelah klik sidebar/detail berikutnya.
+    var nomor = ++nomorPindah;
+    tujuanPindah = alamat;
     var tersimpan = simpan[alamat];
 
     if (tersimpan) {
+      sibuk(false);
       // Sudah di tangan: tampilkan sekarang juga, tanpa menyeberangi laut.
       if (!pasang(tersimpan, alamat, true)) { return; }
       if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
       // Lalu periksa diam-diam apakah sudah berubah.
       delete simpan[alamat];
+      var sentuhanAwal = nomorSentuhan;
       ambil(alamat).then(function (teks) {
         /* Hanya menyegarkan kalau orangnya masih di halaman itu, isinya
            memang berbeda, dan tak ada lembar terbuka. Menukar isi di bawah
            jari orang yang sedang membaca laporan lebih buruk daripada angka
            yang telat setengah detik. */
-        if (!teks || teks === tersimpan) { return; }
+        if (nomor !== nomorPindah || !teks || teks === tersimpan) { return; }
         if (location.pathname + location.search !== alamat) { return; }
         if (lembarTerbuka()) { return; }
+        // Pengguna sudah mulai memakai halaman/menu. Mengganti DOM sekarang
+        // dapat membuang sasaran di antara pointerdown dan click, sehingga
+        // ketukan pertama terasa diabaikan. Simpan versi baru untuk nanti.
+        if (nomorSentuhan !== sentuhanAwal || disentuh) {
+          jumlahPerubahan++;
+          tawarkanPerubahan();
+          return;
+        }
         pasang(teks, alamat, true);
       });
       return;
     }
 
     // Belum ada: tunggu, sambil menunjukkan bahwa sesuatu sedang berjalan.
-    bingkai.classList.add("menunggu");
+    sibuk(true);
     ambil(alamat).then(function (teks) {
-      bingkai.classList.remove("menunggu");
+      if (nomor !== nomorPindah) { return; }
+      sibuk(false);
+      tujuanPindah = null;
       if (!teks) { location.href = alamat; return; }
       if (!pasang(teks, alamat, true)) { return; }
       if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
@@ -582,11 +628,16 @@
   if (!bingkai) { return; }
 
   document.addEventListener("click", function (e) {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) { return; }
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) { return; }
     var a = e.target.closest ? e.target.closest("a") : null;
     if (!bolehDitangani(a)) { return; }
     var alamat = a.pathname + a.search;
-    if (alamat === location.pathname + location.search) { e.preventDefault(); return; }
+    if (alamat === location.pathname + location.search) {
+      // Klik kembali ke halaman kini juga membatalkan tujuan yang menunggu.
+      ++nomorPindah; tujuanPindah = null; sibuk(false);
+      e.preventDefault(); return;
+    }
+    if (tujuanPindah === alamat) { e.preventDefault(); return; }
     e.preventDefault();
 
     /* Tab yang ditekan menyala SEKARANG, bukan setelah halamannya datang.

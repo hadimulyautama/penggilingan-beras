@@ -437,19 +437,24 @@ async def lencana(user: User | None) -> dict:
     """
     if user is None:
         return _KOSONG()
-    try:
-        from app.services import berjalan
-        async with SessionLocal() as db:
-            b = await berjalan.untuk(db, user)
-        # Angkanya disusun `Berjalan.lencana()` — satu tempat untuk keempatnya,
-        # supaya layar yang memakai jalur ini dan layar yang memegang daftarnya
-        # sendiri tak pernah menggambar laci yang berbeda. Operator tak perlu
-        # disaring lagi di sini: `untuk()` hanya mengisi `meja` untuk yang boleh
-        # melihat uang, jadi kedua angka meja sudah nol dengan sendirinya.
-        return b.lencana()
-    except Exception:
-        log.exception("Lencana gagal dihitung (laci tetap tampil)")
-        return _KOSONG()
+    from app.services.navigasi_cache import ambil
+
+    async def baca():
+        try:
+            from app.services import berjalan
+            async with SessionLocal() as db:
+                b = await berjalan.untuk(db, user)
+            # Angkanya disusun `Berjalan.lencana()` — satu tempat untuk keempatnya,
+            # supaya layar yang memakai jalur ini dan layar yang memegang daftarnya
+            # sendiri tak pernah menggambar laci yang berbeda. Operator tak perlu
+            # disaring lagi di sini: `untuk()` hanya mengisi `meja` untuk yang boleh
+            # melihat uang, jadi kedua angka meja sudah nol dengan sendirinya.
+            return b.lencana()
+        except Exception:
+            log.exception("Lencana gagal dihitung (laci tetap tampil)")
+            return _KOSONG()
+
+    return await ambil(user, baca)
 
 
 def _KOSONG() -> dict:

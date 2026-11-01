@@ -585,6 +585,36 @@ async def _aman(nama: str, coro, bawaan):
         return bawaan, f"{nama}: {type(e).__name__}"
 
 
+async def ringkasan_beranda(db: AsyncSession) -> dict:
+    """Hanya angka yang tampil di petak; rincian ada pada daftar pekerjaan.
+
+    Beranda tidak memakai nama pemasok per silo, riwayat KA per dryer,
+    rincian QC, lama jeda, atau tugas dashboard Kantor. Menghitung semuanya
+    lalu membuang hasilnya mengulang sebagian besar pekerjaan layar lain.
+    """
+    from app.models import Warehouse
+    from app.penggilingan.gudang1.services.milling import stok_pk_g1_pemilik
+
+    pengeringan, giling = (await db.execute(select(
+        select(func.count(DryingLot.id)).where(DryingLot.status == "proses").scalar_subquery(),
+        select(func.count(MillingProcess.id)).where(MillingProcess.status == "proses").scalar_subquery(),
+    ))).one()
+    isi = select(SiloStorage.id).where(
+        SiloStorage.silo_id == Silo.id, SiloStorage.status == "terisi").exists()
+    silo = (await db.execute(select(Silo.id, isi.label("terisi"))
+        .join(Warehouse, Warehouse.id == Silo.warehouse_id)
+        .where(Warehouse.kode_fungsi == "g1", Warehouse.aktif.is_(True), Silo.aktif.is_(True))
+        .order_by(Silo.nama_silo))).all()
+    pabrik, jasa = await stok_pk_g1_pemilik(db)
+    return {
+        "gabah_hari_ini": await _gabah_hari_ini(db, now_local().date()),
+        "pengeringan_n": pengeringan, "giling_n": giling,
+        "silo": [{"terisi": bool(s.terisi)} for s in silo],
+        "stok_pk": {"total": pabrik, "jasa_total": jasa,
+                    "maks": settings.g1_pk_tumpukan_maks_kg},
+    }
+
+
 async def dashboard_data(db: AsyncSession) -> dict:
     """Snapshot terstruktur untuk dashboard staff produksi."""
     now = now_local()

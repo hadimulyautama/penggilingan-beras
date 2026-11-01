@@ -20,6 +20,8 @@ menjawab dua pertanyaan sekaligus.
 """
 from __future__ import annotations
 
+from app.performa import baca_sekali
+
 from dataclasses import dataclass, field
 
 from sqlalchemy import bindparam, func, select, text
@@ -477,6 +479,7 @@ def _keadaan_minta(status: str) -> str:
     }.get(status, "")
 
 
+@baca_sekali
 async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     """Tiap lot giling yang PK-nya masih tersisa di Gudang 1, terbaru dulu.
 
@@ -709,6 +712,7 @@ class LotPkG2:
     jumlah_karung: int | None = None
 
 
+@baca_sekali
 async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     """Tiap pemasukan PK yang masih menumpuk di Gudang 2, terbaru dulu.
 
@@ -1450,6 +1454,7 @@ def _fifo_sisa(baris: list[RincianProduk], keluar_kg: float) -> list[RincianProd
     return keluar
 
 
+@baca_sekali
 async def stok_produk(db: AsyncSession, *,
                       jasa_id: int | list[int] | None = None) -> list[KartuProduk]:
     """Satu kartu per kategori, dengan persamaan empat sukunya.

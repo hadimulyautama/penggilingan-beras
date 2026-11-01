@@ -1,6 +1,10 @@
 """Logika bisnis silo Gudang 1 (penyimpanan gabah kering)."""
 from __future__ import annotations
 
+from app.performa import baca_sesi, boleh_memo
+
+from app.performa import baca_sekali
+
 from dataclasses import dataclass
 
 from sqlalchemy import func, select, update
@@ -56,6 +60,7 @@ class SiloError(Exception):
     """Kesalahan proses silo dengan pesan siap-tampil (args[0])."""
 
 
+@baca_sekali
 async def _g1_warehouse_id(db: AsyncSession) -> int:
     wid = (
         await db.execute(
@@ -67,6 +72,7 @@ async def _g1_warehouse_id(db: AsyncSession) -> int:
     return wid
 
 
+@baca_sesi
 async def silos_g1(db: AsyncSession) -> list[Silo]:
     """Semua silo gabah kering Gudang 1, urut nama.
 
@@ -109,6 +115,7 @@ async def _active_storage(db: AsyncSession, silo_id: int) -> SiloStorage | None:
     return (await db.execute(stmt)).scalars().first()
 
 
+@baca_sekali
 async def _lot_bobot(db: AsyncSession, lot_id: int) -> Bobot:
     """Bobot seluruh batch sebuah lot pengeringan, berikut kepastiannya."""
     batches = (await db.execute(
@@ -124,9 +131,12 @@ async def _lot_kg(db: AsyncSession, lot_id: int) -> float:
     return (await _lot_bobot(db, lot_id)).angka()
 
 
+@baca_sesi
 async def _silo_active_rows(db: AsyncSession, silo_id: int) -> list[SiloStorage]:
     """Semua penyimpanan aktif (terisi) di silo — bisa >1 baris untuk kering
     yang menunggu (tiap batch 1 baris, tanpa lot)."""
+    if boleh_memo() and not (db.new or db.dirty or db.deleted):
+        return [r for r in await _seluruh_penyimpanan_aktif(db) if r.silo_id == silo_id]
     return list(
         (
             await db.execute(
@@ -136,6 +146,11 @@ async def _silo_active_rows(db: AsyncSession, silo_id: int) -> list[SiloStorage]
             )
         ).scalars().all()
     )
+
+
+@baca_sesi
+async def _seluruh_penyimpanan_aktif(db):
+    return list((await db.scalars(select(SiloStorage).where(SiloStorage.status == "terisi"))).all())
 
 
 async def giling_berjalan_untuk_silo(db: AsyncSession, silo_id: int) -> MillingProcess | None:

@@ -1,0 +1,110 @@
+"""Batas cache: satu permintaan, satu pemilik, dan transaksi selalu segar."""
+import asyncio
+from types import SimpleNamespace
+
+import httpx
+import pytest
+from fastapi import FastAPI
+
+from app import performa as p
+
+pytestmark = pytest.mark.asyncio
+
+
+async def test_memo_hanya_get_dan_tidak_bocor_antar_permintaan():
+    calls = []
+
+    @p.baca_sekali
+    async def saldo(db, silo, *, pemilik="pabrik"):
+        calls.append((silo, pemilik))
+        return {"kg": len(calls)}
+
+    app = FastAPI()
+    app.add_middleware(p.PerformaMiddleware)
+
+    @app.api_route("/saldo", methods=["GET", "POST"])
+    async def halaman():
+        pertama = await saldo(None, 1)
+        pertama["kg"] = -1
+        return [await saldo(None, 1, pemilik="pabrik"), await saldo(None, 1, pemilik="jasa")]
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://uji") as c:
+        a = await c.get("/saldo")
+        assert a.json() == [{"kg": 1}, {"kg": 2}]
+        assert "app;dur=" in a.headers["server-timing"]
+        assert (await c.get("/saldo")).json() == [{"kg": 3}, {"kg": 4}]
+        await c.post("/saldo")
+    assert len(calls) == 7
+
+
+async def test_penanda_serentak_satu_baca_dan_satu_klien_putus_tetap_aman():
+    cache = p.NilaiSingkat()
+    siap, lanjut = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def baca():
+        nonlocal calls
+        calls += 1
+        siap.set()
+        await lanjut.wait()
+        return {"n": calls}
+
+    awal = asyncio.create_task(cache.ambil("a", baca))
+    await siap.wait()
+    awal.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await awal
+    lain = [asyncio.create_task(cache.ambil("a", baca)) for _ in range(20)]
+    lanjut.set()
+    hasil = await asyncio.gather(*lain)
+    assert calls == 1 and all(x == {"n": 1} for x in hasil)
+    hasil[0]["n"] = -1
+    assert await cache.ambil("a", baca) == {"n": 1}
+    cache.hapus()
+    assert await cache.ambil("a", baca) == {"n": 2}
+
+
+async def test_cache_kedaluwarsa_dan_kegagalan_dibaca_ulang(monkeypatch):
+    jam = [0.0]
+    monkeypatch.setattr(p.time, "monotonic", lambda: jam[0])
+    cache = p.NilaiSingkat(detik=1)
+    calls = 0
+
+    async def baca():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ValueError("Gangguan sementara")
+        return calls
+
+    with pytest.raises(ValueError):
+        await cache.ambil("a", baca)
+    assert await cache.ambil("a", baca) == 2
+    assert await cache.ambil("a", baca) == 2
+    jam[0] = 1.1
+    assert await cache.ambil("a", baca) == 3
+
+
+async def test_lencana_dipisah_per_orang_peran_dan_gudang():
+    from app.services.navigasi_cache import kunci
+    a = SimpleNamespace(id=1, role="peran-a", default_warehouse_id=1)
+    assert len({kunci(a), kunci(SimpleNamespace(**{**vars(a), "id": 2})),
+                kunci(SimpleNamespace(**{**vars(a), "role": "peran-b"})),
+                kunci(SimpleNamespace(**{**vars(a), "default_warehouse_id": 2}))}) == 4
+
+
+async def test_stream_dikirim_langsung_tanpa_memo_dan_tanpa_buffer():
+    chunks = []
+
+    async def stream(scope, receive, send):
+        assert p._konteks.get() is None
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"data: 1\n\n", "more_body": True})
+        assert len(chunks) == 2
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    async def send(message):
+        chunks.append(message)
+
+    await p.PerformaMiddleware(stream)({"type": "http", "method": "GET", "path": "/api/aliran"}, None, send)
+    assert len(chunks) == 3 and p._konteks.get() is None

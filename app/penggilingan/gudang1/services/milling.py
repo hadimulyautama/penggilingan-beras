@@ -1,6 +1,8 @@
 """Logika bisnis proses milling / pecah kulit (Gudang 1)."""
 from __future__ import annotations
 
+from app.performa import baca_sekali
+
 from dataclasses import dataclass
 import math
 
@@ -562,6 +564,7 @@ async def stok_pk_g1(db: AsyncSession, *, termasuk_jasa: bool = False) -> float:
     return pabrik + jasa if termasuk_jasa else pabrik
 
 
+@baca_sekali
 async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
     """PK di lantai Gudang 1, dipecah (milik pabrik, titipan pelanggan).
 
@@ -578,8 +581,10 @@ async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
       ada di gudang — dan yang menagihnya memegang salah satunya.
     """
     pabrik = jasa = 0.0
-    for proc in (await db.execute(select(MillingProcess))).scalars().all():
-        bd = await _pk_breakdown(db, proc.id)
+    procs = (await db.execute(select(MillingProcess))).scalars().all()
+    rincian = await pk_breakdown_banyak(db, [p.id for p in procs])
+    for proc in procs:
+        bd = rincian[proc.id]
         if bd.tersedia > 0:
             if proc.jasa_id is None:
                 pabrik += bd.tersedia
@@ -1209,6 +1214,7 @@ async def _sold_pk_langsung(db: AsyncSession, proc_id: int) -> float:
     return float(r)
 
 
+@baca_sekali
 async def _pk_breakdown(db: AsyncSession, proc_id: int, *, hasil_operator: float | None = None) -> PkBreakdown:
     """Stok PK siap kirim; pratinjau boleh memasok hasil operator tanpa menulis.
 
@@ -1992,6 +1998,7 @@ async def progress_banyak(db: AsyncSession, proc_ids) -> dict[int, float | None]
     return {pid: (float(kg) if kg is not None else None) for pid, kg in baris}
 
 
+@baca_sekali
 async def pk_breakdown_banyak(db: AsyncSession, proc_ids) -> dict[int, PkBreakdown]:
     """`_pk_breakdown` untuk banyak proses. Empat kueri, bukan 4×N."""
     from app.models import OutgoingItem

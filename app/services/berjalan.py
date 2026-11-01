@@ -16,6 +16,8 @@ status gudang — laporan memberi tahu, layar ini menyelesaikan.
 """
 from __future__ import annotations
 
+from app.performa import baca_sekali
+
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
@@ -3588,6 +3590,7 @@ async def _kartu_tiket_keluar_menganggur(db: AsyncSession) -> list[Baris]:
     return keluar
 
 
+@baca_sekali
 async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
     """Gabungkan sesuai peran — server yang memutuskan, bukan layar."""
     from app.web.portal.security import CustomerReader
@@ -3708,6 +3711,10 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
             "Lencana Kabar gagal dihitung (laci tetap tampil)")
     from app.services.identitas_pekerjaan import lengkapi
     await lengkapi(db, b.menunggu + b.berjalan + b.transit + b.meja)
+    # Daftar sudah dihitung untuk isi halaman; sidebar berikutnya memakai
+    # lencana yang sama tanpa membangun seluruh kartu sekali lagi.
+    from app.services.navigasi_cache import ingat
+    ingat(user, b.lencana())
     return b
 
 

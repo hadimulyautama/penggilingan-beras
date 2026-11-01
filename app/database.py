@@ -31,6 +31,9 @@ engine = create_async_engine(
     connect_args={"server_settings": {"timezone": settings.app_timezone}},
 )
 
+from app.performa import pasang_penghitung
+pasang_penghitung(engine)
+
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

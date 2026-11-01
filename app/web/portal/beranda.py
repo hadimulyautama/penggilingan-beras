@@ -133,7 +133,10 @@ async def halaman(request, bagian='beranda'):
             rinci=bagian!='beranda',read_scope=scope)
         d=deepcopy(d) if d else dict(id=scope.reader.pelanggan_id,
             pesanan=[],penerimaan=[],proses=[],stok=[],pengiriman=[],retur=[])
-        b=await berjalan.untuk(db,scope.reader,read_scope=scope)
+        # Daftar kerja hanya dipakai Beranda dan Proses. Penerimaan, Barang,
+        # dan Riwayat mempunyai pembaca sendiri; jangan menghitung yang dibuang.
+        b=(await berjalan.untuk(db,scope.reader,read_scope=scope)
+           if bagian in ('beranda','jasa') else berjalan.Berjalan())
         # Barang masuk berarti penerimaan aktual, bukan tiket antrean.
         # Catatan penolakan tidak menjadi riwayat barang yang diterima.
         d['penerimaan']=penerimaan_diterima(d['penerimaan'])

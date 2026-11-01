@@ -30,6 +30,8 @@ sudah terlanjur datang dan berdiri di halaman tidak membuatnya pergi.
 """
 from __future__ import annotations
 
+from app.performa import baca_sekali
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,6 +141,7 @@ async def isi(db: AsyncSession, kondisi: str | None = None, *,
     )).scalars().all())
 
 
+@baca_sekali
 async def jumlah_kg(db: AsyncSession, *, pemilik: str = "pabrik") -> float:
     """Berapa kilogram yang menumpuk — MILIK PABRIK secara bawaan.
 

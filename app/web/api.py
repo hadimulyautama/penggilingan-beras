@@ -118,7 +118,7 @@ async def acuan(user: User = Depends(pengguna_aksi)) -> dict:
 
 # ──────────────────────── Penanda keadaan ────────────────────────
 
-async def _penanda() -> dict:
+async def _baca_penanda() -> dict:
     """Satu penanda: APAKAH ada yang berubah — bukan apa yang berubah.
 
     Dipanggil tiap sepuluh detik oleh tiap perangkat yang layarnya menyala.
@@ -163,6 +163,14 @@ async def _penanda() -> dict:
     # `versi` (syarat N-A-03): ponsel yang memegang berkas lama tahu dari
     # kanal yang sama, tanpa menunggu navigasi penuh.
     return {"n": f"{n}.{t[0]}.{t[1]}", "versi": VERSI}
+
+
+from app.performa import NilaiSingkat as _NilaiSingkat
+_cache_penanda = _NilaiSingkat(detik=1.0, batas=1)
+
+
+async def _penanda() -> dict:
+    return await _cache_penanda.ambil("pabrik", _baca_penanda)
 
 
 @router.get("/keadaan")

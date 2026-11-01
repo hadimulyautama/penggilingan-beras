@@ -4,7 +4,8 @@ Nama silo dan kode kosong mesin bukan nomor transaksi. Menghapus pemeriksaan
 kode saja akan mempercayai label pemilik yang dapat tidak konsisten dengan
 sumber bahan. Seluruh relasi di sini harus cocok dengan scope baca pelanggan.
 """
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
+from app.performa import baca_sekali
 
 from app.models import (BerasKeSilo, BrokenKeSilo, ByproductStock, CustomerReturn,
                         DryingLot, HasilSampingKeSilo, PkGudang2Intake,
@@ -12,6 +13,7 @@ from app.models import (BerasKeSilo, BrokenKeSilo, ByproductStock, CustomerRetur
                         PurchaseBatch)
 
 
+@baca_sekali
 async def boleh_baca_ruang(db, scope, ruang):
     jenis, ident = ruang
     if jenis == "dryer":
@@ -43,46 +45,68 @@ def _sumber_hasil_aman(scope, jenis, ident):
 
 
 async def _silo_g2_aman(db, scope, ident):
-    # Riwayat lama tetap tersimpan setelah silo dikosongkan. Batas pengosongan
-    # memakai sumber yang sama dengan pemeriksaan bahan proses dalam ReadScope.
-    kosong = await db.scalar(select(func.max(PolishingProcess.waktu_selesai))
-        .join(PolishingSiloUsage, PolishingSiloUsage.polishing_process_id == PolishingProcess.id)
-        .where(PolishingSiloUsage.silo_id == ident,
-               PolishingSiloUsage.berat_akhir_kg == 0,
-               PolishingProcess.waktu_selesai.is_not(None)))
-    def setelah(kolom):
-        return [kolom >= kosong] if kosong is not None else []
+    return (await _silo_g2_banyak(db, scope)).get(ident, False)
 
-    intakes = list((await db.scalars(select(PkGudang2Intake).where(
-        PkGudang2Intake.silo_id == ident, *setelah(PkGudang2Intake.waktu_masuk)))).all())
-    intakes += list((await db.scalars(select(PkGudang2Intake)
-        .join(PkTumpukanToSilo, PkTumpukanToSilo.pk_gudang2_intake_id == PkGudang2Intake.id)
-        .where(PkTumpukanToSilo.silo_id == ident, *setelah(PkTumpukanToSilo.waktu)))).all())
-    if any(i.id not in scope.ids(PkGudang2Intake) for i in intakes):
-        return False
-    ada = bool(intakes)
+
+@baca_sekali
+async def _silo_g2_banyak(db, scope):
+    """Pemeriksaan sumber yang sama, sekaligus untuk seluruh silo.
+
+    Batas kosong dan syarat pemilik/sumber tetap identik. Sebelumnya setiap
+    silo memerlukan enam SELECT walaupun kosong; Beranda pelanggan membaca
+    silo-silo itu lagi saat menggambar bahan. Scope tetap berasal dari
+    pemeriksaan akun/relasi baru di setiap permintaan, tanpa cache izin
+    lintas permintaan maupun pengabaian sumber campuran.
+    """
+    from app.models import Silo
+    silos = list((await db.scalars(select(Silo.id))).all())
+    if not silos:
+        return {}
+    # [ada bahan, seluruh bahan aman]
+    keadaan = {sid: [False, True] for sid in silos}
+    batas = (select(PolishingSiloUsage.silo_id.label("silo"),
+                    func.max(PolishingProcess.waktu_selesai).label("kosong"))
+        .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .where(PolishingSiloUsage.berat_akhir_kg == 0,
+               PolishingProcess.waktu_selesai.is_not(None))
+        .group_by(PolishingSiloUsage.silo_id).subquery())
+
+    def berlaku(q, silo, waktu):
+        return q.outerjoin(batas, batas.c.silo == silo).where(
+            silo.in_(silos), or_(batas.c.kosong.is_(None), waktu >= batas.c.kosong))
+
+    def intake(silo_id, identitas):
+        keadaan[silo_id][0] = True
+        if identitas not in scope.ids(PkGudang2Intake):
+            keadaan[silo_id][1] = False
+
+    for row in (await db.scalars(berlaku(select(PkGudang2Intake),
+            PkGudang2Intake.silo_id, PkGudang2Intake.waktu_masuk))).all():
+        intake(row.silo_id, row.id)
+    pindah = berlaku(select(PkTumpukanToSilo.silo_id, PkGudang2Intake.id)
+        .join(PkGudang2Intake, PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id),
+        PkTumpukanToSilo.silo_id, PkTumpukanToSilo.waktu)
+    for sid, identitas in (await db.execute(pindah)).all():
+        intake(sid, identitas)
+
     for model in (BrokenKeSilo, BerasKeSilo, HasilSampingKeSilo):
-        rows = (await db.scalars(select(model).where(
-            model.silo_id == ident, *setelah(model.waktu)))).all()
-        ada = ada or bool(rows)
+        rows = (await db.scalars(berlaku(select(model), model.silo_id, model.waktu))).all()
         stocks = {s.id: s for s in (await db.scalars(select(ByproductStock).where(
-            ByproductStock.id.in_([r.byproduct_stock_id for r in rows])))).all()} if model is BrokenKeSilo else {}
+            ByproductStock.id.in_([r.byproduct_stock_id for r in rows])))).all()} if model is BrokenKeSilo and rows else {}
         for row in rows:
-            if row.jasa_id not in scope.jasa_ids:
-                return False
+            kondisi = keadaan[row.silo_id]
+            kondisi[0] = True
+            aman = row.jasa_id in scope.jasa_ids
             if model is BrokenKeSilo:
                 stock = stocks.get(row.byproduct_stock_id)
-                if stock is None or stock.jasa_id not in scope.jasa_ids:
-                    return False
-                if not _sumber_hasil_aman(scope, stock.source_type, stock.source_id):
-                    return False
+                aman = (aman and stock is not None and stock.jasa_id in scope.jasa_ids
+                        and _sumber_hasil_aman(scope, stock.source_type, stock.source_id))
             elif model is HasilSampingKeSilo:
-                if row.polishing_process_id not in scope.ids(PolishingProcess):
-                    return False
+                aman = aman and row.polishing_process_id in scope.ids(PolishingProcess)
             else:
-                if row.polishing_process_id is not None and row.polishing_process_id not in scope.ids(PolishingProcess):
-                    return False
-                source_id = row.source_id if row.source_id is not None else row.polishing_process_id
-                if not _sumber_hasil_aman(scope, row.source_type, source_id):
-                    return False
-    return ada
+                aman = (aman and (row.polishing_process_id is None
+                        or row.polishing_process_id in scope.ids(PolishingProcess))
+                        and _sumber_hasil_aman(scope, row.source_type,
+                            row.source_id if row.source_id is not None else row.polishing_process_id))
+            kondisi[1] = kondisi[1] and aman
+    return {sid: ada and aman for sid, (ada, aman) in keadaan.items()}

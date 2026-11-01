@@ -445,7 +445,8 @@ async def beranda(request: Request):
     try:
         async with SessionLocal() as db:
             if gudang1(view):
-                o = (await dashboard_data(db)).get("operasional", {}) or {}
+                from app.services.dashboard import ringkasan_beranda
+                o = await ringkasan_beranda(db)
             if view in V_MEJA:
                 from app.services import beranda as svc_beranda
                 angka = await svc_beranda.angka_gudang(db)
@@ -676,3 +677,10 @@ async def dashboard(request: Request, token: str = Query("")) -> HTMLResponse:
     async with SessionLocal() as db:
         data = await dashboard_data(db)
     return HTMLResponse(render_dashboard_html(data))
+
+
+# Memo GET dan pengukuran berlaku juga pada detail, formulir, API, serta laporan.
+from app.performa import PerformaMiddleware
+app.add_middleware(PerformaMiddleware)
+from app.web.portal.security import PortalSessionMiddleware
+app.add_middleware(PortalSessionMiddleware)

@@ -1,6 +1,8 @@
 """Logika bisnis pengeringan gabah (Gudang 1)."""
 from __future__ import annotations
 
+from app.performa import baca_sesi, boleh_memo
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -141,6 +143,7 @@ def _hours(a: datetime, b: datetime) -> float:
     return (a - b).total_seconds() / 3600.0
 
 
+@baca_sesi
 async def dryers_g1(db: AsyncSession) -> list[Dryer]:
     """Semua mesin pengering Gudang 1, yang aktif lebih dulu."""
     return list((await db.execute(
@@ -434,6 +437,7 @@ class LotResult:
     peringatan: str | None = None
 
 
+@baca_sesi
 async def _loose_dryer_batches(
     db: AsyncSession, dryer_id: int | None = None
 ) -> list[PurchaseBatch]:
@@ -443,6 +447,8 @@ async def _loose_dryer_batches(
     pengeringan" akan menyapu gabah dari SEMUA mesin ke dalam satu lot —
     gabah yang tidak pernah bertemu di mesin yang sama.
     """
+    if dryer_id is not None and boleh_memo() and not (db.new or db.dirty or db.deleted):
+        return [b for b in await _loose_dryer_batches(db) if b.dryer_id == dryer_id]
     in_lot = select(DryingLotBatch.purchase_batch_id)
     q = (select(PurchaseBatch)
          .where(PurchaseBatch.status_batch == "di_dryer",
@@ -638,6 +644,7 @@ async def active_drying_lot(
     return (await db.execute(q.order_by(DryingLot.id.desc()))).scalars().first()
 
 
+@baca_sesi
 async def _lot_batches(db: AsyncSession, lot_id: int) -> list[PurchaseBatch]:
     return list(
         (
