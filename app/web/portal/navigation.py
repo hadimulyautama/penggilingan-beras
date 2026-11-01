@@ -26,6 +26,7 @@ def active_menu(path):
     path=path.removeprefix('/pelanggan').rstrip('/') or '/ringkasan'
     if path=='/serah-terima' or '/serah-terima' in path:return 'laporan'
     if re.fullmatch(r'/jasa/\d+/nota(?:\.pdf)?',path):return 'laporan'
+    if re.fullmatch(r'/riwayat-(?:giling|pengeringan|sosoh)/\d+/laporan(?:\.pdf)?',path):return 'laporan'
     if path.startswith('/barang-masuk'):return 'masuk'
     if path.startswith(('/barang-keluar','/retur')):return 'pengambilan'
     if path.startswith('/riwayat-qc'):return 'stok'
