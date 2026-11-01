@@ -331,3 +331,18 @@ tetap menawarkan hasil HTML, tanpa tautan PDF yang gagal. Pembaca rekap/bukti
 memiliki satu tautan kembali ke Dokumen dan satu tombol unduh. Nomor terkait
 serta rincian berat dapat dibuka bila diperlukan; bobot, catatan, syarat mutu,
 dan PDF resmi tidak dihitung atau disusun ulang oleh lapisan tampilan ini.
+
+Audit alur HP memakai seluruh menu dan detail dengan stok, empat tahap proses,
+penerimaan, pengambilan, pengembalian, serta pemeriksaan mutu. HP memakai satu
+tombol Menu di navigasi bawah. Menu mempunyai tombol tutup, pemulihan fokus,
+Escape dan batas fokus di panel; isi belakang tidak menerima fokus saat menu
+terbuka. Menu yang tertutup tidak masuk urutan fokus HP. Pada desktop, sidebar
+tetap dapat dipakai setelah perubahan ukuran layar.
+
+Logo tidak diberi bingkai pada pembukaan menu atau klik. Fokus saat membuka
+menu diarahkan ke halaman aktif, dan fokus keyboard pada logo ditandai garis
+bawah. Tautan kembali dan kontrol utama mempunyai target minimal 44 px.
+Tab pembaca native dapat dijangkau dengan tombol arah dan diaktifkan melalui
+Enter/Spasi tanpa mengubah pembatasan GET. Halaman mutu serta pengembalian
+memakai judul pelanggan, satu tautan kembali dan satu pintu per bagian; nomor
+jasa berulang dan petunjuk operator disisihkan. Catatan asli tetap dibaca utuh.

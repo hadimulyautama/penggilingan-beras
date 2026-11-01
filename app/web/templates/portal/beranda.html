@@ -4,8 +4,8 @@
 {% block isi %}
 <div class="pelanggan-halaman">
 <header class="pelanggan-sapaan"><p class="pelanggan-alis">Beranda</p><h1>Halo, {{ request.state.portal_scope.reader.nama }}.</h1><p class="pelanggan-redup">Pantau barang dan proses Anda di HMU.</p></header>
-<section class="pelanggan-status" aria-label="Status barang Anda"><span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p><a class="pelanggan-utama" href="/pelanggan/jasa-saya">Lihat perkembangan proses →</a></section>
-<section class="pelanggan-panel"><div class="pelanggan-judul"><h2>Barang di pabrik</h2><a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat semua stok</a></div>
+<section class="pelanggan-status" aria-label="Status barang Anda"><span class="pelanggan-penanda">{{ utama.label }}</span><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p>{% if progres or transit %}<a class="pelanggan-utama" href="/pelanggan/jasa-saya">Lihat proses berjalan →</a>{% endif %}</section>
+<section class="pelanggan-panel"><div class="pelanggan-judul"><h2>Barang di pabrik</h2>{% if komoditas %}<a class="pelanggan-tautan" href="/pelanggan/barang-saya">Lihat semua stok</a>{% endif %}</div>
 {{ daftar_komoditas(komoditas,kg) }}
 </section>
 {% if progres %}{{ proses_berjalan(progres,kg) }}{% endif %}

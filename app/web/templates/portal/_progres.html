@@ -10,7 +10,7 @@
   {% if r.neraca %}<p class="pelanggan-redup">Hasil sementara yang sudah dicatat</p><dl class="pelanggan-fakta">{% for n in r.neraca %}<div><dt>{{ n.nama }}</dt><dd>{{ kg(n.kg) }}</dd></div>{% endfor %}</dl>{% endif %}
   {% if not r.fakta and not r.neraca %}<p class="pelanggan-redup">{{ r.ringkas or 'Pembaruan hasil belum dicatat petugas.' }}</p>{% endif %}
   <p class="pelanggan-catatan">Hasil sementara; jumlah akhir tersedia setelah proses selesai.{% if r.rendemen is not none %} Rasio hasil bukan persentase selesai.{% endif %}</p>
-  <a class="pelanggan-tautan" href="{{ r.href }}">Lihat progres & catatan proses →</a>
+  <a class="pelanggan-tautan" href="{{ r.href }}" aria-label="Lihat proses {{ r.judul }} {{ r.kode }}">Lihat proses →</a>
 </article>{% endfor %}
 </section>
 {% endmacro %}

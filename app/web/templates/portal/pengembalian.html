@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% import '_stok.html' as st %}
+{% block isi %}<div class="pelanggan-halaman">
+<a class="pelanggan-tautan" href="/barang-keluar">← Kembali ke Pengambilan barang</a>
+<header class="pelanggan-sapaan"><h1>Barang dikembalikan</h1><p class="pelanggan-redup">Catatan barang yang dikembalikan ke pabrik.</p></header>
+{% if pengajuan %}<section class="pelanggan-panel"><h2>Menunggu penerimaan kembali</h2>
+{% for r in pengajuan %}<article class="pelanggan-barang"><h3>{{ r.kode_pengiriman }}</h3><p class="pelanggan-redup">{{ r.kode_tiket or 'Penimbangan belum tercatat' }}</p><p class="pelanggan-redup">{{ {'menunggu_timbang':'Menunggu penimbangan','terverifikasi':'Selesai diperiksa','tertahan':'Menunggu pemeriksaan','perlu_koreksi':'Menunggu perbaikan catatan','dibatalkan':'Dibatalkan'}.get(r.status_pemeriksaan,'Menunggu pemeriksaan') }}</p><a class="pelanggan-tautan" href="/retur/pengajuan/{{ r.id }}">Lihat pemeriksaan →</a></article>{% endfor %}
+{% if pengajuan_berikut %}<a class="pelanggan-tautan" href="/retur?sebelum_pengajuan={{ pengajuan_berikut }}">Pengembalian sebelumnya →</a>{% endif %}</section>{% endif %}
+<section class="pelanggan-panel"><h2>Sudah diterima kembali</h2>
+{% for r in recent %}<article class="pelanggan-barang"><div class="pelanggan-baris"><h3>{{ r.kode }}</h3><strong>{{ st.kg(r.berat_rincian_kg) }} kg</strong></div><p class="pelanggan-redup">Diterima {{ r.waktu|jam('%d/%m/%Y %H:%M') }}{% if r.nomor_polisi %} · {{ r.nomor_polisi }}{% endif %}</p><a class="pelanggan-tautan" href="/retur/{{ r.id }}">Lihat rincian →</a></article>{% else %}<p class="pelanggan-redup">Belum ada barang yang diterima kembali.</p>{% endfor %}
+{% if sebelum_berikut %}<a class="pelanggan-tautan" href="/retur?sebelum={{ sebelum_berikut }}">Pengembalian sebelumnya →</a>{% endif %}</section>
+{% if lama %}<details class="pelanggan-detail-lipat"><summary>Catatan pengembalian lama</summary><section>{% for r in lama %}<p>{{ r.kode_tiket or 'Nomor belum tercatat' }} · Pengambilan asal belum tercatat.</p>{% endfor %}</section></details>{% endif %}
+</div>{% endblock %}

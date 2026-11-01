@@ -34,16 +34,24 @@ def bahasa_pelanggan(s,base=''):
         'Bobot belum final':'Berat sementara','Saldo per pelanggan':'Jumlah barang Anda',
         'PK luar':'Bahan masuk (PK)','PK hasil giling':'Hasil giling (PK)',
         'Perintah barang keluar':'Pengambilan & pengiriman','Perintah':'Rencana',
-        'Barang Keluar':'Pengambilan barang',
+        'Barang Keluar':'Pengambilan barang','Menunggu verifikasi':'Menunggu pemeriksaan',
+        'Hasil rata-rata QC':'Hasil rata-rata pemeriksaan mutu','Hasil QC':'Hasil pemeriksaan',
+        'Riwayat QC hasil PK':'Riwayat pemeriksaan hasil giling','Pilih putaran QC':'Pilih pemeriksaan',
+        'Jenis QC':'Jenis pemeriksaan','Putaran':'Pemeriksaan','Putaran terakhir':'Pemeriksaan terakhir',
+        'Putaran pemeriksaan':'Pemeriksaan','Penutupan QC lebih awal':'Pemeriksaan ditutup lebih awal',
+        'QC gabah asal':'Pemeriksaan mutu bahan asal','Hasil QC terbaru':'Hasil pemeriksaan terbaru',
+        'QC data lama · rincian sampel belum tersedia':'Pemeriksaan lama · rincian sampel belum tersedia',
+        'Nilai gabungan seluruh putaran':'Nilai gabungan pemeriksaan',
         'Total perintah':'Rencana pengiriman','Sisa perintah':'Belum dimuat',
         'Sumber bobot':'Cara penimbangan','Ikatan silo aktif':'Silo yang sedang dipakai',
         'Tidak ada pekerjaan perlu tindakan':'Tidak ada barang menunggu penanganan'}
-    for el in s.select('h1,h2,h3,h4,summary,dt,th,label,nav a,nav span,.kirim-detail__label'):
+    for el in s.select('h1,h2,h3,h4,summary,dt,th,label,option,nav a,nav span,.kirim-detail__label,.qc-history-round__head>strong'):
         for node in list(el.find_all(string=True)):
             value=str(node);key=value.strip()
             if key in labels:node.replace_with(value.replace(key,labels[key]))
             elif key in ('Hasil & QC','Lihat hasil & QC','Nilai kualitas QC PK','QC hasil penyosohan'):
                 node.replace_with(value.replace('QC','pemeriksaan mutu'))
+            elif re.match(r'^QC \d+(?:\s|$)',key):node.replace_with(value.replace('QC ','Pemeriksaan ',1))
     for a in s.select('a.riwayat-detail__back,a.jasa-kembali,a.pk-detail__back'):
         target,label=tujuan_kembali(base)
         a['href']='/pelanggan'+target
@@ -183,8 +191,9 @@ def read_only(html, base, *, origin=None, report_available=None):
     from .detail import ringkas
     from .transaksi_detail import ringkas_transaksi
     from .dokumen_detail import ringkas as ringkas_dokumen
+    from .lanjutan import ringkas as ringkas_lanjutan
     s=ringkas(bahasa_pelanggan(s,base),base,report_available=report_available)
-    return str(ringkas_dokumen(ringkas_transaksi(s,base),base))
+    return str(ringkas_lanjutan(ringkas_dokumen(ringkas_transaksi(s,base),base),base))
 
 
 def render_customer(request, name, *, status_code=200, **ctx):
@@ -213,6 +222,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
     if name=='pengiriman.html' and not ctx.get('detail'):
         name='portal/pengambilan.html'
         ctx['page_title']='Pengambilan barang'
+    if name=='retur_daftar.html':
+        name='portal/pengembalian.html';ctx['page_title']='Barang dikembalikan'
     if name=='jasa_pelanggan_detail.html':
         d=copy.deepcopy(ctx['d']);ctx['d']=d
         # Ringkasan dan tab pengambilan wajib memakai cakupan yang sama
