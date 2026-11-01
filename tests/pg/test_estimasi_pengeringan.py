@@ -65,6 +65,14 @@ async def test_dua_bobot_satu_sumber_di_produksi_portal_izin_dan_tidak_menulis(p
         assert 'Bobot gabah basah masuk' in soup.get_text()
         assert '30.251,50 kg' in soup.get_text() and '26.456,76 kg' in soup.get_text()
         assert soup.select('.bobot-pengeringan')
+        for widget in soup.select('.bobot-pengeringan'):
+            card=widget.find_parent('details')
+            if card:
+                assert len(card.select('.bobot-pengeringan'))==1
+                assert widget.find_parent('summary')
+                assert card.select('.anak__baris')  # Expand retains original sources.
+                assert card.select('.pilihan__satu')  # Operational entry points retained.
+
     async with client(account) as c:
         for path in ['/pelanggan/jasa-saya','/pelanggan/pekerjaan?tab=tindakan']:
             page=await c.get(path);assert page.status_code==200

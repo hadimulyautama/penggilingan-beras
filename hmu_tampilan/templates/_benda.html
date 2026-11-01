@@ -22,7 +22,7 @@
   {%- if v is none -%}—{%- else -%}{{ "%.1f"|format(v)|replace(".", ",") }}%{%- endif -%}
 {%- endmacro %}
 
-{% macro penuh(b, ringkas=False) -%}
+{% macro penuh(b, ringkas=False, tampilkan_bobot=True) -%}
   {% if not ringkas %}
   {{ milik.penanda(b) }}
   <div class="benda__judul">
@@ -33,7 +33,7 @@
     {% if b.sub %}<span class="benda__sub">{{ b.sub }}</span>{% endif %}
   </div>
   {% endif %}
-  {% if b.bobot_pengeringan %}{{ dua_bobot(b.bobot_pengeringan) }}{% endif %}
+  {% if b.bobot_pengeringan and tampilkan_bobot %}{{ dua_bobot(b.bobot_pengeringan) }}{% endif %}
   {% if b.fakta %}
     <dl class="fakta">
       {% for label, nilai in b.fakta %}
@@ -157,7 +157,7 @@
 {% macro rincian_antrean(b, packing=False) -%}
   {# Packing sudah menyebut pemilik dan status di ringkasan. Rincian hanya
      menambah informasi baru; nota/peringatan dan asal bahan tetap dibawa. #}
-  {% set isi %}{{ penuh(b, ringkas=packing) }}{{ penuh_anak(b) }}{% endset %}
+  {% set isi %}{{ penuh(b, ringkas=packing or b.bobot_pengeringan, tampilkan_bobot=False) }}{{ penuh_anak(b) }}{% endset %}
   {% if isi|trim %}<div class="antrian-item__rincian">{{ isi }}</div>{% endif %}
 {%- endmacro %}
 
@@ -379,7 +379,7 @@
         {% elif b.aksi and listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% else %}{{ padat(b, progres) }}{% endif %}</summary>
-            <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}
+            <div class="antrian-item__rincian">{{ penuh(b, ringkas=b.bobot_pengeringan, tampilkan_bobot=False) }}{{ penuh_anak(b) }}
               <a class="btn btn--kecil" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">Buka pekerjaan</a>
             </div>
           {{ tautan_penerimaan(b) }}</details>
@@ -404,7 +404,7 @@
           {% if listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item antrian-item--diam"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% else %}{{ padat(b, progres) }}{% endif %}</summary>
-            <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
+            <div class="antrian-item__rincian">{{ penuh(b, ringkas=b.bobot_pengeringan, tampilkan_bobot=False) }}{{ penuh_anak(b) }}</div>
           {{ tautan_penerimaan(b) }}</details>
           {% else %}
           <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} {{ kelas }}--diam"{{ tanda(b) }}>
