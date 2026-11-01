@@ -194,10 +194,10 @@ def tampilkan_detail(content,ctx,env):
         if hero:
             for code in hero.select('.pelanggan-detail-kode'):
                 code.string=code.get_text(' ',strip=True).removeprefix('? · ')
-            box=s.new_tag('div',attrs={'class':'pelanggan-stok-petunjuk'})
-            note=s.new_tag('p',attrs={'class':'pelanggan-petunjuk-proses'})
-            note.string='Untuk pengambilan barang, konfirmasikan dengan petugas.';box.append(note)
+            box=s.new_tag('details',attrs={'class':'pelanggan-detail-lipat pelanggan-stok-petunjuk'})
+            summary=s.new_tag('summary');summary.string='Informasi stok';box.append(summary)
             waktu=s.new_tag('p',attrs={'class':'pelanggan-pembaruan'})
             waktu.string='Waktu pembaruan stok belum tersedia.';box.append(waktu)
-            hero.append(box)
+            root=s.select_one('.pk-detail')
+            if root:root.append(box)
     return str(s)

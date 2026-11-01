@@ -4,14 +4,16 @@
 <main class="pk-detail pelanggan-pk-karung">
 <a class="pk-detail__back" href="/pelanggan/barang-saya">← Kembali ke Barang saya</a>
 <header class="pk-detail__hero"><div class="pk-detail__heading"><h1>{{ t.kode }}</h1><p class="pelanggan-redup">Gudang 2 · Tumpukan</p></div>
-<div class="pk-detail__weight"><span>Stok saat ini</span><strong>{{ st.kg_rinci(b.stok_kg) ~ ' kg' if b.stok_kg is not none else 'Belum ditimbang' }}</strong></div>
-</header>
-<section class="pk-detail__panel"><h2>Karung berisi</h2><p>{{ t.ringkasan_karung|replace(' ~ ',' · sekitar ') }}</p>
+<div class="pk-detail__weight"><span>Stok saat ini</span><strong>{{ st.kg_rinci(b.stok_kg) ~ ' kg' if b.stok_kg is not none else (b.jumlah or 'Berat belum ditimbang') }}</strong></div>
+<div class="pelanggan-satuan-stok" aria-label="Jumlah karung dan berat">
+{% if b.stok_kg is none %}<p class="pelanggan-belum-timbang">Berat belum ditimbang</p>{% elif b.label %}<p class="pelanggan-jumlah-berisi">{{ b.label }}</p>{% endif %}
+{% if b.ukuran %}<p class="pelanggan-ukuran-nominal">Ukuran nominal karung: {{ st.kg_rinci(b.ukuran) }} kg</p>{% endif %}
 {% if not t.bobot_final and b.stok_kg is not none %}<p class="pelanggan-penanda pelanggan-penanda--hati">Berat sementara</p>{% endif %}
-{% if t.peringatan_karung %}<p class="pelanggan-redup">{{ t.peringatan_karung|replace('Periksa jumlah karung pada surat jalan:','Jumlah karung dan berat saat diterima perlu diperiksa petugas:')|replace(' Pencatatan tetap diterima.','') }}</p>{% endif %}
-</section>
+{% if t.peringatan_karung %}<p class="pelanggan-penanda pelanggan-penanda--hati">Catatan penimbangan perlu diperiksa petugas</p>{% endif %}
+</div></header>
 <details class="pelanggan-detail-lipat"><summary>Catatan barang saat diterima</summary><section class="pk-detail__panel">
-<dl class="pelanggan-fakta"><div><dt>Berat saat diterima</dt><dd>{{ st.kg_rinci(b.masuk_kg) ~ ' kg' if b.masuk_kg is not none else 'Belum ditimbang' }}</dd></div><div><dt>Karung saat diterima</dt><dd>{{ t.jumlah_karung }} karung</dd></div>{% if b.ukuran %}<div><dt>Ukuran karung</dt><dd>{{ st.kg_rinci(b.ukuran) }} kg</dd></div>{% endif %}</dl>
+<dl class="pelanggan-fakta"><div><dt>Berat saat diterima</dt><dd>{{ st.kg_rinci(b.masuk_kg) ~ ' kg' if b.masuk_kg is not none else 'Berat belum ditimbang' }}</dd></div><div><dt>Karung saat diterima</dt><dd>{{ t.jumlah_karung }} karung</dd></div></dl>
+{% if t.peringatan_karung %}<p class="pelanggan-redup">{{ t.peringatan_karung|replace('Periksa jumlah karung pada surat jalan:','Jumlah karung dan berat saat diterima perlu diperiksa petugas:')|replace(' Pencatatan tetap diterima.','') }}</p>{% endif %}
 {% if t.selisih_kiriman %}<p class="pelanggan-redup">{{ t.selisih_kiriman }}</p>{% endif %}
 </section></details>
 {% if mutu_aktif %}{% from '_penilaian_pk.html' import penilaian_pk with context %}

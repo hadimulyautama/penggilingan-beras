@@ -1,4 +1,16 @@
 """Pisahkan kemasan kosong milik kontak dari karung yang berisi barang."""
+import re
+
+
+def ringkasan_berisi(teks):
+    """Ambil jumlah dari kalimat native; tidak menghitung jumlah dari kg."""
+    if not teks:return dict(jumlah=None,label=None,perkiraan=False)
+    match=re.match(r'(?:sisa )?(-?\d+ karung|kurang dari 1 karung)',teks)
+    if not match:return dict(jumlah=None,label=teks,perkiraan=True)
+    jumlah=match[1]
+    perkiraan=' ~ ' in teks or ' — ' in teks
+    label='Perkiraan sisa: '+jumlah if perkiraan else jumlah+' tercatat'
+    return dict(jumlah=jumlah,label=label,perkiraan=perkiraan)
 
 
 def baris_kosong(rows):
@@ -26,4 +38,5 @@ async def siapkan_detail(request,ctx):
         if intake.pk_purchase_batch_id not in scope.ids(PkPurchaseBatch):return
         batch=await db.get(PkPurchaseBatch,intake.pk_purchase_batch_id)
         ctx['portal_pk_karung']=dict(stok_kg=None if intake.berat_kg is None else t.tersedia,
-            masuk_kg=dari_batch(batch).kg,ukuran=batch.ukuran_karung_kg)
+            masuk_kg=dari_batch(batch).kg,ukuran=batch.ukuran_karung_kg,
+            **ringkasan_berisi(t.ringkasan_karung))

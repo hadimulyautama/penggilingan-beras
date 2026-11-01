@@ -1,11 +1,10 @@
 {% import '_stok.html' as st with context %}
 <section class="pelanggan-kemasan-barang">
-<h2>Karung berisi dan barang curah</h2>
+<h2>Kemasan barang</h2>
 {% for p in baris_kemasan or [] %}<article class="pelanggan-kemasan-baris">
 <h3>{{ ('Perkiraan karung berisi' if k.jenis in ('broken','menir','reject','bekatul') else 'Karung berisi') if p.ukuran else 'Barang curah' }}{% if p.merk %} · {{ p.merk }}{% endif %}</h3>
-<dl class="pelanggan-fakta">
-{% if p.ukuran %}<div><dt>Jumlah karung berisi</dt><dd>{{ p.karung }} karung</dd></div><div><dt>Isi per karung</dt><dd>{{ st.kg_rinci(p.ukuran) }} kg</dd></div>{% endif %}
-<div><dt>Berat barang</dt><dd>{{ st.kg_rinci(p.kg) ~ ' kg' if p.kg is not none else 'Belum ditimbang' }}</dd></div>
-{% if p.bahan %}<div><dt>Jenis kemasan</dt><dd>{{ p.bahan }}</dd></div>{% endif %}
-</dl></article>{% else %}<p class="pelanggan-redup">Rincian kemasan dan barang curah belum tercatat.</p>{% endfor %}
+{% if p.ukuran %}<p class="pelanggan-jumlah-berisi">{{ p.karung }} karung</p><p class="pelanggan-ukuran-nominal">Ukuran nominal karung: {{ st.kg_rinci(p.ukuran) }} kg</p>{% endif %}
+{% if not PORTAL_BERAT_TUNGGAL %}<dl class="pelanggan-fakta"><div><dt>Berat kelompok ini</dt><dd>{{ st.kg_rinci(p.kg) ~ ' kg' if p.kg is not none else 'Berat belum ditimbang' }}</dd></div></dl>{% endif %}
+{% if p.bahan %}<details class="pelanggan-rincian pelanggan-bahan-kemasan"><summary>Jenis kemasan</summary><p>{{ p.bahan }}</p></details>{% endif %}
+</article>{% else %}<p class="pelanggan-redup">Rincian kemasan dan barang curah belum tercatat.</p>{% endfor %}
 </section>

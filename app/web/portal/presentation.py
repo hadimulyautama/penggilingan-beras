@@ -205,6 +205,13 @@ def render_customer(request, name, *, status_code=200, **ctx):
                boleh_muat=False,boleh_ubah=False,boleh_minta=False,boleh_pindah_tumpukan=False,
                boleh_verifikasi=False,boleh_batal=False, MUTU_AKTIF=True, PORTAL_READ_ONLY=True)
     ctx['PORTAL_STOCK_DETAIL']=bool(ctx.get('detail_kartu')) or name=='stok_produk_detail.html'
+    if name=='stok_produk_detail.html':
+        from decimal import Decimal
+        rows=ctx.get('baris_kemasan') or []
+        stok=ctx['k'].sisa_kg
+        # Hanya hilangkan pengulangan bila nilai satu kelompok persis sama
+        # dengan total. Selisih nominal/timbang tetap terlihat.
+        ctx['PORTAL_BERAT_TUNGGAL']=len(rows)==1 and rows[0].get('kg') is not None and stok is not None and Decimal(str(rows[0]['kg']))==Decimal(str(stok))
     # Defense in depth before HTML creation. No foreign collections enter the DOM.
     for key in ('lot','tempat'):
         if key in ctx:ctx[key]=[x for x in ctx[key] if x.jasa_id in scope.jasa_ids]
