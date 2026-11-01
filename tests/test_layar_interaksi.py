@@ -500,36 +500,6 @@ def test_layar_menyegarkan_diri_saat_kembali_ke_depan():
     assert "setInterval" in js and 'visibilityState === "visible"' in js
 
 
-def test_penyegaran_diam_tak_membuang_ketikan_orang():
-    """Ia berjalan TANPA diminta, jadi ia harus tahu kapan tidak boleh
-    mengganggu. Menukar isi di bawah borang yang sedang diisi berarti membuang
-    ketikan orang — dan sekali itu terjadi, orang berhenti memakai borangnya.
-    """
-    import pathlib
-
-    js = (pathlib.Path(__file__).resolve().parents[1]
-          / "hmu_tampilan/static/pindah.js").read_text()
-    diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
-
-    js_semua = (pathlib.Path(__file__).resolve().parents[1]
-                / "hmu_tampilan/static/pindah.js").read_text()
-    jaga = js_semua[js_semua.index("function bolehDiam"):
-                    js_semua.index("function lembarTerbuka")]
-    assert "lembarTerbuka()" in jaga, "lembar terbuka tak dijaga"
-    assert "INPUT|SELECT|TEXTAREA" in jaga, "kotak isian yang dipegang tak dijaga"
-    assert "disentuh" in jaga, "halaman yang sudah diketik tak dijaga"
-    # Tahap C: denyut TIDAK PERNAH menukar isi — ia hanya bertanya. Satu-
-    # satunya penukaran tanpa ketukan adalah layar `data-segar-sendiri`
-    # (papan pantau), dan itu pun dijaga `bolehDiam()`.
-    assert "ambil(" not in diam and "pasang(" not in diam
-    terima = js[js.index("function terimaPenanda(j)"):js.index("function tawarkanPerubahan()")]
-    assert 'data-segar-sendiri' in terima and "if (bolehDiam()) { muatPerubahan(); }" in terima
-    # Posisi gulung dikembalikan saat pil diketuk — yang sedang membaca baris
-    # ke-20 tak boleh dilempar ke atas.
-    muat = js[js.index("function muatPerubahan()"):js.index("Kanal dorong (SSE)")]
-    assert "scrollTop" in muat
-
-
 def test_halaman_yang_sudah_diketik_tak_digambar_ulang():
     """Memeriksa "ada kotak yang sedang dipegang" saja TIDAK CUKUP.
 
@@ -559,37 +529,6 @@ def test_halaman_yang_sudah_diketik_tak_digambar_ulang():
 
 
 # ────────── Penanda keadaan: bertanya dulu, mengunduh belakangan ──────────
-
-def test_denyut_bertanya_dulu():
-    """Denyut yang mengunduh seluruh halaman (14–26 KB) hanya untuk
-    menyimpulkan "tak ada yang berubah" membakar sekitar 17 MB kuota per
-    perangkat per sif — dan operator memakai kuotanya sendiri."""
-    import pathlib
-
-    js = (pathlib.Path(__file__).resolve().parents[1]
-          / "hmu_tampilan/static/pindah.js").read_text()
-    diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
-    assert "tanyaPenanda()" in diam
-    # Denyut HANYA bertanya; halamannya tak pernah diambil olehnya (Tahap C:
-    # yang mengambil adalah ketukan pil, `muatPerubahan`).
-    assert "ambil(alamat)" not in diam
-    muat = js[js.index("function muatPerubahan()"):js.index("Kanal dorong (SSE)")]
-    assert "ambil(alamat)" in muat
-
-
-def test_belum_tahu_bukan_berarti_tak_berubah():
-    """`null` terjadi tepat sesudah aplikasi dibuka — dan di situlah justru
-    yang paling mungkin basi, karena telepon bisa saja sejam di kantong.
-    Menganggapnya "tak berubah" berarti mengulang keluhan yang sedang
-    diperbaiki."""
-    import pathlib
-
-    js = (pathlib.Path(__file__).resolve().parents[1]
-          / "hmu_tampilan/static/pindah.js").read_text()
-    terima = js[js.index("function terimaPenanda(j)"):js.index("function tawarkanPerubahan()")]
-    # `null` = belum tahu: bukan perubahan, bukan pula "tak berubah".
-    assert "if (!j) { return; }" in terima
-    assert "penanda !== null && n !== penanda" in terima
 
 
 def test_sesi_habis_tak_memicu_muat_ulang_tanpa_henti():

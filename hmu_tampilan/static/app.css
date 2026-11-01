@@ -4124,3 +4124,5 @@ fieldset.akses-bidang { border:0; padding:0; margin:0; min-width:0; display:grid
 .stok-tahap__bobot{display:flex;flex-direction:column;gap:4px;margin:12px 0}.stok-tahap__bobot span{font-size:.8rem;color:var(--redup)}
 .stok-tahap__bobot strong{font-size:1.25rem;font-variant-numeric:tabular-nums}.stok-tahap__tautan{display:inline-block;min-height:44px;padding:10px 0}
 .stok-tahap .stok-baris__ringkas small{display:block}.stok-tahap .jumlah{margin-top:12px}
+
+.pil-perubahan{pointer-events:none;cursor:default}

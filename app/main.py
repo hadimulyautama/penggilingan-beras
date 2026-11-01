@@ -157,6 +157,8 @@ from app.web.portal.routes import router as portal_router
 from app.web.portal.pwa import router as portal_pwa_router
 app.include_router(portal_pwa_router)
 app.include_router(portal_auth_router)
+from app.web.portal.live import router as portal_live_router
+app.include_router(portal_live_router)
 app.include_router(portal_router)
 from app.web.portal.admin import router as portal_admin_router
 app.include_router(portal_admin_router)

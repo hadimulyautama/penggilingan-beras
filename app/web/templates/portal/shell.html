@@ -1,6 +1,7 @@
 {% from '_ikon_portal.html' import ikon_portal %}
 <!doctype html><html lang="id" class="portal-document"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="portal-identitas" content="{{ live_identity }}">
 <meta name="formulir-sesi" content="{{ CSRF }}"><meta name="robots" content="noindex,nofollow">
 <title>{{ title }} · PadiFlow Pelanggan</title>
 {% include 'portal/_pwa.html' %}
@@ -9,6 +10,8 @@
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/padiflow-brand.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-alur12">
+<script src="/static/segar-aman.js?v={{ VERSI }}" defer></script>
+<script src="/static/portal-live.js?v={{ VERSI }}" defer></script>
 <script src="/static/portal-pelanggan.js?v={{ VERSI }}-alur12" defer></script>
 </head><body class="padiflow-ui portal-customer {{ 'terik' if light }}">
 <a class="portal-skip" href="#isi-pelanggan">Lewati ke isi</a>

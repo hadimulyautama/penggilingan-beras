@@ -27,6 +27,8 @@
     }
   });
   close();
+  document.querySelector('[data-theme-toggle]')?.addEventListener('click',e=>{const light=body.classList.toggle('terik');document.cookie=`produksi_terik=${light?'1':'0'}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol==='https:'?'; Secure':''}`;e.currentTarget.textContent=light?'☾':'☀';e.currentTarget.setAttribute('aria-label',light?'Aktifkan mode gelap':'Aktifkan mode terang');});
+  function bindContent(){
   document.querySelectorAll('[role=tablist]').forEach(list=>list.addEventListener('keydown',e=>{
     const tabs=[...list.querySelectorAll('a[role=tab][href]')],i=tabs.indexOf(e.target);
     if(i<0)return;
@@ -35,7 +37,6 @@
     e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
     tabs.forEach((tab,index)=>tab.tabIndex=index===n?0:-1);tabs[n].focus();
   }));
-  document.querySelector('[data-theme-toggle]')?.addEventListener('click',e=>{const light=body.classList.toggle('terik');document.cookie=`produksi_terik=${light?'1':'0'}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol==='https:'?'; Secure':''}`;e.currentTarget.textContent=light?'☾':'☀';e.currentTarget.setAttribute('aria-label',light?'Aktifkan mode gelap':'Aktifkan mode terang');});
   document.querySelectorAll('[data-detail-keluar]').forEach(row=>{
     function open(){const target=new URL(row.dataset.detailKeluar,location.href);if(target.origin===location.origin&&/^\/pelanggan\/barang-keluar\/\d+$/.test(target.pathname))location.assign(target.href);}
     row.addEventListener('click',event=>{if(!event.target.closest('a,button,input,select,textarea'))open();});
@@ -49,4 +50,7 @@
       if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file]});else if(navigator.share)await navigator.share({url});else{await navigator.clipboard.writeText(url);if(status)status.textContent='Tautan laporan disalin. Penerima perlu masuk dengan akun yang berhak.';}
     }catch(error){if(error.name!=='AbortError'&&status)status.textContent='PDF belum berhasil dibagikan. Gunakan Unduh PDF.';}
   }));
+  }
+  bindContent();
+  document.addEventListener('portal:diperbarui',bindContent);
 })();
