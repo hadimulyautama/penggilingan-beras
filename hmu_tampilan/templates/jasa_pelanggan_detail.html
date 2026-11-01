@@ -2,8 +2,8 @@
 {% block judul %}{{ d.nama }} · Pesanan Jasa{% endblock %}
 {% macro tautan(kode,href) %}{% if href %}<a href="{{ ke(href) }}">{{ kode }}</a>{% else %}{{ kode }}{% endif %}{% endmacro %}
 {% block isi %}
-<link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=4">
-{% macro tab_ke(k) -%}?{{ {'tab':k,'status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}|urlencode }}{%- endmacro %}
+<link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=6">
+{% macro tab_ke(k) -%}?{{ dict({'tab':k,'status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}, **(pesanan_query or {}))|urlencode }}{%- endmacro %}
 <div class="jasa-detail">
 <a class="jasa-kembali" href="{{ kembali }}">← Kembali ke Pesanan Jasa</a>
 <header class="jasa-kepala">
@@ -18,20 +18,28 @@
 {% if d.stok|selectattr('kg','none')|list %}<p class="jasa-peringatan">Sebagian bobot belum diukur. Angka Ringkasan mengikuti bobot yang sudah tercatat; periksa rincian pada <a href="{{ tab_ke('stok') }}">Stok</a>.</p>{% elif d.berjalan or d.stok|rejectattr('final')|list %}<p class="jasa-peringatan">Proses atau bobot belum final. Hasil dan sisa bahan mengikuti catatan yang tersedia; periksa <a href="{{ tab_ke('proses') }}">Proses</a> dan <a href="{{ tab_ke('stok') }}">Stok</a>.</p>{% endif %}
 <section class="kartu"><h2>Tindak lanjut pelanggan</h2>
  <div class="jasa-kondisi">{% for n in d.kondisi %}<span class="lencana">{{ n }}</span>{% else %}<span class="bantu">Tidak ada saldo tercatat saat ini</span>{% endfor %}</div>
- <div class="saring jasa-operasi"><a class="btn btn--kecil jasa-utama" href="{{ ke(kerja_href) }}">{{ (d.pekerjaan ~ ' perlu tindakan') if d.pekerjaan else 'Buka Pekerjaan' }}</a>{% if not PORTAL_READ_ONLY %}<a class="btn btn--kecil" href="{{ ke('/barang-keluar/pengambilan-jasa?pelanggan_id=' ~ d.id) }}">Pengambilan barang</a>{% else %}<a class="btn btn--kecil" href="{{ ke(stok_href('produk')) }}">Stok pelanggan</a>{% endif %}</div>
+ {% if not d.pekerjaan %}<p class="jasa-tuntas">Tidak ada tindakan tertunda</p>{% endif %}
+ <div class="saring jasa-operasi">{% if d.pekerjaan %}<a class="btn btn--kecil jasa-utama" href="{{ ke(kerja_href) }}">{{ d.pekerjaan }} perlu tindakan</a>{% endif %}{% if not PORTAL_READ_ONLY %}<a class="btn btn--kecil{% if not d.pekerjaan %} jasa-utama{% endif %}" href="{{ ke('/barang-keluar/pengambilan-jasa?pelanggan_id=' ~ d.id) }}">Pengambilan barang</a>{% endif %}</div>
  <p class="bantu">Saldo per jenis tidak dijumlahkan antar tahap. Bahan di silo/proses bukan PK tersedia untuk diambil. Bobot belum final ditandai pada tab Stok.</p>
 </section>
-<section class="kartu"><h2>Perkembangan pelanggan</h2>
- <div class="jasa-pintasan"><a href="{{ tab_ke('penerimaan') }}"><strong>Penerimaan</strong><small>{{ d.penerimaan|length }} catatan · lihat tiket dan penempatannya</small></a><a href="{{ tab_ke('proses') }}"><strong>Proses</strong><small>{{ d.proses|length }} proses terkait · {{ d.berjalan }} sedang berjalan</small></a></div>
- <dl class="jasa-pasang"><div><dt>Pengambilan / pengiriman</dt><dd>{{ d.pengiriman|length }} catatan</dd></div><div><dt>Retur terkait</dt><dd>{{ d.retur|length }} penerimaan retur</dd></div></dl>
- <a class="jasa-tautan" href="{{ tab_ke('pengambilan') }}">Lihat pengambilan & retur →</a>
- <div class="saring jasa-operasi"><a class="btn btn--kecil" href="{{ ke(masuk_href) }}">Barang Masuk</a><a class="btn btn--kecil" href="{{ ke(kerja_href ~ '&tab=berjalan') }}">Proses berjalan</a><a class="btn btn--kecil" href="{{ ke(stok_href('produk')) }}">Stok pelanggan</a></div>
-</section>
-<section class="kartu"><h2>Pesanan & rekap barang · {{ d.pesanan|length }}</h2><p class="bantu">Penutupan dan pembatalan berlaku untuk pesanan yang dipilih, bukan seluruh pelanggan.</p>
-{% for j in d.pesanan %}<details class="jasa-catatan" id="pesanan-{{ j.id }}"><summary><strong>{{ j.kode }}</strong><span class="lencana">{{ j.status|title }}</span></summary>
+<dl class="jasa-pasang jasa-rekap-riwayat" aria-label="Jumlah pengiriman dan retur"><div><dt>Pengambilan / pengiriman</dt><dd>{{ d.pengiriman|length }} catatan</dd></div><div><dt>Retur terkait</dt><dd>{{ d.retur|length }} penerimaan retur</dd></div></dl>
+{% set pgp=d.pesanan_paginasi %}
+<section class="kartu" id="pesanan-pelanggan" data-pesanan-banyak="{{ '1' if pgp and pgp.akhir>1 else '0' }}"><h2>Pesanan & rekap barang · {{ d.pesanan|length }}</h2><p class="bantu">Penutupan dan pembatalan berlaku untuk pesanan yang dipilih, bukan seluruh pelanggan.</p>
+{% if pgp and (d.pesanan|length>20 or pgp.cari or pgp.status) %}
+<form class="jasa-pesanan-filter" method="get" action="/jasa/pelanggan/{{ d.id }}#pesanan-pelanggan">
+<input type="hidden" name="tab" value="ringkasan">{% for k in ('status','cari','halaman') %}{% if request.query_params.get(k) %}<input type="hidden" name="{{ k }}" value="{{ request.query_params.get(k) }}">{% endif %}{% endfor %}
+<label>Cari pesanan<input name="pesanan_cari" value="{{ pgp.cari }}" placeholder="Nomor atau catatan pesanan" maxlength="200"></label>
+<label>Status pesanan<select name="pesanan_status">{% for v,n in PESANAN_STATUS %}<option value="{{ v }}"{% if v==pgp.status %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label><button class="btn btn--kecil" type="submit">Tampilkan</button>
+</form><p class="bantu">Menampilkan {{ pgp.dari }}–{{ pgp.sampai }} dari {{ pgp.jumlah }} pesanan yang cocok. Saldo di atas tetap mencakup seluruh pesanan pelanggan.</p>
+{% if pgp.fokus_di_luar_filter %}<p class="jasa-peringatan">Pesanan dari tautan langsung ditampilkan; penyaring pesanan dikosongkan agar catatannya terlihat.</p>{% endif %}
+{% endif %}
+{% for j in (pgp.baris if pgp else d.pesanan) %}<details class="jasa-catatan" id="pesanan-{{ j.id }}"><summary><strong>{{ j.kode }}</strong><span class="lencana">{{ j.status|title }}</span></summary>
 <div class="jasa-catatan__isi"><p class="bantu">Umur pesanan {{ j.umur_hari }} hari{% if j.tanggal %} · {{ j.tanggal|jam('%d/%m/%Y') }}{% endif %}</p><p>{{ j.catatan or 'Tanpa catatan' }}</p>{% if j.digabung_ke_id %}<p class="bantu">Digabung ke <a href="{{ ke('/jasa/' ~ j.digabung_ke_id ~ '/nota') }}">rekap pesanan gabungan</a>. Barang dan hasil dihitung pada pesanan gabungan; pesanan ini hanya jejak riwayat.</p>{% endif %}
-<div class="saring jasa-operasi"><a class="btn btn--kecil" href="{{ ke('/jasa/' ~ (j.digabung_ke_id or j.id) ~ '/nota') }}">{% if j.digabung_ke_id %}Lihat rekap pesanan gabungan{% else %}Rekap Barang Jasa · {{ j.kode }}{% endif %}</a>{% if j.status=='berjalan' and j.boleh_tutup %}<a class="btn btn--kecil" href="?{{ {'tab':'ringkasan','buka':'tutup_jasa','nilai':j.id,'status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}|urlencode }}">Tutup pesanan</a>{% endif %}{% if j.boleh_batal %}<a class="btn btn--kecil" href="?{{ {'tab':'ringkasan','buka':'batalkan_jasa','nilai':j.id,'status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}|urlencode }}">Batalkan pesanan</a>{% endif %}</div>{% if j.status=='berjalan' and not j.boleh_tutup %}<p class="bantu">{{ j.sebab }}</p>{% endif %}</div></details>{% endfor %}
+<div class="saring jasa-operasi"><a class="btn btn--kecil" href="{{ ke('/jasa/' ~ (j.digabung_ke_id or j.id) ~ '/nota') }}">{% if j.digabung_ke_id %}Lihat rekap pesanan gabungan{% else %}Rekap Barang Jasa · {{ j.kode }}{% endif %}</a>{% if j.status=='berjalan' and j.boleh_tutup %}<a class="btn btn--kecil" href="?{{ dict({'tab':'ringkasan','buka':'tutup_jasa','nilai':j.id,'status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}, **(pesanan_query or {}))|urlencode }}">Tutup pesanan</a>{% endif %}{% if j.boleh_batal %}<a class="btn btn--kecil" href="?{{ dict({'tab':'ringkasan','buka':'batalkan_jasa','nilai':j.id,'status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}, **(pesanan_query or {}))|urlencode }}">Batalkan pesanan</a>{% endif %}</div>{% if j.status=='berjalan' and not j.boleh_tutup %}<p class="bantu">{{ j.sebab }}</p>{% endif %}</div></details>{% else %}<p class="bantu">Tidak ada pesanan yang cocok dengan penyaring ini. Saldo dan riwayat pelanggan tetap tersedia.</p>{% endfor %}
+{% if pgp and pgp.akhir>1 %}<nav class="jasa-pesanan-paginasi" aria-label="Halaman pesanan">{% if pgp.halaman>1 %}<a class="btn btn--kecil" data-utuh href="{{ pesanan_href(pgp.halaman-1) }}#pesanan-pelanggan">← Sebelumnya</a>{% endif %}<span>Halaman {{ pgp.halaman }} dari {{ pgp.akhir }}</span>{% if pgp.halaman<pgp.akhir %}<a class="btn btn--kecil" data-utuh href="{{ pesanan_href(pgp.halaman+1) }}#pesanan-pelanggan">Berikutnya →</a>{% endif %}</nav>{% endif %}
+{% if pgp and (pgp.cari or pgp.status) %}<a class="jasa-tautan" data-utuh href="?{{ {'tab':'ringkasan','status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}|urlencode }}#pesanan-pelanggan">Semua pesanan pelanggan</a>{% endif %}
 </section>
+<details class="kartu jasa-terkait"><summary>Halaman terkait pelanggan</summary><p class="bantu">Pelanggan {{ d.nama }} tetap terpilih saat halaman dibuka.</p><div class="saring jasa-operasi"><a class="btn btn--kecil" href="{{ ke(masuk_href) }}">Barang Masuk pelanggan</a>{% if not d.pekerjaan %}<a class="btn btn--kecil" href="{{ ke(kerja_href) }}">Pekerjaan pelanggan</a>{% endif %}<a class="btn btn--kecil" href="{{ ke(kerja_href ~ '&tab=berjalan') }}">Proses berjalan pelanggan</a><a class="btn btn--kecil" href="{{ ke(stok_href('produk')) }}">Stok pelanggan</a></div></details>
 {% elif tab=='penerimaan' %}
 <section class="kartu"><h2>Penerimaan · {{ d.penerimaan|length }}</h2><a class="btn btn--kecil" href="{{ ke(masuk_href) }}">Buka Barang Masuk pelanggan</a>
 {% for t in d.penerimaan %}<article class="jasa-catatan"><div class="baris"><strong>{{ tautan(t.kode,t.href) }}</strong><span class="lencana">{{ t.status }}</span></div><p>{{ t.jenis }} · {{ t.pesanan }}</p>
@@ -52,4 +60,4 @@
 </div>
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
 {% endblock %}
-{% block kaki %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endblock %}
+{% block kaki %}<script src="/static/jasa-ringkasan.js?v={{ VERSI }}&ringkasan=2" defer></script><script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endblock %}

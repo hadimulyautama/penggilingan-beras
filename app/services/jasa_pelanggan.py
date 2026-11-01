@@ -69,7 +69,35 @@ async def daftar(db, *, cari='', status='', halaman=1):
     return dict(kartu=kartu,jumlah=jumlah,halaman=halaman,akhir=akhir)
 
 
-async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None):
+def halaman_pesanan(rows, pilihan):
+    """Batas penyajian saja; seluruh pesanan tetap membentuk saldo pelanggan."""
+    cari = str(pilihan.get('cari') or '').strip()[:200]
+    status = pilihan.get('status') if pilihan.get('status') in dict(STATUS) else ''
+    def angka(value):
+        try:
+            return max(1, int(value))
+        except (ValueError, TypeError):
+            return 1
+    fokus = str(pilihan.get('fokus') or '')
+    cocok = [r for r in rows if (not status or r['status']==status)
+             and (not cari or cari.casefold() in (r['kode']+' '+(r['catatan'] or '')).casefold())]
+    di_luar_filter = False
+    if fokus and any(str(r['id'])==fokus for r in rows) and not any(str(r['id'])==fokus for r in cocok):
+        cocok, cari, status, di_luar_filter = rows, '', '', True
+    jumlah, ukuran = len(cocok), 20
+    akhir = max(1, (jumlah+ukuran-1)//ukuran)
+    halaman = min(angka(pilihan.get('halaman')), akhir)
+    if fokus:
+        index = next((i for i,r in enumerate(cocok) if str(r['id'])==fokus), None)
+        if index is not None:
+            halaman = index//ukuran+1
+    mulai = (halaman-1)*ukuran
+    return dict(baris=cocok[mulai:mulai+ukuran], halaman=halaman, akhir=akhir,
+                jumlah=jumlah, dari=mulai+1 if jumlah else 0, sampai=min(mulai+ukuran,jumlah),
+                cari=cari, status=status, fokus_di_luar_filter=di_luar_filter)
+
+
+async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None, ringkasan_pesanan=None):
     p = await db.get(Pelanggan,pid)
     orders = list((await db.scalars(select(Jasa).where(Jasa.pelanggan_id==pid)
                                   .order_by(Jasa.id.desc()))).all())
@@ -81,6 +109,8 @@ async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None):
     d = dict(id=pid,nama=p.nama_pelanggan,pesanan=[pesanan_baris(j) for j in orders],
              penerimaan=[],proses=[],stok=[],pengiriman=[],retur=[],kondisi=[],
              pk_kg=0,beras_kg=0,samping_kg=0,pekerjaan=0,berjalan=0)
+    if ringkasan_pesanan is not None:
+        d['pesanan_paginasi'] = halaman_pesanan(d['pesanan'], ringkasan_pesanan)
     # Per pelanggan SATU panggilan dengan semua pesanan; hasil campuran tidak
     # pernah disalin sebagai saldo penuh ke setiap pesanan asal.
     produk = await stok.stok_produk(db,jasa_id=sorted(ids)) if ids else []
@@ -168,14 +198,19 @@ async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None):
                 sumber=[],hasil=None))
     if rinci:
         from app.services.barang_masuk import rincian_lokasi
-        for t in d['penerimaan']:
+        # Ringkasan hanya memakai jumlah penerimaan/proses. Rincian tetap
+        # dibaca lengkap oleh tab masing-masing dan pemanggil lama.
+        for t in d['penerimaan'] if ringkasan_pesanan is None else []:
             if t['id'] is not None:
                 t['lokasi'],t['proses'],_=await rincian_lokasi(db,t['catatan'])
         from app.services.jasa import boleh_ditutup,pernah_ada_barang
+        ditampilkan = {r['id'] for r in d['pesanan_paginasi']['baris']} if ringkasan_pesanan is not None else None
         for j,r in zip(orders,d['pesanan']):
+            if ditampilkan is not None and (j.id not in ditampilkan or j.status!='berjalan'):
+                continue
             r['boleh_tutup'],r['sebab'] = await boleh_ditutup(db,j.id)
             r['boleh_batal'] = j.status=='berjalan' and not await pernah_ada_barang(db,j.id)
-        for r in d['proses']:
+        for r in d['proses'] if ringkasan_pesanan is None else []:
             await _sumber_proses(db,r,ids)
         await _pengiriman(db,d,ids,read_scope=read_scope)
     if d['pk_kg']>0:

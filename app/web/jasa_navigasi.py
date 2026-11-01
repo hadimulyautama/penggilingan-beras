@@ -11,4 +11,4 @@ def kembali_aman(nilai):
     if u.scheme or u.netloc or not re.fullmatch(r'/jasa(?:/pelanggan/[1-9][0-9]*)?',u.path):
         return ''
     return u.path+('?' + urlencode([(k,v) for k,v in parse_qsl(u.query)
-        if k in ('tab','status','cari','halaman')]) if u.query else '')
+        if k in ('tab','status','cari','halaman','pesanan_halaman','pesanan_cari','pesanan_status')]) if u.query else '')

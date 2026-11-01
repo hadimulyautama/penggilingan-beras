@@ -75,8 +75,14 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
     tab=request.query_params.get('tab','ringkasan')
     if tab not in {'ringkasan','penerimaan','proses','stok','pengambilan'}:
         raise HTTPException(422,'Tab pelanggan tidak dikenal.')
+    pilihan = dict(halaman=request.query_params.get('pesanan_halaman','1'),
+                   cari=request.query_params.get('pesanan_cari',''),
+                   status=request.query_params.get('pesanan_status',''),
+                   fokus=request.query_params.get('pesanan_id') or
+                         (request.query_params.get('nilai') if request.query_params.get('buka') in ('tutup_jasa','batalkan_jasa') else ''))
     async with SessionLocal() as db:
-        d=await svc.pelanggan(db,pelanggan_id,read_scope=getattr(request.state,'portal_scope',None))
+        d=await svc.pelanggan(db,pelanggan_id,read_scope=getattr(request.state,'portal_scope',None),
+                              ringkasan_pesanan=pilihan if tab=='ringkasan' else None)
         if d is None:
             raise HTTPException(404,'Pelanggan jasa tidak ditemukan.')
         b=await berjalan.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
@@ -84,13 +90,20 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
         cocok=await svc.saring_kartu(db,k.tindakan+k.berjalan+k.informasi+k.masuk,pelanggan_id)
         d['pekerjaan']=sum(x in k.tindakan for x in cocok)
         _tambah_tiket(d,[x for x in cocok if x in k.masuk])
-    konteks=f'/jasa/pelanggan/{pelanggan_id}?'+urlencode({'tab':tab,**{k:v for k,v in request.query_params.items() if k in ('status','cari','halaman')}})
+    params={k:v for k,v in request.query_params.items() if k in ('status','cari','halaman','pesanan_halaman','pesanan_cari','pesanan_status')}
+    pag=d.get('pesanan_paginasi')
+    if pag and (pag['akhir']>1 or any(k.startswith('pesanan_') for k in request.query_params)):
+        params.update(pesanan_halaman=str(pag['halaman']),pesanan_cari=pag['cari'],pesanan_status=pag['status'])
+    konteks=f'/jasa/pelanggan/{pelanggan_id}?'+urlencode({'tab':tab,**params})
     kembali='/jasa?'+urlencode({k:v for k,v in request.query_params.items() if k in ('status','cari','halaman')})
     return await render_laci(request,'jasa_pelanggan_detail.html',layar='jasa',d=d,tab=tab,
         kembali=kembali,konteks=konteks,kg=svc.kg_rinci,ke=lambda h:svc.ke(h,konteks),
         stok_href=lambda t:'/stok?'+urlencode(dict(tab=t,pemilik='jasa',pelanggan_id=pelanggan_id)),
         kerja_href='/pekerjaan?'+urlencode(dict(pelanggan_id=pelanggan_id)),
         masuk_href='/barang-masuk?'+urlencode(dict(pelanggan_id=pelanggan_id)),
+        pesanan_href=lambda halaman:'?'+urlencode({'tab':'ringkasan',**params,'pesanan_halaman':halaman}),
+        pesanan_query={k:v for k,v in params.items() if k.startswith('pesanan_')},
+        PESANAN_STATUS=svc.STATUS,
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''))
 
 
@@ -105,7 +118,7 @@ async def referensi_pesanan(jasa_id:int,request:Request,akun=Depends(butuh_akun)
         j=await db.get(Jasa,jasa_id)
         if not j:
             raise HTTPException(404,'Pesanan tidak ditemukan.')
-        return RedirectResponse(f'/jasa/pelanggan/{j.pelanggan_id}?tab=ringkasan#pesanan-{j.id}',303)
+        return RedirectResponse(f'/jasa/pelanggan/{j.pelanggan_id}?tab=ringkasan&pesanan_id={j.id}#pesanan-{j.id}',303)
 
 
 @router.get("/jasa/{jasa_id:int}/nota")
