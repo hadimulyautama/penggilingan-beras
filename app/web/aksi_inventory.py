@@ -1684,7 +1684,8 @@ async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> d
     # perintah bisa memuat barang dari keduanya, dan operator memang saling
     # menggantikan (keputusan pemilik 13 September). Yang menjaga bukan peran
     # melainkan BARIS PERINTAHNYA, yang diperiksa layanan sambil menguncinya.
-    wajib(await _is_g2_operator(user) or await _is_g1_operator(user))
+    from app.web.muatan import boleh_catat
+    wajib(await boleh_catat(user))
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1719,7 +1720,8 @@ async def act_muat_barang(req: MuatBarisReq,
     # perintah bisa memuat barang dari keduanya, dan operator memang saling
     # menggantikan (keputusan pemilik 13 September). Yang menjaga bukan peran
     # melainkan BARIS PERINTAHNYA, yang diperiksa layanan sambil menguncinya.
-    wajib(await _is_g2_operator(user) or await _is_g1_operator(user))
+    from app.web.muatan import boleh_catat
+    wajib(await boleh_catat(user))
     if float(req.jumlah or 0) <= 0:
         raise HTTPException(400, "Isi jumlah yang dimuat lebih dari 0.")
     async with SessionLocal() as db:
@@ -1770,7 +1772,8 @@ async def act_selesai_muat(req: SelesaiMuatReq, user: User = Depends(pengguna_ak
     # perintah bisa memuat barang dari keduanya, dan operator memang saling
     # menggantikan (keputusan pemilik 13 September). Yang menjaga bukan peran
     # melainkan BARIS PERINTAHNYA, yang diperiksa layanan sambil menguncinya.
-    wajib(await _is_g2_operator(user) or await _is_g1_operator(user))
+    from app.web.muatan import boleh_catat
+    wajib(await boleh_catat(user))
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1789,7 +1792,7 @@ async def act_selesai_muat(req: SelesaiMuatReq, user: User = Depends(pengguna_ak
         kode = r.rec.kode
         total = sum(float(i.berat_kg or 0) for i in r.baris)
     return {"ok": True,
-            "pesan": f"✓ {kode} berangkat dengan {kg(total)} — menunggu "
+            "pesan": f"✓ Muatan {kode} selesai dengan aktual {kg(total)} — menunggu "
                      "verifikasi Admin."}
 
 
@@ -1943,7 +1946,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "jumlah", "label": "Total yang sudah dimuat (karung atau kg sesuai barang)",
                   "type": "number", "wajib": True},
              ]},
-            {"akses": "g2", "id": "selesai_muat", "label": "\u2714\uFE0F Selesai muat — truk berangkat",
+            {"akses": "g2", "id": "selesai_muat", "label": "\u2714\uFE0F Selesai muat sesuai aktual",
              "post": "/api/actions/selesai-muat", "pratinjau_muat": "aktual",
              "hint": "Sisa perintah yang tak dimuat HANGUS, dan selisihnya "
                      "terbaca Admin saat verifikasi.",

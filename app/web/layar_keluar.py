@@ -81,6 +81,13 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                   and (await _is_g2_operator(akun.user)
                        or await _is_g1_operator(akun.user)))
 
+    buka_muat = request.query_params.get("buka")
+    if transaksi_id and buka_muat in {"muat_barang", "muat_semua", "selesai_muat"}:
+        if not (boleh_muat or boleh_perintah):
+            raise HTTPException(403, "Anda tidak berhak membuka muatan kiriman ini.")
+        tujuan = "/selesai-muat" if buka_muat == "selesai_muat" else "/muatan"
+        return RedirectResponse(tujuan + "?" + urlencode({"perintah": transaksi_id}), 303)
+
     draf_saya = []
     from app.web.stok_navigasi import pelanggan_diminta
     pid=pelanggan_diminta(request)
@@ -320,8 +327,7 @@ def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "", cep
     if rec.status == OUT_PERINTAH and cepat and boleh_perintah:
         t.append(("keluar_cepat", n, "Konfirmasi barang keluar", True))
     if rec.status == OUT_PERINTAH and boleh_muat:
-        t.append(("muat_semua", n, "Muat semua sesuai perintah", not t))
-        t.append(("muat_barang", n, "Catat per barang", False))
+        t.append(("muat_barang", n, "Catat muatan", not t))
         t.append(("selesai_muat", n, "Selesai muat", False))
     if rec.status == OUT_DIMUAT and boleh_perintah:
         t.append(("verifikasi_keluar", n, "Verifikasi & tutup", True))

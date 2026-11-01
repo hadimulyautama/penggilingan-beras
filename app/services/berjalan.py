@@ -3081,17 +3081,12 @@ async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str,
             sub=f"{rec.kode} · {pembeli}{truk}",
             ringkas=rec.catatan_perintah or None,
             kelompok="keluar", gudang=gudang,
-            # TIGA pilihan, dan urutannya yang menentukan: "muat semua" paling
-            # atas sebab ia keadaan yang paling sering, dan borang yang menuntut
-            # operator mengetik ulang angka yang sudah tertulis di kartunya akan
-            # diketik asal-asalan sambil berdiri di samping truk.
+            # Satu lembar Catat muatan; pintu lama tetap membawa id perintah.
             pilihan=[
-                ("muat_semua", "Muat semua sesuai perintah",
-                 f"Seluruh {macam} macam, {_kg(perintah)}", str(rec.id)),
-                ("muat_barang", "Catat muatan per barang",
-                 "Catat total aktual pada truk ini", str(rec.id)),
-                ("selesai_muat", "Selesai muat — truk berangkat",
-                 "Sisa yang tak dimuat hangus", str(rec.id)),
+                ("muat_barang", "Catat muatan",
+                 "Isi total yang sudah dimuat, bukan tambahannya.", str(rec.id)),
+                ("selesai_muat", "Selesai muat sesuai aktual",
+                 "Periksa aktual dan alasan tidak terkirim per pelanggan", str(rec.id)),
             ]))
     return keluar
 

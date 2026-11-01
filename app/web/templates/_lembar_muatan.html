@@ -1,0 +1,18 @@
+<link rel="stylesheet" href="/static/muat-ringkas.css?v={{ VERSI }}&amp;mr=20261101.4">
+<section class="mr" data-lembar-muatan data-editor-perintah data-catat-muatan
+ data-tahap="{{ 'selesai' if tahap_selesai else 'catat' }}"
+ data-perintah="{{ perintah or request.query_params.get('perintah','') }}"
+ data-boleh="{{ '1' if (boleh_selesai if tahap_selesai else boleh_catat) else '0' }}"
+ data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}"
+ data-buka="{{ buka_awal|default('') }}" data-item="{{ item_awal|default('') }}" data-semua="{{ semua_awal|default('') }}">
+ <h1>{{ 'Selesai muat' if tahap_selesai else 'Catat muatan' }}</h1>
+ <p>{{ 'Periksa aktual dan alasan per pelanggan. Jumlah aktual tidak diubah pada tahap ini.' if tahap_selesai else 'Isi total yang sudah dimuat, bukan tambahannya.' }}</p>
+ <p class="mr-help">{{ 'Penyelesaian tidak menambah muatan, tidak mengurangi stok lagi, dan belum merupakan verifikasi pengiriman.' if tahap_selesai else 'Contoh: tercatat 20 karung lalu bertambah 10, isi 30. Stok berubah hanya sebesar selisihnya.' }}</p>
+ <p data-pesan role="status" aria-live="polite" hidden></p>
+ <div data-galat role="alert" class="mr-error" hidden></div>
+ <div data-pulih hidden><button class="btn" type="button" data-terbaru>Periksa muatan terbaru</button><p class="mr-help">Isian dipertahankan. Baca perbandingan terbaru sebelum pemeriksaan dan konfirmasi ulang.</p></div>
+ <div data-lembar-isi></div>
+ <noscript>Aktifkan JavaScript untuk memeriksa muatan. Halaman ini tidak mengubah stok ketika dibuka.</noscript>
+</section>
+<script type="application/json" id="lembar-awal">{{ awal|tojson }}</script>
+<script src="/static/muat-ringkas.js?v={{ VERSI }}&amp;mr=20261101.4" defer></script>

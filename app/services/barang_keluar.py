@@ -1456,7 +1456,7 @@ async def dampak_total_muatan(db, it, *, jumlah_karung=None, berat_kg=None,
 async def catat_muatan(db: AsyncSession, *, user, item_id: int,
                        jumlah_karung: int | None = None,
                        berat_kg: float | None = None, dasar: str | None = None,
-                       rec_id: int | None = None) -> tuple[OutgoingRecord, str]:
+                       rec_id: int | None = None, simpan: bool = True) -> tuple[OutgoingRecord, str]:
     """Operator mencatat SATU baris yang benar-benar naik ke truk.
 
     ⭐ DI SINILAH STOK BERKURANG, dan itu memang saat karungnya naik — bukan
@@ -1498,8 +1498,11 @@ async def catat_muatan(db: AsyncSession, *, user, item_id: int,
                      ringkas=f"{rec.kode} · {nama} {_kg(berat)} kg",
                      medan=f"item:{it.id}",
                      lama=f"{sudah:.2f}|{'' if karung_lama is None else karung_lama}")
-    await db.commit()
-    await db.refresh(rec)
+    if simpan:
+        await db.commit()
+        await db.refresh(rec)
+    else:
+        await db.flush()
     kurang = perintah - berat
     return rec, (f"✓ {nama} {_kg(berat)} kg dicatat"
                  + (f" — kurang {_kg(kurang)} kg dari perintah."
@@ -1736,8 +1739,8 @@ def periksa_selesai_muat(rec, items, sebab):
 
 async def selesai_muat(db: AsyncSession, *, user, rec_id: int,
                        tanggal=None, jam=None, dasar: str | None = None,
-                       sebab: str = "") -> HasilPerintah:
-    """Operator menyatakan truknya berangkat. Sisa perintah yang tak dimuat HANGUS.
+                       sebab: str = "", simpan: bool = True) -> HasilPerintah:
+    """Operator menyelesaikan muatan pelanggan berdasarkan aktual. Sisa perintah yang tak dimuat HANGUS.
 
     Bukan menggantung, dan itu keputusan yang disengaja: perintah yang tersisa
     separuh akan berdiri di antrean sampai seseorang mengingatnya, lalu dimuat
@@ -1756,8 +1759,11 @@ async def selesai_muat(db: AsyncSession, *, user, rec_id: int,
     async with db.begin_nested():
         hasil=await _tutup_muatan(db,user=user,rec=rec,items=items,
             tanggal=tanggal,jam=jam,diisi=[],sebab=sebab,simpan=False)
-    await db.commit()
-    await db.refresh(rec)
+    if simpan:
+        await db.commit()
+        await db.refresh(rec)
+    else:
+        await db.flush()
     return hasil
 
 
