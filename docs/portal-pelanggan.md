@@ -442,3 +442,16 @@ metadata waktu proses yang memang tercatat tetap tersedia seperti sebelumnya.
 Pemeriksaan mutu stok dikelompokkan dalam satu panel dengan sumber Barang ini
 dan Bahan asal dibedakan. Nilai, perhitungan, putaran, catatan, dan tautan
 pemeriksaan tetap tersedia; nilainya tidak digabung antarjenis sumber.
+
+Navigasi cepat tetap memakai cache memori tab maksimal delapan halaman selama
+30 detik dan selalu mengambil ulang data. Navigasi normal tidak lagi membuat
+banner hijau yang menutupi halaman. Jika respons belum tiba setelah 1,2 detik,
+status kecil netral muncul di bawah nama akun pada kepala halaman, lalu hilang
+ketika selesai. `aria-busy` tetap mengikuti permintaan yang sedang berjalan.
+Jika pengguna sudah berinteraksi dengan halaman tersimpan, pembaruan tidak
+menimpa interaksi: pemberitahuan dan tombol Muat data terbaru tetap tersedia
+secara ringkas di kepala halaman. Kesalahan jaringan dan sesi tetap mengikuti
+jalur navigasi utuh yang sudah ada. Status tidak melekat pada halaman cache
+atau bertahan sesudah navigasi selesai.
+Respons HTML yang persis sama tidak mengganti isi yang sudah ditampilkan atau
+memunculkan pemberitahuan pembaruan; rincian terbuka tetap dipertahankan.

@@ -24,6 +24,9 @@
         ops.utuh(baru && baru.login ? '/pelanggan/masuk' : url); return;
       }
       ingat(url, baru);
+      // Respons yang sama tidak perlu mengganti rincian yang sudah dibuka
+      // atau meminta pengguna memuat ulang halaman yang tidak berubah.
+      if (lama === baru) { ops.status('selesai'); return; }
       if (lama && sentuhan !== ops.sentuhan()) {
         ops.status('perubahan', function () { pindah(url, false, gulung); }); return;
       }
@@ -60,18 +63,28 @@
     main.removeAttribute('aria-busy');
     pesan = null;
     if (mode === 'selesai') return;
-    pesan = document.createElement('div');
-    pesan.setAttribute('role', 'status');
-    pesan.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;padding:8px 16px;background:#174c41;color:#fff;text-align:center;font:500 14px/1.5 system-ui;pointer-events:none';
-    pesan.textContent = mode === 'perubahan' ? 'Data terbaru tersedia. ' : mode === 'simpan' ? 'Menyimpan…' : mode === 'memperbarui' ? 'Tampilan terakhir — memuat data terbaru…' : 'Membuka halaman…';
-    if (muat) {
-      var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Muat data terbaru';
-      b.style.cssText = 'margin-left:10px;pointer-events:auto'; b.addEventListener('click', muat); pesan.appendChild(b);
-    } else {
-      main.setAttribute('aria-busy', 'true');
-      timer = setTimeout(function () { if (pesan) pesan.textContent = 'Respons belum diterima. Periksa koneksi Anda.'; }, 12000);
+    function tampilkan() {
+      var tempat = document.querySelector('.portal-top-identitas');
+      if (!tempat) return;
+      pesan = document.createElement('div');
+      pesan.className = 'portal-status-navigasi';
+      pesan.setAttribute('role', 'status');
+      pesan.setAttribute('aria-live', 'polite');
+      pesan.textContent = mode === 'perubahan' ? 'Data terbaru tersedia. ' : mode === 'simpan' ? 'Menyimpan…' : mode === 'memperbarui' ? 'Memperbarui data…' : 'Membuka halaman…';
+      if (muat) {
+        var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Muat data terbaru';
+        b.addEventListener('click', muat); pesan.appendChild(b);
+      }
+      tempat.appendChild(pesan);
     }
-    document.body.appendChild(pesan);
+    if (muat) { tampilkan(); return; }
+    main.setAttribute('aria-busy', 'true');
+    // Navigasi cepat tetap tenang. Status hanya muncul bila pengguna menunggu,
+    // dalam kepala halaman; tidak menutupi isi atau mewarnai status bar HP.
+    timer = setTimeout(function () {
+      tampilkan();
+      timer = setTimeout(function () { if (pesan) pesan.textContent = 'Respons belum diterima. Periksa koneksi Anda.'; }, 10800);
+    }, 1200);
   }
   function ambil(url) {
     if (janji.has(url)) return janji.get(url);
