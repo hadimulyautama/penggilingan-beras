@@ -84,7 +84,9 @@ async def bahan(db, *, jasa_ids=None, g1=True, g2=True):
             n = dari_batch(b)
             tambah(nama='PK',kode=b.kode_batch,kg=n.kg,pasti=n.pasti,
                 lokasi='Menunggu penempatan · Gudang 2',tahap=MENUNGGU,jid=b.jasa_id)
-        peta = dict((await db.execute(select(Jasa.id,Jasa.pelanggan_id))).all()) if ids is not None else {}
+        peta = {}
+        if ids is not None:
+            peta = dict((await db.execute(select(Jasa.id,Jasa.pelanggan_id))).all())
         nama_jenis = {'pk':'PK', 'beras_putih':'Beras putih', 'broken':'Broken',
                       'menir':'Menir', 'reject':'Reject', 'bekatul':'Bekatul'}
         silos = (await db.scalars(select(Silo).join(Warehouse,Warehouse.id==Silo.warehouse_id)
