@@ -167,7 +167,7 @@ _SQL_PRODUK_DITERIMA = """
                        AND split_part(a.new_value, ' · ', 1) = t.kode))
 """
 
-_SQL_AKTIF = text("""
+SQL_MASUK_BELUM_DITAUT = ("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
@@ -212,6 +212,9 @@ _SQL_AKTIF = text("""
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM pk_purchase_batches
                           WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
        AND NOT (""" + _SQL_PRODUK_DITERIMA + """)
+""")
+
+_SQL_AKTIF = text(SQL_MASUK_BELUM_DITAUT + """
      ORDER BY (t.status_tiket = 'TERBUKA') DESC, t.tanggal DESC, t.id DESC
 """)
 

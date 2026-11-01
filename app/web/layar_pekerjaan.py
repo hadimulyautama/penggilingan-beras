@@ -77,7 +77,8 @@ def daftar_tab_pekerjaan(k, pemilik, gudang, jenis):
         return [x for x in xs if not gudang or x.gudang == gudang]
     tindakan, berjalan, informasi = map(pilih, (k.tindakan, k.berjalan, k.informasi))
     total_tindakan = sum(not jenis or jenis_kerja(x) == jenis for x in tindakan)
-    total_jalan = sum(not jenis or jenis_kerja(x) == jenis for x in berjalan + informasi)
+    from app.web.pekerjaan_ringkas import ringkasan_proses
+    total_jalan = ringkasan_proses([x for x in berjalan if not jenis or jenis_kerja(x)==jenis])['jumlah']
     return tindakan, berjalan, informasi, total_tindakan, total_jalan
 
 
@@ -114,6 +115,9 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
         dasar = [x for x in dasar if svc.grup_baris(x) == grup]
     per_jenis = [(key,nama,sum(jenis_kerja(x)==key for x in dasar)) for key,nama in JENIS_KERJA]
     daftar = [x for x in dasar if not jenis or jenis_kerja(x)==jenis]
+    from app.web.pekerjaan_ringkas import ringkasan_proses
+    ringkasan_jalan=ringkasan_proses([x for x in daftar if x in berjalan])
+    if tab=='berjalan':total_jalan=ringkasan_jalan['jumlah']
     from app.services.proses_aktif import alamat_detail
     konteks = '/pekerjaan?' + urlencode({q:v for q,v in request.query_params.items() if q not in ('buka','nilai')})
     def detail(x):
@@ -125,7 +129,7 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
                           and x.aksi in ('acc_permintaan_pk','kirim_permintaan_pk','tutup_permintaan_pk')]
     from app.main import _pintasan_aksi
     from app.web.layar import view_untuk
-    konteks_tampilan = dict(detail_transfer_pk=detail_transfer_pk,layar='pekerjaan',tab=tab,jenis=jenis,
+    konteks_tampilan = dict(ringkasan_jalan=ringkasan_jalan,detail_transfer_pk=detail_transfer_pk,layar='pekerjaan',tab=tab,jenis=jenis,
         daftar=daftar,proses=[x for x in daftar if x in berjalan],
         informasi=[x for x in daftar if x not in berjalan],
         kelompok=[(key,nama,[x for x in daftar if jenis_kerja(x)==key]) for key,nama in JENIS_KERJA],
@@ -142,6 +146,9 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
 @router.get('/barang-masuk')
 async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
     if (alih:=tautan_penerimaan_lama(request)) is not None:return alih
+    if not is_customer_read(request):
+        from app.web.barang_masuk_pencarian import halaman
+        return await halaman(request,akun)
     from app.web.api import _is_g1_operator, _is_g2_operator
     from app.services.kelompok_kerja import dapat_ditindak
     async with SessionLocal() as db:
@@ -253,6 +260,13 @@ async def konteks_barang_masuk(tid,request,akun):
 async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
     from app.web.penerimaan_ringkas import keadaan,AKSI_PENERIMAAN
     ctx,b=await konteks_barang_masuk(tid,request,akun)
+    if not is_customer_read(request) and not ctx['catatan'] and ctx['jenis'] in ('beras','broken'):
+        from app.services.penerimaan_historis import baca
+        async with SessionLocal() as db:arsip=await baca(db,[tid])
+        if arsip:
+            from app.peran import can_see_financials
+            return render(request,'barang_masuk_historis.html',layar='barang_masuk',arsip=arsip[0],boleh_audit=can_see_financials(akun.user),
+                kembali=konteks_aman(request.query_params.get('kembali_kerja')) or '/barang-masuk?status=diterima',**b.lencana())
     kembali=konteks_aman(request.query_params.get('kembali_kerja')) or '/barang-masuk'
     ctx['proses']=[(kode,url+('&' if '?' in url else '?')+urlencode({'kembali_kerja':kembali})) for kode,url in ctx['proses']]
     tab_detail=pilihan(request,'tab_detail',('ringkasan','tiket','qc','riwayat'),'ringkasan')

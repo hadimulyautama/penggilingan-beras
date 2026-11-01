@@ -45,4 +45,4 @@ async def test_katalog_meneruskan_jumlah_tab(monkeypatch, query):
     *_, tindakan, jalan = daftar_tab_pekerjaan(kelompok, query.get('kepemilikan', ''),
                                                query.get('gudang', ''), query.get('jenis', ''))
     assert (context['total_tindakan'], context['total_jalan']) == (tindakan, jalan)
-    assert (tindakan, jalan) == ((1, 1) if query else (2, 2))
+    assert (tindakan, jalan) == ((1, 1) if query else (2, 1))

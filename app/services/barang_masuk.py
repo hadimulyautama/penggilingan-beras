@@ -187,11 +187,13 @@ async def tiket_riwayat(db, tid):
     return {**dict(r), 'berat_hpp_kg':None, 'sumber_berat':'lihat catatan penerimaan'} if r else None
 
 
-async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None):
+async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None):
     # Sumbernya sama dengan pemeriksaan tiket yang telah tertaut. Tidak
     # memakai saldo tersedia sebagai tanda diterima: barang yang sudah habis
     # diproses tetap memiliki catatan penerimaan.
     hasil = defaultdict(list)
+    if ids_tiket is not None and not ids_tiket:
+        return []
     specs = []
     if g1:
         specs.append((PurchaseBatch, PurchaseBatch.timbangan_transaksi_id, 'gabah'))
@@ -205,6 +207,8 @@ async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None):
             q=q.where(model.jasa_id.in_(jasa_ids))
         if tid is not None:
             q = q.where(kolom == tid)
+        if ids_tiket is not None:
+            q = q.where(kolom.in_(ids_tiket))
         if jenis in ('beras', 'broken'):
             q = q.where(model.source_type == 'timbangan')
         for x in (await db.scalars(q)).all():

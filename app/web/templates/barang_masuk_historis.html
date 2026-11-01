@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block judul %}Arsip penerimaan {{ arsip.kode }}{% endblock %}
+{% block isi %}{% import '_stok.html' as st %}
+<p><a href="{{ kembali }}">← Kembali ke daftar penerimaan</a></p><h1>{{ arsip.kode }}</h1><p>Arsip penerimaan · {{ arsip.jenis_nama or arsip.jenis_kode }} · {{ arsip.nama }} · {{ arsip.nomor_polisi or 'Plat belum tersedia' }}</p>
+<p>Sumber stok penerimaan ini tidak lagi tersedia. Rekaman penerimaan di bawah berasal dari audit, bukan saldo stok sekarang. Identitas pemilik dan rincian sumber yang tidak tersimpan pada arsip tidak direka dari tiket terkini.</p>
+{% for c in arsip.catatan %}<section><h2>{{ c.kode }}</h2><p>{{ c.waktu|jam('%d/%m/%Y · %H:%M') }} · ID pencatat {{ c.petugas_id or 'Tidak tersedia' }}</p><p>Bobot penerimaan: {{ st.kg_rinci(c.berat) ~ ' kg' if c.berat is not none else 'Tidak tersedia pada arsip' }}</p>{% if boleh_audit %}<a href="/audit?{{ {'rentang':'semua','cari':arsip.kode}|urlencode }}">Buka audit penerimaan</a>{% endif %}</section>{% endfor %}
+<p>Formulir dan dokumen yang memerlukan sumber asli tidak ditawarkan dari arsip yang belum lengkap ini. Tidak ada penerimaan ulang atau perubahan stok saat halaman dibuka.</p>
+{% endblock %}
