@@ -251,6 +251,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
         k=ctx.get('k')
         report_available=bool(k.get('silo') if isinstance(k,dict) else getattr(k,'silo',None))
     content=read_only(body,path,origin=str(request.base_url),report_available=report_available)
+    from .identitas_proses import tampilkan_detail
+    content=tampilkan_detail(content,ctx,env)
     return shell(request,content,status_code=status_code,title=ctx.get('page_title') or ctx.get('breadcrumb_detail') or 'Portal pelanggan')
 
 
@@ -284,3 +286,5 @@ async def prepare_context(request,name,ctx):
         ctx['STOK_NAV']['milik']=[x for x in ctx['STOK_NAV']['milik'] if x['kunci']=='jasa']
     from app.web.laporan_navigasi import siapkan as siapkan_laporan
     await siapkan_laporan(request,ctx)
+    from .identitas_proses import siapkan_detail
+    await siapkan_detail(request,name,ctx)

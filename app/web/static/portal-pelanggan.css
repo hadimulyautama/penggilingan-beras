@@ -170,3 +170,21 @@ body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;bord
 .portal-account .portal-pengaturan .btn{width:100%;min-height:44px}
 @media(max-width:900px){.portal-customer .portal-content:has(.pelanggan-beranda){padding-top:12px}.pelanggan-beranda .pelanggan-sapaan h1{margin:0;font-size:22px}.pelanggan-ringkasan{gap:12px}.pelanggan-beranda .pelanggan-judul h2{font-size:17px}}
 @media(max-width:360px){.pelanggan-beranda .pelanggan-panel{padding:12px}.pelanggan-beranda .pelanggan-komoditas-item .pelanggan-berat{max-width:112px;font-size:16px}.pelanggan-proses-ringkas>a{gap:6px}.pelanggan-proses-judul{font-size:15px}}
+
+.pelanggan-pembaruan{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:12px;line-height:1.6;color:var(--pd-muted);margin:8px 0 0}
+.pelanggan-sumber-waktu{font-size:11px}
+.pelanggan-petunjuk-proses{font-size:13px;line-height:1.6;color:var(--pd-ink);margin:8px 0 0}
+.pelanggan-proses-ringkas .pelanggan-pembaruan{font-size:12px;margin-top:6px}
+.pelanggan-proses-ringkas .pelanggan-petunjuk-proses{font-size:12px}
+.portal-customer .pelanggan-hero-proses{padding:20px;border:1px solid var(--pd-line);background:var(--pd-sheet);border-radius:14px}
+.portal-customer .pelanggan-hero-proses h1{font-size:28px;line-height:1.25;margin:10px 0 6px;letter-spacing:-.4px}
+.portal-customer .pelanggan-hero-proses .pelanggan-detail-kode{font-size:12px;margin:0;color:var(--pd-muted)}
+.pelanggan-inti-fakta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0 0}
+.pelanggan-inti-fakta dt{font-size:12px;color:var(--pd-muted)}
+.pelanggan-inti-fakta dd{margin:3px 0 0;color:var(--pd-ink);font-size:15px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.portal-customer .pelanggan-hero-proses .pelanggan-petunjuk-proses,.pelanggan-stok-petunjuk{border-top:1px solid var(--pd-line);padding-top:10px;margin-top:12px}
+.portal-customer .pelanggan-hero-proses .pelanggan-pembaruan,.portal-customer .pk-detail__hero .pelanggan-pembaruan{font-size:12px;line-height:1.6;margin:6px 0 0;color:var(--pd-muted)}
+.portal-customer .pelanggan-hero-proses .pelanggan-petunjuk-proses{font-size:13px;line-height:1.6;color:var(--pd-ink)}
+.pelanggan-perhatian-proses{color:var(--pd-amber);font-size:13px;line-height:1.6}
+.pelanggan-rasio-hasil{margin:0}.pelanggan-rasio-hasil>article{border:0;box-shadow:none;border-radius:0;margin:0}.pelanggan-rasio-hasil>p{padding:0 16px 14px;margin:0}
+@media(max-width:600px){.portal-customer .pelanggan-hero-proses{padding:16px}.portal-customer .pelanggan-hero-proses h1{font-size:24px}.pelanggan-inti-fakta{gap:8px}.pelanggan-inti-fakta dd{font-size:14px}.pelanggan-proses-ringkas>a{grid-template-columns:minmax(0,1fr) auto}.pelanggan-proses-ringkas .pelanggan-penanda{max-width:95px;text-align:center}}

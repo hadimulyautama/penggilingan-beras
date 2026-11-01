@@ -99,6 +99,7 @@ def baris_transit(rows):
 def progres_berjalan(rows,scope):
     """Angka kemajuan/hasil dari pembaca produksi; rendemen bukan persen selesai."""
     from app.services.proses_aktif import alamat_detail
+    from .identitas_proses import identitas
     hasil=[]
     for r in rows:
         href=alamat_detail(r)
@@ -108,7 +109,7 @@ def progres_berjalan(rows,scope):
         neraca=[]
         if r.neraca:
             neraca=[dict(nama=x.nama,kg=x.kg) for x in [r.neraca.beras,*r.neraca.samping]]
-        hasil.append(dict(kode=r.kode,judul=NAMA_PROSES.get(jenis,jenis),
+        hasil.append(dict(kode=r.kode,jenis=jenis,**identitas(jenis,r),
             href=portal_url(href),mulai=r.sejak,status='Dijeda' if r.nota_jenis=='hati' else 'Sedang berjalan',
             catatan=r.nota if r.nota_jenis=='hati' else None,
             maju=r.maju if jenis=='pengeringan' else None,
@@ -144,6 +145,14 @@ async def halaman(request, bagian='beranda'):
         pendinginan={r.kode_lot for r in (await db.scalars(select(DryingLot).where(
             DryingLot.id.in_(scope.ids(DryingLot)),DryingLot.status=='selesai',
             DryingLot.waktu_selesai_pendinginan.is_(None)))).all()}
+        if bagian in ('beranda','jasa'):
+            from .identitas_proses import baca as baca_identitas
+            from app.services.proses_aktif import alamat_detail
+            daftar_proses={('pendinginan' if r['kode'] in pendinginan and r['jenis']=='pengeringan' else r['jenis'],r['kode'])
+                for r in d['proses'] if r['status']=='proses' or r['kode'] in pendinginan}
+            daftar_proses.update((alamat_detail(r).split('/')[2],r.kode) for r in b.berjalan if alamat_detail(r))
+            identitas=await baca_identitas(db,scope,daftar_proses)
+        else:identitas={}
         if bagian=='riwayat':
             from .scope import MODELS
             for jenis in NAMA_PROSES:
@@ -173,9 +182,14 @@ async def halaman(request, bagian='beranda'):
     ada={r['kode'] for r in progres}
     for r in d['proses']:
         if r['status']=='proses' and r['kode'] not in ada:
-            progres.append(dict(kode=r['kode'],judul=NAMA_PROSES.get(r['jenis'],r['jenis']),
+            from .identitas_proses import identitas as nama_barang
+            progres.append(dict(kode=r['kode'],jenis=r['jenis'],**nama_barang(r['jenis']),
                 href=portal_url(r['href']),mulai=None,status='Sedang berjalan',catatan=None,
                 maju=None,fakta=[],neraca=[],ringkas='Rincian kemajuan belum tersedia.',rendemen=None))
+    for r in progres:
+        from .identitas_proses import petunjuk
+        r.update(identitas.get((r['jenis'],r['kode']),dict(diperbarui=None,
+            sumber_waktu='Pembaruan terakhir',petunjuk=petunjuk(None))))
     riwayat=sorted((r for r in d['proses'] if r['status']=='selesai'
         or (r['jenis']=='transfer' and r['status']=='terkirim')),
         key=lambda r:r['selesai'].timestamp() if r.get('selesai') else 0,reverse=True)

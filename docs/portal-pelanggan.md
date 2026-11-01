@@ -361,3 +361,19 @@ rincian dibuka, dan barang tersebut tidak termasuk angka total yang tersedia.
 Berat yang seluruhnya belum diketahui tetap Belum ditimbang, bukan nol.
 Nama menu, judul dan tautan kembali memakai penulisan yang sama. Pemasangan
 aplikasi dan keluar tersedia di Pengaturan akun agar menu utama lebih ringkas.
+
+Identitas kartu proses menyebut barangnya: pengeringan/pendinginan/penggilingan
+untuk gabah, serta penyosohan sesuai komposisi asli per pemakaian silo.
+Bahan campuran disebut campuran; sumber yang belum jelas tetap dinyatakan
+belum tercatat. Kode tetap menjadi identitas sekunder dan alamat lama berlaku.
+Ringkasan detail proses memakai identitas yang sama, berat bahan asli dan
+lokasi dari pembaca native, tanpa menggandakan angka utama di statistik.
+
+Petunjuk pelanggan mengikuti status: proses aktif/dijeda ditangani petugas,
+proses selesai tidak otomatis berarti siap diambil. Rencana pengambilan
+memerlukan konfirmasi petugas. Pembaruan waktu berasal dari proses, catatan
+hasil/mutu/pendinginan, jeda dan audit pencatatan/koreksi yang terkait lewat
+ID proses atau FK anak yang sudah dibatasi pemilik. Waktu mulai diberi label
+tersendiri; waktu buka halaman tidak digunakan. Detail stok agregat belum
+memiliki waktu pembaruan menyeluruh sehingga menyatakan waktunya belum
+tersedia, bukan memakai tanggal masuk atau waktu proses sebagai pembaruan stok.

@@ -33,6 +33,8 @@ async def test_detail_stok_pk_dan_produk_satu_judul_tanpa_navigasi_ganda(pg,port
             assert len(s.select('main a.pk-detail__back'))==1
             assert 'Rahasia Pelanggan B' not in r.text and 'JAS-PORTAL-0' not in s.main.get_text()
             assert not s.select('[data-post],[data-aksi],dialog')
+            assert 'konfirmasikan dengan petugas' in s.select_one('.pelanggan-stok-petunjuk').get_text()
+            assert 'Waktu pembaruan stok belum tersedia' in s.select_one('.pelanggan-stok-petunjuk').get_text()
 
 
 async def test_detail_giling_dan_sosoh_tab_tetap_terbaca_tanpa_tombol_operator(pg,portal):
@@ -47,8 +49,11 @@ async def test_detail_giling_dan_sosoh_tab_tetap_terbaca_tanpa_tombol_operator(p
                 r=await c.get(f'/pelanggan/proses-aktif/{kind}/{code}?tab_detail={tab}')
                 assert r.status_code==200,(kind,tab)
                 s=BeautifulSoup(r.text,'html.parser')
-                assert s.select_one('main h1').get_text() in ('Penggilingan','Penyosohan')
+                assert s.select_one('main h1').get_text().startswith(('Penggilingan gabah','Penyosohan'))
                 assert code in s.main.get_text() and len(s.select('[role=tab]'))==4
+                assert s.select_one('.pelanggan-hero-proses .pelanggan-inti-fakta')
+                for ratio in s.select('.pelanggan-rasio-hasil'):
+                    assert not ratio.has_attr('open') and 'bukan persentase proses selesai' in ratio.get_text()
                 assert not s.select('#tindakan-proses,.identitas-barang,[data-post],[data-aksi]')
                 assert not any(a.get_text(strip=True).startswith('Lihat') for a in s.select('main a.btn[href*="tab_detail="]'))
                 assert 'Rahasia Pelanggan B' not in r.text
