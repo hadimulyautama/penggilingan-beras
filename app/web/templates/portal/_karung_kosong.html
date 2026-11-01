@@ -1,0 +1,9 @@
+{% macro karung_kosong(rows) %}
+<div class="pelanggan-karung-kosong">
+{% for r in rows %}<article class="pelanggan-karung-baris">
+<div><h3>{{ r.nama }}{% if r.merk %} · {{ r.merk }}{% endif %}</h3><p class="pelanggan-redup">{{ r.gudang }}{% if r.ukuran %} · Untuk isi {{ r.ukuran }} kg{% endif %}</p></div>
+<div class="pelanggan-jumlah-karung"><strong>{{ '{:,}'.format(r.lembar).replace(',','.') }}</strong><span>lembar kosong</span></div>
+{% if r.lembar < 0 %}<p class="pelanggan-belum-ditimbang">Jumlah karung perlu diperiksa petugas.</p>{% endif %}
+</article>{% else %}<p class="pelanggan-redup">Belum ada karung kosong yang tercatat.</p>{% endfor %}
+</div>
+{% endmacro %}

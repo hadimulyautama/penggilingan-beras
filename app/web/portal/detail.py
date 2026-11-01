@@ -73,6 +73,33 @@ def ringkas(s,base,*,report_available=None):
         for section in list(s.select('section[aria-labelledby=riwayat-qc-pk]')):
             lipat(section,'Riwayat pemeriksaan mutu')
         for section in list(s.select('.qc-gabah-asal')):lipat(section,'Pemeriksaan mutu bahan asal')
+        if 'produk-detail' in stok.get('class',[]):
+            for detail in list(stok.select('.stok-produk-kartu details.padat')):
+                summary=detail.find('summary',recursive=False)
+                if summary:summary.decompose()
+                detail.unwrap()
+            kemasan=stok.select_one('.pelanggan-kemasan-barang')
+            if kemasan:
+                hero=stok.select_one('.pk-detail__hero')
+                if hero:hero.insert_after(kemasan.extract())
+            ringkasan=stok.select_one('section[aria-labelledby=ringkasan-produk]')
+            if ringkasan:
+                for note in list(ringkasan.select('p.bantu')):
+                    if 'belum final' in note.get_text(' ',strip=True).lower():
+                        hero=stok.select_one('.pk-detail__hero')
+                        if hero:
+                            note['class']=['pelanggan-peringatan-stok']
+                            hero.insert_after(note.extract())
+            lipat(ringkasan,'Riwayat jumlah barang')
+            sumber=stok.select_one('section[aria-labelledby=rincian-produk]')
+            if sumber and sumber.find_parent('details'):
+                sumber.find_parent('details').find('summary',recursive=False).string='Asal barang'
+            for dt in stok.select('dt'):
+                text=dt.get_text(' ',strip=True)
+                if text=='Dikemas':dt.string='Dalam karung berisi'
+                elif text=='Belum dikemas · curah':dt.string='Barang curah'
+                elif text=='Dikemas otomatis':dt.string='Perkiraan berat dalam karung'
+                elif text=='Curah · sisa kemasan':dt.string='Sisa barang curah'
 
     if proses or riwayat:
         parts=path.split('/')

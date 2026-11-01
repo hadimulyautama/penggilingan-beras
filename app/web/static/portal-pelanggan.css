@@ -134,3 +134,72 @@ body.portal-customer .portal-menu{width:auto;flex:0 0 auto;padding:8px 12px}body
 body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;border-radius:8px}body.portal-customer .portal-sidebar .portal-brand:focus:not(:focus-visible){outline:none}body.portal-customer .portal-sidebar .portal-brand:focus-visible{outline:none;box-shadow:0 3px 0 var(--pd-blue)}
 .portal-customer .portal-sidebar-head{position:sticky;top:0;z-index:1;background:var(--pd-sheet);flex-shrink:0}
 .portal-customer .portal-content :is(.riwayat-detail__back,.pk-detail__back,.penerimaan-kembali,.detail-kirim-kembali,.rekap-back){display:inline-flex;align-items:center;min-width:44px;min-height:44px;box-sizing:border-box}
+
+/* Beranda: angka stok dan tahap asli, tanpa kartu pengantar yang berulang. */
+.pelanggan-beranda .pelanggan-sapaan{margin-bottom:14px}
+.pelanggan-ringkasan{align-items:start}
+.pelanggan-beranda .pelanggan-judul{margin-bottom:0;gap:8px}
+.pelanggan-beranda .pelanggan-panel{padding:16px}
+.pelanggan-beranda .pelanggan-komoditas-item{padding:0}
+.pelanggan-beranda .pelanggan-komoditas-item>summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,auto) 12px;gap:10px;padding:12px 0;min-height:72px}
+.pelanggan-beranda .pelanggan-komoditas-item>summary strong{font-size:15px}
+.pelanggan-beranda .pelanggan-komoditas-item .pelanggan-berat{max-width:145px;font-size:17px}
+.pelanggan-komoditas-item>summary .pelanggan-berat small{font-size:11px;font-weight:400}
+.pelanggan-komoditas-item>summary small.pelanggan-belum-ditimbang{color:var(--pd-amber);font-weight:600}
+.pelanggan-beranda .pelanggan-stok-lain{margin:0;border-top:1px solid var(--pd-line)}
+.pelanggan-beranda .pelanggan-status-kosong{background:none;border:0;padding:12px 0 0;margin:0}
+.portal-customer .pelanggan-beranda .pelanggan-status-kosong h2{font-size:16px;margin:0 0 8px}
+.pelanggan-proses-ringkas{border-top:1px solid var(--pd-line);padding:12px 0}
+.pelanggan-proses-ringkas:first-of-type{border-top:0}
+.pelanggan-proses-ringkas:last-child{padding-bottom:0}
+.pelanggan-proses-ringkas>a{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 12px;min-height:44px;color:var(--pd-ink);text-decoration:none;border-radius:6px}
+.pelanggan-proses-ringkas>a:hover .pelanggan-proses-judul{text-decoration:underline;text-underline-offset:3px}
+.pelanggan-proses-judul{font-size:16px;font-weight:600}
+.pelanggan-proses-ringkas .pelanggan-penanda{justify-self:end;font-size:11px;padding:3px 7px}
+.pelanggan-proses-ringkas .pelanggan-kode{grid-column:1;line-height:1.5}
+.pelanggan-proses-panah{grid-column:2;grid-row:2;color:var(--pd-green);justify-self:end}
+.pelanggan-proses-ringkas .pelanggan-kemajuan{margin:10px 0 0}
+.pelanggan-proses-ringkas .pelanggan-kemajuan label{font-size:12px;margin-bottom:6px}
+.pelanggan-tunggu-ringkas{font-size:13px;line-height:1.6;margin:10px 0 0}
+.pelanggan-tunggu-ringkas .pelanggan-penanda{margin-right:5px}
+.portal-pengaturan>summary{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:10px 0;cursor:pointer;font-size:13px;font-weight:600;list-style:none}
+.portal-pengaturan>summary::-webkit-details-marker{display:none}
+.portal-pengaturan>summary:after{content:'+';color:var(--pd-muted);font-size:20px}
+.portal-pengaturan[open]>summary:after{content:'−'}
+.portal-pengaturan .portal-pasang{margin:8px 0 12px}
+.portal-account .portal-pengaturan .btn{width:100%;min-height:44px}
+@media(max-width:900px){.portal-customer .portal-content:has(.pelanggan-beranda){padding-top:12px}.pelanggan-beranda .pelanggan-sapaan h1{margin:0;font-size:22px}.pelanggan-ringkasan{gap:12px}.pelanggan-beranda .pelanggan-judul h2{font-size:17px}}
+@media(max-width:360px){.pelanggan-beranda .pelanggan-panel{padding:12px}.pelanggan-beranda .pelanggan-komoditas-item .pelanggan-berat{max-width:112px;font-size:16px}.pelanggan-proses-ringkas>a{gap:6px}.pelanggan-proses-judul{font-size:15px}}
+
+.pelanggan-pembaruan{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:12px;line-height:1.6;color:var(--pd-muted);margin:8px 0 0}
+.pelanggan-sumber-waktu{font-size:11px}
+.pelanggan-petunjuk-proses{font-size:13px;line-height:1.6;color:var(--pd-ink);margin:8px 0 0}
+.pelanggan-proses-ringkas .pelanggan-pembaruan{font-size:12px;margin-top:6px}
+.pelanggan-proses-ringkas .pelanggan-petunjuk-proses{font-size:12px}
+.portal-customer .pelanggan-hero-proses{padding:20px;border:1px solid var(--pd-line);background:var(--pd-sheet);border-radius:14px}
+.portal-customer .pelanggan-hero-proses h1{font-size:28px;line-height:1.25;margin:10px 0 6px;letter-spacing:-.4px}
+.portal-customer .pelanggan-hero-proses .pelanggan-detail-kode{font-size:12px;margin:0;color:var(--pd-muted)}
+.pelanggan-inti-fakta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0 0}
+.pelanggan-inti-fakta dt{font-size:12px;color:var(--pd-muted)}
+.pelanggan-inti-fakta dd{margin:3px 0 0;color:var(--pd-ink);font-size:15px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.portal-customer .pelanggan-hero-proses .pelanggan-petunjuk-proses,.pelanggan-stok-petunjuk{border-top:1px solid var(--pd-line);padding-top:10px;margin-top:12px}
+.portal-customer .pelanggan-hero-proses .pelanggan-pembaruan,.portal-customer .pk-detail__hero .pelanggan-pembaruan{font-size:12px;line-height:1.6;margin:6px 0 0;color:var(--pd-muted)}
+.portal-customer .pelanggan-hero-proses .pelanggan-petunjuk-proses{font-size:13px;line-height:1.6;color:var(--pd-ink)}
+.pelanggan-perhatian-proses{color:var(--pd-amber);font-size:13px;line-height:1.6}
+.pelanggan-rasio-hasil{margin:0}.pelanggan-rasio-hasil>article{border:0;box-shadow:none;border-radius:0;margin:0}.pelanggan-rasio-hasil>p{padding:0 16px 14px;margin:0}
+.pelanggan-karung-baris{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 16px;padding:16px 0;border-bottom:1px solid var(--pd-line)}
+.pelanggan-karung-baris:last-child{border-bottom:0;padding-bottom:0}.pelanggan-karung-baris>p{grid-column:1/-1;font-size:13px;color:var(--pd-amber);margin:0}
+.pelanggan-jumlah-karung{display:grid;gap:3px;text-align:right;min-width:90px}.pelanggan-jumlah-karung strong{font-size:22px;font-variant-numeric:tabular-nums}.pelanggan-jumlah-karung span{font-size:12px;color:var(--pd-muted)}
+.pelanggan-kemasan-barang{border:1px solid var(--pd-line);border-radius:14px;padding:18px;background:var(--pd-sheet);margin:16px 0}
+.portal-customer .pelanggan-kemasan-barang h2{font-size:18px;margin:0 0 6px}.portal-customer .pelanggan-kemasan-baris h3{font-size:15px;margin:0}
+.pelanggan-kemasan-baris{padding:16px 0;border-top:1px solid var(--pd-line)}.pelanggan-kemasan-baris:first-of-type{border-top:0}.pelanggan-kemasan-baris:last-child{padding-bottom:0}
+.pelanggan-kemasan-baris .pelanggan-fakta{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:0}
+.pelanggan-stok-bobot{display:grid;gap:4px;text-align:right;flex:0 1 auto!important}.pelanggan-stok-bobot>span{font-size:12px;color:var(--pd-muted)}.pelanggan-stok-bobot strong{font-size:16px;font-variant-numeric:tabular-nums}
+.pelanggan-karung-isi{font-size:13px;line-height:1.6;margin:12px 0}.pelanggan-karung-isi strong,.pelanggan-karung-isi span{display:block}
+.pelanggan-filter-lokasi{display:flex;align-items:end;gap:12px;margin:16px 0}.pelanggan-filter-lokasi label{display:grid;gap:6px;font-size:13px}.pelanggan-filter-lokasi select{min-height:44px;min-width:180px;max-width:100%;padding:8px 12px;font:inherit;background:var(--pd-sheet);color:var(--pd-ink);border:1px solid var(--pd-line);border-radius:8px}
+.portal-customer .pelanggan-filter-lokasi .btn{min-height:44px;width:auto}.pelanggan-batch .pelanggan-kode{margin:5px 0}
+.portal-customer .pk-detail__hero{flex-wrap:wrap}.portal-customer .pk-detail__hero .pelanggan-stok-petunjuk{flex:1 0 100%;grid-column:1/-1;width:100%}
+.pelanggan-peringatan-stok{padding:12px 16px;border-radius:10px;background:var(--pd-amber-bg);color:var(--pd-amber);font-size:13px;line-height:1.6;margin:12px 0}
+@media(max-width:540px){.portal-customer .pk-detail__hero{flex-wrap:nowrap}.portal-customer .pk-detail__hero .pelanggan-stok-petunjuk{flex:0 0 auto;min-width:0}}
+@media(max-width:600px){.pelanggan-kemasan-barang{padding:16px}.pelanggan-karung-baris{gap:8px}.pelanggan-karung-baris h3{font-size:14px}.pelanggan-jumlah-karung strong{font-size:20px}.pelanggan-batch .pelanggan-baris{flex-wrap:nowrap;gap:10px}.pelanggan-stok-bobot{max-width:45%}.pelanggan-filter-lokasi{flex-wrap:wrap}.pelanggan-filter-lokasi label{flex:1;min-width:0}.pelanggan-filter-lokasi select{min-width:0;width:100%}}
+@media(max-width:600px){.portal-customer .pelanggan-hero-proses{padding:16px}.portal-customer .pelanggan-hero-proses h1{font-size:24px}.pelanggan-inti-fakta{gap:8px}.pelanggan-inti-fakta dd{font-size:14px}.pelanggan-proses-ringkas>a{grid-template-columns:minmax(0,1fr) auto}.pelanggan-proses-ringkas .pelanggan-penanda{max-width:95px;text-align:center}}

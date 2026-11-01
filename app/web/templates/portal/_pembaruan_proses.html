@@ -1,0 +1,3 @@
+{% macro pembaruan(r) %}
+<p class="pelanggan-pembaruan">{% if r.diperbarui %}<span>{{ 'Mulai proses' if r.sumber_waktu=='Mulai proses' else 'Diperbarui' }} <time datetime="{{ r.diperbarui.isoformat() }}">{{ r.diperbarui|jam('%d/%m/%Y %H:%M') }}</time> WIB</span>{% if r.sumber_waktu!='Mulai proses' %}<span class="pelanggan-sumber-waktu">{{ r.sumber_waktu }}</span>{% endif %}{% else %}Waktu pembaruan belum tercatat.{% endif %}</p>
+{% endmacro %}

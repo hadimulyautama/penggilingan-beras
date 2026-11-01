@@ -27,13 +27,14 @@ def ringkas(rows):
             continue
         k=r['komoditas']
         g=grup.setdefault(k,dict(kunci=k,nama=NAMA.get(k,r['nama']),kg=None,
-            belum_diukur=0,sementara=False,rincian=[],perlu_periksa=False))
+            belum_diukur=0,sementara=False,perkiraan=False,rincian=[],perlu_periksa=False))
         g['rincian'].append(r)
         if r['kg'] is None:
             g['belum_diukur']+=1
         else:
             g['kg']=(g['kg'] or Decimal(0))+Decimal(str(r['kg']))
             g['perlu_periksa']=g['perlu_periksa'] or r['kg']<0
+            g['perkiraan']=g['perkiraan'] or not r['final']
         g['sementara']=g['sementara'] or not r['final']
     urut={k:i for i,k in enumerate(NAMA)}
     return sorted(grup.values(),key=lambda g:(urut.get(g['kunci'],99),g['nama']))
@@ -149,6 +150,7 @@ async def baca(db,scope,d):
         if r['nama']!='PK' and 'kemasan_kg' not in r:continue
         query=parse_qs(urlsplit(r.get('href','')).query)
         bobot_kg=r['kg']
+        karung_berisi=None
         if r['nama']=='PK':
             if query.get('gudang')==['g1'] and query.get('kode',[''])[0] not in scope.codes:continue
             if query.get('gudang')==['g2']:
@@ -156,6 +158,9 @@ async def baca(db,scope,d):
                 if ident not in scope.ids(PkGudang2Intake):continue
                 intake=await db.get(PkGudang2Intake,ident)
                 if intake.berat_kg is None:bobot_kg=None
+                if intake.pk_purchase_batch_id in scope.ids(PkPurchaseBatch):
+                    from app.penggilingan.gudang2.service import ringkasan_karung
+                    karung_berisi=await ringkasan_karung(db,intake)
             jenis='pk'
         else:
             jenis=query.get('jenis',['belum_dikenal'])[0]
@@ -166,6 +171,7 @@ async def baca(db,scope,d):
         rows.append(dict(komoditas=jenis,nama=nama,kode=r['kode'],
             kg=bobot_kg,final=r['final'],lokasi=r['lokasi'],href=portal_url(r['href']),
             status='Berat sementara' if not r['final'] else '',asal=[],catatan=catatan,
+            karung_berisi=karung_berisi,
             identitas=('stok',r['href'])))
 
     # Semua silo G2, termasuk yang sedang dipakai proses. Guard sumber

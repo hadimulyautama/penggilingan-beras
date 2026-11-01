@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% from 'portal/_karung_kosong.html' import karung_kosong %}
+{% block isi %}<div class="pelanggan-halaman">
+<a class="pelanggan-tautan" href="/pelanggan/barang-saya#karung-kosong">← Kembali ke Barang saya</a>
+<header class="pelanggan-sapaan"><h1>Karung kosong</h1><p class="pelanggan-redup">Kemasan milik Anda yang belum dipakai untuk mengisi barang.</p></header>
+<section class="pelanggan-panel">{{ karung_kosong(karung_kosong_baris) }}</section>
+</div>{% endblock %}

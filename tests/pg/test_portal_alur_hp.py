@@ -84,6 +84,12 @@ async def test_semua_pintu_alur_hp_tetap_scoped_dan_terbaca(pg,portal,alur):
             assert len(s.select('main h1'))==1 and len(s.select('#menu-pelanggan'))==1
             assert not s.select('.portal-topbar .portal-menu')
             assert not s.select('main [data-post],main [data-aksi],main dialog')
+            if name=='beranda':
+                assert len(s.select('.pelanggan-proses-ringkas'))==3
+                assert '1 proses lainnya' in s.main.get_text()
+                assert len(s.select('main a[href="/pelanggan/jasa-saya"]'))==1
+                assert not s.select('main .pelanggan-utama')
+                assert s.select_one('#komoditas-gabah > summary .pelanggan-belum-ditimbang')
             if name.startswith('qc_'):
                 assert s.select_one('main h1').get_text()=='Pemeriksaan mutu'
                 assert not s.select('.qc-summary-actions')

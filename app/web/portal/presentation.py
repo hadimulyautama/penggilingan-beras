@@ -18,11 +18,11 @@ def tujuan_kembali(base):
     path=urlsplit(base).path.removeprefix('/pelanggan')
     if path.startswith(('/riwayat-giling','/riwayat-pengeringan','/riwayat-sosoh','/riwayat-transfer')):
         return '/riwayat-proses','Riwayat proses'
-    if path.startswith(('/riwayat-qc','/stok','/barang-saya')):return '/barang-saya','Barang Saya'
+    if path.startswith(('/riwayat-qc','/stok','/barang-saya')):return '/barang-saya','Barang saya'
     if path.startswith('/barang-masuk'):return '/barang-masuk','Barang masuk'
     if path.startswith(('/barang-keluar','/retur')):return '/barang-keluar','Pengambilan barang'
     if '/nota' in path:return '/laporan','Dokumen'
-    return '/jasa-saya','Proses Berjalan'
+    return '/jasa-saya','Proses berjalan'
 
 
 def bahasa_pelanggan(s,base=''):
@@ -211,6 +211,12 @@ def render_customer(request, name, *, status_code=200, **ctx):
     if 'lot' in ctx:ctx['total']=sum(x.tersedia for x in ctx['lot'])
     if name in ('stok_produk_jasa.html','stok_karung_jasa.html'):
         ctx['daftar']=[x for x in ctx.get('daftar',[]) if x['pelanggan_id']==scope.reader.pelanggan_id]
+    if name=='stok_karung_jasa.html':
+        from .karung import baris_kosong
+        ctx['karung_kosong_baris']=baris_kosong([r for p in ctx['daftar'] for r in p['karung']])
+        ctx['STOK_NAV']=None;ctx['page_title']='Karung kosong';name='portal/karung_kosong.html'
+    if name=='stok_pk_dengan_qc_asal.html' and ctx.get('portal_pk_karung'):
+        ctx['template_stok_lama']='portal/pk_karung.html'
     for key in ('proses','k'):
         if ctx.get(key) is not None:
             obj=copy.copy(ctx[key]);ctx[key]=obj
@@ -242,7 +248,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
         for j in d['pesanan']:j['boleh_tutup']=j['boleh_batal']=False
     env=templates.env.overlay(loader=ChoiceLoader([DictLoader({'base.html':"""{% if STOK_NAV %}{% include 'portal/_navigasi_stok.html' %}<div class="stok-isi">{% endif %}
 {% if LAPORAN_NAV %}<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include 'portal/_navigasi_riwayat.html' %}<div class="laporan-isi">{% endif %}
-{% if portal_scope_note %}<p class="bantu">{{ portal_scope_note }}</p>{% endif %}{% block isi %}{% endblock %}{% if LAPORAN_NAV %}</div></div>{% endif %}{% if STOK_NAV %}</div>{% endif %}"""}),templates.env.loader]))
+{% if portal_scope_note %}<p class="bantu">{{ portal_scope_note }}</p>{% endif %}{% block isi %}{% endblock %}{% if LAPORAN_NAV %}</div></div>{% endif %}{% if STOK_NAV %}</div>{% endif %}""",
+        '_produk_kemasan.html':"{% include 'portal/_kemasan_barang.html' %}"}),templates.env.loader]))
     # Native stock-navigation computes visible groups from these already scoped rows.
     body=env.get_template(name).render(**ctx)
     path=request.url.path+('?' +request.url.query if request.url.query else '')
@@ -251,6 +258,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
         k=ctx.get('k')
         report_available=bool(k.get('silo') if isinstance(k,dict) else getattr(k,'silo',None))
     content=read_only(body,path,origin=str(request.base_url),report_available=report_available)
+    from .identitas_proses import tampilkan_detail
+    content=tampilkan_detail(content,ctx,env)
     return shell(request,content,status_code=status_code,title=ctx.get('page_title') or ctx.get('breadcrumb_detail') or 'Portal pelanggan')
 
 
@@ -284,3 +293,7 @@ async def prepare_context(request,name,ctx):
         ctx['STOK_NAV']['milik']=[x for x in ctx['STOK_NAV']['milik'] if x['kunci']=='jasa']
     from app.web.laporan_navigasi import siapkan as siapkan_laporan
     await siapkan_laporan(request,ctx)
+    from .identitas_proses import siapkan_detail
+    await siapkan_detail(request,name,ctx)
+    from .karung import siapkan_detail as siapkan_karung
+    await siapkan_karung(request,ctx)

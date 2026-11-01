@@ -346,3 +346,56 @@ Tab pembaca native dapat dijangkau dengan tombol arah dan diaktifkan melalui
 Enter/Spasi tanpa mengubah pembatasan GET. Halaman mutu serta pengembalian
 memakai judul pelanggan, satu tautan kembali dan satu pintu per bagian; nomor
 jasa berulang dan petunjuk operator disisihkan. Catatan asli tetap dibaca utuh.
+
+Beranda ringkas mendahulukan stok dan proses dalam dua panel (berdampingan
+di desktop, berurutan di HP). Tiga komoditas pertama terlihat langsung;
+komoditas berikutnya dapat dibuka pada Barang lainnya, dengan rincian batch
+tetap tersedia. Tiga proses pertama mempunyai satu tautan per proses dan
+status yang jelas; proses dijeda didahulukan. Sisa proses dan bahan menunggu
+tersedia lewat satu tautan Semua proses. Angka kemajuan hanya ditampilkan
+untuk target kadar air asli, tanpa mengubah rasio hasil menjadi persen selesai.
+
+Label total komoditas membedakan hasil timbang dengan angka yang masih
+mencakup perkiraan. Peringatan Ada barang belum ditimbang terlihat sebelum
+rincian dibuka, dan barang tersebut tidak termasuk angka total yang tersedia.
+Berat yang seluruhnya belum diketahui tetap Belum ditimbang, bukan nol.
+Nama menu, judul dan tautan kembali memakai penulisan yang sama. Pemasangan
+aplikasi dan keluar tersedia di Pengaturan akun agar menu utama lebih ringkas.
+
+Identitas kartu proses menyebut barangnya: pengeringan/pendinginan/penggilingan
+untuk gabah, serta penyosohan sesuai komposisi asli per pemakaian silo.
+Bahan campuran disebut campuran; sumber yang belum jelas tetap dinyatakan
+belum tercatat. Kode tetap menjadi identitas sekunder dan alamat lama berlaku.
+Ringkasan detail proses memakai identitas yang sama, berat bahan asli dan
+lokasi dari pembaca native, tanpa menggandakan angka utama di statistik.
+
+Petunjuk pelanggan mengikuti status: proses aktif/dijeda ditangani petugas,
+proses selesai tidak otomatis berarti siap diambil. Rencana pengambilan
+memerlukan konfirmasi petugas. Pembaruan waktu berasal dari proses, catatan
+hasil/mutu/pendinginan, jeda dan audit pencatatan/koreksi yang terkait lewat
+ID proses atau FK anak yang sudah dibatasi pemilik. Waktu mulai diberi label
+tersendiri; waktu buka halaman tidak digunakan. Detail stok agregat belum
+memiliki waktu pembaruan menyeluruh sehingga menyatakan waktunya belum
+tersedia, bukan memakai tanggal masuk atau waktu proses sebagai pembaruan stok.
+
+Barang saya mempunyai satu ringkasan komoditas dan bagian Karung kosong
+tersendiri. Tiga pintasan Rincian stok & karung dihilangkan. Saldo kemasan
+kosong dibaca dari stok_kemasan_rinci dengan pelanggan_id sesi (satuan lembar),
+tanpa mengubahnya menjadi berat barang. Kombinasi saldo nol tidak ditampilkan;
+defisit tetap tampak. Karung berisi ditampilkan bersama barangnya dari
+ringkasan karung PK dan baris kemasan produk native, termasuk perkiraannya.
+
+Rincian stok menandai sisa saat ini, berat asal/saat diterima dan jumlah
+karung saat diterima secara terpisah. Baris yang belum ditimbang tetap ada,
+dikelompokkan tersendiri ketika ada stok terukur. Satu tautan utama per
+catatan stok; tautan batch asal yang berbeda tetap tersedia. Berat sementara
+tidak diulang dan berat yang belum tersedia tidak menjadi nol.
+
+Detail produk mendahulukan stok saat ini dan kartu kemasan/curah yang dapat
+dibaca di HP. Ringkasan total yang berulang dihilangkan; riwayat jumlah dan
+perkiraan asal stok tetap dapat dibuka. Peringatan hasil belum final tetap
+terlihat di luar lipatan. Detail PK karung mempertahankan sisa, peringatan
+penimbangan, catatan penerimaan dan mutu. Perhitungan sumber, FIFO, PDF,
+transit, serta tampilan operator tidak diubah. Alamat stok lama tetap dapat
+dibaca; judul spesifik dan satu filter lokasi menggantikan tombol kategori
+serta tombol gudang yang berulang di portal pelanggan.
