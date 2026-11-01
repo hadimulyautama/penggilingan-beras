@@ -2,7 +2,8 @@
 
 Saldo untuk transaksi selalu dihitung ulang. Memo hanya hidup selama satu
 halaman dirender; POST dan pekerja latar tidak memakainya. Cache lintas
-permintaan hanya dipakai penanda perubahan dan lencana navigasi.
+permintaan hanya untuk snapshot tampilan singkat; transaksi dan pemeriksaan
+identitas tetap membaca keadaan baru.
 """
 from __future__ import annotations
 
@@ -21,7 +22,11 @@ _pembersih = []
 
 
 def _kunci_nilai(nilai):
+    if nilai is None or isinstance(nilai,(str,int,float,bool,bytes)):
+        return nilai
     if is_dataclass(nilai) and not isinstance(nilai, type):
+        if hasattr(type(nilai),'kunci_performa'):
+            return nilai.kunci_performa
         return (type(nilai), tuple((f.name, _kunci_nilai(getattr(nilai, f.name))) for f in fields(nilai)))
     if isinstance(nilai, dict):
         return frozenset((_kunci_nilai(k), _kunci_nilai(v)) for k, v in nilai.items())
@@ -78,6 +83,68 @@ def baca_sesi(fungsi):
             memo[kunci] = await fungsi(db, *args, **kwargs)
         hasil = memo[kunci]
         return list(hasil) if isinstance(hasil, list) else hasil
+
+    return baca
+
+
+def tampilan_singkat(fungsi):
+    """Snapshot tampilan 1 detik; transaksi/pekerja selalu membaca langsung.
+
+    Pembaca memakai sesi pemanggil. Tidak membuka koneksi kedua atau
+    meninggalkan tugas pembaca setelah permintaan putus.
+    """
+    tanda = inspect.signature(fungsi)
+    nilai = {}
+    keadaan = dict(loop=None, locks={}, generasi=0)
+
+    def hapus():
+        nilai.clear()
+        keadaan['generasi'] += 1
+
+    _pembersih.append(hapus)
+
+    @wraps(fungsi)
+    async def baca(db, *args, **kwargs):
+        def langsung():
+            return not boleh_memo() or any(
+                getattr(db, n, ()) for n in ('new', 'dirty', 'deleted'))
+
+        if langsung():
+            return await fungsi(db, *args, **kwargs)
+        loop = asyncio.get_running_loop()
+        if keadaan['loop'] is not loop:
+            hapus()
+            keadaan.update(loop=loop, locks={})
+        bound = tanda.bind(db, *args, **kwargs)
+        bound.apply_defaults()
+        kunci = (db.get_bind(), tuple((k, _kunci_nilai(v))
+            for k, v in bound.arguments.items() if k != 'db'))
+        lama = nilai.get(kunci)
+        if lama is not None and time.monotonic() - lama[0] < 1:
+            return copy.deepcopy(lama[1])
+        # Miliki koneksi sebelum memegang lock. Jika waiter memenuhi pool
+        # sementara pembaca belum punya koneksi, keduanya akan saling tunggu.
+        await db.connection()
+        entry = keadaan['locks'].setdefault(kunci, [asyncio.Lock(), 0])
+        entry[1] += 1
+        try:
+            async with entry[0]:
+                if langsung():
+                    return await fungsi(db, *args, **kwargs)
+                lama = nilai.get(kunci)
+                if lama is not None and time.monotonic() - lama[0] < 1:
+                    return copy.deepcopy(lama[1])
+                generasi = keadaan['generasi']
+                hasil = await fungsi(db, *args, **kwargs)
+                if generasi == keadaan['generasi']:
+                    if len(nilai) >= 8:
+                        nilai.pop(next(iter(nilai)))
+                    nilai[kunci] = (time.monotonic(), copy.deepcopy(hasil))
+                return hasil
+        finally:
+            entry[1] -= 1
+            if entry[1] == 0:
+                keadaan['locks'].pop(kunci, None)
 
     return baca
 
@@ -173,6 +240,20 @@ def pasang_penghitung(engine):
 def boleh_memo():
     aktif = _konteks.get()
     return aktif is not None and aktif["boleh_memo"]
+
+
+def dalam(db, kolom, nilai):
+    """Keanggotaan ID yang sama, satu parameter array pada PostgreSQL.
+
+    IN dengan ribuan ID membuat SQLAlchemy membangun ribuan placeholder
+    pada setiap pembacaan. ARRAY/ANY menjaga nilai tetap terikat parameter;
+    SQLite untuk uji memakai IN biasa dengan semantik yang sama.
+    """
+    if db.get_bind().dialect.name == 'postgresql':
+        from sqlalchemy import any_, bindparam
+        from sqlalchemy.dialects.postgresql import ARRAY
+        return kolom == any_(bindparam(None, list(nilai), type_=ARRAY(kolom.type)))
+    return kolom.in_(nilai)
 
 
 class PerformaMiddleware:

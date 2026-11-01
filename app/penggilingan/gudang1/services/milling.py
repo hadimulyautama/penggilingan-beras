@@ -1,6 +1,8 @@
 """Logika bisnis proses milling / pecah kulit (Gudang 1)."""
 from __future__ import annotations
 
+from app.performa import dalam, tampilan_singkat
+
 from app.performa import baca_sekali
 
 from dataclasses import dataclass
@@ -565,6 +567,7 @@ async def stok_pk_g1(db: AsyncSession, *, termasuk_jasa: bool = False) -> float:
 
 
 @baca_sekali
+@tampilan_singkat
 async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
     """PK di lantai Gudang 1, dipecah (milik pabrik, titipan pelanggan).
 
@@ -581,7 +584,7 @@ async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
       ada di gudang — dan yang menagihnya memegang salah satunya.
     """
     pabrik = jasa = 0.0
-    procs = (await db.execute(select(MillingProcess))).scalars().all()
+    procs = (await db.execute(select(MillingProcess.id,MillingProcess.jasa_id))).all()
     rincian = await pk_breakdown_banyak(db, [p.id for p in procs])
     for proc in procs:
         bd = rincian[proc.id]
@@ -1193,11 +1196,16 @@ async def _transferred_pk(db: AsyncSession, proc_id: int) -> float:
     return float(r)
 
 
-@dataclass
+@dataclass(frozen=True)
 class PkBreakdown:
     produced: float     # total PK dihasilkan (hasil yang di-update operator)
     transferred: float  # sudah dikirim ke Gudang 2
     tersedia: float     # siap kirim (stok) = produced - transferred
+
+    def __deepcopy__(self, memo):
+        # Tiga angka immutable; memo request tidak perlu merekonstruksi
+        # puluhan ribu objek saldo yang tidak dapat diubah ini.
+        return self
 
 
 async def _sold_pk_langsung(db: AsyncSession, proc_id: int) -> float:
@@ -1991,7 +1999,7 @@ async def progress_banyak(db: AsyncSession, proc_ids) -> dict[int, float | None]
         MillingProgressLog.milling_process_id.label("pid"),
         MillingProgressLog.berat_kumulatif_kg.label("kg"),
         urut,
-    ).where(MillingProgressLog.milling_process_id.in_(ids)).subquery()
+    ).where(dalam(db, MillingProgressLog.milling_process_id, ids)).subquery()
     baris = (await db.execute(
         select(sub.c.pid, sub.c.kg).where(sub.c.urut == 1)
     )).all()
@@ -2010,14 +2018,14 @@ async def pk_breakdown_banyak(db: AsyncSession, proc_ids) -> dict[int, PkBreakdo
     verif = dict((await db.execute(
         select(MillingProcessVerification.milling_process_id,
                MillingProcessVerification.berat_output_final_kg)
-        .where(MillingProcessVerification.milling_process_id.in_(ids))
+        .where(dalam(db, MillingProcessVerification.milling_process_id, ids))
     )).all())
     progres = await progress_banyak(db, ids)
 
     terkirim = dict((await db.execute(
         select(InternalTransfer.milling_process_id,
                func.coalesce(func.sum(InternalTransfer.berat_kg), 0))
-        .where(InternalTransfer.milling_process_id.in_(ids),
+        .where(dalam(db, InternalTransfer.milling_process_id, ids),
                InternalTransfer.status == "terkirim")
         .group_by(InternalTransfer.milling_process_id)
     )).all())
@@ -2025,7 +2033,7 @@ async def pk_breakdown_banyak(db: AsyncSession, proc_ids) -> dict[int, PkBreakdo
     terjual = dict((await db.execute(
         select(OutgoingItem.milling_process_id,
                func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-        .where(OutgoingItem.milling_process_id.in_(ids),
+        .where(dalam(db, OutgoingItem.milling_process_id, ids),
                OutgoingItem.item_type == "pk_langsung")
         .group_by(OutgoingItem.milling_process_id)
     )).all())
@@ -2035,7 +2043,7 @@ async def pk_breakdown_banyak(db: AsyncSession, proc_ids) -> dict[int, PkBreakdo
         select(OutgoingItem.milling_process_id,
                func.sum(CustomerReturnItem.berat_total_kg))
         .join(CustomerReturnItem, CustomerReturnItem.outgoing_item_id == OutgoingItem.id)
-        .where(OutgoingItem.item_type == 'pk_langsung', OutgoingItem.milling_process_id.in_(ids))
+        .where(OutgoingItem.item_type == 'pk_langsung', dalam(db, OutgoingItem.milling_process_id, ids))
         .group_by(OutgoingItem.milling_process_id))).all())
     hasil: dict[int, PkBreakdown] = {}
     for pid in ids:
@@ -2062,7 +2070,7 @@ async def pk_jenis_banyak(db: AsyncSession, procs) -> dict[int, str | None]:
         select(MillingProcessSource.milling_process_id,
                MillingProcessSource.drying_lot_id,
                MillingProcessSource.purchase_batch_id)
-        .where(MillingProcessSource.milling_process_id.in_(ids))
+        .where(dalam(db, MillingProcessSource.milling_process_id, ids))
     )).all()
     per_proses: dict[int, list[tuple[int | None, int | None]]] = {}
     for pid, lot_id, batch_id in sumber:

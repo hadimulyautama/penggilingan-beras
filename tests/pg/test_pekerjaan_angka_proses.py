@@ -32,7 +32,11 @@ async def test_ringkasan_tanpa_mengubah_partisi_dan_tindakan(pg,monkeypatch,stat
   assert s.select_one('.kerja-tab a[href*="tab=berjalan"] .pil__jml').text.strip()==str(len(states))
   if 'Dijeda' in states:assert 'Jeda sejak' in r.text and 'Mesin pendukung diperiksa' in r.text
   if not states:assert 'Informasi pendukung tetap tersedia' in r.text
-  assert 'pekerjaan-cari.js' in r.text and 'saring-kerja.js' not in r.text
+  # Pencarian kini di server agar menjangkau kartu pada halaman lain.
+  form=s.select_one('form[role="search"]')
+  assert form and form.get('method')=='get' and form.get('action')=='/pekerjaan'
+  assert form.select_one('input[name="cari"]') and form.select_one('button[type="submit"]')
+  assert form.select_one('input[name="tab"]').get('value')=='berjalan'
   assert (await c.get('/pekerjaan?tab=tindakan')).status_code==200
  assert k.tindakan==[action] and k.informasi==info and k.berjalan==proses
 

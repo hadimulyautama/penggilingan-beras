@@ -11,6 +11,63 @@ from app import performa as p
 pytestmark = pytest.mark.asyncio
 
 
+async def test_kunci_scope_tetap_memuat_sumber_dan_tidak_dapat_diubah():
+    from app.web.portal.scope import ReadScope
+    from app.web.portal.security import CustomerReader
+    reader=CustomerReader(1,2,'Uji')
+    a=ReadScope(reader,frozenset({3}),frozenset({'sama'}),{'milling_process':frozenset({4})})
+    b=ReadScope(reader,frozenset({3}),frozenset({'sama'}),{'milling_process':frozenset({5})})
+    assert p._kunci_nilai(a)!=p._kunci_nilai(b)
+    assert p._kunci_nilai(a) is p._kunci_nilai(a)
+    with pytest.raises(TypeError):a.resources['milling_process']=frozenset({5})
+
+
+async def test_snapshot_tampilan_serentak_tidak_dipakai_post_dan_commit_menghapus():
+    from sqlalchemy.orm import Session
+    engine=object()
+    db=SimpleNamespace(new=[],dirty=[],deleted=[],get_bind=lambda:engine,connection=lambda:asyncio.sleep(0))
+    calls=[]
+    @p.tampilan_singkat
+    async def nilai(db):
+        calls.append(1)
+        await asyncio.sleep(.01)
+        return {'n':len(calls)}
+    app=FastAPI();app.add_middleware(p.PerformaMiddleware)
+    @app.api_route('/nilai',methods=['GET','POST'])
+    async def halaman():return await nilai(db)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
+        rs=await asyncio.gather(*(c.get('/nilai') for _ in range(20)))
+        assert len(calls)==1 and all(r.json()=={'n':1} for r in rs)
+        await c.post('/nilai');assert len(calls)==2
+        assert (await c.get('/nilai')).json()=={'n':3}
+        with Session() as session:session.commit()
+        assert (await c.get('/nilai')).json()=={'n':4}
+
+
+async def test_snapshot_kunci_lain_tidak_terhalang_dan_pemimpin_putus_dibaca_ulang():
+    engine=object()
+    db=SimpleNamespace(new=[],dirty=[],deleted=[],get_bind=lambda:engine,connection=lambda:asyncio.sleep(0))
+    mulai,lanjut=asyncio.Event(),asyncio.Event()
+    calls=[]
+    @p.tampilan_singkat
+    async def nilai(db,key):
+        calls.append(key)
+        if key=='a' and calls.count('a')==1:
+            mulai.set()
+            await lanjut.wait()
+        return {'key':key,'n':calls.count(key)}
+    app=FastAPI();app.add_middleware(p.PerformaMiddleware)
+    @app.get('/{key}')
+    async def halaman(key:str):return await nilai(db,key)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
+        awal=asyncio.create_task(c.get('/a'))
+        await mulai.wait()
+        assert (await asyncio.wait_for(c.get('/b'),1)).json()=={'key':'b','n':1}
+        awal.cancel()
+        with pytest.raises(asyncio.CancelledError):await awal
+        assert (await asyncio.wait_for(c.get('/a'),1)).json()=={'key':'a','n':2}
+
+
 async def test_memo_hanya_get_dan_tidak_bocor_antar_permintaan():
     calls = []
 

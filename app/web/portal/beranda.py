@@ -4,7 +4,7 @@ Tidak membuat saldo, prediksi selesai, atau izin pengambilan baru. Transit
 tetap berasal dari berjalan.untuk(..., read_scope=scope), termasuk perbaikan
 pemeriksaan sumber silo/mesin milik portal.
 """
-from copy import deepcopy
+from app.performa import dalam
 
 from app.database import SessionLocal
 from .navigation import portal_url
@@ -129,10 +129,21 @@ async def halaman(request, bagian='beranda'):
     from .barang import baca as baca_barang
     scope=request.state.portal_scope
     async with SessionLocal() as db:
+        if bagian=='riwayat':
+            from .riwayat_daftar import baca
+            catatan=await baca(db,scope,request)
+            return render_customer(request,'portal/riwayat.html',catatan=catatan,page_title='Riwayat proses')
+        # Daftar pelanggan memakai status/tautan, bukan pemeriksaan tombol
+        # tutup/batal dan sumber setiap proses sepanjang sejarah. Detail
+        # membaca sumbernya saat dibuka, dengan scope pemilik yang sama.
         d=await jasa_pelanggan.pelanggan(db,scope.reader.pelanggan_id,
-            rinci=bagian!='beranda',read_scope=scope)
-        d=deepcopy(d) if d else dict(id=scope.reader.pelanggan_id,
+            rinci=False,read_scope=scope,kebutuhan=bagian)
+        # Pembaca pelanggan membentuk DTO baru per panggilan; tidak ada
+        # objek halaman bersama yang perlu disalin lagi di sini.
+        d=d if d else dict(id=scope.reader.pelanggan_id,
             pesanan=[],penerimaan=[],proses=[],stok=[],pengiriman=[],retur=[])
+        if bagian=='pengambilan':
+            await jasa_pelanggan._pengiriman(db,d,scope.jasa_ids,read_scope=scope)
         # Daftar kerja hanya dipakai Beranda dan Proses. Penerimaan, Barang,
         # dan Riwayat mempunyai pembaca sendiri; jangan menghitung yang dibuang.
         b=(await berjalan.untuk(db,scope.reader,read_scope=scope)
@@ -150,7 +161,7 @@ async def halaman(request, bagian='beranda'):
         # Status "selesai" pada pengeringan hanya menutup fase kering.
         # Pendinginan masih berjalan sampai waktunya benar-benar dicatat.
         pendinginan={r.kode_lot for r in (await db.scalars(select(DryingLot).where(
-            DryingLot.id.in_(scope.ids(DryingLot)),DryingLot.status=='selesai',
+            dalam(db, DryingLot.id, scope.ids(DryingLot)),DryingLot.status=='selesai',
             DryingLot.waktu_selesai_pendinginan.is_(None)))).all()}
         if bagian in ('beranda','jasa'):
             from .identitas_proses import baca as baca_identitas
@@ -163,13 +174,13 @@ async def halaman(request, bagian='beranda'):
         bobot_riwayat={}
         if bagian=='riwayat':
             from app.services.estimasi_pengeringan import untuk_lot_banyak
-            lots=(await db.scalars(select(DryingLot).where(DryingLot.id.in_(scope.ids(DryingLot)),DryingLot.waktu_selesai_pengeringan.is_not(None)))).all()
+            lots=(await db.scalars(select(DryingLot).where(dalam(db, DryingLot.id, scope.ids(DryingLot)),DryingLot.waktu_selesai_pengeringan.is_not(None)))).all()
             bobot_riwayat={x['kode']:x for x in (await untuk_lot_banyak(db,lots)).values()}
             from .scope import MODELS
             for jenis in NAMA_PROSES:
                 if jenis=='pendinginan':continue
                 model,col=MODELS[jenis]
-                rows=(await db.scalars(select(model).where(model.id.in_(scope.ids(model))))).all()
+                rows=(await db.scalars(select(model).where(dalam(db, model.id, scope.ids(model))))).all()
                 dates={getattr(r,col):(getattr(r,'waktu_selesai_pendinginan',None)
                     if jenis=='pengeringan' else getattr(r,'waktu',None)
                     if jenis=='transfer' else getattr(r,'waktu_selesai',None)) for r in rows}

@@ -16,7 +16,7 @@ status gudang — laporan memberi tahu, layar ini menyelesaikan.
 """
 from __future__ import annotations
 
-from app.performa import baca_sekali
+from app.performa import baca_sekali, tampilan_singkat
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -767,13 +767,21 @@ async def _asal(db: AsyncSession, batch_ids) -> list[tuple[str, str, str]]:
     """
     if not batch_ids:
         return []
+    return (await _asal_banyak(db, {0: batch_ids}))[0]
+
+
+async def _asal_banyak(db, per_kartu):
+    """Asal yang sama untuk banyak kartu, dengan dua pembacaan seluruhnya."""
+    ids = {bid for batch_ids in per_kartu.values() for bid in batch_ids}
+    if not ids:
+        return {key: [] for key in per_kartu}
     baris = (await db.execute(
-        select(PurchaseBatch.kode_batch, PurchaseBatch.berat_total_kg,
+        select(PurchaseBatch.id, PurchaseBatch.kode_batch, PurchaseBatch.berat_total_kg,
                PurchaseBatch.tanggal_pembelian, Supplier.nama_supplier,
                PurchaseBatch.sumber_berat, PurchaseBatch.berat_perkiraan_kg,
                PurchaseBatch.jasa_id)
         .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
-        .where(PurchaseBatch.id.in_(list(batch_ids)))
+        .where(PurchaseBatch.id.in_(ids))
         .order_by(PurchaseBatch.id)
     )).all()
     # ⚠ Satu tempat yang memberi nama ke SEPULUH kartu. `isouter` sudah ada, jadi
@@ -782,10 +790,12 @@ async def _asal(db: AsyncSession, batch_ids) -> list[tuple[str, str, str]]:
     # siapa" membuat kartunya tak bisa dikerjakan. Satu perbaikan di sini
     # menutup kesepuluh kartu sekaligus; membetulkannya per kartu berarti
     # sembilan kesempatan melewatkan satu.
-    peta = await nama_pemilik_banyak(db, {b[6] for b in baris})
-    return [(f"{nama or peta.get(jasa_id) or '?'} · {kode}",
+    peta = await nama_pemilik_banyak(db, {b[7] for b in baris})
+    hasil = {bid: (f"{nama or peta.get(jasa_id) or '?'} · {kode}",
              dari_nilai(kg, sumber, perk).teks(), f"masuk {_tgl(tgl)}")
-            for kode, kg, tgl, nama, sumber, perk, jasa_id in baris]
+            for bid, kode, kg, tgl, nama, sumber, perk, jasa_id in baris}
+    return {key: [hasil[bid] for bid in sorted(set(batch_ids)) if bid in hasil]
+            for key, batch_ids in per_kartu.items()}
 
 
 #: Sebanyak-banyaknya baris asal yang ditampilkan satu kartu. Sesudah daftarnya
@@ -1766,6 +1776,7 @@ def _cap_gudang(b: Berjalan, gid: str) -> Berjalan:
     return b
 
 
+@tampilan_singkat
 async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan:
     """Pekerjaan operator Gudang 1, dari truk masuk sampai giling ditutup.
 
@@ -2401,6 +2412,7 @@ _DI_MANA = {
 }
 
 
+@tampilan_singkat
 async def untuk_gudang2(db: AsyncSession, *, read_scope=None) -> Berjalan:
     """Pekerjaan Gudang 2: PK yang datang dari luar, dan penyosohan.
 
@@ -3344,6 +3356,7 @@ async def _kartu_qc_gabah(db: AsyncSession) -> list[Baris]:
     return kartu
 
 
+@tampilan_singkat
 async def untuk_staff(db: AsyncSession) -> Berjalan:
     """Yang tertahan menunggu keputusan staff/Direksi — bukan pekerjaan fisik.
 
@@ -3375,28 +3388,29 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     # penjaga bobot di `timbang_link`, dan barisnya tetap berdiri untuk
     # keuangan. Yang berhenti cuma menagihnya di layar.
 
-    from app.models import MillingProcessSource
-    from app.penggilingan.gudang1.services.drying import _lot_batches
+    from app.models import MillingProcessSource, DryingLotBatch
 
     selesai = (await db.execute(
-        select(MillingProcess).where(MillingProcess.status == "selesai")
+        select(MillingProcess).where(MillingProcess.status == "selesai",
+            ~select(MillingQcLog.id).where(MillingQcLog.milling_process_id == MillingProcess.id).exists())
         .order_by(MillingProcess.id.desc())
-    )).scalars().all()
+    )).scalars().all() if mutu_aktif else []
+    sumber = (await db.execute(select(MillingProcessSource.milling_process_id,
+        MillingProcessSource.purchase_batch_id, MillingProcessSource.drying_lot_id)
+        .where(MillingProcessSource.milling_process_id.in_([p.id for p in selesai])))).all() if selesai else []
+    lot_ids = {lid for _,_,lid in sumber if lid}
+    lot_batches = {}
+    for lid,bid in (await db.execute(select(DryingLotBatch.drying_lot_id,
+            DryingLotBatch.purchase_batch_id).where(DryingLotBatch.drying_lot_id.in_(lot_ids)))).all() if lot_ids else []:
+        lot_batches.setdefault(lid,set()).add(bid)
+    per_proses = {p.id: set() for p in selesai}
+    for pid,bid,lid in sumber:
+        if bid:per_proses[pid].add(bid)
+        if lid:per_proses[pid].update(lot_batches.get(lid,()))
+    peta_asal = await _asal_banyak(db, per_proses)
     for p in selesai:
-        sumber = (await db.execute(
-            select(MillingProcessSource.purchase_batch_id,
-                   MillingProcessSource.drying_lot_id)
-            .where(MillingProcessSource.milling_process_id == p.id))).all()
-        bid = [x[0] for x in sumber if x[0]]
-        for _, lid in sumber:
-            if lid:
-                bid += [x.id for x in await _lot_batches(db, lid)]
-        asal = await _asal(db, set(bid))
-        ada_qc = (await db.execute(
-            select(func.count()).select_from(MillingQcLog)
-            .where(MillingQcLog.milling_process_id == p.id)
-        )).scalar_one() if mutu_aktif else 1
-        if not ada_qc:
+        asal = peta_asal[p.id]
+        if mutu_aktif:
             b.meja.append(Baris(
                 kode=p.kode_proses, isi="giling selesai, mutu belum diperiksa",
                 keadaan="", aksi="qc_giling", nilai=p.kode_proses,

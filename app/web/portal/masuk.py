@@ -1,4 +1,5 @@
 """Susun daftar penerimaan pelanggan untuk komponen daftar Produksi."""
+from app.performa import dalam
 from urllib.parse import urlencode
 from sqlalchemy import select
 
@@ -10,7 +11,7 @@ async def daftar(db,scope,penerimaan,request):
     native={r['id']:r for r in await riwayat(db,g1=True,g2=True,jasa_ids=scope.jasa_ids)
         if r['id'] in scope.resources.get('timbangan_transaksi',())}
     batches={b.kode_batch:b for model in (PurchaseBatch,PkPurchaseBatch)
-        for b in (await db.scalars(select(model).where(model.id.in_(scope.ids(model)),
+        for b in (await db.scalars(select(model).where(dalam(db, model.id, scope.ids(model)),
             model.timbangan_transaksi_id.is_(None)))).all()}
     rows=[]
     for t in penerimaan:

@@ -3,6 +3,7 @@
 ID pelanggan adalah batas pengelompokan; nama, nomor urut dan status pesanan
 tidak pernah dipakai untuk menebak kepemilikan atau alokasi hasil campuran.
 """
+from app.performa import dalam
 from urllib.parse import urlencode
 
 from app.performa import baca_sekali
@@ -40,34 +41,24 @@ def pesanan_baris(j):
 
 
 async def daftar(db, *, cari='', status='', halaman=1):
-    rows = (await db.execute(select(Pelanggan.id, Pelanggan.nama_pelanggan,
-                                   Jasa.id, Jasa.status)
-        .join(Jasa, Jasa.pelanggan_id==Pelanggan.id)
-        .order_by(Pelanggan.nama_pelanggan, Pelanggan.id, Jasa.id))).all()
-    grup = {}
-    for pid,nama,jid,s in rows:
-        g = grup.setdefault(pid, dict(id=pid,nama=nama,pesanan=[],status=set()))
-        g['pesanan'].append(jid)
-        g['status'].add(s)
-    tickets=(await db.execute(text("SELECT DISTINCT p.id,p.nama_pelanggan FROM pelanggan p JOIN timbangan_transaksi t ON t.pelanggan_id=p.id WHERE t.arah='MASUK' AND t.jasa=TRUE"))).all()
-    for pid,nama in tickets:
-        grup.setdefault(pid,dict(id=pid,nama=nama,pesanan=[],status=set()))
-    # Filter status menentukan pelanggan yang ditawarkan. Ringkasannya selalu
-    # membaca SELURUH pesanannya agar pesanan selesai/batal tidak menyamarkan
-    # barang yang ternyata masih tersisa.
-    ids = [pid for pid,g in grup.items() if (not status or status in g['status'])
-           and (not cari or cari.casefold() in g['nama'].casefold())]
+    """Pilih sepuluh pelanggan di SQL sebelum membaca saldo per pelanggan."""
+    from sqlalchemy import func
+    ada_jasa = select(Jasa.id).where(Jasa.pelanggan_id==Pelanggan.id).exists()
+    ada_tiket = text("EXISTS (SELECT 1 FROM timbangan_transaksi t WHERE t.pelanggan_id=pelanggan.id AND t.arah='MASUK' AND t.jasa=TRUE)")
+    q = select(Pelanggan.id).where(or_(ada_jasa,ada_tiket))
+    if status:
+        q=q.where(select(Jasa.id).where(Jasa.pelanggan_id==Pelanggan.id,Jasa.status==status).exists())
     if cari:
-        kode = (await db.scalars(select(Jasa.pelanggan_id).where(
-            Jasa.kode.ilike('%'+cari+'%')))).all()
-        ids = list(dict.fromkeys(ids+[pid for pid in kode if pid in grup
-                    and (not status or status in grup[pid]['status'])]))
-    jumlah = len(ids)
-    akhir = max(1,(jumlah+9)//10)
-    halaman = min(max(halaman,1),akhir)
-    g1,g2 = await stok.pk_gudang1(db), await stok.pk_gudang2(db)
-    kartu = [await pelanggan(db,pid,rinci=False,pk=(g1,g2))
-             for pid in ids[(halaman-1)*10:halaman*10]]
+        pola='%'+cari.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+        q=q.where(or_(Pelanggan.nama_pelanggan.ilike(pola,escape='\\'),
+            select(Jasa.id).where(Jasa.pelanggan_id==Pelanggan.id,Jasa.kode.ilike(pola,escape='\\')).exists()))
+    jumlah=await db.scalar(select(func.count()).select_from(q.subquery()))
+    akhir=max(1,(jumlah+9)//10)
+    halaman=min(max(halaman,1),akhir)
+    ids=list((await db.scalars(q.order_by(Pelanggan.nama_pelanggan,Pelanggan.id)
+        .offset((halaman-1)*10).limit(10))).all())
+    g1,g2 = (await stok.pk_gudang1(db),await stok.pk_gudang2(db)) if ids else ([],[])
+    kartu=[await pelanggan(db,pid,rinci=False,pk=(g1,g2),rincian={'tab':'daftar'}) for pid in ids]
     return dict(kartu=kartu,jumlah=jumlah,halaman=halaman,akhir=akhir)
 
 
@@ -99,10 +90,11 @@ def halaman_pesanan(rows, pilihan):
                 cari=cari, status=status, fokus_di_luar_filter=di_luar_filter)
 
 
-async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None, ringkasan_pesanan=None):
+async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None, ringkasan_pesanan=None, kebutuhan=None, rincian=None):
     p = await db.get(Pelanggan,pid)
-    orders = list((await db.scalars(select(Jasa).where(Jasa.pelanggan_id==pid)
-                                  .order_by(Jasa.id.desc()))).all())
+    orders = (await db.execute(select(Jasa.id,Jasa.kode,Jasa.status,Jasa.catatan,
+        Jasa.created_at,Jasa.digabung_ke_id).where(Jasa.pelanggan_id==pid)
+        .order_by(Jasa.id.desc()))).all()
     ada_tiket=await db.scalar(text("SELECT EXISTS(SELECT 1 FROM timbangan_transaksi WHERE arah='MASUK' AND jasa=TRUE AND pelanggan_id=:pid)"),{'pid':pid}) if not orders else True
     if p is None or not ada_tiket:
         return None
@@ -115,106 +107,148 @@ async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None, ringkasan_
         d['pesanan_paginasi'] = halaman_pesanan(d['pesanan'], ringkasan_pesanan)
     # Per pelanggan SATU panggilan dengan semua pesanan; hasil campuran tidak
     # pernah disalin sebagai saldo penuh ke setiap pesanan asal.
-    produk = await stok.stok_produk(db,jasa_id=sorted(ids)) if ids else []
-    g1,g2 = pk if pk is not None else (await stok.pk_gudang1(db),await stok.pk_gudang2(db))
-    for gudang,rows in [('g1',g1),('g2',g2)]:
-        for r in rows:
-            if r.jasa_id not in ids:
+    baca_stok = kebutuhan in (None,'beranda','barang')
+    baca_masuk = kebutuhan in (None,'beranda','masuk')
+    baca_proses = kebutuhan in (None,'beranda','jasa')
+    if baca_stok:
+        produk = await stok.stok_produk(db,jasa_id=sorted(ids)) if ids else []
+        g1,g2 = pk if pk is not None else (await stok.pk_gudang1(db),await stok.pk_gudang2(db))
+        for gudang,rows in [('g1',g1),('g2',g2)]:
+            for r in rows:
+                if r.jasa_id not in ids:
+                    continue
+                d['pk_kg'] += r.tersedia
+                ident = r.kode if gudang=='g1' else r.intake_id
+                href = '/stok/pk/detail?' + urlencode({'gudang':gudang,'kode' if gudang=='g1' else 'id':ident,'jasa':1})
+                final = not r.berjalan and not r.belum_dicatat if gudang=='g1' else r.bobot_final
+                d['stok'].append(dict(nama='PK',kode=r.kode,kg=r.tersedia,
+                    lokasi='Tumpukan · Gudang '+('1' if gudang=='g1' else '2'),
+                    final=final,href=href,pesanan=kode.get(r.jasa_id),rincian=r.bahan))
+                if gudang=='g1' and r.belum_dicatat:
+                    d['stok'][-1]['kg']=None
+        for k in produk:
+            if abs(k.sisa_kg)<0.0001 and not k.alarm:
                 continue
-            d['pk_kg'] += r.tersedia
-            ident = r.kode if gudang=='g1' else r.intake_id
-            href = '/stok/pk/detail?' + urlencode({'gudang':gudang,'kode' if gudang=='g1' else 'id':ident,'jasa':1})
-            final = not r.berjalan and not r.belum_dicatat if gudang=='g1' else r.bobot_final
-            d['stok'].append(dict(nama='PK',kode=r.kode,kg=r.tersedia,
-                lokasi='Tumpukan · Gudang '+('1' if gudang=='g1' else '2'),
-                final=final,href=href,pesanan=kode.get(r.jasa_id),rincian=r.bahan))
-            if gudang=='g1' and r.belum_dicatat:
-                d['stok'][-1]['kg']=None
-    for k in produk:
-        if abs(k.sisa_kg)<0.0001 and not k.alarm:
-            continue
-        bidang = 'beras_kg' if stok.adalah_beras(k.jenis) else 'samping_kg'
-        d[bidang] += k.sisa_kg
-        d['stok'].append(dict(nama=k.nama,kode='Saldo per pelanggan',kg=k.sisa_kg,
-            lokasi='Gudang 2',final=not bool(k.belum_final_kg),pesanan=None,
-            href='/stok-produk-jasa/detail?'+urlencode(dict(pelanggan_id=pid,jenis=k.jenis)),
-            rincian=[(x.kode,kg_rinci(x.kg),x.ket or '') for x in k.hasil],
-            kemasan_kg=k.dikemas_kg,curah_kg=k.curah_kg))
+            bidang = 'beras_kg' if stok.adalah_beras(k.jenis) else 'samping_kg'
+            d[bidang] += k.sisa_kg
+            d['stok'].append(dict(nama=k.nama,kode='Saldo per pelanggan',kg=k.sisa_kg,
+                lokasi='Gudang 2',final=not bool(k.belum_final_kg),pesanan=None,
+                href='/stok-produk-jasa/detail?'+urlencode(dict(pelanggan_id=pid,jenis=k.jenis)),
+                rincian=[(x.kode,kg_rinci(x.kg),x.ket or '') for x in k.hasil],
+                kemasan_kg=k.dikemas_kg,curah_kg=k.curah_kg))
     from app.penggilingan.gudang1.services.bobot import dari_batch
     from app.penggilingan.gudang1.services.silo import _row_bobot
-    batches = list((await db.scalars(select(PurchaseBatch).where(PurchaseBatch.jasa_id.in_(ids)))).all())
-    for b in batches:
-        if b.status_batch in ('baru','ditumpuk','di_dryer','dikeringkan'):
-            bobot = dari_batch(b)
-            d['stok'].append(dict(nama='Gabah '+b.kondisi_gabah,kode=b.kode_batch,
-                kg=bobot.kg if bobot.diketahui else None,final=bobot.pasti,
-                lokasi=('Pengering · Gudang 1' if b.status_batch in ('di_dryer','dikeringkan') else 'Menunggu penempatan · Gudang 1' if b.status_batch=='baru' else 'Tumpukan · Gudang 1'),
-                pesanan=kode[b.jasa_id],href='/barang-masuk/'+str(b.timbangan_transaksi_id) if b.timbangan_transaksi_id else '',rincian=[]))
-    for r,nama in (await db.execute(select(SiloStorage,Silo.nama_silo).join(Silo,Silo.id==SiloStorage.silo_id)
-            .where(SiloStorage.jasa_id.in_(ids),SiloStorage.status=='terisi'))).all():
-        b = await _row_bobot(db,r)
-        d['stok'].append(dict(nama='Gabah · bahan proses',kode=nama,kg=b.kg if b.diketahui else None,
-            final=b.pasti, lokasi='Silo · Gudang 1',pesanan=kode[r.jasa_id],href='',rincian=[]))
-    from app.models import GabahKeringLot
-    from app.penggilingan.gudang1.services.gabah_kering import pending_gabah_kering_kg
-    for lot in (await db.scalars(select(GabahKeringLot).where(GabahKeringLot.jasa_id.in_(ids)))).all():
-        kg = await pending_gabah_kering_kg(db,lot.id)
-        if kg>0:
-            d['stok'].append(dict(nama='Gabah kering ditimbang',kode=lot.kode_lot,kg=kg,final=True,
-                lokasi='Tumpukan · Gudang 1',pesanan=kode[lot.jasa_id],href='',rincian=[]))
+    q_batches=select(PurchaseBatch.id,PurchaseBatch.jasa_id,PurchaseBatch.status_batch,
+        PurchaseBatch.kode_batch,PurchaseBatch.kondisi_gabah,PurchaseBatch.berat_total_kg,
+        PurchaseBatch.sumber_berat,PurchaseBatch.berat_perkiraan_kg,PurchaseBatch.retur_supplier_keluar_kg,
+        PurchaseBatch.timbangan_transaksi_id,PurchaseBatch.waktu_pembelian).where(dalam(db, PurchaseBatch.jasa_id, ids))
+    if not baca_masuk:q_batches=q_batches.where(PurchaseBatch.status_batch.in_(('baru','ditumpuk','di_dryer','dikeringkan')))
+    elif kebutuhan=='beranda':
+        # Beranda hanya membutuhkan tanda penerimaan, bukan daftar lengkap.
+        terakhir=select(PurchaseBatch.id).where(dalam(db,PurchaseBatch.jasa_id,ids),
+            PurchaseBatch.timbangan_transaksi_id.is_(None),PurchaseBatch.status_batch!='ditolak').order_by(PurchaseBatch.id.desc()).limit(1)
+        q_batches=q_batches.where(or_(PurchaseBatch.status_batch.in_(('baru','ditumpuk','di_dryer','dikeringkan')),PurchaseBatch.id.in_(terakhir)))
+    batches = (await db.execute(q_batches)).all() if baca_stok or baca_masuk else []
+    if baca_stok:
+        for b in batches:
+            if b.status_batch in ('baru','ditumpuk','di_dryer','dikeringkan'):
+                bobot = dari_batch(b)
+                d['stok'].append(dict(nama='Gabah '+b.kondisi_gabah,kode=b.kode_batch,
+                    kg=bobot.kg if bobot.diketahui else None,final=bobot.pasti,
+                    lokasi=('Pengering · Gudang 1' if b.status_batch in ('di_dryer','dikeringkan') else 'Menunggu penempatan · Gudang 1' if b.status_batch=='baru' else 'Tumpukan · Gudang 1'),
+                    pesanan=kode[b.jasa_id],href='/barang-masuk/'+str(b.timbangan_transaksi_id) if b.timbangan_transaksi_id else '',rincian=[]))
+        for r,nama in (await db.execute(select(SiloStorage,Silo.nama_silo).join(Silo,Silo.id==SiloStorage.silo_id)
+                .where(dalam(db, SiloStorage.jasa_id, ids),SiloStorage.status=='terisi'))).all():
+            b = await _row_bobot(db,r)
+            d['stok'].append(dict(nama='Gabah · bahan proses',kode=nama,kg=b.kg if b.diketahui else None,
+                final=b.pasti, lokasi='Silo · Gudang 1',pesanan=kode[r.jasa_id],href='',rincian=[]))
+        from app.models import GabahKeringLot
+        from app.penggilingan.gudang1.services.gabah_kering import pending_gabah_kering_kg
+        for lot in (await db.scalars(select(GabahKeringLot).where(dalam(db, GabahKeringLot.jasa_id, ids)))).all():
+            kg = await pending_gabah_kering_kg(db,lot.id)
+            if kg>0:
+                d['stok'].append(dict(nama='Gabah kering ditimbang',kode=lot.kode_lot,kg=kg,final=True,
+                    lokasi='Tumpukan · Gudang 1',pesanan=kode[lot.jasa_id],href='',rincian=[]))
     # Riwayat penerimaan yang sudah dicatat tetap memakai pembaca Barang
     # Masuk; tiket asal terpisah dari pesanan pemilik catatan saat ini.
-    from app.services.barang_masuk import riwayat
-    diterima = await riwayat(db,g1=True,g2=True,jasa_ids=ids)
-    for t in diterima:
-        cat = [c for c in t['catatan'] if c['jasa_id'] in ids]
-        if not cat:
-            continue
-        d['penerimaan'].append(dict(id=t['id'],kode=t['kode'],jenis=t['jenis_nama'] or t['jenis_kode'],
-            catatan=cat,pesanan=kode.get(t['jasa_id'],'Pesanan asal belum tersedia'),
-            status=t['status_tiket'],href=f"/barang-masuk/{t['id']}"))
-    # Batch warisan tanpa FK tiket tidak dihilangkan atau dicocokkan lewat nama.
-    for b in batches:
-        if not b.timbangan_transaksi_id:
-            d['penerimaan'].append(dict(id=None,kode=b.kode_batch,jenis='Gabah '+b.kondisi_gabah,
-                catatan=[dict(berat=b.berat_total_kg,sumber_berat=b.sumber_berat,waktu=b.waktu_pembelian,status=b.status_batch)],
-                pesanan=kode[b.jasa_id],status='Tautan tiket belum tersedia',href=''))
-    for pkl in (await db.scalars(select(PkPurchaseBatch).where(PkPurchaseBatch.jasa_id.in_(ids),PkPurchaseBatch.timbangan_transaksi_id.is_(None)))).all():
-        d['penerimaan'].append(dict(id=None,kode=pkl.kode_batch,jenis='PK',
-            catatan=[dict(berat=pkl.berat_total_kg,sumber_berat=pkl.sumber_berat,waktu=pkl.waktu_pembelian,status=pkl.status_batch)],
-            pesanan=kode[pkl.jasa_id],status='Tautan tiket belum tersedia',href=''))
+    if baca_masuk:
+        from app.services.barang_masuk import riwayat
+        diterima = await riwayat(db,g1=True,g2=True,jasa_ids=ids,batas_per_jenis=1 if kebutuhan=='beranda' else None)
+        for t in diterima:
+            cat = [c for c in t['catatan'] if c['jasa_id'] in ids]
+            if not cat:
+                continue
+            d['penerimaan'].append(dict(id=t['id'],kode=t['kode'],jenis=t['jenis_nama'] or t['jenis_kode'],
+                catatan=cat,pesanan=kode.get(t['jasa_id'],'Pesanan asal belum tersedia'),
+                status=t['status_tiket'],href=f"/barang-masuk/{t['id']}"))
+        # Batch warisan tanpa FK tiket tidak dihilangkan atau dicocokkan lewat nama.
+        for b in batches:
+            if not b.timbangan_transaksi_id:
+                d['penerimaan'].append(dict(id=None,kode=b.kode_batch,jenis='Gabah '+b.kondisi_gabah,
+                    catatan=[dict(berat=b.berat_total_kg,sumber_berat=b.sumber_berat,waktu=b.waktu_pembelian,status=b.status_batch)],
+                    pesanan=kode[b.jasa_id],status='Tautan tiket belum tersedia',href=''))
+        for pkl in (await db.scalars(select(PkPurchaseBatch).where(dalam(db, PkPurchaseBatch.jasa_id, ids),PkPurchaseBatch.timbangan_transaksi_id.is_(None)).limit(1) if kebutuhan=='beranda' else
+                select(PkPurchaseBatch).where(dalam(db,PkPurchaseBatch.jasa_id,ids),PkPurchaseBatch.timbangan_transaksi_id.is_(None)))).all():
+            d['penerimaan'].append(dict(id=None,kode=pkl.kode_batch,jenis='PK',
+                catatan=[dict(berat=pkl.berat_total_kg,sumber_berat=pkl.sumber_berat,waktu=pkl.waktu_pembelian,status=pkl.status_batch)],
+                pesanan=kode[pkl.jasa_id],status='Tautan tiket belum tersedia',href=''))
     # Pending diambil dari kartu operasional di rute pemanggil; pembaca ini
     # tidak menawarkan penerimaan yang tidak ditawarkan sumber lama.
-    pols = list((await db.scalars(select(PolishingProcess).where(PolishingProcess.jasa_id.in_(ids)).order_by(PolishingProcess.id.desc()))).all())
-    dryers = list((await db.scalars(select(DryingLot).where(DryingLot.jasa_id.in_(ids)))).all())
-    mills = list((await db.scalars(select(MillingProcess).where(MillingProcess.jasa_id.in_(ids)))).all())
-    transfers = list((await db.scalars(select(InternalTransfer).where(InternalTransfer.jasa_id.in_(ids)))).all())
-    for jenis,rows,attr,prefix in [('pengeringan',dryers,'kode_lot','riwayat-pengeringan'),('giling',mills,'kode_proses','riwayat-giling'),('transfer',transfers,'kode_transfer','riwayat-transfer'),('sosoh',pols,'kode_proses','riwayat-sosoh')]:
-        for r in rows:
-            aktif = jenis!='transfer' and r.status=='proses'
-            if aktif:
-                d['berjalan'] += 1
-            kode_r = getattr(r,attr)
-            d['proses'].append(dict(id=r.id,jenis=jenis,kode=kode_r,status=r.status,
-                pesanan=kode.get(r.jasa_id),href=f'/proses-aktif/{jenis}/{kode_r}' if aktif else f'/{prefix}/{r.id}',
-                sumber=[],hasil=None))
+    proses_sql = kebutuhan is None and rincian is not None
+    if proses_sql:
+        d['proses'],d['proses_jumlah'],d['berjalan'],pag = await _proses_halaman(db,pid,rincian)
+        if pag is not None:d['rincian_paginasi']=pag
+    else:
+        pols = list((await db.execute(select(PolishingProcess.id,PolishingProcess.jasa_id,PolishingProcess.status,PolishingProcess.kode_proses).where(dalam(db, PolishingProcess.jasa_id, ids),
+            PolishingProcess.status=='proses' if kebutuhan else True).order_by(PolishingProcess.id.desc()))).all()) if baca_proses else []
+        dryers = list((await db.execute(select(DryingLot.id,DryingLot.jasa_id,DryingLot.status,DryingLot.kode_lot).where(dalam(db, DryingLot.jasa_id, ids),
+            or_(DryingLot.status=='proses', (DryingLot.status=='selesai') & DryingLot.waktu_selesai_pendinginan.is_(None)) if kebutuhan else True))).all()) if baca_proses else []
+        mills = list((await db.execute(select(MillingProcess.id,MillingProcess.jasa_id,MillingProcess.status,MillingProcess.kode_proses).where(dalam(db, MillingProcess.jasa_id, ids),
+            MillingProcess.status=='proses' if kebutuhan else True))).all()) if baca_proses else []
+        transfers = list((await db.execute(select(InternalTransfer.id,InternalTransfer.jasa_id,InternalTransfer.status,InternalTransfer.kode_transfer).where(dalam(db, InternalTransfer.jasa_id, ids)))).all()) if kebutuhan is None else []
+        for jenis,rows,attr,prefix in [('pengeringan',dryers,'kode_lot','riwayat-pengeringan'),('giling',mills,'kode_proses','riwayat-giling'),('transfer',transfers,'kode_transfer','riwayat-transfer'),('sosoh',pols,'kode_proses','riwayat-sosoh')]:
+            for r in rows:
+                aktif = jenis!='transfer' and r.status=='proses'
+                if aktif:
+                    d['berjalan'] += 1
+                kode_r = getattr(r,attr)
+                d['proses'].append(dict(id=r.id,jenis=jenis,kode=kode_r,status=r.status,
+                    pesanan=kode.get(r.jasa_id),href=f'/proses-aktif/{jenis}/{kode_r}' if aktif else f'/{prefix}/{r.id}',
+                    sumber=[],hasil=None))
+    d['penerimaan_jumlah']=len(d['penerimaan'])
+    d.setdefault('proses_jumlah',len(d['proses']))
+    tab_rinci=rincian.get('tab') if rincian is not None else None
+    if tab_rinci=='penerimaan' or (tab_rinci=='proses' and not proses_sql):
+        key=tab_rinci
+        cari=str(rincian.get('cari') or '').strip()[:200]
+        rows=[r for r in d[key] if not cari or cari.casefold() in
+            ' '.join(str(r.get(k) or '') for k in ('kode','pesanan','jenis','status')).casefold()]
+        akhir=max(1,(len(rows)+24)//25)
+        try:halaman=min(akhir,max(1,int(rincian.get('halaman') or 1)))
+        except ValueError:halaman=1
+        d['rincian_paginasi']=dict(halaman=halaman,akhir=akhir,jumlah=len(rows),cari=cari)
+        d[key]=rows[(halaman-1)*25:halaman*25]
     if rinci:
         from app.services.barang_masuk import rincian_lokasi
         # Ringkasan hanya memakai jumlah penerimaan/proses. Rincian tetap
         # dibaca lengkap oleh tab masing-masing dan pemanggil lama.
-        for t in d['penerimaan'] if ringkasan_pesanan is None else []:
+        for t in d['penerimaan'] if ringkasan_pesanan is None and tab_rinci in (None,'penerimaan') else []:
             if t['id'] is not None:
                 t['lokasi'],t['proses'],_=await rincian_lokasi(db,t['catatan'])
         from app.services.jasa import boleh_ditutup,pernah_ada_barang
         ditampilkan = {r['id'] for r in d['pesanan_paginasi']['baris']} if ringkasan_pesanan is not None else None
         for j,r in zip(orders,d['pesanan']):
+            if read_scope is not None or tab_rinci not in (None,'ringkasan'):
+                # Proyeksi pelanggan tidak menawarkan aksi tutup/batal.
+                continue
             if ditampilkan is not None and (j.id not in ditampilkan or j.status!='berjalan'):
                 continue
             r['boleh_tutup'],r['sebab'] = await boleh_ditutup(db,j.id)
             r['boleh_batal'] = j.status=='berjalan' and not await pernah_ada_barang(db,j.id)
-        for r in d['proses'] if ringkasan_pesanan is None else []:
+        for r in d['proses'] if ringkasan_pesanan is None and tab_rinci in (None,'proses') else []:
             await _sumber_proses(db,r,ids)
-        await _pengiriman(db,d,ids,read_scope=read_scope)
+        if tab_rinci in (None,'ringkasan','pengambilan'):
+            await _pengiriman(db,d,ids,read_scope=read_scope)
     if d['pk_kg']>0:
         d['kondisi'].append('PK tersisa')
     if d['beras_kg']>0 or d['samping_kg']>0:
@@ -224,6 +258,40 @@ async def pelanggan(db, pid, *, rinci=True, pk=None, read_scope=None, ringkasan_
     if any(r['nama'].startswith('Gabah') for r in d['stok']):
         d['kondisi'].append('Bahan masih di pabrik')
     return d
+
+
+async def _proses_halaman(db, pid, rincian):
+    """Hitung riwayat di database; hanya 25 proses yang perlu diperkaya."""
+    from sqlalchemy import func,literal,union_all
+    specs=[('pengeringan',DryingLot,'kode_lot'),('giling',MillingProcess,'kode_proses'),
+           ('transfer',InternalTransfer,'kode_transfer'),('sosoh',PolishingProcess,'kode_proses')]
+    queries=[]
+    for urut,(jenis,model,col) in enumerate(specs):
+        queries.append(select(model.id.label('id'),literal(jenis).label('jenis'),
+            literal(urut).label('urut'),getattr(model,col).label('kode'),model.status.label('status'),
+            Jasa.kode.label('pesanan')).join(Jasa,Jasa.id==model.jasa_id).where(Jasa.pelanggan_id==pid))
+    semua=union_all(*queries).subquery()
+    jumlah,aktif=(await db.execute(select(func.count(),func.count().filter(
+        semua.c.jenis!='transfer',semua.c.status=='proses')).select_from(semua))).one()
+    if rincian is None or rincian.get('tab')!='proses':return [],jumlah,aktif,None
+    cari=str(rincian.get('cari') or '').strip()[:200]
+    q=select(semua)
+    if cari:
+        pola='%'+cari.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+        q=q.where(or_(*(getattr(semua.c,k).ilike(pola,escape='\\') for k in ('kode','pesanan','jenis','status'))))
+    total=await db.scalar(select(func.count()).select_from(q.subquery())) if cari else jumlah
+    akhir=max(1,(total+24)//25)
+    try:halaman=min(akhir,max(1,int(rincian.get('halaman') or 1)))
+    except ValueError:halaman=1
+    rows=(await db.execute(q.order_by(semua.c.urut,semua.c.id.desc()).offset((halaman-1)*25).limit(25))).mappings()
+    hasil=[]
+    for r in rows:
+        aktif_r=r['jenis']!='transfer' and r['status']=='proses'
+        prefix={'pengeringan':'pengeringan','giling':'giling','transfer':'transfer','sosoh':'sosoh'}[r['jenis']]
+        href=f"/proses-aktif/{r['jenis']}/{r['kode']}" if aktif_r else f"/riwayat-{prefix}/{r['id']}"
+        hasil.append(dict(id=r['id'],jenis=r['jenis'],kode=r['kode'],status=r['status'],
+            pesanan=r['pesanan'],href=href,sumber=[],hasil=None))
+    return hasil,jumlah,aktif,dict(halaman=halaman,akhir=akhir,jumlah=total,cari=cari)
 
 
 @baca_sekali
@@ -243,7 +311,7 @@ async def saring_kartu(db, rows, pid):
 
 async def _sumber_proses(db,r,ids):
     if r['jenis']=='pengeringan':
-        for b in (await db.scalars(select(PurchaseBatch).join(DryingLotBatch,DryingLotBatch.purchase_batch_id==PurchaseBatch.id).where(DryingLotBatch.drying_lot_id==r['id'],PurchaseBatch.jasa_id.in_(ids)))).all():
+        for b in (await db.scalars(select(PurchaseBatch).join(DryingLotBatch,DryingLotBatch.purchase_batch_id==PurchaseBatch.id).where(DryingLotBatch.drying_lot_id==r['id'],dalam(db, PurchaseBatch.jasa_id, ids)))).all():
             r['sumber'].append(dict(kode=b.kode_batch,kg=None,ket='Bobot masuk pada penerimaan; bukan berat setelah kering',href=f'/barang-masuk/{b.timbangan_transaksi_id}' if b.timbangan_transaksi_id else ''))
     elif r['jenis']=='giling':
         sources = (await db.scalars(select(MillingProcessSource).where(MillingProcessSource.milling_process_id==r['id']))).all()
@@ -313,16 +381,16 @@ async def _sumber_sosoh(db,r,ids):
 async def _pengiriman(db,d,ids,*,read_scope=None):
     from app.penggilingan.inventory.models import CustomerReturn,CustomerReturnItem
     rows=(await db.execute(select(OutgoingRecord,OutgoingItem).join(OutgoingItem,OutgoingItem.outgoing_record_id==OutgoingRecord.id)
-          .where(OutgoingItem.jasa_id.in_(ids),
-                 OutgoingRecord.id.in_(read_scope.ids(OutgoingRecord)) if read_scope is not None else True).order_by(OutgoingRecord.id.desc(),OutgoingItem.id))).all()
+          .where(dalam(db, OutgoingItem.jasa_id, ids),
+                 dalam(db, OutgoingRecord.id, read_scope.ids(OutgoingRecord)) if read_scope is not None else True).order_by(OutgoingRecord.id.desc(),OutgoingItem.id))).all()
     grouped={}
     for o,i in rows:
         g=grouped.setdefault(o.id,dict(id=o.id,kode=o.kode,status=o.status,href=f'/barang-keluar/{o.id}',item=[]))
         g['item'].append(dict(jenis=i.item_type,kg=i.berat_kg,pesanan_id=i.jasa_id))
     d['pengiriman']=list(grouped.values())
     rs=(await db.scalars(select(CustomerReturn).join(CustomerReturnItem,CustomerReturnItem.customer_return_id==CustomerReturn.id)
-        .where(or_(CustomerReturnItem.jasa_id.in_(ids),CustomerReturn.pelanggan_id==d['id']),
-               CustomerReturn.id.in_(read_scope.ids(CustomerReturn)) if read_scope is not None else True)
+        .where(or_(dalam(db, CustomerReturnItem.jasa_id, ids),CustomerReturn.pelanggan_id==d['id']),
+               dalam(db, CustomerReturn.id, read_scope.ids(CustomerReturn)) if read_scope is not None else True)
         .distinct().order_by(CustomerReturn.id.desc()))).all()
     # Relasi item adalah bukti asal; nama pelanggan/tanggal/bobot bukan.
     # Dibaca sekaligus agar banyak retur tidak menambah satu query per asal.
@@ -336,8 +404,13 @@ async def _pengiriman(db,d,ids,*,read_scope=None):
             .distinct().order_by(CustomerReturnItem.customer_return_id,OutgoingRecord.id))).all()
         for rid,oid,kode_asal in asal_rows:
             asal_per_retur.setdefault(rid,[]).append(dict(id=oid,kode=kode_asal,href=f'/barang-keluar/{oid}'))
+    pemilik_per_retur={}
+    if rs:
+        for rid,jid in (await db.execute(select(CustomerReturnItem.customer_return_id,CustomerReturnItem.jasa_id)
+                .where(CustomerReturnItem.customer_return_id.in_([x.id for x in rs])))).all():
+            pemilik_per_retur.setdefault(rid,set()).add(jid)
     for x in rs:
-        pemilik=set((await db.scalars(select(CustomerReturnItem.jasa_id).where(CustomerReturnItem.customer_return_id==x.id))).all())
+        pemilik=pemilik_per_retur.get(x.id,set())
         status='Milik pabrik' if pemilik=={None} else 'Titipan jasa' if pemilik<=set(ids) else 'Kepemilikan per item'
         d['retur'].append(dict(id=x.id,kode=x.kode,href=f'/retur/{x.id}',asal=asal_per_retur.get(x.id,[]),
             status='Retur · '+status+('' if asal_per_retur.get(x.id) else ' · Pengeluaran asal belum tertaut')))

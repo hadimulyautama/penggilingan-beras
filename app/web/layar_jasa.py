@@ -45,19 +45,23 @@ async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
         data=await svc.daftar(db,cari=cari,status=tapis,halaman=halaman)
         b=await berjalan.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
         k=bagi(b)
+        tindakan_ids={id(x) for x in k.tindakan}
+        masuk_ids={id(x) for x in k.masuk}
         for d in data['kartu']:
             cocok=await svc.saring_kartu(db,k.tindakan+k.masuk,d['id'])
-            d['pekerjaan']=sum(x in k.tindakan for x in cocok)
-            _tambah_tiket(d,[x for x in cocok if x in k.masuk])
+            d['pekerjaan']=sum(id(x) in tindakan_ids for x in cocok)
+            _tambah_tiket(d,[x for x in cocok if id(x) in masuk_ids])
     return await render_laci(
         request,"jasa.html",layar='jasa',**data,tapis=tapis,cari=cari,
         STATUS_PILIHAN=svc.STATUS,kg=svc.kg_rinci)
 
 
 def _tambah_tiket(d,rows):
+    kode_ada={x['kode'] for x in d['penerimaan']}
     for r in rows:
-        if any(x['kode']==r.kode for x in d['penerimaan']):
+        if r.kode in kode_ada:
             continue
+        kode_ada.add(r.kode)
         d['penerimaan'].append(dict(id=None,kode=r.kode,jenis=r.judul or r.isi,
             catatan=[],pesanan='Mengikuti tiket asal',status='Belum diterima',
             href='/barang-masuk?'+urlencode(
@@ -82,15 +86,19 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
                          (request.query_params.get('nilai') if request.query_params.get('buka') in ('tutup_jasa','batalkan_jasa') else ''))
     async with SessionLocal() as db:
         d=await svc.pelanggan(db,pelanggan_id,read_scope=getattr(request.state,'portal_scope',None),
-                              ringkasan_pesanan=pilihan if tab=='ringkasan' else None)
+                              ringkasan_pesanan=pilihan if tab=='ringkasan' else None,
+                              rincian=dict(tab=tab,halaman=request.query_params.get('rincian_halaman','1'),
+                                           cari=request.query_params.get('rincian_cari','')))
         if d is None:
             raise HTTPException(404,'Pelanggan jasa tidak ditemukan.')
         b=await berjalan.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
         k=bagi(b)
         cocok=await svc.saring_kartu(db,k.tindakan+k.berjalan+k.informasi+k.masuk,pelanggan_id)
-        d['pekerjaan']=sum(x in k.tindakan for x in cocok)
-        _tambah_tiket(d,[x for x in cocok if x in k.masuk])
-    params={k:v for k,v in request.query_params.items() if k in ('status','cari','halaman','pesanan_halaman','pesanan_cari','pesanan_status')}
+        tindakan_ids={id(x) for x in k.tindakan}
+        masuk_ids={id(x) for x in k.masuk}
+        d['pekerjaan']=sum(id(x) in tindakan_ids for x in cocok)
+        _tambah_tiket(d,[x for x in cocok if id(x) in masuk_ids])
+    params={k:v for k,v in request.query_params.items() if k in ('status','cari','halaman','pesanan_halaman','pesanan_cari','pesanan_status','rincian_halaman','rincian_cari')}
     pag=d.get('pesanan_paginasi')
     if pag and (pag['akhir']>1 or any(k.startswith('pesanan_') for k in request.query_params)):
         params.update(pesanan_halaman=str(pag['halaman']),pesanan_cari=pag['cari'],pesanan_status=pag['status'])
@@ -102,6 +110,7 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
         kerja_href='/pekerjaan?'+urlencode(dict(pelanggan_id=pelanggan_id)),
         masuk_href='/barang-masuk?'+urlencode(dict(pelanggan_id=pelanggan_id)),
         pesanan_href=lambda halaman:'?'+urlencode({'tab':'ringkasan',**params,'pesanan_halaman':halaman}),
+        rincian_href=lambda halaman:'?'+urlencode({'tab':tab,**params,'rincian_halaman':halaman}),
         pesanan_query={k:v for k,v in params.items() if k.startswith('pesanan_')},
         PESANAN_STATUS=svc.STATUS,
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''))

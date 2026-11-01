@@ -7,6 +7,7 @@ ORM; SQL tiket hanya membaca metadata Timbangan dan tidak menulis ke sana.
 from collections import defaultdict
 from decimal import Decimal
 from sqlalchemy import select, text, bindparam
+from app.performa import dalam
 from app.models import PurchaseBatch, PkPurchaseBatch, FinishedGoodsStock, ByproductStock
 from app.penggilingan.peta_jenis import intake_dari_jenis
 
@@ -187,7 +188,7 @@ async def tiket_riwayat(db, tid):
     return {**dict(r), 'berat_hpp_kg':None, 'sumber_berat':'lihat catatan penerimaan'} if r else None
 
 
-async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None):
+async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None, batas_per_jenis=None):
     # Sumbernya sama dengan pemeriksaan tiket yang telah tertaut. Tidak
     # memakai saldo tersedia sebagai tanda diterima: barang yang sudah habis
     # diproses tetap memiliki catatan penerimaan.
@@ -204,13 +205,17 @@ async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None):
     for model, kolom, jenis in specs:
         q = select(model).where(kolom.is_not(None))
         if jasa_ids is not None:
-            q=q.where(model.jasa_id.in_(jasa_ids))
+            q=q.where(dalam(db,model.jasa_id,jasa_ids))
         if tid is not None:
             q = q.where(kolom == tid)
         if ids_tiket is not None:
             q = q.where(kolom.in_(ids_tiket))
         if jenis in ('beras', 'broken'):
             q = q.where(model.source_type == 'timbangan')
+        if batas_per_jenis is not None:
+            if jenis=='gabah':q=q.where(model.status_batch!='ditolak')
+            if jenis=='pk':q=q.where(model.status_batch.not_in(('baru','ditolak')))
+            q=q.order_by(model.id.desc()).limit(batas_per_jenis)
         for x in (await db.scalars(q)).all():
             hasil[int(getattr(x, kolom.key))].append({
                 'id': x.id, 'model': jenis,

@@ -1,7 +1,11 @@
 """Trusted read capability: identity comes exclusively from the customer session."""
+from app.performa import dalam
 from dataclasses import dataclass
+from functools import cached_property
+from types import MappingProxyType
 from fastapi import HTTPException
 from sqlalchemy import select, text
+from types import SimpleNamespace
 from app.database import SessionLocal
 from app.models import (Jasa, PurchaseBatch, PkPurchaseBatch, DryingLot,
                         MillingProcess, PolishingProcess, InternalTransfer)
@@ -23,6 +27,16 @@ class ReadScope:
     codes: frozenset[str]
     resources: dict[str, frozenset[int]]
 
+    def __post_init__(self):
+        # Scope baca tidak boleh berubah setelah lolos pemeriksaan sumber.
+        object.__setattr__(self,'resources',MappingProxyType({k:frozenset(v) for k,v in self.resources.items()}))
+
+    @cached_property
+    def kunci_performa(self):
+        # Semua batas pemilik/sumber tetap masuk kunci, dihitung sekali
+        # selama request, bukan menyalin ribuan ID untuk setiap memo kecil.
+        return (type(self),self.reader,self.jasa_ids,self.codes,frozenset(self.resources.items()))
+
     def ids(self, model):
         return self.resources.get(model.__tablename__, frozenset())
 
@@ -40,13 +54,22 @@ async def load_scope(reader):
         objects = {}
         models = set(m for m, _ in MODELS.values()) | {PkGudang2Intake}
         for model in models:
-            objects[model] = {r.id:r for r in (await db.scalars(select(model).where(model.jasa_id.in_(ids)))).all()}
+            # Capability hanya membutuhkan identitas dan relasi sumber;
+            # catatan/angka detail dibaca di halaman detail yang diminta.
+            names = {'id','jasa_id'} | {col for m,col in MODELS.values() if m is model}
+            names.update({MillingProcess: ('purchase_batch_id','drying_lot_id'),
+                InternalTransfer: ('milling_process_id',),
+                PkGudang2Intake: ('internal_transfer_id','pk_purchase_batch_id'),
+                PolishingProcess: ('waktu_mulai','waktu_selesai')}.get(model,()))
+            rows=(await db.execute(select(*(getattr(model,n) for n in sorted(names)))
+                .where(dalam(db, model.jasa_id, ids)))).mappings().all()
+            objects[model] = {r['id']:SimpleNamespace(**r) for r in rows}
         # Fail closed on inconsistent imports / mixed physical lots. An owner
         # label alone must not authorize somebody else's source batch.
         drying = objects[DryingLot]
         sources = (await db.execute(select(DryingLotBatch.drying_lot_id, PurchaseBatch.jasa_id)
             .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
-            .where(DryingLotBatch.drying_lot_id.in_(drying)))).all()
+            .where(dalam(db, DryingLotBatch.drying_lot_id, drying)))).all()
         for lid, jid in sources:
             if jid not in ids:drying.pop(lid, None)
         mills = objects[MillingProcess]
@@ -54,7 +77,9 @@ async def load_scope(reader):
             if ((proc.purchase_batch_id and proc.purchase_batch_id not in objects[PurchaseBatch]) or
                 (proc.drying_lot_id and proc.drying_lot_id not in drying)):
                 mills.pop(mid,None)
-        for source in (await db.scalars(select(MillingProcessSource).where(MillingProcessSource.milling_process_id.in_(mills)))).all():
+        for source in (await db.execute(select(MillingProcessSource.milling_process_id,
+                MillingProcessSource.purchase_batch_id,MillingProcessSource.drying_lot_id)
+                .where(dalam(db, MillingProcessSource.milling_process_id, mills)))).all():
             if ((source.purchase_batch_id and source.purchase_batch_id not in objects[PurchaseBatch]) or
                 (source.drying_lot_id and source.drying_lot_id not in drying)):
                 mills.pop(source.milling_process_id, None)
@@ -70,14 +95,14 @@ async def load_scope(reader):
         resources = {m.__tablename__:frozenset(rows) for m,rows in objects.items()}
         codes = {getattr(r,col) for m,col in set(MODELS.values()) for r in objects[m].values()}
         outs = (await db.scalars(select(OutgoingRecord).where(OutgoingRecord.id.in_(
-            select(OutgoingItem.outgoing_record_id).where(OutgoingItem.jasa_id.in_(ids)))))).all()
+            select(OutgoingItem.outgoing_record_id).where(dalam(db, OutgoingItem.jasa_id, ids)))))).all()
         outitems = (await db.scalars(select(OutgoingItem).where(OutgoingItem.outgoing_record_id.in_([x.id for x in outs])))).all()
         grouped = {}
         for item in outitems:grouped.setdefault(item.outgoing_record_id,[]).append(item.jasa_id)
         outids = frozenset(o.id for o in outs if grouped.get(o.id) and all(j in ids for j in grouped[o.id]))
         resources[OutgoingRecord.__tablename__] = outids
         rets = (await db.scalars(select(CustomerReturn).where(CustomerReturn.id.in_(
-            select(CustomerReturnItem.customer_return_id).where(CustomerReturnItem.jasa_id.in_(ids)))))).all()
+            select(CustomerReturnItem.customer_return_id).where(dalam(db, CustomerReturnItem.jasa_id, ids)))))).all()
         retitems = (await db.scalars(select(CustomerReturnItem).where(CustomerReturnItem.customer_return_id.in_([x.id for x in rets])))).all()
         grouped = {}
         for item in retitems:grouped.setdefault(item.customer_return_id,[]).append(item.jasa_id)
@@ -144,7 +169,7 @@ async def own_model(scope, kind, identity, *, by_code=False):
     if kind not in MODELS:missing()
     model,column = MODELS[kind]
     async with SessionLocal() as db:
-        row = await db.scalar(select(model).where(model.id.in_(scope.ids(model)),
+        row = await db.scalar(select(model).where(dalam(db, model.id, scope.ids(model)),
             (getattr(model,column)==identity) if by_code else (model.id==identity)))
     if row is None:missing()
     return row

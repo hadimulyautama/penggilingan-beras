@@ -3,6 +3,7 @@
 Semua bobot berasal dari pembaca produksi. Asal batch hanya rincian untuk
 penelusuran, tidak masuk penjumlahan kedua. Tidak menulis stok atau transaksi.
 """
+from app.performa import dalam
 from decimal import Decimal
 from urllib.parse import parse_qs,urlsplit
 
@@ -99,7 +100,7 @@ async def baca(db,scope,d):
         return asal
 
     # Gabah sebelum pengeringan: satu catatan per batch.
-    batches=(await db.scalars(select(PurchaseBatch).where(PurchaseBatch.id.in_(scope.ids(PurchaseBatch)),
+    batches=(await db.scalars(select(PurchaseBatch).where(dalam(db, PurchaseBatch.id, scope.ids(PurchaseBatch)),
         PurchaseBatch.status_batch.in_(('baru','ditumpuk'))))).all()
     for b in batches:
         rows.append(_baris('gabah','Gabah '+b.kondisi_gabah,b.kode_batch,dari_batch(b),
@@ -113,7 +114,7 @@ async def baca(db,scope,d):
             mesin.nama if mesin else 'Mesin pengering',status='Menunggu pengeringan',
             asal=[_batch(b,scope)],href=_batch(b,scope)['href'],identitas=('batch',b.id)))
     # Lot yang sudah pindah ke silo tidak dihitung lagi di mesin.
-    lots=list((await db.scalars(select(DryingLot).where(DryingLot.id.in_(scope.ids(DryingLot)),
+    lots=list((await db.scalars(select(DryingLot).where(dalam(db, DryingLot.id, scope.ids(DryingLot)),
         DryingLot.status=='proses',~exists().where(SiloStorage.drying_lot_id==DryingLot.id)))).all())
     for selesai in (False,True):
         lots.extend(await berjalan._lot(db,pendinginan_selesai=selesai))
@@ -134,7 +135,7 @@ async def baca(db,scope,d):
             asal=[_batch(b,scope) for b in bs],href=href,identitas=('pengeringan',lot.id)))
         if info:rows[-1]['bobot_pengeringan']=[info]
     storages=(await db.execute(select(SiloStorage,Silo.nama_silo).join(Silo,Silo.id==SiloStorage.silo_id)
-        .where(SiloStorage.jasa_id.in_(scope.jasa_ids),SiloStorage.status=='terisi'))).all()
+        .where(dalam(db, SiloStorage.jasa_id, scope.jasa_ids),SiloStorage.status=='terisi'))).all()
     estimates_silo=await untuk_silo_banyak(db,{row.silo_id for row,_ in storages})
     for row,nama in storages:
         asal=await asal_storage(row)
@@ -148,14 +149,14 @@ async def baca(db,scope,d):
             status='Sedang digiling' if proses and proses.kode_proses in scope.codes else 'Menunggu penggilingan',
             asal=asal,identitas=('silo-gabah',row.id)))
         if info:rows[-1]['bobot_pengeringan']=info
-    for lot in (await db.scalars(select(GabahKeringLot).where(GabahKeringLot.jasa_id.in_(scope.jasa_ids)))).all():
+    for lot in (await db.scalars(select(GabahKeringLot).where(dalam(db, GabahKeringLot.jasa_id, scope.jasa_ids)))).all():
         kg=await pending_gabah_kering_kg(db,lot.id)
         if kg<=0:continue
         asal=await asal_storage(await db.get(SiloStorage,lot.silo_storage_id))
         if asal:rows.append(_baris('gabah','Gabah kering',lot.kode_lot,Bobot(kg,PASTI),
             'Tumpukan · Gudang 1',asal=asal,status='Sudah ditimbang',identitas=('gabah-kering',lot.id)))
 
-    for pk in (await db.scalars(select(PkPurchaseBatch).where(PkPurchaseBatch.id.in_(scope.ids(PkPurchaseBatch)),
+    for pk in (await db.scalars(select(PkPurchaseBatch).where(dalam(db, PkPurchaseBatch.id, scope.ids(PkPurchaseBatch)),
         PkPurchaseBatch.status_batch=='diterima',~exists().where(PkGudang2Intake.pk_purchase_batch_id==PkPurchaseBatch.id)))).all():
         href=f'/riwayat-qc/pk-luar/{pk.kode_batch}'
         rows.append(_baris('pk',NAMA['pk'],pk.kode_batch,dari_batch(pk),'Gudang 2',
@@ -206,7 +207,7 @@ async def baca(db,scope,d):
         proses=await db.scalar(select(PolishingProcess).join(PolishingSiloUsage,
             PolishingSiloUsage.polishing_process_id==PolishingProcess.id).where(
                 PolishingSiloUsage.silo_id==silo.id,PolishingSiloUsage.berat_akhir_kg.is_(None),
-                PolishingProcess.id.in_(scope.ids(PolishingProcess)),PolishingProcess.status=='proses'))
+                dalam(db, PolishingProcess.id, scope.ids(PolishingProcess)),PolishingProcess.status=='proses'))
         # Asal hanya dari isian saat ini. Bobot asal adalah pemasukan, bukan
         # alokasi sisa per batch: pembaca komposisi hanya menetapkan komoditas.
         kosong=await db.scalar(select(func.max(PolishingProcess.waktu_selesai)).join(

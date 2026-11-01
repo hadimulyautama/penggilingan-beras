@@ -19,8 +19,9 @@ disosoh — dan menempelkannya di halaman yang sama akan membuat satu layar
 menjawab dua pertanyaan sekaligus.
 """
 from __future__ import annotations
+from app.performa import dalam
 
-from app.performa import baca_sekali
+from app.performa import baca_sekali, tampilan_singkat
 
 from dataclasses import dataclass, field
 
@@ -288,7 +289,7 @@ async def _bahan_banyak(db: AsyncSession, proses) -> dict[int, tuple[list, list[
 
     sumber = list((await db.execute(
         select(MillingProcessSource)
-        .where(MillingProcessSource.milling_process_id.in_(ids))
+        .where(dalam(db, MillingProcessSource.milling_process_id, ids))
         .order_by(MillingProcessSource.id))).scalars().all())
     per_proses: dict[int, list] = {}
     for s in sumber:
@@ -480,6 +481,7 @@ def _keadaan_minta(status: str) -> str:
 
 
 @baca_sekali
+@tampilan_singkat
 async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     """Tiap lot giling yang PK-nya masih tersisa di Gudang 1, terbaru dulu.
 
@@ -491,14 +493,22 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         pk_breakdown_banyak,
     )
 
-    proses = list((await db.execute(
-        select(MillingProcess).order_by(MillingProcess.id.desc())
-    )).scalars().all())
+    proses = (await db.execute(select(MillingProcess.id,MillingProcess.status)
+        .order_by(MillingProcess.id.desc()))).all()
     # Satu panggilan untuk SELURUH proses, bukan empat kueri per proses.
     # Layar ini membaca setiap giling yang pernah ada, jadi dengan data
     # setahun gelung lamanya sendirian mengeluarkan ribuan kueri untuk
     # menghasilkan belasan baris. Temuan QA P-S-02.
     rincian = await pk_breakdown_banyak(db, [p.id for p in proses])
+    # QC dan asal hanya untuk lot yang benar-benar akan ditampilkan.
+    # Riwayat lot habis tetap ikut rumus saldo di atas, tetapi ribuan asal
+    # dan sampel mutunya tidak perlu dibangun lalu langsung dibuang.
+    proses = [p for p in proses if rincian[p.id].tersedia > 0 or
+        (p.status == 'selesai' and rincian[p.id].produced <= 0
+         and rincian[p.id].transferred <= 0)]
+    proses = list((await db.scalars(select(MillingProcess)
+        .where(dalam(db,MillingProcess.id,[p.id for p in proses]))
+        .order_by(MillingProcess.id.desc()))).all()) if proses else []
     # Nilai QC untuk seluruh lot sekaligus. Satu kueri, bukan satu per lot.
     peta_mutu = await _mutu_banyak(db, [p.id for p in proses])
     peta_bahan = await _bahan_banyak(db, proses)
@@ -772,7 +782,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     saldo = await sisa_tumpukan_banyak(db, intakes)
     karung_dipindah = dict((await db.execute(select(PkTumpukanToSilo.pk_gudang2_intake_id,
         func.coalesce(func.sum(PkTumpukanToSilo.jumlah_karung), 0))
-        .where(PkTumpukanToSilo.pk_gudang2_intake_id.in_(ids))
+        .where(dalam(db, PkTumpukanToSilo.pk_gudang2_intake_id, ids))
         .group_by(PkTumpukanToSilo.pk_gudang2_intake_id))).all())
     batches_karung = {b.id: b for b in (await db.execute(select(PkPurchaseBatch).where(
         PkPurchaseBatch.id.in_([i.pk_purchase_batch_id for i in intakes if i.pk_purchase_batch_id])))).scalars().all()}
@@ -1023,7 +1033,7 @@ async def output_sosoh_banyak(db: AsyncSession, proc_ids=None
         ids = list(proc_ids)
         if not ids:
             return {}
-        q = q.where(PolishingOutputLog.polishing_process_id.in_(ids))
+        q = q.where(dalam(db, PolishingOutputLog.polishing_process_id, ids))
     keluar: dict[int, dict[str, float]] = {}
     for pid, jenis, kg in (await db.execute(q)).all():
         keluar.setdefault(pid, {})[jenis] = float(kg)

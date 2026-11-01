@@ -1,4 +1,5 @@
 """Identitas dan waktu catatan pelanggan; tidak menulis keadaan produksi."""
+from app.performa import dalam
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_,func,select
@@ -60,7 +61,7 @@ async def baca(db,scope,permintaan):
         codes={kode for tipe,kode in permintaan if tipe==jenis}
         if not codes:continue
         model,col=MODELS[jenis]
-        rows=(await db.scalars(select(model).where(model.id.in_(scope.ids(model)),
+        rows=(await db.scalars(select(model).where(dalam(db, model.id, scope.ids(model)),
             getattr(model,col).in_(codes)))).all()
         ids=[r.id for r in rows]
         events={i:[] for i in ids}
@@ -68,7 +69,7 @@ async def baca(db,scope,permintaan):
             # Log pengeringan/giling memakai ID proses sebagai record_id.
             for ident,catat,batal in (await db.execute(select(ActivityLog.record_id,
                 func.max(ActivityLog.waktu_perubahan),func.max(ActivityLog.dibatalkan_pada))
-                .where(ActivityLog.table_name.in_(tables),ActivityLog.record_id.in_(ids))
+                .where(ActivityLog.table_name.in_(tables),dalam(db, ActivityLog.record_id, ids))
                 .group_by(ActivityLog.record_id))).all():
                 events[ident].extend((w,label) for w in (catat,batal))
         async def log(table,fk,waktu,label):

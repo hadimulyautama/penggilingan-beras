@@ -1,4 +1,5 @@
 """Customer routes call production read composers after exact ownership checks."""
+from app.performa import dalam
 import re
 from collections import OrderedDict
 from types import SimpleNamespace
@@ -203,7 +204,7 @@ async def reports(request):
         from app.models import Jasa,PolishingSiloUsage,PolishingProcess
         # Pesanan asal yang digabung bukan dokumen tambahan. Tampilkan rekap
         # utama sekali; URL rekap lama tetap dilayani oleh pembaca produksi.
-        orders=(await db.scalars(select(Jasa).where(Jasa.id.in_(scope.jasa_ids),
+        orders=(await db.scalars(select(Jasa).where(dalam(db, Jasa.id, scope.jasa_ids),
             Jasa.status!='digabung').order_by(Jasa.id.desc()))).all()
         from app.services.serah_terima import daftar as daftar_serah
         serah=await daftar_serah(db,scope=scope)
@@ -211,10 +212,10 @@ async def reports(request):
         # Pembaca PDF sosoh memerlukan rincian pemakaian silo. Proses lama
         # tanpa rincian itu masih dapat dibuka, tetapi PDF native belum ada.
         bahan_sosoh=set((await db.scalars(select(PolishingSiloUsage.polishing_process_id).where(
-            PolishingSiloUsage.polishing_process_id.in_(scope.ids(PolishingProcess))))).all())
+            dalam(db, PolishingSiloUsage.polishing_process_id, scope.ids(PolishingProcess))))).all())
         for kind in ('pengeringan','giling','sosoh'):
             model,col=MODELS[kind]
-            for row in (await db.scalars(select(model).where(model.id.in_(scope.ids(model))).order_by(model.id.desc()))).all():
+            for row in (await db.scalars(select(model).where(dalam(db, model.id, scope.ids(model))).order_by(model.id.desc()))).all():
                 finished=(row.waktu_selesai_pendinginan is not None if kind=='pengeringan' else row.status=='selesai')
                 if finished:rows.append(dict(kind=kind,code=getattr(row,col),id=row.id,
                     tanggal=row.waktu_selesai_pendinginan if kind=='pengeringan' else row.waktu_selesai,

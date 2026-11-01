@@ -65,9 +65,10 @@ async def siapkan_daftar_pekerjaan(request, user):
             from app.models import Pelanggan
             p=await db.get(Pelanggan,pid)
             pelanggan_saring=p.nama_pelanggan if p else 'Pelanggan tidak ditemukan'
-        k.tindakan=[r for r in k.tindakan if r in cocok]
-        k.berjalan=[r for r in k.berjalan if r in cocok]
-        k.informasi=[r for r in k.informasi if r in cocok]
+        cocok_ids={id(r) for r in cocok}
+        k.tindakan=[r for r in k.tindakan if id(r) in cocok_ids]
+        k.berjalan=[r for r in k.berjalan if id(r) in cocok_ids]
+        k.informasi=[r for r in k.informasi if id(r) in cocok_ids]
     return b, k, pelanggan_saring
 
 
@@ -98,6 +99,7 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
     kategori = pilihan(request,'kategori',dict(svc.GRUP_KEPUTUSAN))
     asal = request.query_params.get('asal','')
     tindakan, berjalan, informasi, total_tindakan, total_jalan = daftar_tab_pekerjaan(k, pemilik, gudang, jenis)
+    berjalan_ids = {id(x) for x in berjalan}
     if request.url.path=='/aksi' and 'tab' not in request.query_params and grup and not any(svc.grup_baris(x)==grup for x in tindakan) and any(svc.grup_baris(x)==grup for x in informasi):
         tab='berjalan'
     dasar = tindakan if tab == 'tindakan' else berjalan+informasi
@@ -108,7 +110,8 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
         dasar = [x for x in dasar if golongan_mutu(x.aksi)]
     elif asal == 'keputusan':
         from app.services.keputusan import golongan_mutu
-        dasar = [x for x in dasar if x in b.meja and not golongan_mutu(x.aksi)]
+        meja_ids = {id(x) for x in b.meja}
+        dasar = [x for x in dasar if id(x) in meja_ids and not golongan_mutu(x.aksi)]
     if kategori:
         dasar = [x for x in dasar if svc.grup_keputusan(x) == kategori]
     if grup and grup in dict(svc.GRUP_ANTREAN):
@@ -116,8 +119,25 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
     per_jenis = [(key,nama,sum(jenis_kerja(x)==key for x in dasar)) for key,nama in JENIS_KERJA]
     daftar = [x for x in dasar if not jenis or jenis_kerja(x)==jenis]
     from app.web.pekerjaan_ringkas import ringkasan_proses
-    ringkasan_jalan=ringkasan_proses([x for x in daftar if x in berjalan])
+    ringkasan_jalan=ringkasan_proses([x for x in daftar if id(x) in berjalan_ids])
     if tab=='berjalan':total_jalan=ringkasan_jalan['jumlah']
+    jumlah_informasi=sum(id(x) not in berjalan_ids for x in daftar)
+    nama_saring = sorted({x.judul for x in daftar if x.judul})
+    cari = request.query_params.get('cari','').strip()[:200].casefold()
+    pemasok = request.query_params.get('pemasok','')
+    if cari:
+        daftar = [x for x in daftar if cari in ' '.join(str(v or '') for v in
+            (x.kode,x.judul,x.isi,x.sub,x.utama,x.fakta,x.anak)).casefold()]
+    if pemasok:
+        daftar = [x for x in daftar if x.judul == pemasok]
+    # Semua pekerjaan tetap dihitung; hanya kartu halaman terpilih dikirim
+    # ke browser. Pencarian diterapkan sebelum LIMIT tampilan, sehingga
+    # pekerjaan lama tetap ditemukan walaupun berada di halaman berikutnya.
+    jumlah_daftar = len(daftar)
+    halaman_akhir = max(1,(jumlah_daftar+49)//50)
+    try: halaman = min(halaman_akhir,max(1,int(request.query_params.get('halaman','1'))))
+    except ValueError: halaman = 1
+    daftar = daftar[(halaman-1)*50:halaman*50]
     from app.services.proses_aktif import alamat_detail
     konteks = '/pekerjaan?' + urlencode({q:v for q,v in request.query_params.items() if q not in ('buka','nilai')})
     def detail(x):
@@ -130,14 +150,15 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
     from app.main import _pintasan_aksi
     from app.web.layar import view_untuk
     konteks_tampilan = dict(ringkasan_jalan=ringkasan_jalan,detail_transfer_pk=detail_transfer_pk,layar='pekerjaan',tab=tab,jenis=jenis,
-        daftar=daftar,proses=[x for x in daftar if x in berjalan],
-        informasi=[x for x in daftar if x not in berjalan],
+        daftar=daftar,proses=[x for x in daftar if id(x) in berjalan_ids],
+        informasi=[x for x in daftar if id(x) not in berjalan_ids],
+        jumlah_daftar=jumlah_daftar,jumlah_informasi=jumlah_informasi,halaman=halaman,halaman_akhir=halaman_akhir,
         kelompok=[(key,nama,[x for x in daftar if jenis_kerja(x)==key]) for key,nama in JENIS_KERJA],
         total_tindakan=total_tindakan,total_jalan=total_jalan,per_jenis=per_jenis,pelanggan_saring=pelanggan_saring,
         href=lambda **p:tautan(request,'/pekerjaan',**p),alamat_detail_proses=detail,
         lama=svc._lama,PINTASAN=_pintasan_aksi(await view_untuk(akun.user)),
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''),
-        gudang=gudang,nama_saring=sorted({x.judul for x in daftar if x.judul}))
+        gudang=gudang,nama_saring=nama_saring)
     if detail_transfer_pk:
         return render(request, "pekerjaan_dengan_transfer.html", **konteks_tampilan, **b.lencana())
     return render(request, "pekerjaan.html", **konteks_tampilan, **b.lencana())

@@ -23,7 +23,7 @@
 </header>
 {% if request.query_params.get('grup') or request.query_params.get('asal') or request.query_params.get('kategori') %}<p class="bantu">Saringan dari tautan lama aktif. <a href="{{ href(grup='',asal='',kategori='',jenis='') }}">Lihat semua pekerjaan</a>.</p>{% endif %}
 {% if tab=='tindakan' %}
-<p class="bantu">{{ daftar|length }} pekerjaan perlu tindakan. Penerimaan tiket ada di <a href="/barang-masuk">Barang Masuk</a>.</p>
+<p class="bantu">{{ jumlah_daftar }} pekerjaan perlu tindakan. Penerimaan tiket ada di <a href="/barang-masuk">Barang Masuk</a>.</p>
 {% for key,nama,baris in kelompok %}
 {{ benda.blok(nama,baris,alamat=request.url.path,listview=true,tabel='packing' if key=='packing' else false) }}
 {% endfor %}
@@ -31,19 +31,20 @@
 {% else %}
 <section class="pekerjaan-ringkasan" aria-label="Ringkasan proses">
 <strong>{{ ringkasan_jalan.jumlah }} proses belum selesai</strong>
-<p>{{ informasi|length }} informasi pendukung · dihitung terpisah</p>
+<p>{{ jumlah_informasi }} informasi pendukung · dihitung terpisah</p>
 {% if ringkasan_jalan.status %}<p>{% for nama,n in ringkasan_jalan.status %}{{ ' · ' if not loop.first }}{{ nama }} {{ n }}{% endfor %}</p>{% endif %}
 {% if request.query_params.get('informasi') == '1' %}<p><a href="{{ href(informasi='') }}">Lihat semua proses dan informasi</a></p>{% endif %}
 <p class="bantu">Pencarian kartu menampilkan jumlah kecocokan tersendiri; angka tab tetap mencakup proses pada filter aktif.</p>
 </section>
 {% include '_pekerjaan_berjalan_ringkas.html' %}
 {% if not proses %}<div class="kosong"><div><h2>Tidak ada proses yang sedang berlangsung pada filter ini</h2><p class="bantu">{{ 'Informasi pendukung tetap tersedia di bawah.' if informasi else 'Coba filter lain; pekerjaan yang perlu tindakan tersedia di tab Perlu tindakan.' }}</p></div></div>{% endif %}
-{% if informasi %}<details class="pekerjaan-informasi"><summary>Informasi pendukung · {{ informasi|length }}</summary>
+{% if informasi %}<details class="pekerjaan-informasi"><summary>Informasi pendukung · {{ jumlah_informasi }}</summary>
 <p class="bantu">Informasi ini tidak menambah angka proses. Tugas wajib tetap berada di Perlu tindakan sesuai kewenangan.</p>
 {{ benda.blok('Status & informasi',informasi,alamat=request.url.path,listview=true) }}
 </details>{% endif %}
 <style>.pekerjaan-ringkasan{padding:1rem;border:1px solid var(--garis);border-radius:.7rem;margin-block:1rem}.pekerjaan-ringkasan p{margin:.4rem 0}.pekerjaan-informasi>summary{padding:1rem;cursor:pointer;font-weight:650}.pekerjaan-informasi{margin-block:1rem;min-width:0}</style>
 {% endif %}
+{% if halaman_akhir and halaman_akhir>1 %}<nav class="saring" aria-label="Halaman pekerjaan"><span class="bantu">Halaman {{ halaman }} dari {{ halaman_akhir }} · {{ jumlah_daftar }} pekerjaan</span>{% if halaman>1 %}<a class="btn btn--kecil" href="{{ href(halaman=halaman-1) }}">← Sebelumnya</a>{% endif %}{% if halaman<halaman_akhir %}<a class="btn btn--kecil" href="{{ href(halaman=halaman+1) }}">Berikutnya →</a>{% endif %}</nav>{% endif %}
 {% if not MUTU_AKTIF and VIEW in V_MEJA %}<p class="bantu">Pencatatan mutu dimatikan di Pengaturan. Tugas QC tidak ditagih.</p>{% endif %}
 {% if PINTASAN %}<div class="saring">{% set dasar=benda.dasar_borang(request.url.path) %}{% for id,nama in PINTASAN %}<a class="btn btn--kecil" href="{{ dasar }}buka={{ id }}">{{ nama }}</a>{% endfor %}</div>{% endif %}
 
