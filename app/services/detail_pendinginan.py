@@ -65,7 +65,9 @@ async def lengkapi(db, *, lot, detail, riwayat=None):
                         selesai=_waktu(selesai) if selesai else 'Belum dinyatakan',
                         lama=_lama(mulai, selesai or kini), aktif=selesai is None))
     lama = _lama(mulai, selesai or kini)
-    detail.update(lot_id=lot.id, riwayat_putaran_lengkap=terpadu is not None, status=status, tahap=3 if sumber else 2 if selesai else 1,
+    from app.services.estimasi_pengeringan import untuk_lot_banyak
+    bobot = (await untuk_lot_banyak(db, [lot]))[lot.id]
+    detail.update(bobot_pengeringan=bobot, lot_id=lot.id, riwayat_putaran_lengkap=terpadu is not None, status=status, tahap=3 if sumber else 2 if selesai else 1,
                   lokasi=lokasi, pindah_waktu=_waktu(sumber[1]) if sumber else 'Belum dipindahkan',
                   dingin_waktu=_waktu(selesai) if selesai else 'Belum dinyatakan',
                   putaran=putaran, lama_pendinginan=lama, laporan_tersedia=selesai is not None,

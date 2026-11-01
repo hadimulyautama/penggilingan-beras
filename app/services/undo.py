@@ -1234,6 +1234,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str
     tag = getattr(log, "aksi", None)
     # Tag eksplisit juga menentukan penolakan. Jangan menebak nama tabel
     # lebih dulu: koreksi ini memiliki alur pembatalan khusus di riwayat.
+    if tag == "catat_bobot_kering_terukur":
+        raise UndoError("Catatan flowing scale dikoreksi melalui Bobot hasil pengeringan; undo umum tidak mengubah lot atau stoknya.")
     if tag == "koreksi_hasil_giling":
         raise UndoError(
             "Koreksi hasil giling tidak dibatalkan lewat undo umum. "

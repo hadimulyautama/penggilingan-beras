@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% from '_bobot_pengeringan.html' import dua_bobot %}
+{% block kepala_ekstra %}<style>[data-bobot-pengeringan] [hidden]{display:none!important}[data-form-bobot]>label{display:block;margin-top:16px}[data-form-bobot] input:not([type=checkbox]),[data-form-bobot] textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px}</style>{% endblock %}
+{% block judul %}Bobot hasil pengeringan{% endblock %}
+{% block isi %}
+<section class="kartu" style="padding:20px;max-width:760px;margin:auto" data-bobot-pengeringan>
+<h1>Bobot hasil pengeringan · {{ d.kode }}</h1>
+{{ dua_bobot([d.bobot]) }}
+<p class="bantu">Estimasi tersedia dari indikator mesin. Isi bobot pasti hanya bila seluruh hasil lot ini benar-benar ditimbang dengan flowing scale. Catatan timbang ini tidak mengubah bobot penerimaan, saldo stok, atau lokasi gabah.</p>
+{% if d.terukur %}<p>Catatan terukur terakhir: {{ d.terukur.kg }} kg · {{ d.terukur.referensi }} · {{ d.terukur.waktu }}</p>{% endif %}
+<form data-form-bobot>
+<label>Bobot gabah kering dari flowing scale (kg)<input name="kg" type="number" min="0.01" step="0.01" inputmode="decimal" required value="{{ d.terukur.kg if d.terukur else '' }}"></label>
+<label>Referensi hasil flowing scale<input name="referensi" maxlength="120" required value="{{ d.terukur.referensi if d.terukur else '' }}"></label>
+<label>Alasan koreksi / catatan<textarea name="alasan" maxlength="1000" {% if d.terukur %}required{% endif %}></textarea></label>
+<label style="display:flex;gap:10px;align-items:start"><input name="konfirmasi" type="checkbox" required style="width:auto">Saya memastikan angka ini merupakan hasil flowing scale untuk seluruh gabah pada lot ini setelah pemindahan ke silo selesai.</label>
+<div class="pilihan" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px"><button class="btn" type="submit">Periksa catatan timbang</button><a class="btn" href="/riwayat-pengeringan/{{ d.lot_id }}">Kembali ke proses</a></div>
+</form>
+<section data-preview hidden style="margin-top:18px"><h2>Konfirmasi pencatatan bobot pasti</h2><p data-ringkasan></p><p>Bobot basah asal dan estimasi tetap tersedia. Tidak ada mutasi stok atau perubahan status proses.</p><button class="btn btn--utama" type="button" data-simpan>Simpan bobot terukur</button></section>
+<p data-pesan role="status" aria-live="polite"></p><button class="btn" type="button" data-baca hidden>Periksa status dan data terbaru</button>
+</section>
+<script type="application/json" id="bobot-pengeringan-awal">{{ d|tojson }}</script>
+<script src="/static/bobot-pengeringan.js?v={{ VERSI }}" defer></script>
+{% endblock %}

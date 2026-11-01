@@ -1455,19 +1455,10 @@ def peringatan_kadar_air(log) -> list[str]:
 # `milling.riwayat_giling()` — kartu TIAP lot yang SUDAH SELESAI, terbaru
 # dulu, lima-enam kueri borongan apa pun banyaknya kartu.
 #
-# ⚠⚠ TANPA SATU KOLOM PUN BERNAMA "SUSUT" — dan itu bukan kelalaian, sebab
-# tak ada satu tempat pun di seluruh basis data yang menyimpan berat gabah
-# KERING saat keluar dryer. `DryingLot` dan `SiloStorage` sama-sama tanpa
-# kolom berat; `masuk_silo()` (`silo.py`) menghitung `kg`-nya lewat
-# `_lot_kg`→`_lot_bobot`, dan itu membaca ULANG berat BASAH dari
-# `PurchaseBatch` (`dari_batches`) — bukan menimbang gabah kering yang baru
-# keluar. Satu-satunya berat KERING yang pernah tercatat adalah
-# `MillingProcessSource.berat_kg`, dan itu cuma ada kalau lotnya sudah
-# PERNAH DIGILING (sebagian, atau belum sama sekali). Jadi "susut
-# pengeringan" di sini secara jujur TIDAK BISA DIHITUNG — bukan "0%", bukan
-# "belum tersedia": tidak pernah ada cara mengukurnya hari ini. Yang
-# ditampilkan hanya yang BENAR-BENAR tercatat: bahan basah masuk, kadar air
-# terakhir, dan status silo.
+# Bobot basah tetap berasal dari penerimaan. Estimasi kering dibaca dari
+# indikator mesin oleh estimasi_pengeringan; hasil flowing scale adalah
+# catatan pengukuran terpisah sesudah pindah silo. Ketiganya tidak menjadi
+# mutasi stok baru dan tidak boleh dianggap sebagai susut terukur.
 #
 # "SELESAI" di sini = `waktu_selesai_pendinginan IS NOT NULL` — bukan cuma
 # `status=="selesai"`, yang hanya menutup fase KERINGNYA. Lot bisa
@@ -1506,6 +1497,7 @@ class KartuPengeringan:
     #: Nama silo tujuan, atau None = belum dipindah ke silo sama sekali.
     silo_tujuan: str | None
     waktu_masuk_silo: datetime | None
+    bobot_pengeringan: dict = field(default_factory=dict)
 
 
 async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
@@ -1611,6 +1603,8 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
         )).all()
     }
 
+    from app.services.estimasi_pengeringan import untuk_lot_banyak
+    dua_bobot = await untuk_lot_banyak(db, lots)
     kartu = []
     for lot in lots:
         baris = batch_per_lot.get(lot.id, [])
@@ -1653,6 +1647,6 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
             bahan_kg=bobot.angka(), bahan_final=bobot.pasti, bahan=bahan,
             ka_terakhir=_fmt_ka(log_ka),
             silo_tujuan=(nama_silo.get(sid) if sid else None),
-            waktu_masuk_silo=tgl_masuk,
+            waktu_masuk_silo=tgl_masuk, bobot_pengeringan=dua_bobot[lot.id],
         ))
     return kartu, lagi

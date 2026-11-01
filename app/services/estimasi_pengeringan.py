@@ -137,6 +137,12 @@ async def untuk_lot_banyak(db, lots):
         select(ProsesTerpadu).where(ProsesTerpadu.aplikasi == 'produksi',
             ProsesTerpadu.tabel_sumber == 'drying_lots',
             ProsesTerpadu.id_sumber.in_([str(x) for x in ids])))).all()}
+    terukur_ids={lid for lid,p in snapshots.items() if (p.metadata_domain or {}).get('bobot_kering_terukur')}
+    placements=defaultdict(set)
+    if terukur_ids:
+        for lid,sid in (await db.execute(select(SiloStorage.drying_lot_id,SiloStorage.id).where(
+                SiloStorage.drying_lot_id.in_([int(x) for x in terukur_ids])))).all():
+            placements[lid].add(sid)
     out = {}
     for lot in lots.values():
         sources = batches[lot.id]
@@ -153,6 +159,15 @@ async def untuk_lot_banyak(db, lots):
         if retur or (refs and set(refs) != {b.kode_batch for b in sources}):
             info['kering'] = None
             info['catatan'].append('Komposisi bahan berubah atau memiliki retur sumber; estimasi perlu diperiksa per lot.')
+        timbang = snapshot.get('bobot_kering_terukur') or {}
+        if not isinstance(timbang,dict):timbang={}
+        pasti = angka(timbang.get('kg'))
+        info.update(terukur=format_angka(pasti) if pasti is not None and pasti > 0
+                    and timbang.get('metode') == 'flowing_scale' and lot.waktu_selesai_pendinginan
+                    and isinstance(timbang.get('penempatan_ids'),list) and timbang['penempatan_ids']
+                    and all(isinstance(i,int) for i in timbang['penempatan_ids'])
+                    and set(timbang['penempatan_ids']).issubset(placements[lot.id]) else None,
+                    timbang_waktu=timbang.get('waktu'), timbang_petugas=timbang.get('pencatat_nama') or timbang.get('pencatat'))
         info['lot_id'] = lot.id
         out[lot.id] = info
     return out

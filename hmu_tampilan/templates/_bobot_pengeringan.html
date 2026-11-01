@@ -6,10 +6,10 @@
   {% if rows|length > 1 %}<small class="bantu">{{ e.kode }}</small>{% endif %}
   <dl style="display:grid;gap:8px;margin:0">
     <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:baseline;min-width:0"><dt style="font-size:14px;color:var(--redup,currentColor)">Bobot gabah basah masuk</dt><dd style="margin:0;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">{{ e.basah or 'Belum diketahui' }}</dd></div>
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:baseline;min-width:0"><dt style="font-size:14px;color:var(--redup,currentColor)">{{ 'Estimasi hasil drying awal' if e.historis else 'Estimasi bobot gabah kering' }}</dt><dd style="margin:0;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">{{ ('≈ ' ~ e.kering) if e.kering else 'Belum tersedia' }}</dd></div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:baseline;min-width:0"><dt style="font-size:14px;color:var(--redup,currentColor)">{{ 'Bobot gabah kering terukur' if e.terukur else 'Estimasi hasil drying awal' if e.historis else 'Estimasi bobot gabah kering' }}</dt><dd style="margin:0;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">{{ e.terukur if e.terukur else ('≈ ' ~ e.kering) if e.kering else 'Belum tersedia' }}</dd></div>
   </dl>
-  <small style="display:block;margin-top:6px;font-size:12px;color:var(--redup,currentColor)">{{ 'Estimasi awal; bukan saldo sisa saat ini.' if e.historis else 'Estimasi · belum ditimbang' }}</small>
-  {% if not e.kering and e.catatan %}<p class="bantu" style="margin:6px 0 0;font-size:13px;line-height:1.6">{{ e.catatan[-1] }}</p>{% endif %}
+  <small style="display:block;margin-top:6px;font-size:12px;color:var(--redup,currentColor)">{{ 'Hasil flowing scale · bukan saldo sisa saat ini' if e.terukur and e.historis else 'Hasil timbang flowing scale' if e.terukur else 'Estimasi awal; bukan saldo sisa saat ini.' if e.historis else 'Estimasi · belum ditimbang' }}</small>
+  {% if not e.kering and not e.terukur and e.catatan %}<p class="bantu" style="margin:6px 0 0;font-size:13px;line-height:1.6">{{ e.catatan[-1] }}</p>{% endif %}
   {% if e.saldo_campuran %}<p class="bantu" style="margin:6px 0 0;font-size:13px;line-height:1.6">Silo juga memuat sumber lain. Saldo pencatatan sumber gabungan: {{ e.saldo_campuran }}; estimasi di atas hanya untuk {{ e.kode }}.</p>{% endif %}
 </section>
 {% endfor %}

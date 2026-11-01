@@ -5916,3 +5916,35 @@ async def act_sesuaikan_stok_pk_lama(req: PenyesuaianPkLamaReq,user: User = Depe
         except Gudang2Error as e:
             raise _err(e,"Gagal menyesuaikan stok PK lama.")
     return {"ok":True,"pesan":f"Penyesuaian stok tanggal {row.tanggal}: {row.selisih_kg:+} kg. Alasan: {row.alasan}. Laporan lama tetap tersimpan."}
+
+
+class BobotPengeringanReq(BaseModel):
+    lot_id: int
+    kg: Positif
+    referensi: str = Field(min_length=1,max_length=120)
+    alasan: str = Field(default='',max_length=1000)
+    konfirmasi: bool = False
+    dasar: str
+    kunci: str = Field(min_length=1,max_length=100)
+
+
+@router.get('/actions/bobot-pengeringan')
+async def baca_bobot_pengeringan(lot_id: int,response: Response,user: User=Depends(pengguna_aksi)):
+    response.headers['Cache-Control']='no-store'
+    from app.services.bobot_pengeringan import konteks
+    _require(await _is_g1_operator(user))
+    async with SessionLocal() as db:
+        try:return (await konteks(db,lot_id=lot_id,user=user))[0]
+        except (ValueError,PermissionError) as e:raise HTTPException(400,str(e))
+
+
+@router.post('/actions/bobot-pengeringan')
+async def catat_bobot_pengeringan(req: BobotPengeringanReq,user: User=Depends(pengguna_aksi)):
+    from app.services.bobot_pengeringan import simpan
+    _require(await _is_g1_operator(user))
+    async with SessionLocal() as db:
+        try:
+            async with db.begin():
+                data=await simpan(db,user=user,**req.model_dump())
+        except (ValueError,PermissionError) as e:raise HTTPException(400,str(e))
+    return {'ok':True,'pesan':'Bobot hasil flowing scale tercatat. Penerimaan dan saldo stok tidak diubah.','data':data}

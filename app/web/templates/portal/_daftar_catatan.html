@@ -1,3 +1,4 @@
+{% from '_bobot_pengeringan.html' import dua_bobot %}
 <div class="pelanggan-halaman pelanggan-catatan-halaman">
 <header class="pelanggan-sapaan"><h1>{{ catatan.judul }}</h1><p class="pelanggan-redup">{{ catatan.pengantar }}</p></header>
 <form class="pelanggan-filter-catatan" method="get" action="{{ catatan.base }}" role="search">
@@ -13,6 +14,7 @@
 <article class="pelanggan-catatan-baris" data-jenis="{{ r.jenis }}">
  <div class="pelanggan-catatan-isi"><h2>{{ r.judul }}</h2><p class="pelanggan-kode">{{ r.kode }}</p>
  {% if r.tanggal %}<p class="pelanggan-waktu">{{ r.label_tanggal }} <time datetime="{{ r.tanggal.isoformat() }}">{{ r.tanggal|jam('%d/%m/%Y %H:%M') }}</time></p>{% else %}<p class="pelanggan-waktu">Tanggal belum tercatat</p>{% endif %}
+ {% if r.bobot_pengeringan %}{{ dua_bobot([r.bobot_pengeringan]) }}{% endif %}
  {% if r.catatan %}<p class="pelanggan-redup">{{ r.catatan }}</p>{% endif %}</div>
  <a class="pelanggan-tautan pelanggan-catatan-buka" href="{{ r.href }}" aria-label="{{ r.aksi }} {{ r.judul }} {{ r.kode }}">{{ r.aksi }} <span aria-hidden="true">→</span></a>
 </article>

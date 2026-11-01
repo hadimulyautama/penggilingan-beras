@@ -1,3 +1,4 @@
+{% from '_bobot_pengeringan.html' import dua_bobot %}
 {% extends "base.html" %}
 {% import "_benda.html" as benda with context %}
 {% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
@@ -35,6 +36,7 @@
 <div id="panel-ringkasan" class="pengeringan-panel" role="tabpanel" aria-labelledby="tab-ringkasan" {% if tab_pengeringan != 'ringkasan' %}hidden{% endif %}>
   <ol class="pengeringan-tahap" aria-label="Tahap proses, informasi saja">{% for tahap in ['Pengeringan','Pendinginan','Sudah dingin','Ke silo'] %}<li class="{{ 'aktif' if loop.index0 == d.tahap else 'lewat' if loop.index0 < d.tahap }}" {% if loop.index0 == d.tahap %}aria-current="step"{% endif %}>{{ tahap }}</li>{% endfor %}</ol>
   <section class="proses-detail__statistik" id="ringkasan-proses" aria-label="Ringkasan pendinginan">{% for label, nilai in d.statistik_pendinginan %}<article class="riwayat-detail__card"><span>{{ label }}</span><strong>{{ nilai }}</strong></article>{% endfor %}</section>
+  <section class="riwayat-detail__card" aria-label="Bobot gabah setelah pengeringan">{{ dua_bobot([d.bobot_pengeringan]) }}{% if boleh_catat_bobot_pengeringan and d.tahap == 3 %}<a class="btn btn--kecil" href="/riwayat-pengeringan/{{ d.lot_id }}/bobot">Catat hasil timbang flowing scale</a>{% endif %}</section>
   <section class="riwayat-detail__card" id="tindakan-proses"><h2>Tindakan saat ini</h2>
     <div class="pendinginan-kondisi"><strong>{{ 'Gabah sudah dipindahkan ke silo' if d.tahap == 3 else 'Sudah dingin, menunggu dipindah ke silo' if d.tahap == 2 else 'Gabah sedang didinginkan di ' ~ d.dryer }}</strong><p>{{ 'Tindakan pendinginan di dryer untuk lot ini sudah ditutup.' if d.tahap == 3 else 'Pernyataan dingin tidak memindahkan gabah secara otomatis.' if d.tahap == 2 else 'Nyatakan sudah dingin setelah memeriksa kondisi gabah.' }}</p></div>
     <div class="proses-detail__aksi pilihan pengeringan-aksi-utama">{% for p in proses.pilihan %}{{ tindakan(p, loop.first) }}{% else %}<p class="bantu">Tidak ada tindakan dryer yang tersedia untuk lot ini.</p>{% endfor %}</div>

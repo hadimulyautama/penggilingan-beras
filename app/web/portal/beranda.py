@@ -157,7 +157,11 @@ async def halaman(request, bagian='beranda'):
             daftar_proses.update((alamat_detail(r).split('/')[2],r.kode) for r in b.berjalan if alamat_detail(r))
             identitas=await baca_identitas(db,scope,daftar_proses)
         else:identitas={}
+        bobot_riwayat={}
         if bagian=='riwayat':
+            from app.services.estimasi_pengeringan import untuk_lot_banyak
+            lots=(await db.scalars(select(DryingLot).where(DryingLot.id.in_(scope.ids(DryingLot)),DryingLot.waktu_selesai_pengeringan.is_not(None)))).all()
+            bobot_riwayat={x['kode']:x for x in (await untuk_lot_banyak(db,lots)).values()}
             from .scope import MODELS
             for jenis in NAMA_PROSES:
                 if jenis=='pendinginan':continue
@@ -205,7 +209,7 @@ async def halaman(request, bagian='beranda'):
         from .daftar_catatan import daftar
         catatan=daftar([dict(jenis=r['jenis'],judul=NAMA_PROSES.get(r['jenis'],r['jenis']),
             kode=r['kode'],tanggal=r.get('selesai'),label_tanggal='Selesai',href=r['href'],
-            aksi='Lihat hasil',catatan='') for r in riwayat],request,
+            aksi='Lihat hasil',catatan='',bobot_pengeringan=bobot_riwayat.get(r['kode']) if r['jenis']=='pengeringan' else None) for r in riwayat],request,
             base='/pelanggan/riwayat-proses',pilihan=[('','Semua proses')]+[(k,v) for k,v in NAMA_PROSES.items() if k!='pendinginan'],
             judul='Riwayat proses',pengantar='Proses yang sudah selesai. Buka untuk melihat bahan dan hasilnya.',
             label_jenis='Jenis proses',satuan='proses')

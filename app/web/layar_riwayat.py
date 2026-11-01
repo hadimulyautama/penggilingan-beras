@@ -481,6 +481,7 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
                         "riwayat" if request.query_params.get("halaman_dingin") or request.query_params.get("halaman_jeda") else "ringkasan"),
         kembali=konteks_aman(request.query_params.get("kembali_kerja")) or "/riwayat-pengeringan",
         dari_riwayat=True, breadcrumb_detail=lot.kode_lot, layar="riwayat_pengeringan",
+        boleh_catat_bobot_pengeringan=not is_customer_read(request) and await _is_g1_operator(akun.user),
         alamat=request.url.path, halaman_proses=halaman, buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
@@ -493,7 +494,7 @@ def _pdf_pengeringan(data: dict) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
 
     navy = colors.HexColor("#173042")
     teal = colors.HexColor("#0B6D83")
@@ -553,14 +554,20 @@ def _pdf_pengeringan(data: dict) -> bytes:
 
     story = [Paragraph("Laporan Pengeringan Gabah", styles["ReportTitle"]),
              Paragraph(f"{escape(data['kode'])}  ·  Dicetak {stamp(datetime.now(ZoneInfo(settings.app_timezone)))}", styles["ReportSub"])]
-    story.append(grid([
-        ["Ringkasan lot", "Nilai"],
-        ["Pemilik", data["owner"]],
-        ["Mesin / mode", data["dryer"]],
-        ["Total bahan basah", kg(data["weight"])],
-        ["Target kadar air", persen_pdf(data["target"]) if data["target"] is not None else "Tidak ditetapkan"],
-        ["Silo tujuan", data["silo"]],
-    ], [70 * mm, 100 * mm]))
+    bobot=data.get('bobot_pengeringan')
+    rows=[["Ringkasan lot", "Nilai"], ["Pemilik", data["owner"]],
+          ["Mesin / mode", data["dryer"]],
+          ["Bobot gabah basah masuk" if bobot else "Total bahan basah", bobot['basah'] if bobot else kg(data["weight"])]]
+    if bobot:
+        rows += [["Estimasi bobot gabah kering", ("Sekitar " + bobot['kering']) if bobot['kering'] else "Belum tersedia"],
+                 ["Indikator mesin pertama / selesai", (bobot.get('awal') or "Belum tercatat") + " / " + (bobot.get('akhir') or "Belum tercatat")]]
+        if bobot.get('terukur'):
+            rows += [["Bobot kering terukur - flowing scale",bobot['terukur']],
+                     ["Pencatatan bobot terukur",(stamp(datetime.fromisoformat(bobot['timbang_waktu'])) if bobot.get('timbang_waktu') else "Belum tercatat") + " - " + str(bobot.get('timbang_petugas') or "Petugas belum tercatat")]]
+    rows += [["Target kadar air", persen_pdf(data["target"]) if data["target"] is not None else "Tidak ditetapkan"], ["Silo tujuan", data["silo"]]]
+    story.append(grid(rows,[70*mm,100*mm]))
+    if bobot:
+        story.append(Paragraph("Estimasi dari perubahan indikator mesin pertama tercatat sampai selesai; bukan hasil timbang dan tidak mengganti bobot basah asal.",styles["ReportNote"]))
 
     story += [Paragraph("Bahan baku dan asal", styles["ReportSection"]),
               Paragraph("Supplier atau pemilik, nomor polisi, dan berat dicantumkan untuk setiap batch.", styles["ReportNote"]),
@@ -591,12 +598,12 @@ def _pdf_pengeringan(data: dict) -> bytes:
         rows.append(["Belum ada catatan kadar air", "—", "—", "—", "—"])
     story.append(grid(rows, [35 * mm, 48 * mm, 27 * mm, 29 * mm, 28 * mm]))
 
-    story += [Paragraph("Waktu dan durasi proses", styles["ReportSection"]),
+    story.append(KeepTogether([Paragraph("Waktu dan durasi proses", styles["ReportSection"]),
               grid([["Tahap", "Mulai", "Selesai", "Durasi"],
                     ["Pengeringan", stamp(data["dry_start"]), stamp(data["dry_end"]), durasi(data["dry_start"], data["dry_end"])],
                     ["Pendinginan", stamp(data["cool_start"]), stamp(data["cool_end"]), durasi(data["cool_start"], data["cool_end"])],
                     ["Total", stamp(data["dry_start"]), stamp(data["cool_end"]), durasi(data["dry_start"], data["cool_end"]) ]],
-                   [35 * mm, 47 * mm, 47 * mm, 51 * mm])]
+                   [35 * mm, 47 * mm, 47 * mm, 51 * mm])]))
     if data["cooling_notes"]:
         story.append(Paragraph("Catatan pendinginan", styles["ReportSection"]))
         story.extend(Paragraph(escape(note), styles["ReportNote"]) for note in data["cooling_notes"])
@@ -725,7 +732,10 @@ async def laporan_pengeringan_pdf(lot_id: int, unduh: int = 0):
 
         from app.penggilingan.gudang1.services.bobot import dari_batches
         weight = dari_batches(b for b, _ in batch_rows).angka()
+        from app.services.estimasi_pengeringan import untuk_lot_banyak
+        bobot_pengeringan=(await untuk_lot_banyak(db,[lot]))[lot.id]
         payload = {
+            "bobot_pengeringan":bobot_pengeringan,
             "kode": lot.kode_lot, "owner": owner or "Tidak tercatat",
             "dryer": f"{dryer_name or 'Tidak tercatat'} / {lot.mode_dryer or 'mode tidak tercatat'}",
             "weight": weight,
@@ -1119,3 +1129,16 @@ async def detail_catatan_penghalang(tipe: str, id_: int, request: Request, akun=
         return await render_laci(request, "koreksi_catatan.html", catatan=rincian(row, tipe),
             sumber=f"{getattr(row, 'source_type', tipe)} #{getattr(row, 'source_id', None) or getattr(row, 'polishing_process_id', None) or getattr(row, 'pk_gudang2_intake_id', '?')}",
             waktu=row.waktu, pencatat=orang.nama if orang else "Tidak diketahui", keluar=keluar, kembali="/audit")
+
+
+@router.get('/riwayat-pengeringan/{lot_id}/bobot')
+async def formulir_bobot_pengeringan(lot_id: int,request: Request,akun=Depends(butuh_akun)):
+    from app.services.bobot_pengeringan import konteks
+    from app.web.api import _is_g1_operator
+    if is_customer_read(request) or not await _is_g1_operator(akun.user):
+        raise HTTPException(403,'Pencatatan bobot pengeringan hanya untuk petugas Gudang 1 yang berhak.')
+    async with SessionLocal() as db:
+        try:data=(await konteks(db,lot_id=lot_id,user=akun.user))[0]
+        except ValueError as e:raise HTTPException(400,str(e))
+    from fastapi.encoders import jsonable_encoder
+    return await render_laci(request,'bobot_pengeringan.html',d=jsonable_encoder(data))
