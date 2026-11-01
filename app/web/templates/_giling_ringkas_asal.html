@@ -1,0 +1,7 @@
+{% from '_bahan_silo_giling.html' import bahan_silo %}
+{% for bagian in d.bagian if not bagian.parameter %}
+<section><h3>{{ bagian.judul }}</h3>{% if bagian.keterangan %}<p>{{ bagian.keterangan }}</p>{% endif %}
+{% if bagian.kelompok_silo is defined %}{{ bahan_silo(bagian.kelompok_silo) }}
+{% else %}<table class="sr-table"><thead><tr>{% for k in bagian.kolom %}<th>{{ k }}</th>{% endfor %}</tr></thead><tbody>{% for baris in bagian.baris %}<tr>{% for v in baris %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>{% endif %}
+{% if bagian.qc_gabah_asal is defined %}{% with qc_gabah_asal=bagian.qc_gabah_asal %}{% include '_qc_gabah_asal.html' %}{% endwith %}{% endif %}</section>
+{% endfor %}

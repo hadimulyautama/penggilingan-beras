@@ -303,7 +303,9 @@ def test_kemajuan_pengeringan_dihitung_dari_bacaan_pertama():
     # berbeda, dan yang berbeda diam-diam tak akan ada yang menyadarinya.
     dash = inspect.getsource(dashboard._pengeringan_berjalan)
     assert "kadar_air_target_persen" in dash
-    assert "kemajuan(awal, ka, target)" in dash
+    assert "kemajuan(awal, indikator_progres, target)" in dash
+    assert "indikator_mesin_terakhir(db, lot.id)" in dash
+    assert "indikator_mesin_terakhir(db, lot.id)" in inspect.getsource(berjalan.untuk_gudang1)
     assert "kemajuan(await kadar_air_awal(db, lot.id)" in inspect.getsource(
         berjalan.untuk_gudang1)
     # Dua bacaan tetap terpisah, tidak diruntuhkan jadi satu.

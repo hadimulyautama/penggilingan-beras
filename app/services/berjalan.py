@@ -2008,29 +2008,24 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         bl = dari_batches(isi_lot)
         kg_lot = bl.angka()
         from app.penggilingan.gudang1.services.drying import (
-            kadar_air_awal, kemajuan, peringatan_kadar_air)
+            kadar_air_awal, kemajuan, peringatan_kadar_air, indikator_mesin_terakhir)
         from app.services.setelan import target_kadar_air
 
         target_n = (float(lot.target_kadar_air) if lot.target_kadar_air is not None
                     else await target_kadar_air(db))
         target = f"{target_n:g}%"
         asal_lot = await _asal(db, [x.id for x in isi_lot])
-        # Alat tes yang menggerakkan batang kemajuan — itulah ukuran yang
-        # dipakai memutuskan. Bacaan mesin cuma pembanding; kalau ia ikut
-        # menggerakkan batang, dryer yang sensornya melenceng akan menyeret
-        # kemajuan seluruh lot tanpa ada yang tahu.
-        kini = None
-        if log is not None:
-            if log.kadar_air_tes_manual is not None:
-                kini = float(log.kadar_air_tes_manual)
-            elif log.kadar_air_indikator is not None:
-                kini = float(log.kadar_air_indikator)
+        # Progres memakai indikator mesin terbaru. Alat tes tetap ditampilkan
+        # sebagai pemeriksaan tersendiri dan tidak menjadi pengganti indikator.
+        kini = await indikator_mesin_terakhir(db, lot.id)
         maju = kemajuan(await kadar_air_awal(db, lot.id), kini, target_n)
         fakta = []
         if log is not None and log.kadar_air_tes_manual is not None:
             fakta.append(("Alat tes", f"{float(log.kadar_air_tes_manual):.1f}%"))
         if log is not None and log.kadar_air_indikator is not None:
             fakta.append(("Mesin", f"{float(log.kadar_air_indikator):g}%"))
+        if kini is not None:
+            fakta.append(("Acuan progres", f"Indikator mesin {kini:g}%"))
         fakta.append(("Target", target))
         if lot.mode_dryer:
             fakta.append(("Mode", lot.mode_dryer))

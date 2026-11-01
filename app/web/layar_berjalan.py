@@ -53,6 +53,12 @@ async def halaman_berjalan(request: Request, akun=Depends(butuh_akun)):
 @router.get("/proses-aktif/{jenis}/{kode}")
 async def detail_proses_aktif(jenis: str, kode: str, request: Request,
                              akun=Depends(butuh_akun)):
+    if jenis == "giling" and not is_customer_read(request):
+        from app.web.giling_ringkas import halaman
+        return await halaman(kode, request, akun)
+    if jenis == "sosoh" and not is_customer_read(request):
+        from app.web.sosoh_ringkas import halaman
+        return await halaman(kode, request, akun)
     from app.models import DryingLot, MillingProcess
     from app.web.layar_pekerjaan import konteks_aman
     from app.penggilingan.gudang2.models import PolishingProcess

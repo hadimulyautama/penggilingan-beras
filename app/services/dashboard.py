@@ -120,10 +120,11 @@ async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
         # Titik tolak dan rumusnya dipinjam dari layanan pengeringan — layar
         # Beranda memakai yang sama persis, dan dua salinan rumus yang sama
         # adalah dua angka yang cepat atau lambat berbeda.
-        from app.penggilingan.gudang1.services.drying import kadar_air_awal, kemajuan
+        from app.penggilingan.gudang1.services.drying import kadar_air_awal, kemajuan, indikator_mesin_terakhir
 
         awal = await kadar_air_awal(db, lot.id)
-        maju = kemajuan(awal, ka, target)
+        indikator_progres = await indikator_mesin_terakhir(db, lot.id)
+        maju = kemajuan(awal, indikator_progres, target)
 
         out.append({
             "kode": lot.kode_lot,
@@ -133,6 +134,7 @@ async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
             "awal": awal,
             "target": target,
             "maju": maju,
+            "indikator_progres": indikator_progres,
             "jam": _jam(now, lot.waktu_mulai_pengeringan),
             "suppliers": await _lot_suppliers(db, lot.id),
             "kg": await _lot_kg(db, lot.id),

@@ -138,8 +138,8 @@ async def test_kemajuan_pengeringan_sama_dengan_perhitungan_produksi(pg,pengerin
             assert r.status_code==200
             s=BeautifulSoup(r.text,'html.parser').select_one('.pelanggan-progres')
             assert s and 'Kemajuan menuju target kadar air' in s.get_text()
-            assert s.select_one('progress')['value']=='0.5'
-            assert '50%' in s.get_text() and '15.5%' in s.get_text() and '13%' in s.get_text()
+            assert float(s.select_one('progress')['value'])==pytest.approx(0.4)
+            assert '40%' in s.get_text() and '16%' in s.get_text() and '15.5%' in s.get_text() and '13%' in s.get_text()
 
 
 async def test_dokumen_hanya_menampilkan_rekap_utama_pada_rantai_gabungan(pg,dunia):

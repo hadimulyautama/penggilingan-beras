@@ -547,10 +547,24 @@ class OutputResult:
     spek: str | None = None
 
 
+async def rencana_total_output(db, proc_id, jenis, total):
+    """Pemeriksaan kumulatif yang sama untuk satu jenis maupun satu lembar."""
+    if not jenis or jenis.lower() not in _ALL_JENIS:
+        raise Gudang2Error("Jenis hasil harus salah satu: " + ", ".join(sorted(_ALL_JENIS)) + ".")
+    if not math.isfinite(float(total)) or float(total) <= 0:
+        raise Gudang2Error("Berat hasil harus lebih dari 0. Yang keliru dibatalkan lewat 'Batalkan input terakhir', bukan dicatat sebagai angka minus.")
+    jenis = jenis.lower()
+    sebelumnya = await _total_output(db, proc_id, jenis)
+    delta = float(total) - sebelumnya
+    if delta < -0.000001:
+        raise Gudang2Error(f"Total {jenis} sudah {sebelumnya:g} kg. Total baru tidak boleh lebih kecil; gunakan pembatalan atau koreksi hasil.")
+    return dict(jenis=jenis, sebelumnya=sebelumnya, total=float(total), tambahan=0 if abs(delta)<=0.000001 else delta)
+
+
 async def catat_output(
     db: AsyncSession, *, user, kode: str | None, jenis: str | None,
     berat_kg: float | None = None, spek: str | None = None,
-    berat_kumulatif: float | None = None, tanggal=None, jam=None,
+    berat_kumulatif: float | None = None, tanggal=None, jam=None, simpan: bool = True,
 ) -> OutputResult:
     """Catat total aktual per jenis tanpa mengubah log tambahan yang sudah ada.
 
@@ -585,14 +599,10 @@ async def catat_output(
     if proc.status == "selesai":
         raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
     if berat_kumulatif is not None:
-        sebelumnya = await _total_output(db, proc.id, jenis)
-        berat = float(berat_kumulatif) - sebelumnya
-        if berat < -0.000001:
-            raise Gudang2Error(
-                f"Total {jenis} sudah {sebelumnya:g} kg. Total baru tidak boleh "
-                "lebih kecil; gunakan pembatalan atau koreksi hasil.")
+        perubahan = await rencana_total_output(db, proc.id, jenis, float(berat_kumulatif))
+        sebelumnya, berat = perubahan['sebelumnya'], perubahan['tambahan']
         if abs(berat) <= 0.000001:
-            await db.commit()
+            if simpan: await db.commit()
             return OutputResult(proc=proc, jenis=jenis,
                                 berat_kumulatif=sebelumnya, berat_kg=0)
     spek = (spek or "").strip() or None
@@ -608,7 +618,10 @@ async def catat_output(
         new_value=f"{jenis} {float(berat):.0f}kg"
                   + (f" · spek {spek}" if spek else ""),
     )
-    await db.commit()
+    if simpan:
+        await db.commit()
+    else:
+        await db.flush()
     total = await _total_output(db, proc.id, jenis)
     return OutputResult(proc=proc, jenis=jenis, berat_kumulatif=total,
                         berat_kg=float(berat), spek=spek)

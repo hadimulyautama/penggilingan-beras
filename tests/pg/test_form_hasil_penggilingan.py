@@ -91,7 +91,8 @@ async def test_kumulatif_naik_turun_sama_stok_log_audit(pg,hasil,peran,view):
         d=(await c.get('/api/actions/ringkasan-hasil-giling',params={'kode_proses':pr.kode_proses,'berat_kumulatif':5800})).json()
         assert d['tercatat']==5800 and d['rendemen']==5800/10000*100
         r=await c.get('/proses-aktif/giling/'+pr.kode_proses+'?tab_detail=hasil')
-        assert '5.800 kg' in r.text and '58,0%' in r.text
+        from tests.pg.test_detail_giling_tab import data
+        assert data(r)['tercatat']==5800 and data(r)['rendemen']==pytest.approx(58)
 
 
 @pytest.mark.parametrize('total',['',0,-1,'NaN','Infinity','6.400,1',None])

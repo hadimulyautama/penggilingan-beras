@@ -49,6 +49,8 @@ from app.web.riwayat_retur_supplier import router as riwayat_retur_supplier_rout
 from app.web.retur_supplier_koreksi import router as retur_supplier_koreksi_router
 from app.web.layar_produk import router as produk_router
 from app.web.layar_riwayat import router as riwayat_router
+from app.web.giling_ringkas import router as giling_ringkas_router
+from app.web.sosoh_ringkas import router as sosoh_ringkas_router
 from app.web.layar_sosoh import router as sosoh_router
 from app.web.layar_stok import router as stok_router
 from app.web.lihat_sebagai import router as lihat_sebagai_router
@@ -138,6 +140,8 @@ app.include_router(riwayat_retur_supplier_router)
 app.include_router(retur_supplier_koreksi_router)
 app.include_router(jasa_router)
 app.include_router(serah_terima_router)
+app.include_router(giling_ringkas_router)
+app.include_router(sosoh_ringkas_router)
 app.include_router(sosoh_router)
 app.include_router(riwayat_router)
 from app.web.layar_transfer import router as transfer_detail_router

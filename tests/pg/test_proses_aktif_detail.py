@@ -97,12 +97,13 @@ async def test_giling_berulang_qc_lengkap_hasil_kumulatif_dan_paginasi(pg, gilin
     assert r.status_code == lebih.status_code == 200
     assert 'Rendemen sementara' in daftar.text
     assert 'Rendemen sementara PK terhadap gabah' in daftar.text
-    for kata in ["250 kg", "Nilai kualitas QC PK", "Butir kuning", "Gabah", "Merang", "21 putaran", "QC 21", "qc_giling", "halaman_qc=2", "86,67", "B1"]:
-        assert kata in r.text, kata
-    assert "350 kg" not in r.text
-    assert "QC 1 ·" not in r.text and "QC 1 ·" in lebih.text
-    assert "21 putaran" in lebih.text  # rata-rata tidak bergantung halaman
-    assert "86,67" in lebih.text
+    from tests.pg.test_detail_giling_tab import data
+    d=data(r); d2=data(lebih)
+    assert d['tercatat']==250 and [x['kg'] for x in d['riwayat_hasil']]==[100,250]
+    assert d['qc']['nilai']==pytest.approx(86.666667) and d['qc']['kelas']=='B1'
+    assert d['qc']['putaran']==len(d['riwayat_qc'])==21
+    assert d2['qc']==d['qc'] and d2['riwayat_qc']==d['riwayat_qc']
+    assert d['riwayat_qc'][0]['nomor']==1 and d['riwayat_qc'][-1]['nomor']==21
     _potret("giling-qc", r)
 
 
@@ -119,9 +120,11 @@ async def test_giling_dijeda_dan_sumber_semua_silo(pg, g1):
     async with await _klien(pg, peran="operator", gudang="Gudang 1") as c:
         h = await c.get(f"/proses-aktif/giling/{r.proc.kode_proses}")
     assert h.status_code == 200
-    for kata in ["GB-SUMBER-A", "GB-SUMBER-B", "Silo A", "Silo B", "Dijeda", "Listrik padam", "lanjutkan_proses"]:
-        assert kata in h.text
-    assert "?buka=qc_giling" not in h.text
+    from tests.pg.test_detail_giling_tab import data
+    d=data(h)
+    assert d['status']=='dijeda' and d['jeda']['sebab']=='Listrik padam'
+    assert not d['boleh_qc'] and len(d['silos_aktif'])==2
+    for kata in ['GB-SUMBER-A','GB-SUMBER-B','Silo A','Silo B']:assert kata in d['asal_html']
     _potret("giling-jeda", h)
 
 
@@ -141,13 +144,14 @@ async def test_sosoh_rinci_per_entri_jeda_dan_tautan_lama(pg, gudang2):
     assert h.status_code == lama.status_code == 200
     assert 'Neraca sementara: beras' in daftar.text
     assert 'belum dapat dihitung' not in daftar.text
-    for kata in ["250 kg", "Bahan &amp; pemakaian silo", "UJI DETAIL", "Riwayat pencatatan hasil sosoh", "Pertambahan hasil", "total kumulatif per jenis hasil", "150 kg", "lanjutkan_penyosohan", "Listrik padam"]:
-        assert kata in h.text, kata
-    # Isian 100 lalu 250 adalah angka kumulatif; bukan 350 kg tambahan.
-    assert "350 kg" not in h.text
-    assert h.text.count("<h2>Bahan &amp; pemakaian silo</h2>") == 1
-    assert "<h2>Pemakaian silo</h2>" not in h.text
-    assert "<h2>Bahan baku masuk per silo</h2>" not in h.text
+    from tests.pg.test_detail_sosoh_tab import data
+    d=data(h)
+    assert d['jeda']['sebab']=='Listrik padam'
+    assert next(x['kg'] for x in d['hasil'] if x['jenis']=='medium')==250
+    assert [x['kg'] for x in d['riwayat_hasil']]==[100,150]
+    assert all(x['spek']=='UJI DETAIL' for x in d['riwayat_hasil'])
+    assert len(d['sumber'])==1 and d['sumber'][0]['awal']==9800
+    assert data(lama)['dasar']==d['dasar']
     _potret("sosoh", h)
     from app.penggilingan.gudang2.polishing import selesai_penyosohan, akhiri_penyosohan
     async with pg() as db:
@@ -156,7 +160,8 @@ async def test_sosoh_rinci_per_entri_jeda_dan_tautan_lama(pg, gudang2):
         await akhiri_penyosohan(db, user=u, kode=r.proc.kode_proses)
     async with await _klien(pg, peran="superadmin") as c:
         selesai = await c.get(f"/proses-aktif/sosoh/{r.proc.kode_proses}", follow_redirects=False)
-    assert selesai.status_code == 303 and selesai.headers["location"] == f"/riwayat-sosoh/{r.proc.id}"
+    assert selesai.status_code == 200 and not data(selesai)["aktif"]
+    assert data(selesai)["detail"] == f"/riwayat-sosoh/{r.proc.id}"
 
 
 async def test_akses_gudang_dan_alamat_tidak_sah(pg, giling):
@@ -173,8 +178,9 @@ async def test_qc_kosong_dan_giling_selesai_masuk_riwayat(pg, giling):
     async with await _klien(pg, peran="operator", gudang="Gudang 1") as c:
         r = await c.get(f"/proses-aktif/giling/{giling['kode']}")
         assert r.status_code == 200
-        assert "Belum dicatat" in r.text and "Belum dinilai" in r.text
-        assert "?buka=qc_giling" not in r.text
+        from tests.pg.test_detail_giling_tab import data
+        assert data(r)['tercatat'] is None and data(r)['qc']['nilai'] is None
+        assert not data(r)['boleh_qc']
         _potret("giling-kosong", r)
         async with pg() as db:
             p = await db.get(MillingProcess, giling["id"])
@@ -183,9 +189,9 @@ async def test_qc_kosong_dan_giling_selesai_masuk_riwayat(pg, giling):
             await db.commit()
         final = await c.get(f"/proses-aktif/giling/{giling['kode']}", follow_redirects=False)
         segar = await c.get(f"/proses-aktif/giling/{giling['kode']}", headers={"X-Pindah": "1"})
-    assert final.status_code == 303 and final.headers['location'] == f"/riwayat-giling/{giling['id']}"
-    assert segar.status_code == 200 and "window.location.replace" in segar.text
-    assert f"/riwayat-giling/{giling['id']}" in segar.text
+    assert final.status_code==segar.status_code==200
+    assert not data(final)['aktif'] and not data(segar)['aktif']
+    assert data(final)['detail']==f"/riwayat-giling/{giling['id']}"
     _potret("peralihan-giling", segar)
 
 
@@ -278,9 +284,11 @@ async def test_tindakan_detail_mempertahankan_konteks_pekerjaan(pg, giling):
         assert r.status_code==200
         links=[html.unescape(x) for x in re.findall(r'href="([^"]+)"',r.text)]
         assert konteks in links
-        tindakan=[x for x in links if 'buka=' in x]
-        assert tindakan
-        for url in tindakan:
-            assert parse_qs(urlsplit(url).query)['kembali_kerja']==[konteks],url
+        # Tombol inline memakai konteks yang sama; tautan lama tetap dapat dibuka.
+        from tests.pg.test_detail_giling_tab import data
+        assert data(r)['kode_proses']==giling['kode']
+        for buka in ['hasil_giling','selesai_giling','tambah_silo_giling','tutup_silo_giling','qc_giling']:
+            url=f"/proses-aktif/giling/{giling['kode']}?"+urlencode(dict(buka=buka,kembali_kerja=konteks))
             opened=await c.get(url)
             assert opened.status_code==200 and konteks.replace('&','&amp;') in opened.text
+            assert f'data-buka="{buka}"' in opened.text

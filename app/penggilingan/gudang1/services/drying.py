@@ -1384,6 +1384,15 @@ async def kadar_air_awal(db: AsyncSession, lot_id: int) -> float | None:
     return float(nilai) if nilai is not None else None
 
 
+async def indikator_mesin_terakhir(db: AsyncSession, lot_id: int) -> float | None:
+    """Indikator terbaru yang terisi; log alat tes sesudahnya tidak menimpanya."""
+    nilai = await db.scalar(select(DryingMoistureLog.kadar_air_indikator).where(
+        DryingMoistureLog.drying_lot_id == lot_id,
+        DryingMoistureLog.kadar_air_indikator.is_not(None),
+    ).order_by(DryingMoistureLog.waktu_update.desc(), DryingMoistureLog.id.desc()).limit(1))
+    return float(nilai) if nilai is not None else None
+
+
 def kemajuan(awal: float | None, kini: float | None, target: float) -> float | None:
     """Sejauh mana lot bergerak dari bacaan pertamanya menuju target — 0..1.
 
