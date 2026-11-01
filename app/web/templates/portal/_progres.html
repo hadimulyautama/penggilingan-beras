@@ -1,3 +1,4 @@
+{% from '_bobot_pengeringan.html' import dua_bobot %}
 {% from 'portal/_pembaruan_proses.html' import pembaruan %}
 {% macro proses_berjalan(rows,kg) %}
 <section class="pelanggan-panel pelanggan-progres" aria-label="Progres proses berjalan">
@@ -7,6 +8,7 @@
   <p class="pelanggan-kode">{{ r.kode }}</p>
   {% if r.judul=='Penyosohan bahan campuran' or r.barang=='Jenis bahan belum tercatat' %}<p class="pelanggan-redup">{{ r.barang }}</p>{% endif %}
   {{ pembaruan(r) }}
+{% if r.bobot_pengeringan %}{{ dua_bobot(r.bobot_pengeringan) }}{% endif %}
   <p class="pelanggan-petunjuk-proses">{{ r.petunjuk }}</p>
   {% if r.catatan %}<p>{{ r.catatan }}</p>{% endif %}
   {% if r.maju is not none %}<div class="pelanggan-kemajuan"><label for="progres-{{ loop.index }}">Kemajuan menuju target kadar air · {{ '%.0f'|format(r.maju * 100) }}%</label><progress id="progres-{{ loop.index }}" value="{{ r.maju }}" max="1">{{ '%.0f'|format(r.maju * 100) }}%</progress></div>{% endif %}

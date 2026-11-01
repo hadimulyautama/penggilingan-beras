@@ -27,8 +27,15 @@ def ringkas(rows):
             continue
         k=r['komoditas']
         g=grup.setdefault(k,dict(kunci=k,nama=NAMA.get(k,r['nama']),kg=None,
-            belum_diukur=0,sementara=False,perkiraan=False,rincian=[],perlu_periksa=False))
+            belum_diukur=0,sementara=False,perkiraan=False,rincian=[],perlu_periksa=False,
+            bobot_pengeringan=[],kg_lain=None,jumlah_lain=0))
         g['rincian'].append(r)
+        if r.get('bobot_pengeringan'):
+            g['bobot_pengeringan'].append(r)
+        else:
+            g['jumlah_lain'] += 1
+            if r['kg'] is not None:
+                g['kg_lain'] = (g['kg_lain'] or Decimal(0)) + Decimal(str(r['kg']))
         if r['kg'] is None:
             g['belum_diukur']+=1
         else:
@@ -69,6 +76,7 @@ async def baca(db,scope,d):
     from app.services import berjalan,stok
     from app.services.transit_pelanggan import boleh_baca_ruang
     from app.penggilingan.gudang2.service import hitung_stok_silo,komposisi_bahan_silo
+    from app.services.estimasi_pengeringan import untuk_lot_banyak,untuk_silo_banyak
     rows=[]
     sumber_cache={}
 
@@ -109,6 +117,8 @@ async def baca(db,scope,d):
         DryingLot.status=='proses',~exists().where(SiloStorage.drying_lot_id==DryingLot.id)))).all())
     for selesai in (False,True):
         lots.extend(await berjalan._lot(db,pendinginan_selesai=selesai))
+    lots=list({lot.id:lot for lot in lots if lot.id in scope.ids(DryingLot)}.values())
+    estimates=await untuk_lot_banyak(db,[lot for lot in lots if lot.waktu_selesai_pengeringan])
     for lot in lots:
         if lot.id not in scope.ids(DryingLot):continue
         bs=[b for b in await _lot_batches(db,lot.id) if b.id in scope.ids(PurchaseBatch)]
@@ -117,18 +127,27 @@ async def baca(db,scope,d):
         selesai=lot.waktu_selesai_pendinginan is not None
         phase='pengeringan' if lot.status=='proses' else 'pendinginan'
         href=f'/proses-aktif/{phase}/{lot.kode_lot}' if not selesai else f'/riwayat-pengeringan/{lot.id}'
-        rows.append(_baris('gabah','Gabah',lot.kode_lot,dari_batches(bs),
+        info=estimates.get(lot.id)
+        rows.append(_baris('gabah','Gabah hasil pengeringan' if info else 'Gabah basah',lot.kode_lot,dari_batches(bs),
             mesin.nama if mesin else 'Mesin pengering',
             status='Sedang dikeringkan' if lot.status=='proses' else 'Menunggu dipindahkan' if selesai else 'Sedang didinginkan',
             asal=[_batch(b,scope) for b in bs],href=href,identitas=('pengeringan',lot.id)))
-    for row,nama in (await db.execute(select(SiloStorage,Silo.nama_silo).join(Silo,Silo.id==SiloStorage.silo_id)
-        .where(SiloStorage.jasa_id.in_(scope.jasa_ids),SiloStorage.status=='terisi'))).all():
+        if info:rows[-1]['bobot_pengeringan']=[info]
+    storages=(await db.execute(select(SiloStorage,Silo.nama_silo).join(Silo,Silo.id==SiloStorage.silo_id)
+        .where(SiloStorage.jasa_id.in_(scope.jasa_ids),SiloStorage.status=='terisi'))).all()
+    estimates_silo=await untuk_silo_banyak(db,{row.silo_id for row,_ in storages})
+    for row,nama in storages:
         asal=await asal_storage(row)
         if not asal:continue
         proses=await giling_berjalan_untuk_silo(db,row.silo_id)
-        rows.append(_baris('gabah','Gabah',nama,await _row_bobot(db,row),nama,
+        # Pilih lot catatan ini saja, bukan seluruh isi silo bersama.
+        info=[]
+        if row.drying_lot_id in scope.ids(DryingLot):
+            info=[e for e in estimates_silo.get(row.silo_id,[]) if e['lot_id']==row.drying_lot_id]
+        rows.append(_baris('gabah','Gabah hasil pengeringan' if info else 'Gabah',nama,await _row_bobot(db,row),nama,
             status='Sedang digiling' if proses and proses.kode_proses in scope.codes else 'Menunggu penggilingan',
             asal=asal,identitas=('silo-gabah',row.id)))
+        if info:rows[-1]['bobot_pengeringan']=info
     for lot in (await db.scalars(select(GabahKeringLot).where(GabahKeringLot.jasa_id.in_(scope.jasa_ids)))).all():
         kg=await pending_gabah_kering_kg(db,lot.id)
         if kg<=0:continue

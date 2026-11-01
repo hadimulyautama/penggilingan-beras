@@ -117,7 +117,8 @@ def progres_berjalan(rows,scope):
             fakta=[({'Alat tes':'Kadar air','Mesin':'Bacaan mesin','Target':'Target kadar air',
                 'Bahan':'Bahan masuk','Hasil':'Hasil sementara','Mutu':'Pemeriksaan mutu'}.get(k,k),
                 v.replace('rendemen','rasio hasil')) for k,v in r.fakta if k!='Mode'],neraca=neraca,
-            ringkas=r.ringkas,rendemen=r.rendemen_sementara))
+            ringkas=r.ringkas,rendemen=r.rendemen_sementara,
+            bobot_pengeringan=getattr(r,'bobot_pengeringan',[])))
     return hasil
 
 

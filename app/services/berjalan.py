@@ -1935,10 +1935,15 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
 
     from app.penggilingan.gudang1.services.drying import _lot_batches
 
-    for lot in await _lot(db, pendinginan_selesai=True):
+    from app.services.estimasi_pengeringan import untuk_lot_banyak
+    dingin=await _lot(db, pendinginan_selesai=True)
+    pendinginan=await _lot(db, pendinginan_selesai=False)
+    bobot_dryer=await untuk_lot_banyak(db,[*dingin,*pendinginan])
+    for lot in dingin:
         asal = await _asal(db, [x.id for x in await _lot_batches(db, lot.id)])
         b.transit.append(Baris(
-            kode=lot.kode_lot, isi="sudah dingin, dryer perlu dikosongkan",
+            kode=lot.kode_lot, bobot_pengeringan=[bobot_dryer[lot.id]],
+            isi="sudah dingin, dryer perlu dikosongkan",
             keadaan="pindahkan ke silo", aksi="pindah_silo",
             nilai=lot.kode_lot, fase="dryer",
             judul="Sudah dingin",
@@ -1956,10 +1961,11 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             ],
         ))
 
-    for lot in await _lot(db, pendinginan_selesai=False):
+    for lot in pendinginan:
         asal = await _asal(db, [x.id for x in await _lot_batches(db, lot.id)])
         b.berjalan.append(Baris(
-            kode=lot.kode_lot, isi="pengeringan selesai, sedang didinginkan",
+            kode=lot.kode_lot, bobot_pengeringan=[bobot_dryer[lot.id]],
+            isi="pengeringan selesai, sedang didinginkan",
             keadaan="nyatakan bila sudah dingin", aksi="selesai_pendinginan",
             nilai=lot.kode_lot, fase="dryer",
             sejak=lot.waktu_mulai_pendinginan,

@@ -106,7 +106,24 @@ async def untuk_silo_banyak(db, silo_ids):
         SiloStorage.silo_id.in_(silo_ids), SiloStorage.status == 'terisi'))).all()
     if not rows:
         return {}
-    ids = {lot.id for _, lot in rows}
+    used = set(await db.scalars(select(MillingProcessSource.silo_storage_id).where(
+        MillingProcessSource.silo_storage_id.in_([r.id for r, _ in rows]),
+        MillingProcessSource.berat_akhir_kg.is_not(None))))
+    infos = await untuk_lot_banyak(db, [lot for _, lot in rows])
+    out = defaultdict(list)
+    for row, lot in rows:
+        info = dict(infos[lot.id])
+        info['historis'] = bool(row.dikemas_kg or row.id in used)
+        out[row.silo_id].append(info)
+    return dict(out)
+
+
+async def untuk_lot_banyak(db, lots):
+    """Tiga SELECT borongan; berlaku sejak drying selesai, sebelum pindah silo."""
+    lots = {lot.id: lot for lot in lots}
+    if not lots:
+        return {}
+    ids = set(lots)
     batches = defaultdict(list)
     for lid, b in (await db.execute(select(DryingLotBatch.drying_lot_id, PurchaseBatch).join(
             PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id).where(
@@ -120,11 +137,8 @@ async def untuk_silo_banyak(db, silo_ids):
         select(ProsesTerpadu).where(ProsesTerpadu.aplikasi == 'produksi',
             ProsesTerpadu.tabel_sumber == 'drying_lots',
             ProsesTerpadu.id_sumber.in_([str(x) for x in ids])))).all()}
-    used = set(await db.scalars(select(MillingProcessSource.silo_storage_id).where(
-        MillingProcessSource.silo_storage_id.in_([r.id for r, _ in rows]),
-        MillingProcessSource.berat_akhir_kg.is_not(None))))
-    out = defaultdict(list)
-    for row, lot in rows:
+    out = {}
+    for lot in lots.values():
         sources = batches[lot.id]
         proses = snapshots.get(str(lot.id))
         snapshot = (proses.metadata_domain or {}) if proses else {}
@@ -134,11 +148,11 @@ async def untuk_silo_banyak(db, silo_ids):
         if retur and bobot.kg is not None:
             bobot = Bobot(bobot.kg + retur, bobot.keadaan, bobot.tak_diketahui, bobot.asal)
         info = ringkas(lot, bobot, logs[lot.id],
-            snapshot_akhir=snapshot.get('kadar_air_akhir'),
-            terpakai=bool(row.dikemas_kg or row.id in used))
+            snapshot_akhir=snapshot.get('kadar_air_akhir'))
         refs = proses.referensi_asal if proses else []
         if retur or (refs and set(refs) != {b.kode_batch for b in sources}):
             info['kering'] = None
             info['catatan'].append('Komposisi bahan berubah atau memiliki retur sumber; estimasi perlu diperiksa per lot.')
-        out[row.silo_id].append(info)
-    return dict(out)
+        info['lot_id'] = lot.id
+        out[lot.id] = info
+    return out

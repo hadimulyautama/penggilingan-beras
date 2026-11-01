@@ -119,3 +119,50 @@ async def test_peran_efektif_tetap_membatasi_kartu(pg,dunia,role,warehouse,view,
         assert response.status_code==200
         soup=BeautifulSoup(response.text,'html.parser')
         assert bool(soup.select('.bobot-pengeringan'))==visible
+
+
+@pytest.mark.parametrize('tahap',['pendinginan','dingin','silo','masih-drying'])
+async def test_beranda_barang_dua_bobot_langsung_setelah_drying_selesai(pg,dunia,tmp_path,tahap):
+    from sqlalchemy import delete
+    from app.web.portal.scope import load_scope
+    from app.web.portal.security import CustomerReader
+    from app.web.portal.barang import baca
+    from app.services import jasa_pelanggan
+    lid,storage,bid=await buat(pg,dunia)
+    await buat(pg,dunia,huruf='B',jasa=dunia['jasa3'],kode='PGR-RAHASIA-B',kg=5000)
+    async with pg() as db:
+        lot=await db.get(DryingLot,lid)
+        if tahap!='silo':
+            await db.execute(delete(SiloStorage).where(SiloStorage.id==storage))
+            batch=await db.get(PurchaseBatch,bid);batch.status_batch='diproses'
+            if tahap in ('pendinginan','masih-drying'):lot.waktu_selesai_pendinginan=None
+            if tahap=='masih-drying':
+                lot.status='proses';lot.waktu_selesai_pengeringan=None
+            await db.commit()
+    account=await _akun(pg,dunia)
+    before=await sidik(pg)
+    async with client(account) as c:
+        for path,nama in [('/pelanggan/','beranda'),('/pelanggan/barang-saya','barang')]:
+            page=await c.get(path);assert page.status_code==200
+            soup=BeautifulSoup(page.text,'html.parser')
+            assert 'PGR-RAHASIA-B' not in page.text
+            metrics=soup.select('.pelanggan-bobot-drying .bobot-pengeringan')
+            if tahap=='masih-drying':
+                assert not metrics and '26.456,76 kg' not in page.text
+            else:
+                assert len(metrics)==1
+                body=metrics[0].get_text(' ',strip=True)
+                assert '30.251,50 kg' in body and '26.456,76 kg' in body
+                assert 'Bobot gabah basah masuk' in body and 'Estimasi bobot gabah kering' in body
+                assert not metrics[0].find_parent('details')
+                # Wet receipt is not presented as measured dry stock in collapsed heading.
+                assert '30.251' not in soup.select_one('#komoditas-gabah>summary').get_text()
+                assert not soup.select('[data-post],[data-aksi]')
+            (tmp_path/f'{nama}-{tahap}.html').write_text(page.text)
+    assert await sidik(pg)==before
+    scope=await load_scope(CustomerReader(1,dunia['catur'],'Catur'))
+    async with pg() as db:
+        d=await jasa_pelanggan.pelanggan(db,dunia['catur'],rinci=False,read_scope=scope)
+        groups=await baca(db,scope,d)
+        assert groups[0]['kg']==Decimal('30251.50')  # Existing ledger reader is unchanged.
+        assert (await db.get(PurchaseBatch,bid)).berat_total_kg==Decimal('30251.50')
