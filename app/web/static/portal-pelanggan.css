@@ -203,3 +203,14 @@ body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;bord
 @media(max-width:540px){.portal-customer .pk-detail__hero{flex-wrap:nowrap}.portal-customer .pk-detail__hero .pelanggan-stok-petunjuk{flex:0 0 auto;min-width:0}}
 @media(max-width:600px){.pelanggan-kemasan-barang{padding:16px}.pelanggan-karung-baris{gap:8px}.pelanggan-karung-baris h3{font-size:14px}.pelanggan-jumlah-karung strong{font-size:20px}.pelanggan-batch .pelanggan-baris{flex-wrap:nowrap;gap:10px}.pelanggan-stok-bobot{max-width:45%}.pelanggan-filter-lokasi{flex-wrap:wrap}.pelanggan-filter-lokasi label{flex:1;min-width:0}.pelanggan-filter-lokasi select{min-width:0;width:100%}}
 @media(max-width:600px){.portal-customer .pelanggan-hero-proses{padding:16px}.portal-customer .pelanggan-hero-proses h1{font-size:24px}.pelanggan-inti-fakta{gap:8px}.pelanggan-inti-fakta dd{font-size:14px}.pelanggan-proses-ringkas>a{grid-template-columns:minmax(0,1fr) auto}.pelanggan-proses-ringkas .pelanggan-penanda{max-width:95px;text-align:center}}
+.portal-customer .pk-detail__hero>.pelanggan-kemasan-barang,.portal-customer .pk-detail__hero>.pelanggan-satuan-stok{flex:1 0 100%;width:100%;min-width:0;border:0;background:none;padding:0;margin:0}
+.portal-customer .pk-detail__hero .pelanggan-kemasan-barang h2{font-size:13px;font-weight:400;color:var(--pd-muted);margin:0 0 8px}
+.portal-customer .pk-detail__hero .pelanggan-jumlah-berisi{font-size:19px;font-weight:600;color:var(--pd-ink);line-height:1.4;margin:8px 0 4px}
+.portal-customer .pk-detail__hero .pelanggan-ukuran-nominal,.portal-customer .pk-detail__hero .pelanggan-belum-timbang{font-size:13px;color:var(--pd-muted);line-height:1.6;margin:0}
+.portal-customer .pk-detail__hero .pelanggan-belum-timbang{color:var(--pd-amber);font-weight:600}
+.portal-customer .pk-detail__hero>.pelanggan-peringatan-stok{font-size:12px;line-height:1.4;padding:4px 9px;margin:0;width:max-content;max-width:100%}
+.pelanggan-kemasan-baris .pelanggan-bahan-kemasan{margin:8px 0 0}.pelanggan-bahan-kemasan>summary{font-weight:400}.pelanggan-bahan-kemasan>p{font-size:13px;margin:4px 0 0}
+.pelanggan-stok-petunjuk>.pelanggan-pembaruan{padding:12px 16px;margin:0}
+.pelanggan-satuan-stok .pelanggan-penanda{margin:8px 0 0}
+.pelanggan-kemasan-baris{min-width:0;overflow-wrap:anywhere}.portal-customer .pk-detail__weight strong{white-space:normal;overflow-wrap:anywhere;text-align:right;min-width:0}.pelanggan-detail-lipat.pelanggan-stok-petunjuk{padding-top:0}
+@media(max-width:540px){.portal-customer .pk-detail__hero>.pelanggan-kemasan-barang,.portal-customer .pk-detail__hero>.pelanggan-satuan-stok{flex:0 0 auto}}

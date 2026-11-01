@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
 <div class="pelanggan-halaman pelanggan-pengambilan keluar-ringkas">
-<header class="pelanggan-sapaan"><h1>Pengambilan barang</h1><p class="pelanggan-redup">Barang milik Anda yang diambil atau dikirim dari pabrik.</p></header>
+<header class="pelanggan-sapaan"><h1>Pengambilan barang</h1><p class="pelanggan-redup">Barang milik Anda yang diambil atau dikirim dari pabrik.</p><p class="pelanggan-redup">Untuk rencana pengambilan barang, konfirmasikan dengan petugas.</p></header>
 <form method="get" action="/barang-keluar" class="pelanggan-filter-masuk keluar-filter saring">
 <label>Cari pengambilan<input class="fld" type="search" name="q" value="{{ pencarian }}" placeholder="Cari kode atau plat…"></label>
 <label>Status<select class="fld" name="status">{% for value,label in [('', 'Semua status'),('perintah','Menunggu dimuat'),('dimuat','Menunggu pemeriksaan'),('selesai','Selesai'),('batal','Dibatalkan')] %}<option value="{{ value }}"{% if status_filter==value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>

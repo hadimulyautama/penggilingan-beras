@@ -399,3 +399,22 @@ penimbangan, catatan penerimaan dan mutu. Perhitungan sumber, FIFO, PDF,
 transit, serta tampilan operator tidak diubah. Alamat stok lama tetap dapat
 dibaca; judul spesifik dan satu filter lokasi menggantikan tombol kategori
 serta tombol gudang yang berulang di portal pelanggan.
+
+Ringkasan detail stok mengelompokkan berat stok dan kemasan dalam satu kartu.
+Pada satu kelompok dengan berat persis sama dengan total, berat tidak diulang.
+Berat tiap kelompok tetap ditampilkan untuk beberapa ukuran/kelompok atau
+ketika nilainya berbeda dari total. Ukuran karung selalu berlabel nominal;
+tidak ada perkalian ukuran menjadi hasil timbang baru. Jenis bahan kemasan
+tersedia pada rincian yang dapat dibuka.
+
+Jumlah karung PK memakai kalimat dari pembaca native, dengan penanda
+perkiraan tetap terlihat. Berat pembulatan kedua tidak diulang. Jika berat
+belum ditimbang, jumlah karung yang tercatat menjadi angka utama dan
+ketidaktersediaan berat dinyatakan jelas. Peringatan penimbangan ditandai
+ringkas; alasan, angka penerimaan dan selisih asli tetap tersedia pada catatan.
+
+Penanda hasil sementara tetap terlihat di kartu utama, sementara rincian
+penyebab/angkanya dapat dibuka pada Rincian jumlah stok. Waktu stok yang
+belum tersedia ada pada Informasi stok; waktu buka halaman tidak dipakai
+sebagai pengganti. Petunjuk umum rencana pengambilan ada sekali pada menu
+Pengambilan barang, tanpa diulang pada setiap detail stok.

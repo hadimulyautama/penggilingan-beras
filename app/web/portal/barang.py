@@ -160,7 +160,8 @@ async def baca(db,scope,d):
                 if intake.berat_kg is None:bobot_kg=None
                 if intake.pk_purchase_batch_id in scope.ids(PkPurchaseBatch):
                     from app.penggilingan.gudang2.service import ringkasan_karung
-                    karung_berisi=await ringkasan_karung(db,intake)
+                    from .karung import ringkasan_berisi
+                    karung_berisi=ringkasan_berisi(await ringkasan_karung(db,intake))['label']
             jenis='pk'
         else:
             jenis=query.get('jenis',['belum_dikenal'])[0]

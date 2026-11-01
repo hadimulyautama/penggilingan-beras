@@ -81,16 +81,16 @@ def ringkas(s,base,*,report_available=None):
             kemasan=stok.select_one('.pelanggan-kemasan-barang')
             if kemasan:
                 hero=stok.select_one('.pk-detail__hero')
-                if hero:hero.insert_after(kemasan.extract())
+                if hero:hero.append(kemasan.extract())
             ringkasan=stok.select_one('section[aria-labelledby=ringkasan-produk]')
             if ringkasan:
                 for note in list(ringkasan.select('p.bantu')):
                     if 'belum final' in note.get_text(' ',strip=True).lower():
                         hero=stok.select_one('.pk-detail__hero')
                         if hero:
-                            note['class']=['pelanggan-peringatan-stok']
-                            hero.insert_after(note.extract())
-            lipat(ringkasan,'Riwayat jumlah barang')
+                            badge=s.new_tag('span',attrs={'class':'pelanggan-penanda pelanggan-penanda--hati pelanggan-peringatan-stok'})
+                            badge.string='Hasil sementara';hero.append(badge)
+            lipat(ringkasan,'Rincian jumlah stok')
             sumber=stok.select_one('section[aria-labelledby=rincian-produk]')
             if sumber and sumber.find_parent('details'):
                 sumber.find_parent('details').find('summary',recursive=False).string='Asal barang'
