@@ -214,3 +214,7 @@ body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;bord
 .pelanggan-satuan-stok .pelanggan-penanda{margin:8px 0 0}
 .pelanggan-kemasan-baris{min-width:0;overflow-wrap:anywhere}.portal-customer .pk-detail__weight strong{white-space:normal;overflow-wrap:anywhere;text-align:right;min-width:0}.pelanggan-detail-lipat.pelanggan-stok-petunjuk{padding-top:0}
 @media(max-width:540px){.portal-customer .pk-detail__hero>.pelanggan-kemasan-barang,.portal-customer .pk-detail__hero>.pelanggan-satuan-stok{flex:0 0 auto}}
+
+/* Tiap tahap punya angka sendiri; bahan aktif tidak menjadi saldo siap pakai. */
+.pelanggan-tahap+.pelanggan-tahap{border-top:1px solid var(--pd-line);margin-top:20px;padding-top:20px}
+.pelanggan-tahap>.pelanggan-judul h3{margin:0;font-size:1.05rem}.pelanggan-tahap>.pelanggan-redup{margin:8px 0 12px}

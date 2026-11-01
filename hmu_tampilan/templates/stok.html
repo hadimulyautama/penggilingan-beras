@@ -25,11 +25,12 @@
     {% for p in kelompok_pk %}
     <section class="stok-pelanggan" aria-label="Titipan {{ p.pemilik }}">
       <h2 class="stok-pelanggan__judul">{{ p.pemilik }} · Titipan jasa</h2>
-      {% with lot=p.lot, tempat=p.tempat, total=p.total, pelanggan_filter=p.pelanggan_id %}
-        {% include "_stok_pk_daftar.html" %}
+      {% with lot=p.lot, tempat=p.tempat, total=p.total, pelanggan_filter=p.pelanggan_id, TAHAP_STOK=p.tahap_stok|default([]) %}
+        {% if TAHAP_STOK %}{% include "_stok_per_tahap.html" %}{% else %}{% include "_stok_pk_daftar.html" %}{% endif %}
       {% endwith %}
     </section>
     {% endfor %}
+  {% elif TAHAP_STOK %}{% include "_stok_per_tahap.html" %}
   {% else %}{% include "_stok_pk_daftar.html" %}{% endif %}
 {% endif %}
 
@@ -40,7 +41,7 @@
 {% endblock %}
 
 {% block kaki %}
-<div class="kaki">{%- if VIEW == V_POLESAN %}PK di tumpukan tersedia; PK di silo menjadi bahan proses{%- elif boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya{%- else %}Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini{% endif -%}</div>
+<div class="kaki">Saldo mengikuti pencatatan pekerjaan; sisa bahan dalam proses dikonfirmasi saat penyelesaian.</div>
 {% if boleh_ubah or boleh_minta or boleh_pindah_tumpukan %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
 {% endif %}

@@ -9,6 +9,7 @@ from urllib.parse import parse_qs,urlsplit
 from sqlalchemy import select,exists,func
 
 from .navigation import portal_url
+from app.services.tahap_stok import MENUNGGU, DALAM_PROSES, HASIL, kelompok_baris
 
 NAMA={'gabah':'Gabah','pk':'Beras pecah kulit (PK)','beras':'Beras',
       'broken':'Beras pecah (broken)','menir':'Menir','bekatul':'Bekatul',
@@ -40,10 +41,10 @@ def ringkas(rows):
     return sorted(grup.values(),key=lambda g:(urut.get(g['kunci'],99),g['nama']))
 
 
-def _baris(jenis,nama,kode,bobot,lokasi,*,href=None,status='',asal=(),catatan=(),identitas=None):
+def _baris(jenis,nama,kode,bobot,lokasi,*,href=None,status='',asal=(),catatan=(),identitas=None,tahap=MENUNGGU):
     return dict(komoditas=jenis,nama=nama,kode=kode,kg=bobot.kg,
         final=bobot.pasti,lokasi=lokasi,href=portal_url(href) if href else None,
-        status=status,asal=list(asal),catatan=list(catatan),identitas=identitas)
+        status=status,asal=list(asal),catatan=list(catatan),identitas=identitas,tahap=tahap)
 
 
 def _batch(b,scope):
@@ -120,7 +121,8 @@ async def baca(db,scope,d):
         rows.append(_baris('gabah','Gabah',lot.kode_lot,dari_batches(bs),
             mesin.nama if mesin else 'Mesin pengering',
             status='Sedang dikeringkan' if lot.status=='proses' else 'Menunggu dipindahkan' if selesai else 'Sedang didinginkan',
-            asal=[_batch(b,scope) for b in bs],href=href,identitas=('pengeringan',lot.id)))
+            asal=[_batch(b,scope) for b in bs],href=href,identitas=('pengeringan',lot.id),
+            tahap=MENUNGGU if selesai else DALAM_PROSES))
     for row,nama in (await db.execute(select(SiloStorage,Silo.nama_silo).join(Silo,Silo.id==SiloStorage.silo_id)
         .where(SiloStorage.jasa_id.in_(scope.jasa_ids),SiloStorage.status=='terisi'))).all():
         asal=await asal_storage(row)
@@ -128,7 +130,8 @@ async def baca(db,scope,d):
         proses=await giling_berjalan_untuk_silo(db,row.silo_id)
         rows.append(_baris('gabah','Gabah',nama,await _row_bobot(db,row),nama,
             status='Sedang digiling' if proses and proses.kode_proses in scope.codes else 'Menunggu penggilingan',
-            asal=asal,identitas=('silo-gabah',row.id)))
+            asal=asal,identitas=('silo-gabah',row.id),
+            tahap=DALAM_PROSES if proses and proses.kode_proses in scope.codes else MENUNGGU))
     for lot in (await db.scalars(select(GabahKeringLot).where(GabahKeringLot.jasa_id.in_(scope.jasa_ids)))).all():
         kg=await pending_gabah_kering_kg(db,lot.id)
         if kg<=0:continue
@@ -173,6 +176,7 @@ async def baca(db,scope,d):
             kg=bobot_kg,final=r['final'],lokasi=r['lokasi'],href=portal_url(r['href']),
             status='Berat sementara' if not r['final'] else '',asal=[],catatan=catatan,
             karung_berisi=karung_berisi,
+            tahap=MENUNGGU if r['nama']=='PK' and query.get('gudang')==['g2'] else HASIL,
             identitas=('stok',r['href'])))
 
     # Semua silo G2, termasuk yang sedang dipakai proses. Guard sumber
@@ -230,9 +234,23 @@ async def baca(db,scope,d):
             rows.append(_baris(k,NAMA.get(k,k),silo.nama_silo,Bobot(n,PASTI if pasti else PERKIRAAN),silo.nama_silo,
                 status='Sedang disosoh' if proses else 'Menunggu penyosohan',
                 asal=asal.get(k,[]),href=f'/proses-aktif/sosoh/{proses.kode_proses}' if proses else None,
-                identitas=('silo-g2',silo.id,k)))
+                identitas=('silo-g2',silo.id,k),tahap=DALAM_PROSES if proses else MENUNGGU))
         if any(n is None or (not n and not i.bobot_final) for i,n,_ in intakes):
             rows.append(_baris('pk',NAMA['pk'],silo.nama_silo,Bobot(None,PERKIRAAN),silo.nama_silo,
                 status='Sebagian bahan belum ditimbang',asal=asal.get('pk',[]),
-                identitas=('silo-g2-belum-diukur',silo.id)))
+                identitas=('silo-g2-belum-diukur',silo.id),tahap=DALAM_PROSES if proses else MENUNGGU))
     return ringkas(rows)
+
+
+def per_tahap(komoditas):
+    """Susun ulang saldo yang sama; jumlah lintas tahap tidak ditampilkan."""
+    rows = [r for g in komoditas for r in g['rincian']]
+    result = []; seen = set()
+    for g in kelompok_baris(rows):
+        komoditas = ringkas(g['baris'])
+        for k in komoditas:
+            k['tahap'] = g['kunci']
+            k['id'] = 'komoditas-' + k['kunci'] + ('-' + g['kunci'] if k['kunci'] in seen else '')
+            seen.add(k['kunci'])
+        result.append({**g, 'komoditas':komoditas})
+    return result

@@ -1,0 +1,25 @@
+{% for tahap in TAHAP_STOK %}
+<section class="stok-tahap stok-tahap--{{ tahap.kunci }}" data-tahap="{{ tahap.kunci }}">
+  <h2 class="stok-tahap__judul">{{ tahap.judul }}</h2>
+  <p class="bantu">{{ tahap.keterangan }}</p>
+  {% if tahap.baris %}<div class="stok-tahap__baris">
+    {% for b in tahap.baris %}
+    <article class="stok-tahap__kartu">
+      <div><h3>{{ b.nama }}</h3><p class="bantu">{{ b.kode }} · {{ b.lokasi }}</p>
+      {% if b.proses %}<p class="bantu">Proses {{ b.proses }}</p>{% endif %}</div>
+      <div class="stok-tahap__bobot"><span>{{ 'Bahan masuk tercatat' if tahap.kunci=='dalam_proses' else 'Stok menunggu proses' }}</span><strong>{{ st.kg_rinci(b.kg) ~ ' kg' if b.kg is not none else 'Belum ditimbang' }}</strong></div>
+      {% if tahap.kunci=='dalam_proses' %}<p class="bantu">Sisa aktual belum dikonfirmasi.</p>{% elif not b.final %}<p class="bantu">Berat masih sementara.</p>{% endif %}
+      {% if b.href %}<a class="stok-tahap__tautan" href="{{ b.href }}">{{ 'Lihat proses' if tahap.kunci=='dalam_proses' else 'Lihat asal bahan' }} →</a>{% endif %}
+    </article>
+    {% endfor %}
+  </div>{% endif %}
+  {% if tahap.lot or tahap.tempat %}
+    {% with lot=tahap.lot, tempat=tahap.tempat, total=tahap.lot|sum(attribute='tersedia'), stok_tahap=tahap.kunci %}
+      {% include '_stok_pk_daftar.html' %}
+    {% endwith %}
+  {% elif not tahap.baris %}<p class="bantu">Belum ada barang pada tahap ini.</p>{% endif %}
+  {% if tahap.kunci=='hasil' and STOK_NAV and STOK_NAV.tab[1].boleh %}
+    <a class="stok-tahap__tautan" href="{{ STOK_NAV.tab[1].href }}">Lihat hasil beras dan hasil samping →</a>
+  {% endif %}
+</section>
+{% endfor %}

@@ -8,7 +8,7 @@ from urllib.parse import urlencode, urlsplit, parse_qs
 from fastapi import HTTPException
 
 from app.database import SessionLocal
-from app.web.layar import MEJA, POLESAN, gudang2
+from app.web.layar import MEJA, POLESAN, gudang1, gudang2
 
 HALAMAN = {
     'stok.html': ('bahan', 'pabrik'),
@@ -89,12 +89,38 @@ async def siapkan(request, nama, konteks):
         gudang = ''
     pelanggan = []
     kelompok = []
+    bahan_lokasi = []
+    if jenis == 'bahan':
+        from sqlalchemy import select
+        from app.models import Jasa
+        from app.services.stok_lokasi import bahan
+        async with SessionLocal() as db:
+            scope = getattr(request.state, 'portal_scope', None)
+            if scope is not None:
+                # Alias stok portal juga wajib melalui pemeriksaan sumber
+                # portal; label jasa saja tidak cukup untuk membaca isi silo.
+                from app.web.portal.barang import baca
+                barang = await baca(db, scope, {})
+                for grup in barang:
+                    for r in grup['rincian']:
+                        g2 = r['identitas'][0] in ('pk-masuk', 'silo-g2', 'silo-g2-belum-diukur')
+                        if gudang and gudang != ('g2' if g2 else 'g1'):
+                            continue
+                        bahan_lokasi.append(dict(nama=r['nama'], kode=r['kode'], kg=r['kg'],
+                            final=r['final'], lokasi=r['lokasi'], tahap=r['tahap'],
+                            jasa_id=next(iter(scope.jasa_ids)), href=r['href'], proses=''))
+            else:
+                jasa_ids = (await db.scalars(select(Jasa.id))).all() if pemilik == 'jasa' else None
+                bahan_lokasi = await bahan(db, jasa_ids=jasa_ids,
+                    g1=gudang1(view) and gudang in ('', 'g1'),
+                    g2=gudang2(view) and gudang in ('', 'g2'))
     if pemilik == 'jasa':
         if jenis == 'bahan':
             from sqlalchemy import select
             from app.models import Jasa, Pelanggan
             barang = konteks['lot'] + konteks['tempat']
             ids = {b.jasa_id for b in barang if b.jasa_id is not None}
+            ids.update(b['jasa_id'] for b in bahan_lokasi if b['jasa_id'] is not None)
             async with SessionLocal() as db:
                 rows = (await db.execute(
                     select(Jasa.id, Jasa.pelanggan_id, Pelanggan.nama_pelanggan)
@@ -109,7 +135,8 @@ async def siapkan(request, nama, konteks):
                 lot = [b for b in konteks['lot'] if peta.get(b.jasa_id, (None,))[0] == pelanggan_id]
                 tempat = [b for b in konteks['tempat'] if peta.get(b.jasa_id, (None,))[0] == pelanggan_id]
                 kelompok.append(dict(pelanggan_id=pelanggan_id, pemilik=nama_pelanggan,
-                                     lot=lot, tempat=tempat, total=sum(b.tersedia for b in lot)))
+                                     lot=lot, tempat=tempat, total=sum(b.tersedia for b in lot),
+                                     bahan_lokasi=[b for b in bahan_lokasi if peta.get(b['jasa_id'], (None,))[0] == pelanggan_id]))
         else:
             kelompok = konteks['daftar']
         pelanggan = [(p['pelanggan_id'], p['pemilik']) for p in kelompok]
@@ -133,6 +160,15 @@ async def siapkan(request, nama, konteks):
             konteks['total'] = sum(b.tersedia for b in konteks['lot'])
         else:
             konteks['daftar'] = kelompok
+
+    if jenis == 'bahan':
+        from app.services.tahap_stok import untuk_stok
+        if pemilik == 'jasa':
+            for p in kelompok:
+                p['tahap_stok'] = untuk_stok(p['bahan_lokasi'], p['lot'], p['tempat'])
+            konteks['TAHAP_STOK'] = []
+        else:
+            konteks['TAHAP_STOK'] = untuk_stok(bahan_lokasi, konteks['lot'], konteks['tempat'])
 
     # Produk lahir di G2; memilih G1 tidak boleh tetap menampilkan angka G2.
     if jenis == 'produk' and gudang == 'g1':

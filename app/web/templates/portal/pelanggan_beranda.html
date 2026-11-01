@@ -1,14 +1,13 @@
 {% extends 'base.html' %}
-{% from 'portal/_komoditas.html' import daftar_komoditas %}
+{% from 'portal/_komoditas.html' import daftar_tahap %}
 {% from 'portal/_pembaruan_proses.html' import pembaruan %}
 {% block isi %}
 <div class="pelanggan-halaman pelanggan-beranda">
 <header class="pelanggan-sapaan"><h1>Beranda</h1></header>
 <div class="pelanggan-grid pelanggan-ringkasan">
 <section class="pelanggan-panel pelanggan-stok-beranda" aria-labelledby="judul-stok-beranda"><div class="pelanggan-judul"><h2 id="judul-stok-beranda">Barang di pabrik</h2>{% if komoditas %}<a class="pelanggan-tautan" href="/pelanggan/barang-saya">Semua stok</a>{% endif %}</div>
-{% if komoditas %}{{ daftar_komoditas(komoditas[:3],kg) }}
-{% if komoditas|length > 3 %}<details class="pelanggan-rincian pelanggan-stok-lain"><summary>Barang lainnya · {{ komoditas|length - 3 }} jenis</summary>{{ daftar_komoditas(komoditas[3:],kg) }}</details>{% endif %}
-{% else %}<div class="pelanggan-status pelanggan-status-kosong"><h2>{{ utama.judul }}</h2><p>{{ utama.isi }}</p></div>{% endif %}
+{% if not komoditas %}<p class="pelanggan-redup">{{ utama.judul }} {{ utama.isi }}</p>{% endif %}
+{{ daftar_tahap(kelompok_stok,kg,ringkas=true) }}
 </section>
 <section class="pelanggan-panel pelanggan-progres pelanggan-progres-beranda" aria-labelledby="judul-proses-beranda">
 <div class="pelanggan-judul"><h2 id="judul-proses-beranda">Proses berjalan</h2>{% if progres or transit %}<a class="pelanggan-tautan" href="/pelanggan/jasa-saya">Semua proses</a>{% endif %}</div>
