@@ -1,5 +1,6 @@
 {% import "_proses_visual.html" as visual with context %}
 {% import "_kepemilikan.html" as milik with context %}
+{% from "_bobot_pengeringan.html" import dua_bobot %}
 {# ── Satu bentuk kartu, dua kepadatan ──
    Beranda dan Sedang berjalan memuat benda yang SAMA. Kalau masing-masing
    punya salinan markup-nya sendiri, cepat atau lambat keduanya berbeda isi —
@@ -32,6 +33,7 @@
     {% if b.sub %}<span class="benda__sub">{{ b.sub }}</span>{% endif %}
   </div>
   {% endif %}
+  {% if b.bobot_pengeringan %}{{ dua_bobot(b.bobot_pengeringan) }}{% endif %}
   {% if b.fakta %}
     <dl class="fakta">
       {% for label, nilai in b.fakta %}
@@ -120,6 +122,7 @@
    tak punya mekanisme expand sama sekali, jadi keduanya TETAP memanggil
    `penuh()` lalu `penuh_anak()` berurutan, selalu tampil seperti semula. #}
 {% macro penuh_anak(b) -%}
+  {% if b.bobot_pengeringan and b.anak %}<p class="bantu">Bobot catatan bahan asal; bukan pembagian estimasi bobot kering.</p>{% endif %}
   {% if b.anak_grup %}
     <div class="anak anak--kelompok">
       {% for judul, baris_grup in b.anak_grup %}
@@ -185,6 +188,7 @@
     {{- keterangan -}}
     {% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}
   </div>
+  {% if b.bobot_pengeringan %}{{ dua_bobot(b.bobot_pengeringan) }}{% endif %}
   {% if progres %}
     {% if b.nota %}<div class="beranda-proses-status">{{ b.nota }}</div>{% elif b.keadaan %}<div class="beranda-proses-status">{{ b.keadaan }}</div>{% endif %}
     {{ visual.kemajuan(b) }}

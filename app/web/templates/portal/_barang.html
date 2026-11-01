@@ -10,11 +10,13 @@
 </div>
 {% endmacro %}
 
+{% from '_bobot_pengeringan.html' import dua_bobot %}
 {% macro tunggu(rows, tampilkan_berat=true) %}
 <div class="pelanggan-daftar">
 {% for r in rows %}<article class="pelanggan-barang">
   <div class="pelanggan-baris"><div><h3>{{ r.nama }}</h3><p class="pelanggan-redup">{{ r.lokasi }}{% if r.lokasi %} · {% endif %}Menunggu proses</p></div>{% if r.berat and tampilkan_berat %}<strong class="pelanggan-berat">{{ r.berat }}</strong>{% endif %}</div>
   {% if tampilkan_berat %}<p class="pelanggan-redup">{{ r.isi }}</p>{% endif %}
+  {% if r.bobot_pengeringan and tampilkan_berat %}{{ dua_bobot(r.bobot_pengeringan) }}{% endif %}
   {% if r.rincian %}<details class="pelanggan-rincian"><summary>Lihat bahan di lokasi ini</summary><ul>{% for anak in r.rincian %}<li>{{ anak|join(' · ') }}</li>{% endfor %}</ul></details>{% endif %}
 </article>{% endfor %}
 </div>

@@ -199,6 +199,8 @@ class Baris:
     #: Kartu tempat belum mempunyai kode transaksi/proses. Portal menelusuri
     #: sumber isinya melalui ID ini; nama silo/mesin bukan bukti kepemilikan.
     ruang_baca: tuple[str, int] | None = None
+    #: Dua bobot hasil drying untuk tampilan saja; bukan saldo/mutasi stok.
+    bobot_pengeringan: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -2102,9 +2104,12 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         giling_berjalan_untuk_silo)
 
     wid = await _g1_warehouse_id(db)
-    for silo in (await db.execute(
+    silos_g1 = (await db.execute(
         select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
-    )).scalars().all():
+    )).scalars().all()
+    from app.services.estimasi_pengeringan import untuk_silo_banyak
+    estimasi_silo = await untuk_silo_banyak(db, [s.id for s in silos_g1])
+    for silo in silos_g1:
         if not await _silo_active_rows(db, silo.id):
             continue
         # ── "ada di antara SUMBER proses yang berjalan", bukan "silo_id-nya" ──
@@ -2136,17 +2141,22 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             if r.drying_lot_id:
                 bid_silo += [x.id for x in await _lot_batches(db, r.drying_lot_id)]
         asal_silo = await _asal(db, set(bid_silo))
+        estimasi = estimasi_silo.get(silo.id, [])
+        if estimasi and any(not r.drying_lot_id for r in baris_silo):
+            # Jangan menyebut seluruh saldo campuran sebagai hasil drying.
+            estimasi = [dict(e, saldo_campuran=bs.teks()) for e in estimasi]
         b.transit.append(Baris(
-            kode=silo.nama_silo, pemilik_ids=tuple({r.jasa_id for r in baris_silo}), isi=f"gabah kering · {bs.teks()}",
+            kode=silo.nama_silo, pemilik_ids=tuple({r.jasa_id for r in baris_silo}), isi=("Gabah hasil pengeringan" if estimasi else f"gabah kering · {bs.teks()}"),
             ruang_baca=("silo_gabah", silo.id),
             keadaan="mulai giling bila siap", aksi="mulai_giling",
             nilai=huruf, fase="silo",
             judul=silo.nama_silo,
-            utama=_utama(bs),
-            sub="gabah kering · menunggu giliran digiling"
+            utama=None if estimasi else _utama(bs),
+            sub=("Gabah hasil pengeringan" if estimasi else "gabah kering") + " · menunggu giliran digiling"
                 + (f" · {_pemasok_ringkas(asal_silo)}" if asal_silo else ""),
             anak=asal_silo,
-            ringkas="gabah kering · menunggu giliran digiling",
+            ringkas=("Gabah hasil pengeringan" if estimasi else "gabah kering") + " · menunggu giliran digiling",
+            bobot_pengeringan=estimasi,
             # Kartunya menyebut SATU silo, tapi borangnya membuka semuanya:
             # silo ini sudah tercentang, dan yang lain boleh ikut dicentang —
             # hasilnya tetap satu lot. Keterangannya menyebut itu, sebab

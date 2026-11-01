@@ -92,7 +92,8 @@ def baris_transit(rows):
     return [dict(nama=r.judul or r.kode, kode=r.kode, isi=r.isi,
                  berat=' '.join(map(str,r.utama)) if r.utama else None,
                  sejak=r.sejak, lokasi={'g1':'Gudang 1','g2':'Gudang 2'}.get(r.gudang,''),
-                 status='Menunggu proses', rincian=r.anak)
+                 status='Menunggu proses', rincian=r.anak,
+                 bobot_pengeringan=getattr(r, 'bobot_pengeringan', []))
             for r in rows]
 
 

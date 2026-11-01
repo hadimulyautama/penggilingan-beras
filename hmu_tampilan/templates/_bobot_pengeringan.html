@@ -1,0 +1,17 @@
+{# Komponen baca bersama Produksi/portal; tidak membawa tindakan operasional. #}
+{% macro dua_bobot(rows) -%}
+<div class="bobot-pengeringan" style="display:grid;gap:14px;margin-top:14px;min-width:0">
+{% for e in rows %}
+<section aria-label="Bobot gabah {{ e.kode }}" style="min-width:0">
+  <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:18px;margin:0">
+    <div style="min-width:0"><dt style="font-size:14px;color:var(--redup,currentColor)">Bobot gabah basah masuk</dt><dd style="margin:5px 0 0;font-size:clamp(20px,3vw,28px);font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere">{{ e.basah or 'Belum diketahui' }}</dd><small style="font-size:12px;color:var(--redup,currentColor)">Catatan penerimaan awal</small></div>
+    <div style="min-width:0"><dt style="font-size:14px;color:var(--redup,currentColor)">{{ 'Estimasi hasil drying awal' if e.historis else 'Estimasi bobot gabah kering' }}</dt><dd style="margin:5px 0 0;font-size:clamp(20px,3vw,28px);font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere">{{ ('≈ ' ~ e.kering) if e.kering else 'Belum tersedia' }}</dd><small style="font-size:12px;color:var(--redup,currentColor)">Estimasi · belum ditimbang</small></div>
+  </dl>
+  <p class="bantu" style="margin:12px 0 0;font-size:13px;line-height:1.6">Gabah yang sama, sebelum dan sesudah pengeringan. Estimasi memperhitungkan penurunan kadar air; bobot penerimaan awal tetap tercatat.</p>
+  <p class="bantu" style="margin:6px 0 0;font-size:13px;line-height:1.6">{{ e.kode }}{% if e.awal and e.akhir %} · Indikator mesin {{ e.awal }} → {{ e.akhir }}{% endif %}</p>
+  {% for pesan in e.catatan %}<p class="bantu" style="margin:6px 0 0;font-size:13px;line-height:1.6">{{ pesan }}</p>{% endfor %}
+  {% if e.saldo_campuran %}<p class="bantu" style="margin:6px 0 0;font-size:13px;line-height:1.6">Silo juga memuat sumber lain. Saldo pencatatan sumber gabungan: {{ e.saldo_campuran }}; estimasi di atas hanya untuk {{ e.kode }}.</p>{% endif %}
+</section>
+{% endfor %}
+</div>
+{%- endmacro %}
