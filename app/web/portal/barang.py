@@ -27,13 +27,14 @@ def ringkas(rows):
             continue
         k=r['komoditas']
         g=grup.setdefault(k,dict(kunci=k,nama=NAMA.get(k,r['nama']),kg=None,
-            belum_diukur=0,sementara=False,rincian=[],perlu_periksa=False))
+            belum_diukur=0,sementara=False,perkiraan=False,rincian=[],perlu_periksa=False))
         g['rincian'].append(r)
         if r['kg'] is None:
             g['belum_diukur']+=1
         else:
             g['kg']=(g['kg'] or Decimal(0))+Decimal(str(r['kg']))
             g['perlu_periksa']=g['perlu_periksa'] or r['kg']<0
+            g['perkiraan']=g['perkiraan'] or not r['final']
         g['sementara']=g['sementara'] or not r['final']
     urut={k:i for i,k in enumerate(NAMA)}
     return sorted(grup.values(),key=lambda g:(urut.get(g['kunci'],99),g['nama']))

@@ -191,7 +191,7 @@ async def halaman(request, bagian='beranda'):
             base='/pelanggan/riwayat-proses',pilihan=[('','Semua proses')]+[(k,v) for k,v in NAMA_PROSES.items() if k!='pendinginan'],
             judul='Riwayat proses',pengantar='Proses yang sudah selesai. Buka untuk melihat bahan dan hasilnya.',
             label_jenis='Jenis proses',satuan='proses')
-    judul_halaman={'beranda':'Beranda','jasa':'Proses Berjalan','barang':'Barang Saya',
+    judul_halaman={'beranda':'Beranda','jasa':'Proses berjalan','barang':'Barang saya',
         'riwayat':'Riwayat proses','masuk':'Barang masuk','pengambilan':'Pengambilan barang'}
     return render_customer(request,f'portal/{bagian}.html',d=d,bahan=bahan,hasil=hasil,
         transit=transit,progres=progres,utama=status_utama(d,transit),komoditas=komoditas,

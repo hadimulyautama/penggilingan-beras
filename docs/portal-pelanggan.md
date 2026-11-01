@@ -346,3 +346,18 @@ Tab pembaca native dapat dijangkau dengan tombol arah dan diaktifkan melalui
 Enter/Spasi tanpa mengubah pembatasan GET. Halaman mutu serta pengembalian
 memakai judul pelanggan, satu tautan kembali dan satu pintu per bagian; nomor
 jasa berulang dan petunjuk operator disisihkan. Catatan asli tetap dibaca utuh.
+
+Beranda ringkas mendahulukan stok dan proses dalam dua panel (berdampingan
+di desktop, berurutan di HP). Tiga komoditas pertama terlihat langsung;
+komoditas berikutnya dapat dibuka pada Barang lainnya, dengan rincian batch
+tetap tersedia. Tiga proses pertama mempunyai satu tautan per proses dan
+status yang jelas; proses dijeda didahulukan. Sisa proses dan bahan menunggu
+tersedia lewat satu tautan Semua proses. Angka kemajuan hanya ditampilkan
+untuk target kadar air asli, tanpa mengubah rasio hasil menjadi persen selesai.
+
+Label total komoditas membedakan hasil timbang dengan angka yang masih
+mencakup perkiraan. Peringatan Ada barang belum ditimbang terlihat sebelum
+rincian dibuka, dan barang tersebut tidak termasuk angka total yang tersedia.
+Berat yang seluruhnya belum diketahui tetap Belum ditimbang, bukan nol.
+Nama menu, judul dan tautan kembali memakai penulisan yang sama. Pemasangan
+aplikasi dan keluar tersedia di Pengaturan akun agar menu utama lebih ringkas.

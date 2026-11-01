@@ -18,11 +18,11 @@ def tujuan_kembali(base):
     path=urlsplit(base).path.removeprefix('/pelanggan')
     if path.startswith(('/riwayat-giling','/riwayat-pengeringan','/riwayat-sosoh','/riwayat-transfer')):
         return '/riwayat-proses','Riwayat proses'
-    if path.startswith(('/riwayat-qc','/stok','/barang-saya')):return '/barang-saya','Barang Saya'
+    if path.startswith(('/riwayat-qc','/stok','/barang-saya')):return '/barang-saya','Barang saya'
     if path.startswith('/barang-masuk'):return '/barang-masuk','Barang masuk'
     if path.startswith(('/barang-keluar','/retur')):return '/barang-keluar','Pengambilan barang'
     if '/nota' in path:return '/laporan','Dokumen'
-    return '/jasa-saya','Proses Berjalan'
+    return '/jasa-saya','Proses berjalan'
 
 
 def bahasa_pelanggan(s,base=''):

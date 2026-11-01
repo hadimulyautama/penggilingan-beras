@@ -2,7 +2,7 @@
 {% from 'portal/_komoditas.html' import daftar_komoditas %}
 {% block isi %}
 <div class="pelanggan-halaman">
-<header class="pelanggan-sapaan"><h1>Barang Saya</h1><p class="pelanggan-redup">Buka jenis barang untuk melihat stok, lokasi, dan batch asalnya.</p></header>
+<header class="pelanggan-sapaan"><h1>Barang saya</h1><p class="pelanggan-redup">Buka jenis barang untuk melihat stok, lokasi, dan batch asalnya.</p></header>
 <section class="pelanggan-panel" id="stok"><div class="pelanggan-judul"><h2>Barang di pabrik</h2></div>{{ daftar_komoditas(komoditas,kg) }}</section>
 <details class="pelanggan-rincian"><summary>Rincian stok & karung</summary><nav class="pelanggan-pintasan" aria-label="Rincian stok"><a href="/pelanggan/stok?tab=bahan">Beras pecah kulit (PK)</a><a href="/pelanggan/stok?tab=produk">Beras & hasil samping</a><a href="/pelanggan/stok?tab=karung">Karung saya</a></nav></details>
 </div>

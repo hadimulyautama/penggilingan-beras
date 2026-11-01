@@ -69,8 +69,8 @@ def ringkas_transaksi(s, base):
         for p in root.select('p.terima-bantu,.penerimaan-bobot>small'):
             text=p.get_text(' ',strip=True)
             replacements={
-                'Total berasal dari catatan penerimaan yang sah. Catatan ditolak tidak dihitung; ini bukan saldo stok sekarang.':'Jumlah ini adalah barang yang diterima. Sisa stok dapat dilihat di Barang Saya.',
-                'Bobot penerimaan, bukan saldo stok saat ini.':'Berat saat barang diterima. Sisa stok dapat dilihat di Barang Saya.',
+                'Total berasal dari catatan penerimaan yang sah. Catatan ditolak tidak dihitung; ini bukan saldo stok sekarang.':'Jumlah ini adalah barang yang diterima. Sisa stok dapat dilihat di Barang saya.',
+                'Bobot penerimaan, bukan saldo stok saat ini.':'Berat saat barang diterima. Sisa stok dapat dilihat di Barang saya.',
                 'Pencatatan QC penerimaan jenis barang ini belum tersedia.':'Pemeriksaan mutu belum tersedia untuk jenis barang ini.'}
             if text in replacements:p.string=replacements[text]
 

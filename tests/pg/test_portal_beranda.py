@@ -15,15 +15,18 @@ async def test_beranda_mendahulukan_barang_dan_bukan_tugas_operator(pg,portal):
         r=await c.get('/pelanggan/')
         assert r.status_code==200
         s=BeautifulSoup(r.text,'html.parser')
-        assert s.select_one('main h1').get_text().startswith('Halo, Pemilik Portal A')
-        assert s.select_one('.pelanggan-status h2')
+        assert s.select_one('main h1').get_text()=='Beranda'
+        assert not s.select('.pelanggan-status')
+        assert s.select_one('.pelanggan-stok-beranda') and s.select_one('.pelanggan-progres-beranda')
+        assert s.select_one('.portal-pengaturan [data-pasang-app]')
+        assert not s.select('.portal-pengaturan')[0].has_attr('open')
         assert 'perlu tindakan' not in s.select_one('main').get_text().lower()
         assert 'Barang di pabrik' in r.text
         assert s.select_one('#komoditas-gabah > summary')
         assert 'Kabar terbaru' not in s.select_one('main').get_text()
         assert not s.select('main a[href="/pelanggan/barang-masuk"],main a[href="/pelanggan/barang-keluar"],main a[href="/pelanggan/riwayat-proses"]')
         nav=s.select_one('.portal-sidebar nav')
-        assert [a.get_text(strip=True) for a in nav.select('a')]==['Beranda','Barang masuk','Barang Saya','Proses Berjalan','Riwayat proses','Pengambilan barang','Dokumen']
+        assert [a.get_text(strip=True) for a in nav.select('a')]==['Beranda','Barang masuk','Barang saya','Proses berjalan','Riwayat proses','Pengambilan barang','Dokumen']
         assert nav.select_one('[aria-current=page]').get_text(strip=True)=='Beranda'
         bawah=s.select_one('.portal-bawah')
         assert len(bawah.select('a'))==3 and bawah.select_one('button').get_text(strip=True).endswith('Menu')
@@ -90,7 +93,7 @@ async def test_transit_tampil_di_beranda_dan_barang_tanpa_data_pelanggan_lain(pg
             assert r.status_code==200
             assert 'Silo A' in r.text and '10.000' in r.text
         home=BeautifulSoup((await c.get('/pelanggan/')).text,'html.parser')
-        assert 'Menunggu proses' in home.select_one('.pelanggan-status').get_text()
+        assert 'Menunggu proses' in home.select_one('.pelanggan-progres').get_text()
     async with client(akun_uji[1]) as c:
         for path in ('/pelanggan/','/pelanggan/jasa-saya','/pelanggan/barang-saya'):
             r=await c.get(path)
@@ -112,7 +115,8 @@ async def test_hasil_giling_berjalan_tampil_sementara_tanpa_persen_selesai(pg,po
             assert r.status_code==200
             s=BeautifulSoup(r.text,'html.parser').select_one('.pelanggan-progres')
             assert s and '2.500' in s.get_text() and 'Hasil sementara' in s.get_text()
-            assert 'bukan persentase selesai' in s.get_text()
+            if path=='/pelanggan/jasa-saya':assert 'bukan persentase selesai' in s.get_text()
+            else:assert 'rasio hasil' not in s.get_text()
             assert not s.select('progress')
 
 

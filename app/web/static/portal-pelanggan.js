@@ -20,7 +20,7 @@
     if(!body.classList.contains('sidebar-open'))return;
     if(e.key==='Escape'){e.preventDefault();close(true);return;}
     if(e.key==='Tab'&&sidebar){
-      const focusable=[...sidebar.querySelectorAll('a[href],button:not([disabled]),input:not([type=hidden]),select,textarea')].filter(el=>el.getClientRects().length&&!el.closest('[hidden]'));
+      const focusable=[...sidebar.querySelectorAll('a[href],button:not([disabled]),input:not([type=hidden]),select,textarea,summary')].filter(el=>el.getClientRects().length&&!el.closest('[hidden]')&&!el.closest('details:not([open]) > :not(summary)'));
       const first=focusable[0],last=focusable[focusable.length-1];
       if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
       else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
