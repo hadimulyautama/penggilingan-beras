@@ -88,7 +88,7 @@ def baca_sesi(fungsi):
 
 
 def tampilan_singkat(fungsi):
-    """Snapshot tampilan 1 detik; transaksi/pekerja selalu membaca langsung.
+    """Snapshot tampilan 2 detik; transaksi/pekerja selalu membaca langsung.
 
     Pembaca memakai sesi pemanggil. Tidak membuka koneksi kedua atau
     meninggalkan tugas pembaca setelah permintaan putus.
@@ -109,6 +109,7 @@ def tampilan_singkat(fungsi):
             return not boleh_memo() or any(
                 getattr(db, n, ()) for n in ('new', 'dirty', 'deleted'))
 
+        _segarkan_lintas_proses()
         if langsung():
             return await fungsi(db, *args, **kwargs)
         loop = asyncio.get_running_loop()
@@ -120,7 +121,7 @@ def tampilan_singkat(fungsi):
         kunci = (db.get_bind(), tuple((k, _kunci_nilai(v))
             for k, v in bound.arguments.items() if k != 'db'))
         lama = nilai.get(kunci)
-        if lama is not None and time.monotonic() - lama[0] < 1:
+        if lama is not None and time.monotonic() - lama[0] < 2:
             return copy.deepcopy(lama[1])
         # Miliki koneksi sebelum memegang lock. Jika waiter memenuhi pool
         # sementara pembaca belum punya koneksi, keduanya akan saling tunggu.
@@ -132,7 +133,7 @@ def tampilan_singkat(fungsi):
                 if langsung():
                     return await fungsi(db, *args, **kwargs)
                 lama = nilai.get(kunci)
-                if lama is not None and time.monotonic() - lama[0] < 1:
+                if lama is not None and time.monotonic() - lama[0] < 2:
                     return copy.deepcopy(lama[1])
                 generasi = keadaan['generasi']
                 hasil = await fungsi(db, *args, **kwargs)
@@ -174,6 +175,7 @@ class NilaiSingkat:
         self._nilai[kunci] = (time.monotonic(), copy.deepcopy(nilai))
 
     async def ambil(self, kunci, baca):
+        _segarkan_lintas_proses()
         loop = asyncio.get_running_loop()
         if self._loop is not loop:
             self.hapus()
@@ -205,6 +207,11 @@ class NilaiSingkat:
         return copy.deepcopy(await asyncio.shield(self._tugas[kunci]))
 
 
+def _segarkan_lintas_proses():
+    from app.cache_epoch import berubah
+    if berubah():lupakan_cache()
+
+
 def lupakan_cache():
     for bersihkan in _pembersih:
         bersihkan()
@@ -222,6 +229,8 @@ def _sesudah_commit(session):
     if aktif is not None:
         aktif["memo"].clear()
     lupakan_cache()
+    from app.cache_epoch import catat
+    catat()
 
 
 def pasang_penghitung(engine):

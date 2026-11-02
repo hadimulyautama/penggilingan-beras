@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import os
+from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator,Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +15,10 @@ class Settings(BaseSettings):
     # Tautan antaraplikasi saja; tidak menjadi sumber tiket atau angka timbang.
     # Kosong ditampilkan sebagai konfigurasi belum tersedia, bukan URL tebakan.
     teraflow_web_url: str = ""
+
+    # Pool per proses: empat web maksimal 28 koneksi, pekerja maksimal 5.
+    db_pool_size: int = Field(default=3,ge=1,le=20)
+    db_max_overflow: int = Field(default=4,ge=0,le=20)
 
     # Database
     database_url: str = "postgresql+asyncpg://milluser:millpass@localhost:5432/penggilingan"
@@ -57,6 +62,9 @@ class Settings(BaseSettings):
     # Auto-watch invoice: pantau _TRANSIT → usul (arsip + update IT) lewat gerbang.
     # Default OFF (jaga biaya OCR/LLM; nyalakan setelah divalidasi, mis. saat GajiHub).
     invoice_auto: bool = False
+
+    # Mode lama tetap dapat dipakai untuk pengembangan langsung via uvicorn.
+    peran_proses: Literal['gabungan','web','pekerja'] = 'gabungan'
 
     # Aplikasi
     app_timezone: str = "Asia/Jakarta"

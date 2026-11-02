@@ -583,17 +583,12 @@ async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
       di layar lain adalah dua jawaban tentang berapa barang orang lain yang
       ada di gudang — dan yang menagihnya memegang salah satunya.
     """
-    pabrik = jasa = 0.0
-    procs = (await db.execute(select(MillingProcess.id,MillingProcess.jasa_id))).all()
-    rincian = await pk_breakdown_banyak(db, [p.id for p in procs])
-    for proc in procs:
-        bd = rincian[proc.id]
-        if bd.tersedia > 0:
-            if proc.jasa_id is None:
-                pabrik += bd.tersedia
-            else:
-                jasa += bd.tersedia
-    return pabrik, jasa
+    saldo=pk_saldo_query().subquery()
+    grouped=(await db.execute(select(saldo.c.jasa_id.is_not(None),func.sum(saldo.c.tersedia))
+        .where(saldo.c.tersedia>0).group_by(saldo.c.jasa_id.is_not(None)))).all()
+    total={jasa:float(kg or 0) for jasa,kg in grouped}
+    return total.get(False,0.0),total.get(True,0.0)
+
 
 
 async def log_progress(
@@ -1983,6 +1978,32 @@ async def resinkron_bahan_berjalan(db: AsyncSession) -> list[str]:
 # Yang satuan TIDAK dihapus: ia masih dipakai jalur yang memang hanya
 # menyangkut satu proses (layar rincian, laporan satu kode), dan di sana ia
 # memang bentuk yang benar.
+
+
+def pk_saldo_query():
+    """Rumus saldo yang sama, dihitung di SQL agar lot habis tidak dikirim.
+
+    Verifikasi menang atas progres terakhir. Transfer terkirim dan penjualan
+    langsung mengurangi saldo, retur menambahnya, hasil negatif tetap dijepit
+    nol seperti pk_breakdown_banyak. Tidak menyimpan saldo alternatif.
+    """
+    from sqlalchemy import case,cast,Float
+    from app.models import OutgoingItem,CustomerReturnItem
+    latest=select(MillingProgressLog.milling_process_id.label('pid'),
+        MillingProgressLog.berat_kumulatif_kg.label('kg'),func.row_number().over(
+            partition_by=MillingProgressLog.milling_process_id,
+            order_by=MillingProgressLog.waktu_update.desc()).label('urut')).subquery()
+    progress=select(latest.c.pid,latest.c.kg).where(latest.c.urut==1).subquery()
+    verif=select(MillingProcessVerification.milling_process_id.label('pid'),
+        MillingProcessVerification.berat_output_final_kg.label('kg')).subquery()
+    transfers=select(InternalTransfer.milling_process_id.label('pid'),func.sum(InternalTransfer.berat_kg).label('kg'))        .where(InternalTransfer.status=='terkirim').group_by(InternalTransfer.milling_process_id).subquery()
+    sold=select(OutgoingItem.milling_process_id.label('pid'),func.sum(OutgoingItem.berat_kg).label('kg'))        .where(OutgoingItem.item_type=='pk_langsung').group_by(OutgoingItem.milling_process_id).subquery()
+    returned=select(OutgoingItem.milling_process_id.label('pid'),func.sum(CustomerReturnItem.berat_total_kg).label('kg'))        .join(CustomerReturnItem,CustomerReturnItem.outgoing_item_id==OutgoingItem.id)        .where(OutgoingItem.item_type=='pk_langsung').group_by(OutgoingItem.milling_process_id).subquery()
+    produced=cast(func.coalesce(verif.c.kg,progress.c.kg,0.0),Float(53))
+    sent=cast(func.coalesce(transfers.c.kg,0.0),Float(53))
+    saldo=produced+cast(func.coalesce(returned.c.kg,0.0),Float(53))-sent-cast(func.coalesce(sold.c.kg,0.0),Float(53))
+    return select(MillingProcess.id,MillingProcess.jasa_id,MillingProcess.status,
+        produced.label('produced'),sent.label('transferred'),case((saldo>0,saldo),else_=0.0).label('tersedia'))        .outerjoin(verif,verif.c.pid==MillingProcess.id).outerjoin(progress,progress.c.pid==MillingProcess.id)        .outerjoin(transfers,transfers.c.pid==MillingProcess.id).outerjoin(sold,sold.c.pid==MillingProcess.id)        .outerjoin(returned,returned.c.pid==MillingProcess.id)
 
 
 async def progress_banyak(db: AsyncSession, proc_ids) -> dict[int, float | None]:

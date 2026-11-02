@@ -1,40 +1,11 @@
-"""Satu putaran sinkron kontak Kledo — dipicu dari tiga tempat, satu fungsi.
+"""Satu pemilik sinkron kontak Kledo untuk seluruh proses web.
 
-Tiga pemicu berbagi `mulai()`:
-  · tombol "Perbarui Kontak" di Pengaturan (produksi sendiri);
-  · `/internal/kledo-kontak/sinkron` — dipanggil Timbangan, yang tidak
-    pernah memegang `KLEDO_API_KEY` sendiri (lihat `.env.example`);
-  · scheduler tengah malam (`app/services/kledo_scheduler.py`).
+Dalam deployment app.server, scheduler dan RPC privat berada pada satu
+pekerja. Web memakai status_async/mulai_async; pemicu manual dari semua
+web bertemu lock yang sama. Mode gabungan tetap mendukung pengembangan.
 
-Ketiganya memanggil `hmu_core.kledo_kontak.sinkron_semua(db)` yang SAMA — tak
-satu pun menulis jalurnya sendiri. Menyalin logikanya akan membuat ketiganya
-lambat laun berbeda, dan perbedaan diam-diam pada aturan penautan identitas
-adalah jenis kesalahan yang paling sulit disadari (lihat docstring modul itu
-sendiri untuk aturan sinkronnya).
-
-**Kenapa ada status/lock di sini, bukan di `hmu_core`.** Modul `hmu_core`
-sengaja netral — tak tahu apa-apa soal web, latar belakang, atau Railway.
-Yang butuh tahu "sedang berjalan atau tidak" dan "apa hasil yang terakhir"
-hanya produksi (pemilik satu-satunya proses yang menjalankannya — lihat
-`railway.json`: `numReplicas: 1`). Jadi statusnya singleton tingkat modul di
-sini, bukan di tabel basis data: tak ada proses lain yang perlu membacanya,
-dan tabel baru untuk sesuatu yang hilang begitu proses restart cuma menambah
-tempat lain yang bisa berbeda dari kenyataan.
-
-**Kunci race-free TANPA `asyncio.Lock`.** `mulai()` memeriksa lalu menyetel
-`_sedang_berjalan` TANPA satu pun `await` di antaranya — asyncio koperatif
-satu-thread, jadi tak ada potongan kode lain yang bisa menyelip di antara
-keduanya. Itu "satu kunci sederhana" yang dibutuhkan: dua orang menekan
-tombol bersamaan (satu di Pengaturan produksi, satu lewat Timbangan) akan
-membuat panggilan KEDUA melihat `_sedang_berjalan=True` dan pulang tanpa
-memulai putaran kedua — bukan karena ditolak, cukup karena tak ada gunanya.
-
-Bila `railway.json` suatu saat diubah ke lebih dari satu replika, singleton
-ini TIDAK LAGI cukup: dua proses bisa sama-sama melihat `_sedang_berjalan =
-False` miliknya sendiri dan menjalankan dua sinkron bersamaan. Tidak
-merusak (`sinkron_semua` tetap idempoten) tapi memboroskan kuota API Kledo
-dan menghasilkan dua laporan yang membingungkan — persis yang pemicu ini
-dibuat untuk dicegah pada satu replika.
+railway.json tetap satu replika. Menambah kontainer memerlukan koordinasi
+pekerja lintas kontainer, bukan menggandakan supervisor ini begitu saja.
 """
 from __future__ import annotations
 
@@ -72,6 +43,37 @@ def status() -> StatusSinkron:
         gagal_terakhir=_gagal_terakhir,
         selesai_pada=_selesai_pada,
     )
+
+
+async def _rpc(method,path):
+    import os
+    import httpx
+    from fastapi import HTTPException
+    token=os.environ.get('HMU_PEKERJA_TOKEN','')
+    if not token:raise HTTPException(503,'Pekerja sinkronisasi belum tersedia.')
+    port=int(os.environ.get('HMU_PEKERJA_PORT','8787'))
+    try:
+        async with httpx.AsyncClient(base_url=f'http://127.0.0.1:{port}',timeout=3,trust_env=False) as client:
+            response=await client.request(method,path,headers={'X-Pekerja-Token':token})
+            response.raise_for_status()
+            return response.json()
+    except (httpx.HTTPError,ValueError) as e:
+        log.warning('Pekerja sinkronisasi tidak tersedia: %s',type(e).__name__)
+        raise HTTPException(503,'Pekerja sinkronisasi belum tersedia.') from e
+
+
+async def status_async():
+    from app.config import settings
+    if settings.peran_proses!='web':return status()
+    d=await _rpc('GET','/kledo/status')
+    if d.get('selesai_pada'):d['selesai_pada']=datetime.fromisoformat(d['selesai_pada'])
+    return StatusSinkron(**d)
+
+
+async def mulai_async():
+    from app.config import settings
+    if settings.peran_proses!='web':return mulai()
+    return bool((await _rpc('POST','/kledo/mulai'))['dimulai'])
 
 
 def mulai() -> bool:

@@ -189,7 +189,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         ada_super = await ada_superadmin() if tuan else False
     # Potret tanpa basis data (singleton di memori proses ini) — aman dibaca
     # di luar `async with SessionLocal()` di atas.
-    kledo = kledo_sinkron.status() if tuan else None
+    kledo = await kledo_sinkron.status_async() if tuan else None
     # Versi kode yang sedang berjalan — untuk SEMUA peran, di kaki halaman.
     # Peringatan skema tertinggal hanya dirender untuk admin ke atas (di
     # templat); operator tak bisa menjalankan migrasi, jadi baginya itu cuma
@@ -349,9 +349,9 @@ async def mulai_sinkron_kledo_kontak(
     tujuan = await tujuan_form(request)
     from app.services import kledo_sinkron
 
-    if not kledo_sinkron.status().terkonfigurasi:
+    if not (await kledo_sinkron.status_async()).terkonfigurasi:
         return redirect(tujuan + "?err=kledo-belum-tersambung")
-    if not kledo_sinkron.mulai():
+    if not await kledo_sinkron.mulai_async():
         return redirect(tujuan + "?err=kledo-sedang-berjalan")
     return redirect(tujuan + "?pesan=kledo-dimulai")
 

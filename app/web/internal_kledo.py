@@ -38,7 +38,7 @@ async def kledo_kontak_status(
 ) -> dict:
     """Keadaan sekarang — dipanggil Timbangan tiap kali layar Pengaturannya dimuat."""
     _pastikan_token(x_internal_token)
-    s = kledo_sinkron.status()
+    s = await kledo_sinkron.status_async()
     return {
         "terkonfigurasi": s.terkonfigurasi,
         "sedang_berjalan": s.sedang_berjalan,
@@ -60,7 +60,7 @@ async def kledo_kontak_sinkron(
     dari balasan panggilan ini.
     """
     _pastikan_token(x_internal_token)
-    dimulai = kledo_sinkron.mulai()
+    dimulai = await kledo_sinkron.mulai_async()
     if not dimulai:
         log.info("Sinkron kontak Kledo: permintaan dari Timbangan, sudah berjalan")
     return {"dimulai": dimulai}

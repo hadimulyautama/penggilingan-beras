@@ -131,6 +131,10 @@ async def halaman(request, bagian='beranda'):
     from .barang import baca as baca_barang
     scope=request.state.portal_scope
     async with SessionLocal() as db:
+        if bagian=='masuk':
+            from .masuk import daftar
+            catatan=await daftar(db,scope,[],request)
+            return render_customer(request,'portal/masuk.html',daftar_masuk=catatan,page_title='Barang masuk')
         if bagian=='riwayat':
             from .riwayat_daftar import baca
             catatan=await baca(db,scope,request)

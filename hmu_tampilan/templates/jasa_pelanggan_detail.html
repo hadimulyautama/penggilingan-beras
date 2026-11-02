@@ -9,8 +9,8 @@
 <header class="jasa-kepala">
  <div class="jasa-kepala__atas"><span>Pesanan Jasa · Detail pelanggan</span><span class="lencana">Titipan jasa</span></div>
  <h1>{{ d.nama }}</h1>
- <p>{{ d.penerimaan_jumlah|default(d.penerimaan|length) }} penerimaan · {{ d.pesanan|length }} pesanan · {{ d.proses_jumlah|default(d.proses|length) }} proses terkait</p>
- <p>Kontak #{{ d.id }} · {{ d.pesanan|selectattr('status','equalto','berjalan')|list|length }} pesanan berjalan</p>
+ <p>{{ d.penerimaan_jumlah|default(d.penerimaan|length) }} penerimaan · {{ d.pesanan_jumlah|default(d.pesanan|length) }} pesanan · {{ d.proses_jumlah|default(d.proses|length) }} proses terkait</p>
+ <p>Kontak #{{ d.id }} · {{ d.pesanan_berjalan|default(d.pesanan|selectattr('status','equalto','berjalan')|list|length) }} pesanan berjalan</p>
 </header>
 <nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for k,n in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a href="{{ tab_ke(k) }}"{% if tab==k %} aria-current="page"{% endif %}>{{ n }}</a>{% endfor %}</nav>
 {% if tab=='ringkasan' %}
@@ -24,8 +24,8 @@
 </section>
 <dl class="jasa-pasang jasa-rekap-riwayat" aria-label="Jumlah pengiriman dan retur"><div><dt>Pengambilan / pengiriman</dt><dd>{{ d.pengiriman|length }} catatan</dd></div><div><dt>Retur terkait</dt><dd>{{ d.retur|length }} penerimaan retur</dd></div></dl>
 {% set pgp=d.pesanan_paginasi %}
-<section class="kartu" id="pesanan-pelanggan" data-pesanan-banyak="{{ '1' if pgp and pgp.akhir>1 else '0' }}"><h2>Pesanan & rekap barang · {{ d.pesanan|length }}</h2><p class="bantu">Penutupan dan pembatalan berlaku untuk pesanan yang dipilih, bukan seluruh pelanggan.</p>
-{% if pgp and (d.pesanan|length>20 or pgp.cari or pgp.status) %}
+<section class="kartu" id="pesanan-pelanggan" data-pesanan-banyak="{{ '1' if pgp and pgp.akhir>1 else '0' }}"><h2>Pesanan & rekap barang · {{ d.pesanan_jumlah|default(d.pesanan|length) }}</h2><p class="bantu">Penutupan dan pembatalan berlaku untuk pesanan yang dipilih, bukan seluruh pelanggan.</p>
+{% if pgp and (d.pesanan_jumlah|default(d.pesanan|length)>20 or pgp.cari or pgp.status) %}
 <form class="jasa-pesanan-filter" method="get" action="/jasa/pelanggan/{{ d.id }}#pesanan-pelanggan">
 <input type="hidden" name="tab" value="ringkasan">{% for k in ('status','cari','halaman') %}{% if request.query_params.get(k) %}<input type="hidden" name="{{ k }}" value="{{ request.query_params.get(k) }}">{% endif %}{% endfor %}
 <label>Cari pesanan<input name="pesanan_cari" value="{{ pgp.cari }}" placeholder="Nomor atau catatan pesanan" maxlength="200"></label>

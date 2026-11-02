@@ -1,4 +1,4 @@
-# Image aplikasi (FastAPI + 3 bot Telegram long-polling).
+# Image PadiFlow: FastAPI dan satu pekerja latar dalam satu kontainer.
 # Multi-arch: jalan di ARM64 (Oracle Ampere A1) maupun AMD64.
 FROM python:3.11-slim
 
@@ -33,9 +33,7 @@ RUN chmod +x /entrypoint.sh
 ARG RAILWAY_GIT_COMMIT_SHA
 RUN printf '%s' "${RAILWAY_GIT_COMMIT_SHA}" > /app/KOMIT
 
-# entrypoint: jalankan migrasi dulu, lalu start server.
-# Port dari $PORT (disuntik Railway/PaaS); default 8000 untuk lokal.
-# Bentuk shell agar ${PORT} ter-ekspansi. WAJIB 1 proses / 1 replica —
-# banyak proses = banyak polling = bentrok 409 Telegram.
+# Migrasi sekali sebelum supervisor memulai satu pekerja latar dan web workers.
+# Tetap satu replika/kontainer; scheduler tidak digandakan per web worker.
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["python", "-m", "app.server"]

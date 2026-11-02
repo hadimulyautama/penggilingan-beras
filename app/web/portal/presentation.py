@@ -196,6 +196,17 @@ def read_only(html, base, *, origin=None, report_available=None):
     return str(ringkas_lanjutan(ringkas_dokumen(ringkas_transaksi(s,base),base),base))
 
 
+from functools import lru_cache
+
+@lru_cache(maxsize=4)
+def _env_pelanggan(base,loader):
+    """Simpan template terkompilasi, bukan HTML/data/cookie pelanggan."""
+    return base.overlay(loader=ChoiceLoader([DictLoader({'base.html':"""{% if STOK_NAV %}{% include 'portal/_navigasi_stok.html' %}<div class="stok-isi">{% endif %}
+{% if LAPORAN_NAV %}<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include 'portal/_navigasi_riwayat.html' %}<div class="laporan-isi">{% endif %}
+{% if portal_scope_note %}<p class="bantu">{{ portal_scope_note }}</p>{% endif %}{% block isi %}{% endblock %}{% if LAPORAN_NAV %}</div></div>{% endif %}{% if STOK_NAV %}</div>{% endif %}""",
+        '_produk_kemasan.html':"{% include 'portal/_kemasan_barang.html' %}"}),loader]))
+
+
 def render_customer(request, name, *, status_code=200, **ctx):
     from app.web.tampilan import templates, VERSI
     scope=request.state.portal_scope
@@ -253,10 +264,7 @@ def render_customer(request, name, *, status_code=200, **ctx):
             if t.get('proses'):t['proses']=[(code,href) for code,href in t['proses'] if code in scope.codes]
         d['berjalan']=sum(r['status']=='proses' for r in d['proses'])
         for j in d['pesanan']:j['boleh_tutup']=j['boleh_batal']=False
-    env=templates.env.overlay(loader=ChoiceLoader([DictLoader({'base.html':"""{% if STOK_NAV %}{% include 'portal/_navigasi_stok.html' %}<div class="stok-isi">{% endif %}
-{% if LAPORAN_NAV %}<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include 'portal/_navigasi_riwayat.html' %}<div class="laporan-isi">{% endif %}
-{% if portal_scope_note %}<p class="bantu">{{ portal_scope_note }}</p>{% endif %}{% block isi %}{% endblock %}{% if LAPORAN_NAV %}</div></div>{% endif %}{% if STOK_NAV %}</div>{% endif %}""",
-        '_produk_kemasan.html':"{% include 'portal/_kemasan_barang.html' %}"}),templates.env.loader]))
+    env=_env_pelanggan(templates.env,templates.env.loader)
     # Native stock-navigation computes visible groups from these already scoped rows.
     body=env.get_template(name).render(**ctx)
     path=request.url.path+('?' +request.url.query if request.url.query else '')

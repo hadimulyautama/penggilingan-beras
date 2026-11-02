@@ -13,7 +13,7 @@
 {% for d in kartu %}
 <a class="kartu jasa-pelanggan" href="/jasa/pelanggan/{{ d.id }}?{{ {'status':tapis,'cari':cari,'halaman':halaman}|urlencode }}">
 <div class="baris"><h2>{{ d.nama }}</h2><span class="lencana">Jasa</span></div>
-<p class="bantu">{{ d.penerimaan|length }} penerimaan · {{ d.pesanan|length }} pesanan · {{ d.pekerjaan }} perlu tindakan · {{ d.berjalan }} proses berjalan</p>
+<p class="bantu">{{ d.penerimaan_jumlah|default(d.penerimaan|length) }} penerimaan · {{ d.pesanan_jumlah|default(d.pesanan|length) }} pesanan · {{ d.pekerjaan }} perlu tindakan · {{ d.berjalan }} proses berjalan</p>
 <div class="jasa-angka">
 {% for label,n in [('PK tersedia',d.pk_kg),('Beras tersisa',d.beras_kg),('Hasil samping',d.samping_kg)] %}<div><small>{{ label }}</small><strong>{{ kg(n) }}</strong></div>{% endfor %}
 </div>

@@ -28,6 +28,8 @@ from hmu_core import Base, TimestampMixin  # noqa: F401 — Base & skema master 
 # kontainer yang zonanya benar pun tetap membuka sesi berzona UTC.
 engine = create_async_engine(
     settings.database_url, echo=False, pool_pre_ping=True,
+    **({"pool_size":settings.db_pool_size,"max_overflow":settings.db_max_overflow}
+       if settings.database_url.startswith("postgresql+") else {}),
     connect_args={"server_settings": {"timezone": settings.app_timezone}},
 )
 

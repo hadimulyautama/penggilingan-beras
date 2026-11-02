@@ -165,3 +165,33 @@ async def test_stream_dikirim_langsung_tanpa_memo_dan_tanpa_buffer():
 
     await p.PerformaMiddleware(stream)({"type": "http", "method": "GET", "path": "/api/aliran"}, None, send)
     assert len(chunks) == 3 and p._konteks.get() is None
+
+
+async def test_salin_kartu_cepat_tetap_memisahkan_semua_isian_mutable():
+    import copy
+    from app.services.berjalan import Baris,Tombol
+    source=Baris(kode='uji',isi='uji',keadaan='',fakta=[('Jumlah','10 kg')],anak=[('Asal','10 kg','Hari ini')],
+        tombol=[Tombol('Buka','Uji','/uji',{'ids':[1,2]})],bobot_pengeringan=[{'rincian':[1,2]}])
+    source.tambahan={'rows':[['asli']]}
+    a=copy.deepcopy(source);b=copy.deepcopy(source)
+    a.fakta.append(('Baru','20 kg'));a.anak[0]=('Lain','20 kg','Besok')
+    a.tombol[0].data['ids'].append(3);a.bobot_pengeringan[0]['rincian'].append(3)
+    a.tambahan['rows'][0].append('berubah');a.isi='berubah'
+    assert b==source and b.tambahan==source.tambahan and b.isi=='uji'
+    assert b.tombol[0].data['ids']==[1,2]
+
+
+async def test_snapshot_kedaluwarsa_dua_detik_dan_objek_tidak_dibagi(monkeypatch):
+    clock=[0.0];monkeypatch.setattr(p.time,'monotonic',lambda:clock[0])
+    engine=object();calls=[]
+    db=SimpleNamespace(new=[],dirty=[],deleted=[],get_bind=lambda:engine,connection=lambda:asyncio.sleep(0))
+    @p.tampilan_singkat
+    async def nilai(db):
+        calls.append(1)
+        return {'n':len(calls)}
+    token=p._konteks.set({'boleh_memo':True,'memo':{}})
+    try:
+        first=await nilai(db);first['n']=-1
+        clock[0]=1.9;assert (await nilai(db))['n']==1
+        clock[0]=2.1;assert (await nilai(db))['n']==2
+    finally:p._konteks.reset(token)

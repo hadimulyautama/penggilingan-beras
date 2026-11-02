@@ -208,6 +208,29 @@ class Baris:
     bobot_pengeringan: list[dict] = field(default_factory=list)
 
 
+    def __deepcopy__(self,memo):
+        """Salin kartu tanpa menyalin ulang nilai immutable di setiap kolom.
+
+        List/dict bertingkat tetap dipisah. Tuple fakta/asal yang berisi
+        skalar tidak dapat diubah, sehingga cukup menyalin list luarnya.
+        Atribut tambahan dari penyusun kartu juga ikut disalin.
+        """
+        import copy
+        from decimal import Decimal
+        scalar=(str,int,float,bool,type(None),datetime,date,timedelta,Decimal)
+        result=type(self).__new__(type(self))
+        memo[id(self)]=result
+        for key,value in vars(self).items():
+            if isinstance(value,scalar):cloned=value
+            elif isinstance(value,list) and all(isinstance(v,scalar) or
+                    (isinstance(v,tuple) and all(isinstance(x,scalar) for x in v)) for v in value):
+                cloned=list(value)
+            elif isinstance(value,tuple) and all(isinstance(v,scalar) for v in value):cloned=value
+            else:cloned=copy.deepcopy(value,memo)
+            setattr(result,key,cloned)
+        return result
+
+
 @dataclass
 class Berjalan:
     """Tiga golongan, dan batasnya satu kalimat.

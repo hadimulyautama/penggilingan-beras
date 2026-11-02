@@ -5,7 +5,6 @@ from functools import cached_property
 from types import MappingProxyType
 from fastapi import HTTPException
 from sqlalchemy import select, text
-from types import SimpleNamespace
 from app.database import SessionLocal
 from app.models import (Jasa, PurchaseBatch, PkPurchaseBatch, DryingLot,
                         MillingProcess, PolishingProcess, InternalTransfer)
@@ -31,6 +30,11 @@ class ReadScope:
         # Scope baca tidak boleh berubah setelah lolos pemeriksaan sumber.
         object.__setattr__(self,'resources',MappingProxyType({k:frozenset(v) for k,v in self.resources.items()}))
 
+    def __deepcopy__(self,memo):
+        # Reader frozen, resource frozenset di balik mapping read-only.
+        # Capability tidak membawa sesi/ORM atau objek yang dapat diubah.
+        return self
+
     @cached_property
     def kunci_performa(self):
         # Semua batas pemilik/sumber tetap masuk kunci, dihitung sekali
@@ -45,74 +49,106 @@ def missing():
     raise HTTPException(404, 'Catatan tidak ditemukan.')
 
 
+from app.performa import NilaiSingkat
+_scope_bersama=NilaiSingkat(detik=2,batas=16)
+
+
 async def load_scope(reader):
+    """Gabungkan pembacaan hanya selama WAL dan snapshot transaksi primary belum berubah.
+
+    Setiap request membaca posisi WAL dan transaksi yang masih aktif.
+    Snapshot transaksi juga membedakan commit yang WAL-nya sudah ditulis
+    tetapi datanya belum terlihat. Izin tidak dibagi melintasi commit.
+    Perubahan lain pada cluster hanya menambah cache miss, bukan akses.
+    Tidak dipakai pada standby/SQLite, dan akun/sesi tetap diperiksa terpisah.
+    """
+    async with SessionLocal() as db:
+        primary=db.get_bind().dialect.name=='postgresql'
+        posisi=await db.scalar(text("SELECT CASE WHEN pg_is_in_recovery() THEN NULL ELSE pg_current_wal_insert_lsn()::text || ':' || txid_current_snapshot()::text END")) if primary else None
+        bind=db.get_bind()
+    # Lepas koneksi probe sebelum menunggu pembaca bersama, agar waiter
+    # tidak memenuhi pool sementara pembaca menunggu koneksi sendiri.
+    if posisi is None:return await _load_scope_sql(reader)
+    return await _scope_bersama.ambil((bind,reader,posisi),lambda:_load_scope_sql(reader))
+
+
+async def _load_scope_sql(reader):
+    """Validasi sumber di SQL tanpa membangun seluruh objek riwayat di Python.
+
+    Capability tetap dibaca ulang pada setiap request. CTE membatasi pemilik
+    dan sumber sebelum ID diteruskan ke pembaca halaman; tidak ada cache izin.
+    """
+    from collections import defaultdict
+    from sqlalchemy import union_all, literal, null, table, column, or_
     from app.models import (OutgoingRecord, OutgoingItem, CustomerReturn, CustomerReturnItem,
                             PkGudang2Intake, DryingLotBatch, MillingProcessSource)
     from app.penggilingan.inventory.models import ReturRincian
+    own = select(Jasa.id).where(Jasa.pelanggan_id == reader.pelanggan_id).cte('scope_jasa')
+    own_ids = select(own.c.id)
+    batch = select(PurchaseBatch.id).where(PurchaseBatch.jasa_id.in_(own_ids)).cte('scope_batch')
+    pk = select(PkPurchaseBatch.id).where(PkPurchaseBatch.jasa_id.in_(own_ids)).cte('scope_pk')
+    # Sama dengan pembaca acuan: sumber drying diperiksa lewat batch yang
+    # terlihat (cermin batal otomatis disaring oleh event ORM).
+    dry_bad = select(DryingLotBatch.id).join(PurchaseBatch,
+        PurchaseBatch.id == DryingLotBatch.purchase_batch_id).where(
+            DryingLotBatch.drying_lot_id == DryingLot.id,
+            or_(PurchaseBatch.jasa_id.is_(None), ~PurchaseBatch.jasa_id.in_(own_ids))).exists()
+    dry = select(DryingLot.id).where(DryingLot.jasa_id.in_(own_ids), ~dry_bad).cte('scope_dry')
+    batch_ids, dry_ids = select(batch.c.id), select(dry.c.id)
+    source_bad = select(MillingProcessSource.id).where(
+        MillingProcessSource.milling_process_id == MillingProcess.id,
+        or_(MillingProcessSource.purchase_batch_id.is_not(None) & ~MillingProcessSource.purchase_batch_id.in_(batch_ids),
+            MillingProcessSource.drying_lot_id.is_not(None) & ~MillingProcessSource.drying_lot_id.in_(dry_ids))).exists()
+    mills = select(MillingProcess.id).where(MillingProcess.jasa_id.in_(own_ids),
+        or_(MillingProcess.purchase_batch_id.is_(None), MillingProcess.purchase_batch_id.in_(batch_ids)),
+        or_(MillingProcess.drying_lot_id.is_(None), MillingProcess.drying_lot_id.in_(dry_ids)), ~source_bad).cte('scope_mills')
+    transfers = select(InternalTransfer.id).where(InternalTransfer.jasa_id.in_(own_ids),
+        InternalTransfer.milling_process_id.in_(select(mills.c.id))).cte('scope_transfers')
+    intakes = select(PkGudang2Intake.id).where(PkGudang2Intake.jasa_id.in_(own_ids),
+        or_(PkGudang2Intake.internal_transfer_id.is_(None), PkGudang2Intake.internal_transfer_id.in_(select(transfers.c.id))),
+        or_(PkGudang2Intake.pk_purchase_batch_id.is_(None), PkGudang2Intake.pk_purchase_batch_id.in_(select(pk.c.id)))).cte('scope_intakes')
+    def header_aman(model, item, fk, nama):
+        ada = select(item.id).where(getattr(item, fk) == model.id).exists()
+        asing = select(item.id).where(getattr(item, fk) == model.id,
+            or_(item.jasa_id.is_(None), ~item.jasa_id.in_(own_ids))).exists()
+        return select(model.id).where(ada, ~asing).cte(nama)
+    outs = header_aman(OutgoingRecord, OutgoingItem, 'outgoing_record_id', 'scope_outs')
+    rets = header_aman(CustomerReturn, CustomerReturnItem, 'customer_return_id', 'scope_rets')
+    rincian = select(ReturRincian.id).where(ReturRincian.outgoing_record_id.in_(select(outs.c.id))).cte('scope_rincian')
+    queries = [select(literal('jasa').label('jenis'), own.c.id.label('id'), null().label('kode'))]
+    for model, field, safe in [(PurchaseBatch,'kode_batch',batch), (PkPurchaseBatch,'kode_batch',pk),
+            (DryingLot,'kode_lot',dry), (MillingProcess,'kode_proses',mills),
+            (InternalTransfer,'kode_transfer',transfers), (PkGudang2Intake,None,intakes),
+            (OutgoingRecord,None,outs), (CustomerReturn,None,rets), (ReturRincian,None,rincian)]:
+        queries.append(select(literal(model.__tablename__), model.id,
+            getattr(model, field) if field else null()).where(model.id.in_(select(safe.c.id))))
+    tiket = table('timbangan_transaksi',column('id'),column('pelanggan_id'),column('jasa'),column('arah'))
+    terkait = union_all(select(CustomerReturn.timbangan_transaksi_id).where(CustomerReturn.id.in_(select(rets.c.id))),
+        select(ReturRincian.timbangan_transaksi_id).where(ReturRincian.id.in_(select(rincian.c.id))))
+    queries.append(select(literal('timbangan_transaksi'),tiket.c.id,null()).where(or_(
+        (tiket.c.pelanggan_id == reader.pelanggan_id) & (tiket.c.jasa == True) & tiket.c.arah.in_(('MASUK','RETUR_MASUK')),
+        tiket.c.id.in_(terkait))))
     async with SessionLocal() as db:
-        ids = frozenset((await db.scalars(select(Jasa.id).where(Jasa.pelanggan_id == reader.pelanggan_id))).all())
-        objects = {}
-        models = set(m for m, _ in MODELS.values()) | {PkGudang2Intake}
-        for model in models:
-            # Capability hanya membutuhkan identitas dan relasi sumber;
-            # catatan/angka detail dibaca di halaman detail yang diminta.
-            names = {'id','jasa_id'} | {col for m,col in MODELS.values() if m is model}
-            names.update({MillingProcess: ('purchase_batch_id','drying_lot_id'),
-                InternalTransfer: ('milling_process_id',),
-                PkGudang2Intake: ('internal_transfer_id','pk_purchase_batch_id'),
-                PolishingProcess: ('waktu_mulai','waktu_selesai')}.get(model,()))
-            rows=(await db.execute(select(*(getattr(model,n) for n in sorted(names)))
-                .where(dalam(db, model.jasa_id, ids)))).mappings().all()
-            objects[model] = {r['id']:SimpleNamespace(**r) for r in rows}
-        # Fail closed on inconsistent imports / mixed physical lots. An owner
-        # label alone must not authorize somebody else's source batch.
-        drying = objects[DryingLot]
-        sources = (await db.execute(select(DryingLotBatch.drying_lot_id, PurchaseBatch.jasa_id)
-            .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
-            .where(dalam(db, DryingLotBatch.drying_lot_id, drying)))).all()
-        for lid, jid in sources:
-            if jid not in ids:drying.pop(lid, None)
-        mills = objects[MillingProcess]
-        for mid,proc in list(mills.items()):
-            if ((proc.purchase_batch_id and proc.purchase_batch_id not in objects[PurchaseBatch]) or
-                (proc.drying_lot_id and proc.drying_lot_id not in drying)):
-                mills.pop(mid,None)
-        for source in (await db.execute(select(MillingProcessSource.milling_process_id,
-                MillingProcessSource.purchase_batch_id,MillingProcessSource.drying_lot_id)
-                .where(dalam(db, MillingProcessSource.milling_process_id, mills)))).all():
-            if ((source.purchase_batch_id and source.purchase_batch_id not in objects[PurchaseBatch]) or
-                (source.drying_lot_id and source.drying_lot_id not in drying)):
-                mills.pop(source.milling_process_id, None)
-        transfers = objects[InternalTransfer]
-        transfers = {i:r for i,r in transfers.items() if r.milling_process_id in mills}
-        objects[InternalTransfer] = transfers
-        intakes = objects[PkGudang2Intake]
-        objects[PkGudang2Intake] = {i:r for i,r in intakes.items() if
-            (not r.internal_transfer_id or r.internal_transfer_id in transfers) and
-            (not r.pk_purchase_batch_id or r.pk_purchase_batch_id in objects[PkPurchaseBatch])}
-        unsafe_polishing=await _unsafe_polishing_sources(db,objects[PolishingProcess],ids,frozenset(objects[PkGudang2Intake]))
-        for pid in unsafe_polishing:objects[PolishingProcess].pop(pid,None)
-        resources = {m.__tablename__:frozenset(rows) for m,rows in objects.items()}
-        codes = {getattr(r,col) for m,col in set(MODELS.values()) for r in objects[m].values()}
-        outs = (await db.scalars(select(OutgoingRecord).where(OutgoingRecord.id.in_(
-            select(OutgoingItem.outgoing_record_id).where(dalam(db, OutgoingItem.jasa_id, ids)))))).all()
-        outitems = (await db.scalars(select(OutgoingItem).where(OutgoingItem.outgoing_record_id.in_([x.id for x in outs])))).all()
-        grouped = {}
-        for item in outitems:grouped.setdefault(item.outgoing_record_id,[]).append(item.jasa_id)
-        outids = frozenset(o.id for o in outs if grouped.get(o.id) and all(j in ids for j in grouped[o.id]))
-        resources[OutgoingRecord.__tablename__] = outids
-        rets = (await db.scalars(select(CustomerReturn).where(CustomerReturn.id.in_(
-            select(CustomerReturnItem.customer_return_id).where(dalam(db, CustomerReturnItem.jasa_id, ids)))))).all()
-        retitems = (await db.scalars(select(CustomerReturnItem).where(CustomerReturnItem.customer_return_id.in_([x.id for x in rets])))).all()
-        grouped = {}
-        for item in retitems:grouped.setdefault(item.customer_return_id,[]).append(item.jasa_id)
-        resources[CustomerReturn.__tablename__] = frozenset(r.id for r in rets if grouped.get(r.id) and all(j in ids for j in grouped[r.id]))
-        resources[ReturRincian.__tablename__] = frozenset((await db.scalars(select(ReturRincian.id).where(ReturRincian.outgoing_record_id.in_(outids)))).all())
-        related_tickets=set((await db.scalars(select(CustomerReturn.timbangan_transaksi_id).where(CustomerReturn.id.in_(resources[CustomerReturn.__tablename__])))).all())
-        related_tickets.update((await db.scalars(select(ReturRincian.timbangan_transaksi_id).where(ReturRincian.id.in_(resources[ReturRincian.__tablename__])))).all())
-        resources['timbangan_transaksi'] = frozenset(related_tickets-{None}) | frozenset((await db.scalars(text(
-            "SELECT id FROM timbangan_transaksi WHERE pelanggan_id=:pid AND jasa=TRUE AND arah IN ('MASUK','RETUR_MASUK')"), {'pid':reader.pelanggan_id})).all())
-    return ReadScope(reader,ids,frozenset(codes),resources)
+        resources = defaultdict(set)
+        codes = set()
+        for kind, ident, code in (await db.execute(union_all(*queries))).all():
+            resources[kind].add(ident)
+            if code is not None:codes.add(code)
+        ids = frozenset(resources.pop('jasa', ()))
+        pols = (await db.execute(select(PolishingProcess.id,PolishingProcess.kode_proses,
+            PolishingProcess.waktu_mulai,PolishingProcess.waktu_selesai)
+            .where(PolishingProcess.jasa_id.in_(own_ids)))).all()
+        polishing = {p.id:p for p in pols}
+        unsafe = await _unsafe_polishing_sources(db,polishing,ids,frozenset(resources[PkGudang2Intake.__tablename__]))
+        for row in pols:
+            if row.id not in unsafe:
+                resources[PolishingProcess.__tablename__].add(row.id)
+                codes.add(row.kode_proses)
+    # Stabilkan juga kunci resource kosong untuk kesetaraan capability lama.
+    models = {m for m,_ in MODELS.values()} | {PkGudang2Intake,OutgoingRecord,CustomerReturn,ReturRincian}
+    for model in models:resources[model.__tablename__]
+    resources['timbangan_transaksi']
+    return ReadScope(reader,ids,frozenset(codes),dict(resources))
 
 
 async def _unsafe_polishing_sources(db, processes, ids, safe_intakes):

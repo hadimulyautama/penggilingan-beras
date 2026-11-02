@@ -25,7 +25,7 @@ from app.performa import baca_sekali, tampilan_singkat
 
 from dataclasses import dataclass, field
 
-from sqlalchemy import bindparam, func, select, text
+from sqlalchemy import bindparam, func, select, text, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local, tanggal_lokal
@@ -489,26 +489,14 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     daftar yang memuat baris nol mengajari orang melewatkan barisnya.
     """
     from app.penggilingan.gudang1.services.milling import (
-        hitung_rendemen,
-        pk_breakdown_banyak,
+        hitung_rendemen,pk_saldo_query,PkBreakdown,
     )
-
-    proses = (await db.execute(select(MillingProcess.id,MillingProcess.status)
-        .order_by(MillingProcess.id.desc()))).all()
-    # Satu panggilan untuk SELURUH proses, bukan empat kueri per proses.
-    # Layar ini membaca setiap giling yang pernah ada, jadi dengan data
-    # setahun gelung lamanya sendirian mengeluarkan ribuan kueri untuk
-    # menghasilkan belasan baris. Temuan QA P-S-02.
-    rincian = await pk_breakdown_banyak(db, [p.id for p in proses])
-    # QC dan asal hanya untuk lot yang benar-benar akan ditampilkan.
-    # Riwayat lot habis tetap ikut rumus saldo di atas, tetapi ribuan asal
-    # dan sampel mutunya tidak perlu dibangun lalu langsung dibuang.
-    proses = [p for p in proses if rincian[p.id].tersedia > 0 or
-        (p.status == 'selesai' and rincian[p.id].produced <= 0
-         and rincian[p.id].transferred <= 0)]
-    proses = list((await db.scalars(select(MillingProcess)
-        .where(dalam(db,MillingProcess.id,[p.id for p in proses]))
-        .order_by(MillingProcess.id.desc()))).all()) if proses else []
+    saldo=pk_saldo_query().subquery()
+    rows=(await db.execute(select(saldo).where(or_(saldo.c.tersedia>0,
+        (saldo.c.status=='selesai') & (saldo.c.produced<=0) & (saldo.c.transferred<=0))))).all()
+    rincian={r.id:PkBreakdown(float(r.produced),float(r.transferred),float(r.tersedia)) for r in rows}
+    proses=list((await db.scalars(select(MillingProcess)
+        .where(dalam(db,MillingProcess.id,rincian)).order_by(MillingProcess.id.desc()))).all()) if rows else []
     # Nilai QC untuk seluruh lot sekaligus. Satu kueri, bukan satu per lot.
     peta_mutu = await _mutu_banyak(db, [p.id for p in proses])
     peta_bahan = await _bahan_banyak(db, proses)
