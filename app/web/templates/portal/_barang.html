@@ -11,12 +11,13 @@
 {% endmacro %}
 
 {% from '_bobot_pengeringan.html' import dua_bobot %}
-{% macro tunggu(rows, tampilkan_berat=true) %}
+{% from 'portal/_bobot_proses.html' import bobot_proses %}
+{% macro tunggu(rows, tampilkan_berat=true, ringkas=false) %}
 <div class="pelanggan-daftar">
 {% for r in rows %}<article class="pelanggan-barang">
   <div class="pelanggan-baris"><div><h3>{{ r.nama }}</h3><p class="pelanggan-redup">{{ r.lokasi }}{% if r.lokasi %} · {% endif %}Menunggu proses</p></div>{% if r.berat and tampilkan_berat %}<strong class="pelanggan-berat">{{ r.berat }}</strong>{% endif %}</div>
   {% if tampilkan_berat %}<p class="pelanggan-redup">{{ r.isi }}</p>{% endif %}
-  {% if r.bobot_pengeringan and tampilkan_berat %}{{ dua_bobot(r.bobot_pengeringan) }}{% endif %}
+  {% if r.bobot_pengeringan and tampilkan_berat %}{% if ringkas %}{{ bobot_proses(r.bobot_pengeringan) }}<details class="pelanggan-rincian"><summary>Tentang perkiraan berat</summary>{% for e in r.bobot_pengeringan %}{% for note in e.catatan %}<p>{{ note|replace('Pasangan indikator awal dan selesai belum lengkap; estimasi belum tersedia.','Data pengukuran belum lengkap.') }}</p>{% endfor %}{% endfor %}</details>{% else %}{{ dua_bobot(r.bobot_pengeringan) }}{% endif %}{% endif %}
   {% if r.rincian %}<details class="pelanggan-rincian"><summary>Lihat bahan di lokasi ini</summary><ul>{% for anak in r.rincian %}<li>{{ anak|join(' · ') }}</li>{% endfor %}</ul></details>{% endif %}
 </article>{% endfor %}
 </div>

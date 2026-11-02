@@ -115,8 +115,8 @@ async def test_hasil_giling_berjalan_tampil_sementara_tanpa_persen_selesai(pg,po
             assert r.status_code==200
             s=BeautifulSoup(r.text,'html.parser').select_one('.pelanggan-progres')
             assert s and '2.500' in s.get_text() and 'Hasil sementara' in s.get_text()
-            if path=='/pelanggan/jasa-saya':assert 'bukan persentase selesai' in s.get_text()
-            else:assert 'rasio hasil' not in s.get_text()
+            assert 'rasio hasil' not in s.get_text().lower()
+            assert 'jumlah akhir tersedia setelah proses selesai' not in s.get_text()
             assert not s.select('progress')
 
 
@@ -143,7 +143,10 @@ async def test_kemajuan_pengeringan_sama_dengan_perhitungan_produksi(pg,pengerin
             s=BeautifulSoup(r.text,'html.parser').select_one('.pelanggan-progres')
             assert s and 'Kemajuan menuju target kadar air' in s.get_text()
             assert float(s.select_one('progress')['value'])==pytest.approx(0.4)
-            assert '40%' in s.get_text() and '15.5%' in s.get_text() and '13%' in s.get_text()
+            assert '40%' in s.get_text() and '13%' in s.get_text()
+            if path=='/pelanggan/jasa-saya':
+                assert 'Saat ini 16%' in s.get_text() and 'Acuan progres' not in s.get_text()
+            else:assert '15.5%' in s.get_text()
 
 
 async def test_dokumen_hanya_menampilkan_rekap_utama_pada_rantai_gabungan(pg,dunia):

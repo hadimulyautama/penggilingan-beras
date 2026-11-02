@@ -89,11 +89,12 @@ def status_utama(d, transit):
 
 def baris_transit(rows):
     # Hanya proyeksikan bidang baca. Aksi/tombol operator tidak ikut dikirim.
+    from .proses_ringkas import bobot
     return [dict(nama=r.judul or r.kode, kode=r.kode, isi=r.isi,
                  berat=' '.join(map(str,r.utama)) if r.utama else None,
                  sejak=r.sejak, lokasi={'g1':'Gudang 1','g2':'Gudang 2'}.get(r.gudang,''),
                  status='Menunggu proses', rincian=r.anak,
-                 bobot_pengeringan=getattr(r, 'bobot_pengeringan', []))
+                 bobot_pengeringan=bobot(getattr(r, 'bobot_pengeringan', [])))
             for r in rows]
 
 
@@ -118,6 +119,7 @@ def progres_berjalan(rows,scope):
                 'Bahan':'Bahan masuk','Hasil':'Hasil sementara','Mutu':'Pemeriksaan mutu'}.get(k,k),
                 v.replace('rendemen','rasio hasil')) for k,v in r.fakta if k!='Mode'],neraca=neraca,
             ringkas=r.ringkas,rendemen=r.rendemen_sementara,
+            angka=('Berat gabah saat masuk' if jenis in ('pengeringan','pendinginan') else 'Jumlah bahan',' '.join(r.utama)) if r.utama else None,
             bobot_pengeringan=getattr(r,'bobot_pengeringan',[])))
     return hasil
 
@@ -212,6 +214,8 @@ async def halaman(request, bagian='beranda'):
         from .identitas_proses import petunjuk
         r.update(identitas.get((r['jenis'],r['kode']),dict(diperbarui=None,
             sumber_waktu='Pembaruan terakhir',petunjuk=petunjuk(None))))
+        from .proses_ringkas import siapkan
+        siapkan(r)
     riwayat=sorted((r for r in d['proses'] if r['status']=='selesai'
         or (r['jenis']=='transfer' and r['status']=='terkirim')),
         key=lambda r:r['selesai'].timestamp() if r.get('selesai') else 0,reverse=True)

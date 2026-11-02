@@ -77,12 +77,12 @@ async def test_dua_bobot_satu_sumber_di_produksi_portal_izin_dan_tidak_menulis(p
         for path in ['/pelanggan/jasa-saya','/pelanggan/pekerjaan?tab=tindakan']:
             page=await c.get(path);assert page.status_code==200
             soup=BeautifulSoup(page.text,'html.parser');body=soup.get_text(' ',strip=True)
-            assert 'Bobot gabah basah masuk' in body and 'Estimasi bobot gabah kering' in body
-            assert '30.251,50 kg' in body and '26.456,76 kg' in body
+            assert 'Berat gabah saat masuk' in body and 'Perkiraan setelah kering' in body
+            assert '30.251,5 kg' in body and '26.456,76 kg' in body
             assert 'PGR-RAHASIA-B' not in body and '4.372' not in body
             assert not soup.select('[data-post],[data-aksi],form[action*="mulai_giling"]')
             # Dua bobot selalu di luar rincian yang tersembunyi.
-            for metric in soup.select('.bobot-pengeringan'):
+            for metric in soup.select('.bobot-pengeringan,.pelanggan-bobot-proses'):
                 for detail in metric.find_parents('details'):
                     summary=detail.find('summary',recursive=False)
                     assert detail.has_attr('open') or (summary and metric in summary.descendants)

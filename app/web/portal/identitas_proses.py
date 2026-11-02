@@ -53,7 +53,7 @@ def terbaru(catatan):
 
 async def baca(db,scope,permintaan):
     from app.models import (DryingLot,DryingMoistureLog,DryingCoolingLog,
-        MillingProcess,MillingProgressLog,MillingQcLog,PolishingProcess,
+        MillingProcess,MillingProgressLog,MillingQcLog,PolishingProcess,Dryer,
         PolishingOutputLog,PolishingSiloUsage,JedaProses,JedaCatatan,InternalTransfer,ActivityLog)
     from .scope import MODELS
     permintaan=set(permintaan);hasil={}
@@ -64,6 +64,7 @@ async def baca(db,scope,permintaan):
         rows=(await db.scalars(select(model).where(dalam(db, model.id, scope.ids(model)),
             getattr(model,col).in_(codes)))).all()
         ids=[r.id for r in rows]
+        dryers=dict((await db.execute(select(Dryer.id,Dryer.nama).where(Dryer.id.in_({r.dryer_id for r in rows})))).all()) if model is DryingLot and rows else {}
         events={i:[] for i in ids}
         async def audit_parent(tables,label):
             # Log pengeringan/giling memakai ID proses sebagai record_id.
@@ -132,6 +133,7 @@ async def baca(db,scope,permintaan):
             if status=='Sedang berjalan' and r.id in dijeda and jenis!='pendinginan':status='Dijeda'
             waktu,sumber=terbaru([(mulai,'Mulai proses'),(r.updated_at,'Catatan proses'),*events[r.id]])
             hasil[jenis,getattr(r,col)]=dict(status=status or 'Belum tersedia',
+                lokasi=('Gudang 1 · '+dryers[r.dryer_id] if r.dryer_id in dryers else 'Gudang 1') if model is DryingLot else 'Gudang 2' if model is PolishingProcess else 'Gudang 1',
                 diperbarui=waktu,sumber_waktu=sumber,petunjuk=petunjuk(status))
     return hasil
 
@@ -143,6 +145,8 @@ async def siapkan_detail(request,name,ctx):
     if d:
         jenis,kode=d['jenis'],d['kode'];kartu=ctx.get('proses')
         lokasi=d.get('dryer') if jenis in ('pengeringan','pendinginan') else None
+        if jenis=='pendinginan' and d.get('tahap')==3 and d.get('lokasi'):
+            lokasi=d['lokasi'].removeprefix('Sudah dipindah ke ')
         if not lokasi:
             silos=d.get('silo_aktif') or []
             lokasi=('Gudang 2' if jenis=='sosoh' else 'Gudang 1')+(' · '+', '.join(silos) if silos else '')
@@ -159,12 +163,37 @@ async def siapkan_detail(request,name,ctx):
         metadata=(await baca(db,request.state.portal_scope,[(jenis,kode)])).get((jenis,kode))
     if metadata is None:return
     ctx['portal_inti_proses']=dict(**metadata,**identitas(jenis,kartu),
-        kode=kode,lokasi=lokasi,angka=angka,catatan=getattr(kartu,'nota',None))
+        kode=kode,angka=angka,catatan=getattr(kartu,'nota',None))
+    inti=ctx['portal_inti_proses']
+    if lokasi:inti['lokasi']=('Gudang 1 · '+lokasi) if jenis in ('pengeringan','pendinginan') else lokasi
+    if d:
+        from .proses_ringkas import siapkan
+        inti.update(ringkas_aktif=True,jenis=jenis,tab_aktif=request.query_params.get('tab_detail','ringkasan'),
+            maju=getattr(kartu,'maju',None) if jenis=='pengeringan' else None,
+            fakta=[({'Target':'Target kadar air'}.get(k,k),v) for k,v in getattr(kartu,'fakta',[])],
+            bobot_pengeringan=[d['bobot_pengeringan']] if d.get('bobot_pengeringan') else [])
+        if jenis in ('pengeringan','pendinginan') and inti['angka']:inti['angka']=('Berat gabah saat masuk',inti['angka'][1])
+        siapkan(inti)
+        # Penimbangan yang benar-benar tercatat dapat lebih baru daripada
+        # kejadian pendinginan; bukan waktu halaman dibuka.
+        from datetime import datetime
+        for e in inti['bobot_pengeringan']:
+            if e.get('terukur') and e.get('timbang_waktu'):
+                try:waktu=datetime.fromisoformat(e['timbang_waktu']) if isinstance(e['timbang_waktu'],str) else e['timbang_waktu']
+                except ValueError:continue
+                inti['diperbarui'],inti['sumber_waktu']=terbaru([(inti['diperbarui'],inti['sumber_waktu']),(waktu,'Pencatatan hasil timbang')])
+        if jenis=='pendinginan':
+            inti['status_tampil']={1:'Menunggu dingin',2:'Menunggu pemindahan',3:'Sudah di silo'}.get(d.get('tahap'),inti['status_tampil'])
+            if d.get('tahap') in (1,2):inti['petunjuk']='Ditangani petugas. Anda belum perlu bertindak.'
+        elif inti['status']=='Sedang berjalan':inti['petunjuk']='Ditangani petugas. Anda belum perlu bertindak.'
 
 
 def tampilkan_detail(content,ctx,env):
     from bs4 import BeautifulSoup
     inti=ctx.get('portal_inti_proses');stok=ctx.get('portal_pembaruan_stok')
+    if inti and inti.get('ringkas_aktif'):
+        from .proses_ringkas import detail
+        return detail(content,inti,ctx,env)
     if not inti and not stok:return content
     s=BeautifulSoup(content,'html.parser')
     if inti:

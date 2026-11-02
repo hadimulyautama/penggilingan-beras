@@ -33,12 +33,19 @@ async def test_kartu_dan_detail_memakai_catatan_terbaru_milik_sendiri_serta_stat
                 r=await c.get(path);assert r.status_code==200
                 s=BeautifulSoup(r.text,'html.parser')
                 card=(s.select_one('.pelanggan-hero-proses') if '/proses-aktif/' in path else
-                    next(a for a in s.select('.pelanggan-progres article') if code in a.get_text()))
+                    next(a for a in s.select('.pelanggan-progres article') if code==a.get('data-kode-proses') or code in a.get_text()))
                 assert 'Penggilingan gabah' in card.get_text()
                 waktu=card.select_one('.pelanggan-pembaruan time')
                 assert waktu.get_text()=='31/10/2026 10:12'
-                assert 'Pencatatan hasil giling' in card.get_text()
-                assert 'belum perlu bertindak' in card.get_text()
+                if path=='/pelanggan/jasa-saya':
+                    assert not card.select('.pelanggan-sumber-waktu')
+                    assert s.select_one('.pelanggan-proses-petunjuk')
+                elif '/proses-aktif/' in path:
+                    assert 'Pencatatan hasil giling' in s.select_one('[data-portal-ringkas=catatan]').get_text()
+                    assert 'belum perlu bertindak' in card.get_text()
+                else:
+                    assert 'Pencatatan hasil giling' in card.get_text()
+                    assert 'belum perlu bertindak' in card.get_text()
                 assert '31/10/2026 18:12' not in s.main.get_text()
                 assert 'Rahasia Pelanggan B' not in r.text
         async with pg() as db:
@@ -52,7 +59,7 @@ async def test_kartu_dan_detail_memakai_catatan_terbaru_milik_sendiri_serta_stat
             r=await c.get(path);assert r.status_code==200
             s=BeautifulSoup(r.text,'html.parser')
             card=(s.select_one('.pelanggan-hero-proses') if '/proses-aktif/' in path else
-                next(a for a in s.select('.pelanggan-progres article') if code in a.get_text()))
+                next(a for a in s.select('.pelanggan-progres article') if code==a.get('data-kode-proses') or code in a.get_text()))
             assert 'Dijeda' in card.get_text() and 'menunggu penanganan petugas' in card.get_text()
             assert card.select_one('.pelanggan-pembaruan time').get_text()=='31/10/2026 10:31'
             assert 'Mesin perlu diperiksa' in card.get_text()

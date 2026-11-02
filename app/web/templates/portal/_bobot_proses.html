@@ -1,0 +1,10 @@
+{% macro bobot_proses(rows,perkiraan=true) %}
+<div class="pelanggan-bobot-proses">
+{% for e in rows %}<section aria-label="Berat gabah {{ e.kode }}">
+{% if rows|length > 1 %}<p class="pelanggan-redup">{{ e.kode }}</p>{% endif %}
+<dl class="pelanggan-proses-angka"><div><dt>Berat gabah saat masuk</dt><dd>{{ e.basah or 'Belum ditimbang' }}</dd></div>
+{% if perkiraan %}<div><dt>{{ 'Berat setelah kering' if e.terukur else 'Perkiraan awal setelah kering' if e.historis else 'Perkiraan setelah kering' }}</dt><dd class="{{ 'pelanggan-angka-kosong' if not e.terukur and not e.kering }}">{{ e.terukur or e.kering or 'Belum tersedia' }}{% if e.terukur %}<small>Hasil timbang{% if e.historis %} · bukan stok saat ini{% endif %}</small>{% elif e.kering %}<small>Perkiraan · belum ditimbang{% if e.historis %} · bukan stok saat ini{% endif %}</small>{% endif %}</dd></div>{% endif %}</dl>
+{% if e.saldo_campuran %}<p class="pelanggan-perhatian-proses">Perkiraan hanya untuk {{ e.kode }}. Saldo sumber gabungan: {{ e.saldo_campuran }}.</p>{% endif %}
+</section>{% endfor %}</div>
+{% endmacro %}
+{% macro kemajuan(r,id) %}{% if r.maju is not none %}<div class="pelanggan-kemajuan pelanggan-progres-air"><label for="{{ id }}">Kemajuan menuju target kadar air <strong>{{ '%.0f'|format(r.maju * 100) }}%</strong></label><progress id="{{ id }}" value="{{ r.maju }}" max="1">{{ '%.0f'|format(r.maju * 100) }}%</progress><div class="pelanggan-progres-batas">{% if r.kadar_air %}<span>Saat ini {{ r.kadar_air|replace('.',',') }}</span>{% endif %}{% if r.target_air %}<span>Target {{ r.target_air|replace('.',',') }}</span>{% endif %}</div></div>{% endif %}{% endmacro %}

@@ -1,0 +1,14 @@
+{% from 'portal/_bobot_proses.html' import bobot_proses,kemajuan %}
+{% from 'portal/_pembaruan_proses.html' import pembaruan %}
+<header class="riwayat-detail__hero pelanggan-hero-proses pelanggan-inti-ringkas" data-portal-ringkas="hero">
+<div class="pelanggan-proses-kepala"><div><h1>{{ r.judul }}</h1>{% if r.lokasi %}<p class="pelanggan-proses-lokasi">{{ r.lokasi }}</p>{% endif %}</div><span class="pelanggan-penanda{% if r.status=='Dijeda' %} pelanggan-penanda--hati{% endif %}">{{ r.status_tampil }}</span></div>
+{% if r.judul=='Penyosohan bahan campuran' or r.barang=='Jenis bahan belum tercatat' %}<p class="pelanggan-redup">{{ r.barang }}</p>{% endif %}
+{% if r.bobot_pengeringan %}{{ bobot_proses(r.bobot_pengeringan,r.jenis!='pengeringan') }}{% elif r.angka %}<dl class="pelanggan-proses-angka pelanggan-inti-fakta"><div><dt>{{ r.angka[0] }}</dt><dd>{{ r.angka[1] }}</dd></div></dl>{% endif %}
+{{ kemajuan(r,'progres-detail') }}
+{% if r.catatan %}<p class="pelanggan-perhatian-proses">{{ r.catatan }}</p>{% endif %}
+<p class="pelanggan-petunjuk-proses">{{ r.petunjuk }}</p>
+{% if r.bobot_pengeringan and r.jenis=='pendinginan' and not r.bobot_pengeringan[0].terukur %}<p class="pelanggan-status-timbang">Berat akhir belum ditimbang.</p>{% endif %}
+{{ pembaruan(r,true) }}
+</header>
+{% if r.bobot_pengeringan and r.jenis=='pendinginan' %}<details class="pelanggan-detail-lipat" data-portal-ringkas="estimasi"><summary>{{ 'Catatan berat' if r.bobot_pengeringan[0].terukur else 'Tentang perkiraan berat' }}</summary><div class="pelanggan-proses-catatan">{% for e in r.bobot_pengeringan %}{% if r.bobot_pengeringan|length > 1 %}<h2>{{ e.kode }}</h2>{% endif %}<p>{% if e.terukur %}Berat setelah kering berasal dari hasil penimbangan.{% elif e.kering %}Perkiraan memakai perubahan kadar air. Angka ini belum menjadi hasil timbang akhir.{% else %}Perkiraan berat kering belum dapat dihitung dari catatan pengukuran yang tersedia.{% endif %}</p>{% for note in e.catatan %}<p>{{ note|replace('Pasangan indikator awal dan selesai belum lengkap; estimasi belum tersedia.','Data pengukuran belum lengkap.')|replace('Indikator mesin tidak sah atau meningkat; estimasi perlu diperiksa.','Catatan pengukuran perlu diperiksa petugas.')|replace('Data lama: indikator akhir dari catatan mesin terakhir saat selesai.','Perkiraan memakai catatan pengukuran lama.') }}</p>{% endfor %}{% endfor %}</div></details>{% endif %}
+<details class="pelanggan-detail-lipat" data-portal-ringkas="catatan"><summary>Catatan proses</summary><div class="pelanggan-proses-catatan"><dl class="pelanggan-fakta"><div><dt>Kode proses</dt><dd>{{ r.kode }}</dd></div><div><dt>Lokasi</dt><dd>{{ r.lokasi or 'Belum tercatat' }}</dd></div></dl>{{ pembaruan(r) }}</div></details>

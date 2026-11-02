@@ -234,3 +234,21 @@ body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;bord
 .portal-status-navigasi button{font:inherit;color:var(--pd-green);background:transparent;border:1px solid var(--pd-line);border-radius:8px;min-height:44px;padding:8px 12px;cursor:pointer}
 .portal-status-navigasi button:focus-visible{outline:2px solid var(--pd-green);outline-offset:2px}
 @media(max-width:900px){.portal-top-identitas{flex:1}.portal-top-identitas>span{display:block;max-width:calc(100vw - 90px);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.portal-top-actions{flex-shrink:0}}
+
+/* Kartu Proses berjalan: tahap, angka, progres, lalu satu pintu detail. */
+.pelanggan-proses-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.pelanggan-proses-kartu{min-width:0;background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:16px;padding:18px}
+.pelanggan-proses-kepala{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.pelanggan-proses-kepala>div{min-width:0}.pelanggan-proses-kepala h2{font-size:17px;margin:0;line-height:1.4}.pelanggan-proses-kepala .pelanggan-penanda{font-size:11px;margin:0;max-width:100%}
+.pelanggan-proses-lokasi{font-size:12px;color:var(--pd-muted);margin:5px 0 0;overflow-wrap:anywhere}
+.pelanggan-proses-angka{display:grid;gap:12px;margin:17px 0 0}.pelanggan-proses-angka:empty{display:none}.pelanggan-proses-angka>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:start}
+.pelanggan-proses-angka dt{font-size:13px;color:var(--pd-muted)}.pelanggan-proses-angka dd{margin:0;font-size:15px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;max-width:100%}.pelanggan-proses-angka dd small{display:block;font-size:11px;font-weight:400;color:var(--pd-muted);max-width:170px;line-height:1.5;margin-top:3px}.pelanggan-proses-angka .pelanggan-angka-kosong{font-size:13px;font-weight:400}
+.pelanggan-proses-pied{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px}.pelanggan-proses-pied .pelanggan-pembaruan{font-size:11px;margin:0}.pelanggan-proses-pied .pelanggan-tautan{font-size:13px;min-height:44px;display:inline-flex;align-items:center}
+.pelanggan-proses-halaman .pelanggan-sapaan{margin-bottom:18px}.pelanggan-proses-petunjuk{font-size:13px;color:var(--pd-muted);margin:14px 0 0}
+.pelanggan-progres-air{margin-top:16px}.pelanggan-progres-air label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}.pelanggan-progres-air label strong{font-weight:600;font-variant-numeric:tabular-nums}.pelanggan-progres-batas{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--pd-muted);margin-top:6px}
+.portal-customer .pelanggan-inti-ringkas .pelanggan-proses-angka{display:grid;grid-template-columns:1fr;margin:17px 0 0}.portal-customer .pelanggan-inti-ringkas .pelanggan-proses-angka dd{font-size:16px}.portal-customer .pelanggan-inti-ringkas .pelanggan-proses-angka dt{font-size:13px}.portal-customer .pelanggan-inti-ringkas .pelanggan-proses-lokasi{font-size:13px}.portal-customer .pelanggan-inti-ringkas>.pelanggan-pembaruan{margin-top:13px}.pelanggan-status-timbang{font-size:13px;color:var(--pd-muted);margin-top:10px}
+.pelanggan-proses-catatan{padding:14px 16px;font-size:13px}.pelanggan-proses-catatan p{margin:0 0 10px}.pelanggan-proses-catatan p:last-child{margin-bottom:0}.pelanggan-proses-catatan h2{font-size:15px}.pelanggan-proses-lanjutan{padding:0}.pelanggan-proses-lanjutan>nav{margin:12px}.pelanggan-proses-lanjutan>.pengeringan-panel,.pelanggan-proses-lanjutan>.proses-detail__tab-panel{padding:12px}
+@media(max-width:900px){.pelanggan-proses-grid{grid-template-columns:1fr}.pelanggan-proses-kartu{padding:17px}.pelanggan-proses-kepala .pelanggan-penanda{max-width:100%}.portal-customer .pelanggan-inti-ringkas{padding:17px}.portal-customer .pelanggan-inti-ringkas h1{font-size:23px}}
+@media(max-width:360px){.pelanggan-proses-kartu{padding:14px}.pelanggan-proses-angka dd{font-size:14px}.pelanggan-proses-angka>div{gap:8px}.pelanggan-proses-kepala{gap:8px}}
+.portal-customer .pelanggan-proses-detail-ringkas>.pelanggan-detail-lipat{margin:0}
+.pelanggan-proses-halaman>.pelanggan-proses-grid{margin-bottom:16px}

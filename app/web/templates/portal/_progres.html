@@ -1,22 +1,16 @@
-{% from '_bobot_pengeringan.html' import dua_bobot %}
+{% from 'portal/_bobot_proses.html' import bobot_proses,kemajuan %}
 {% from 'portal/_pembaruan_proses.html' import pembaruan %}
 {% macro proses_berjalan(rows,kg) %}
-<section class="pelanggan-panel pelanggan-progres" aria-label="Progres proses berjalan">
-<div class="pelanggan-judul"><h2>Proses sedang berjalan</h2></div>
-{% for r in rows %}<article class="pelanggan-barang">
-  <div class="pelanggan-baris"><h3>{{ r.judul }}</h3><span class="pelanggan-penanda{% if r.status=='Dijeda' %} pelanggan-penanda--hati{% endif %}">{{ 'Sedang diproses' if r.status=='Sedang berjalan' else r.status }}</span></div>
-  <p class="pelanggan-kode">{{ r.kode }}</p>
-  {% if r.judul=='Penyosohan bahan campuran' or r.barang=='Jenis bahan belum tercatat' %}<p class="pelanggan-redup">{{ r.barang }}</p>{% endif %}
-  {{ pembaruan(r) }}
-{% if r.bobot_pengeringan %}{{ dua_bobot(r.bobot_pengeringan) }}{% endif %}
-  <p class="pelanggan-petunjuk-proses">{{ r.petunjuk }}</p>
-  {% if r.catatan %}<p>{{ r.catatan }}</p>{% endif %}
-  {% if r.maju is not none %}<div class="pelanggan-kemajuan"><label for="progres-{{ loop.index }}">Kemajuan menuju target kadar air · {{ '%.0f'|format(r.maju * 100) }}%</label><progress id="progres-{{ loop.index }}" value="{{ r.maju }}" max="1">{{ '%.0f'|format(r.maju * 100) }}%</progress></div>{% endif %}
-  <dl class="pelanggan-fakta">{% for k,v in r.fakta %}<div><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
-  {% if r.neraca %}<p class="pelanggan-redup">Hasil sementara yang sudah dicatat</p><dl class="pelanggan-fakta">{% for n in r.neraca %}<div><dt>{{ n.nama }}</dt><dd>{{ kg(n.kg) }}</dd></div>{% endfor %}</dl>{% endif %}
-  {% if not r.fakta and not r.neraca %}<p class="pelanggan-redup">{{ r.ringkas or 'Pembaruan hasil belum dicatat petugas.' }}</p>{% endif %}
-  <p class="pelanggan-catatan">Hasil sementara; jumlah akhir tersedia setelah proses selesai.{% if r.rendemen is not none %} Rasio hasil bukan persentase selesai.{% endif %}</p>
-  <a class="pelanggan-tautan" href="{{ r.href }}" aria-label="Lihat proses {{ r.judul }} {{ r.kode }}">Lihat proses →</a>
+<section class="pelanggan-progres pelanggan-proses-grid" aria-label="Progres proses berjalan">
+{% for r in rows %}<article class="pelanggan-proses-kartu" data-kode-proses="{{ r.kode }}">
+<div class="pelanggan-proses-kepala"><div><h2>{{ r.judul }}</h2>{% if r.lokasi %}<p class="pelanggan-proses-lokasi">{{ r.lokasi }}</p>{% endif %}</div><span class="pelanggan-penanda{% if r.status=='Dijeda' %} pelanggan-penanda--hati{% endif %}">{{ r.status_tampil }}</span></div>
+{% if r.judul=='Penyosohan bahan campuran' or r.barang=='Jenis bahan belum tercatat' %}<p class="pelanggan-redup">{{ r.barang }}</p>{% endif %}
+{% if r.bobot_pengeringan %}{{ bobot_proses(r.bobot_pengeringan,r.jenis!='pengeringan') }}{% elif r.angka %}<dl class="pelanggan-proses-angka"><div><dt>{{ r.angka[0] }}</dt><dd>{{ r.angka[1] }}</dd></div></dl>{% endif %}
+{{ kemajuan(r,'progres-' ~ loop.index) }}
+{% if r.jenis not in ('pengeringan','pendinginan') %}<dl class="pelanggan-proses-angka">{% for k,v in r.fakta_ringkas if not r.angka or v!=r.angka[1] %}<div><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>{% endif %}
+{% if r.catatan %}<p class="pelanggan-perhatian-proses">{{ r.catatan }}</p>{% endif %}
+{% if r.status not in ('Sedang berjalan','Dijeda') %}<p class="pelanggan-petunjuk-proses">{{ r.petunjuk }}</p>{% endif %}
+<footer class="pelanggan-proses-pied">{{ pembaruan(r,true) }}<a class="pelanggan-tautan" href="{{ r.href }}" aria-label="Lihat proses {{ r.judul }} {{ r.kode }}">Lihat detail →</a></footer>
 </article>{% endfor %}
 </section>
 {% endmacro %}

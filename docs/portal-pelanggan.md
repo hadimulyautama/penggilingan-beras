@@ -455,3 +455,34 @@ jalur navigasi utuh yang sudah ada. Status tidak melekat pada halaman cache
 atau bertahan sesudah navigasi selesai.
 Respons HTML yang persis sama tidak mengganti isi yang sudah ditampilkan atau
 memunculkan pemberitahuan pembaruan; rincian terbuka tetap dipertahankan.
+
+Halaman Proses berjalan memakai kartu terpisah yang ringkas: nama proses dan
+lokasi, status tahap, angka bahan/hasil yang tercatat, progres kadar air bila
+tersedia, waktu catatan aktual dan satu tautan detail. Kode serta sumber waktu
+ada pada Catatan proses di detail. Petunjuk umum pelanggan cukup sekali pada
+halaman; jeda, catatan perhatian dan status yang belum tersedia tetap terlihat.
+Status tahap dibedakan (dikeringkan, menunggu dingin, digiling, disosoh), tanpa
+mengganti status transaksi atau memasukkan pendinginan ke riwayat terlalu awal.
+
+Bobot proses pelanggan diproyeksikan dari pembaca estimasi/timbang yang sama:
+Berat gabah saat masuk, Perkiraan setelah kering atau Berat setelah kering
+untuk hasil timbang yang sah. Label perkiraan/belum ditimbang hanya muncul
+bersama angka perkiraan; kondisi tanpa estimasi cukup Belum tersedia. Nol
+pecahan di ujung dibuang tanpa pembulatan dan tanpa mengganti nilai sumber.
+Untuk proses yang masih dikeringkan, tidak ditawarkan estimasi akhir yang
+belum dapat dihitung. Catatan yang mendasari estimasi dapat dibuka di detail;
+penanda sumber historis/campuran tetap dibawa, tidak dianggap saldo saat ini.
+
+Progres tetap memakai indikator mesin terakhir dan target native, tidak
+memakai alat tes sebagai pengganti dan tidak menyatakan rasio hasil sebagai
+persentase selesai. Kartu menampilkan satu acuan kadar air dan target;
+pengukuran alat tes, putaran, bahan, hasil dan rasio tetap tersedia pada
+rincian native. Ringkasan detail berada di luar lipatan. Tab Bahan/Pengukuran/
+Hasil/Riwayat dan laporan dipertahankan dalam rincian lanjutan; permintaan
+tab tertentu membuka lipatan itu agar panel tujuan langsung dapat dibaca.
+Perhitungan, otorisasi, transaksi, stok operator dan PDF tidak diubah.
+Alamat proses pelanggan lama `/pelanggan/pekerjaan` memakai daftar ringkas yang
+sama. Proses yang sudah selesai tetap mengikuti pengalihan native ke riwayat.
+Untuk pendinginan yang sudah dipindah, lokasi mengikuti silo yang tercatat;
+jika ada timbang sah, waktu timbang ikut dipertimbangkan sebagai pembaruan
+aktual. Tidak ada penggantian waktu dengan jam saat halaman dibuka.
