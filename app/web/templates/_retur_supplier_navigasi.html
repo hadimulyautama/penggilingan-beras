@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block kaki %}
+{{ super() }}
+{% if akun and kembali %}
+{# Gunakan titik ekstensi paket. Tombol dipasang sebelum pengikat sidebar
+   bawaan berjalan, termasuk ketika PINDAH mengganti isi halaman. #}
+<link rel="stylesheet" href="/static/retur-supplier-menu.css?menu=1">
+<template data-rsp-menu>
+  <button class="bar__menu" type="button" id="buka-laci" aria-label="Buka menu"
+          aria-controls="laci" aria-expanded="false">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.1" stroke-linecap="round" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16"/>
+    </svg>
+  </button>
+</template>
+{# Wajib sinkron: pada navigasi instan skrip inline sidebar dapat berjalan
+   sebelum skrip eksternal selesai dimuat. Ini hanya menempatkan tombol;
+   seluruh perilaku sidebar tetap ditangani base.html sesudah blok kaki. #}
+<script data-rsp-menu-setup>
+(function () {
+  "use strict";
+  var sumber = document.querySelector("template[data-rsp-menu]");
+  if (!sumber) return;
+  var bar = document.querySelector("main.isi > header.bar");
+  var kembali = bar && bar.querySelector("a.bar__balik");
+  if (bar && kembali && !document.getElementById("buka-laci")) {
+    bar.insertBefore(sumber.content.cloneNode(true), kembali);
+    bar.classList.add("bar--rsp-menu-kembali");
+  }
+  sumber.remove();
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends '_retur_supplier_navigasi.html' %}
 {% import '_stok.html' as st %}
 {% macro kg(v) %}{{ ('{:,.4f}'.format(v|float).rstrip('0').rstrip('.')).replace(',', '_').replace('.', ',').replace('_', '.') ~ ' kg' if v is not none else 'Belum tersedia' }}{% endmacro %}
 {% block judul %}Pemeriksaan Retur ke Supplier{% endblock %}

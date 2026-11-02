@@ -1,0 +1,19 @@
+/* Judul mendapat ruang tersisa setelah menu, kembali, dan notifikasi.
+   Safe area, warna, ukuran tombol, dan header desktop tetap dari paket. */
+@media (max-width: 899px) {
+  .bar.bar--rsp-menu-kembali { gap: 8px; }
+  .bar--rsp-menu-kembali .bar__merek {
+    position: static;
+    transform: none;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    display: block;
+    line-height: 42px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+}
