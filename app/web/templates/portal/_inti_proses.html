@@ -1,10 +1,10 @@
 {% from 'portal/_pembaruan_proses.html' import pembaruan %}
 <header class="riwayat-detail__hero pelanggan-hero-proses">
-<span class="pelanggan-penanda{% if r.status=='Dijeda' %} pelanggan-penanda--hati{% endif %}">{{ 'Sedang diproses' if r.status=='Sedang berjalan' else r.status }}</span>
+<span class="pelanggan-penanda{% if r.status=='Dijeda' %} pelanggan-penanda--hati{% endif %}">{{ r.status_tampil or ('Sedang diproses' if r.status=='Sedang berjalan' else r.status) }}</span>
 <h1>{{ r.judul }}</h1><p class="pelanggan-detail-kode">{{ r.kode }}</p>
 {% if r.judul=='Penyosohan bahan campuran' or r.barang=='Jenis bahan belum tercatat' %}<p class="pelanggan-redup">{{ r.barang }}</p>{% endif %}
 {% if r.angka or r.lokasi %}<dl class="pelanggan-inti-fakta">{% if r.angka %}<div><dt>{{ r.angka[0] }}</dt><dd>{{ r.angka[1] }}</dd></div>{% endif %}{% if r.lokasi %}<div><dt>Lokasi</dt><dd>{{ r.lokasi }}</dd></div>{% endif %}</dl>{% endif %}
 {% if r.catatan %}<p class="pelanggan-perhatian-proses">{{ r.catatan }}</p>{% endif %}
-<p class="pelanggan-petunjuk-proses">{{ r.petunjuk }}</p>
+{% if r.petunjuk %}<p class="pelanggan-petunjuk-proses">{{ r.petunjuk }}</p>{% endif %}
 {{ pembaruan(r) }}
 </header>

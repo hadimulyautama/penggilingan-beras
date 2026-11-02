@@ -119,7 +119,7 @@ def progres_berjalan(rows,scope):
                 'Bahan':'Bahan masuk','Hasil':'Hasil sementara','Mutu':'Pemeriksaan mutu'}.get(k,k),
                 v.replace('rendemen','rasio hasil')) for k,v in r.fakta if k!='Mode'],neraca=neraca,
             ringkas=r.ringkas,rendemen=r.rendemen_sementara,
-            angka=('Berat gabah saat masuk' if jenis in ('pengeringan','pendinginan') else 'Jumlah bahan',' '.join(r.utama)) if r.utama else None,
+            angka=('Gabah basah saat masuk' if jenis in ('pengeringan','pendinginan') else 'Jumlah bahan',' '.join(r.utama)) if r.utama else None,
             bobot_pengeringan=getattr(r,'bobot_pengeringan',[])))
     return hasil
 

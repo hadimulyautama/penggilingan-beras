@@ -252,3 +252,5 @@ body.portal-customer .portal-sidebar .portal-brand{border:0;box-shadow:none;bord
 @media(max-width:360px){.pelanggan-proses-kartu{padding:14px}.pelanggan-proses-angka dd{font-size:14px}.pelanggan-proses-angka>div{gap:8px}.pelanggan-proses-kepala{gap:8px}}
 .portal-customer .pelanggan-proses-detail-ringkas>.pelanggan-detail-lipat{margin:0}
 .pelanggan-proses-halaman>.pelanggan-proses-grid{margin-bottom:16px}
+
+.pelanggan-waktu-timbang{font-size:12px;color:var(--pd-muted);margin:10px 0 0}.portal-customer .pelanggan-inti-ringkas .pelanggan-waktu-timbang{font-size:12px;margin-top:10px}.pelanggan-proses-angka dd small{font-size:12px}.pelanggan-berat-lanjutan:empty{display:none}.pelanggan-berat-lanjutan>.proses-detail__statistik{padding:12px;margin:0}.pelanggan-proses-lanjutan>.pelanggan-proses-catatan{border-bottom:1px solid var(--pd-line)}

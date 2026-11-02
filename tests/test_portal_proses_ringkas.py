@@ -30,6 +30,18 @@ def test_hasil_timbang_tidak_disebut_perkiraan_atau_belum_ditimbang():
     e=dict(kode='PGR-1',basah='30.251,5 kg',kering='26.456,76 kg',terukur='26.000,25 kg',historis=False)
     macro=templates.env.get_template('portal/_bobot_proses.html').module.bobot_proses
     s=BeautifulSoup(macro([e]),'html.parser')
-    assert '26.000,25 kg' in s.get_text() and 'Hasil timbang' in s.get_text()
+    assert '26.000,25 kg' in s.get_text() and 'Berat kering hasil timbang' in s.get_text()
     assert '26.456,76 kg' not in s.get_text() and 'belum ditimbang' not in s.get_text()
-    assert 'Berat setelah kering' in s.get_text()
+    assert 'Berat kering hasil timbang' in s.get_text()
+
+
+def test_waktu_timbang_tidak_memakai_waktu_proses_dan_menolak_waktu_tidak_sah():
+    from datetime import datetime
+    from app.web.portal.proses_ringkas import bobot,waktu_timbang
+    value='2026-11-01T10:23:00+07:00'
+    e=dict(terukur='26.000,25 kg',timbang_waktu=value,basah='30.251,50 kg',kering=None)
+    assert waktu_timbang(e)==datetime.fromisoformat(value)
+    assert bobot([e])[0]['ditimbang_pada']==datetime.fromisoformat(value)
+    assert waktu_timbang({**e,'terukur':None}) is None
+    for invalid in [None,'salah',123,{},'2026-99-01']:
+        assert waktu_timbang({**e,'timbang_waktu':invalid}) is None

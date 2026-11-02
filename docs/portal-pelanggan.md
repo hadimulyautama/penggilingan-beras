@@ -486,3 +486,26 @@ sama. Proses yang sudah selesai tetap mengikuti pengalihan native ke riwayat.
 Untuk pendinginan yang sudah dipindah, lokasi mengikuti silo yang tercatat;
 jika ada timbang sah, waktu timbang ikut dipertimbangkan sebagai pembaruan
 aktual. Tidak ada penggantian waktu dengan jam saat halaman dibuka.
+
+Rincian proses pelanggan membedakan selesainya satu tahap dari keseluruhan
+jasa. Hasil pengeringan yang sudah dingin/berada di silo berjudul Hasil
+pengeringan gabah, dengan penanda Pengeringan selesai serta lokasi native.
+Tahap lain yang selesai memakai nama tahapnya, tanpa otomatis menawarkan
+pengambilan hanya karena satu proses ditutup. Menunggu pemindahan tetap
+mengikuti keadaan yang tercatat, bukan dianggap sudah dipindah.
+
+Dua kelompok rincian adalah Rincian berat serta Bahan dan riwayat. Kode dan
+sumber pembaruan masuk ke kelompok kedua bersama tab native yang dipertahankan.
+Statistik berat/hasil berada pada kelompok pertama. Tidak ada lipatan ketiga
+untuk catatan yang sama. Pada ringkasan, Gabah basah saat masuk dipasangkan
+dengan Perkiraan berat kering atau Berat kering hasil timbang. Penanda Belum
+ditimbang cukup sekali; bila perkiraan belum ada, ringkasan menyatakan berat
+kering belum ditimbang dan alasannya tersedia di Rincian berat.
+
+Waktu Ditimbang hanya memakai waktu yang tersimpan bersama hasil timbang
+sah dari pembaca native. Nilai kosong, salah bentuk atau bukan hasil timbang
+sah tidak memperoleh waktu pengganti dari pembaruan proses maupun jam buka.
+Ringkasan hasil timbang menampilkan Waktu timbang belum tercatat bila waktu
+tersebut tidak tersedia. Pembaruan proses tetap ada pada Bahan dan riwayat,
+dengan jenis kejadian dan tanggal aslinya. Seluruh angka, perhitungan, saldo,
+riwayat koreksi dan PDF tetap memakai sumber yang sama.

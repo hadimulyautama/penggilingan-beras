@@ -165,6 +165,10 @@ async def siapkan_detail(request,name,ctx):
     ctx['portal_inti_proses']=dict(**metadata,**identitas(jenis,kartu),
         kode=kode,angka=angka,catatan=getattr(kartu,'nota',None))
     inti=ctx['portal_inti_proses']
+    if inti['status']=='Selesai':
+        inti['status_tampil']=TAHAP[jenis]+' selesai'
+        if jenis!='transfer':inti['judul']='Hasil '+inti['judul'][0].lower()+inti['judul'][1:]
+        inti['petunjuk']=''
     if lokasi:inti['lokasi']=('Gudang 1 · '+lokasi) if jenis in ('pengeringan','pendinginan') else lokasi
     if d:
         from .proses_ringkas import siapkan
@@ -172,19 +176,19 @@ async def siapkan_detail(request,name,ctx):
             maju=getattr(kartu,'maju',None) if jenis=='pengeringan' else None,
             fakta=[({'Target':'Target kadar air'}.get(k,k),v) for k,v in getattr(kartu,'fakta',[])],
             bobot_pengeringan=[d['bobot_pengeringan']] if d.get('bobot_pengeringan') else [])
-        if jenis in ('pengeringan','pendinginan') and inti['angka']:inti['angka']=('Berat gabah saat masuk',inti['angka'][1])
+        if jenis in ('pengeringan','pendinginan') and inti['angka']:inti['angka']=('Gabah basah saat masuk',inti['angka'][1])
         siapkan(inti)
         # Penimbangan yang benar-benar tercatat dapat lebih baru daripada
         # kejadian pendinginan; bukan waktu halaman dibuka.
-        from datetime import datetime
         for e in inti['bobot_pengeringan']:
-            if e.get('terukur') and e.get('timbang_waktu'):
-                try:waktu=datetime.fromisoformat(e['timbang_waktu']) if isinstance(e['timbang_waktu'],str) else e['timbang_waktu']
-                except ValueError:continue
-                inti['diperbarui'],inti['sumber_waktu']=terbaru([(inti['diperbarui'],inti['sumber_waktu']),(waktu,'Pencatatan hasil timbang')])
+            if e.get('ditimbang_pada'):
+                inti['diperbarui'],inti['sumber_waktu']=terbaru([(inti['diperbarui'],inti['sumber_waktu']),(e['ditimbang_pada'],'Pencatatan hasil timbang')])
         if jenis=='pendinginan':
-            inti['status_tampil']={1:'Menunggu dingin',2:'Menunggu pemindahan',3:'Sudah di silo'}.get(d.get('tahap'),inti['status_tampil'])
-            if d.get('tahap') in (1,2):inti['petunjuk']='Ditangani petugas. Anda belum perlu bertindak.'
+            inti['status_tampil']={1:'Menunggu dingin',2:'Pengeringan selesai',3:'Pengeringan selesai'}.get(d.get('tahap'),inti['status_tampil'])
+            if d.get('tahap')==1:inti['petunjuk']='Ditangani petugas. Anda belum perlu bertindak.'
+            elif d.get('tahap') in (2,3):
+                inti['judul']='Hasil pengeringan gabah'
+                inti['petunjuk']='Menunggu pemindahan ke silo oleh petugas.' if d['tahap']==2 else ''
         elif inti['status']=='Sedang berjalan':inti['petunjuk']='Ditangani petugas. Anda belum perlu bertindak.'
 
 

@@ -16,7 +16,20 @@ def status_tahap(jenis,status):
 
 
 def bobot(rows):
-    return [dict(e,**{k:angka(e.get(k)) for k in ('basah','kering','terukur')}) for e in rows or []]
+    return [dict(e,ditimbang_pada=waktu_timbang(e),**{k:angka(e.get(k)) for k in ('basah','kering','terukur')}) for e in rows or []]
+
+
+def waktu_timbang(e):
+    """Hanya waktu milik hasil timbang sah; tidak memakai waktu proses/buka."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from app.config import settings
+    if not e.get('terukur'):return None
+    value=e.get('timbang_waktu')
+    try:dt=datetime.fromisoformat(value) if isinstance(value,str) else value
+    except ValueError:return None
+    if not isinstance(dt,datetime):return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=ZoneInfo(settings.app_timezone))
 
 
 def siapkan(r):
@@ -70,8 +83,13 @@ def detail(content,r,ctx,env):
             parent=el.parent;el.decompose()
             if parent.name=='section' and not parent.get_text(strip=True):parent.decompose()
     wrapper=s.new_tag('details',attrs={'class':'pelanggan-detail-lipat pelanggan-proses-lanjutan'})
-    summary=s.new_tag('summary');summary.string='Bahan, pengukuran dan riwayat' if r['jenis'] in ('pengeringan','pendinginan') else 'Rincian bahan dan hasil'
+    summary=s.new_tag('summary');summary.string='Bahan dan riwayat'
     wrapper.append(summary)
+    catatan=root.select_one('[data-portal-ringkas=catatan]')
+    if catatan:wrapper.append(catatan.extract())
+    berat=root.select_one('.pelanggan-berat-lanjutan')
+    if berat and r['jenis'] in ('giling','sosoh'):
+        for grid in list(root.select('.proses-detail__statistik')):berat.append(grid.extract())
     if r.get('tab_aktif') not in (None,'ringkasan'):wrapper['open']=''
     for el in list(root.children):
         if getattr(el,'name',None) and not el.get('data-portal-ringkas') and 'riwayat-detail__back' not in el.get('class',[]):

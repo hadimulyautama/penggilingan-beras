@@ -77,7 +77,7 @@ async def test_dua_bobot_satu_sumber_di_produksi_portal_izin_dan_tidak_menulis(p
         for path in ['/pelanggan/jasa-saya','/pelanggan/pekerjaan?tab=tindakan']:
             page=await c.get(path);assert page.status_code==200
             soup=BeautifulSoup(page.text,'html.parser');body=soup.get_text(' ',strip=True)
-            assert 'Berat gabah saat masuk' in body and 'Perkiraan setelah kering' in body
+            assert 'Gabah basah saat masuk' in body and 'Perkiraan berat kering' in body
             assert '30.251,5 kg' in body and '26.456,76 kg' in body
             assert 'PGR-RAHASIA-B' not in body and '4.372' not in body
             assert not soup.select('[data-post],[data-aksi],form[action*="mulai_giling"]')

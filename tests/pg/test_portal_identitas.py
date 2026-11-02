@@ -70,9 +70,9 @@ async def test_riwayat_proses_tidak_menjanjikan_barang_siap_diambil(pg,portal):
         r=await c.get('/pelanggan/riwayat-giling/'+str(portal.process[0]['giling']))
         assert r.status_code==200
         s=BeautifulSoup(r.text,'html.parser');hero=s.select_one('.pelanggan-hero-proses')
-        assert hero.h1.get_text()=='Penggilingan gabah'
-        assert hero.select_one('.pelanggan-penanda').get_text()=='Selesai'
-        assert 'konfirmasikan dengan petugas' in hero.get_text()
+        assert hero.h1.get_text()=='Hasil penggilingan gabah'
+        assert hero.select_one('.pelanggan-penanda').get_text()=='Penggilingan selesai'
+        assert 'pengambilan' not in hero.get_text()
         assert 'siap diambil' not in hero.get_text() and hero.select_one('time')
 
 
