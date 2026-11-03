@@ -38,7 +38,7 @@ async def save(pg,uid,kode,**kw):
         result=await s.simpan(db,jenis=jenis,kode=kode,user=user,req=body);await db.commit()
     return result,body
 
-async def test_60_56_sisa_500_terpakai_2300_dan_riwayat(pg,running):
+async def test_60_56_sisa_300_terpakai_2500_dan_riwayat(pg,running):
     uid,kode,mid,it=running
     r,body=await save(pg,uid,kode,bahan=[dict(id=mid,sumber=str(it),jumlah=56)])
     after=r['hasil']['sesudah'];assert after['basis']==2500
@@ -250,3 +250,106 @@ async def test_siapkan_bukti_ui(pg,running,hasil):
             akun=await db.scalar(select(ProduksiAkun).order_by(ProduksiAkun.id.desc()).limit(1))
             if os.environ.get('UJI_EXPORT_UI'):
                 Path('../ui.json').write_text(json.dumps(dict(username=akun.username,password='rahasia123',sosoh=kode,giling=giling.kode_proses,move_id=mid,intake_id=it)))
+
+async def test_pertukaran_dua_sumber_memakai_saldo_rancangan_akhir(pg,dunia):
+    async with pg() as db:
+        u,a,ia=await batch_baru(db,dunia,n=100,w=5000,kode='PKB-TUKAR-A')
+        _,b,ib=await batch_baru(db,dunia,n=100,w=6000,kode='PKB-TUKAR-B')
+        await pindah(db,u,ia,100,'A');await pindah(db,u,ib,100,'B')
+        proc=(await p.mulai_penyosohan(db,user=u,nama_silos=['A','B'])).proc
+        u.role='admin';await db.commit();uid=u.id;kode=proc.kode_proses
+        moves=(await db.scalars(select(PkTumpukanToSilo).order_by(PkTumpukanToSilo.id))).all()
+        changes=[dict(id=moves[0].id,sumber=str(ib.id),jumlah=100),dict(id=moves[1].id,sumber=str(ia.id),jumlah=100)]
+        ids=(ia.id,ib.id)
+    r,_=await save(pg,uid,kode,bahan=changes)
+    assert r['hasil']['sesudah']['basis']==11000
+    async with pg() as db:
+        assert await g2._sisa_tumpukan_intake(db,ids[0])==0
+        assert await g2._sisa_tumpukan_intake(db,ids[1])==0
+
+async def test_status_kiriman_setelah_commit_tanpa_kirim_ulang(pg,running):
+    from app.web.koreksi_bahan_berjalan import Rancangan,tulis,status
+    uid,kode,mid,it=running
+    # Simulasikan balasan hilang setelah commit dengan mengabaikan hasilnya.
+    _,body=await save(pg,uid,kode,bahan=[dict(id=mid,sumber=str(it),jumlah=56)])
+    async with pg() as db:
+        u=await db.get(User,uid)
+        response=await status(body['kunci'],user=u)
+        import json
+        observed=json.loads(response.body)
+        assert observed['tercatat'] and observed['hasil']['sesudah']['entries'][0]['sisa']==300
+        assert await g2._sisa_tumpukan_intake(db,it)==2200
+
+
+async def test_giling_sisa_eksplisit_menyimpan_audit_sebelum_asli(pg,hasil):
+    from app.penggilingan.gudang1.services import milling as m
+    from app.models import ActivityLog
+    import json
+    u,pr,_=hasil
+    async with pg() as db:
+        user=await db.get(User,u.id);user.role='admin';await db.commit()
+        src=(await db.scalars(select(MillingProcessSource).where(MillingProcessSource.milling_process_id==pr.id).order_by(MillingProcessSource.id))).first()
+        sid=src.silo_storage_id;mid=src.id
+        await m.tutup_silo_giling(db,user=user,kode_proses=pr.kode_proses,nama_silo='A',sisa_kg=500)
+        st=await db.get(SiloStorage,sid);key=f'batch:{st.purchase_batch_id}'
+    await save(pg,u.id,pr.kode_proses,jenis='giling',bahan=[dict(id=sid,sumber=key,jumlah=5800,sisa=400)])
+    async with pg() as db:
+        audit=await db.scalar(select(ActivityLog).where(ActivityLog.table_name=='milling_process_sources',ActivityLog.record_id==mid,ActivityLog.field_name=='koreksi_bahan_sisa').order_by(ActivityLog.id.desc()))
+        assert D(str(json.loads(audit.old_value)['berat_akhir_kg']))==500
+        assert D(str(json.loads(audit.new_value)['berat_akhir_kg']))==400
+
+async def test_giling_pertukaran_sumber_tanpa_menggandakan_alokasi(pg,hasil):
+    u,pr,_=hasil
+    async with pg() as db:
+        user=await db.get(User,u.id);user.role='admin';await db.commit()
+        ctx=await s.konteks(db,jenis='giling',kode=pr.kode_proses,user=user)
+        a,b=ctx['entries']
+    result,_=await save(pg,u.id,pr.kode_proses,jenis='giling',bahan=[
+        dict(id=a['id'],sumber=b['sumber'],jumlah=b['jumlah']),
+        dict(id=b['id'],sumber=a['sumber'],jumlah=a['jumlah'])])
+    after=result['hasil']['sesudah']
+    assert after['basis']==10000
+    assert sorted(e['kg'] for e in after['entries'])==[4000,6000]
+    assert all(src['bebas']==0 for src in after['sources'] if src['key'] in (a['sumber'],b['sumber']))
+    async with pg() as db:
+        assert not await db.scalar(select(SiloStorage.id).where(SiloStorage.status=='koreksi').limit(1))
+
+from tests.pg.test_gabah_kering_dikemas import pabrik
+async def test_bongkar_gabah_ganti_sumber_dan_batal_menjaga_lot_asal(pg,pabrik):
+    from tests.pg.test_gabah_kering_dikemas import _isi_silo_langsung,_keluarkan
+    from app.penggilingan.gudang1.services.silo import masuk_silo
+    from app.penggilingan.gudang1.services.gabah_kering import saldo_gabah_kering
+    from app.models import GabahKeringBongkar,GabahKeringLot
+    a=await _isi_silo_langsung(pg,pabrik,huruf='A',kode='GB-KOREKSI-01',kg=1000)
+    first=await _keluarkan(pg,pabrik,silo_storage_id=a,berat_kg=1000)
+    b=await _isi_silo_langsung(pg,pabrik,huruf='B',kode='GB-KOREKSI-02',kg=1500)
+    second=await _keluarkan(pg,pabrik,silo_storage_id=b,berat_kg=1500)
+    async with pg() as db:
+        u=await db.get(User,pabrik['user'])
+        await masuk_silo(db,user=u,nama_silo='B',kode_lot=None,kode_batch=None,kode_gkr=first.lot.kode_lot)
+        bo=await db.scalar(select(GabahKeringBongkar).where(GabahKeringBongkar.gabah_kering_lot_id==first.lot.id));sid=bo.silo_storage_id
+    key=f'bongkar:{second.lot.id}'
+    await save(pg,pabrik['user'],f'catatan-{sid}',jenis='giling',bahan=[dict(id=sid,sumber=key,jumlah=800)])
+    async with pg() as db:
+        assert await saldo_gabah_kering(db,first.lot.id)==1000
+        assert await saldo_gabah_kering(db,second.lot.id)==700
+        assert (await db.get(GabahKeringLot,first.lot.id)).berat_timbang_kg==1000
+    await save(pg,pabrik['user'],f'catatan-{sid}',jenis='giling',bahan=[dict(id=sid,hapus=True)],key='uji-bongkar-batal-123')
+    async with pg() as db:
+        assert await saldo_gabah_kering(db,second.lot.id)==1500
+        assert (await db.get(SiloStorage,sid)).status=='batal'
+        assert await db.get(GabahKeringLot,first.lot.id)
+
+async def test_hasil_bertambah_tidak_membatalkan_kemasan_lama(pg,running):
+    from tests.pg.test_masukkan_beras_silo import _kemas_grade
+    from app.models import FinishedGoodsStock
+    from app.services.seed import seed_master
+    uid,kode,mid,it=running
+    await seed_master()
+    await _kemas_grade(pg,dict(user=uid,kode_pol=kode),grade='medium',jumlah_karung=10,ukuran=25)
+    async with pg() as db:
+        old=[(x.id,x.jumlah_karung,x.berat_total_kg) for x in (await db.scalars(select(FinishedGoodsStock))).all()]
+    r,_=await save(pg,uid,kode,hasil={'medium':2200})
+    assert r['hasil']['sesudah']['outputs']['medium']==2200
+    async with pg() as db:
+        assert [(x.id,x.jumlah_karung,x.berat_total_kg) for x in (await db.scalars(select(FinishedGoodsStock))).all()]==old

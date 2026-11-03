@@ -1231,6 +1231,8 @@ async def _undo_beras_masuk_silo(db: AsyncSession, log: ActivityLog, *, actor_id
 
 
 async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str:
+    if log.aksi == 'koreksi_bahan_hasil_berjalan':
+        raise UndoError('Koreksi bahan/hasil tersimpan sebagai satu rancangan atomik. Gunakan koreksi proses berjalan dengan nilai efektif terbaru; jangan membatalkan satu jejak anak secara terpisah.')
     tag = getattr(log, "aksi", None)
     # Tag eksplisit juga menentukan penolakan. Jangan menebak nama tabel
     # lebih dulu: koreksi ini memiliki alur pembatalan khusus di riwayat.

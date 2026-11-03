@@ -23,13 +23,13 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session, with_loader_criteria
 
 from app.penggilingan.gudang1.models import PurchaseBatch
-from app.penggilingan.gudang2.models import PkGudang2Intake, PkPurchaseBatch, PkTumpukanToSilo
+from app.penggilingan.gudang2.models import PkGudang2Intake, PkPurchaseBatch, PkTumpukanToSilo, BrokenKeSilo, BerasKeSilo, HasilSampingKeSilo
 
 TERMASUK_DIBATALKAN = "termasuk_dibatalkan"
 
 #: Model yang cerminnya bertanda. Menambah model = menambah di sini DAN
 #: memberi kolom `dibatalkan_pada` (migrasi).
-MODEL_CERMIN = (PurchaseBatch, PkPurchaseBatch, PkGudang2Intake, PkTumpukanToSilo)
+MODEL_CERMIN = (PurchaseBatch, PkPurchaseBatch, PkGudang2Intake, PkTumpukanToSilo, BrokenKeSilo, BerasKeSilo, HasilSampingKeSilo)
 
 
 @event.listens_for(Session, "do_orm_execute")

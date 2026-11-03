@@ -256,6 +256,14 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
         teks = berkas.read_text()
         for m in re.finditer(r'\brender(_laci)?\(\s*request,\s*"([^"]+)"', teks):
             nama = m.group(2)
+            # Pembungkus aplikasi mempertahankan kedua template Stok paket.
+            if nama == "stok_dengan_koreksi.html":
+                assert 'extends template_stok_asal' in (TPL / nama).read_text()
+                asal=re.search(r'template_stok_asal="(stok(?:_pk_jasa)?\.html)"',_panggilan(teks,m.end()))
+                assert asal, "Pembungkus Stok harus membawa identitas layar asal"
+                terlihat.add(asal.group(1))
+                assert m.group(1) or "lencana(" in _panggilan(teks, m.end())
+                continue
             if nama not in berlaci:
                 continue
             terlihat.add(nama)

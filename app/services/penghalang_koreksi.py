@@ -1,17 +1,17 @@
 """Catatan hilir yang harus diperiksa manusia sebelum membetulkan asalnya."""
 from sqlalchemy import select, or_
 from app.models import InternalTransfer, OutgoingItem, OutgoingRecord
-from app.penggilingan.gudang2.models import (PkGudang2Intake, PkTumpukanToSilo,
+from app.penggilingan.gudang2.models import (PkGudang2Intake, PkTumpukanToSilo, BrokenKeSilo,
     PolishingSiloUsage, PolishingProcess, BerasKeSilo, HasilSampingKeSilo)
 from app.penggilingan.inventory.models import FinishedGoodsStock, ByproductStock
 
 MODEL = {'packing': FinishedGoodsStock, 'stok-samping': ByproductStock,
          'beras-silo': BerasKeSilo, 'samping-silo': HasilSampingKeSilo,
-         'pk-silo': PkTumpukanToSilo}
+         'pk-silo': PkTumpukanToSilo, 'broken-silo': BrokenKeSilo}
 
 
 def rincian(row, tipe):
-    kode = getattr(row, 'kode_pindah', None) or f"{ {'packing':'Packing', 'stok-samping':'Stok hasil samping', 'beras-silo':'Beras ke silo', 'samping-silo':'Hasil samping ke silo', 'pk-silo':'PK ke silo'}[tipe]} #{row.id}"
+    kode = getattr(row, 'kode_pindah', None) or f"{ {'packing':'Packing', 'stok-samping':'Stok hasil samping', 'beras-silo':'Beras ke silo', 'samping-silo':'Hasil samping ke silo', 'pk-silo':'PK ke silo', 'broken-silo':'Broken ke silo'}[tipe]} #{row.id}"
     berat = getattr(row, 'berat_total_kg', None)
     if berat is None: berat = getattr(row, 'berat_kg', 0)
     return dict(kode=kode, jumlah=float(berat or 0),
@@ -36,6 +36,10 @@ async def daftar(db, jenis, id_):
     elif jenis == 'sosoh':
         for tipe, model in MODEL.items():
             if tipe == 'pk-silo': continue
+            if tipe == 'broken-silo':
+                rows=(await db.scalars(select(BrokenKeSilo).join(ByproductStock,ByproductStock.id==BrokenKeSilo.byproduct_stock_id).where(ByproductStock.source_type=='polishing',ByproductStock.source_id==id_))).all()
+                hasil += [rincian(x,tipe) for x in rows]
+                continue
             kondisi = ((model.source_type == 'polishing') & (model.source_id == id_)
                        if tipe in ('packing','stok-samping') else model.polishing_process_id == id_)
             hasil += [rincian(x, tipe) for x in (await db.scalars(select(model).where(kondisi))).all()]

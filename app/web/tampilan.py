@@ -238,15 +238,18 @@ async def render_laci(request: Request, nama: str, **konteks):
     memanggil ini di sana berarti menyusun ulang seluruh daftar dua kali
     hanya demi tiga angka.
     """
+    # Pembungkus hanya menambahkan informasi. Konteks/nav/portal tetap
+    # dipersiapkan dengan identitas layar asal yang dipakai aplikasi lama.
+    nama_asal=konteks.get('template_stok_asal',nama)
     from app.web.portal.scope import is_customer_read
     if is_customer_read(request):
         from app.web.portal.presentation import prepare_context
-        await prepare_context(request, nama, konteks)
-        return render(request, nama, **konteks)
+        await prepare_context(request, nama_asal, konteks)
+        return render(request, nama_asal, **konteks)
     from app.web.nav import lencana
 
     from app.web.stok_navigasi import siapkan
-    await siapkan(request, nama, konteks)
+    await siapkan(request, nama_asal, konteks)
     from app.web.laporan_navigasi import siapkan as siapkan_laporan
     await siapkan_laporan(request, konteks)
     from app.web.layar_pekerjaan import konteks_aman

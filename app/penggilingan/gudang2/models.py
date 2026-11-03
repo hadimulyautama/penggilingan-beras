@@ -322,6 +322,7 @@ class BrokenKeSilo(Base, TimestampMixin):
 
     __tablename__ = "broken_ke_silo"
 
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     byproduct_stock_id: Mapped[int] = mapped_column(
@@ -362,6 +363,8 @@ class BerasKeSilo(Base, TimestampMixin):
 
     __tablename__ = "beras_ke_silo"
 
+    sumber_koreksi_json: Mapped[str | None] = mapped_column(String)
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     polishing_process_id: Mapped[int | None] = mapped_column(
@@ -391,6 +394,7 @@ class HasilSampingKeSilo(Base, TimestampMixin):
 
     __tablename__ = "hasil_samping_ke_silo"
 
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     polishing_process_id: Mapped[int] = mapped_column(

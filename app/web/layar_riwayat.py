@@ -1127,14 +1127,16 @@ async def detail_catatan_penghalang(tipe: str, id_: int, request: Request, akun=
         orang = await db.get(User, row.input_by)
         keluar = []
         koreksi_url=None
-        if tipe=='pk-silo' and row.dibatalkan_pada is None:
+        if tipe in ('pk-silo','beras-silo','samping-silo','broken-silo') and row.dibatalkan_pada is None:
             from app.services.koreksi_bahan_berjalan import siklus_g2
             usage=await siklus_g2(db,row)
             if usage:
                 from app.models import PolishingProcess
                 pr=await db.get(PolishingProcess,usage.polishing_process_id)
                 if pr.status=='proses':koreksi_url=f'/koreksi-bahan/sosoh/{pr.kode_proses}'
-            else:koreksi_url=f'/koreksi-bahan/sosoh/catatan-{row.id}'
+            else:
+                prefix={'pk-silo':'','beras-silo':'beras-','samping-silo':'samping-','broken-silo':'broken-'}[tipe]
+                koreksi_url=f'/koreksi-bahan/sosoh/catatan-{prefix}{row.id}'
         return await render_laci(request, "koreksi_catatan.html", koreksi_url=koreksi_url, catatan=rincian(row, tipe),
             sumber=f"{getattr(row, 'source_type', tipe)} #{getattr(row, 'source_id', None) or getattr(row, 'polishing_process_id', None) or getattr(row, 'pk_gudang2_intake_id', '?')}",
             waktu=row.waktu, pencatat=orang.nama if orang else "Tidak diketahui", keluar=keluar, kembali="/audit")
