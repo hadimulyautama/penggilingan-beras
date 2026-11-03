@@ -875,7 +875,7 @@ async def konteks_curah(db,pr,usages,*,catatan=None):
             entries.append(dict(id=f'{tipe}:{move.id}',kode=move.kode_pindah,silo=silo.nama_silo,silo_id=silo.id,siklus=usage.id if usage else None,sumber=key,kg=float(move.berat_kg),jumlah=float(move.berat_kg),satuan='karung' if allocation and allocation['jumlah_karung'] else 'kg',sisa=usage.berat_akhir_kg if usage else move.berat_kg,raw=raw(move),tipe=tipe,alokasi=allocation))
             if allocation:
                 entries[-1]['jumlah']=allocation['jumlah_karung'] if allocation['jumlah_karung'] else float(move.berat_kg)
-                for stock in (await db.scalars(select(FinishedGoodsStock).where(FinishedGoodsStock.jasa_id==pr.jasa_id,FinishedGoodsStock.product_sku_id==move.product_sku_id))).all():
+                for stock in (await db.scalars(select(FinishedGoodsStock).where(FinishedGoodsStock.jasa_id==pr.jasa_id,FinishedGoodsStock.product_sku_id.in_(select(ProductSku.id).where(ProductSku.kategori==('beras_b' if move.jenis=='beras_b' else 'beras_putih'))),FinishedGoodsStock.rice_quality_standard_id==allocation.get('rice_quality_standard_id')))).all():
                     candidate=f'berasstok:{move.jenis}:{stock.id}'
                     source=await sumber_beras_stok(db,candidate)
                     if source['bebas']>0:sources[candidate]=source
@@ -1003,7 +1003,9 @@ async def sumber_beras_stok(db,key,*,asli=None):
         n=0;free=D(str(row.berat_total_kg))-D(str(row.retur_supplier_keluar_kg))-await terikat(db,sumber=f'beras:{rid}')
     else:n=0;free=0
     bags=bool(asli['jumlah_karung'] if asli else not snapshot.get('curah_kemas_ulang',False))
-    return dict(key=key,kode=f'Stok beras #{rid} · {grade}',pemilik=snapshot['jasa_id'],kg=float(row.berat_total_kg) if row else 0,bebas=float(free),satuan='karung' if bags else 'kg',karung=n if bags else None,rasio=None,final=True,raw=snapshot,jenis=grade,proses_id=snapshot['source_id'] if snapshot['source_type']=='polishing' else None)
+    from app.services.rencana_beras_silo import identitas
+    origin=await identitas(db,snapshot['source_id'] if snapshot['source_type']=='polishing' else None,snapshot['source_type'],snapshot['source_id'],rid)
+    return dict(key=key,kode=origin['kode']+f' · stok #{rid} · {grade}',pemilik=snapshot['jasa_id'],kg=float(row.berat_total_kg) if row else 0,bebas=float(free),satuan='karung' if bags else 'kg',karung=n if bags else None,rasio=None,final=True,raw=snapshot,jenis=grade,proses_id=snapshot['source_id'] if snapshot['source_type']=='polishing' else None)
 
 
 async def rencana_stok_beras(db,entries,changes,user,alasan):
@@ -1036,7 +1038,6 @@ async def rencana_stok_beras(db,entries,changes,user,alasan):
         source=await sumber_beras_stok(db,key);row=await db.get(FinishedGoodsStock,int(key.split(':')[-1]))
         old=e['alokasi']
         if row.jasa_id!=old['jasa_id']:raise ValueError('Pemilik sumber pengganti harus sama.')
-        if source['satuan']!=e['satuan']:raise ValueError('Bentuk sumber pengganti harus sama dengan satuan catatan asal.')
         qty=angka(c.get('jumlah'),'Jumlah bahan',nol=False,presisi=2)
         if source['satuan']=='karung':
             if qty!=qty.to_integral_value():raise ValueError('Jumlah karung harus bilangan bulat.')

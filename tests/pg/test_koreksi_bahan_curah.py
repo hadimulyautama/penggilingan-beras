@@ -132,3 +132,24 @@ async def test_http_identitas_bahan_curah_dan_role_efektif(pg,curah):
         assert (await client.get(path)).status_code==403
         denied=await client.post(path+'/periksa',json=body,headers={'X-CSRF-Token':cap_formulir(client)})
         assert denied.status_code==403
+
+async def test_ganti_sumber_karung_ke_curah_memakai_satuan_sumber_pengganti(pg,sosoh):
+    from tests.pg.test_beras_silo_berat_nyata import pembelian
+    from app.models import FinishedGoodsStock
+    src=await pembelian(pg,sosoh,berat=998,karung=20)
+    async with pg() as db:
+        uid=sosoh['user'];user=await db.get(User,uid);row=await db.get(FinishedGoodsStock,src['id'])
+        other=FinishedGoodsStock(product_sku_id=row.product_sku_id,rice_quality_standard_id=row.rice_quality_standard_id,source_type='timbangan',source_id=99999,jumlah_karung=0,berat_total_kg=2000,warehouse_id=row.warehouse_id,waktu=now_local(),input_by=uid,curah_kemas_ulang=True,kemasan_mengurangi_stok=False)
+        db.add(other);await db.commit();target=other.id
+        await g2.masukkan_beras_ke_silo(db,user=user,jenis='medium',sumber_stok=f"sku:{src['sku']}",nama_silo='C',berat_kg=998)
+        move=await db.scalar(select(BerasKeSilo));mid=move.id
+        proc=(await p.mulai_penyosohan(db,user=user,nama_silos=['C'])).proc;kode=proc.kode_proses
+        await p.selesai_penyosohan(db,user=user,kode=kode,nama_silo='C',sisa_kg=500)
+    result,_=await save(pg,uid,kode,bahan=[dict(id=f'beras:{mid}',sumber=f'berasstok:medium:{target}',jumlah=900)])
+    entry=result['hasil']['sesudah']['entries'][0]
+    assert entry['satuan']=='kg' and entry['jumlah']==900 and entry['kg']==900
+    assert D(str(entry['sisa']))==402
+    async with pg() as db:
+        old=await db.get(FinishedGoodsStock,src['id']);new=await db.get(FinishedGoodsStock,target)
+        assert old.jumlah_karung==20 and old.berat_total_kg==998
+        assert new.jumlah_karung==0 and new.berat_total_kg==1100

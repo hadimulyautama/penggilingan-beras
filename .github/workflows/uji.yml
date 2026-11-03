@@ -16,9 +16,19 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      cakupan:
+        description: Cakupan pemeriksaan manual
+        type: choice
+        required: true
+        default: semua
+        options:
+          - semua
+          - koreksi-bahan
 
 jobs:
   uji:
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
     name: Uji ${{ matrix.profil }}
     runs-on: ubuntu-latest
     strategy:
@@ -102,6 +112,7 @@ jobs:
           path: bukti/
 
   dua-aplikasi:
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
     name: Integrasi HTTP PadiFlow dan TeraFlow82 terpin
     runs-on: ubuntu-latest
     services:
@@ -175,6 +186,7 @@ jobs:
           path: bukti/dua-aplikasi/junit.xml
 
   retur-dua-aplikasi:
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
     name: Integrasi HTTP retur PadiFlow dan TeraFlow terpin
     runs-on: ubuntu-latest
     services:
@@ -243,3 +255,60 @@ jobs:
         with:
           name: hasil-retur-dua-aplikasi
           path: bukti/retur-dua-aplikasi/
+
+  # Profil fokus tidak mengganti cakupan penuh; default tetap semua.
+  koreksi-bahan:
+    if: ${{ github.event.inputs.cakupan == 'koreksi-bahan' }}
+    name: Koreksi atomik, stok, akses, dan regresi portal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: uji
+          POSTGRES_DB: uji_koreksi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_koreksi
+      UJI_PG_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_koreksi
+      MODE_UJI: "1"
+      SECRET_KEY: kunci-uji-ci-koreksi-bukan-produksi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Pasang dependensi
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Migrasi dan keselarasan model
+        run: |
+          alembic upgrade head
+          alembic check
+      - name: Uji koreksi dan regresi terkait
+        run: >-
+          python -m pytest -q --junitxml=bukti/koreksi-aktif.xml
+          tests/pg/test_koreksi_bahan_berjalan.py
+          tests/pg/test_koreksi_bahan_curah.py
+          tests/pg/test_giling_ringkas.py
+          tests/pg/test_sosoh_ringkas.py
+          tests/pg/test_beras_silo_berat_nyata.py
+          tests/pg/test_curah_beras_ke_silo.py
+          tests/pg/test_konsolidasi_stok.py
+          tests/pg/test_portal_stok_karung.py
+          tests/pg/test_portal_alur_hp.py
+          tests/pg/test_stok_penerimaan.py
+          tests/test_antrean.py::test_tiap_layar_berlaci_membawa_ketiga_lencana
+      - name: Simpan bukti
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: koreksi-bahan-hasil-aktif
+          path: bukti/
