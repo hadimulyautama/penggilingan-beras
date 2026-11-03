@@ -349,3 +349,21 @@ async def bangun_ulang(db: AsyncSession) -> dict[str, int]:
             select(func.count()).select_from(tabel))).scalar_one()
     await db.commit()
     return laporan
+
+
+async def _koreksi_bahan_aktif(db, e):
+    """Replay proyeksi pemindahan mengikuti koreksi, tanpa mengulang stok."""
+    for x in e.muatan.get('hasil',{}).get('proyeksi',[]):
+        if not x.get('peristiwa_asal_id'):
+            continue  # Catatan lama tanpa ledger tidak dibuatkan asal palsu.
+        row = await db.get(ProyeksiPindahTumpukanSilo,x['peristiwa_asal_id'])
+        if row is None:
+            raise ValueError('Proyeksi pemindahan asal tidak ditemukan.')
+        row.intake_id=x['intake_id'];row.berat_kg=x['berat_kg']
+        row.jumlah_karung=x['jumlah_karung'];row.jumlah_karung_50=x['jumlah_karung_50']
+        row.berat_curah_kg=x['berat_curah_kg']
+        if x['batal']:
+            row.status=DIBATALKAN;row.dibatalkan_peristiwa_id=e.id
+    await db.flush()
+
+PENANGAN['koreksi_bahan_hasil_berjalan']=_koreksi_bahan_aktif

@@ -1,0 +1,11 @@
+{% extends 'stok_pk_jasa.html' if JASA_SAJA else 'stok.html' %}
+{% block isi %}
+{{ super() }}
+{% if sisa_koreksi_g1 %}
+<section class="card" aria-label="Saldo bahan belum dialokasikan setelah koreksi">
+<h2>Saldo sumber bahan · Gudang 1</h2>
+<p>Bagian sumber yang tidak lagi dialokasikan ke silo setelah koreksi. Ini bukan stok masuk baru dan bukan PK hasil giling.</p>
+{% for s in sisa_koreksi_g1 %}<article class="card"><strong>{{ s.kode }}</strong><p>{{ s.nama_pemilik }} · {{ s.bebas }} kg belum dialokasikan{% if not s.final %} · bobot belum final{% endif %}</p>{% if akun.is_admin %}<a href="/audit?rentang=semua&cari=koreksi_bahan_hasil_berjalan">Periksa audit sumber</a>{% endif %}</article>{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

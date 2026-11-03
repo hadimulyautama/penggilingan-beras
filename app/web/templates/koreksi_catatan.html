@@ -6,5 +6,6 @@
 <p>Asal: {{ sumber }} · {{ waktu }} · dicatat oleh {{ pencatat }}</p>
 <p>Periksa riwayat pemakaian dan barang keluar sebelum mengoreksi asalnya. Jangan menghapus catatan hilir yang barangnya sudah dipakai; mintakan koreksi berjejak kepada Admin.</p>
 {% if keluar %}<ul>{% for x in keluar %}<li><a href="/barang-keluar/{{ x.id }}">{{ x.kode }}</a> · {{ x.status }}</li>{% endfor %}</ul>{% endif %}
+{% if koreksi_url %}<p><a class="btn" href="{{ koreksi_url }}">Ubah bahan masuk silo</a></p>{% endif %}
 <a href="/audit">Periksa jejak audit</a>
 {% endblock %}

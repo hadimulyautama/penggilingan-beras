@@ -260,6 +260,8 @@ async def _row_bobot(db: AsyncSession, row: SiloStorage, *, sebelum_sumber: int 
         b = Bobot(float(kg), PASTI) if kg is not None else NOL
     else:
         return NOL
+    if row.alokasi_koreksi_kg is not None:
+        b = Bobot(float(row.alokasi_koreksi_kg), b.keadaan, b.tak_diketahui, b.asal)
     # Pengeluaran giling yang sudah diperiksa operator mengurangi isi fisik.
     # Saat menyinkronkan snapshot bahan suatu proses, hanya pemakaian SEBELUM
     # sumber itu yang dikurangkan; pemakaian proses berikutnya tidak boleh

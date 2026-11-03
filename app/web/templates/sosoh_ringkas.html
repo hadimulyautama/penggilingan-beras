@@ -5,7 +5,8 @@
 <main class="sr" data-sosoh-ringkas data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
  <div data-pesan role="status" hidden></div><div data-galat role="alert" hidden></div>
  <div data-pemulihan hidden><button type="button" class="btn" data-terbaru>Baca status terbaru</button><p>Isian tetap tersedia. Periksa data terbaru sebelum konfirmasi ulang.</p></div>
- <div data-proses-isi></div>
+ {% if awal.aktif and akun.is_admin %}<p><a class="btn" href="/koreksi-bahan/sosoh/{{ awal.kode_proses }}">Perbaiki bahan & hasil</a></p>{% endif %}
+<div data-proses-isi></div>
  <noscript>Aktifkan JavaScript untuk mengerjakan proses. Membuka halaman tidak mengubah hasil, silo, maupun status.</noscript>
 </main>
 <script id="sosoh-awal" type="application/json">{{ awal|tojson }}</script>

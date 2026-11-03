@@ -593,7 +593,7 @@ async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
 
 async def log_progress(
     db: AsyncSession, *, user, kode_proses: str | None, berat_kumulatif: float | None,
-    tanggal=None, jam=None,
+    tanggal=None, jam=None, simpan: bool = True,
 ) -> ProgressResult:
     if not kode_proses:
         raise MillingError("Sebutkan kode proses, contoh: `progress giling LOT-20260702-01 5 ton`")
@@ -653,7 +653,10 @@ async def log_progress(
         db, table_name="milling_progress_logs", record_id=proc.id, action="INSERT",
         changed_by=user.id, new_value=f"kumulatif {berat_kumulatif:.0f}kg",
     )
-    await db.commit()
+    if simpan:
+        await db.commit()
+    else:
+        await db.flush()
     rendemen = hitung_rendemen(berat_kumulatif, proc.berat_gabah_masuk_kg)
     jenis = await pk_jenis(db, proc)
 

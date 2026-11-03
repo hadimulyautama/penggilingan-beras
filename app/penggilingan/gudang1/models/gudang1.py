@@ -378,6 +378,7 @@ class SiloStorage(Base, TimestampMixin):
 
     __tablename__ = "silo_storage"
     __table_args__ = (
+        CheckConstraint('alokasi_koreksi_kg IS NULL OR alokasi_koreksi_kg >= 0', name='ck_silo_alokasi_koreksi_nonnegatif'),
         Index("ix_silo_storage_lot", "drying_lot_id"),
         Index("ix_silo_storage_silo_status", "silo_id", "status"),
         # Dua indeks unik PARSIAL: satu batch hanya boleh berada di satu silo
@@ -446,6 +447,11 @@ class SiloStorage(Base, TimestampMixin):
     milling_process_id: Mapped[int | None] = mapped_column(
         ForeignKey("milling_process.id", ondelete="SET NULL", use_alter=True)
     )
+    # Alokasi efektif pada catatan masuk silo, bukan revisi penerimaan asal.
+    # NULL mempertahankan pembacaan historis. Nol hanya untuk pembatalan
+    # beralasan; bukti awal disimpan pada peristiwa dan activity_logs.
+    alokasi_koreksi_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
+
     #: Berapa kg baris ini SUDAH dikeluarkan untuk dikemas+ditimbang (pesan
     #: kerja 7 Oktober 2026, butir 6 — migrasi 0077). Jalan keluar BARU dari
     #: silo, selain giling — gudang1.gabah_kering.keluarkan_untuk_kemasan()

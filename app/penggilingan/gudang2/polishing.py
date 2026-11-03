@@ -657,6 +657,7 @@ async def alasan_koreksi_hasil(db: AsyncSession, process_id: int) -> str | None:
 async def koreksi_hasil_sosoh(
     db: AsyncSession, *, user, process_id: int,
     perubahan: dict[str, float], dasar: dict[str, float], alasan: str,
+    berjalan: bool = False, simpan: bool = True,
 ) -> PolishingProcess:
     """Ubah catatan hasil selesai dengan audit dan sinkronkan neraca lintas-app.
 
@@ -668,9 +669,9 @@ async def koreksi_hasil_sosoh(
         select(PolishingProcess).where(PolishingProcess.id == process_id)
         .with_for_update()
     )).scalar_one_or_none()
-    if proc is None or proc.status != "selesai":
+    if proc is None or proc.status != ("proses" if berjalan else "selesai"):
         raise Gudang2Error("Koreksi hanya tersedia untuk proses sosoh yang selesai.")
-    penghalang = await alasan_koreksi_hasil(db, proc.id)
+    penghalang = None if berjalan else await alasan_koreksi_hasil(db, proc.id)
     if penghalang:
         raise Gudang2Error(penghalang)
     alasan = (alasan or "").strip()
@@ -712,7 +713,7 @@ async def koreksi_hasil_sosoh(
         if not rows and target > 0:
             row = PolishingOutputLog(
                 polishing_process_id=proc.id, jenis=jenis, berat_kg=target,
-                waktu_update=proc.waktu_selesai, input_by=user.id,
+                waktu_update=now_local() if berjalan else proc.waktu_selesai, input_by=user.id,
             )
             db.add(row)
             await db.flush()
@@ -753,6 +754,15 @@ async def koreksi_hasil_sosoh(
                 break
     if not berubah:
         raise Gudang2Error("Tidak ada perubahan hasil yang dimasukkan.")
+
+    if berjalan:
+        # Jalur aktif tidak menutup ProsesTerpadu, tidak memverifikasi hasil,
+        # dan tidak menyentuh status/jeda. Transaksi dimiliki pemanggil.
+        if simpan:
+            await db.commit()
+        else:
+            await db.flush()
+        return proc
 
     outputs = await _output_map(db, proc.id)
     rendemen = await rendemen_proses(db, proc.id)

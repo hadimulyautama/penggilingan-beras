@@ -654,3 +654,6 @@ from app.performa import PerformaMiddleware
 app.add_middleware(PerformaMiddleware)
 from app.web.portal.security import PortalSessionMiddleware
 app.add_middleware(PortalSessionMiddleware)
+
+from app.web.koreksi_bahan_berjalan import router as koreksi_bahan_berjalan_router
+app.include_router(koreksi_bahan_berjalan_router)

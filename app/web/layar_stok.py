@@ -127,6 +127,8 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         tempat = ([t for t in await svc.pk_gudang2(db) if not t.pemilik]
                   if gudang2(view) and gudang in ("", "g2") else [])
         mutu_aktif = await fitur_mutu(db)
+        from app.services.koreksi_bahan_berjalan import sumber_bebas_g1
+        sisa_koreksi_g1=await sumber_bebas_g1(db) if gudang1(view) and gudang in ('','g1') else []
         # ── Barang jadi & hasil samping ──
         # Gerbang yang SAMA dengan stok karung tepat di bawahnya: barang jadi
         # lahir di Gudang 2, jadi operator selepan tak melihatnya. Sampai 23
@@ -139,7 +141,7 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         bj = (await svc.barang_jadi_g2(db) if gudang2(view) and gudang in ("", "g2")
               else svc.BarangJadiG2(produk=[], samping=[]))
     return await render_laci(
-        request, "stok.html", layar="stok",
+        request, "stok_dengan_koreksi.html", layar="stok", sisa_koreksi_g1=sisa_koreksi_g1,
         lot=lot, tempat=tempat,
         # `SARING_GUDANG` = nama kontrak templat bersama (Tahap 2). Kosong untuk
         # operator: ia sudah diberi satu gudang lewat view-nya, dan pil tunggal
@@ -236,8 +238,10 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         tempat = ([t for t in await svc.pk_gudang2(db) if t.pemilik]
                   if gudang2(view) and gudang in ("", "g2") else [])
         mutu_aktif = await fitur_mutu(db)
+        from app.services.koreksi_bahan_berjalan import sumber_bebas_g1
+        sisa_koreksi_g1=await sumber_bebas_g1(db,jasa=True) if gudang1(view) and gudang in ('','g1') else []
     return await render_laci(
-        request, "stok_pk_jasa.html", layar="stok_pk_jasa",
+        request, "stok_dengan_koreksi.html", layar="stok_pk_jasa", sisa_koreksi_g1=sisa_koreksi_g1,
         lot=lot, tempat=tempat,
         SARING_GUDANG=saring, gudang=gudang,
         produk=[], samping=[], total=sum(l.tersedia for l in lot),

@@ -39,6 +39,9 @@ async def sumber_giling_banyak(db, ids):
         ).order_by(ActivityLog.id))).all()
         for log in logs:
             audit[pemilik_sumber[log.record_id]] = log
+    koreksi_ids=set((await db.scalars(select(ActivityLog.record_id).where(
+        ActivityLog.table_name=='milling_process_sources',ActivityLog.aksi=='koreksi_bahan_hasil_berjalan',
+        ActivityLog.record_id.in_(list(pemilik_sumber)),ActivityLog.dibatalkan_pada.is_(None)))).all()) if pemilik_sumber else set()
     hasil = {}
     for s, nama, asal in rows:
         hasil.setdefault(s.milling_process_id, []).append(dict(
@@ -58,6 +61,10 @@ async def sumber_giling_banyak(db, ids):
             if any(s.berat_akhir_kg is None for s in semua):
                 akhir['ringkasan_sisa'] = 'Belum dicatat'
                 akhir['ringkasan_status'] = 'Masih terikat proses'
+                continue
+            if any(s.id in koreksi_ids for s in semua):
+                akhir['ringkasan_sisa']=kg_rinci(sum(float(s.berat_akhir_kg) for s in semua))
+                akhir['ringkasan_status']='Dilepaskan · sisa dikoreksi berjejak'
                 continue
             log = audit.get((pid, nama))
             sisa = None
