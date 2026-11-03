@@ -235,6 +235,9 @@ async def konteks(db,*,jenis,kode,user):
     if jenis=='sosoh':
         from app.services.koreksi_broken_terkait import konteks as terkait_broken
         values['broken_terkait']=await terkait_broken(db,pr)
+        silo_names={x.id:x.nama_silo for x in (await db.scalars(select(Silo).where(Silo.id.in_([u.silo_id for u in usages])))).all()}
+        saldo_silo=await g2._saldo_silo_halaman(db,'semua')
+        values['pemakaian_silo']=[dict(id=u.id,silo_id=u.silo_id,silo=silo_names.get(u.silo_id,'Tidak tersedia'),saldo_silo=saldo_silo.get(u.silo_id),bahan=float(u.berat_awal_kg+u.berat_masuk_kg),sisa=float(u.berat_akhir_kg) if u.berat_akhir_kg is not None else None,terpakai=float(u.berat_terpakai_kg) if u.berat_akhir_kg is not None and u.berat_terpakai_kg is not None else None) for u in usages]
     terkait=await siklus_terkait(db,jenis,{x['silo_id'] for x in entries})
     from app.penggilingan.gudang1.services.jeda import jeda_terbuka
     pause=await jeda_terbuka(db,'giling' if jenis=='giling' else 'penyosohan',pr.id)

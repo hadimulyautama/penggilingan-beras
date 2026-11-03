@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy import select,func
 from decimal import Decimal as D
 from app.database import now_local
-from app.models import User,Silo,BrokenKeSilo,ByproductStock,PolishingProcess,ActivityLog,PolishingOutputLog
+from app.models import User,Silo,BrokenKeSilo,ByproductStock,PolishingProcess,PolishingSiloUsage,ActivityLog,PolishingOutputLog
 from app.services import koreksi_bahan_berjalan as s
 from app.penggilingan.gudang2 import service as g2,polishing as p
 from tests.pg.test_koreksi_bahan_berjalan import running,save,request,dunia
@@ -243,3 +243,75 @@ async def test_draf_bahan_2850_sisa_5300_ditolak_tanpa_menghalangi_koreksi_hasil
     async with pg() as db:
         assert await g2.hitung_stok_silo(db,silo.id)==5300
         usage=await s.siklus_g2(db,await db.get(BrokenKeSilo,original_id));assert usage.berat_terpakai_kg==2850
+
+
+async def test_kasus_broken_bahan_2800_habis_hasil_nol_sisa_di_stok_sumber(pg,running):
+    uid,kode,_,_=running
+    async with pg() as db:
+        u=await db.get(User,uid)
+        silo=Silo(nama_silo='Tong Broken Uji',warehouse_id=u.default_warehouse_id,jenis_isi='broken',aktif=True,status='kosong');db.add(silo);await db.commit()
+        ext=ByproductStock(jenis_produk='broken',source_type='timbangan',source_id=919,berat_kg=8150,tanggal=now_local().date(),waktu=now_local(),input_by=uid)
+        db.add(ext);await db.commit()
+        await g2.pindah_broken_ke_silo(db,user=u,byproduct_stock_id=ext.id,nama_silo=silo.nama_silo,berat=8150)
+        original=await db.scalar(select(BrokenKeSilo));original_id=original.id
+        await p.tambah_silo_penyosohan(db,user=u,kode=kode,nama_silos=[silo.nama_silo])
+        await p.selesai_penyosohan(db,user=u,kode=kode,nama_silo=silo.nama_silo,sisa_kg=5300)
+        await p.catat_output(db,user=u,kode=kode,jenis='broken',berat_kumulatif=5350)
+        await g2.masukkan_broken_ke_silo(db,user=u,kode_pol=kode,nama_silo=silo.nama_silo,berat_kg=50)
+        false_move=await db.scalar(select(BrokenKeSilo).where(BrokenKeSilo.id!=original_id))
+        mid=false_move.id
+        ctx=await s.konteks(db,jenis='sosoh',kode=kode,user=u)
+        entry=next(x for x in ctx['entries'] if x['id']==f'broken:{original_id}')
+
+    r,_=await save(pg,uid,kode,bahan=[dict(id=entry['id'],sumber=entry['sumber'],jumlah=2800,sisa=0)],hasil={'broken':0},broken_terkait=[mid])
+    after=r['hasil']['sesudah'];corrected=next(x for x in after['entries'] if x['id']==entry['id'])
+    assert corrected['kg']==2800 and corrected['sisa']==0
+    assert after['outputs']['broken']==0 and after['outputs']['medium']==2000
+    assert after['basis']==5300
+    cycle=next(x for x in after['pemakaian_silo'] if x['silo_id']==silo.id)
+    assert cycle['bahan']==2800 and cycle['sisa']==0 and cycle['terpakai']==2800 and cycle['saldo_silo']==0
+    async with pg() as db:
+        original_move=await db.get(BrokenKeSilo,original_id)
+        assert original_move.berat_kg==2800
+        usage=await s.siklus_g2(db,original_move)
+        assert usage.berat_terpakai_kg==2800 and usage.berat_akhir_kg==0
+        assert await g2.hitung_stok_silo(db,silo.id)==0
+        assert await g2._sisa_broken_row(db,ext.id)==5350
+        assert (await db.get(ByproductStock,ext.id)).berat_kg==8150
+        assert await db.scalar(select(BrokenKeSilo.id).where(BrokenKeSilo.id==mid)) is None
+        other=await db.scalar(select(PolishingSiloUsage).where(PolishingSiloUsage.silo_id!=silo.id))
+        assert other.berat_terpakai_kg==2500 and other.berat_akhir_kg==500
+        audit=(await db.scalars(select(ActivityLog).where(ActivityLog.aksi==s.JENIS))).all()
+        assert any(x.table_name=='polishing_silo_usage' and x.old_value and x.new_value and x.alasan_perubahan for x in audit)
+
+
+async def test_formulir_terpandu_mempertahankan_fakta_sumber_dan_siklus(pg,running):
+    uid,kode,_,_=running
+    async with pg() as db:
+        u=await db.get(User,uid)
+        silo=Silo(nama_silo='Tong Broken Uji',warehouse_id=u.default_warehouse_id,jenis_isi='broken',aktif=True,status='kosong');db.add(silo);await db.commit()
+        ext=ByproductStock(jenis_produk='broken',source_type='timbangan',source_id=919,berat_kg=8150,tanggal=now_local().date(),waktu=now_local(),input_by=uid)
+        db.add(ext);await db.commit()
+        await g2.pindah_broken_ke_silo(db,user=u,byproduct_stock_id=ext.id,nama_silo=silo.nama_silo,berat=8150)
+        original=await db.scalar(select(BrokenKeSilo));original_id=original.id
+        await p.tambah_silo_penyosohan(db,user=u,kode=kode,nama_silos=[silo.nama_silo])
+        await p.selesai_penyosohan(db,user=u,kode=kode,nama_silo=silo.nama_silo,sisa_kg=5300)
+        await p.catat_output(db,user=u,kode=kode,jenis='broken',berat_kumulatif=5350)
+        await g2.masukkan_broken_ke_silo(db,user=u,kode_pol=kode,nama_silo=silo.nama_silo,berat_kg=50)
+        false_move=await db.scalar(select(BrokenKeSilo).where(BrokenKeSilo.id!=original_id))
+        mid=false_move.id
+        ctx=await s.konteks(db,jenis='sosoh',kode=kode,user=u)
+        entry=next(x for x in ctx['entries'] if x['id']==f'broken:{original_id}')
+
+
+    from tests.pg.test_riwayat_giling import _klien
+    async with await _klien(pg,peran='operator',gudang='Gudang 2') as c:
+        data=(await c.get('/api/actions/koreksi-bahan/sosoh/'+kode)).json()
+        cycle=next(x for x in data['pemakaian_silo'] if x['silo_id']==silo.id)
+        assert cycle['bahan']==8150 and cycle['sisa']==5300 and cycle['terpakai']==2850
+        assert data['outputs']['broken']==5350
+        assert any(x['id']==mid and x['boleh_batal'] for x in data['broken_terkait'])
+    import os,json
+    if os.environ.get('UJI_BROKEN_VISUAL')=='1':
+        from pathlib import Path
+        Path('../visual-broken-terpandu.json').write_text(json.dumps(dict(kode=kode,material_id=entry['id'],material_kode=entry['kode'],false_move_id=mid)))
