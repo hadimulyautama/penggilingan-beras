@@ -18,7 +18,10 @@ async def running(pg,dunia):
         await p.catat_output(db,user=u,kode=pr.kode_proses,jenis='medium',berat_kumulatif=2000)
         await p.catat_output(db,user=u,kode=pr.kode_proses,jenis='broken',berat_kumulatif=200)
         await p.selesai_penyosohan(db,user=u,kode=pr.kode_proses,nama_silo='A',sisa_kg=500)
-        u.role='admin';await db.commit()
+        u.role='admin'
+        from app.models import Warehouse
+        wh=await db.get(Warehouse,u.default_warehouse_id);wh.nama_gudang='Gudang 2 - Uji koreksi'
+        await db.commit()
         mid=await db.scalar(select(PkTumpukanToSilo.id).where(PkTumpukanToSilo.kode_pindah==move.kode_pindah))
         return u.id,pr.kode_proses,mid,it.id
 
@@ -104,11 +107,13 @@ async def test_giling_verifikasi_tetap_terpisah(pg,hasil):
     assert r['hasil']['sesudah']['verification']['berat_output_final_kg']==5900
     async with pg() as db:assert (await m._pk_breakdown(db,pr.id)).produced==5900
 
-async def test_izin_operator_tidak_menjadi_hak_koreksi(pg,running):
+async def test_operator_gudang_sendiri_boleh_koreksi(pg,running):
     uid,kode,mid,it=running
     async with pg() as db:
-        user=await db.get(User,uid);user.role='operator'
-        with pytest.raises(PermissionError):await s.konteks(db,jenis='sosoh',kode=kode,user=user)
+        user=await db.get(User,uid);user.role='operator';await db.commit()
+    r,_=await save(pg,uid,kode,bahan=[dict(id=mid,sumber=str(it),jumlah=56)])
+    assert r['hasil']['sesudah']['entries'][0]['sisa']==300
+
 
 async def test_ganti_sumber_audit_dan_replay_proyeksi(pg,running,dunia):
     uid,kode,mid,it=running
@@ -221,10 +226,15 @@ async def test_sisa_sosoh_mengalir_ke_siklus_berikutnya_yang_masih_berjalan(pg,r
 from tests.pg.test_riwayat_giling import _klien
 from tests.pg.formulir import cap_formulir
 
-@pytest.mark.parametrize('role,view,ok',[('superadmin',None,True),('admin',None,True),('operator',None,False),('admin','operator:g1',False),('superadmin','operator:g2',False),('staff',None,False)])
+@pytest.mark.parametrize('role,view,ok',[('superadmin',None,True),('admin',None,True),('operator',None,True),('admin','operator:g1',False),('superadmin','operator:g2',True),('staff',None,False)])
 async def test_http_hak_efektif_tidak_terbuka_dari_url(pg,running,role,view,ok):
     uid,kode,mid,it=running
     from app.web.lihat_sebagai import NAMA_KUKI
+    from app.models import Warehouse
+    async with pg() as db:
+        wh=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g1'))
+        if wh is None:db.add(Warehouse(nama_gudang='Gudang 1 - Uji akses',kode_fungsi='g1',aktif=True))
+        await db.commit()
     async with await _klien(pg,peran=role,gudang='Gudang 2') as c:
         if view:c.cookies.set(NAMA_KUKI,view)
         r=await c.get('/koreksi-bahan/sosoh/'+kode);assert r.status_code==(200 if ok else 403),r.text
@@ -437,3 +447,36 @@ async def test_jawaban_http_putus_setelah_commit_diperiksa_sebelum_retry(pg,runn
     async with pg() as db:
         assert await g2._sisa_tumpukan_intake(db,it)==2200
         assert await db.scalar(select(func.count()).select_from(Peristiwa).where(Peristiwa.jenis==s.JENIS))==1
+
+@pytest.mark.parametrize('kind,scope,allowed',[('giling','g1',True),('giling','g2',False),('sosoh','g2',True),('sosoh','g1',False),('giling','none',False),('sosoh','none',False)])
+async def test_operator_scope_koreksi_tetap_terbatas(monkeypatch,kind,scope,allowed):
+    from types import SimpleNamespace
+    import app.peran
+    async def wh(db,user):return scope
+    monkeypatch.setattr(app.peran,'user_wh_scope',wh)
+    user=SimpleNamespace(role='operator')
+    if allowed:await s.izin(None,user,kind)
+    else:
+        with pytest.raises(PermissionError):await s.izin(None,user,kind)
+
+async def test_operator_koreksi_hasil_sosoh_saat_jeda(pg,running):
+    uid,kode,mid,it=running
+    from app.penggilingan.gudang1.services import jeda
+    async with pg() as db:
+        u=await db.get(User,uid);u.role='operator';await db.commit()
+        await jeda.hentikan(db,user=u,jenis='penyosohan',kode=kode,sebab='Listrik padam')
+    r,_=await save(pg,uid,kode,hasil={'medium':1900})
+    assert r['hasil']['sesudah']['outputs']['medium']==1900
+    async with pg() as db:
+        from app.models import PolishingProcess
+        pr=await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses==kode))
+        assert pr.status=='proses' and await jeda.jeda_terbuka(db,'penyosohan',pr.id)
+
+async def test_operator_koreksi_giling_bahan_hasil(pg,hasil):
+    u,pr,_=hasil
+    async with pg() as db:
+        user=await db.get(User,u.id);user.role='operator';await db.commit()
+        src=(await db.scalars(select(MillingProcessSource).where(MillingProcessSource.milling_process_id==pr.id).order_by(MillingProcessSource.id))).first()
+        st=await db.get(SiloStorage,src.silo_storage_id);key=f'batch:{st.purchase_batch_id}'
+    r,_=await save(pg,u.id,pr.kode_proses,jenis='giling',bahan=[dict(id=st.id,sumber=key,jumlah=5800)],hasil={'pk':5900})
+    assert r['hasil']['sesudah']['outputs']['pk']==5900

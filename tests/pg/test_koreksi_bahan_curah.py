@@ -129,6 +129,13 @@ async def test_http_identitas_bahan_curah_dan_role_efektif(pg,curah):
         assert ok.status_code==200,ok.text
         assert (await client.get('/api/actions/koreksi-bahan-status/'+body['kunci'])).json()['tercatat']
         client.cookies.set(NAMA_KUKI,'operator:g2')
+        assert (await client.get(path)).status_code==200
+        from app.models import Warehouse
+        async with pg() as db:
+            wh=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g1'))
+            if wh is None:db.add(Warehouse(nama_gudang='Gudang 1 - Uji akses',kode_fungsi='g1',aktif=True))
+            await db.commit()
+        client.cookies.set(NAMA_KUKI,'operator:g1')
         assert (await client.get(path)).status_code==403
         denied=await client.post(path+'/periksa',json=body,headers={'X-CSRF-Token':cap_formulir(client)})
         assert denied.status_code==403

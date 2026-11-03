@@ -5,7 +5,7 @@
 <main class="sr gr" data-giling-ringkas data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-user="{{ akun.user.id }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
 <div data-pesan role="status" hidden></div><div data-galat role="alert" hidden></div>
 <div data-pemulihan hidden><button class="btn" type="button" data-terbaru>Baca status terbaru</button><p>Isian tetap tersedia. Periksa data terbaru dan riwayat sebelum konfirmasi ulang.</p></div>
-{% if awal.aktif and akun.is_admin %}<p><a class="btn" href="/koreksi-bahan/giling/{{ awal.kode_proses }}">Perbaiki bahan & hasil</a></p>{% endif %}
+{% if awal.aktif and boleh %}<p><a class="btn" href="/koreksi-bahan/giling/{{ awal.kode_proses }}">Perbaiki bahan & hasil</a></p>{% endif %}
 <div data-proses-isi></div><noscript>Aktifkan JavaScript untuk mengerjakan proses. Membuka halaman tidak mengubah hasil, QC, silo atau status.</noscript>
 </main><script id="giling-awal" type="application/json">{{ awal|tojson }}</script>
 <script src="/static/giling-ringkas.js?v={{ VERSI }}&amp;gr=20261101.3" defer></script>

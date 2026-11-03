@@ -49,10 +49,11 @@ def angka(v, nama, *, nol=True, presisi=3):
 
 
 async def izin(db,user,jenis):
-    # Sama dengan kewenangan koreksi hasil/catatan lama, bukan hak catat biasa.
+    # Operator boleh mengoreksi proses berjalan pada gudang efektifnya.
+    # Status proses dan ketergantungan tetap diperiksa oleh layanan berikutnya.
     if jenis not in ('giling','sosoh'):raise ValueError('Jenis proses tidak dikenal.')
-    if not user or not P.admin_keatas(user.role):
-        raise PermissionError('Koreksi bahan dan hasil mengikuti kewenangan koreksi Admin ke atas.')
+    if not user or not (P.admin_keatas(user.role) or P.operator_saja(user.role)):
+        raise PermissionError('Koreksi proses berjalan memerlukan petugas operasional yang berwenang.')
     from app.peran import user_wh_scope
     if await user_wh_scope(db,user) not in ('all','g1' if jenis=='giling' else 'g2'):
         raise PermissionError('Gudang efektif tidak mengizinkan koreksi proses ini.')
