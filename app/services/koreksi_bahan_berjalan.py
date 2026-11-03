@@ -227,11 +227,14 @@ async def konteks(db,*,jenis,kode,user):
         from app.services.jasa import pemilik_hasil_proses
         stock_values={'Hasil '+x.jenis+' belum dikemas/dipindah · proses ini':x.sisa_kg for x in await beras_curah(db,proses_id=pr.id)}
         for k in p.BYPRODUCTS:
-            if outputs.get(k,0):
+            if k in outputs:
                 owner_id=await pemilik_hasil_proses(db,pr.jasa_id,k)
                 stock_values['Stok '+k+' tersedia · seluruh sumber pemilik terkait']=await hitung_stok_byproduct_total(db,k,jasa_id=owner_id)
     values=dict(stok_hasil=stock_values,jenis=jenis,kode=kode,id=pr.id,status=pr.status,pemilik=owner,jasa_id=pr.jasa_id,entries=entries,sources=list(sources.values()),outputs=outputs,jenis_hasil=jenis_hasil,basis=basis,
         verification=raw(verification) if verification else None)
+    if jenis=='sosoh':
+        from app.services.koreksi_broken_terkait import konteks as terkait_broken
+        values['broken_terkait']=await terkait_broken(db,pr)
     terkait=await siklus_terkait(db,jenis,{x['silo_id'] for x in entries})
     from app.penggilingan.gudang1.services.jeda import jeda_terbuka
     pause=await jeda_terbuka(db,'giling' if jenis=='giling' else 'penyosohan',pr.id)
@@ -342,7 +345,9 @@ async def hasil_berjalan(db,jenis,pr,targets,user,alasan):
                 q=select(model).where(where)
                 if model==ByproductStock:q=q.where(model.source_type=='polishing',model.source_id==pr.id)
                 else:q=q.where(model.polishing_process_id==pr.id)
-                for row in (await db.scalars(q)).all():blockers.append(f'{model.__tablename__} #{row.id}: {getattr(row,"berat_kg",None)} kg')
+                for row in (await db.scalars(q)).all():
+                    if model==ByproductStock and D(str(row.berat_kg))==0:continue
+                    blockers.append(f'{model.__tablename__} #{row.id}: {getattr(row,"berat_kg",None)} kg')
             if blockers:raise ValueError('Koreksi '+kind+' ditahan oleh '+ '; '.join(blockers)+'. Perbaiki catatan terkait melalui alur yang sah.')
             new[kind]=float(target)
         if all(new[k]==old.get(k,0) for k in new):raise ValueError('Tidak ada perubahan hasil.')
@@ -549,6 +554,12 @@ async def terapkan(db,*,jenis,kode,user,req):
             if row.status=='koreksi':row.status=entries[c['id']]['raw']['status']
         await db.flush()
     if pr is None and req.get('hasil'):raise ValueError('Catatan belum terkait proses tidak menerima koreksi hasil produksi.')
+    koreksi_broken=[]
+    if req.get('broken_terkait'):
+        if jenis!='sosoh' or pr is None or 'broken' not in req.get('hasil',{}):raise ValueError('Pembatalan perpindahan terkait harus diperiksa bersama koreksi hasil broken proses ini.')
+        if angka(req['hasil']['broken'],'Total broken')>=D(str(before['outputs'].get('broken') or 0)):raise ValueError('Pembatalan terkait memerlukan koreksi penurunan hasil broken.')
+        from app.services.koreksi_broken_terkait import batalkan
+        koreksi_broken=await batalkan(db,pr,req['broken_terkait'],user,req['alasan'])
     await hasil_berjalan(db,jenis,pr,req.get('hasil',{}),user,req['alasan'])
     await db.flush()
     if pr is None and any(c.get('hapus') for c in changes):
@@ -575,7 +586,7 @@ async def terapkan(db,*,jenis,kode,user,req):
         await sinkron_bahan(db,jenis,changed)
     if jenis=='sosoh':
         for sid in sorted({entries[c['id']]['silo_id'] for c in changes}):await g2.segarkan_status_silo(db,sid)
-    return dict(sebelum=before,sesudah=after,neraca=balance,proyeksi=projection)
+    return dict(sebelum=before,sesudah=after,neraca=balance,proyeksi=projection,koreksi_broken_terkait=koreksi_broken)
 
 
 async def kunci(db,jenis,kode,user):
@@ -592,7 +603,7 @@ async def kunci(db,jenis,kode,user):
         await db.scalars(q.with_for_update().execution_options(populate_existing=True))
     pr=await proses(db,jenis,kode)
     ctx=await konteks(db,jenis=jenis,kode=kode,user=user)
-    for id_ in sorted({x['silo_id'] for x in ctx['entries']}):
+    for id_ in sorted({x['silo_id'] for x in ctx['entries']}|{x['silo_id'] for x in ctx.get('broken_terkait',[])}):
         await db.scalar(select(Silo).where(Silo.id==id_).with_for_update())
     await proses(db,jenis,kode,kunci=True)
     ids=[e['id'] for e in ctx['entries'] if isinstance(e['id'],int)]

@@ -28,6 +28,7 @@ class Rancangan(BaseModel):
     dasar:str
     bahan:list[Bahan]=Field(default_factory=list)
     hasil:dict[str,FiniteFloat]=Field(default_factory=dict)
+    broken_terkait:list[PositiveInt]=Field(default_factory=list)
     alasan:str=Field(max_length=2000)
     kunci:str
     pemeriksaan:str=''

@@ -25,9 +25,9 @@ async def running(pg,dunia):
         mid=await db.scalar(select(PkTumpukanToSilo.id).where(PkTumpukanToSilo.kode_pindah==move.kode_pindah))
         return u.id,pr.kode_proses,mid,it.id
 
-async def request(db,uid,kode,*,jenis='sosoh',bahan=None,hasil=None,key='uji-koreksi-123456'):
+async def request(db,uid,kode,*,jenis='sosoh',bahan=None,hasil=None,broken_terkait=None,key='uji-koreksi-123456'):
     user=await db.get(User,uid);ctx=await s.konteks(db,jenis=jenis,kode=kode,user=user)
-    return user,dict(dasar=ctx['dasar'],bahan=bahan or [],hasil=hasil or {},alasan='Pemeriksaan fisik dan salah input',kunci=key)
+    return user,dict(dasar=ctx['dasar'],bahan=bahan or [],hasil=hasil or {},broken_terkait=broken_terkait or [],alasan='Pemeriksaan fisik dan salah input',kunci=key)
 
 async def save(pg,uid,kode,**kw):
     jenis=kw.pop('jenis','sosoh')
