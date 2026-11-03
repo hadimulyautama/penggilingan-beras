@@ -357,9 +357,6 @@ async def bahan_g2(db,entry,change,pr,user,alasan,*,gabungan=False):
     if usage and (not pr or usage.polishing_process_id!=pr.id):
         other=await db.get(PolishingProcess,usage.polishing_process_id)
         raise ValueError(f'{move.kode_pindah} terkait {other.kode_proses} ({other.status}); periksa proses terkait.')
-    usage_before=raw(usage) if usage else None
-    old_consumed=D(str(usage.berat_terpakai_kg)) if usage and usage.berat_akhir_kg is not None else None
-    old_remain=D(str(usage.berat_akhir_kg)) if usage and usage.berat_akhir_kg is not None else None
     oldsource=await db.get(PkGudang2Intake,move.pk_gudang2_intake_id)
     cancel=change.get('hapus',False)
     target=oldsource if cancel else await db.get(PkGudang2Intake,int(change['sumber']),populate_existing=True)
@@ -382,7 +379,7 @@ async def bahan_g2(db,entry,change,pr,user,alasan,*,gabungan=False):
     free=None if source['bebas'] is None else D(str(source['bebas']))+(D(str(oldkg)) if target.id==oldsource.id else D(0))
     if free is None:raise ValueError('Saldo sumber belum tersedia; bukan nol.')
     if not gabungan and newkg>free+D('.000001'):raise ValueError(f'{source["kode"]}: saldo bebas {source["bebas"]} kg; batas koreksi {free} kg; diminta {newkg} kg. Alokasi transaksi lain dipertahankan.')
-    # Snapshot sisa fisik tidak berubah kecuali diminta secara eksplisit.
+    # Kontribusi dipasang dahulu; sisa seluruh rancangan diperiksa bersama.
     old_fixed=None
     if usage and move.pemakaian_silo_id!=usage.id:
         column='awal_tetap_kg' if move.waktu<=pr.waktu_mulai else 'masuk_tetap_kg'
@@ -403,23 +400,7 @@ async def bahan_g2(db,entry,change,pr,user,alasan,*,gabungan=False):
             # Semua kontribusi yang sebelumnya kg tetap tetap di basis tetap;
             # baris dinamis lama otomatis membaca jumlah/partai efektif baru.
             setattr(usage,col,value+newkg-D(str(oldkg)))
-        if 'sisa' in change:
-            if usage.berat_akhir_kg is None:raise ValueError('Sisa belum diperiksa. Gunakan Periksa sisa & bebaskan, bukan koreksi untuk melepas silo.')
-            usage.berat_akhir_kg=angka(change['sisa'],'Sisa fisik',presisi=2)
-        await db.flush();await db.refresh(usage,['pemindahan_karung'])
-        masuk=D(str(usage.berat_awal_kg))+D(str(usage.berat_masuk_kg));sisa=usage.berat_akhir_kg
-        if old_consumed is not None and 'sisa' not in change:
-            # Keputusan pemilik 3 Nov: setelah dilepas, pertahankan pemakaian
-            # terkonfirmasi dan ubah sisa sesuai selisih bahan, bukan sebaliknya.
-            usage.berat_akhir_kg=masuk-old_consumed
-            sisa=usage.berat_akhir_kg
-        if masuk<0 or (sisa is not None and (D(str(sisa))>masuk or D(str(sisa))<0)):raise ValueError(f'Siklus #{usage.id}: bahan {masuk} kg tidak mencakup sisa terukur {sisa} kg. Perbaiki data terkait.')
-        if sisa is not None:
-            usage.terpakai_lama_kg=masuk-D(str(sisa))
-            await alir_sisa_g2(db,usage,old_remain,D(str(sisa)),user,alasan)
-        await log_activity(db,table_name='polishing_silo_usage',record_id=usage.id,action='UPDATE',changed_by=user.id,
-            field_name='koreksi_bahan_sisa',old_value=json.dumps(buku.bersih(usage_before),default=str),new_value=json.dumps(buku.bersih(raw(usage)),default=str),alasan=alasan,aksi=JENIS)
-    if not cancel and before==raw(move):raise ValueError('Catatan bahan tidak berubah.')
+    if not cancel and before==raw(move) and 'sisa' not in change:raise ValueError('Catatan bahan tidak berubah.')
     await log_activity(db,table_name='pk_tumpukan_to_silo',record_id=move.id,action='UPDATE',changed_by=user.id,
         old_value=json.dumps(buku.bersih(before),default=str),new_value=json.dumps(buku.bersih(raw(move)),default=str),alasan=alasan,aksi=JENIS)
     await db.flush()
@@ -540,6 +521,7 @@ async def terapkan(db,*,jenis,kode,user,req):
     changes=req.get('bahan',[]);entries={x['id']:x for x in before['entries']}
     if len({x['id'] for x in changes})!=len(changes):raise ValueError('Satu catatan bahan tidak boleh dikoreksi dua kali dalam rancangan yang sama.')
     projection=[]
+    rencana_sisa=await siapkan_sisa_g2(db,before,entries,changes) if jenis=='sosoh' else {}
     if jenis=='sosoh':
         await anggaran_pk(db,entries,[c for c in changes if isinstance(c['id'],int)])
         await anggaran_curah(db,entries,[c for c in changes if isinstance(c['id'],str) and not entries.get(c['id'],{}).get('alokasi')])
@@ -559,6 +541,7 @@ async def terapkan(db,*,jenis,kode,user,req):
             if isinstance(c['id'],str):await bahan_curah(db,entries[c['id']],c,pr,user,req['alasan'],stok_plan=beras_plans.get(c['id']))
             else:projection.append(await bahan_g2(db,entries[c['id']],c,pr,user,req['alasan'],gabungan=True))
         else:await bahan_g1(db,entries[c['id']],c,pr,user,req['alasan'],gabungan=True)
+    if jenis=='sosoh':await terapkan_sisa_g2(db,rencana_sisa,user,req['alasan'])
     if jenis=='giling':
         for c in changes:
             row=await db.get(SiloStorage,c['id'])
@@ -571,6 +554,7 @@ async def terapkan(db,*,jenis,kode,user,req):
         after={**before,'entries':[]}
         after['sources']=[await (g2_sumber(db,await db.get(PkGudang2Intake,int(x['key']))) if jenis=='sosoh' and x['key'].isdigit() else sumber_curah(db,x['key']) if jenis=='sosoh' else g1_sumber(db,x['key'])) for x in before['sources']]
     else:after=await konteks(db,jenis=jenis,kode=kode,user=user)
+    if changes and not any(c.get('hapus') for c in changes) and not req.get('hasil') and before['dasar']==after.get('dasar'):raise ValueError('Tidak ada perubahan bahan atau sisa yang diminta.')
     if pr is None:balance=dict(bahan=None,hasil=None,rendemen=None)
     elif jenis=='sosoh':
         if after['basis'] is not None and after['basis']<=0:raise ValueError('Proses berjalan harus tetap mempunyai sumber bahan yang sah.')
@@ -747,17 +731,23 @@ async def sinkron_bahan(db,jenis,ids):
     for pid in sorted(ids):
         if jenis=='giling':
             rows=(await db.execute(select(MillingProcessSource,SiloStorage).join(SiloStorage,SiloStorage.id==MillingProcessSource.silo_storage_id).where(MillingProcessSource.milling_process_id==pid).order_by(MillingProcessSource.id))).all()
-            bahan=tuple(ArusProses(produk=buat_produk('gabah',kondisi='kering'),berat_kg=D(str(src.berat_kg)),referensi=f'SiloStorage:{st.id}',lokasi_id=st.silo_id) for src,st in rows if src.berat_kg is not None and src.berat_kg>0)
+            bahan=tuple(ArusProses(produk=buat_produk('gabah',kondisi='kering'),berat_kg=D(str(src.berat_terpakai_kg if src.berat_akhir_kg is not None else src.berat_kg)),referensi=f'SiloStorage:{st.id}',lokasi_id=st.silo_id) for src,st in rows if src.berat_kg is not None and src.berat_kg>0)
             await perbarui_bahan_proses_bersama(db,tabel_sumber='milling_process',id_sumber=pid,bahan=bahan)
         else:
             proc=await db.get(PolishingProcess,pid)
             rows=(await db.execute(select(PolishingSiloUsage,Silo).join(Silo).where(PolishingSiloUsage.polishing_process_id==pid).order_by(PolishingSiloUsage.id))).all()
-            bahan=[]
+            bahan=[];kelompok={};rincian={}
             for u,silo in rows:
-                total=float(u.berat_awal_kg)+float(u.berat_masuk_kg)
+                # Sisa yang dipakai ulang bukan bahan baru. Kelompokkan satu
+                # silo memakai basis operasional yang sama dengan detail.
+                total=float(u.berat_terpakai_kg) if u.berat_akhir_kg is not None else float(u.berat_awal_kg)+float(u.berat_masuk_kg)
+                kelompok[silo.id]=(silo,kelompok.get(silo.id,(None,0))[1]+total)
+            for silo,total in kelompok.values():
                 comp=await g2.komposisi_bahan_silo(db,silo.id,sampai=proc.waktu_selesai or now_local(),kecuali_proses_id=pid,target_kg=total)
+                rincian[silo.nama_silo]=comp
                 bahan.extend(p._arus_dari_komposisi(silo,comp))
-            await perbarui_bahan_proses_bersama(db,tabel_sumber='polishing_process',id_sumber=pid,bahan=tuple(bahan))
+            row=await perbarui_bahan_proses_bersama(db,tabel_sumber='polishing_process',id_sumber=pid,bahan=tuple(bahan))
+            if row is not None:row.metadata_domain={**(row.metadata_domain or {}),'komposisi_bahan':rincian}
 
 
 async def anggaran_pk(db,entries,changes):
@@ -925,8 +915,6 @@ async def bahan_curah(db,entry,change,pr,user,alasan,*,stok_plan=None):
     g2._pastikan_komoditas_silo(silo,'broken' if tipe=='broken' else 'beras_putih' if tipe=='beras' else source['jenis'])
     old=D(str(move.berat_kg));qty=D(str(stok_plan['kg'])) if stok_plan else D(0) if change.get('hapus') else angka(change.get('jumlah'),'Jumlah bahan',nol=False,presisi=2)
     if usage:
-        consumed=D(str(usage.berat_terpakai_kg)) if usage.berat_akhir_kg is not None else None
-        remain=None if usage.berat_akhir_kg is None else D(str(usage.berat_akhir_kg))
         col='awal_tetap_kg' if move.waktu<=pr.waktu_mulai else 'masuk_tetap_kg'
         setattr(usage,col,D(str(getattr(usage,col) or 0))+qty-old)
     if change.get('hapus'):move.dibatalkan_pada=now_local()
@@ -941,18 +929,8 @@ async def bahan_curah(db,entry,change,pr,user,alasan,*,stok_plan=None):
             move.polishing_process_id=ident
             if tipe=='beras':move.source_id=ident
         move.berat_kg=qty
-    if usage:
-        if 'sisa' in change:
-            if remain is None:raise ValueError('Sisa pertama tetap melalui Periksa sisa & bebaskan.')
-            usage.berat_akhir_kg=angka(change['sisa'],'Sisa yang benar',presisi=2)
-        elif consumed is not None:usage.berat_akhir_kg=D(str(usage.berat_awal_kg))+D(str(usage.berat_masuk_kg))-consumed
-        total=D(str(usage.berat_awal_kg))+D(str(usage.berat_masuk_kg))
-        if total<0 or usage.berat_akhir_kg is not None and not D(0)<=D(str(usage.berat_akhir_kg))<=total:raise ValueError(f'Siklus #{usage.id}: bahan {total} kg tidak mencakup pemakaian/sisa. Perbaiki data terkait.')
-        if usage.berat_akhir_kg is not None:
-            usage.terpakai_lama_kg=total-D(str(usage.berat_akhir_kg))
-            await alir_sisa_g2(db,usage,remain,D(str(usage.berat_akhir_kg)),user,alasan)
-    if before==raw(move) and (usage is None or ubefore==raw(usage)):raise ValueError('Catatan bahan tidak berubah.')
-    for row,oldrow in ((move,before),(usage,ubefore)):
+    if before==raw(move) and (usage is None or ubefore==raw(usage)) and 'sisa' not in change:raise ValueError('Catatan bahan tidak berubah.')
+    for row,oldrow in ((move,before),):
         if row is None:continue
         await log_activity(db,table_name=row.__tablename__,record_id=row.id,action='UPDATE',changed_by=user.id,field_name='koreksi_bahan_sisa',old_value=json.dumps(buku.bersih(oldrow),default=str),new_value=json.dumps(buku.bersih(raw(row)),default=str),alasan=alasan,aksi=JENIS)
     await db.flush()
@@ -1056,3 +1034,46 @@ async def rencana_stok_beras(db,entries,changes,user,alasan):
         await db.refresh(row)
         await log_activity(db,table_name='finished_goods_stock',record_id=rid,action='UPDATE',changed_by=user.id,old_value=json.dumps(buku.bersih(old),default=str),new_value=json.dumps(buku.bersih(raw(row)),default=str),alasan=alasan,aksi=JENIS)
     return plans
+
+
+async def siapkan_sisa_g2(db,before,entries,changes):
+    plans={}
+    for c in changes:
+        e=entries.get(c['id'])
+        if e is None:raise ValueError('Bahan bukan bagian proses yang dipilih.')
+        uid=e.get('siklus')
+        if uid is None:
+            if 'sisa' in c:raise ValueError('Sisa pertama tetap melalui pemeriksaan silo yang sah.')
+            continue
+        if uid not in plans:
+            usage=await db.get(PolishingSiloUsage,uid,populate_existing=True)
+            for rel in before.get('terkait',[]):
+                if rel['siklus']['silo_id']==usage.silo_id and rel['siklus']['id']>uid and rel['proses']['status']!='proses':
+                    raise ValueError(f"Silo sudah dipakai proses {rel['proses']['kode_proses']} ({rel['proses']['status']}). Koreksi proses selesai harus melalui mekanisme terkait, bukan mengubah sumber historis diam-diam.")
+            plans[uid]=dict(usage=usage,sebelum=raw(usage),terpakai=D(str(usage.berat_terpakai_kg)) if usage.berat_akhir_kg is not None else None)
+        if 'sisa' in c:
+            plan=plans[uid]
+            if plan['sebelum']['berat_akhir_kg'] is None:raise ValueError('Sisa pertama tetap melalui Periksa sisa & bebaskan.')
+            target=angka(c['sisa'],'Sisa yang benar',presisi=2)
+            if 'target' in plan and plan['target']!=target:raise ValueError('Satu siklus memiliki dua koreksi sisa yang berbeda. Periksa kembali rancangan.')
+            plan['target']=target
+    return plans
+
+
+async def terapkan_sisa_g2(db,plans,user,alasan):
+    await db.flush()
+    for uid,plan in sorted(plans.items()):
+        usage=plan['usage']
+        await db.refresh(usage,['pemindahan_karung'])
+        total=D(str(usage.berat_awal_kg))+D(str(usage.berat_masuk_kg))
+        # Dapat sudah berubah akibat propagasi siklus sebelumnya dalam rencana
+        # yang sama. Propagasi berikutnya hanya selisih yang belum diterapkan.
+        sebelum_alir=None if usage.berat_akhir_kg is None else D(str(usage.berat_akhir_kg))
+        if plan['terpakai'] is not None:
+            target=plan.get('target',total-plan['terpakai'])
+            if not D(0)<=target<=total:raise ValueError(f'Siklus #{uid}: total bahan rancangan {total} kg tidak mencakup sisa {target} kg. Pemakaian terkonfirmasi {plan["terpakai"]} kg tetap dilindungi.')
+            usage.berat_akhir_kg=target;usage.terpakai_lama_kg=total-target
+            await alir_sisa_g2(db,usage,sebelum_alir,target,user,alasan)
+        elif total<0:raise ValueError(f'Saldo bahan siklus #{uid} menjadi {total} kg; seluruh rancangan dibatalkan.')
+        await log_activity(db,table_name='polishing_silo_usage',record_id=uid,action='UPDATE',changed_by=user.id,field_name='koreksi_bahan_sisa',old_value=json.dumps(buku.bersih(plan['sebelum']),default=str),new_value=json.dumps(buku.bersih(raw(usage)),default=str),alasan=alasan,aksi=JENIS)
+    await db.flush()

@@ -353,3 +353,87 @@ async def test_hasil_bertambah_tidak_membatalkan_kemasan_lama(pg,running):
     assert r['hasil']['sesudah']['outputs']['medium']==2200
     async with pg() as db:
         assert [(x.id,x.jumlah_karung,x.berat_total_kg) for x in (await db.scalars(select(FinishedGoodsStock))).all()]==old
+
+async def test_koreksi_dua_bahan_satu_siklus_memakai_dampak_akhir_bersama(pg,dunia):
+    async with pg() as db:
+        u,a,ia=await batch_baru(db,dunia,n=100,w=5000,kode='PKB-GABUNG-A')
+        _,b,ib=await batch_baru(db,dunia,n=100,w=5000,kode='PKB-GABUNG-B')
+        await pindah(db,u,ia,20,'A');await pindah(db,u,ib,20,'A')
+        pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'])).proc
+        await p.selesai_penyosohan(db,user=u,kode=pr.kode_proses,nama_silo='A',sisa_kg=100)
+        u.role='admin';await db.commit();uid=u.id;kode=pr.kode_proses
+        moves=(await db.scalars(select(PkTumpukanToSilo).order_by(PkTumpukanToSilo.id))).all()
+        changes=[dict(id=moves[0].id,sumber=str(ia.id),jumlah=10),dict(id=moves[1].id,sumber=str(ib.id),jumlah=30)]
+    result,_=await save(pg,uid,kode,bahan=changes)
+    assert result['hasil']['sesudah']['basis']==1900
+    assert all(e['sisa']==100 for e in result['hasil']['sesudah']['entries'])
+    async with pg() as db:
+        assert await g2._sisa_tumpukan_intake(db,ia.id)==4500
+        assert await g2._sisa_tumpukan_intake(db,ib.id)==3500
+
+async def test_beberapa_siklus_satu_rancangan_tidak_mengalirkan_selisih_dua_kali(pg,dunia):
+    async with pg() as db:
+        u,a,ia=await batch_baru(db,dunia,n=100,w=5000,kode='PKB-SIKLUS-A')
+        _,b,ib=await batch_baru(db,dunia,n=100,w=5000,kode='PKB-SIKLUS-B')
+        await pindah(db,u,ia,20,'A')
+        proc=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'])).proc
+        await p.selesai_penyosohan(db,user=u,kode=proc.kode_proses,nama_silo='A',sisa_kg=500)
+        await pindah(db,u,ib,20,'A')
+        await p.tambah_silo_penyosohan(db,user=u,kode=proc.kode_proses,nama_silos=['A'])
+        await p.selesai_penyosohan(db,user=u,kode=proc.kode_proses,nama_silo='A',sisa_kg=400)
+        await p.tambah_silo_penyosohan(db,user=u,kode=proc.kode_proses,nama_silos=['A'])
+        u.role='admin';await db.commit();uid=u.id;kode=proc.kode_proses
+        rows=(await db.scalars(select(PkTumpukanToSilo).order_by(PkTumpukanToSilo.id))).all()
+        changes=[dict(id=rows[0].id,sumber=str(ia.id),jumlah=18),dict(id=rows[1].id,sumber=str(ib.id),jumlah=22)]
+    result,_=await save(pg,uid,kode,bahan=changes)
+    assert result['hasil']['sesudah']['basis']==2000
+    async with pg() as db:
+        usages=(await db.scalars(select(PolishingSiloUsage).order_by(PolishingSiloUsage.id))).all()
+        assert [x.berat_akhir_kg for x in usages]==[400,400,None]
+        assert [x.berat_terpakai_kg for x in usages[:2]]==[500,1100]
+        assert usages[2].berat_awal_kg==400
+        from hmu_core.proses_db import ProsesTerpadu,ArusProsesTerpadu
+        shared=await db.scalar(select(ProsesTerpadu).where(ProsesTerpadu.tabel_sumber=='polishing_process',ProsesTerpadu.id_sumber==str(proc.id)))
+        total=await db.scalar(select(func.sum(ArusProsesTerpadu.berat_kg)).where(ArusProsesTerpadu.proses_id==shared.id,ArusProsesTerpadu.arah=='bahan'))
+        assert total==2000
+
+async def test_siklus_lanjutan_selesai_dilindungi_dari_koreksi_bahan(pg,running):
+    uid,kode,mid,it=running
+    async with pg() as db:
+        u=await db.get(User,uid)
+        nxt=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'])).proc
+        await p.catat_output(db,user=u,kode=nxt.kode_proses,jenis='medium',berat_kumulatif=450)
+        await p.catat_output(db,user=u,kode=nxt.kode_proses,jenis='broken',berat_kumulatif=50)
+        await p.selesai_penyosohan(db,user=u,kode=nxt.kode_proses,nama_silo='A',sisa_kg=0)
+        await p.akhiri_penyosohan(db,user=u,kode=nxt.kode_proses)
+    with pytest.raises(ValueError,match='selesai'):await save(pg,uid,kode,bahan=[dict(id=mid,sumber=str(it),jumlah=56)])
+    async with pg() as db:
+        assert await g2._sisa_tumpukan_intake(db,it)==2000
+        assert (await db.get(PkTumpukanToSilo,mid)).jumlah_karung==60
+
+async def test_koreksi_sisa_yang_sama_tidak_membuat_jejak_baru(pg,running):
+    uid,kode,mid,it=running
+    with pytest.raises(ValueError,match='Tidak ada perubahan'):await save(pg,uid,kode,bahan=[dict(id=mid,sumber=str(it),jumlah=60,sisa=500)])
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(Peristiwa).where(Peristiwa.jenis==s.JENIS))==0
+
+async def test_jawaban_http_putus_setelah_commit_diperiksa_sebelum_retry(pg,running):
+    import httpx
+    uid,kode,mid,it=running
+    async with await _klien(pg,peran='superadmin') as c:
+        path=f'/api/actions/koreksi-bahan/sosoh/{kode}'
+        ctx=(await c.get(path)).json()
+        req=dict(dasar=ctx['dasar'],bahan=[dict(id=mid,sumber=str(it),jumlah=56)],hasil={},alasan='Uji balasan putus setelah transaksi',kunci='uji-putus-http-12345')
+        pre=await c.post(path+'/periksa',json=req,headers={'X-CSRF-Token':cap_formulir(c)});assert pre.status_code==200,pre.text
+        req.update(pemeriksaan=pre.json()['pemeriksaan'],konfirmasi=True)
+        async def putus(response):
+            if response.request.url.path==path+'/simpan' and response.status_code==200:raise httpx.ReadError('Simulasi balasan terputus setelah commit',request=response.request)
+        c.event_hooks['response'].append(putus)
+        with pytest.raises(httpx.ReadError):await c.post(path+'/simpan',json=req,headers={'X-CSRF-Token':cap_formulir(c)})
+        c.event_hooks['response'].remove(putus)
+        status=(await c.get('/api/actions/koreksi-bahan-status/'+req['kunci'])).json();assert status['tercatat']
+        retry=await c.post(path+'/simpan',json=req,headers={'X-CSRF-Token':cap_formulir(c)})
+        assert retry.status_code==200 and retry.json()['sudah_tercatat'] and retry.json()['peristiwa_id']==status['peristiwa_id']
+    async with pg() as db:
+        assert await g2._sisa_tumpukan_intake(db,it)==2200
+        assert await db.scalar(select(func.count()).select_from(Peristiwa).where(Peristiwa.jenis==s.JENIS))==1
