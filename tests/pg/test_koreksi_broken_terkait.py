@@ -216,3 +216,30 @@ async def test_dua_perpindahan_satu_pembukuan_dibatalkan_sekali(pg,kasus):
     async with pg() as db:
         assert (await db.get(ByproductStock,bid)).berat_kg==0
         assert await g2.hitung_stok_silo(db,sid)==0
+
+async def test_draf_bahan_2850_sisa_5300_ditolak_tanpa_menghalangi_koreksi_hasil_saja(pg,running):
+    uid,kode,_,_=running
+    async with pg() as db:
+        u=await db.get(User,uid)
+        silo=Silo(nama_silo='Tong Broken Uji',warehouse_id=u.default_warehouse_id,jenis_isi='broken',aktif=True,status='kosong');db.add(silo);await db.commit()
+        ext=ByproductStock(jenis_produk='broken',source_type='timbangan',source_id=919,berat_kg=8150,tanggal=now_local().date(),waktu=now_local(),input_by=uid)
+        db.add(ext);await db.commit()
+        await g2.pindah_broken_ke_silo(db,user=u,byproduct_stock_id=ext.id,nama_silo=silo.nama_silo,berat=8150)
+        original=await db.scalar(select(BrokenKeSilo));original_id=original.id
+        await p.tambah_silo_penyosohan(db,user=u,kode=kode,nama_silos=[silo.nama_silo])
+        await p.selesai_penyosohan(db,user=u,kode=kode,nama_silo=silo.nama_silo,sisa_kg=5300)
+        await p.catat_output(db,user=u,kode=kode,jenis='broken',berat_kumulatif=5350)
+        await g2.masukkan_broken_ke_silo(db,user=u,kode_pol=kode,nama_silo=silo.nama_silo,berat_kg=50)
+        false_move=await db.scalar(select(BrokenKeSilo).where(BrokenKeSilo.id!=original_id))
+        mid=false_move.id
+        ctx=await s.konteks(db,jenis='sosoh',kode=kode,user=u)
+        entry=next(x for x in ctx['entries'] if x['id']==f'broken:{original_id}')
+    with pytest.raises(ValueError,match='tidak mencakup sisa'):
+        await save(pg,uid,kode,bahan=[dict(id=entry['id'],sumber=entry['sumber'],jumlah=2850,sisa=5300)],hasil={'broken':0},broken_terkait=[mid])
+    r,_=await save(pg,uid,kode,hasil={'broken':0},broken_terkait=[mid])
+    after=r['hasil']['sesudah'];keep=next(x for x in after['entries'] if x['id']==entry['id'])
+    assert keep['kg']==8150 and keep['sisa']==5300
+    assert after['outputs']['broken']==0
+    async with pg() as db:
+        assert await g2.hitung_stok_silo(db,silo.id)==5300
+        usage=await s.siklus_g2(db,await db.get(BrokenKeSilo,original_id));assert usage.berat_terpakai_kg==2850

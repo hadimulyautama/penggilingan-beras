@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% block judul %}Koreksi bahan & hasil · {{ awal.kode }}{% endblock %}
 {% block isi %}
-<link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?kb=20261103.3">
+<link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?kb=20261103.4">
 <main data-koreksi-bahan data-editor-perintah data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
 <header><p class="bantu">{{ 'PENGGILINGAN' if awal.jenis=='giling' else 'PENYOSOHAN' }} · KOREKSI PROSES BERJALAN</p><h1>{{ awal.kode }}</h1><p>{{ awal.pemilik }} · {{ 'Gudang 1' if awal.jenis=='giling' else 'Gudang 2' }}</p></header>
 <div data-kb-pesan role="status"></div><div data-kb-galat role="alert"></div>
 <div data-kb-recovery hidden><button type="button" class="btn" data-kb-terbaru>Baca data & status terbaru</button><p>Isian dipertahankan. Periksa data terbaru sebelum konfirmasi ulang.</p></div>
 <div data-kb-isi></div><noscript>Aktifkan JavaScript untuk memeriksa dampak koreksi. Membuka halaman ini tidak mengubah stok.</noscript>
 </main><script type="application/json" id="koreksi-bahan-awal">{{ awal|tojson }}</script>
-<script src="/static/koreksi-bahan-berjalan.js?kb=20261103.3" defer></script>
+<script src="/static/koreksi-bahan-berjalan.js?kb=20261103.4" defer></script>
 {% endblock %}
