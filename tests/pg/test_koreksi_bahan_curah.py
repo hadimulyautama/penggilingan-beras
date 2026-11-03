@@ -153,3 +153,23 @@ async def test_ganti_sumber_karung_ke_curah_memakai_satuan_sumber_pengganti(pg,s
         old=await db.get(FinishedGoodsStock,src['id']);new=await db.get(FinishedGoodsStock,target)
         assert old.jumlah_karung==20 and old.berat_total_kg==998
         assert new.jumlah_karung==0 and new.berat_total_kg==1100
+
+@pytest.mark.parametrize('curah',['broken','samping'],indirect=True)
+async def test_pembatalan_curah_tercatat_tetapi_tidak_dihitung_sebagai_isi(pg,curah):
+    from app.models import Silo
+    uid,kode,tipe,mid=curah
+    model=BrokenKeSilo if tipe=='broken' else HasilSampingKeSilo
+    async with pg() as db:
+        user=await db.get(User,uid)
+        db.add(Silo(nama_silo='Silo Penanda',warehouse_id=user.default_warehouse_id,jenis_isi='pk'));await db.commit()
+        if tipe=='broken':
+            original=await db.get(BrokenKeSilo,mid)
+            await g2.pindah_broken_ke_silo(db,user=user,byproduct_stock_id=original.byproduct_stock_id,nama_silo='Penanda',berat=100)
+        else:await g2.masukkan_hasil_samping_ke_silo(db,user=user,jenis='menir',jasa_id=None,nama_silo='Penanda',berat_kg=100)
+        other=await db.scalar(select(model).order_by(model.id.desc()).limit(1));rid=other.id;sid=other.silo_id
+    await save(pg,uid,f'catatan-{tipe}-{rid}',bahan=[dict(id=f'{tipe}:{rid}',hapus=True)])
+    async with pg() as db:
+        assert await db.get(model,rid) is None
+        old=await db.scalar(select(model).where(model.id==rid).execution_options(termasuk_dibatalkan=True))
+        assert old.berat_kg==100 and old.dibatalkan_pada is not None
+        assert await g2.hitung_stok_silo(db,sid)==0

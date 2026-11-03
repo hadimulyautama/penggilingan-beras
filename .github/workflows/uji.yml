@@ -297,6 +297,7 @@ jobs:
           python -m pytest -q --junitxml=bukti/koreksi-aktif.xml
           tests/pg/test_koreksi_bahan_berjalan.py
           tests/pg/test_koreksi_bahan_curah.py
+          tests/pg/test_cermin_bertanda.py
           tests/pg/test_giling_ringkas.py
           tests/pg/test_sosoh_ringkas.py
           tests/pg/test_beras_silo_berat_nyata.py

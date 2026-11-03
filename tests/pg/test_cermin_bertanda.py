@@ -220,8 +220,9 @@ async def test_indeks_unik_parsial_hidup_terpasang(pg, indeks):
     assert lama == 0
 
 
-async def test_saringan_berlaku_untuk_keempat_model(pg):
+async def test_saringan_berlaku_untuk_semua_model_bertanda(pg):
     from app.models import cermin
 
     assert {m.__tablename__ for m in cermin.MODEL_CERMIN} == {
-        "purchase_batches", "pk_purchase_batches", "pk_gudang2_intakes", "pk_tumpukan_to_silo"}
+        "purchase_batches", "pk_purchase_batches", "pk_gudang2_intakes", "pk_tumpukan_to_silo",
+        "broken_ke_silo", "beras_ke_silo", "hasil_samping_ke_silo"}
