@@ -34,7 +34,9 @@ async def list_page(request:Request,akun=Depends(butuh_akun)):
     async with SessionLocal() as db:
         try:await s.izin(db,akun.user)
         except PermissionError as e:raise fail(e)
-    return await render_laci(request,'kepemilikan.html',awal=None,layar='stok',kembali='/stok',breadcrumb_detail='Pindah kepemilikan')
+    from app.web.stok_navigasi import kembali_aman, alamat
+    kembali = kembali_aman(request.query_params.get('kembali_stok')) or alamat('karung' if request.query_params.get('kind') == 'karung' else 'produk')
+    return await render_laci(request,'kepemilikan.html',awal=None,layar='stok',kembali=kembali,breadcrumb_detail='Riwayat kepemilikan')
 
 @router.get('/kepemilikan/{ident}')
 async def detail_page(ident:str,request:Request,akun=Depends(butuh_akun)):

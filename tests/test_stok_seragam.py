@@ -53,7 +53,7 @@ def test_informasi_saldo_detail_dan_kontrol(width,tab,owner):
   else:page.locator('.sk-tindakan-desktop [data-sk-cetak]').click()
   assert page.evaluate('window.totalPrint')==1
   if tab=='karung' and owner=='pabrik':
-   action=page.locator('.karung-aksi').first;action.locator('summary').click();expect(action.get_by_role('link',name='Pindah kepemilikan')).to_be_visible();action.locator('summary').click()
+   action=page.locator('.karung-aksi').first;action.locator('summary').click();expect(action.get_by_role('link',name='Alihkan ke pelanggan')).to_be_visible();action.locator('summary').click()
   assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   out=R/'output/stok-seragam';out.mkdir(parents=True,exist_ok=True);page.screenshot(path=str(out/f'{tab}-{owner}-{width}.png'),full_page=True)
   assert not errors,errors;b.close()

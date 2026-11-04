@@ -1,11 +1,13 @@
 {% extends '_retur_supplier_navigasi.html' %}
-{% block judul %}{{ awal.code if awal else 'Pindah kepemilikan' }}{% endblock %}
+{% block judul %}{{ awal.code if awal else 'Riwayat kepemilikan' }}{% endblock %}
 {% block isi %}
-<link rel="stylesheet" href="/static/kepemilikan.css?v=20261104.3">
-<main data-kepemilikan data-editor-perintah data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
+<link rel="stylesheet" href="/static/stok-seragam.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/kepemilikan.css?v={{ VERSI }}">
+<section data-kepemilikan data-editor-perintah data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
+<div data-ko-controls></div>
 <div data-ko-message role="status"></div><div data-ko-error role="alert"></div>
 <div data-ko-recovery hidden><button type="button" class="btn" data-ko-latest>Baca status terbaru</button><p>Isian dipertahankan. Periksa status sebelum mengulang penyimpanan.</p></div>
 <div data-ko-body></div><noscript>Aktifkan JavaScript untuk membaca rincian dan pemeriksaan dampak. Membuka halaman tidak mengubah stok.</noscript>
-</main><script type="application/json" id="kepemilikan-awal">{{ awal|tojson }}</script>
-<script src="/static/kepemilikan.js?v=20261104.3" defer></script>
+</section><script type="application/json" id="kepemilikan-awal">{{ awal|tojson }}</script>
+<script src="/static/kepemilikan.js?v={{ VERSI }}" defer></script>
 {% endblock %}
