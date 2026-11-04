@@ -2456,7 +2456,7 @@
               '>' + esc(o.label) + "</option>";
           }).join("");
         if (dipilih) { s.value = dipilih; }
-        if(masukkanSilo&&f.name==='tumpukan'&&!dipilih&&sumberAwalMasukkan){var bawaanMi=daftar.find(function(o){return o.value===sumberAwalMasukkan||o.value.split(':')[0]===sumberAwalMasukkan;});if(bawaanMi){s.value=bawaanMi.value;s.dispatchEvent(new Event('change',{bubbles:true}));sumberAwalMasukkan='';}}
+        if(masukkanSilo&&f.name==='tumpukan'&&!dipilih&&sumberAwalMasukkan){var bawaanMi=daftar.find(function(o){var pemilikBagian=o.value.split('|pemilik=');var asalBagian=pemilikBagian[0].split(':')[0]+(pemilikBagian.length>1?'|pemilik='+pemilikBagian[1]:'');return o.value===sumberAwalMasukkan||asalBagian===sumberAwalMasukkan;});if(bawaanMi){s.value=bawaanMi.value;s.dispatchEvent(new Event('change',{bubbles:true}));sumberAwalMasukkan='';}}
         if ((selesaiGiling || selesaiSosoh) && f.name==='kode_proses' && semula && semula['kode:kode_proses']) s.value=semula['kode:kode_proses'];
         /* Tiket dari tautan aplikasi Timbangan dibawa sampai ke lembar ini.
            Pilihan tetap menunggu transaksi barang keluar dipilih lebih dulu;

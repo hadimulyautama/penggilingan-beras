@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright,expect
 R=Path(__file__).resolve().parents[1]
 
 def detail(kind='karung'):
- state=dict(kind=kind,quantity=120,kg=None if kind=='karung' else 6000,customer=7,
+ state=dict(kind=kind,quantity=120,kg=None if kind=='karung' else 6000,customer=None if kind=='pk' else 7,
             owners=[7],status='terkoreksi',version=1,parties={'7':'Pak Pras','None':'Pabrik'})
  line=dict(source_id=41,target_id=42,source_owner=7,quantity=120,kg=state['kg'],
            free=100,used=20,source_before=dict(source_type='pembelian',source_id=11),
@@ -16,7 +16,7 @@ def detail(kind='karung'):
  state['lines']=[line]
  original=copy.deepcopy(state);original.update(quantity=150,version=0,status='aktif')
  return dict(id=128,code='PKM/00128',state=state,original=original,
-             description=dict(unit='lembar' if kind=='karung' else 'karung',
+             description=dict(unit='kg' if kind=='pk' else 'lembar' if kind=='karung' else 'karung',
                               label='Karung laminasi · Hadi Mulya · 25 kg',warehouses=['Gudang 2'],
                               capacity_note='Ukuran tercatat 25 kg per lembar.'),
              names={'7':'Pak Pras','None':'Pabrik'},time='2026-11-04T13:14:00Z',actor='Admin A',
@@ -36,7 +36,7 @@ def route_for(page,data,theme,requests):
   if path=='/static/kepemilikan.js':route.fulfill(path=R/'app/web/static/kepemilikan.js');return
   if path.startswith('/api/'):
    requests.append((path,route.request.method,parse_qs(u.query),route.request.post_data_json if route.request.method=='POST' else None))
-   if path=='/api/actions/pelanggan-kledo':value=[dict(label='Pak Pras',value=7),dict(label='Genta PK',value=8)]
+   if path in ['/api/actions/pelanggan-kledo','/api/pk-kepemilikan/pemilik']:value=[dict(label='Pak Pras',value=7),dict(label='Genta PK',value=8)]
    elif path.endswith('/sumber'):value=dict(items=[dict(id=41,label='Pak Pras · JAS/007 · Sumber #41',available=120)],total=1,page=1,pages=1)
    elif path.endswith('/periksa'):
     before=data['state'];after={**before,'quantity':100};value=dict(review='bukti-uji',plan=dict(before=before,after=after,balances_before={'7':{'lembar':120}},balances_after={'7':{'lembar':100}}))
@@ -82,14 +82,14 @@ def test_daftar_kontrol_isi_tema_dan_ukuran(width,theme):
   b.close()
 
 @pytest.mark.parametrize('width',[390,1440])
-@pytest.mark.parametrize('kind',['karung','barang'])
+@pytest.mark.parametrize('kind',['karung','barang','pk'])
 def test_detail_koreksi_pemeriksaan_konfirmasi_dan_batal(width,kind):
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1000));requests=[];errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)));data=detail(kind);route_for(page,data,'terik',requests)
   page.goto('https://uji.local/kepemilikan/128?kembali=%2Fkepemilikan%3Fkind%3Dkarung%26status%3Daktif')
   expect(page.get_by_role('heading',name='PKM/00128')).to_be_visible()
-  for text in ['Gudang 2','Admin A','Awal tercatat','Sumber #41 → baris #42','Masih bebas','Terpakai / terikat','pembelian #11','Saldo tersedia saat ini','Ukuran tercatat']:
+  for text in ['Gudang 2','Admin A','Awal tercatat','Sumber #41 → baris #42','Masih bebas','Terpakai / terikat','pembelian #11',('Saldo sumber PK ini' if kind=='pk' else 'Saldo tersedia saat ini'),'Ukuran tercatat']:
    assert text in page.locator('[data-ko-body]').inner_text()
   assert page.get_by_role('link',name='← Riwayat kepemilikan').get_attribute('href')=='/kepemilikan?kind=karung&status=aktif'
   page.get_by_text('Riwayat perubahan · 2',exact=True).click();assert 'Jumlah awal salah catat' in page.locator('[data-ko-body]').inner_text()
@@ -98,7 +98,7 @@ def test_detail_koreksi_pemeriksaan_konfirmasi_dan_batal(width,kind):
   page.get_by_role('button',name='Koreksi transaksi',exact=True).click()
   page.get_by_role('spinbutton').fill('100');page.get_by_role('textbox',name='Alasan koreksi (wajib)').fill('Jumlah dicatat terlalu banyak')
   if kind=='karung':expect(page.get_by_role('combobox')).to_have_value('7')
-  else:
+  elif kind=='barang':
    page.get_by_text('Perbaiki pemilik / baris sumber (jika salah)',exact=True).click();page.get_by_role('button',name='Cari sumber').click();page.get_by_role('checkbox').check()
   page.get_by_role('button',name='Periksa dampak').click()
   expect(page.get_by_role('heading',name='Dampak sebelum disimpan')).to_be_visible()

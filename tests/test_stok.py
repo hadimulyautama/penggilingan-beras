@@ -698,10 +698,11 @@ def test_layar_stok_karung_menggambar_kosong_dan_isi():
 
     isi = gambar(_KARUNG, boleh_pindah=True)
     assert "Karung Laminasi" in isi and "Karung PK" in isi
-    assert "Pindah kepemilikan" in isi, "boleh_pindah=True harus menggambar tombolnya"
+    assert "Alihkan ke pelanggan" in isi, "boleh_pindah=True harus menggambar tombolnya"
+    assert "buka=pindah_kepemilikan_karung" in isi
 
     tanpa_tombol = gambar(_KARUNG, boleh_pindah=False)
-    assert "Pindah kepemilikan" not in tanpa_tombol
+    assert "buka=pindah_kepemilikan_karung" not in tanpa_tombol
     assert "menipis" in isi, "yang menipis tak terbaca menipis"
 
 

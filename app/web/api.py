@@ -1987,7 +1987,7 @@ async def pk_g1_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
     async with SessionLocal() as db:
         lot = await pk_gudang1(db)
-    return [{"value": l.kode,
+    return [{"value": l.kode_aksi or l.kode,
              "label": (f"{l.kode} · {_kg(l.tersedia)}"
                        + (f" · {l.kelas}" if l.kelas else "")
                        + (f" · {l.lama}" if l.lama else "")
@@ -2456,6 +2456,11 @@ async def pk_transfer_list(user: User = Depends(pengguna_aksi)) -> list[dict]:
     from app.penggilingan.gudang1.services.milling import pk_jenis
     out: list[dict] = []
     async with SessionLocal() as db:
+        from app.services import pk_persediaan
+        if await pk_persediaan.ada_pengalihan(db):
+            from app.services.stok import pk_gudang1
+            cards=await pk_gudang1(db)
+            return [dict(value=c.kode_aksi or c.kode,label=c.kode+' · '+(c.pemilik or 'Pabrik')+' · '+str(c.tersedia)+' kg') for c in cards if c.tersedia>0]
         procs = (
             await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
         ).scalars().all()
@@ -3968,6 +3973,9 @@ async def pratinjau_unit_transfer_pk(tahap: str, kode_proses: str = '',
     if not (kode_proses.strip() if tahap == 'minta' else permintaan.strip()):
         return {'teks': 'Pilih lot PK.' if tahap == 'minta' else 'Pilih permintaan yang sudah disetujui.', 'nonaktif': nonaktif}
     async with SessionLocal() as db:
+        from app.services.pk_persediaan import pecah_kode
+        from app.services.transfer import pending_transfer_kg
+        kode_proses,owner=pecah_kode(kode_proses)
         b = None
         if tahap == 'minta':
             proc = await db.scalar(select(MillingProcess).where(MillingProcess.kode_proses == kode_proses.strip()))
@@ -3982,8 +3990,9 @@ async def pratinjau_unit_transfer_pk(tahap: str, kode_proses: str = '',
             proc = await db.get(MillingProcess, b.milling_process_id)
         if proc is None:
             raise HTTPException(404, 'Lot PK tidak ditemukan.')
-        saldo = (await _pk_breakdown(db, proc.id)).tersedia
-        pemilik = await nama_pemilik(db, proc.jasa_id) if proc.jasa_id else 'Milik pabrik'
+        owner=(proc.jasa_id if owner is ... else owner) if b is None else b.jasa_id
+        saldo = await pending_transfer_kg(db,proc.id,pemilik_id=owner,bebas=True)
+        pemilik = await nama_pemilik(db, owner) if owner else 'Milik pabrik'
         dasar = f'{proc.kode_proses} · {pemilik or "Pemilik belum tercatat"}\nSisa PK G1 {angka(saldo)} kg'
         if saldo >= 0:
             dasar += f' (setara {teks(saldo)})'
@@ -4688,15 +4697,25 @@ async def _izin_masukkan_silo(user):
 @router.get("/actions/sumber-masukkan-silo")
 async def sumber_masukkan_silo(user: User = Depends(pengguna_aksi)):
     await _izin_masukkan_silo(user)
-    from sqlalchemy import select
+    from sqlalchemy import select, or_
     from app.models import PkGudang2Intake
     from app.services.masukkan_silo import sumber
     from app.services.pk_50 import angka
+    from app.services import pk_persediaan
+    from app.penggilingan.gudang2.service import _g2_warehouse_id
     out=[]
     async with SessionLocal() as db:
+        wid=await _g2_warehouse_id(db)
+        positions=await pk_persediaan.baca(db) if await pk_persediaan.ada_pengalihan(db) else {}
         for it in (await db.scalars(select(PkGudang2Intake).where(
-                PkGudang2Intake.tujuan=='ditumpuk').order_by(PkGudang2Intake.waktu_masuk,PkGudang2Intake.id))).all():
-            for s in await sumber(db,it):
+                PkGudang2Intake.tujuan=='ditumpuk',or_(PkGudang2Intake.warehouse_id==wid,PkGudang2Intake.warehouse_id.is_(None))).order_by(PkGudang2Intake.waktu_masuk,PkGudang2Intake.id))).all():
+            position=positions.get('tumpukan:'+str(it.id))
+            rows=[]
+            if position and not position.masalah:
+                for owner in sorted({b.pemilik_id for b in position.stok.bagian},key=lambda v:v or 0):
+                    if position.stok.saldo(owner)>0:rows.extend(await sumber(db,it,pemilik_id=owner,saldo_pemilik=float(position.stok.saldo(owner))))
+            else:rows=await sumber(db,it)
+            for s in rows:
                 if s['saldo_kg'] is not None and s['saldo_kg']<=0 and not s['karung']:
                     continue
                 bentuk={'karung':'Berkarung','curah':'Curah','lama':'Data lama / bagian karung'}[s['bentuk']]
@@ -4720,6 +4739,8 @@ async def rincian_masukkan_silo(tumpukan: str='', silo: str='', jumlah_karung: s
     if not tumpukan:
         return {'sumber':None,'siap':False}
     try:
+        from app.services.pk_persediaan import pecah_kode
+        _,owner=pecah_kode(tumpukan)
         iid,bentuk=urai(tumpukan)
         def baca(s):
             if not s.strip():return None
@@ -4728,7 +4749,7 @@ async def rincian_masukkan_silo(tumpukan: str='', silo: str='', jumlah_karung: s
             return d
         n=baca(jumlah_karung_partai)
         async with SessionLocal() as db:
-            rows=await sumber(db,await db.get(PkGudang2Intake,iid),jumlah_partai=n)
+            rows=await sumber(db,await db.get(PkGudang2Intake,iid),jumlah_partai=n,pemilik_id=owner)
             if not rows:
                 raise ValueError('Sumber ini sudah habis. Periksa stok terbaru.')
             src=pilih(rows,bentuk) if bentuk else rows[0]
@@ -4796,7 +4817,10 @@ async def silo_g2_daftar(komoditas: str = "pk", induk: str = "",
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         intake = None
+        owner=...
         if induk.strip():
+            from app.services.pk_persediaan import pecah_kode
+            _,owner=pecah_kode(induk)
             from app.services.masukkan_silo import urai
             try:
                 iid,_ = urai(induk)
@@ -4814,7 +4838,7 @@ async def silo_g2_daftar(komoditas: str = "pk", induk: str = "",
             if intake is not None:
                 pemilik = await pemilik_silo_g2(db, s.id)
                 if pemilik and not all(
-                    [await cocok_pemilik(db, intake.jasa_id, p) for p in pemilik]
+                    [await cocok_pemilik(db, (intake.jasa_id if owner is ... else owner), p) for p in pemilik]
                 ):
                     continue
             kg = await hitung_stok_silo(db, s.id)
@@ -5120,6 +5144,8 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
              or P.super_saja(user.role))
     from app.services.masukkan_silo import urai
     try:
+        from app.services.pk_persediaan import pecah_kode
+        _,owner=pecah_kode(req.tumpukan)
         iid,bentuk=urai(req.tumpukan)
     except ValueError as e:
         raise HTTPException(400,str(e)) from None
@@ -5138,7 +5164,7 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
         u = await db.get(User, user.id)
         try:
             r = await pindah_tumpukan_ke_silo(
-                db, user=u, intake_id=iid, nama_silo=req.silo.strip(),
+                db, user=u, intake_id=iid, nama_silo=req.silo.strip(),pemilik_id=owner,
                 bentuk_sumber=bentuk,
                 jumlah_karung=req.jumlah_karung, hasil_timbang=req.hasil_timbang == "ya",
                 jumlah_karung_partai=req.jumlah_karung_partai, ukuran_karung_kg=req.ukuran_karung_kg,
@@ -5153,7 +5179,7 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
             try:
                 from app.models import PkGudang2Intake
                 from app.services.masukkan_silo import sumber
-                rows = await sumber(db, await db.get(PkGudang2Intake,iid))
+                rows = await sumber(db, await db.get(PkGudang2Intake,iid),pemilik_id=owner)
                 jenis = 'karung' if req.jumlah_karung is not None and bentuk!='curah' else bentuk
                 akhir = next((s for s in rows if s['bentuk']==jenis),None)
                 bobot_aktual_final = rows[0]['bobot_final'] if rows else (await db.get(PkGudang2Intake,iid)).bobot_final

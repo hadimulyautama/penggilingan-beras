@@ -243,6 +243,7 @@ async def start_milling(
     # peninggalan adalah kolom yang akan dipakai lagi oleh orang berikutnya.
     st = next((r for r in rows if r.drying_lot_id), rows[0])
     proc = MillingProcess(
+        warehouse_id=silo.warehouse_id,
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
         jasa_id=pemilik_lot,
@@ -583,6 +584,16 @@ async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
       di layar lain adalah dua jawaban tentang berapa barang orang lain yang
       ada di gudang — dan yang menagihnya memegang salah satunya.
     """
+    from app.services import pk_persediaan
+    if await pk_persediaan.ada_pengalihan(db):
+        sources=await pk_persediaan.baca(db)
+        pabrik=jasa=Decimal(0)
+        for key,source in sources.items():
+            if not key.startswith('giling:'):continue
+            if source.masalah:raise MillingError(source.masalah)
+            pabrik+=source.stok.saldo(None)
+            jasa+=source.stok.fisik_kg-source.stok.saldo(None)
+        return float(pabrik),float(jasa)
     saldo=pk_saldo_query().subquery()
     grouped=(await db.execute(select(saldo.c.jasa_id.is_not(None),func.sum(saldo.c.tersedia))
         .where(saldo.c.tersedia>0).group_by(saldo.c.jasa_id.is_not(None)))).all()
@@ -1242,6 +1253,9 @@ async def alasan_koreksi_hasil_giling(db: AsyncSession, process_id: int) -> str 
     proc = await db.get(MillingProcess, process_id)
     if proc is None or proc.status != "selesai":
         return "Koreksi hanya tersedia untuk penggilingan yang sudah selesai."
+    from app.services.pk_persediaan import ada_pengalihan
+    if await ada_pengalihan(db,sumber='giling:'+str(process_id)):
+        return 'Sumber PK sudah memiliki riwayat pengalihan kepemilikan; periksa transaksi terkait sebelum mengubah hasil asal.'
     if (await db.execute(select(InternalTransfer.id).where(
             InternalTransfer.milling_process_id == process_id,
             InternalTransfer.status == "terkirim").limit(1))).first():
@@ -1262,6 +1276,8 @@ async def koreksi_hasil_giling(
     """Koreksi hasil PK selesai dengan audit dan sinkronisasi stok lintas-app."""
     import math
 
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     proc = (await db.execute(
         select(MillingProcess).where(MillingProcess.id == process_id)
         .with_for_update()
@@ -1753,6 +1769,9 @@ async def verify_milling_output(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
+    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
+    try:await pastikan_sumber_tidak_diubah(db,'giling:'+str(proc.id))
+    except ValueError as e:raise MillingError(str(e)) from None
     if berat_output is None:
         raise MillingError("Sebutkan berat output PK final-nya, mis. `... 14 ton`.")
     # Rendemen final dan HPP berdiri di atas bahan masuk. Selama bahannya

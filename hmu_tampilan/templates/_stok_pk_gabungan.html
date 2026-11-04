@@ -16,7 +16,7 @@
           {% elif label|lower in ("butir patah", "broken") %}{% set mutu.broken = nilai %}
           {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
         {% endfor %}
-        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
+        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}{% if l.bagian_pemilik %}&amp;pemilik_id={{ l.jasa_id if l.jasa_id else 'pabrik' }}{% endif %}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
           <span class="stok-baris__kode"><span>{{ l.kode }}</span><small>{{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
           <span>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }}</span>
           <span>Gudang 1</span>
@@ -36,7 +36,7 @@
           {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
         {% endfor %}
         {% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
-        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
+        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}{% if t.bagian_pemilik %}&amp;pemilik_id={{ t.jasa_id if t.jasa_id else 'pabrik' }}{% endif %}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
           <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{% if t.tanggal %}{{ t.tanggal }}{% endif %}{% if t.lama %}{% if t.tanggal %} · {% endif %}{{ t.lama }}{% endif %}</small>{% if t.ringkasan_karung|default('') %}<small class="stok-pk-unit">{{ t.ringkasan_karung }}</small>{% endif %}</span>
           <span>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }}</span>
           <span>Gudang 2</span>

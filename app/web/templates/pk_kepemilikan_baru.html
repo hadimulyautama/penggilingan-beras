@@ -1,0 +1,26 @@
+{% extends '_retur_supplier_navigasi.html' %}
+{% block judul %}Alihkan kepemilikan PK{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/stok-seragam.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/kepemilikan.css?v={{ VERSI }}">
+<section data-kepemilikan data-pk-baru data-editor-perintah data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-kembali="{{ kembali }}">
+  <header class="kerja-kepala sk-kepala">
+    <div class="sk-judul"><h1>Alihkan kepemilikan PK</h1><button class="btn btn--kecil" type="button" data-pk-panduan>ⓘ Panduan</button></div>
+    <p class="ko-muted">Pabrik ↔ pelanggan jasa · hanya bagian bebas di tumpukan.</p>
+  </header>
+  <dialog class="sk-panel" data-pk-guide aria-labelledby="pk-guide-title"><div class="sk-panel-kepala"><h2 id="pk-guide-title">ⓘ Panduan pengalihan PK</h2><button class="btn sk-ikon" type="button" data-pk-tutup aria-label="Tutup panduan">×</button></div><p>Pilih gudang, sumber PK, pemilik asal, dan pemilik tujuan. Setiap pilihan sumber menunjukkan bagian bebas milik pemilik tersebut.</p><p>Periksa jumlah dan dampaknya sebelum mengonfirmasi. Pengalihan mengubah pemilik; gudang dan total fisik tetap sama. PK dalam silo/proses serta bagian yang sudah dialokasikan tidak dapat dialihkan.</p><p>Transaksi tersimpan dapat dibuka dari tab PK pada Riwayat kepemilikan. Koreksi dan pembatalan mengikuti bagian transaksi yang masih bebas.</p></dialog>
+  <p data-pk-status role="status">Memuat sumber PK…</p><div data-pk-error role="alert"></div>
+  <div data-pk-recovery hidden><button class="btn" type="button" data-pk-check>Baca status terbaru</button><p class="ko-muted">Isian dipertahankan. Periksa hasil sebelum mengirim kembali.</p></div>
+  <form class="ko-box" data-pk-form hidden>
+    <label class="ko-field">Gudang<select name="warehouse_id" required></select></label>
+    <label class="ko-field">Sumber PK dan pemilik asal<select name="sumber" required></select></label>
+    <p class="ko-muted" data-pk-saldo></p>
+    <label class="ko-field">Pemilik tujuan<select name="ke" required></select></label>
+    <label class="ko-field">Bobot yang dialihkan (kg)<input name="quantity" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
+    <label class="ko-field">Alasan pengalihan<textarea name="reason" maxlength="2000" required></textarea></label>
+    <div class="ko-actions"><button class="btn btn--utama" type="submit">Periksa dampak</button><a class="btn" href="{{ kembali }}">Kembali ke riwayat</a></div>
+  </form>
+  <section class="ko-box" data-pk-review hidden aria-labelledby="pk-review-title"><h2 id="pk-review-title">Dampak sebelum disimpan</h2><div data-pk-plan></div><label class="ko-check"><input type="checkbox" data-pk-confirm><span>Saya sudah memeriksa gudang, sumber, pemilik, jumlah, dan dampak stok.</span></label><div class="ko-actions"><button class="btn btn--utama" type="button" data-pk-save disabled>Simpan pengalihan PK</button><button class="btn" type="button" data-pk-edit>Ubah isian</button></div></section>
+</section>
+<script src="/static/pk-kepemilikan.js?v={{ VERSI }}" defer></script>
+{% endblock %}

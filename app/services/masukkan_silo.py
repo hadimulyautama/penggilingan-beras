@@ -11,6 +11,8 @@ from app.models import (PkGudang2Intake, PkPurchaseBatch, PkTumpukanToSilo,
 
 
 def urai(nilai):
+    from app.services.pk_persediaan import pecah_kode
+    nilai,_ = pecah_kode(nilai)
     bagian = str(nilai or '').strip().split(':')
     if not bagian[0].isdigit() or len(bagian) > 2:
         raise ValueError('Pilih sumber stok yang sah.')
@@ -20,7 +22,7 @@ def urai(nilai):
     return int(bagian[0]), bentuk
 
 
-async def sumber(db, intake, *, jumlah_partai=None):
+async def _sumber(db, intake, *, jumlah_partai=None, pemilik_id=..., saldo_pemilik=...):
     """Saldo terkini dari pembaca lama; tidak melengkapi N saat pratinjau."""
     from app.penggilingan.gudang2.service import _sisa_tumpukan_intake, acuan_karung_surat_jalan
     from app.penggilingan.gudang2.karung import bobot_per_karung
@@ -29,10 +31,11 @@ async def sumber(db, intake, *, jumlah_partai=None):
     from app.services.pk_50 import bagi, UKURAN
     if intake is None or intake.tujuan != 'ditumpuk':
         raise ValueError('Sumber tumpukan tidak ditemukan. Muat ulang pilihan.')
-    saldo = await _sisa_tumpukan_intake(db, intake.id)
-    pemilik = await nama_pemilik(db, intake.jasa_id) if intake.jasa_id else 'Milik pabrik'
+    owner=intake.jasa_id if pemilik_id is ... else pemilik_id
+    saldo = await _sisa_tumpukan_intake(db, intake.id,pemilik_id=owner) if saldo_pemilik is ... else saldo_pemilik
+    pemilik = await nama_pemilik(db, owner) if owner else 'Milik pabrik'
     batch = await db.get(PkPurchaseBatch, intake.pk_purchase_batch_id) if intake.pk_purchase_batch_id else None
-    if batch is not None and saldo is not None:
+    if batch is not None and saldo is not None and owner==intake.jasa_id:
         from app.services.retur_supplier_reservasi import terikat
         saldo=max(0,float(Decimal(str(saldo))-await terikat(db,sumber=f'pk:{batch.id}')))
     transfer = await db.get(InternalTransfer, intake.internal_transfer_id) if intake.internal_transfer_id else None
@@ -122,3 +125,11 @@ def periksa(jenis, *, jumlah_karung=None, berat_kg=None):
     if nilai>saldo+toleransi:
         raise ValueError(f'Saldo terbaru tinggal {saldo:g} kg. Periksa kembali berat yang dimasukkan.')
     return min(nilai,saldo)
+
+
+async def sumber(db,intake,*,jumlah_partai=None,pemilik_id=...,saldo_pemilik=...):
+    rows=await _sumber(db,intake,jumlah_partai=jumlah_partai,pemilik_id=pemilik_id,saldo_pemilik=saldo_pemilik)
+    if pemilik_id is not ...:
+        token='pabrik' if pemilik_id is None else str(pemilik_id)
+        for row in rows:row['value']+='|pemilik='+token
+    return rows

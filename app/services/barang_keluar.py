@@ -246,7 +246,7 @@ async def _kunci_sumber_keluar(db, baris):
 
 async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
                          jenis=None, jasa_id=None, proc_id=None, silo_id=_TAK_DIMINTA,
-                         gkr_id=None) -> float:
+                         gkr_id=None, pemilik_pk=...) -> float:
     """Berapa kg barang ini sudah DIPERINTAHKAN keluar tetapi belum dimuat.
 
     Tanpa ini, Admin bisa menerbitkan dua perintah atas 2.000 kg yang sama:
@@ -287,6 +287,7 @@ async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
              else q.where(OutgoingItem.jasa_id == jasa_id))
     elif proc_id is not None:
         q = q.where(OutgoingItem.milling_process_id == proc_id)
+        if pemilik_pk is not ...:q=q.where(OutgoingItem.jasa_id.is_(None) if pemilik_pk is None else OutgoingItem.jasa_id==pemilik_pk)
     elif silo_id is not _TAK_DIMINTA:
         # `item_type` WAJIB ikut disebut — `silo_id` sendiri NULL untuk
         # SELURUH jenis barang lain juga (hanya `pk_g2` yang mengisinya),
@@ -390,7 +391,9 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         # perintah ini — baik sebagai penjualan pabrik (`b.jasa_id` None) maupun
         # sebagai pengambilan oleh pesanan yang BUKAN pemiliknya. Yang kedua
         # itulah yang menyerahkan barang ke orang yang salah.
-        if p is not None and p.jasa_id != b.jasa_id:
+        from app.services import pk_persediaan
+        pk_terbagi=await pk_persediaan.ada_pengalihan(db,sumber='giling:'+str(b.milling_process_id))
+        if p is not None and p.jasa_id != b.jasa_id and not pk_terbagi:
             milik = await nama_pemilik(db, p.jasa_id)
             raise BarangKeluarError(
                 f"PK {p.kode_proses} "
@@ -399,10 +402,10 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
                    "perintah atas nama pesanannya."
                    if b.jasa_id is None else
                    " — bukan barang pesanan ini. Periksa lagi pilihannya."))
-        ada = float(await pending_transfer_kg(db, b.milling_process_id))
+        ada = float(await pending_transfer_kg(db, b.milling_process_id, pemilik_id=b.jasa_id))
         nama = f"PK {p.kode_proses}" if p else "PK"
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
-            db, proc_id=b.milling_process_id)
+            db, proc_id=b.milling_process_id,pemilik_pk=b.jasa_id if pk_terbagi else ...)
     elif b.tipe == "pk_g2":
         from app.penggilingan.gudang2.service import (hitung_stok_silo,
                                                        hitung_stok_tumpukan,

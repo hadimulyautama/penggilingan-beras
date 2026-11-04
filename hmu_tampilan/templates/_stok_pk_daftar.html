@@ -16,7 +16,7 @@
           <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 1</h2><strong>{{ kg(total) }} kg</strong></header>
           <p>{{ lot|length }} lot{% if lot|selectattr("belum_dicatat")|list|length %} · {{ lot|selectattr("belum_dicatat")|list|length }} hasil belum dicatat{% endif %}</p>
           {% for l in lot %}
-            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
+            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}{% if l.bagian_pemilik %}&amp;pemilik_id={{ l.jasa_id if l.jasa_id else 'pabrik' }}{% endif %}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
               <span class="stok-mobile-list__ikon" aria-hidden="true">{% if l.jasa_id %}◇{% else %}▦{% endif %}</span>
               <span class="stok-mobile-list__isi"><strong>{{ l.kode }}</strong><small>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }} · {{ "Jasa" if l.jasa_id else "Bukan jasa" }} · {{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small>
                 {% if mutu_aktif %}{% if l.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} · {{ l.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}{% endif %}
@@ -31,7 +31,7 @@
           <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 2</h2><strong>{{ kg(tempat|sum(attribute="tersedia")) }} kg</strong></header>
           <p>{{ tempat|length }} kode bahan · tumpukan</p>
           {% for t in tempat %}{% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
-            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
+            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}{% if t.bagian_pemilik %}&amp;pemilik_id={{ t.jasa_id if t.jasa_id else 'pabrik' }}{% endif %}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
               <span class="stok-mobile-list__ikon" aria-hidden="true">{% if t.pemilik %}◇{% else %}▦{% endif %}</span>
               <span class="stok-mobile-list__isi"><strong>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</strong><small>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }} · {{ "Jasa" if t.pemilik else "Bukan jasa" }} · {{ t.tanggal or "Tanggal tidak tersedia" }}</small>
                 {% if mutu_aktif %}{% if t.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} · {{ t.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}{% endif %}

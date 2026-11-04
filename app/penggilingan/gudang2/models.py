@@ -194,6 +194,7 @@ class PkGudang2Intake(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     # beli_luar / transfer_internal
     sumber_tipe: Mapped[str] = mapped_column(String(20), nullable=False)
     pk_purchase_batch_id: Mapped[int | None] = mapped_column(
@@ -242,6 +243,7 @@ class PkTumpukanToSilo(Base, TimestampMixin):
 
     __tablename__ = "pk_tumpukan_to_silo"
 
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     pk_gudang2_intake_id: Mapped[int] = mapped_column(

@@ -44,7 +44,7 @@ from app.performa import dalam
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -615,7 +615,7 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
         .limit(1)
     )).first()
     lewat_tumpukan = (await db.execute(
-        select(PkTumpukanToSilo.waktu, PkGudang2Intake.jasa_id)
+        select(PkTumpukanToSilo.waktu, PkTumpukanToSilo.jasa_id)
         .join(PkGudang2Intake,
               PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id)
         .where(PkTumpukanToSilo.silo_id == silo_id)
@@ -673,6 +673,11 @@ async def pemilik_tumpukan_g2(db: AsyncSession) -> set[int | None]:
 
     if float(await hitung_stok_tumpukan(db)) <= 0.001:
         return set()
+
+    from app.services import pk_persediaan
+    if await pk_persediaan.ada_pengalihan(db):
+        sources=await pk_persediaan.baca(db)
+        return {b.pemilik_id for key,source in sources.items() if key.startswith('tumpukan:') for b in source.stok.bagian if b.berat_kg>0}
 
     terbaru = (await db.execute(
         select(PkGudang2Intake.waktu_masuk, PkGudang2Intake.jasa_id)
@@ -991,6 +996,11 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
         select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
         .where(OutgoingItem.item_type == "pk_g2", OutgoingItem.jasa_id == jasa_id)
     )).scalar_one())
+    from app.services import pk_persediaan
+    if await pk_persediaan.ada_pengalihan(db):
+        sources=await pk_persediaan.baca(db)
+        pk_g1=float(sum((source.stok.saldo(jasa_id) for key,source in sources.items() if key.startswith('giling:')),0))
+        masuk_g2+=float(sum((source.kepemilikan_net.get(jasa_id,0) for key,source in sources.items() if key.startswith('tumpukan:')),0))
     pk_g2 = max(masuk_g2 - disosoh - diambil_g2, 0.0)
 
     # Broken = yang tercatat curah (`byproduct_stock`, lahir dari `catat_
@@ -1067,6 +1077,10 @@ async def pernah_ada_barang(db: AsyncSession, jasa_id: int) -> bool:
     kedua memang belum punya angka, dan "bobotnya nol" bukan berarti truknya
     tak pernah datang.
     """
+    from app.models import Peristiwa
+    if await db.scalar(select(Peristiwa.id).where(Peristiwa.jenis=='pindah_kepemilikan_rinci',
+            Peristiwa.muatan['kind'].as_string()=='pk',or_(Peristiwa.muatan['owners'][0].as_integer()==jasa_id,Peristiwa.muatan['customer'].as_integer()==jasa_id)).limit(1)):
+        return True
     from app.models import PkGudang2Intake, PkPurchaseBatch, PurchaseBatch
 
     # TIGA jalan barang bisa tiba untuk sebuah pesanan, dan ketiganya dihitung:
@@ -1204,7 +1218,9 @@ async def tutup_pesanan(db: AsyncSession, *, user, jasa_id: int) -> str:
     from app.models import Jasa
     from app.services.activity_log import log_activity
 
-    pesanan = await db.get(Jasa, int(jasa_id))
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
+    pesanan = await db.get(Jasa, int(jasa_id),with_for_update=True,populate_existing=True)
     if pesanan is None:
         raise JasaError("Pesanan jasa tidak ditemukan.")
     if pesanan.status != BERJALAN:
@@ -1245,7 +1261,9 @@ async def batalkan_pesanan(db: AsyncSession, *, user, jasa_id: int,
             "Sebutkan sebab pembatalannya — pesanan yang hilang tanpa "
             "keterangan akan ditanyakan pelanggannya, dan tak ada yang bisa "
             "menjawab.")
-    pesanan = await db.get(Jasa, int(jasa_id))
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
+    pesanan = await db.get(Jasa, int(jasa_id),with_for_update=True,populate_existing=True)
     if pesanan is None:
         raise JasaError("Pesanan jasa tidak ditemukan.")
     if pesanan.status != BERJALAN:

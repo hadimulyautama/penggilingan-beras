@@ -87,6 +87,9 @@ async def siapkan(request, nama, konteks):
     if nama not in HALAMAN:
         return
     jenis, pemilik = HALAMAN[nama]
+    from app.peran import can_see_financials
+    akun = getattr(request.state, "akun", None)
+    konteks.setdefault("BOLEH_KEPEMILIKAN", bool(akun and can_see_financials(akun.user)))
     view = getattr(request.state, 'view', 'tamu')
     pid = pelanggan_diminta(request) if pemilik == 'jasa' else None
     gudang = request.query_params.get('gudang', '')

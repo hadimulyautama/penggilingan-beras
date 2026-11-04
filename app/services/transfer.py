@@ -104,12 +104,24 @@ async def saldo_pk(db: AsyncSession, proc_id: int) -> float:
     )
 
 
-async def pending_transfer_kg(db: AsyncSession, proc_id: int) -> float:
+async def pending_transfer_kg(db: AsyncSession, proc_id: int, *, pemilik_id=..., bebas=False) -> float:
     """PK tersedia (stok) = produksi − yang ditransfer − yang dijual langsung.
 
     Dipotong di nol untuk TAMPILAN saja. Yang memeriksa kelebihan memakai
     `saldo_pk`, yang tak memotong apa pun.
     """
+    from app.services import pk_persediaan
+    if await pk_persediaan.ada_pengalihan(db,sumber='giling:'+str(proc_id)):
+        source=(await pk_persediaan.baca(db)).get('giling:'+str(proc_id))
+        if source is None:raise TransferError('Sumber PK tidak dapat dibuktikan.')
+        owner=source.pemilik_awal if pemilik_id is ... else pemilik_id
+        try:
+            if source.masalah:raise ValueError(source.masalah)
+            return float(source.bebas(owner) if bebas else source.stok.saldo(source.pemilik(owner)))
+        except ValueError as e:raise TransferError(str(e)) from None
+    if pemilik_id is not ...:
+        proc=await db.get(MillingProcess,proc_id)
+        if proc is None or proc.jasa_id!=pemilik_id:return 0.0
     return max(await saldo_pk(db, proc_id), 0.0)
 
 
@@ -135,7 +147,7 @@ class TransferResult:
 async def create_internal_transfer(
     db: AsyncSession, *, user, kode_proses: str, lokasi_tujuan: str,
     berat: float | None = None, kunci_kiriman: str | None = None,
-    commit: bool = True, alasan: str | None = None, aksi: str | None = None,
+    commit: bool = True, alasan: str | None = None, aksi: str | None = None, pemilik_id=...,
 ) -> TransferResult:
     """Kirim PK dari sebuah milling ke Gudang 2. Mengurangi stok siap kirim.
 
@@ -152,6 +164,11 @@ async def create_internal_transfer(
     # jawaban untuk "tempat mana di Gudang 2", dan satu daftar yang tumbuh
     # bersama master. Yang tersimpan JENIS-nya (`silo`/`ditumpuk`); silo mana
     # jadi rujukan di `silo_id`.
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
+    from app.services.pk_persediaan import pecah_kode
+    kode_proses, encoded_owner = pecah_kode(kode_proses)
+    if pemilik_id is ...:pemilik_id=encoded_owner
     from app.penggilingan.gudang2.service import (
         Gudang2Error as _G2Error, _tujuan_and_silo, label_tujuan)
 
@@ -173,6 +190,7 @@ async def create_internal_transfer(
     ).scalars().first()
     if proc is None:
         raise TransferError(f"Proses {kode_proses} tidak ditemukan.")
+    owner=proc.jasa_id if pemilik_id is ... else pemilik_id
 
     # Pastikan silo cocok SEBELUM mencatat peristiwa yang mengurangi saldo
     # Gudang 1. Penjaga `_add_intake` tetap menjadi pagar terakhir, tetapi
@@ -183,13 +201,13 @@ async def create_internal_transfer(
 
         pemilik_tujuan = await pemilik_silo_g2(db, silo_tujuan_id)
         if pemilik_tujuan and not all(
-            [await cocok_pemilik(db, proc.jasa_id, p) for p in pemilik_tujuan]
+            [await cocok_pemilik(db, owner, p) for p in pemilik_tujuan]
         ):
             raise TransferError(
                 "Silo tujuan berisi PK dengan pemilik berbeda. Pilih silo kosong "
                 "atau silo milik pelanggan jasa yang sama.")
 
-    tersedia = await pending_transfer_kg(db, proc.id)
+    tersedia = await pending_transfer_kg(db, proc.id, pemilik_id=owner,bebas=True)
     if tersedia <= 0:
         raise TransferError(
             f"Tidak ada stok PK dari {kode_proses} untuk dikirim "
@@ -229,7 +247,7 @@ async def create_internal_transfer(
         # Pemiliknya ikut ke buku besar. Tanpa ini, satu-satunya tempat yang
         # menyebut milik siapa PK yang berpindah adalah cermin tabelnya — dan
         # cermin bisa dibangun ulang dari peristiwa, bukan sebaliknya.
-        "jasa_id": proc.jasa_id,
+        "jasa_id": owner,
     }
     e = await buku.catat(db, jenis=PK_DIPINDAH_G1G2, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
                          muatan=muatan, waktu=now)
@@ -248,7 +266,7 @@ async def create_internal_transfer(
         # DISALIN dari lotnya, bukan dibaca menyusul lewat `milling_process_id`:
         # yang berpindah sudah berpindah, dan pemiliknya tak boleh ikut bergeser
         # bila lotnya kemudian dikoreksi.
-        jasa_id=proc.jasa_id,
+        jasa_id=owner,
         berat_kg=kirim, jumlah_karung=karung, berat_curah_kg=curah,
         lokasi_tujuan=lokasi_tujuan,
         silo_id=silo_tujuan_id,
@@ -282,7 +300,7 @@ async def create_internal_transfer(
                     if silo_tujuan_id is not None else lokasi_tujuan),
             berat_kg=kirim, hpp_per_kg=hpp, tanggal=None, jam=None,
             internal_transfer_id=transfer.id, transfer_peristiwa_id=e.id, commit=False,
-            jasa_id=proc.jasa_id,
+            jasa_id=owner,
         )
     except Gudang2Error as e_:  # mis. tumpukan G2 penuh → seluruh transaksi batal
         # Jangan biarkan caller yang memulihkan status permintaan melakukan

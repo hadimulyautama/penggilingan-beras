@@ -167,10 +167,13 @@ def _kg(n) -> str:
 
 
 async def _proses(db: AsyncSession, kode: str | None) -> MillingProcess:
+    from app.services.pk_persediaan import pecah_kode
+    kode, owner = pecah_kode(kode)
     p = (await db.execute(select(MillingProcess).where(
         MillingProcess.kode_proses == (kode or "").strip()))).scalars().first()
     if p is None:
         raise PermintaanError(f"Lot {kode} tidak ditemukan.")
+    p._pk_owner = p.jasa_id if owner is ... else owner
     return p
 
 
@@ -201,12 +204,15 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None,
     """
     from app.penggilingan.gudang1.services.milling import _pk_breakdown
 
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     p = await _proses(db, kode_proses)
     # Lot yang sudah habis tak bisa diminta: permintaan atas barang yang tak ada
     # akan berdiri di layar Admin sampai seseorang menyadarinya. Sisanya dibaca
     # lewat `_pk_breakdown` — SATU jawaban untuk "berapa PK lot ini masih ada",
     # yang sama dengan yang dipakai layar Stok (hasil − dikirim − dijual).
-    tersedia = (await _pk_breakdown(db, p.id)).tersedia
+    from app.services.transfer import pending_transfer_kg
+    tersedia = await pending_transfer_kg(db,p.id,pemilik_id=p._pk_owner,bebas=True)
     if tersedia <= 0:
         raise PermintaanError(
             f"Lot {p.kode_proses} sudah habis — tak ada PK tersisa untuk dipindah.")
@@ -226,7 +232,7 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None,
     # gagal.
     kode, proses_id = p.kode_proses, p.id
 
-    baris = PermintaanPk(milling_process_id=proses_id, diminta_oleh=user.id,
+    baris = PermintaanPk(milling_process_id=proses_id, jasa_id=p._pk_owner, diminta_oleh=user.id,
                          waktu_minta=now_local(), status=DIMINTA,
                          berat_minta_kg=kg)
     db.add(baris)
@@ -369,7 +375,7 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
         proc = await db.get(MillingProcess, baris.milling_process_id)
         pemilik_tujuan = await pemilik_silo_g2(db, silo_id)
         if proc is not None and pemilik_tujuan and not all(
-            [await cocok_pemilik(db, proc.jasa_id, p) for p in pemilik_tujuan]
+            [await cocok_pemilik(db, baris.jasa_id, p) for p in pemilik_tujuan]
         ):
             raise PermintaanError(
                 "Silo tujuan sudah berisi PK dengan pemilik berbeda. Pilih silo "
@@ -378,7 +384,8 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
     kg = float(berat or 0)
     if kg <= 0:
         raise PermintaanError("Sebutkan berapa kg yang disetujui.")
-    tersedia = (await _pk_breakdown(db, baris.milling_process_id)).tersedia
+    from app.services.transfer import pending_transfer_kg
+    tersedia = await pending_transfer_kg(db,baris.milling_process_id,pemilik_id=baris.jasa_id,bebas=True)
     if kg > tersedia + 0.001:
         raise PermintaanError(
             f"Lot ini tinggal {tersedia:,.0f} kg — tak bisa menyetujui "
@@ -479,7 +486,7 @@ async def kirim(db: AsyncSession, *, user, permintaan_id: int,
 
     try:
         r = await create_internal_transfer(
-            db, user=user, kode_proses=kode_proses, lokasi_tujuan=lokasi, berat=kg)
+            db, user=user, kode_proses=kode_proses, lokasi_tujuan=lokasi, berat=kg, pemilik_id=baris.jasa_id)
     except TransferError as e:
         # Dikembalikan ke keadaan semula, DAN itu bukan kerapian: permintaan
         # yang tertinggal di `dikirim` tanpa perpindahan akan berdiri di meja
@@ -569,7 +576,7 @@ async def tutup_admin(db: AsyncSession, *, user, permintaan_id: int,
             r = await create_internal_transfer(
                 db, user=user, kode_proses=proc.kode_proses,
                 lokasi_tujuan=(tujuan if baris.silo_id is not None else "ditumpuk"),
-                berat=final)
+                berat=final, pemilik_id=baris.jasa_id)
         except TransferError as e:
             raise PermintaanError(
                 f"Koreksi ditolak: {e.args[0] if e.args else e}") from None

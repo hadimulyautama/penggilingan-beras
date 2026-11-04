@@ -145,6 +145,10 @@ class LotPk:
     #: ikut ke daftar barang yang bisa DIJUAL, dan itu disaring di borang barang
     #: keluar (`aksi_inventory.barang_bisa_keluar`, `pk_siap_keluar`) berikut
     #: penjaganya di `barang_keluar.tersedia`.
+    warehouse_id: int | None = None
+    gudang_nama: str | None = None
+    kode_aksi: str | None = None
+    bagian_pemilik: bool = False
     jasa_id: int | None = None
     #: "JAS-2610-007 Pak Budi" — dicetak di kartunya. None untuk barang pabrik.
     pemilik: str | None = None
@@ -560,7 +564,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
                           and peta_minta[proc.id].status == DISETUJUI),
             belum_dicatat=belum,
         ))
-    return keluar
+    return await _pk_bagian(db, keluar, "giling")
 
 
 # ─────────────────────────── Gudang 2 — Penyosohan ───────────────────────────
@@ -666,6 +670,10 @@ class LotPkG2:
     pemilik: str | None = None
     #: ID pesanan jasa bila stok ini titipan; dipakai untuk membedakan
     #: pemilik jasa secara pasti pada halaman detail.
+    warehouse_id: int | None = None
+    gudang_nama: str | None = None
+    kode_aksi: str | None = None
+    bagian_pemilik: bool = False
     jasa_id: int | None = None
     #: (label, nilai) — Kadar air/Butir patah/Susut serta Butir kuning/Gabah/
     #: Merang/Catatan lab untuk kedua asal. Kosong =
@@ -731,8 +739,10 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     from app.penggilingan.gudang2.service import (_JENIS_PK_LABEL,
                                                    hitung_stok_tumpukan)
     from app.services.jasa import nama_pemilik_banyak
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
 
+    from app.penggilingan.gudang2.service import _g2_warehouse_id
+    warehouse_id=await _g2_warehouse_id(db)
     tump = float(await hitung_stok_tumpukan(db))
     if tump <= 0:
         # ⚠ `hitung_stok_tumpukan` menjumlah `berat_kg`, dan SQL `SUM`
@@ -755,7 +765,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
 
     intakes = list((await db.execute(
         select(PkGudang2Intake)
-        .where(PkGudang2Intake.tujuan == "ditumpuk")
+        .where(PkGudang2Intake.tujuan == "ditumpuk",or_(PkGudang2Intake.warehouse_id==warehouse_id,PkGudang2Intake.warehouse_id.is_(None)))
         .order_by(PkGudang2Intake.id.desc())
     )).scalars().all())
     if not intakes:
@@ -863,6 +873,8 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             sisa_ambil -= ambil
 
     from app.services import pk_50
+    from app.services import pk_persediaan
+    bagian_pk = await pk_persediaan.baca(db) if await pk_persediaan.ada_pengalihan(db) else {}
     keluar: list[LotPkG2] = []
     for i in intakes:
         batch = batches_karung.get(i.pk_purchase_batch_id)
@@ -877,7 +889,8 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             sisa, bobot_final, berat_awal = 0.0, False, 0.0
         else:
             berat_awal = float(awal_kg)
-            sisa = float(saldo.get(i.id) or 0) - float(diambil_fifo.get(i.id, 0))
+            bagian_sumber = bagian_pk.get("tumpukan:"+str(i.id))
+            sisa = float(bagian_sumber.stok.fisik_kg) if bagian_sumber and not bagian_sumber.masalah else float(saldo.get(i.id) or 0) - float(diambil_fifo.get(i.id, 0))
             bobot_final = (batch.sumber_berat != "perkiraan") if batch and batch.jumlah_karung else i.bobot_final
             # Kartu tampil dengan kg bulat. Sisa <= 0,5 kg akan terbaca "0 kg"
             # dan membuat operator mengira stok kosong tetapi kartunya masih ada.
@@ -915,7 +928,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             selisih_kiriman=selisih_kiriman(batch, nama or "Pemasok") if batch and batch.jumlah_karung else None,
             peringatan_karung=peringatan_karung(batch) if batch and batch.jumlah_karung else None,
         ))
-    return keluar
+    return await _pk_bagian(db, keluar, "tumpukan", bagian_pk)
 
 
 #: Grade beras putih yang dihitung sebagai PRODUK; sisanya hasil samping.
@@ -2174,3 +2187,31 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
         daftar.sort(key=lambda k: (_URUT_BARANG.get(k["jenis"], 99),
                                    k["nama"], k["ukuran"]))
     return BarangJadiG2(produk=produk, samping=samping)
+
+
+async def _pk_bagian(db, cards, jenis, sources=None):
+    from dataclasses import replace
+    from app.services import pk_persediaan
+    from app.services.jasa import nama_pemilik_banyak
+    if sources is None:
+        if not await pk_persediaan.ada_pengalihan(db):return cards
+        sources=await pk_persediaan.baca(db)
+    by_code={source.model.kode_proses:source for key,source in sources.items() if key.startswith('giling:')}
+    names=await nama_pemilik_banyak(db,{b.pemilik_id for source in sources.values() for b in source.stok.bagian if b.pemilik_id})
+    output=[]
+    for card in cards:
+        source=by_code.get(card.kode) if jenis=='giling' else sources.get('tumpukan:'+str(card.intake_id))
+        if source is None or source.masalah:
+            output.append(card);continue
+        owners=sorted({b.pemilik_id for b in source.stok.bagian},key=lambda v:v or 0)
+        for owner in owners:
+            available=source.stok.saldo(owner)
+            if available<=0:continue
+            row=replace(card,tersedia=float(available),jasa_id=owner,pemilik=names.get(owner) if owner else None,
+                        warehouse_id=source.stok.gudang.id,gudang_nama=source.stok.gudang.nama,bagian_pemilik=True,
+                        kode_aksi=(card.kode if jenis=='giling' else str(card.intake_id))+'|pemilik='+('pabrik' if owner is None else str(owner)))
+            if jenis=='tumpukan':
+                from app.penggilingan.gudang2.service import ringkasan_karung
+                row.ringkasan_karung=await ringkasan_karung(db,source.model,available)
+            output.append(row)
+    return output

@@ -45,7 +45,7 @@ body.padiflow-ui [data-kepemilikan] .ko-actions .btn{width:auto;min-height:44px;
 [data-kepemilikan] .ko-filter{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
 [data-kepemilikan] .ko-filter .ko-field{flex:1;min-width:150px}
 [data-kepemilikan] .ko-empty{padding:24px 0;color:var(--pd-muted)}
-[data-ko-error]:not(:empty){border:1px solid var(--bahaya);color:var(--pd-ink);background:var(--pd-sheet);padding:16px;margin:16px 0;border-radius:10px}
+[data-ko-error]:not(:empty),[data-pk-error]:not(:empty){border:1px solid var(--bahaya);color:var(--pd-ink);background:var(--pd-sheet);padding:16px;margin:16px 0;border-radius:10px}
 [data-ko-message]:not(:empty){padding:12px 0}
 @media(max-width:760px){
  [data-kepemilikan] .ko-grid{grid-template-columns:minmax(0,1fr)}

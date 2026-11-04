@@ -41,6 +41,7 @@ class MillingProcess(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     #: ⚠ PENINGGALAN — silo PERTAMA saja, dan TIDAK berwenang.
     #:

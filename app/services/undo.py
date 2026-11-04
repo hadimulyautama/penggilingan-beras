@@ -583,6 +583,9 @@ async def _undo_keluar_silo(db: AsyncSession, silo_id: int) -> str:
 
 # ── Milling ──
 async def _undo_start_milling(db: AsyncSession, proc_id: int) -> str:
+    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
+    try:await pastikan_sumber_tidak_diubah(db,'giling:'+str(proc_id))
+    except ValueError as e:raise UndoError(str(e)) from None
     proc = await db.get(MillingProcess, proc_id)
     if proc is None:
         raise UndoError("Proses giling sudah tidak ada.")
@@ -617,6 +620,9 @@ async def _undo_start_milling(db: AsyncSession, proc_id: int) -> str:
 
 
 async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
+    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
+    try:await pastikan_sumber_tidak_diubah(db,'giling:'+str(proc_id))
+    except ValueError as e:raise UndoError(str(e)) from None
     proc = await db.get(MillingProcess, proc_id, with_for_update=True)
     if proc is None:
         raise UndoError("Proses giling sudah tidak ada.")
@@ -712,6 +718,9 @@ async def _label_g2(db: AsyncSession, tujuan: str | None, silo_id: int | None) -
 
 
 async def _undo_last_progress(db: AsyncSession, proc_id: int) -> str:
+    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
+    try:await pastikan_sumber_tidak_diubah(db,'giling:'+str(proc_id))
+    except ValueError as e:raise UndoError(str(e)) from None
     p = (
         await db.execute(
             select(MillingProgressLog)
@@ -927,6 +936,9 @@ async def _undo_last_qc(db: AsyncSession, proc_id: int) -> str:
 
 
 async def _undo_verify_output(db: AsyncSession, proc_id: int) -> str:
+    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
+    try:await pastikan_sumber_tidak_diubah(db,'giling:'+str(proc_id))
+    except ValueError as e:raise UndoError(str(e)) from None
     v = (
         await db.execute(
             select(MillingProcessVerification).where(
@@ -1032,6 +1044,9 @@ async def _undo_pk_qc(db: AsyncSession, qc_id: int) -> str:
 
 
 async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: bool = False) -> str:
+    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
+    try:await pastikan_sumber_tidak_diubah(db,'tumpukan:'+str(intake_id))
+    except ValueError as e:raise UndoError(str(e)) from None
     it = await _ambil_termasuk_batal(db, PkGudang2Intake, intake_id)
     if it is None:
         raise UndoError("Pemasukan PK sudah tidak ada.")

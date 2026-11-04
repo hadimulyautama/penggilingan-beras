@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import date, time
 from decimal import Decimal
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -332,7 +332,7 @@ def _kolom_saldo_silo(silo_id, pemilik):
         q_tumpukan = q_tumpukan.join(
             PkGudang2Intake,
             PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id
-        ).where(milik(PkGudang2Intake))
+        ).where(milik(PkTumpukanToSilo))
         q_terpakai = q_terpakai.join(
             PolishingProcess,
             PolishingProcess.id == PolishingSiloUsage.polishing_process_id
@@ -501,7 +501,7 @@ _SEMUA_PEMILIK_TUMPUKAN = object()
 @baca_sekali
 async def hitung_stok_tumpukan(db: AsyncSession, *,
                                pemilik: str = "semua",
-                               jasa_id=_SEMUA_PEMILIK_TUMPUKAN) -> float:
+                               jasa_id=_SEMUA_PEMILIK_TUMPUKAN, warehouse_id=None) -> float:
     """Stok tumpukan G2 = masuk sbg tumpukan − dipindah ke silo − diambil keluar.
 
     `pemilik` bawaannya "semua" — isi FISIK lantainya, dan itu yang benar untuk
@@ -517,13 +517,26 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
     baris finished_goods/byproduct_curah/pk_langsung (yang `silo_id`-nya
     juga selalu NULL) akan ikut terjumlah ke sini.
     """
+    if warehouse_id is None:warehouse_id=await _g2_warehouse_id(db)
+    from app.services import pk_persediaan
+    if await pk_persediaan.ada_pengalihan(db):
+        sources=await pk_persediaan.baca(db,warehouse_id=warehouse_id)
+        total=Decimal(0)
+        for key,source in sources.items():
+            if not key.startswith('tumpukan:'):continue
+            if source.masalah:raise Gudang2Error(source.masalah)
+            if jasa_id is not _SEMUA_PEMILIK_TUMPUKAN:total+=source.stok.saldo(jasa_id)
+            elif pemilik=='pabrik':total+=source.stok.saldo(None)
+            elif pemilik=='jasa':total+=source.stok.fisik_kg-source.stok.saldo(None)
+            else:total+=source.stok.fisik_kg
+        return float(total)
     if pemilik == "semua" and jasa_id is _SEMUA_PEMILIK_TUMPUKAN:
         # Sama seperti isi silo, pembulatan/toleransi pemilik A tak boleh
         # mengurangi stok fisik milik B yang berada di tumpukan yang sama.
-        return (await hitung_stok_tumpukan(db, pemilik="pabrik")
-                + await hitung_stok_tumpukan(db, pemilik="jasa"))
+        return (await hitung_stok_tumpukan(db, pemilik="pabrik",warehouse_id=warehouse_id)
+                + await hitung_stok_tumpukan(db, pemilik="jasa",warehouse_id=warehouse_id))
 
-    syarat = [PkGudang2Intake.tujuan == DITUMPUK]
+    syarat = [PkGudang2Intake.tujuan == DITUMPUK, or_(PkGudang2Intake.warehouse_id==warehouse_id,PkGudang2Intake.warehouse_id.is_(None))]
     syarat_keluar = [OutgoingItem.item_type == "pk_g2", OutgoingItem.silo_id.is_(None)]
     if jasa_id is not _SEMUA_PEMILIK_TUMPUKAN:
         syarat.append(PkGudang2Intake.jasa_id.is_(None) if jasa_id is None else PkGudang2Intake.jasa_id == jasa_id)
@@ -580,6 +593,9 @@ async def sisa_tumpukan_banyak(db: AsyncSession, intakes) -> dict[int, Decimal |
 async def sesuaikan_stok_pk_lama(db, *, user, intake_id: int, selisih_kg, alasan: str, tanggal):
     if user.role not in PERAN_ADMIN_KEATAS:
         raise Gudang2Error("Penyesuaian stok hanya boleh dicatat Admin ke atas.")
+    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
+    try:await pastikan_sumber_tidak_diubah(db,'tumpukan:'+str(intake_id))
+    except ValueError as e:raise Gudang2Error(str(e)) from None
     selisih = Decimal(str(selisih_kg))
     if not selisih.is_finite() or selisih == 0 or not (alasan or "").strip() or tanggal is None:
         raise Gudang2Error("Isi tanggal, alasan, dan selisih kg yang bukan nol.")
@@ -605,11 +621,21 @@ async def sesuaikan_stok_pk_lama(db, *, user, intake_id: int, selisih_kg, alasan
 
 
 @baca_sekali
-async def _sisa_tumpukan_intake(db: AsyncSession, intake_id: int) -> float:
+async def _sisa_tumpukan_intake(db: AsyncSession, intake_id: int, *, pemilik_id=...) -> float:
     """Sisa PK sebuah intake tumpukan yang belum dipindah ke silo."""
     intake = await db.get(PkGudang2Intake, intake_id)
     if intake is None:
         raise Gudang2Error("Data tumpukan tidak ditemukan.")
+    from app.services import pk_persediaan
+    if await pk_persediaan.ada_pengalihan(db):
+        source=(await pk_persediaan.baca(db)).get('tumpukan:'+str(intake.id))
+        if source:
+            owner=intake.jasa_id if pemilik_id is ... else pemilik_id
+            try:
+                if source.masalah:raise ValueError(source.masalah)
+                return float(source.stok.saldo(source.pemilik(owner)))
+            except ValueError as e:raise Gudang2Error(str(e)) from None
+    elif pemilik_id is not ... and pemilik_id!=intake.jasa_id:return 0.0
     nilai = (await sisa_tumpukan_banyak(db, [intake]))[intake.id]
     return await _sisa_karung_setelah_keluar(db,intake,nilai)
 
@@ -1329,6 +1355,7 @@ async def _add_intake(
             return IntakeResult(intake=ada, lokasi_label=label, hpp_per_kg=ada.hpp_per_kg)
 
     intake = PkGudang2Intake(
+        warehouse_id=await _g2_warehouse_id(db),
         sumber_tipe=sumber_tipe,
         pk_purchase_batch_id=pk_purchase_batch_id,
         internal_transfer_id=internal_transfer_id,
@@ -1720,7 +1747,7 @@ async def _catat_pindah(
     db: AsyncSession, *, user: User, intake: PkGudang2Intake, silo: Silo, nama_silo: str,
     kirim: float | None, now, kunci_kiriman: str | None = None,
     jumlah_karung: int | None = None, hasil_timbang: bool = False,
-    isian_sumber: dict | None = None,
+    isian_sumber: dict | None = None, pemilik_id=...,
 ) -> tuple[PkTumpukanToSilo, str | None]:
     """SATU titik tulis pemindahan tumpukan → silo (jalur peristiwa, Tahap 3
     aksi kelima): nomor atomik → catat ke proses yang sedang memakai silo →
@@ -1732,14 +1759,21 @@ async def _catat_pindah(
     # tak punya kolom `jasa_id` sendiri dan tak perlu — pemiliknya ada di intake
     # asalnya, dan kolom kedua yang berarti hal sama adalah kolom yang suatu
     # hari berselisih dengan yang pertama.
+    owner=intake.jasa_id if pemilik_id is ... else pemilik_id
     batch = await db.get(PkPurchaseBatch,intake.pk_purchase_batch_id) if intake.pk_purchase_batch_id else None
+    from app.services import pk_persediaan
+    if await pk_persediaan.ada_pengalihan(db,sumber='tumpukan:'+str(intake.id)):
+        source=(await pk_persediaan.baca(db)).get('tumpukan:'+str(intake.id))
+        value=bobot_per_karung(batch,jumlah=jumlah_karung) if jumlah_karung is not None else Decimal(str(kirim or 0))
+        if source is None or value is None or value<=0 or value>source.bebas(owner)+Decimal('.000001'):
+            raise Gudang2Error('Bobot melebihi bagian bebas pemilik PK yang dipilih.')
     if batch and batch.jumlah_karung and jumlah_karung is None and not hasil_timbang:
         raise Gudang2Error("PK beli luar berkarung harus dipindah dalam karung; kg wajib ditandai hasil timbang / bagian karung.")
     _pastikan_komoditas_silo(silo, "pk")
     await kunci_silo(db, silo.id)
     try:
-        await pastikan_satu_pemilik(
-            db, user=user, jasa_ids=list(await pemilik_silo_g2(db, silo.id)) + [intake.jasa_id])
+        owner = await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=list(await pemilik_silo_g2(db, silo.id)) + [owner])
     except JasaError as e:
         raise Gudang2Error(f"❌ Silo {nama_silo}: {e.args[0]}") from None
 
@@ -1756,7 +1790,7 @@ async def _catat_pindah(
     # Pengajuan supplier belum mengurangi fisik, tetapi bagian yang sudah
     # dialokasikan tidak boleh ikut dipindah ke bahan proses. Pemakaian
     # yang tidak dialokasikan tetap memakai perhitungan karung/kg lama.
-    if batch is not None:
+    if batch is not None and owner==intake.jasa_id:
         from app.services.retur_supplier_reservasi import terikat
         alokasi_retur=await terikat(db,sumber=f'pk:{batch.id}')
         if alokasi_retur>0:
@@ -1785,7 +1819,7 @@ async def _catat_pindah(
         from app.services.pk_50 import bagi_tersimpan
         karung_50, curah_50 = bagi_tersimpan(kirim, 3)
     muatan = {
-        "kode_pindah": kode, "intake_id": intake.id, "intake_peristiwa_id": intake.peristiwa_id,
+        "kode_pindah": kode, "intake_id": intake.id, "jasa_id": owner, "intake_peristiwa_id": intake.peristiwa_id,
         "silo_id": silo.id, "nama_silo": nama_silo, "berat_kg": None if jumlah_karung is not None else kirim,
         "jumlah_karung": jumlah_karung, "ke_proses": ke_proses,
         "jumlah_karung_50": karung_50, "berat_curah_kg": curah_50,
@@ -1797,6 +1831,7 @@ async def _catat_pindah(
     e = await buku.catat(db, jenis=PK_TUMPUKAN_KE_SILO, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
                          muatan=muatan, waktu=now)
     move = PkTumpukanToSilo(
+        jasa_id=owner,
         kode_pindah=kode, pk_gudang2_intake_id=intake.id, silo_id=silo.id,
         berat_kg=None if jumlah_karung is not None else kirim, jumlah_karung=jumlah_karung,
         jumlah_karung_50=karung_50, berat_curah_kg=curah_50,
@@ -1856,7 +1891,7 @@ async def pindah_tumpukan_ke_silo(
     jumlah_karung: int | None = None, hasil_timbang: bool = False, commit: bool = True,
     jumlah_karung_partai: int | None = None, ukuran_karung_kg: float | None = None,
     berat_curah_kg: float | None = None,
-    bentuk_sumber: str | None = None,
+    bentuk_sumber: str | None = None, pemilik_id=...,
 ) -> PindahResult:
     """Pindah PK dari tumpukan ke silo. HANYA operator Gudang 2 (admin fallback).
 
@@ -1864,6 +1899,8 @@ async def pindah_tumpukan_ke_silo(
     sama-sama membaca "sisa 15.000" lalu memindahkan 10.000 akan mengosongkan
     tumpukan −5.000 — pola yang sama dengan P-K-06 di transfer.
     """
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     g2_wid = await _g2_warehouse_id(db)
     if not is_operator_gudang2(user, g2_wid):
         raise Gudang2Error(
@@ -1881,6 +1918,8 @@ async def pindah_tumpukan_ke_silo(
     )).scalars().first()
     if intake is None:
         raise Gudang2Error("Tumpukan sumber tidak ditemukan.")
+    if intake.warehouse_id is not None and intake.warehouse_id!=silo.warehouse_id:
+        raise Gudang2Error("Gudang sumber PK berbeda dari silo tujuan; gunakan alur pemindahan fisik antargudang.")
     if intake.tujuan != "ditumpuk":
         raise Gudang2Error("Sumber bukan tumpukan — hanya PK di tumpukan yang bisa dipindah.")
 
@@ -1914,7 +1953,7 @@ async def pindah_tumpukan_ke_silo(
                     or (isian_sumber is None and berat_curah_kg is not None and ada.berat_curah_kg != Decimal(str(berat_curah_kg)))):
                 raise Gudang2Error("Kunci kiriman ini sudah dipakai untuk pemindahan lain.")
             batch = await db.get(PkPurchaseBatch,intake.pk_purchase_batch_id) if intake.pk_purchase_batch_id else None
-            sisa = await _sisa_tumpukan_intake(db,intake.id)
+            sisa = await _sisa_tumpukan_intake(db,intake.id,pemilik_id=pemilik_id)
             return PindahResult(ada.kode_pindah,nama_silo,
                 None if ada.berat_kg is None else float(ada.berat_kg),sisa,
                 jumlah_karung=ada.jumlah_karung_50 if ada.jumlah_karung_50 is not None else ada.jumlah_karung,berat_curah_kg=float(ada.berat_curah_kg) if ada.berat_curah_kg is not None else None,bobot_final=dari_batch(batch).pasti if batch else intake.bobot_final)
@@ -1923,7 +1962,7 @@ async def pindah_tumpukan_ke_silo(
         try:
             if berat is not None and berat_curah_kg is not None:
                 raise ValueError('Kirim satu isian berat, bukan dua bobot bersamaan.')
-            jenis = pilih(await sumber(db, intake, jumlah_partai=jumlah_karung_partai), bentuk_sumber)
+            jenis = pilih(await sumber(db, intake, jumlah_partai=jumlah_karung_partai,pemilik_id=pemilik_id), bentuk_sumber)
             kg = periksa(jenis, jumlah_karung=jumlah_karung,
                          berat_kg=berat_curah_kg if berat_curah_kg is not None else berat)
         except ValueError as e:
@@ -1946,7 +1985,7 @@ async def pindah_tumpukan_ke_silo(
         raise Gudang2Error("Isian curah ini hanya untuk PK giling sendiri bersama pilihan karung 50 kg. Gunakan kg hasil timbang untuk cara manual.")
     if sendiri and not hasil_timbang and berat is None:
         from app.services.pk_50 import bagi, pilihan
-        saldo = await _sisa_tumpukan_intake(db, intake.id)
+        saldo = await _sisa_tumpukan_intake(db, intake.id,pemilik_id=pemilik_id)
         if saldo is None or saldo <= 0:
             raise Gudang2Error("Tumpukan ini sudah habis atau bobotnya belum diketahui.")
         try:
@@ -1954,13 +1993,13 @@ async def pindah_tumpukan_ke_silo(
         except ValueError as e:
             raise Gudang2Error(str(e)) from None
         now = input_time(tanggal,jam)
-        move,ke_proses = await _catat_pindah(db,user=user,intake=intake,silo=silo,nama_silo=nama_silo,kirim=float(kirim),now=now,kunci_kiriman=kunci_kiriman,isian_sumber=isian_sumber)
+        move,ke_proses = await _catat_pindah(db, pemilik_id=pemilik_id,user=user,intake=intake,silo=silo,nama_silo=nama_silo,kirim=float(kirim),now=now,kunci_kiriman=kunci_kiriman,isian_sumber=isian_sumber)
         if commit:await db.commit()
         # Gunakan presisi yang benar-benar tersimpan, sama seperti jalur kg
         # lama. Ketikan dengan desimal lebih banyak tidak boleh membuat
         # pesan hasil berbeda dari unit pada cermin dan proyeksinya.
         await db.refresh(move)
-        sisa = await _sisa_tumpukan_intake(db,intake.id)
+        sisa = await _sisa_tumpukan_intake(db,intake.id,pemilik_id=pemilik_id)
         return PindahResult(move.kode_pindah,nama_silo,float(move.berat_kg),sisa,ke_proses,
             jumlah_karung=move.jumlah_karung_50,sisa_karung=bagi(sisa)[0],berat_curah_kg=float(move.berat_curah_kg))
     if jumlah_karung_partai is not None:
@@ -2010,17 +2049,17 @@ async def pindah_tumpukan_ke_silo(
         r = bobot_per_karung(batch)
         # Setelah ada baris kg tetap, batas K juga harus menghormati saldo
         # fisiknya. Jumlah karung terakhir mungkin sudah dibongkar sebagian.
-        sisa_kg = await _sisa_tumpukan_intake(db, intake.id)
+        sisa_kg = await _sisa_tumpukan_intake(db, intake.id,pemilik_id=pemilik_id)
         if r is not None and sisa_kg is not None and Decimal(k) * r > Decimal(str(sisa_kg)) + Decimal("0.000001"):
             utuh = int(Decimal(str(sisa_kg)) // r)
             raise Gudang2Error(f"Tinggal {utuh} karung utuh; sisanya kurang dari 1 karung. Gunakan kg hasil timbang untuk bagian karung.")
         now = input_time(tanggal, jam)
-        move, ke_proses = await _catat_pindah(db, user=user, intake=intake, silo=silo,
+        move, ke_proses = await _catat_pindah(db, pemilik_id=pemilik_id, user=user, intake=intake, silo=silo,
             nama_silo=nama_silo, kirim=None, jumlah_karung=int(k), now=now, kunci_kiriman=kunci_kiriman,isian_sumber=isian_sumber)
         if commit:
             await db.commit()
         await db.refresh(move)
-        sisa = await _sisa_tumpukan_intake(db, intake.id)
+        sisa = await _sisa_tumpukan_intake(db, intake.id,pemilik_id=pemilik_id)
         return PindahResult(move.kode_pindah, nama_silo,
             None if move.berat_kg is None else float(move.berat_kg), sisa, ke_proses,
             jumlah_karung=int(k), bobot_final=dari_batch(batch).pasti,
@@ -2067,7 +2106,7 @@ async def pindah_tumpukan_ke_silo(
             "seluruh sisanya.")
 
     now = input_time(tanggal, jam)
-    move, ke_proses = await _catat_pindah(db, user=user, intake=intake, silo=silo, nama_silo=nama_silo,
+    move, ke_proses = await _catat_pindah(db, pemilik_id=pemilik_id, user=user, intake=intake, silo=silo, nama_silo=nama_silo,
                                           kirim=kirim, now=now, kunci_kiriman=kunci_kiriman, hasil_timbang=hasil_timbang,isian_sumber=isian_sumber)
     if commit:
         await db.commit()

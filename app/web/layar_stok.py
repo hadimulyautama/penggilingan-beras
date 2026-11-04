@@ -271,10 +271,17 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
 async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
     """Detail satu stok PK, memakai komponen yang sama untuk pabrik dan jasa."""
     from app.services.setelan import fitur_mutu
+    from app.peran import can_see_financials
     from app.web.layar import POLESAN, SUPER, gudang1, gudang2
 
     gudang = request.query_params.get("gudang", "")
     jasa_saja = request.query_params.get("jasa") == "1"
+    owner=...
+    owner_text=request.query_params.get('pemilik_id')
+    if owner_text is not None:
+        if owner_text=='pabrik':owner=None
+        elif owner_text.isascii() and owner_text.isdigit() and int(owner_text)>0:owner=int(owner_text)
+        else:return await _pk_tidak_tersedia(request,'Pemilik PK tidak sah. Pilih kembali dari daftar stok.')
     if gudang not in {"g1", "g2"}:
         return await _pk_tidak_tersedia(request, "Tautan stok PK tidak valid. Buka daftar stok terbaru.")
 
@@ -293,12 +300,14 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
             identitas = request.query_params.get("kode", "")
             kartu = next((x for x in daftar
                           if x.kode == identitas
-                          and bool(x.jasa_id) == jasa_saja), None)
+                          and bool(x.jasa_id) == jasa_saja
+                          and (owner is ... or x.jasa_id==owner)), None)
         else:
             daftar = await svc.pk_gudang2(db)
             kartu = next((x for x in daftar
                           if x.intake_id == intake_id
-                          and bool(x.jasa_id) == jasa_saja), None)
+                          and bool(x.jasa_id) == jasa_saja
+                          and (owner is ... or x.jasa_id==owner)), None)
         if kartu is not None:
             from app.services.qc_gabah_asal import dari_pk
             qc_gabah_asal = await dari_pk(db, kode=kartu.kode if gudang == "g1" else None,
@@ -323,6 +332,7 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         params_detail["kode"] = kartu.kode
     else:
         params_detail["id"] = str(kartu.intake_id)
+    if owner is not ...:params_detail['pemilik_id']='pabrik' if owner is None else str(owner)
     gudang_filter = request.query_params.get("gudang_filter")
     if gudang_filter in {"g1", "g2"}:
         kembali += "?gudang=" + gudang_filter
@@ -334,6 +344,7 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         qc_gabah_asal=qc_gabah_asal,
         layar="stok_pk_jasa" if jasa_saja else "stok",
         detail=True, detail_gudang=gudang, detail_kartu=kartu,
+        BOLEH_KEPEMILIKAN=can_see_financials(akun.user),
         riwayat_qc=riwayat_qc,
         SARING_GUDANG=(), gudang="", lot=[], tempat=[], produk=[], samping=[],
         total=0, JASA_SAJA=jasa_saja, mutu_aktif=mutu_aktif,

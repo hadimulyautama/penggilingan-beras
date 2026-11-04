@@ -185,6 +185,9 @@ async def allocate(db,kind,identity,owners,amount,dest,user,*,source_ids=None):
     return lines
 
 def audit_summary(state):
+    if state['kind']=='pk':
+        tujuan=state.get('parties',{}).get(str(state.get('customer')),'Pabrik')
+        return str(state['quantity'])+' kg PK → '+tujuan
     kind=state['kind'];n=format(D(state['quantity']).normalize(),'f')
     if kind=='karung':return n+' lembar → pelanggan'
     weight=format(D(state['kg']).normalize(),'f')
@@ -256,6 +259,9 @@ async def evidence(db,state,selected=()):
 async def context(db,*,user,ident,selected=()):
     await izin(db,user)
     event,state,last=await root_state(db,ident)
+    if state['kind']=='pk':
+        from app.services.pk_kepemilikan import context as pk_context
+        return await pk_context(db,user=user,ident=ident)
     await izin(db,user,state['warehouses'])
     facts=await evidence(db,state,selected)
     names={str(o):await pihak(db,o,state['kind']) for o in set(state['owners'])|{state.get('customer'),None}}
@@ -383,6 +389,10 @@ async def lock_sources(db,ident,selected=()):
     if ids:await db.scalars(select(M).where(M.id.in_(ids)).order_by(M.id).with_for_update().execution_options(populate_existing=True))
 
 async def inspect(db,*,user,ident,req):
+    event=await db.get(Peristiwa,ident)
+    if event is not None and event.jenis==AWAL and event.muatan.get('kind')=='pk':
+        from app.services.pk_kepemilikan import periksa
+        return await periksa(db,user=user,ident=ident,req=req)
     await izin(db,user);await lock(db)
     await lock_sources(db,ident,req.get('source_ids') or [])
     current=await context(db,user=user,ident=ident)
@@ -397,6 +407,10 @@ async def inspect(db,*,user,ident,req):
     return dict(plan=plan,review=sign(dict(facts=facts,request=normalized(req),baseline=req['baseline'])))
 
 async def save(db,*,user,ident,req):
+    event=await db.get(Peristiwa,ident)
+    if event is not None and event.jenis==AWAL and event.muatan.get('kind')=='pk':
+        from app.services.pk_kepemilikan import simpan
+        return await simpan(db,user=user,ident=ident,req=req)
     await izin(db,user);await lock(db)
     key='kepemilikan-koreksi:'+str(user.id)+':'+req['key']
     existing=await db.scalar(select(Peristiwa).where(Peristiwa.kunci_kiriman==key))
@@ -418,7 +432,9 @@ async def save(db,*,user,ident,req):
 
 async def sources(db,*,user,ident,search='',page=1):
     await izin(db,user);_,state,_=await root_state(db,ident);await izin(db,user,state['warehouses'])
-    kind=state['kind'];M=MODELS[kind]
+    kind=state['kind']
+    if kind=='pk':return dict(items=[],total=0,page=1,pages=0,fixed_source=True)
+    M=MODELS[kind]
     if kind=='karung':return dict(items=[],total=0,page=1,pages=0)
     q=select(M).where(*conditions(kind,state['identity']),M.jasa_id.is_not(None))
     if kind=='barang' and state['warehouses']:q=q.where(M.warehouse_id.in_(state['warehouses']))
@@ -438,6 +454,9 @@ async def listing(db,*,user,kind=None,status=None,search='',page=1,legacy=False)
     await izin(db,user)
     if legacy:
         q=select(ActivityLog).where(ActivityLog.aksi.in_(set(AKSI.values())),ActivityLog.table_name!='peristiwa')
+        if kind=='pk':q=q.where(ActivityLog.aksi=='pindah_kepemilikan_pk')
+        elif kind in ['produk','barang','curah']:q=q.where(ActivityLog.aksi=='pindah_kepemilikan_produk')
+        elif kind=='karung':q=q.where(ActivityLog.aksi=='pindah_kepemilikan_karung')
         scope=await user_wh_scope(db,user)
         if scope!='all':q=q.where(ActivityLog.gudang==scope)
         if search.strip():q=q.where(or_(ActivityLog.new_value.ilike('%'+search.strip()+'%'),ActivityLog.old_value.ilike('%'+search.strip()+'%')))
@@ -460,7 +479,7 @@ async def listing(db,*,user,kind=None,status=None,search='',page=1,legacy=False)
         q=q.where(or_(*(Peristiwa.muatan['warehouses'].contains([wid]) for wid in whs))) if whs else q.where(False)
     total=await db.scalar(select(func.count()).select_from(q.subquery()));page=max(1,min(page,max(1,math.ceil(total/25))))
     rows=(await db.execute(q.order_by(Peristiwa.id.desc()).offset((page-1)*25).limit(25))).all()
-    return dict(items=[dict(id=e.id,code=('AM-KRG-' if st['kind']=='karung' else 'AM-BRG-')+str(e.id),kind=st['kind'],status=st['status'],quantity=st['quantity'],kg=st['kg'],time=e.waktu.isoformat(),summary=' · '.join(st.get('parties',{}).values())) for e,st in rows],total=total,page=page,pages=math.ceil(total/25),legacy=False)
+    return dict(items=[dict(id=e.id,code=('AM-PK-' if st['kind']=='pk' else 'AM-KRG-' if st['kind']=='karung' else 'AM-BRG-')+str(e.id),kind=st['kind'],status=st['status'],quantity=st['quantity'],kg=st['kg'],time=e.waktu.isoformat(),summary=(st.get('parties',{}).get(str(st['owners'][0]),'Pabrik')+' → '+st.get('parties',{}).get(str(st.get('customer')),'Pabrik')+' · '+st.get('label','PK')) if st['kind']=='pk' else ' · '.join(st.get('parties',{}).values())) for e,st in rows],total=total,page=page,pages=math.ceil(total/25),legacy=False)
 
 async def legacy_detail(db,*,user,ident):
     await izin(db,user)
