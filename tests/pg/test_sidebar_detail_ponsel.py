@@ -17,7 +17,7 @@ BASE='http://127.0.0.1:59994'
 
 @pytest.mark.parametrize('pelanggan',[False,True])
 @pytest.mark.parametrize('engine',os.environ.get('UJI_PONSEL_ENGINES','chromium').split(','))
-@pytest.mark.parametrize('width',[320,390])
+@pytest.mark.parametrize('width',[int(v) for v in os.environ.get('UJI_PONSEL_WIDTHS','320,390').split(',')])
 async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
     asal='/pelanggan/' if pelanggan else '/barang-masuk'
     daftar='/pelanggan/riwayat-proses' if pelanggan else '/jasa'
@@ -35,7 +35,8 @@ async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
         assert all(r.status_code==200 for r in pages.values()),[(p,r.status_code) for p,r in pages.items()]
         async with async_playwright() as pw:
             browser=await getattr(pw,engine).launch()
-            ctx=await browser.new_context(viewport={'width':width,'height':844},is_mobile=True,has_touch=True,device_scale_factor=2,service_workers='block',reduced_motion='reduce')
+            profile=pw.devices['iPhone SE' if width<=375 else 'iPhone 13'] if engine=='webkit' else {}
+            ctx=await browser.new_context(**{**profile,'viewport':{'width':width,'height':844},'is_mobile':True,'has_touch':True,'device_scale_factor':2,'service_workers':'block','reduced_motion':'reduce'})
             await ctx.add_cookies([{'name':x.name,'value':x.value,'url':BASE} for x in c.cookies.jar])
             writes=[];errors=[];refresh=[False]
             async def app(route):
