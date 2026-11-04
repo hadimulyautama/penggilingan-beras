@@ -264,7 +264,8 @@ def test_penyaring_gudang_sama_di_stok_dan_di_berjalan():
     assert 'x.gudang == gudang' in inspect.getsource(layar_pekerjaan.daftar_tab_pekerjaan)
     for nama in ('pekerjaan.html','barang_masuk.html'):
         t=(Path(__file__).resolve().parents[1]/'hmu_tampilan/templates'/nama).read_text()
-        assert 'TAMPILAN_INDUK or VIEW in V_MEJA' in t and 'filter_gudang' in t
+        assert 'TAMPILAN_INDUK or VIEW in V_MEJA' in t
+        assert ('name="gudang"' in t if nama == 'barang_masuk.html' else 'filter_gudang' in t)
 
 
 def test_saringan_stok_ikut_ke_seluruh_blok_halamannya():
