@@ -218,7 +218,7 @@ async def test_satu_putaran_kolom_kosong_dan_pembatalan_putaran(pg,qc):
         assert akhir.get_text(' ',strip=True)==awal.get_text(' ',strip=True)
 
 
-async def test_rata_rata_antarproses_tidak_bercampur_dan_sosoh_bukan_qc(pg,qc):
+async def test_rata_rata_antarproses_tidak_bercampur_dan_qc_sosoh_menunggu_sampel(pg,qc):
     async with pg() as db:
         pertama=await db.get(MillingProcess,qc['proc'])
         kedua=MillingProcess(kode_proses='LOT-QC-TERPISAH',silo_id=pertama.silo_id,
@@ -238,5 +238,5 @@ async def test_rata_rata_antarproses_tidak_bercampur_dan_sosoh_bukan_qc(pg,qc):
             stamp=r.select_one('.tabel-standar__sekunder')
             assert stamp and ':' in stamp.get_text()
         kosong=await c.get('/riwayat-qc/beras-hasil-sosoh')
-        assert kosong.status_code==200 and 'bukan hasil pengukuran QC' in kosong.text
+        assert kosong.status_code==200 and 'Belum ada sampel QC beras' in kosong.text
         assert not BeautifulSoup(kosong.text,'html.parser').select('.tabel-standar__baris')

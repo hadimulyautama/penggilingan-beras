@@ -588,7 +588,7 @@
       var inputAngka = '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
         '"' + (f.wajib ? ' data-wajib="1"' : "") +
         ' data-label="' + esc(f.label) + '"' +
-        ' type="text" inputmode="' + (angka ? "decimal" : "text") + '"' +
+        ' type="text" inputmode="' + (angka || f.inputmode === "decimal" ? "decimal" : "text") + '"' +
         (angka ? ' data-angka="1" pattern="[0-9]*[.,]?[0-9]*"' : "") +
         ' enterkeyhint="' + (terakhir ? "done" : "next") + '" autocomplete="off">';
       if (f.maksimal_karung) {

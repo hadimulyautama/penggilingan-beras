@@ -605,7 +605,9 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     assert "n != '0'" in fn, "bawaannya tidak menyala"
 
     mini = (AKAR / "app/web/api.py").read_text()
-    assert 'AKSI_MUTU = {"qc_giling", "qc_pk_luar", "qc_gabah_basah", "qc_gabah_kering"}' in mini
+    from app.web.api import AKSI_MUTU
+    assert {'qc_giling', 'qc_pk_luar', 'qc_gabah_basah', 'qc_gabah_kering',
+            'sampel_qc_sosoh', 'qc_sosoh', 'batalkan_sampel_qc_sosoh'} <= AKSI_MUTU
     assert 'a["id"] not in (*AKSI_MUTU, "qc_gabah_tutup")' in mini, "katalog tak disaring"
     # Disembunyikan SAJA tidak cukup: alamatnya bisa diketik, dan lembar yang
     # masih terbuka di layar orang lain masih bisa mengirim.

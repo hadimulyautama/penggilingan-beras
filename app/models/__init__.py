@@ -4,6 +4,7 @@ Definisi model tinggal di paket domain (app.penggilingan.gudang1.models, app.pen
 dan master/system/transfer di sini. Konsumen tetap pakai `from app.models import X`.
 """
 from app.database import Base
+from app.penggilingan.gudang2.model_qc import SampelQcSosoh
 from app.models.master import (
     Armada,
     Dryer,
@@ -171,3 +172,5 @@ from app.models.retur_supplier_koreksi import ReturSupplierEfektif, ReturSupplie
 from app.models.koreksi_pengiriman import KoreksiPengiriman
 from app.models.retur_supplier import pasang_saldo_sumber as _pasang_saldo_retur_supplier
 _pasang_saldo_retur_supplier()
+
+__all__.append("SampelQcSosoh")

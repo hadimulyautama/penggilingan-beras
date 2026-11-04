@@ -80,6 +80,8 @@ app.include_router(api_router)
 app.include_router(hmu_tampilan.router_pwa(render))
 app.include_router(aksi_inventory_router)
 app.include_router(aksi_undo_router)
+from app.web.aksi_qc_sosoh import router as qc_sosoh_router
+app.include_router(qc_sosoh_router)
 app.include_router(laporan_router)
 app.include_router(laporan_navigasi_router)
 from app.web.layar_pekerjaan import router as pekerjaan_router

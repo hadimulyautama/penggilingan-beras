@@ -196,8 +196,10 @@ async def history_list(request,kind):
     async with SessionLocal() as db:
         cards,more=await {'giling':riwayat_giling,'pengeringan':riwayat_pengeringan,'sosoh':riwayat_sosoh,'transfer':riwayat_transfer}[kind](db,
             batas=30,sebelum=integer(request.query_params.get('sebelum')),allowed_ids=request.state.portal_scope.ids(model))
+        from app.services.qc_sosoh import rekap_proses
+        qc_rekap=await rekap_proses(db,[k.id for k in cards]) if kind=='sosoh' else {}
     return await render_laci(request,'riwayat_'+kind+'.html',kartu=cards,lagi=more,SEKALI=30,
-        sesudah=cards[-1].id if cards and more else None,dari_awal=bool(request.query_params.get('sebelum')),SAMPING_DISEBUT=SAMPING_DISEBUT)
+        sesudah=cards[-1].id if cards and more else None,dari_awal=bool(request.query_params.get('sebelum')),SAMPING_DISEBUT=SAMPING_DISEBUT,qc_rekap=qc_rekap)
 
 
 async def reports(request):

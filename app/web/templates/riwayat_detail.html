@@ -194,6 +194,7 @@
         </details>
       {% endif %}
     {% endif %}
+    {% if qc_sosoh %}{% include "_qc_sosoh.html" %}{% endif %}
     <a class="btn btn--kecil" href="/riwayat-sosoh/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
 
   {% else %}

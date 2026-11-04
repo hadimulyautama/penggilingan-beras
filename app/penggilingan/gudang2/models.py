@@ -564,6 +564,7 @@ class PolishingOutputLog(Base):
     #: lahir dari permintaan pembeli, bukan dari daftar yang bisa dibekukan.
     #: NULL pada baris yang lahir sebelum hari itu.
     spek: Mapped[str | None] = mapped_column(String(30))
+    cara_input: Mapped[str] = mapped_column(String(20), nullable=False, default="lama", server_default=text("'lama'"))
     #: Yang keluar pada PROSESAN INI, bukan total sejak awal.
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     waktu_update: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

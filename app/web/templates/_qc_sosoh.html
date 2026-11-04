@@ -1,0 +1,78 @@
+{# Satu tampilan untuk proses aktif, riwayat proses, dan riwayat QC. #}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/qc-sosoh.css?v={{ VERSI }}');</style>
+<div class="qc-sosoh" data-qc-sosoh data-kode="{{ qc_kode }}">
+<section class="riwayat-detail__card" id="qc-sosoh">
+  <div class="qc-sosoh__judul"><div><h2>QC beras hasil sosoh</h2><p class="bantu">{{ qc_sosoh.sampel|length }} sampel · {{ qc_sosoh.menunggu }} menunggu hasil lab</p></div>
+  {% if not PORTAL_READ_ONLY and akun and akun.is_admin and MUTU_AKTIF and qc_sosoh.sementara %}<button class="btn btn--utama" type="button" data-qc-baru>Catat QC</button>{% endif %}</div>
+  <p class="bantu">Sampel terikat ke proses {{ qc_kode }}, jenis beras, dan waktu pengambilan. Hasil lab boleh dilengkapi kemudian, termasuk sebelum hasil timbang tercatat.</p>
+  {% if qc_sosoh.sementara %}<p class="nota">Estimasi sementara · mengikuti waktu proses berjalan, sampel, dan total hasil yang sudah dicatat.</p>{% endif %}
+  {% if not PORTAL_READ_ONLY and akun and akun.is_admin and MUTU_AKTIF %}
+  <form class="qc-sosoh__editor" data-qc-editor method="post" hidden>
+    <h3 data-qc-tajuk>Catat QC beras</h3><p class="qc-sosoh__identitas">Proses sosoh <strong>{{ qc_kode }}</strong></p>
+    <fieldset data-qc-pilihan><legend>Spesifikasi yang sedang diperiksa</legend><div class="qc-sosoh__pilihan">{% for jenis, label in qc_sosoh.jenis_label.items() %}<button class="btn" type="button" data-qc-jenis="{{ jenis }}">{{ label }}</button>{% endfor %}</div><p class="bantu">Pilih saat sampel diambil. Waktu pengambilan langsung tersimpan.</p></fieldset>
+    <p class="nota" data-qc-identitas hidden></p>
+    <fieldset data-qc-hasil disabled><legend>Hasil pemeriksaan</legend><div class="qc-sosoh__angka">{% for komponen in qc_sosoh.komponen %}<label>{{ komponen.label }}<input type="text" inputmode="decimal" name="{{ komponen.nama }}" autocomplete="off" placeholder="0,00"></label>{% endfor %}</div><p class="bantu">Gunakan koma untuk desimal. Nilai disimpan dengan dua angka di belakang koma.</p>
+    <details><summary>Catatan lab</summary><label>Catatan lab<textarea name="catatan_lab" rows="2" maxlength="500"></textarea></label></details>
+    </fieldset>
+    <p class="qc-sosoh__galat" data-qc-galat role="alert"></p><p class="bantu" data-qc-kabar role="status" aria-live="polite"></p>
+    <div class="qc-sosoh__aksi"><button class="btn btn--kecil" type="button" data-qc-nanti>Lanjutkan nanti</button><button class="btn btn--utama" type="submit" data-qc-simpan disabled>Simpan hasil QC</button></div>
+  </form>
+  {% endif %}
+  {% if not qc_sosoh.sesi %}<p class="riwayat-detail__empty">Belum ada sampel QC beras aktif. Sampel boleh dicatat sebelum hasil timbang.</p>{% endif %}
+  {% for catatan in qc_sosoh.catatan %}<p class="nota">{{ catatan }}</p>{% endfor %}
+</section>
+{% if qc_sosoh.hasil %}
+<section class="riwayat-detail__card">
+  <h2>Total hasil timbang per jenis</h2>
+  <div class="tabel-standar"><table class="tabel-standar" data-ponsel="rincian">
+    <thead><tr><th scope="col">Jenis beras</th><th scope="col">Total aktual</th><th scope="col">Sesi menurut QC</th></tr></thead>
+    <tbody>{% for e in qc_sosoh.hasil %}<tr>
+      <th scope="row">{{ qc_sosoh.jenis_label[e.jenis] }}</th>
+      <td data-label="Total aktual">{{ '%.2f'|format(e.berat_kg)|replace('.', ',') ~ ' kg' if e.berat_kg is not none else 'Belum dicatat' }}</td>
+      <td data-label="Sesi menurut QC">{{ e.sesi|join(', ') if e.sesi else 'Belum ada sampel' }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% if qc_sosoh.sesi %}
+<section class="riwayat-detail__card">
+  <h2>Estimasi waktu dan hasil tiap garapan</h2>
+  <div class="tabel-standar"><table class="tabel-standar" data-ponsel="rincian">
+    <thead><tr><th scope="col">Sesi</th><th scope="col">Estimasi waktu garapan</th><th scope="col">Durasi aktif estimasi</th><th scope="col">Bobot sesi · estimasi</th><th scope="col">Sampel dan hasil QC</th></tr></thead>
+    <tbody>{% for s in qc_sosoh.sesi %}<tr>
+      <th scope="row">Sesi {{ s.nomor }} · {{ qc_sosoh.jenis_label[s.jenis] }}</th>
+      <td data-label="Estimasi waktu garapan">{{ s.estimasi_mulai|jam('%d/%m/%Y %H:%M') }}–{{ s.estimasi_sampai|jam('%d/%m/%Y %H:%M') }}<br><small>Sampel teramati {{ s.teramati_mulai|jam('%H:%M') }}–{{ s.teramati_sampai|jam('%H:%M') }}.</small>
+        {% if s.batas_akhir %}<br><small>Pergantian di antara {{ s.batas_akhir[0]|jam('%d/%m %H:%M') }} dan {{ s.batas_akhir[1]|jam('%d/%m %H:%M') }}.</small>{% endif %}</td>
+      <td data-label="Durasi aktif estimasi">{{ '%.1f'|format(s.durasi_detik/60)|replace('.', ',') }} menit</td>
+      <td data-label="Bobot sesi">{% if s.berat_estimasi_kg is not none %}≈ {{ '%.2f'|format(s.berat_estimasi_kg)|replace('.', ',') }} kg · estimasi{% else %}Belum dipetakan ke hasil timbang{% endif %}</td>
+      <td data-label="Sampel dan hasil QC">{% for q in s.sampel %}#{{ q.id }}{{ ', ' if not loop.last else '' }}{% endfor %}<br>
+        {% for label, nilai, n, satuan in s.rata %}{{ label }} {{ '%.2f'|format(nilai)|replace('.', ',') }}{{ satuan }} ({{ n }} QC){{ ' · ' if not loop.last else '' }}{% else %}Menunggu hasil QC{% endfor %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% if qc_sosoh.sampel %}
+<section class="riwayat-detail__card">
+  <h2>Riwayat sampel dan hasil QC</h2>
+  <p>{{ qc_sosoh.sampel|length }} sampel tercatat · {{ qc_sosoh.menunggu }} menunggu hasil QC.</p>
+  <p class="bantu">Sesi otomatis mengikuti perubahan jenis pada waktu pengambilan QC. Setiap tambahan hasil dibagi menurut durasi aktif jenis yang sama dalam rentang pencatatannya, dengan asumsi laju produksi sama. Total timbang tetap aktual; bobot sesi dan sampel adalah estimasi.</p>
+  <div class="tabel-standar"><table class="tabel-standar" data-ponsel="rincian">
+    <thead><tr><th scope="col">Sampel</th><th scope="col">Jenis saat diambil</th><th scope="col">Waktu pengambilan</th><th scope="col">Hasil pemeriksaan</th><th scope="col">Waktu isi lab</th><th scope="col">Pemetaan estimasi</th></tr></thead>
+    <tbody>{% for r in qc_sosoh.sampel %}<tr>
+      <th scope="row">#{{ r.q.id }}<br><small>{{ r.pengambil }}</small></th>
+      <td data-label="Jenis saat diambil">{{ qc_sosoh.jenis_label[r.q.jenis] }}</td>
+      <td data-label="Waktu pengambilan">{{ r.q.waktu_sampel|jam('%d/%m/%Y %H:%M') }}</td>
+      <td data-label="Hasil pemeriksaan">{{ r.nilai }}
+        {% if r.q.dibatalkan_pada %}<br><strong>Dibatalkan</strong> · {{ r.q.alasan_batal }}
+        {% elif not PORTAL_READ_ONLY and akun and akun.is_admin and MUTU_AKTIF %}
+          {% if not r.q.hasil_pada %}<br><button class="btn btn--kecil" type="button" data-qc-lengkapi="{{ r.q.id }}" data-jenis="{{ r.q.jenis }}" data-label="{{ qc_sosoh.jenis_label[r.q.jenis] }}" data-waktu="{{ r.q.waktu_sampel|jam('%d/%m/%Y %H:%M') }}">Isi hasil sampel #{{ r.q.id }}</button>{% endif %}
+          <br><a class="btn btn--kecil" href="?buka=batalkan_sampel_qc_sosoh&amp;nilai={{ r.q.id }}">Batalkan sampel</a>
+        {% endif %}</td>
+      <td data-label="Waktu isi lab">{{ r.q.hasil_pada|jam('%d/%m/%Y %H:%M') if r.q.hasil_pada else 'Belum diisi' }}{% if r.q.hasil_pada %}<br><small>{{ r.pemeriksa }}</small>{% endif %}</td>
+      <td data-label="Pemetaan estimasi">{% if r.q.dibatalkan_pada %}Dikeluarkan dari pemetaan{% else %}Sesi {{ r.sesi }}{% if r.alokasi %} · ≈ {{ '%.2f'|format(r.alokasi.berat_estimasi_kg)|replace('.', ',') }} kg<br><small>{{ r.alokasi.estimasi_mulai|jam('%d/%m %H:%M') }}–{{ r.alokasi.estimasi_sampai|jam('%d/%m %H:%M') }}</small>{% else %} · Menunggu hasil timbang{% endif %}{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+</div>
+{% if not PORTAL_READ_ONLY and akun and akun.is_admin and MUTU_AKTIF and not qc_tunda_script|default(false) %}<script src="/static/qc-sosoh.js?v={{ VERSI }}" defer></script>{% endif %}

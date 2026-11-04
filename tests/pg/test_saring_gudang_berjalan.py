@@ -112,14 +112,17 @@ async def test_pil_tergambar_dan_menyaring_untuk_super(pg, pabrik):
         aktif=(await c.get('/berjalan')).text
         siap=(await c.get('/pekerjaan?tab=tindakan')).text
         assert kode in aktif and lot not in aktif
-        assert lot in siap and kode not in siap
+        # Proses sosoh kini juga mempunyai tugas QC selama proses berjalan.
+        assert lot in siap and kode in siap and 'QC penyosohan' in siap
         assert 'Gudang 1' in aktif and 'Gudang 2' in aktif
         assert kode in (await c.get('/berjalan?gudang=g2')).text
         assert kode not in (await c.get('/berjalan?gudang=g1')).text
         g1=(await c.get('/pekerjaan?gudang=g1')).text
         g2=(await c.get('/pekerjaan?gudang=g2')).text
         assert lot in g1 and lot not in g2
-        assert 'pil--on' in g1
+        assert kode not in g1 and kode in g2
+        from bs4 import BeautifulSoup
+        assert BeautifulSoup(g1, 'html.parser').select_one('select[name="gudang"] option[selected]')['value'] == 'g1'
 
 
 async def test_operator_tak_ditawari_penyaring(pg, pabrik):

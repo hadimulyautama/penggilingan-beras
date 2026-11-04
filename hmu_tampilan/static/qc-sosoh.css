@@ -1,0 +1,17 @@
+/* Satu editor di detail proses; identitas terkunci sesudah sampel tersimpan. */
+.qc-sosoh{display:grid;gap:16px;min-width:0;scroll-margin-top:110px}
+.qc-sosoh__judul,.qc-sosoh__pilihan,.qc-sosoh__aksi{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.qc-sosoh__pilihan{justify-content:flex-start}
+.qc-sosoh__editor{display:grid;gap:16px;margin-top:18px;padding-top:18px;border-top:1px solid var(--kulit-pemisah)}
+.qc-sosoh [hidden]{display:none!important}
+.qc-sosoh__editor fieldset{margin:0;padding:0;border:0;min-width:0}
+.qc-sosoh__editor legend{margin-bottom:10px;font-weight:650}
+.qc-sosoh__identitas{padding:12px;border-radius:8px;background:var(--panel-2);overflow-wrap:anywhere}
+.qc-sosoh__angka{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}
+.qc-sosoh__editor label{display:grid;gap:7px;color:var(--tinta)}
+.qc-sosoh__editor input,.qc-sosoh__editor select,.qc-sosoh__editor textarea{box-sizing:border-box;min-width:0;width:100%;min-height:46px;padding:11px;border:1px solid var(--kulit-batas);border-radius:8px;background:var(--kulit-kartu);color:var(--tinta);font:inherit;font-size:16px}
+.qc-sosoh__editor textarea{resize:vertical}
+.qc-sosoh__editor button{min-height:44px;white-space:normal}
+.qc-sosoh__galat{color:var(--bahaya);font-weight:600}
+.qc-sosoh__galat:empty{display:none}
+@media(max-width:700px){.qc-sosoh{gap:11px}.qc-sosoh__angka{grid-template-columns:repeat(2,minmax(0,1fr))}.qc-sosoh__angka>label:last-child{grid-column:1/-1}.qc-sosoh__judul{align-items:flex-start}.qc-sosoh__aksi{align-items:stretch}.qc-sosoh__aksi .btn--utama{flex:1}}

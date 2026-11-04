@@ -25,6 +25,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
+from app.services.qc_sosoh import kartu_menunggu as _kartu_qc_sosoh
 from app.services import keputusan as K
 from app.penggilingan.gudang1.services.bobot import (
     Bobot, dari_batch, dari_batches, dari_nilai)
@@ -3672,6 +3673,8 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
         # menawarkan pintu "Mutu & QC" yang isinya pasti kosong.
         b.mutu_aktif = s.mutu_aktif
         b.meja += s.meja
+        if s.mutu_aktif:
+            b.meja += await _kartu_qc_sosoh(db)
         b.berjalan += s.berjalan
         # `menunggu` ikut sejak 24 September 2026: `untuk_staff` kini juga
         # memancarkan tiket berjenis tak dikenal, dan daftar yang tak diambil

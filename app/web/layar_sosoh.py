@@ -74,9 +74,11 @@ async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
 
     async with SessionLocal() as db:
         kartu, lagi = await riwayat_sosoh(db, batas=SEKALI, sebelum=sebelum_id)
+        from app.services.qc_sosoh import rekap_proses
+        qc_rekap = await rekap_proses(db, [k.id for k in kartu])
     return await render_laci(
         request, "riwayat_sosoh.html",
-        kartu=kartu, lagi=lagi, SEKALI=SEKALI,
+        kartu=kartu, lagi=lagi, SEKALI=SEKALI, qc_rekap=qc_rekap,
         SAMPING_DISEBUT=SAMPING_DISEBUT,
         # Kursor halaman berikutnya: id kartu TERAKHIR yang digambar.
         sesudah=(kartu[-1].id if kartu and lagi else None),
@@ -113,6 +115,10 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
     from app.services.stok import nama_produk
     async with SessionLocal() as db:
         kartu, _ = await riwayat_sosoh(db, batas=1, process_id=process_id)
+        from app.models import PolishingProcess
+        from app.services.qc_sosoh import data_proses
+        proc_qc = await db.get(PolishingProcess, process_id) if kartu else None
+        qc_sosoh = await data_proses(db, proc_qc) if proc_qc else None
         output_logs = (await db.execute(
             select(PolishingOutputLog)
             .where(PolishingOutputLog.polishing_process_id == process_id)
@@ -133,6 +139,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         catatan_penghalang = await daftar(db, "sosoh", process_id) if akun.is_admin and penghalang else []
     return await render_laci(
         request, "riwayat_detail.html", jenis="sosoh", k=kartu[0],
+        qc_sosoh=qc_sosoh, qc_kode=kartu[0].kode,
         catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
         layar="riwayat_sosoh",

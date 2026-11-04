@@ -67,6 +67,7 @@ JENIS: tuple[tuple[str, str, str], ...] = (
     # Verifikasi barang keluar memiliki halaman sendiri, tanpa kartu di meja.
     ("qc_giling", "Mutu giling belum diperiksa", MUTU),
     ("qc_pk_luar", "Mutu PK luar belum dicatat", MUTU),
+    ("sampel_qc_sosoh", "QC penyosohan berjalan", MUTU),
     ("qc_gabah_basah", "Mutu gabah basah belum dicatat", MUTU),
     ("qc_gabah_kering", "Mutu gabah kering belum dicatat", MUTU),
 )

@@ -122,11 +122,13 @@ async def halaman(kode,request,akun):
     await izin(akun.user)
     async with SessionLocal() as db:
         data=await baca(db,kode)
+        from app.services.qc_sosoh import data_proses
+        qc_sosoh=await data_proses(db,await db.get(PolishingProcess,data['id']))
         from app.services.riwayat_jeda import riwayat_jeda
         jejak=await riwayat_jeda(db,jenis='penyosohan',id_=data['id'],params=request.query_params)
     def halaman_riwayat(parameter,nomor):return str(request.url.include_query_params(**{parameter:nomor}))
     from app.web.layar_pekerjaan import konteks_aman
-    return await render_laci(request,'sosoh_ringkas.html',awal=data,
+    return await render_laci(request,'sosoh_ringkas.html',awal=data,qc_sosoh=qc_sosoh,qc_kode=kode,
         kembali=konteks_aman(request.query_params.get('kembali_kerja')) or '/pekerjaan?tab=berjalan',breadcrumb_detail=kode,
         jejak_jeda=jejak,boleh=True,halaman_proses=halaman_riwayat,layar='pekerjaan',
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''))

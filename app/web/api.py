@@ -389,7 +389,7 @@ def _urai_tujuan(nilai: str | None) -> tuple[str, int | None]:
 
 
 #: Aksi yang lenyap begitu fitur mutu dimatikan di Pengaturan.
-AKSI_MUTU = {"qc_giling", "qc_pk_luar", "qc_gabah_basah", "qc_gabah_kering"}
+AKSI_MUTU = {"qc_giling", "qc_pk_luar", "qc_gabah_basah", "qc_gabah_kering", "sampel_qc_sosoh", "qc_sosoh", "batalkan_sampel_qc_sosoh"}
 
 
 async def _wajib_mutu() -> None:
@@ -1370,6 +1370,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # Siapa pun yang boleh mencatat sesuatu boleh membatalkan catatannya
     # sendiri — termasuk operator, yang justru paling sering salah ketik.
     actions += aksi_undo.spesifikasi(boleh=g1 or g2 or fin)
+    from app.web.aksi_qc_sosoh import spesifikasi as aksi_qc_sosoh
+    actions += aksi_qc_sosoh()
 
     if fin:
         actions.append({"akses": "admin", "id": "sesuaikan_stok_pk_lama", "label": "Penyesuaian stok PK beli luar lama",
@@ -1521,6 +1523,7 @@ _GRUP_AKSI = {
 # Aksinya TETAP dikirim di menu: lembar kartu dibangun dari spesifikasi yang
 # sama. Yang berubah cuma `a["kartu"]`, dan katalog melewatkannya.
 for _a in (
+    "sampel_qc_sosoh", "qc_sosoh", "batalkan_sampel_qc_sosoh",
     # Spesifikasi tetap dikirim untuk Stok dan detail Pesanan Jasa.
     "masukkan_beras_silo", "tutup_jasa", "batalkan_jasa",
     # Gudang 1
@@ -1588,6 +1591,7 @@ URUT_GRUP = [
 # harga & QC gabah/giling = G1; PK luar (catat/kualitas/harga) = G2; transfer PK
 # berasal dari proses G1 → G1.
 _ACTION_WH = {
+    "sampel_qc_sosoh": "g2", "qc_sosoh": "g2", "batalkan_sampel_qc_sosoh": "g2",
     "sesuaikan_stok_pk_lama": "g2",
     # Gudang 1 (Selepan)
     "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",

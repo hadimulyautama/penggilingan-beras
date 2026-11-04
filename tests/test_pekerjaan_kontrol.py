@@ -14,7 +14,12 @@ def test_isi_daftar_dan_kartu_tetap_sama():
  assert hashlib.sha256(sebelum.encode()).hexdigest()=='f328c94b5c7d839f916350e1539fa27d5eac47682d35f3eb41658efc355d186b'
  assert hashlib.sha256(sesudah.encode()).hexdigest()=='53cc2f9a444afad6bc1e5efc99b1b6a646d575deabebcf00824970da279e2013'
  for f,sidik in {'app/web/templates/_pekerjaan_berjalan_ringkas.html': '7acb30322e9f7d815684602772681707798a2b0185f2b862cb8619139feeeb6d', 'hmu_tampilan/templates/_benda.html': 'cd7c4c8f3c46668cd0bcedfe1acf16b85c1f446e24207bb9aee91bb06850c140'}.items():
-  assert hashlib.sha256((R/f).read_bytes()).hexdigest()==sidik
+  isi=(R/f).read_text()
+  if f.endswith('/_benda.html'):
+   # Rilis QC menambah satu jenis kartu. Seluruh kartu lama tetap identik.
+   from tests.kartu_asli import tanpa_kartu_qc
+   isi=tanpa_kartu_qc(isi)
+  assert hashlib.sha256(isi.encode()).hexdigest()==sidik
 
 @pytest.mark.parametrize('width',[320,390,1440])
 @pytest.mark.parametrize('tab',['tindakan','berjalan'])

@@ -116,6 +116,7 @@
           bahan bakunya belum tercatat — persennya tak bisa dihitung
         </div>
       {% endif %}
+      {% set qc = qc_rekap.get(k.id) %}<p class="bantu">QC beras · {{ qc.jumlah if qc else 0 }} sampel{% if qc and qc.menunggu %} · {{ qc.menunggu }} menunggu hasil lab{% endif %}</p>
     </summary>
 
     {% if k.bahan_pasti and k.neraca.timpang %}
@@ -251,7 +252,8 @@
         <span class="riwayat-desktop-number">{{ kg(k.neraca.susut.kg) ~ " kg" if k.bahan_pasti else "Belum dapat dipastikan" }}</span>
         <span>{{ psn(k.rendemen) }}</span>
         <span>{{ k.oleh }}</span>
-      </summary>
+        {% set qc = qc_rekap.get(k.id) %}<p class="bantu">QC beras · {{ qc.jumlah if qc else 0 }} sampel{% if qc and qc.menunggu %} · {{ qc.menunggu }} menunggu hasil lab{% endif %}</p>
+    </summary>
       <div class="riwayat-desktop-detail">
         {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %}</span></div>{% endif %}
         {% if k.bahan_pasti and k.neraca.timpang %}

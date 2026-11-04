@@ -608,6 +608,7 @@ async def catat_output(
     spek = (spek or "").strip() or None
     baris = PolishingOutputLog(
         polishing_process_id=proc.id, jenis=jenis, berat_kg=berat, spek=spek,
+        cara_input="kumulatif" if berat_kumulatif is not None else "tambahan",
         waktu_update=input_time(tanggal, jam), input_by=user.id,
     )
     db.add(baris)

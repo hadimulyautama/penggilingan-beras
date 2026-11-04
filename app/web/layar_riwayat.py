@@ -872,6 +872,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
 
+    if jenis == "beras-hasil-sosoh":
+        from app.web.riwayat_qc_sosoh import halaman
+        return await halaman(request, referensi)
+
     grouped: dict[str, dict] = {}
     qc_detail = {}
 

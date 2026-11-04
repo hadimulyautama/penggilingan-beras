@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block judul %}QC beras hasil sosoh{% endblock %}
+{% block isi %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
+<main class="riwayat-detail">
+  <header class="riwayat-detail__hero"><h1>QC beras hasil sosoh</h1><p>Sampel, hasil lab, estimasi sesi garapan, dan pemetaan ke hasil timbang.</p></header>
+  {% if qc_sosoh is defined %}
+    <p><a class="btn btn--kecil" href="/riwayat-qc/beras-hasil-sosoh">← Semua proses QC beras</a> <a class="btn btn--kecil" href="{{ proses_href }}">Lihat proses {{ qc_kode }}</a></p>
+    <h2>{{ qc_kode }}</h2>
+    {% include "_qc_sosoh.html" %}
+  {% else %}
+    {% if not PORTAL_READ_ONLY and akun and akun.is_admin and MUTU_AKTIF %}<p><a class="btn btn--kecil" href="?buka=sampel_qc_sosoh">Ambil sampel QC beras</a> <a class="btn btn--kecil" href="?buka=qc_sosoh">Isi hasil QC beras</a></p>{% endif %}
+    {% for p in proses_qc %}<section class="riwayat-detail__card"><h2><a href="/riwayat-qc/beras-hasil-sosoh/{{ p.kode }}">{{ p.kode }}</a></h2><p>{{ p.jumlah }} sampel · {{ p.menunggu }} menunggu hasil QC · {{ 'proses berjalan' if p.status == 'proses' else 'proses selesai' }}</p></section>
+    {% else %}<p>Belum ada sampel QC beras. Sampel dapat dicatat sebelum hasil timbang.</p>{% endfor %}
+  {% endif %}
+</main>
+{% if not PORTAL_READ_ONLY %}<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>{% endif %}
+{% endblock %}
+{% block kaki %}{% if not PORTAL_READ_ONLY %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ request.query_params.get('buka', '') }}" data-nilai="{{ request.query_params.get('nilai', '') }}"></script>{% endif %}{% endblock %}
