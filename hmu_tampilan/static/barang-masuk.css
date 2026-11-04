@@ -37,15 +37,6 @@ body.padiflow-ui .bm-form-filter .fld { width:100%; min-width:0; min-height:48px
   .bm-tab a:not([aria-current=page]) { display:none; }
   .masuk-baris { break-inside:avoid; }
 }
-@media screen {
-  body:has(.bm-kepala) .masuk-daftar { border:0; background:var(--pd-sheet); border-radius:12px; }
-  body:has(.bm-kepala) .masuk-kepala { background:var(--pd-soft); color:var(--pd-muted); }
-  body:has(.bm-kepala) .masuk-baris { padding:16px 12px; border-color:var(--pd-line); }
-  @media(max-width:650px) {
-    body:has(.bm-kepala) .masuk-daftar { background:transparent; display:grid; gap:12px; }
-    body:has(.bm-kepala) .masuk-baris { border:1px solid var(--pd-line); border-radius:12px; padding:16px; background:var(--pd-sheet); }
-  }
-}
 
 .bm-pencarian { display:flex; align-items:center; gap:8px; flex-wrap:wrap; width:min(460px,100%); margin:0; }
 .bm-pencarian .bm-cari { flex:1; min-width:0; width:auto; }
