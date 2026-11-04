@@ -81,11 +81,12 @@ async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
                 field=page.locator('main input[type=search]').first
                 await field.fill('ketikan belum dikirim')
                 await field.evaluate('(el)=>window.inputAsli=el')
-                top=await page.locator('main').evaluate('(el)=>{el.scrollTop=40;return el.scrollTop}')
+                top=await page.evaluate("() => {window.readScroller=[document.querySelector('main'),document.scrollingElement].find(el=>el && el.scrollHeight>el.clientHeight+40);if(!window.readScroller)return 0;window.readScroller.scrollTop=40;return window.readScroller.scrollTop}")
+                assert top>0, 'Halaman uji harus benar-benar dapat digulir'
                 await asyncio.sleep(2);gates[daftar].set();await asyncio.sleep(.4)
                 await expect(field).to_have_value('ketikan belum dikirim')
                 assert await page.evaluate('window.inputAsli.isConnected')
-                assert await page.locator('main').evaluate('(el)=>el.scrollTop')==top
+                assert await page.evaluate('window.readScroller.scrollTop')==top
                 await field.fill('');await field.evaluate('(el)=>el.blur()')
                 await expect(page.locator('main a[href="'+detailHref+'"]').first).to_be_visible()
                 await page.locator('main a[href="'+detailHref+'"]').first.tap()
@@ -103,7 +104,7 @@ async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
                 out=Path(os.environ.get('UJI_PONSEL_OUT','output/ponsel'));out.mkdir(parents=True,exist_ok=True)
                 name=('portal' if pelanggan else 'padiflow')+f'-{engine}-{width}'
                 await page.screenshot(path=str(out/(name+'.png')))
-                (out/(name+'.json')).write_text(json.dumps({'engine':engine,'width':width,'touch':True,'sidebar_taps':taps[daftar],'detail_taps':taps[detail],'data_delay_ms':2000,'menu_preserved':True,'input_preserved':True,'scroll_preserved':True,'errors':errors,'writes':writes})+'\n')
+                (out/(name+'.json')).write_text(json.dumps({'engine':engine,'width':width,'touch':True,'sidebar_taps':taps[daftar],'detail_taps':taps[detail],'data_delay_ms':2000,'menu_preserved':True,'input_preserved':True,'scroll_preserved':True,'scroll_test_top':top,'errors':errors,'writes':writes})+'\n')
                 await page.go_back();await expect(page).to_have_url(BASE+daftar)
                 await expect(page.locator('.halaman-memuat')).to_have_count(0,timeout=10000)
             finally:
