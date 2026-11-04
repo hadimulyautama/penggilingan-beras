@@ -30,7 +30,13 @@
       // atau meminta pengguna memuat ulang halaman yang tidak berubah.
       if (lama === baru) { ops.status('selesai'); return; }
       if (lama && sentuhan !== ops.sentuhan()) {
-        ops.status('perubahan', function () { pindah(url, false, gulung); }); return;
+        // Navigasi dari cache juga mengikuti pembaruan tanpa meminta ketukan.
+        // Bila pengguna mulai mengisi filter, denyut berikutnya melanjutkan
+        // sesudah fokus dilepas; isian dan posisi tidak ditimpa.
+        if (!ops.siap || ops.siap()) {
+          if (!ops.pasang(baru, url, false, gulung, true)) { ops.utuh(url); return; }
+        }
+        ops.status('selesai'); return;
       }
       if (!ops.pasang(baru, url, lama ? false : dorong, gulung)) { ops.utuh(url); return; }
       ops.status('selesai');
