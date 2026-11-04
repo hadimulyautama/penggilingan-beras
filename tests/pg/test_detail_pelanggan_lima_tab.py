@@ -97,7 +97,8 @@ async def test_tab_portal_baca_saja_tidak_membocorkan_pelanggan_lain(pg,portal):
             assert r.status_code==200,r.text[:500]
             assert 'Rahasia Pelanggan B' not in r.text and 'LOT-RAHASIA-B' not in r.text
             s=BeautifulSoup(r.text,'html.parser')
-            assert len(s.select('.jasa-detail-tab a'))==5
+            from app.web.portal.navigation import MENU
+            assert len(s.select('#sidebar-pelanggan nav[aria-label="Menu utama"] a'))==len(MENU)
             assert not s.select('dialog,[data-kirim],[data-post]')
             assert 'Tutup pesanan' not in r.text and 'Batalkan pesanan' not in r.text
             assert not any('buka=' in a['href'] for a in s.select('a[href]'))
@@ -212,8 +213,7 @@ async def test_portal_ringkasan_dan_tab_tidak_memuat_pengiriman_retur_di_luar_sc
             for code in [o.kode for o in kiriman[1:]]+[x.kode for x in retur[1:]]:assert code not in r.text
             if tab=='ringkasan':
                 s=BeautifulSoup(r.text,'html.parser')
-                pairs={d.dt.get_text(strip=True):d.dd.get_text(strip=True) for d in s.select('.jasa-pasang>div')}
-                assert pairs=={'Pengambilan / pengiriman':'1 catatan','Retur terkait':'1 penerimaan retur'}
+                assert s.select_one('#sidebar-pelanggan a[href="/pelanggan/barang-keluar"]')
             if tab=='pengambilan':assert kiriman[0].kode in r.text and retur[0].kode in r.text
             bukti('retur-tertaut-portal-'+tab+'.html',r.text)
         for row in kiriman[1:]:assert (await c.get(f'/pelanggan/barang-keluar/{row.id}')).status_code==404

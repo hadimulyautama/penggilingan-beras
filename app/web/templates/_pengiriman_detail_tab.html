@@ -35,7 +35,7 @@
   {% if k.cepat and k.rec.status == "perintah" %}<p class="bantu">Alur cepat · di bawah 200 kg. Admin mengonfirmasi jumlah aktual dan penyerahan; tiket timbang tidak wajib.</p>{% endif %}
   {% if k.tombol %}<nav class="kirim-detail__aksi" aria-label="Tindakan perintah">
     {% for buka, nilai, label, utama in k.tombol if buka != 'tambah_barang_keluar' %}
-    <a class="btn{{ '' if utama else ' btn--kecil' }}" href="/barang-keluar/{{ k.rec.id }}?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}">{{ label }}</a>
+    <a class="btn{{ '' if utama else ' btn--kecil' }}" href="{% if buka in ('muat_barang', 'muat_semua', 'selesai_muat') %}{{ '/selesai-muat' if buka == 'selesai_muat' else '/muatan' }}?perintah={{ k.rec.id }}{% else %}/barang-keluar/{{ k.rec.id }}?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}{% endif %}">{{ label }}</a>
     {% endfor %}
   </nav>{% endif %}
 

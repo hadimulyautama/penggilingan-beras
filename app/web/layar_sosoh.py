@@ -136,7 +136,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         jeda_riwayat = await riwayat_jeda(db, jenis="penyosohan", id_=process_id, params=request.query_params)
     from app.services.penghalang_koreksi import daftar
     async with SessionLocal() as db:
-        catatan_penghalang = await daftar(db, "sosoh", process_id) if akun.is_admin and penghalang else []
+        catatan_penghalang = await daftar(db, "sosoh", process_id) if akun.is_admin else []
     return await render_laci(
         request, "riwayat_detail.html", jenis="sosoh", k=kartu[0],
         qc_sosoh=qc_sosoh, qc_kode=kartu[0].kode,

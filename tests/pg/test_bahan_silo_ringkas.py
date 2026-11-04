@@ -5,11 +5,15 @@ import pytest
 from tests.pg.test_riwayat_giling import pabrik, _isi_silo, _klien
 from tests.pg.test_gudang2_operator_pg import gudang2
 from tests.pg.test_riwayat_sosoh import _silo_berisi
+from tests.pg.halaman import data_awal, html_asal
 pytestmark = pytest.mark.asyncio
 
 def simpan(nama, r):
     assert r.status_code == 200
-    assert 'class="bahan-silo"' in r.text
+    if nama == 'aktif-sosoh':
+        assert data_awal(r, 'sosoh-awal')['sumber']
+    else:
+        assert 'class="bahan-silo"' in html_asal(r)
     if os.environ.get('UJI_POTRET_RINGKAS'):
         folder = Path('/tmp/pos-kontras340/halaman345')
         folder.mkdir(exist_ok=True)
@@ -32,8 +36,8 @@ async def test_giling_sumber_ulang_aktif_dan_riwayat(pg, pabrik):
     async with await _klien(pg, peran='operator', gudang='Gudang 1') as c:
         r = await c.get('/proses-aktif/giling/' + pr.kode_proses)
         simpan('aktif-giling', r)
-        assert r.text.count('class="bahan-silo__satu"') == 1
-        assert 'Belum dicatat' in r.text and 'Tidak dipisahkan' in r.text
+        assert html_asal(r).count('class="bahan-silo__satu"') == 1
+        assert 'Belum dicatat' in html_asal(r) and 'Tidak dipisahkan' in html_asal(r)
     async with pg() as db:
         u = await db.get(User, pabrik['user'])
         await tutup_silo_giling(db, user=u, kode_proses=pr.kode_proses, nama_silo='A', sisa_kg=500)
@@ -57,8 +61,9 @@ async def test_sosoh_pemakaian_ulang_aktif_dan_riwayat(pg, gudang2):
     async with await _klien(pg, peran='admin') as c:
         r = await c.get('/proses-aktif/sosoh/' + pr.kode_proses)
         simpan('aktif-sosoh', r)
-        assert r.text.count('class="bahan-silo__satu"') == 1
-        assert 'Belum dicatat' in r.text
+        sumber = data_awal(r, 'sosoh-awal')['sumber']
+        assert len(sumber) == 2 and [s['sisa'] for s in sumber] == [0, None]
+        assert sumber[0]['id'] != sumber[1]['id']
     async with pg() as db:
         await catat_output(db, user=u, kode=pr.kode_proses, jenis='medium', berat_kumulatif=1000)
         await selesai_penyosohan(db, user=u, kode=pr.kode_proses, nama_silo='B', sisa_kg=100)

@@ -184,7 +184,8 @@ def test_tiap_kartu_menyebut_asal_usul_barangnya():
 
     sumber = inspect.getsource(svc)
     assert "async def _asal(" in sumber
-    fn = inspect.getsource(svc._asal)
+    assert "await _asal_banyak(" in inspect.getsource(svc._asal)
+    fn = inspect.getsource(svc._asal_banyak)
     assert "Supplier.nama_supplier" in fn and "tanggal_pembelian" in fn
     assert 'f"masuk {_tgl(tgl)}"' in fn
 
@@ -193,7 +194,7 @@ def test_tiap_kartu_menyebut_asal_usul_barangnya():
     g1 = inspect.getsource(svc.untuk_gudang1)
     assert g1.count("await _asal(") >= 5, "ada kartu yang belum menyebut asalnya"
     assert "_pemasok_ringkas(" in g1
-    assert "await _asal(" in inspect.getsource(svc.untuk_staff)
+    assert "await _asal_banyak(" in inspect.getsource(svc.untuk_staff)
 
 
 def test_kartu_pk_menyebut_lot_gilingnya():

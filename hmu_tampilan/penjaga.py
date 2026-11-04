@@ -14,7 +14,7 @@ from pathlib import Path
 from . import BERKAS_PAKET
 
 MANIFEST = "MANIFEST.sha256"
-_ABAIKAN = {".venv", "node_modules", "__pycache__", ".git", "graphify-out", "hmu_tampilan"}
+_ABAIKAN = {".venv", "node_modules", "__pycache__", ".git", "graphify-out", "hmu_tampilan", "output"}
 
 
 def _sha(p: Path) -> str:
@@ -48,12 +48,24 @@ def baca_manifest(akar_paket: Path) -> dict[str, str]:
 
 
 def salinan_terlarang(akar_repo: Path) -> list[Path]:
-    """Berkas bernama sama dengan berkas paket, di luar folder vendored."""
+    """Tolak penimpaan templat paket dan salinan aset, bukan nama layar portal.
+
+    `portal/masuk.html` adalah layar tersendiri dalam namespace Jinja. Ia
+    tidak menimpa `masuk.html`. Salinan identik tetap ditolak walau dipindah
+    ke namespace lain. Hasil ekspor/pratinjau di output bukan sumber aplikasi.
+    """
     temuan = []
     for p in akar_repo.rglob("*"):
         if any(bag in _ABAIKAN for bag in p.relative_to(akar_repo).parts[:-1]):
             continue
         if p.is_file() and p.name in BERKAS_PAKET:
+            rel = p.relative_to(akar_repo)
+            if 'templates' in rel.parts:
+                nama = Path(*rel.parts[rel.parts.index('templates') + 1:])
+                sumber = Path(__file__).resolve().parent / 'templates'
+                asli = sumber / p.name
+                if len(nama.parts) > 1 and not (sumber / nama).exists() and asli.exists() and p.read_bytes() != asli.read_bytes():
+                    continue
             temuan.append(p.relative_to(akar_repo))
     return temuan
 

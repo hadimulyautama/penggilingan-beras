@@ -82,7 +82,7 @@ async def test_picker_barang_dan_kartu_membawa_perintah_pemilik_plat(pg,gudang):
     assert {r['value'] for r in rows}=={str(i.id) for i in a.baris}
     assert not {r['value'] for r in rows}&{str(i.id) for i in b.baris}
     assert all(a.rec.kode in r['label'] and 'Bu Sri' in r['label'] and 'B 1234 XY' in r['label'] for r in rows)
-    assert ('muat_barang',str(a.rec.id),'Catat per barang',False) in _tombol(a.rec,boleh_perintah=False,boleh_muat=True)
+    assert ('muat_barang',str(a.rec.id),'Catat muatan',True) in _tombol(a.rec,boleh_perintah=False,boleh_muat=True)
     # Tombol halaman Barang Keluar dan antrean sama-sama membawa id truk;
     # render kartu antrean diuji oleh suite muat konfirmasi yang sudah ada.
 

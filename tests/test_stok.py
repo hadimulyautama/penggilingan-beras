@@ -162,7 +162,7 @@ def test_angka_stok_dipinjam_bukan_dihitung_ulang():
     from app.services import stok
 
     fn = inspect.getsource(stok.pk_gudang1)
-    assert "pk_breakdown_banyak" in fn
+    assert "pk_saldo_query()" in fn
     assert "func.sum" not in fn, "stok dihitung ulang di sini"
 
 
@@ -615,7 +615,8 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     assert mini.count("await _wajib_mutu()") == 9, "ada rute mutu tanpa penjaga"
 
     jalan = (AKAR / "app/services/berjalan.py").read_text()
-    assert "if mutu_aktif else 1" in jalan, "kartu QC giling tak ikut padam"
+    assert "qc_aktif = await fitur_mutu(db) if giling_jalan else False" in jalan
+    assert "if qc_aktif else {}" in jalan, "pembacaan QC giling tak ikut padam"
     assert "if await fitur_mutu(db) else []" in jalan, "kartu QC PK luar tak ikut padam"
     # Jumlah/lokasi impor bukan kontrak fitur. Kartu dan POST QC saat fitur
     # padam, lalu kartu yang pulih saat menyala, diuji lewat HTTP untuk

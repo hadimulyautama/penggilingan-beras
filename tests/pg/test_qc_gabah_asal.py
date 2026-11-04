@@ -62,7 +62,8 @@ async def test_dari_gabah_ke_pk_tanpa_mengubah_angka(pg, dryer_tab, peran):
             r=await c.get(url+('&' if '?' in url else '?')+'tab_detail=bahan')
             assert r.status_code==200,(tahap,r.text[:200])
             for teks in ['QC gabah asal','QC 1','QC 2','24%','27%','Ya · 2 sak','Padat',dryer_tab['tambahan'],'QC gabah belum tercatat untuk batch ini.']:
-                assert teks in r.text,(tahap,teks)
+                from tests.pg.halaman import html_asal
+                assert teks in html_asal(r),(tahap,teks)
             if tahap in ['pengeringan','pendinginan','sudah-dingin','silo']:
                 assert 'Mode dryer belum tercatat' in r.text
             async with pg() as db:

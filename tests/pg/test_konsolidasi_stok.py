@@ -82,6 +82,17 @@ def normal(nilai):
     return nilai
 
 
+def navigasi_stok(html):
+    from bs4 import BeautifulSoup
+    s = BeautifulSoup(html, 'html.parser')
+    nav = s.select_one('nav[aria-label="Jenis stok"]')
+    assert nav and len(nav.select('a,span[aria-disabled]')) == 3
+    form = s.select_one('#sk-filter form[method="get"][action="/stok"]')
+    assert form
+    assert {o['value'] for o in form.select('select[name="pemilik"] option')} == {'pabrik', 'jasa'}
+    assert {o['value'] for o in form.select('select[name="gudang"] option')} == {'', 'g1', 'g2'}
+
+
 @pytest.mark.parametrize('lama,tab,pemilik', PASANGAN)
 async def test_enam_alias_saldo_dan_aksi_sama(pg, stok_lengkap, monkeypatch, lama, tab, pemilik):
     from app.web import tampilan
@@ -149,14 +160,13 @@ async def test_akses_lama_baru_dan_navigasi_saat_kosong(pg, stok_lengkap, role, 
                 r = await c.get(url)
                 assert r.status_code == (403 if gudang == 'g1' and tab != 'bahan' else 200), url
                 if r.status_code == 200:
-                    assert 'aria-label="Jenis barang"' in r.text
-                    assert 'aria-label="Kepemilikan stok"' in r.text
+                    navigasi_stok(r.text)
                     assert 'class="pintu__jml pintu__jml--stok"' not in r.text
         if role == 'admin':
             r = await c.get('/stok?tab=produk&pemilik=pabrik&gudang=g1')
             assert 'Tak ada' in r.text or 'Belum ada' in r.text
             assert '9.000' not in r.text
-            assert 'aria-label="Jenis barang"' in r.text
+            navigasi_stok(r.text)
 
 
 async def test_detail_dan_kembali_mempertahankan_filter(pg, stok_lengkap):
@@ -218,8 +228,7 @@ async def test_navigasi_enam_pilihan_tetap_ada_pada_database_kosong(pg):
         for lama, tab, pemilik in PASANGAN:
             r = await c.get(f'/stok?tab={tab}&pemilik={pemilik}')
             assert r.status_code == 200, r.text
-            assert 'aria-label="Jenis barang"' in r.text
-            assert 'aria-label="Kepemilikan stok"' in r.text
+            navigasi_stok(r.text)
             assert 'Belum ada' in r.text
 
 

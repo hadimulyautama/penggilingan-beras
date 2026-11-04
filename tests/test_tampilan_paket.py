@@ -18,6 +18,23 @@ def test_tak_ada_salinan_berkas_paket_di_repo_ini():
     assert penjaga.salinan_terlarang(AKAR) == []
 
 
+def test_penjaga_membedakan_namespace_dan_salinan_asli(tmp_path):
+    sumber = AKAR / 'hmu_tampilan/templates/masuk.html'
+    portal = tmp_path / 'app/web/templates/portal/masuk.html'
+    portal.parent.mkdir(parents=True)
+    portal.write_text('<h1>Masuk pelanggan</h1>')
+    ekspor = tmp_path / 'output/pratinjau/masuk.html'
+    ekspor.parent.mkdir(parents=True)
+    ekspor.write_bytes(sumber.read_bytes())
+    assert penjaga.salinan_terlarang(tmp_path) == []
+    portal.write_bytes(sumber.read_bytes())
+    assert penjaga.salinan_terlarang(tmp_path) == [portal.relative_to(tmp_path)]
+    portal.unlink()
+    timpa = portal.parent.parent / 'masuk.html'
+    timpa.write_text('<h1>Menimpa layar paket</h1>')
+    assert penjaga.salinan_terlarang(tmp_path) == [timpa.relative_to(tmp_path)]
+
+
 def test_vendored_selaras_dengan_manifest_dan_sumbernya():
     assert penjaga.vendor_selaras(AKAR) == []
 

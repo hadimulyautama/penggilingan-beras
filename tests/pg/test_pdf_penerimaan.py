@@ -2,6 +2,7 @@
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
+from bs4 import BeautifulSoup
 import os
 
 import pytest
@@ -269,8 +270,10 @@ async def test_portal_unduh_sendiri_url_asing_ditolak_dan_tidak_ada_perubahan(pg
         async with pg() as db:awal=await sidik(db)
         page=await c.get(f'/pelanggan/barang-masuk/{tids[0]}')
         assert f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf' in page.text
-        assert f'data-penerimaan-share="/pelanggan/barang-masuk/{tids[0]}/laporan.pdf"' in page.text
-        assert '/static/pdf-penerimaan.js?' in page.text
+        # Portal menyajikan tautan PDF baca saja, tanpa tombol aksi internal.
+        soup=BeautifulSoup(page.text,'html.parser')
+        assert soup.select_one(f'a[href^="/pelanggan/barang-masuk/{tids[0]}/laporan.pdf"]'), [a['href'] for a in soup.select('a[href]') if '.pdf' in a['href']]
+        assert not soup.select('[data-penerimaan-share]')
         pdf,teks=isi(await c.get(f'/pelanggan/barang-masuk/{tids[0]}/laporan.pdf'))
         assert 'Pemilik barang:' in teks and portal.owners[0].nama_pelanggan in teks
         assert portal.owners[1].nama_pelanggan not in teks

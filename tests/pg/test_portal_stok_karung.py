@@ -164,7 +164,7 @@ async def test_barang_saya_memisahkan_karung_kosong_dari_karung_berisi_dan_detai
             response=await c.get(path);assert response.status_code==200,(name,response.text[:200])
             s=BeautifulSoup(response.text,'html.parser')
             assert len(s.select('main h1'))==1 and 'Cap Privat B' not in s.main.get_text()
-            assert not s.select('nav[aria-label="Jenis barang"],nav[aria-label="Lokasi stok"]')
+            assert not s.select('[data-stok-controls],nav[aria-label="Jenis stok"]')
             (out/(name+'.html')).write_text(response.text)
         for suffix in ('timbang','belum'):
             s=BeautifulSoup((await c.get(stok_karung['pk_karung_'+suffix])).text,'html.parser')

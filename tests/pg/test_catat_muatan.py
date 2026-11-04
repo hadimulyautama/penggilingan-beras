@@ -201,7 +201,7 @@ async def test_http_formulir_endpoint_dan_peran_g1_g2_tetap_saling_menggantikan(
             if gid=='g2':
                 detail=await c.get(f'/barang-keluar/{rs[0].rec.id}')
                 assert detail.status_code==200,detail.text
-                assert 'Catat muatan' in detail.text and 'buka=muat_barang' in detail.text
+                assert 'Catat muatan' in detail.text and f'/muatan?perintah={rs[0].rec.id}' in detail.text
                 lama=await c.get(f'/muatan?perintah={rs[0].rec.id}&item={rs[0].baris[0].id}')
                 assert lama.status_code==200 and f'data-item="{rs[0].baris[0].id}"' in lama.text
                 assert 'Penerima A' in detail.text and 'Penerima B' in detail.text

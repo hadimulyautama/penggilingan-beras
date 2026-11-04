@@ -17,17 +17,18 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         assert r.status_code==200
         import re
         from html import unescape
-        masuk=re.search(r'href="([^"]+)"[^>]*><span class="kerja-tab__nama">Pekerjaan lain</span></a>',r.text)
-        assert masuk and '/pekerjaan/catat-lain?' in masuk[1]
+        from bs4 import BeautifulSoup
+        masuk=BeautifulSoup(r.text,'html.parser').select_one('nav[aria-label="Tab pekerjaan"] a[href^="/pekerjaan/catat-lain?"]')
+        assert masuk and masuk.get_text(strip=True)=='Pekerjaan lain'
         assert not re.search(r'<a[^>]*href="/aksi-lain"',r.text)
         tabs=re.search(r'aria-label="Tab pekerjaan">(.*?)</nav>',r.text,re.S)[1]
         assert tabs.count('<a ')==3
-        katalog=await c.get(unescape(masuk[1]))
+        katalog=await c.get(masuk['href'])
         assert katalog.status_code==200
         assert '← Kembali ke Pekerjaan' not in katalog.text
         assert re.findall(r'class="pil__jml">(\d+)</span>', katalog.text) == re.findall(r'class="pil__jml">(\d+)</span>', tabs)
-        tujuan=re.search(r'href="([^"]+)"[^>]*><span class="kerja-tab__nama">Berjalan</span>',katalog.text)
-        assert parse_qs(urlsplit(unescape(tujuan[1])).query)==parse_qs(query)
+        tujuan=BeautifulSoup(katalog.text,'html.parser').select_one('nav[aria-label="Tab pekerjaan"] a[href*="tab=berjalan"]')
+        assert tujuan and parse_qs(urlsplit(tujuan['href']).query)==parse_qs(query)
         menu=(await c.get('/api/actions/menu')).json()
         ada={a['id']:a for a in menu}
         katalog_ids={a['id'] for a in menu if not a.get('kartu')}

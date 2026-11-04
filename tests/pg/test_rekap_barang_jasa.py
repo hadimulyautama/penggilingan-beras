@@ -79,10 +79,9 @@ async def test_gabah_basah_kering_digabung_lalu_pk_diambil(pg, dunia):
     async with client(account) as c:
         laporan = await c.get('/pelanggan/laporan')
         soup = BeautifulSoup(laporan.text, 'html.parser')
-        links = soup.find('h2', string='Rekap Barang Jasa').parent.find_all('a', string='Baca PDF')
+        links = soup.select(f'a[href="/pelanggan/jasa/{jid}/nota"]')
         assert len(links) == 1  # Satu rekap utama, dua penerimaan.
-        assert links[0]['href'] == f'/pelanggan/jasa/{jid}/nota.pdf'
-        assert soup.find('a', string='Lihat rekap pesanan gabungan')['href'] == f'/pelanggan/jasa/{jid}/nota'
+        assert links[0]['href'] == f'/pelanggan/jasa/{jid}/nota'
         old = await c.get(f"/pelanggan/jasa/{max(dunia['jasa1'], dunia['jasa2'])}/nota")
         assert 'sudah digabung' in old.text and 'Neraca bobot' not in old.text
         assert 'Baca PDF' not in BeautifulSoup(old.text, 'html.parser').get_text()
@@ -120,7 +119,7 @@ async def test_rekap_staff_portal_pdf_sama_dan_pelanggan_lain_ditolak(pg, portal
         soup = BeautifulSoup(halaman.text, 'html.parser')
         assert soup.title.get_text(strip=True) == 'Rekap Barang Jasa · PadiFlow Pelanggan'
         teks = soup.select_one('.rekap-jasa').get_text(' ',strip=True)
-        assert soup.find('a', string='Baca PDF')['href'] == f'/pelanggan/jasa/{jid}/nota.pdf'
+        assert soup.select_one(f'a[href="/pelanggan/jasa/{jid}/nota.pdf?unduh=1"]')
         pdf = await c.get(f'/pelanggan/jasa/{jid}/nota.pdf')
         isi = teks_pdf(pdf)
         flattened = ' '.join(isi.split())
@@ -128,7 +127,8 @@ async def test_rekap_staff_portal_pdf_sama_dan_pelanggan_lain_ditolak(pg, portal
             for td in row.find_all('td'):
                 text = td.get_text(' ',strip=True)
                 if text not in ('Belum ada barang masuk.','Belum ada hasil yang diambil.'):
-                    assert text in flattened
+                    # Portal menjabarkan singkatan PK; jumlah/referensi tetap.
+                    assert text.replace('Beras pecah kulit (PK)', 'Beras PK') in flattened
         assert 'REKAP BARANG JASA' in isi
         assert 'Rahasia Pelanggan B' not in isi
         unduh = await c.get(f'/pelanggan/jasa/{jid}/nota.pdf?unduh=1')
@@ -138,10 +138,13 @@ async def test_rekap_staff_portal_pdf_sama_dan_pelanggan_lain_ditolak(pg, portal
         assert (await c.get(f'/pelanggan/jasa/{jid}/nota.pdf?pelanggan_id={portal.owners[1].id}')).status_code == 404
         assert (await c.get(f'/jasa/{jid}/nota.pdf')).status_code == 303
         laporan = await c.get('/pelanggan/laporan')
-        assert 'Rekap Barang Jasa' in laporan.text and 'Nota pesanan' not in laporan.text
+        assert 'Rekap barang' in laporan.text and 'Nota pesanan' not in laporan.text
     async with await _klien(pg, peran='admin') as c:
         native = await c.get(f'/jasa/{jid}/nota')
-        assert BeautifulSoup(native.text, 'html.parser').select_one('.rekap-jasa').get_text(' ',strip=True) == teks
+        # Judul, navigasi dan penjabaran PK mengikuti bahasa masing-masing
+        # layar. Seluruh nilai tabel/neraca dan PDF harus tetap sama.
+        data_html=lambda html:[td.get_text(' ',strip=True).replace('Beras pecah kulit (PK)', 'Beras PK') for td in BeautifulSoup(html,'html.parser').select('.rekap-table tbody td,.rekap-totals dd,.rekap-lines dd')]
+        assert data_html(native.text) and data_html(native.text)==data_html(halaman.text)
         assert teks_pdf(await c.get(f'/jasa/{jid}/nota.pdf')) == isi
     async with await _klien(pg, peran='operator', gudang='g1') as c:
         assert (await c.get(f'/jasa/{jid}/nota.pdf')).status_code == 403

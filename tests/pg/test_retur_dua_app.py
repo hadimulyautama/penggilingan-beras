@@ -68,7 +68,14 @@ def _skema_head():
             rev=await c.scalar(text('SELECT version_num FROM alembic_version_timbangan')) if ada else None
         await e.dispose();return rev
     rev=asyncio.run(versi())
-    if rev=='0047_pengiriman_snapshot':steps=steps[-2:]
+    # Source TeraFlow terpin menentukan head-nya sendiri; nomor lama yang
+    # ditanam di tes membuat database uji sah tidak bisa dipakai ulang.
+    head=subprocess.run([str(TF/'.venv/bin/python'),'-m','alembic','heads'],cwd=TF,
+        env=env,capture_output=True,text=True,timeout=30)
+    assert head.returncode==0,head.stderr[-1000:]
+    heads=[line.split()[0] for line in head.stdout.splitlines() if '(head)' in line]
+    assert len(heads)==1,'Profil retur memerlukan satu head migrasi TeraFlow.'
+    if rev==heads[0]:steps=steps[-2:]
     elif rev is not None:raise AssertionError('Database uji harus baru atau sudah di head kedua aplikasi; jangan menstempel ulang skema yang sudah terisi.')
     for i,(cwd,python,args) in enumerate(steps):
         r=subprocess.run([python,'-m','alembic',*args],cwd=cwd,env=env,capture_output=True,text=True,timeout=180)

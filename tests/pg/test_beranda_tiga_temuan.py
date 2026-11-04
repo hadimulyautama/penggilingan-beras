@@ -23,7 +23,10 @@ async def test_kosong_dan_gagal_terpisah(pg,gudang,monkeypatch,gagal):
     async def kosong(*a,**kw):return svc.Berjalan()
     if gagal in ('pekerjaan','semua'):monkeypatch.setattr(svc,'untuk',rusak)
     else:monkeypatch.setattr(svc,'untuk',kosong)
-    if gagal in ('ringkasan','semua'):monkeypatch.setattr(main,'dashboard_data',rusak)
+    if gagal in ('ringkasan','semua'):
+        from app.services import dashboard, beranda
+        monkeypatch.setattr(dashboard,'ringkasan_beranda',rusak)
+        monkeypatch.setattr(beranda,'angka_gudang',rusak)
     if gagal in ('pengiriman','semua'):monkeypatch.setattr(barang_keluar,'menunggu_muat',rusak)
     async with await _klien(pg,gudang['adm']) as c:
         for _ in range(2):
@@ -74,7 +77,9 @@ async def test_informasi_tetap_bisa_ditemukan(pg,gudang,monkeypatch):
         h=await c.get('/');r=await c.get('/pekerjaan?tab=berjalan&informasi=1')
         assert 'href="/aksi"' not in h.text and 'informasi=1' in h.text
         assert 'INFO-UNIK' in r.text and 'TR' in r.text
-        assert 'Perlu tindakan' in r.text and 'class="kerja-tab__nama">Berjalan</span>' in r.text
+        from bs4 import BeautifulSoup
+        nav=BeautifulSoup(r.text,'html.parser').select_one('nav[aria-label="Tab pekerjaan"]')
+        assert nav and 'Perlu tindakan' in nav.get_text() and 'Berjalan' in nav.get_text()
 
 async def test_proses_hari_lalu_tetap_aktif_saat_ringkasan_gagal(pg,pengeringan,monkeypatch):
     from app import main
@@ -85,7 +90,8 @@ async def test_proses_hari_lalu_tetap_aktif_saat_ringkasan_gagal(pg,pengeringan,
     async with pg() as db:
         lot=await db.get(DryingLot,pengeringan['id']);lot.waktu_mulai_pengeringan=now_local()-timedelta(days=2);await db.commit()
     async def rusak(*a,**kw):raise RuntimeError('uji')
-    monkeypatch.setattr(main,'dashboard_data',rusak)
+    from app.services import dashboard
+    monkeypatch.setattr(dashboard,'ringkasan_beranda',rusak)
     async with await klien_peran(pg,peran='operator',gudang='Gudang 1') as c:
         r=await c.get('/');assert pengeringan['kode'] in r.text
         assert 'Ringkasan operasional belum dapat dimuat' in r.text

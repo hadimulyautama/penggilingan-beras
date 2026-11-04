@@ -164,6 +164,12 @@
     </section>
     {% set isian_koreksi = isian_koreksi|default({}) %}
     {% if boleh_koreksi %}
+      {% if jenis == 'sosoh' and catatan_penghalang and not penghalang_koreksi %}
+        <details class="riwayat-detail__card"><summary>Catatan hilir terkait</summary>
+          <p>Periksa transaksi terkait bila koreksi hasil ditahan oleh pemakaian yang sudah tercatat.</p>
+          <ul>{% for c in catatan_penghalang %}<li><a href="{{ c.url }}">{{ c.kode }}</a> · {{ c.jumlah }} kg · {{ c.status }}</li>{% endfor %}</ul>
+        </details>
+      {% endif %}
       {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi hasil tersimpan.</p>{% endif %}
       {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
       {% if penghalang_koreksi %}

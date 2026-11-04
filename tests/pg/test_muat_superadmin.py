@@ -26,8 +26,8 @@ async def test_tugas_dan_tombol_muat_mengikuti_peran_efektif(pg,gudang,role,karu
         if role==P.SUPERADMIN:assert r.rec.kode in page.text and 'Muat barang keluar' in page.text
         detail=await c.get(f'/barang-keluar/{r.rec.id}')
         assert detail.status_code==200
-        assert ('buka=muat_barang' in detail.text)==(role==P.SUPERADMIN)
-        assert ('buka=selesai_muat' in detail.text)==(role==P.SUPERADMIN)
+        assert (f'/muatan?perintah={r.rec.id}' in detail.text)==(role==P.SUPERADMIN)
+        assert (f'/selesai-muat?perintah={r.rec.id}' in detail.text)==(role==P.SUPERADMIN)
         assert 'buka=batal_perintah_keluar' in detail.text
     async with pg() as db:
         assert (await db.get(User,gudang['adm'])).role==role
@@ -46,7 +46,7 @@ async def test_super_admin_lihat_sebagai_tetap_mengikuti_mode(pg,gudang,mode,sta
         c.cookies.set('produksi_lihat',mode)
         response=await c.get(f'/barang-keluar/{r.rec.id}')
         assert response.status_code==status
-        if status==200:assert ('buka=muat_barang' in response.text)==muat
+        if status==200:assert (f'/muatan?perintah={r.rec.id}' in response.text)==muat
     assert await _stok(pg,gudang)==10000
     async with pg() as db:assert (await db.get(User,gudang['adm'])).role==P.SUPERADMIN
 

@@ -32,6 +32,8 @@ AKAR = pathlib.Path(__file__).resolve().parents[1] / "app"
 #: `pelanggan_id` secara langsung — masing-masing dengan alasannya sendiri,
 #: BUKAN sebagai penentu "ini jasa atau bukan":
 _KECUALI = {
+    # Saringan pemilik yang sudah ditentukan sebagai jasa oleh argumen terpisah.
+    ("services/koreksi_bahan_berjalan.py", "sumber_bebas_g1", 'if pelanggan_id is not None:'),
     # Bounds-checking two account/contact identifiers, not classifying a
     # weighbridge ticket as jasa. The broad regex also sees kledo_id's None
     # check on this line; keep the exception exact and leave ticket guards intact.
@@ -78,14 +80,33 @@ _POLA_IS_NONE = re.compile(r"pelanggan_id[^\n]{0,40}\bis\s+(not\s+)?None\b")
 _POLA_TERNARY = re.compile(r"\bif\b[^\n]*\bpelanggan_id\b[^\n]*\belse\b")
 
 
+def _menyebut_pelanggan(expr):
+    return any((isinstance(a, ast.Name) and a.id == 'pelanggan_id')
+               or (isinstance(a, ast.Attribute) and a.attr == 'pelanggan_id')
+               or (isinstance(a, ast.Constant) and a.value == 'pelanggan_id')
+               for a in ast.walk(expr))
+
+
 def _temuan() -> list[tuple[str, int, str]]:
     hasil: list[tuple[str, int, str]] = []
     for berkas in sorted(AKAR.rglob("*.py")):
         if "__pycache__" in berkas.parts:
             continue
         rel = str(berkas.relative_to(AKAR))
-        fungsi = [n for n in ast.walk(ast.parse(berkas.read_text()))
+        pohon = ast.parse(berkas.read_text())
+        fungsi = [n for n in ast.walk(pohon)
                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        baris_ternary = {i for n in ast.walk(pohon) if isinstance(n, ast.IfExp)
+                         and _menyebut_pelanggan(n.test)
+                         for i in range(n.test.lineno, n.test.end_lineno + 1)}
+        baris_none = set()
+        for n in ast.walk(pohon):
+            if not isinstance(n, ast.Compare):
+                continue
+            for kiri, op, kanan in zip([n.left, *n.comparators], n.ops, n.comparators):
+                kosong = lambda a:isinstance(a, ast.Constant) and a.value is None
+                if isinstance(op, (ast.Is, ast.IsNot)) and ((kosong(kiri) and _menyebut_pelanggan(kanan)) or (kosong(kanan) and _menyebut_pelanggan(kiri))):
+                    baris_none.update(range(n.lineno, n.end_lineno + 1))
         dalam_docstring = False
         for i, baris in enumerate(berkas.read_text().splitlines(), start=1):
             tanda = baris.count('"""') + baris.count("'''")
@@ -103,7 +124,9 @@ def _temuan() -> list[tuple[str, int, str]]:
                 continue
             if "pelanggan_id" not in baris:
                 continue
-            if not (_POLA_IS_NONE.search(baris) or _POLA_TERNARY.search(baris)):
+            # Periksa KONDISI ternary, bukan nama pelanggan di bagian lain
+            # baris panjang yang kebetulan mempunyai ternary untuk berat.
+            if i not in baris_none and i not in baris_ternary:
                 continue
             pemilik = [f for f in fungsi if f.lineno <= i <= f.end_lineno]
             nama_fungsi = max(pemilik, key=lambda f: f.lineno).name if pemilik else ""
@@ -123,6 +146,16 @@ def test_pelanggan_id_tak_dipakai_sebagai_penentu_jasa():
         "(bukan penentu jasa), daftarkan di _KECUALI berikut alasannya:\n"
         + "\n".join(f"  {f}:{n}: {baris}" for f, n, baris in temuan)
     )
+
+
+def test_kondisi_ternary_diperiksa_tanpa_menuduh_kolom_di_sebelahnya(monkeypatch, tmp_path):
+    monkeypatch.setitem(globals(), 'AKAR', tmp_path)
+    f = tmp_path / 'contoh.py'
+    f.write_text('def baca(r):\n return dict(pelanggan_id=r.pelanggan_id, kg=1 if r.berat is not None else 0)\n')
+    assert _temuan() == []
+    for kondisi in ('r.pelanggan_id', 'r.get("pelanggan_id")', 'pelanggan_id'):
+        f.write_text(f'def baca(r):\n return "jasa" if {kondisi} else "pabrik"\n')
+        assert len(_temuan()) == 1
 
 
 def test_penjaga_menangkap_bentuk_lama_sebelum_dibetulkan():

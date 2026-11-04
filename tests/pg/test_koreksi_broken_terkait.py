@@ -53,7 +53,7 @@ async def test_preview_tanpa_mutasi_dan_simpan_atomik_5350_nol(pg,kasus):
 
 async def test_hasil_nol_tanpa_pilihan_terkait_tetap_ditolak(pg,kasus):
     uid,kode,mid,bid,sid=kasus
-    with pytest.raises(ValueError,match='ditahan'):await save(pg,uid,kode,hasil={'broken':0})
+    with pytest.raises(g2.Gudang2Error,match='hasil .* kurang dari'):await save(pg,uid,kode,hasil={'broken':0})
     async with pg() as db:assert (await db.get(ByproductStock,bid)).berat_kg==50
 
 async def test_bahan_sudah_dipakai_proses_lain_ditolak(pg,kasus):
@@ -135,7 +135,7 @@ async def test_perpindahan_lain_tidak_dibatalkan_diam_diam(pg,kasus):
         u=await db.get(User,uid);silo=await db.get(Silo,sid)
         await g2.masukkan_broken_ke_silo(db,user=u,kode_pol=kode,nama_silo=silo.nama_silo,berat_kg=25)
         other=await db.scalar(select(BrokenKeSilo).where(BrokenKeSilo.id!=mid));oid=other.id
-    with pytest.raises(ValueError,match='ditahan'):await joint(pg,kasus)
+    with pytest.raises(g2.Gudang2Error,match='hasil .* kurang dari'):await joint(pg,kasus)
     async with pg() as db:
         assert (await db.get(ByproductStock,bid)).berat_kg==50
         assert await db.scalar(select(BrokenKeSilo.id).where(BrokenKeSilo.id==oid))==oid

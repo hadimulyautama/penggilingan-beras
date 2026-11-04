@@ -106,7 +106,13 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     elif m:=re.fullmatch(r'/jasa/pelanggan/(\d+)',path):
         if int(m[1])!=reader.pelanggan_id:missing()
         from .beranda import halaman
-        result=await halaman(req,'barang' if q.get('tab') in ('stok','pengambilan') else 'jasa')
+        if q.get('tab')=='pengambilan':
+            req=native_request(request,'/barang-keluar',scope)
+            result=await outgoing.halaman_barang_keluar(req,account)
+        else:
+            bagian={'stok':'barang','penerimaan':'masuk'}.get(q.get('tab'),'jasa')
+            req=native_request(request,{'barang':'/barang-saya','masuk':'/barang-masuk','jasa':'/jasa-saya'}[bagian],scope)
+            result=await halaman(req,bagian)
     elif m:=re.fullmatch(r'/jasa/(\d+)(/nota(?:\.pdf)?)?',path):
         await own_order(scope,int(m[1]))
         if m[2]=='/nota.pdf':result=await jasa.rekap_pdf(int(m[1]),req,unduh=integer(q.get('unduh')) or 0,akun=account)

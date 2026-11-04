@@ -146,7 +146,8 @@ def test_stok_pk_gudang1_diturunkan_bukan_disimpan():
     # orang wajib menurunkan dari situ — bukan menghitung sendiri untuk kedua
     # kalinya.
     badan = kode_saja(milling.stok_pk_g1_pemilik)
-    assert "_pk_breakdown" in badan
+    # Pembaca ringkasan memakai kueri saldo kanonik sekaligus, tanpa N+1.
+    assert "pk_saldo_query()" in badan
     assert "stok_pk_g1_pemilik" in kode_saja(milling.stok_pk_g1)
     # Bukan dibaca dari tabel keadaan tersendiri.
     for b in (badan, kode_saja(milling.stok_pk_g1)):

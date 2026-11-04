@@ -16,7 +16,16 @@ pytestmark=pytest.mark.asyncio
 
 
 def penilaian(html):
-    return re.search(r'<div class="penilaian-pk" data-penilaian-pk="gabungan">(.*?)</section>',html,re.S)[1].strip()
+    from bs4 import BeautifulSoup, NavigableString
+    node = BeautifulSoup(html, 'html.parser').select_one('[data-penilaian-pk="gabungan"]')
+    assert node
+    # Warna cetak ditambahkan penyaji halaman QC; nilai dan pedoman tetap sama.
+    for element in node.find_all(style=True):
+        del element['style']
+    for text in list(node.find_all(string=True)):
+        if isinstance(text, NavigableString) and not text.strip():
+            text.extract()
+    return str(node)
 
 
 async def test_enam_komponen_rumus_dan_pedoman_identik_di_kedua_halaman(pg,dunia):

@@ -81,7 +81,8 @@ async def test_semua_pintu_alur_hp_tetap_scoped_dan_terbaca(pg,portal,alur):
             r=await c.get(path);assert r.status_code==200,(name,r.text[:200])
             assert 'Rahasia Pelanggan B' not in r.text and 'LOT-CATATAN-RAHASIA' not in r.text
             s=BeautifulSoup(r.text,'html.parser')
-            assert len(s.select('main h1'))==1 and len(s.select('#menu-pelanggan'))==1
+            (out/(name+'.html')).write_text(r.text)
+            assert len(s.select('main h1'))==1 and len(s.select('#menu-pelanggan'))==1,(name,path)
             assert not s.select('.portal-topbar .portal-menu')
             assert not s.select('main [data-post],main [data-aksi],main dialog')
             if name=='beranda':

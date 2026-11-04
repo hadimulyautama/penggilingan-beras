@@ -1164,10 +1164,23 @@ September 2026 suite ini tak punya satu pun uji ber-Postgres. Akibatnya
 tabrakan kode harian (P-K-01) berjalan berbulan-bulan tanpa terlihat.
 
 ```
-createdb uji_produksi
+createdb -E UTF8 -T template0 uji_produksi
 UJI_PG_URL=postgresql+asyncpg://postgres:pw@127.0.0.1:5432/uji_produksi \
-    .venv/bin/python -m pytest -q tests/pg
+    .venv/bin/python -m pytest -q tests/pg -m 'not dua_aplikasi'
 ```
+
+Profil dua aplikasi dijalankan terpisah, seperti pemisahan di
+`.github/workflows/uji.yml`. Retur memakai database baru UTF-8 bernama
+`uji_tf_retur_*`, port lokal khusus (bawaan 56639; `UJI_RETUR_PORT` bila
+berbeda), dan `UJI_TF_ROOT` menuju source/interpreter TeraFlow terpin yang
+sesuai manifest CI. Jalankan `tests/pg/test_retur_dua_app.py` dengan profil
+itu. Jangan mengarahkan profil retur ke database umum atau melonggarkan
+pagar URL agar lolos. Head TeraFlow dibaca dari source terpin, bukan nomor
+migrasi lama yang ditanam dalam tes. Draf source lokal dapat tertinggal
+dari produksi; cocokkan commit/manifest sebelum menyimpulkan integrasi rusak.
+
+UTF-8 wajib: cluster lokal SQL_ASCII dapat membuat tes JSONB gagal ketika
+menyimpan teks Unicode, walaupun query dan skema aplikasi benar.
 
 Skemanya dibangun lewat `alembic upgrade head`, bukan dari metadata —
 migrasinya sendiri ikut diuji, dan membangun dari metadata akan melewatkannya

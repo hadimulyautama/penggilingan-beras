@@ -240,7 +240,7 @@ async def render_laci(request: Request, nama: str, **konteks):
     """
     # Pembungkus hanya menambahkan informasi. Konteks/nav/portal tetap
     # dipersiapkan dengan identitas layar asal yang dipakai aplikasi lama.
-    nama_asal=konteks.get('template_stok_asal',nama)
+    nama_asal=konteks.get('template_stok_asal',konteks.get('template_kepemilikan_asal',nama))
     from app.web.portal.scope import is_customer_read
     if is_customer_read(request):
         from app.web.portal.presentation import prepare_context
