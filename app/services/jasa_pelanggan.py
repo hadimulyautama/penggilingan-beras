@@ -191,7 +191,10 @@ async def _pelanggan(db,pid,*,rinci=True,pk=None,read_scope=None,ringkasan_pesan
                 lokasi='Gudang 2',final=not bool(k.belum_final_kg),pesanan=None,
                 href='/stok-produk-jasa/detail?'+urlencode(dict(pelanggan_id=pid,jenis=k.jenis)),
                 rincian=[(x.kode,kg_rinci(x.kg),x.ket or '') for x in k.hasil],
-                kemasan_kg=k.dikemas_kg,curah_kg=k.curah_kg))
+                kemasan_kg=(k.dikemas_otomatis_kg if k.ukuran_kemasan_otomatis else k.dikemas_kg),
+                curah_kg=(k.curah_otomatis_kg if k.ukuran_kemasan_otomatis else k.curah_kg),
+                kemasan_otomatis=bool(k.ukuran_kemasan_otomatis),
+                karung_otomatis=k.jumlah_karung_otomatis,ukuran_otomatis=k.ukuran_kemasan_otomatis))
     from app.penggilingan.gudang1.services.bobot import dari_batch
     from app.penggilingan.gudang1.services.silo import _row_bobot
     q_batches=select(PurchaseBatch.id,PurchaseBatch.jasa_id,PurchaseBatch.status_batch,

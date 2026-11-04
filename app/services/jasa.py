@@ -1450,33 +1450,42 @@ async def rekap_barang_jasa(db: AsyncSession, jasa_id: int) -> dict:
     baris_out.append("─" * 58)
     baris_out.append(f"Total kembali{_kg_nota(kembali):>23}")
 
-    # ── MASIH DI PABRIK ──
+    # Rekap adalah pembaca, bukan penjaga tutup/batal pesanan. Fase bahan
+    # tetap dari layanan lama; produk memakai saldo efektif Stok, termasuk
+    # hasil otomatis tanpa FinishedGoodsStock/ByproductStock tersimpan.
     sisa = await sisa_jasa(db, jasa_id)
-    data['fase'] = FASE_JASA.get(sisa.fase, sisa.fase)
-    if sisa.ada:
-        baris_out.append("")
-        baris_out.append(f"Masih di pabrik ({FASE_JASA.get(sisa.fase, sisa.fase)})")
-        for sebut, kg in (("gabah", sisa.gabah_kg), ("di pengering", sisa.dryer_kg),
-                          ("di silo", sisa.silo_kg),
-                          ("gabah kering ditumpuk", sisa.gabah_kering_kg),
-                          ("PK Gudang 1", sisa.pk_g1_kg),
-                          ("PK Gudang 2", sisa.pk_g2_kg),
-                          ("broken curah / silo", sisa.broken_kg),
-                          ("hasil samping curah", sisa.samping_kg),
-                          ("barang jadi", sisa.barang_jadi_kg)):
-            if kg > 1.0:
-                data['sisa'].append(dict(nama=sebut[0].upper() + sebut[1:], kg=kg))
-                baris_out.append(f"   {sebut:<16}{_kg_nota(kg):>12}")
-
-    # ── SELISIH: satu baris, TIDAK dirinci ──
+    from app.services.stok import stok_produk
+    produk = await stok_produk(db, jasa_id=jasa_id)
+    rows_sisa = [dict(nama=nama, kg=kg) for nama, kg in (
+        ('Gabah', sisa.gabah_kg), ('Di pengering', sisa.dryer_kg),
+        ('Di silo', sisa.silo_kg), ('Gabah kering ditumpuk', sisa.gabah_kering_kg),
+        ('PK Gudang 1', sisa.pk_g1_kg), ('PK Gudang 2', sisa.pk_g2_kg),
+    ) if abs(kg) > 0.0001]
+    rows_sisa += [dict(nama=k.nama[0].upper()+k.nama[1:], kg=k.sisa_kg)
+                  for k in produk if abs(k.sisa_kg) > 0.0001]
+    # Stok siap diambil sudah mengurangi broken yang masuk silo. Barang di
+    # silo belum hilang dari pabrik: pertahankan pemakaian FIFO lama untuk
+    # sisa tersebut, tanpa menambahkan kembali seluruh perpindahan historis.
+    from app.models import BrokenKeSilo
+    masuk_silo = float(await db.scalar(select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
+                                      .where(BrokenKeSilo.jasa_id == jasa_id)))
+    dipakai = (await _broken_terpakai_per_jasa_dari_silo(db)).get(jasa_id, 0.0)
+    broken_silo = max(masuk_silo - dipakai, 0.0)
+    if broken_silo > 0.0001:
+        rows_sisa.append(dict(nama='Broken di silo', kg=broken_silo))
+    data['sisa'] = rows_sisa
+    data['fase'] = ('Produk masih di pabrik' if rows_sisa and sisa.fase == 'kosong' else FASE_JASA.get(sisa.fase, sisa.fase))
+    if rows_sisa:
+        baris_out += ['', 'Masih di pabrik']
+        for r in rows_sisa:
+            baris_out.append(f"   {r['nama']:<16}{_kg_nota(r['kg']):>12}")
     if masuk > 0:
-        selisih = masuk - kembali - sisa.total
+        selisih = masuk - kembali - sum(r['kg'] for r in rows_sisa)
         if selisih > 1.0:
             data['selisih_kg'] = selisih
-            baris_out.append("─" * 58)
-            baris_out.append(f"Selisih{_kg_nota(selisih):>29}")
-            baris_out.append("  susut pengeringan, sekam & susut proses")
-            baris_out.append("  — tidak diukur terpisah")
+            baris_out += ['─' * 58, f'Selisih{_kg_nota(selisih):>29}',
+                          '  susut pengeringan, sekam & susut proses',
+                          '  — tidak diukur terpisah']
 
     # ── BEKATUL, PER PROSES — untuk diketahui, bukan untuk "Total kembali" ──
     #
