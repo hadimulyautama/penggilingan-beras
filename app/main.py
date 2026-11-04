@@ -657,3 +657,6 @@ app.add_middleware(PortalSessionMiddleware)
 
 from app.web.koreksi_bahan_berjalan import router as koreksi_bahan_berjalan_router
 app.include_router(koreksi_bahan_berjalan_router)
+
+from app.web.kepemilikan import router as kepemilikan_router
+app.include_router(kepemilikan_router)

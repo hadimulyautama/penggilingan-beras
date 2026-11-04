@@ -80,6 +80,16 @@ if(action?.type==='selesai'&&data.aktif){body.append(completion());return;}
 if(action&&['pause','resume','condition'].includes(action.type)&&data.aktif)body.append(panel());
 const board=el('div',null,'sr-board');board.append(outputs(),sources());const balanceDetails=el('details',null,'sr-card sr-full');balanceDetails.append(el('summary','Neraca hasil & kepastian data'));balance(balanceDetails);board.append(balanceDetails,history());if(!data.aktif){const note=el('section',null,'sr-card sr-full');note.append(el('p','Tindakan proses aktif ditutup. Koreksi atau pembatalan mengikuti izin dan mekanisme yang sudah berlaku.'),link('Buka rincian riwayat dan tindakan yang diizinkan','/riwayat-sosoh/'+data.id));board.append(note);}body.append(board);}
 function render(){renderDetail();root.dispatchEvent(new CustomEvent('pf:detail-render'));}
+let readBusy=false;
+root.pfReadRefresh=async function(){
+ const ready=()=>root.isConnected&&!busy&&!uncertain&&!action&&!review&&!dirty()&&!root.pfCorrectionActive?.()&&!/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName||'');
+ if(readBusy||!ready())return false;readBusy=true;
+ try{const next=await call(base);if(!ready())return false;
+ if(!Array.isArray(next.sumber))return false;
+ const state=window.KEADAAN_BACA?.ambil(root);data=next;render();
+ if(state){state.fields=[];KEADAAN_BACA.pulihkan(root,state);}root.dispatchEvent(new Event('pf:data-refresh'));persist();return true;
+ }catch(_){return false;}finally{readBusy=false;}
+};
 root.pfCorrection={kind:'sosoh',active:()=>data.aktif,canOpen:()=>can&&!busy&&!uncertain&&!action&&!dirty(),refresh:()=>refresh(),notice:text=>notice(text,true),success:text=>notice(text)};
 window.PadiKoreksiDetail?.(root);
 root.querySelector('[data-terbaru]').onclick=()=>refresh();

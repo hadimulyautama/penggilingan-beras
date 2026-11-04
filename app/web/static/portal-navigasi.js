@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   function pengarah(ops) {
-    var cache = new Map(), urutan = 0;
+    var cache = new Map(), urutan = 0, menavigasi = false, memperbarui = false;
     function ingat(url, html) {
       if (!html) return;
       cache.delete(url); cache.set(url, { html: html, saat: ops.waktu() });
@@ -15,11 +15,13 @@
     async function pindah(url, dorong, gulung) {
       var nomor = ++urutan, lama = terakhir(url), sentuhan;
       if (lama && !ops.pasang(lama, url, dorong, gulung)) { ops.utuh(url); return; }
-      sentuhan = ops.sentuhan();
+      sentuhan = ops.sentuhan(); menavigasi = true;
       ops.status(lama ? 'memperbarui' : 'memuat');
       var baru;
       try { baru = await ops.ambil(url); } catch (_) { baru = null; }
       if (nomor !== urutan) return;
+      menavigasi = false;
+      if (baru && typeof baru.html === 'string') { url = baru.url; baru = baru.html; }
       if (!baru || typeof baru !== 'string') {
         ops.utuh(baru && baru.login ? '/pelanggan/masuk' : url); return;
       }
@@ -34,7 +36,24 @@
       ops.status('selesai');
     }
     return {
-      pindah: pindah, ingat: ingat, bersihkan: function () { cache.clear(); ++urutan; },
+      pindah: pindah, ingat: ingat, bersihkan: function () { cache.clear(); ++urutan; menavigasi = false; },
+      perbarui: async function (url, gulung) {
+        if (menavigasi || memperbarui) return;
+        memperbarui = true;
+        var nomor = urutan, baru;
+        try {
+          try { baru = await ops.ambil(url); } catch (_) { baru = null; }
+          if (nomor !== urutan) return;
+          if (baru && baru.login) { cache.clear(); ops.utuh('/pelanggan/masuk'); return; }
+          if (baru && typeof baru.html === 'string') { url = baru.url; baru = baru.html; }
+          if (!baru || typeof baru !== 'string') {
+            ops.status('tertunda'); return;
+          }
+          if (ops.siap && !ops.siap()) return;
+          if (!ops.pasang(baru, url, false, gulung, true)) { cache.clear(); ops.utuh(url); return; }
+          ingat(url, baru); ops.status('selesai');
+        } finally { memperbarui = false; }
+      },
       siapkan: async function (url) {
         if (terakhir(url)) return;
         try { var html = await ops.ambil(url); if (typeof html === 'string') ingat(url, html); } catch (_) {}
@@ -63,6 +82,7 @@
     main.removeAttribute('aria-busy');
     pesan = null;
     if (mode === 'selesai') return;
+    if (mode === 'tertunda') { mode = 'gagal'; muat = function () { segarkan(true); }; }
     function tampilkan() {
       var tempat = document.querySelector('.portal-top-identitas');
       if (!tempat) return;
@@ -70,7 +90,7 @@
       pesan.className = 'portal-status-navigasi';
       pesan.setAttribute('role', 'status');
       pesan.setAttribute('aria-live', 'polite');
-      pesan.textContent = mode === 'perubahan' ? 'Data terbaru tersedia. ' : mode === 'simpan' ? 'Menyimpan…' : mode === 'memperbarui' ? 'Memperbarui data…' : 'Membuka halaman…';
+      pesan.textContent = mode === 'gagal' ? 'Data belum berhasil diperbarui. Tampilan masih memakai data sebelumnya. ' : mode === 'perubahan' ? 'Data terbaru tersedia. ' : mode === 'simpan' ? 'Menyimpan…' : mode === 'memperbarui' ? 'Memperbarui data…' : 'Membuka halaman…';
       if (muat) {
         var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Muat data terbaru';
         b.addEventListener('click', muat); pesan.appendChild(b);
@@ -92,16 +112,24 @@
     var p = fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: { 'X-Portal-Navigasi': '1', 'Accept': 'text/html' } }).then(function (r) {
         if (r.status === 401) return { login: true };
-        if (!r.ok || r.redirected || !(r.headers.get('Content-Type') || '').startsWith('text/html')) return null;
+        if (!r.ok || !(r.headers.get('Content-Type') || '').startsWith('text/html')) return null;
+        if (r.redirected) {
+          var cible = new URL(r.url, location.href);
+          if (cible.origin === location.origin && cible.pathname === '/pelanggan/masuk') return { login: true };
+          if (!aman(cible)) return null;
+          return r.text().then(function (html) { return { html: html, url: cible.pathname + cible.search }; });
+        }
         return r.text();
       }).finally(function () { clearTimeout(batas); janji.delete(url); });
     janji.set(url, p); return p;
   }
-  function pasang(html, url, dorong, gulung) {
+  function pasang(html, url, dorong, gulung, otomatis) {
     if (nonce() !== sesi) return false;
     var doc = new DOMParser().parseFromString(html, 'text/html');
     var baru = doc.getElementById('isi-pelanggan');
     if (!baru || doc.body.getAttribute('data-portal-akun') !== akun) return false;
+    var keadaan = otomatis && window.KEADAAN_BACA ? KEADAAN_BACA.ambil(main) : null;
+    if (otomatis && main.innerHTML === baru.innerHTML) return true;
     if (dorong) history.replaceState(Object.assign({}, history.state, { portalScroll: main.scrollTop }), '', alamat());
     doc.querySelectorAll('link[rel=stylesheet][href]').forEach(function (link) {
       var ada = Array.from(document.querySelectorAll('link[rel=stylesheet][href]')).some(function (el) { return el.getAttribute('href') === link.getAttribute('href'); });
@@ -131,13 +159,14 @@
     // navigasi utuh menerbitkan kerangka/formulir baru. Jangan menimpa cap
     // formulir tetap dengan metadata milik konten/detail yang diganti.
     if (dorong) history.pushState({ portal: 1, portalScroll: 0 }, '', url);
-    main.scrollTop = gulung || 0;
-    main.focus({ preventScroll: true });
+    else if (url !== alamat()) history.replaceState({ portal: 1, portalScroll: gulung || 0 }, '', url);
+    if (otomatis) { if (keadaan) KEADAAN_BACA.pulihkan(main,keadaan); }
+    else { main.scrollTop = gulung || 0; main.focus({ preventScroll: true }); }
     window.dispatchEvent(new Event('portal:halaman'));
     return true;
   }
   var router = pengarah({ waktu: Date.now, sentuhan: function () { return sentuhan; }, ambil: ambil,
-    pasang: pasang, status: status, utuh: function (url) { location.assign(url); } });
+    pasang: pasang, status: status, siap: siapSegar, utuh: function (url) { location.assign(url); } });
   window.PORTAL_NAV = { buka: function (url) {
     var u = new URL(url, location.href);
     if (!aman(u) || nonce() !== sesi) { router.bersihkan(); location.assign(u.href); return; }
@@ -173,9 +202,30 @@
     if (nonce() !== sesi) { location.reload(); return; }
     router.pindah(alamat(), false, main.scrollTop);
   });
+  var segarTimer = null, segarTerakhir = 0;
+  function siapSegar() {
+    var aktif = document.activeElement, pilihan = window.getSelection && window.getSelection();
+    return !document.hidden && !(aktif && main.contains(aktif) && aktif.matches('input,textarea,select,button,[contenteditable=true]'))
+      && !(pilihan && !pilihan.isCollapsed && main.contains(pilihan.anchorNode));
+  }
+  async function segarkan(paksa) {
+    clearTimeout(segarTimer);
+    if (document.hidden) return;
+    if (nonce() !== sesi) { router.bersihkan(); location.reload(); return; }
+    if (siapSegar() && (paksa || Date.now() - segarTerakhir >= 3000)) {
+      segarTerakhir = Date.now();
+      await router.perbarui(alamat(), main.scrollTop);
+    }
+    clearTimeout(segarTimer);
+    segarTimer = setTimeout(function () { segarkan(false); }, 30000);
+  }
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && nonce() !== sesi) { router.bersihkan(); location.reload(); }
+    clearTimeout(segarTimer);
+    if (!document.hidden) segarkan(true);
   });
+  window.addEventListener('focus', function () { segarkan(false); });
+  window.addEventListener('online', function () { segarkan(true); });
+  segarTimer = setTimeout(function () { segarkan(false); }, 30000);
   var hover;
   function siapkan(e) {
     if (document.hidden || (navigator.connection && navigator.connection.saveData)) return;

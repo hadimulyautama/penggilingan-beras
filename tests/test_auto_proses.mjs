@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import fs from 'node:fs';
+for(const name of ['giling','sosoh']){
+ const source=fs.readFileSync(new URL('../app/web/static/'+name+'-ringkas.js',import.meta.url),'utf8');const code=source.slice(source.indexOf('let readBusy=false;'),source.indexOf('root.pfCorrection='));
+ function setup(){let resolve;const state={fields:[{value:'lama'}]};const root={isConnected:true,dispatchEvent(){}};const c={root,busy:false,uncertain:false,action:null,review:null,dirty:()=>false,document:{activeElement:{tagName:'BODY'}},call:()=>new Promise(r=>resolve=r),base:'uji',data:{old:true},render(){c.renders=(c.renders||0)+1;},persist(){},Event:class{},window:{KEADAAN_BACA:{ambil:()=>state}},KEADAAN_BACA:{pulihkan(r,s){c.restored=s;}},renders:0};vm.runInNewContext(code,c);return {c,root,resolve:v=>resolve(v)};}
+ test(name+': baca baru memperbarui data tanpa menyalin input transaksi lama',async()=>{const s=setup();const p=s.root.pfReadRefresh();s.resolve({sumber:[],value:2});assert.equal(await p,true);assert.equal(s.c.data.value,2);assert.equal(s.c.renders,1);assert.equal(s.c.restored.fields.length,0);});
+ for(const flag of ['busy','uncertain','action','review'])test(name+': '+flag+' menahan pembaruan',async()=>{const s=setup();s.c[flag]=true;assert.equal(await s.root.pfReadRefresh(),false);assert.equal(s.c.renders,0);});
+ test(name+': draf dan editor koreksi tetap terlindungi',async()=>{const s=setup();s.c.dirty=()=>true;assert.equal(await s.root.pfReadRefresh(),false);s.c.dirty=()=>false;s.root.pfCorrectionActive=()=>true;assert.equal(await s.root.pfReadRefresh(),false);});
+ test(name+': mengetik saat respons berjalan membatalkan pemasangan',async()=>{const s=setup();const p=s.root.pfReadRefresh();s.c.dirty=()=>true;s.resolve({sumber:[],value:2});assert.equal(await p,false);assert.equal(s.c.renders,0);assert.equal(s.c.data.old,true);});
+}

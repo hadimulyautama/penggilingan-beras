@@ -2,6 +2,8 @@
 window.PadiKoreksiDetail=function(root){
 'use strict';if(root.dataset.kbBridge)return;root.dataset.kbBridge='1';
 const detail=root.pfCorrection;let context=null,loading=null,editor=null,controller=null,anchor=null,opened=false,disabled=new Map();
+root.pfCorrectionActive=()=>opened||!!loading||!!controller&&(controller.hasDraft()||controller.isBusy());
+root.addEventListener('pf:data-refresh',()=>{context=null;load();});
 const kg=x=>x==null?'Belum tersedia':Number(x).toLocaleString('id-ID',{maximumFractionDigits:3})+' kg';
 function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function lock(){root.classList.add('pf-correction-open');for(const n of root.querySelectorAll('button,input,select,textarea')){if(editor?.contains(n))continue;if(!disabled.has(n))disabled.set(n,n.disabled);n.disabled=true;}}

@@ -347,7 +347,7 @@ async def beli_kemasan(
 # terpecah ulang tiap kedatangan.
 async def pindah_kepemilikan_karung(
     db: AsyncSession, *, user: User, material_kode: str, ukuran: int,
-    brand_nama: str | None, pelanggan_id: int, jumlah_lembar: int,
+    brand_nama: str | None, pelanggan_id: int, jumlah_lembar: int, commit: bool = True,
 ) -> int:
     """Pindah N lembar karung dari milik PABRIK ke satu KONTAK pelanggan.
 
@@ -359,81 +359,17 @@ async def pindah_kepemilikan_karung(
     Mengembalikan jumlah lembar yang berpindah (selalu `jumlah_lembar`
     persis — dipecah dari baris pembelian pabrik, FIFO, tertua dulu).
     """
-    from app.services.barang_keluar import _kunci_saldo_keluar
-    await _kunci_saldo_keluar(db)
-    if not pelanggan_id:
-        raise InventoryError("Sebutkan pelanggan tujuan.")
-    if not jumlah_lembar or jumlah_lembar <= 0:
-        raise InventoryError("Sebutkan jumlah lembar yang dipindah, lebih dari 0.")
-    material = await get_material(db, material_kode)
-    if material is None:
-        raise InventoryError(f"Jenis karung '{material_kode}' tidak ada.")
-    size = await get_size(db, ukuran)
-    if size is None:
-        raise InventoryError(f"Ukuran {ukuran}kg tidak terdaftar.")
-    brand_id = None
-    if brand_nama:
-        brand = await get_brand(db, brand_nama)
-        if brand is None:
-            raise InventoryError(f"Merk '{brand_nama}' tidak ada.")
-        brand_id = brand.id
-    material_id, size_id = material.id, size.id
-    tersedia = await hitung_stok_kemasan(db, material_id, size_id, brand_id, pelanggan_id=None)
-    if jumlah_lembar > tersedia:
-        raise InventoryError(
-            f"Stok karung pabrik tinggal {tersedia} lembar — "
-            f"tak bisa memindahkan {jumlah_lembar} lembar.")
-
-    def _brand(col):
-        return col.is_(None) if brand_id is None else col == brand_id
-
-    # Baris sumbernya DIKUNCI sebelum dipecah — dua admin yang memindahkan
-    # kombinasi karung yang sama pada detik yang sama akan memecah baris
-    # yang sama, bukan dua baris berbeda yang jumlahnya diam-diam dobel.
-    rows = (await db.execute(
-        select(PackagingPurchase)
-        .where(PackagingPurchase.packaging_material_id == material_id,
-               PackagingPurchase.package_size_id == size_id,
-               _brand(PackagingPurchase.brand_id),
-               PackagingPurchase.pelanggan_id.is_(None))
-        .order_by(PackagingPurchase.tanggal.asc(), PackagingPurchase.waktu.asc(),
-                   PackagingPurchase.id.asc())
-        .with_for_update()
-    )).scalars().all()
-
-    sisa = jumlah_lembar
-    now = now_local()
-    baris_disentuh: list[int] = []
-    for row in rows:
-        if sisa <= 0:
-            break
-        baris_disentuh.append(row.id)
-        if row.jumlah_lembar <= sisa:
-            row.pelanggan_id = pelanggan_id
-            sisa -= row.jumlah_lembar
-        else:
-            row.jumlah_lembar -= sisa
-            # TANPA `harga_per_lembar` — kolom uang, dan sejak 29 September
-            # 2026 tak boleh ditulis lagi oleh layanan mana pun (keputusan
-            # pemilik), termasuk menyalinnya dari baris asal.
-            db.add(PackagingPurchase(
-                kode=await next_packaging_purchase_code(db, now.date()),
-                packaging_material_id=row.packaging_material_id,
-                package_size_id=row.package_size_id, brand_id=row.brand_id,
-                jumlah_lembar=sisa,
-                tanggal=now.date(), waktu=now, input_by=user.id,
-                pelanggan_id=pelanggan_id,
-            ))
-            sisa = 0
-    await log_activity(
-        db, table_name="packaging_purchases", record_id=baris_disentuh[0],
-        action="UPDATE", changed_by=user.id, field_name="pelanggan_id",
-        new_value=f"{jumlah_lembar} lembar → pelanggan",
-        aksi="pindah_kepemilikan_karung",
-        pelanggan_ids={pelanggan_id},
-    )
-    await db.commit()
-    return jumlah_lembar
+    material=await get_material(db,material_kode)
+    size=await get_size(db,ukuran)
+    brand=await get_brand(db,brand_nama) if brand_nama else None
+    if not material or not size or brand_nama and not brand:
+        raise InventoryError('Identitas bahan, ukuran, atau merek karung tidak sah.')
+    from app.services.kepemilikan import initial
+    from app.penggilingan.inventory.finished_goods import InventoryError as GoodsError
+    try:
+        return int(await initial(db,user=user,kind='karung',identity={'material':material.id,'size':size.id,'brand':brand.id if brand else None},owners=[None],customer=pelanggan_id,amount=jumlah_lembar,commit=commit))
+    except GoodsError as exc:
+        raise InventoryError(str(exc)) from exc
 
 
 def kemasan_gudang(material_kode: str | None) -> str:

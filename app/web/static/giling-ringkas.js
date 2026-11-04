@@ -56,6 +56,16 @@ function history(){const box=el('details',null,'sr-card gr-wide');box.append(el(
 function renderDetail(){body.replaceChildren();const head=el('header');head.append(el('small',data.aktif?'PROSES AKTIF · PENGGILINGAN':'RIWAYAT PENGGILINGAN'),el('h1',data.kode_proses));const identity=el('div',null,'sr-context');identity.append(el('strong',data.pemilik+' · '+data.kepemilikan),el('span',data.gudang),el('span',data.status==='dijeda'?'Dijeda':data.aktif?'Berjalan':'Selesai','sr-status'));head.append(identity,el('small',(data.pesanan?data.pesanan+' · ':'')+'Mulai '+date(data.waktu.mulai)+' · durasi '+data.waktu.durasi+' · aktif '+data.waktu.aktif+' · jeda '+data.waktu.jeda));if(data.jeda)head.append(el('p',data.jeda.sebab+' · dijeda sejak '+date(data.jeda.mulai),'sr-note'));if(!data.aktif)head.append(el('p','Selesai '+date(data.waktu.selesai)+' · '+(data.petugas_selesai||'Petugas belum tersedia')));body.append(head);const metrics=el('div',null,'sr-metrics');for(const [label,text]of [['Gabah terkait',data.bahan],['Hasil PK operator · kumulatif',kg(data.tercatat)],['Rendemen'+(!data.bobot_final?' · sementara':''),data.rendemen==null?'Belum dapat dipastikan':n(data.rendemen)+'%']]){const c=el('div',null,'sr-metric');c.append(el('small',label),el('strong',text));metrics.append(c);}body.append(metrics);
 if(data.aktif&&action?.type!=='selesai'){const actions=el('div',null,'sr-actions');actions.append(button('Selesaikan penggilingan',()=>open('selesai'),data.siap),button(data.jeda?'Lanjutkan penggilingan':'Hentikan sementara',()=>open(data.jeda?'resume':'pause')));if(data.jeda)actions.append(button('Perbarui kondisi jeda',()=>open('condition')));body.append(actions);}if(action?.type==='selesai'&&data.aktif){body.append(completion());return;}if(action&&['pause','resume','condition'].includes(action.type)&&data.aktif)body.append(panel());const board=el('div',null,'sr-board');board.append(outputs(),sources(),qcCard(),history());if(!data.aktif){const row=el('section',null,'sr-card gr-wide');row.append(el('p','Tindakan proses aktif ditutup. Verifikasi, koreksi dan pembatalan tetap memakai jalur dan izin yang berlaku.'),link('Buka detail riwayat & tindakan yang diizinkan','/riwayat-giling/'+data.id));board.append(row);}body.append(board);}
 function render(){renderDetail();root.dispatchEvent(new CustomEvent('pf:detail-render'));}
+let readBusy=false;
+root.pfReadRefresh=async function(){
+ const ready=()=>root.isConnected&&!busy&&!uncertain&&!action&&!review&&!dirty()&&!root.pfCorrectionActive?.()&&!/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName||'');
+ if(readBusy||!ready())return false;readBusy=true;
+ try{const next=await call(base);if(!ready())return false;
+ if(!Array.isArray(next.sumber))return false;
+ const state=window.KEADAAN_BACA?.ambil(root);data=next;render();
+ if(state){state.fields=[];KEADAAN_BACA.pulihkan(root,state);}root.dispatchEvent(new Event('pf:data-refresh'));persist();return true;
+ }catch(_){return false;}finally{readBusy=false;}
+};
 root.pfCorrection={kind:'giling',active:()=>data.aktif,canOpen:()=>can&&!busy&&!uncertain&&!action&&!dirty(),refresh:()=>refresh(),notice:text=>notice(text,true),success:text=>notice(text)};
 window.PadiKoreksiDetail?.(root);
 root.querySelector('[data-terbaru]').onclick=()=>refresh();

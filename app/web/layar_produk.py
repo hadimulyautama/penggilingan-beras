@@ -33,6 +33,8 @@ pada perubahan berikutnya.
 """
 from __future__ import annotations
 
+from app.peran import can_see_financials
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.database import SessionLocal
@@ -118,7 +120,7 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis:
         return await _detail_produk(request, kartu, jenis, kemasan,
                                     boleh_catat=boleh_catat)
     return await render_laci(
-        request, "stok_produk.html", layar="stok_produk",
+        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_produk.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_produk",
         BOLEH_CATAT=boleh_catat,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
@@ -355,7 +357,7 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
                                     curah_titipan={"broken":p["broken_curah_kg"],
                                                    "bekatul":p["bekatul_curah_kg"]})
     return await render_laci(
-        request, "stok_produk_jasa.html", layar="stok_produk_jasa",
+        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_produk_jasa.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_produk_jasa",
         daftar=daftar, BOLEH_PINDAH=boleh_pindah,
         BOLEH_MASUKKAN_SILO=boleh_masukkan_silo,
         buka=request.query_params.get("buka") or "",
@@ -500,7 +502,7 @@ async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
         karung = [b for b in await kms.stok_kemasan_rinci(db, pelanggan_id=None)
                   if b["gudang"] != "Gudang 1" or gudang1(view)]
     return await render_laci(
-        request, "stok_karung.html", layar="stok_karung",
+        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_karung.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_karung",
         karung=karung, BOLEH_PINDAH=can_see_financials(akun.user),
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
@@ -555,7 +557,7 @@ async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
             })
     daftar.sort(key=lambda p: p["pemilik"])
     return await render_laci(
-        request, "stok_karung_jasa.html", layar="stok_karung_jasa",
+        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_karung_jasa.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_karung_jasa",
         daftar=daftar,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",

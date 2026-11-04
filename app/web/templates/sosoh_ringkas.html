@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block judul %}Penyosohan {{ awal.kode_proses }}{% endblock %}
 {% block isi %}
-<link rel="stylesheet" href="/static/sosoh-ringkas.css?v={{ VERSI }}&amp;sr=20261103.12">
+<link rel="stylesheet" href="/static/sosoh-ringkas.css?v={{ VERSI }}&amp;sr=20261104.auto1">
 <main class="sr" data-sosoh-ringkas data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
  <div data-pesan role="status" hidden></div><div data-galat role="alert" hidden></div>
  <div data-pemulihan hidden><button type="button" class="btn" data-terbaru>Baca status terbaru</button><p>Isian tetap tersedia. Periksa data terbaru sebelum konfirmasi ulang.</p></div>
@@ -9,8 +9,8 @@
  <noscript>Aktifkan JavaScript untuk mengerjakan proses. Membuka halaman tidak mengubah hasil, silo, maupun status.</noscript>
 </main>
 <script id="sosoh-awal" type="application/json">{{ awal|tojson }}</script>
-<link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?kb=20261103.12">
-<script src="/static/koreksi-bahan-berjalan.js?kb=20261103.12" defer></script>
-<script src="/static/koreksi-di-detail.js?kb=20261103.12" defer></script>
-<script src="/static/sosoh-ringkas.js?v={{ VERSI }}&amp;sr=20261103.12" defer></script>
+<link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?kb=20261104.auto1">
+<script src="/static/koreksi-bahan-berjalan.js?kb=20261104.auto1" defer></script>
+<script src="/static/koreksi-di-detail.js?kb=20261104.auto1" defer></script>
+<script src="/static/sosoh-ringkas.js?v={{ VERSI }}&amp;sr=20261104.auto1" defer></script>
 {% endblock %}

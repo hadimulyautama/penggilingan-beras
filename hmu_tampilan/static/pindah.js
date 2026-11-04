@@ -113,6 +113,7 @@
          sejak Tahap C, isinya memang TIDAK PERNAH ditukar diam-diam: bila
          berubah, pil "perubahan baru" yang muncul — orangnya yang memutuskan
          kapan tata letak bergerak. */
+      if (perluSegar && (bolehDiam() || pembacaEditor())) muatPerubahan();
       statistik.tanya++;
       tanyaPenanda().then(terimaPenanda);
     },
@@ -315,7 +316,7 @@
    * layarnya sendiri tak disentuh sampai pil diketuk. Satu-satunya
    * pengecualian: layar tanpa sasaran ketukan (`data-segar-sendiri`, papan
    * pantau) boleh menyegar sendiri — tak ada jari yang bisa mendarat salah. */
-  var jumlahPerubahan = 0;
+  var jumlahPerubahan = 0, perluSegar = false, sedangSegar = false;
   var statistik = { tanya: 0, dorongan: 0 };
 
   function terimaPenanda(j) {
@@ -323,30 +324,12 @@
     var n = String(j.n);
     tandaiSegar();
     if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
-    if (penanda !== null && n !== penanda) {
-      if (document.querySelector("[data-segar-sendiri]")) {
-        if (bolehDiam()) { muatPerubahan(); }
-      } else {
-        jumlahPerubahan++;
-        tawarkanPerubahan();
-      }
-    }
+    if (penanda !== null && n !== penanda) perluSegar = true;
+    if (perluSegar && (bolehDiam() || pembacaEditor())) muatPerubahan();
     penanda = n;
   }
 
-  function tawarkanPerubahan() {
-    var pil = document.querySelector(".pil-perubahan");
-    if (!pil) {
-      pil = document.createElement("button");
-      pil.type = "button";
-      pil.className = "pil pil-perubahan";
-      pil.setAttribute("data-pil", "perubahan");
-      pil.setAttribute("role", "status");
-      pil.addEventListener("click", muatPerubahan);
-      document.body.appendChild(pil);
-    }
-    pil.textContent = jumlahPerubahan + " perubahan baru — ketuk untuk muat";
-  }
+  function tawarkanPerubahan() { perluSegar = true; if (bolehDiam()) muatPerubahan(); }
 
   function hapusPilPerubahan() {
     var pil = document.querySelector(".pil-perubahan");
@@ -354,20 +337,22 @@
     jumlahPerubahan = 0;
   }
 
+  function pembacaEditor() { var editor=document.querySelector('[data-editor-perintah]'); return editor && typeof editor.pfReadRefresh==='function' ? editor : null; }
   function muatPerubahan() {
-    if (document.querySelector("[data-editor-perintah],[data-kemas-ulang]")) { return; }
-    var alamat = location.pathname + location.search;
-    if (!bingkai) { return; }
+    var editor=pembacaEditor();
+    if(editor){ if(sedangSegar||document.visibilityState!=='visible')return; sedangSegar=true; Promise.resolve(editor.pfReadRefresh()).then(function(ok){if(ok)perluSegar=false;}).finally(function(){sedangSegar=false;});return; }
+    if (sedangSegar || !bolehDiam() || document.querySelector("[data-editor-perintah],[data-kemas-ulang]")) return;
+    var alamat = location.pathname + location.search, generasi = nomorPindah;
+    if (!bingkai) return;
+    sedangSegar = true;
     delete simpan[alamat];
     ambil(alamat).then(function (teks) {
-      if (!teks) { return; }
-      if (location.pathname + location.search !== alamat) { return; }
-      var gulung = document.querySelector(".isi");
-      var atas = gulung ? gulung.scrollTop : 0;
-      if (!pasang(teks, alamat)) { return; }
-      var g2 = document.querySelector(".isi");
-      if (g2 && atas) { g2.scrollTop = atas; }
-    });
+      if (!teks || location.pathname + location.search !== alamat || generasi !== nomorPindah || !bolehDiam()) return;
+      var keadaan = window.KEADAAN_BACA && KEADAAN_BACA.ambil(bingkai);
+      if (!pasang(teks, alamat)) return;
+      if (keadaan) KEADAAN_BACA.pulihkan(bingkai, keadaan);
+      perluSegar = false;
+    }).finally(function () { sedangSegar = false; });
   }
 
   /* ── Kanal dorong (SSE) — jalur pertama; denyut 10 detik jadi jalur kedua ──
@@ -533,8 +518,8 @@
     return true;
   }
 
-  document.addEventListener("input", function () { disentuh = true; }, true);
-  document.addEventListener("change", function () { disentuh = true; }, true);
+  document.addEventListener("input", function (e) { if (!e.target.form || (e.target.form.method || "get").toLowerCase() !== "get") disentuh = true; }, true);
+  document.addEventListener("change", function (e) { if (!e.target.form || (e.target.form.method || "get").toLowerCase() !== "get") disentuh = true; }, true);
 
   /* ── Kesegaran data, terlihat ──
    *

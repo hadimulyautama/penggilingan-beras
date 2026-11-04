@@ -523,11 +523,12 @@ def test_penyegaran_diam_tak_membuang_ketikan_orang():
     # (papan pantau), dan itu pun dijaga `bolehDiam()`.
     assert "ambil(" not in diam and "pasang(" not in diam
     terima = js[js.index("function terimaPenanda(j)"):js.index("function tawarkanPerubahan()")]
-    assert 'data-segar-sendiri' in terima and "if (bolehDiam()) { muatPerubahan(); }" in terima
+    assert 'perluSegar && (bolehDiam() || pembacaEditor())' in terima
+    assert 'tawarkanPerubahan();' not in terima
     # Posisi gulung dikembalikan saat pil diketuk — yang sedang membaca baris
     # ke-20 tak boleh dilempar ke atas.
     muat = js[js.index("function muatPerubahan()"):js.index("Kanal dorong (SSE)")]
-    assert "scrollTop" in muat
+    assert "KEADAAN_BACA.ambil" in muat and "KEADAAN_BACA.pulihkan" in muat
 
 
 def test_halaman_yang_sudah_diketik_tak_digambar_ulang():
@@ -615,7 +616,7 @@ def test_penanda_memuat_tiket_timbang():
 
     from app.web import api
 
-    src = inspect.getsource(api._penanda)      # satu rumus untuk /keadaan dan /aliran
+    src = inspect.getsource(api._penanda) + inspect.getsource(api._baca_penanda)      # satu rumus untuk /keadaan dan /aliran
     assert "ActivityLog" in src, "perubahan di aplikasi ini tak terpantau"
     assert "timbangan_transaksi" in src, "tiket timbang tak terpantau"
     # `updated_at` ikut: tiket DIUBAH saat timbang kedua, nomornya tak
@@ -645,7 +646,7 @@ def test_tiket_gabah_baru_muncul_sendiri_di_antrean():
     from app.services import berjalan
     from app.web import api
 
-    assert "timbangan_transaksi" in inspect.getsource(api._penanda)
+    assert "timbangan_transaksi" in inspect.getsource(api._penanda) + inspect.getsource(api._baca_penanda)
 
     saring = inspect.getsource(berjalan._tiket_belum_ditaut)
     assert 'info.model != "gabah"' in saring, "yang bukan gabah tak disaring"
