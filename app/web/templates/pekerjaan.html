@@ -5,22 +5,7 @@
 {% import '_benda.html' as benda with context %}
 {% import '_kepemilikan.html' as milik with context %}
 {% import '_kerja_navigasi.html' as nav with context %}
-<header class="kerja-kepala"><h1>Pekerjaan</h1>
-{% from '_pekerjaan_tab.html' import tab_pekerjaan with context %}
-{{ tab_pekerjaan(tab, href(tab='tindakan',asal='',kategori='',grup='',informasi=''), href(tab='berjalan',asal='',kategori='',grup='',informasi=''), '/pekerjaan/catat-lain?' ~ ({'kembali': href()}|urlencode), total_tindakan, total_jalan) }}
-<details class="kerja-saringan"><summary class="btn btn--kecil">Filter · {{ jenis or 'Semua jenis' }} · {{ {'jasa':'Jasa','pabrik':'Pabrik'}.get(request.query_params.get('kepemilikan'),'Semua pemilik') }} · {{ {'g1':'G1','g2':'G2'}.get(gudang,'Semua gudang') }}</summary>
-{{ milik.saring() }}
-{% if TAMPILAN_INDUK or VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
-<form method="get" action="/pekerjaan" class="saring">
-<input type="hidden" name="tab" value="{{ tab }}">
-{% for key in ['kepemilikan','gudang','cari','pemasok','pelanggan_id','kembali_jasa','informasi'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
-<label class="kerja-filter">Jenis pekerjaan<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for k,n,j in per_jenis %}<option value="{{ k }}"{{ ' selected' if jenis==k }}>{{ n }} · {{ j }}</option>{% endfor %}</select></label>
-<button class="btn btn--kecil" type="submit">Tampilkan</button>
-</form>
-</details>
-{% if pelanggan_saring %}<p class="bantu">Pelanggan: <strong>{{ pelanggan_saring }}</strong> · <a href="{{ href(pelanggan_id='') }}">Semua pelanggan</a></p>{% endif %}
-{% include '_pekerjaan_cari.html' %}
-</header>
+{% include '_pekerjaan_kontrol.html' %}
 {% if request.query_params.get('grup') or request.query_params.get('asal') or request.query_params.get('kategori') %}<p class="bantu">Saringan dari tautan lama aktif. <a href="{{ href(grup='',asal='',kategori='',jenis='') }}">Lihat semua pekerjaan</a>.</p>{% endif %}
 {% if tab=='tindakan' %}
 <p class="bantu">{{ jumlah_daftar }} pekerjaan perlu tindakan. Penerimaan tiket ada di <a href="/barang-masuk">Barang Masuk</a>.</p>
