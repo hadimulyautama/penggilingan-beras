@@ -1,5 +1,5 @@
 {# Tabel ringkas desktop. Setiap baris membuka halaman detail PK. #}
-<section class="stok-gabungan" aria-label="Stok PK seluruh gudang">
+<section class="stok-gabungan stok-grup" aria-label="Stok PK seluruh gudang">
   <div class="jumlah">
     <span class="lbl">{% if gudang == "g1" %}Stok PK · Gudang 1{% elif gudang == "g2" %}Stok PK · Gudang 2{% else %}Stok PK · seluruh gudang{% endif %}{% if STOK_NAV %} · {{ STOK_NAV.nama_pemilik }}{% endif %}</span>
     <div class="jumlah__angka">{{ kg(total + (tempat|sum(attribute="tersedia") if tempat else 0)) }}<small>kg</small></div>

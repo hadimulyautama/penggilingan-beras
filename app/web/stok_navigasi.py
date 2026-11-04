@@ -20,12 +20,14 @@ HALAMAN = {
 }
 
 
-def alamat(jenis='bahan', pemilik='pabrik', *, pelanggan_id='', gudang=''):
+def alamat(jenis='bahan', pemilik='pabrik', *, pelanggan_id='', gudang='', cari=''):
     params = {'tab': jenis, 'pemilik': pemilik}
     if pemilik == 'jasa' and pelanggan_id:
         params['pelanggan_id'] = pelanggan_id
     if gudang:
         params['gudang'] = gudang
+    if cari:
+        params['cari'] = cari[:200]
     return '/stok?' + urlencode(params)
 
 
@@ -60,7 +62,7 @@ def kembali_aman(nilai):
         return ''
     if gudang not in {'', 'g1', 'g2'} or pid and (not pid.isascii() or not pid.isdigit() or int(pid) <= 0):
         return ''
-    return alamat(tab, pemilik, pelanggan_id=pid, gudang=gudang)
+    return alamat(tab, pemilik, pelanggan_id=pid, gudang=gudang, cari=q.get('cari',[''])[0][:200])
 
 
 async def siapkan(request, nama, konteks):
@@ -152,13 +154,14 @@ async def siapkan(request, nama, konteks):
         else:
             konteks['karung'] = saring(konteks['karung'])
 
+    cari = request.query_params.get('cari', '')[:200]
     label = dict(bahan='Bahan & PK', produk='Produk', karung='Karung')[jenis]
     nama_pemilik = 'Pabrik' if pemilik == 'pabrik' else 'Titipan jasa'
     nama_pelanggan = dict(pelanggan).get(pid, 'Semua pelanggan')
     def href(tab=jenis, milik=pemilik, lokasi=gudang):
-        return alamat(tab, milik, pelanggan_id=pid or '', gudang=lokasi)
+        return alamat(tab, milik, pelanggan_id=pid or '', gudang=lokasi, cari=cari)
     konteks['STOK_NAV'] = dict(
-        url=alamat(jenis, pemilik, pelanggan_id=pid or '', gudang=gudang),
+        url=alamat(jenis, pemilik, pelanggan_id=pid or '', gudang=gudang, cari=cari),
         jenis=jenis, pemilik=pemilik, pelanggan_id=pid or '', pelanggan=pelanggan,
         gudang=gudang, label=label, nama_pemilik=nama_pemilik,
         cakupan=nama_pemilik + (' · ' + nama_pelanggan if pemilik == 'jasa' else ''),

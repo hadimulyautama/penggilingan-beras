@@ -184,12 +184,12 @@
    selalu terlihat — dan kaki ini catatan kaki, bukan pengumuman. #}
 <!-- isi-halaman:mulai -->
 {% if STOK_NAV %}{% include "_stok_navigasi.html" %}{% endif %}
-{% if STOK_NAV %}<div class="stok-isi">{% endif %}
+{% if STOK_NAV %}<div class="stok-isi stok-seragam">{% endif %}
 {% if LAPORAN_NAV %}<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include "_laporan_navigasi.html" %}<div class="laporan-isi">{% endif %}
 {% if JASA_KEMBALI %}<a class="btn btn--kecil" href="{{ JASA_KEMBALI }}" data-kembali-jasa="{{ JASA_KEMBALI }}">Kembali ke pelanggan jasa</a>{% endif %}
 {% block isi %}{% endblock %}
 {% if LAPORAN_NAV %}</div></div>{% endif %}
-{% if STOK_NAV %}</div>{% endif %}
+{% if STOK_NAV %}</div><script src="/static/stok-seragam.js?v={{ VERSI }}" defer></script>{% endif %}
 {% block kaki %}{% endblock %}
 <!-- isi-halaman:akhir -->
 <script src="/static/kabar-badge.js?v={{ VERSI }}" defer></script>
