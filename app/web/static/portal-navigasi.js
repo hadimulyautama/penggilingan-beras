@@ -207,9 +207,12 @@
     // formulir tetap dengan metadata milik konten/detail yang diganti.
     if (dorong) history.pushState({ portal: 1, portalScroll: 0 }, '', url);
     else if (url !== alamat()) history.replaceState({ portal: 1, portalScroll: gulung || 0 }, '', url);
+    var menuTerbuka = document.body.classList.contains('sidebar-open');
     if (otomatis) { if (keadaan) KEADAAN_BACA.pulihkan(main,keadaan); }
-    else { main.scrollTop = gulung || 0; main.focus({ preventScroll: true }); }
-    window.dispatchEvent(new Event('portal:halaman'));
+    else { main.scrollTop = gulung || 0; if (!menuTerbuka) main.focus({ preventScroll: true }); }
+    // Kerangka sudah menutup menu pada awal navigasi. Respons data yang
+    // datang belakangan tidak boleh menutup menu yang dibuka kembali.
+    if (!menuTerbuka) window.dispatchEvent(new Event('portal:halaman'));
     return true;
   }
   var router = pengarah({ waktu: Date.now, sentuhan: function () { return sentuhan; }, ambil: ambil,

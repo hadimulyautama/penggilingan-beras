@@ -25,7 +25,13 @@
   var bingkai = null;
   var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
   var nomorPindah = 0, tujuanPindah = null, nomorSentuhan = 0;
-  document.addEventListener("pointerdown", function () { nomorSentuhan++; }, true);
+  var dataMenunggu = null, pointerAktif = false;
+  document.addEventListener("pointerdown", function () { nomorSentuhan++; pointerAktif = true; }, true);
+  function lepasPointer() { pointerAktif = false; setTimeout(pasangMenunggu, 0); }
+  document.addEventListener('pointerup', lepasPointer, true);
+  document.addEventListener('pointercancel', lepasPointer, true);
+  document.addEventListener('click', function () { setTimeout(pasangMenunggu, 0); });
+  document.addEventListener('keyup', function () { setTimeout(pasangMenunggu, 0); });
   document.addEventListener("keydown", function () { nomorSentuhan++; }, true);
 
   /* Pendengar tingkat dokumen milik HALAMAN, bukan milik aplikasi.
@@ -580,7 +586,8 @@
     var isi = gantiIsiHalaman('<h1></h1><p role="status" aria-live="polite">Memuat data…</p><div class="halaman-memuat__baris" aria-hidden="true"><i></i><i></i><i></i></div>');
     if (!isi) { return false; }
     isi.setAttribute('aria-busy', 'true');
-    cabutSemua();
+    // Pendengar sidebar tetap hidup sampai isi baru benar-benar dipasang.
+    // cabutSemua() dijalankan oleh pasang(), setelah pengguna selesai memakai menu.
     var lembarLama = document.getElementById('lembar');
     if (lembarLama) lembarLama.remove();
     // Kerangka tidak membawa angka, izin, atau formulir dari halaman lama.
@@ -622,10 +629,23 @@
     isi.querySelector('a').href = alamat;
   }
 
+  function pasangMenunggu() {
+    if (!dataMenunggu) return;
+    if (dataMenunggu.nomor !== nomorPindah) { dataMenunggu = null; return; }
+    var laci = document.getElementById('laci');
+    // Jangan mengganti elemen sasaran di antara sentuh dan lepas, atau
+    // menutup menu yang baru dibuka saat data masih dalam perjalanan.
+    if (pointerAktif || laci && !laci.hidden) return;
+    var data = dataMenunggu; dataMenunggu = null;
+    tujuanPindah = null; sibuk(false);
+    pasang(data.teks, data.alamat, false);
+  }
+
   function pindah(alamat, dorong, judul) {
     // Hanya pilihan terakhir yang boleh memasang HTML, termasuk bila
     // respons lama datang setelah klik sidebar/detail berikutnya.
     var nomor = ++nomorPindah;
+    dataMenunggu = null;
     tujuanPindah = alamat;
     var tersimpan = simpan[alamat];
 
@@ -667,13 +687,17 @@
     sibuk(true);
     ambil(alamat).then(function (teks) {
       if (nomor !== nomorPindah) { return; }
-      sibuk(false);
-      tujuanPindah = null;
       if (!teks) {
+        sibuk(false); tujuanPindah = null;
         if (bertahap && gagal[alamat]) { gagalMuat(alamat, judul); }
         else { location.href = alamat; }
         return;
       }
+      if (bertahap) {
+        dataMenunggu = { teks: teks, alamat: alamat, nomor: nomor };
+        pasangMenunggu(); return;
+      }
+      sibuk(false); tujuanPindah = null;
       if (!pasang(teks, alamat, !bertahap)) { return; }
       if (!bertahap && dorong) { history.pushState({ pindah: 1 }, "", alamat); }
     });
