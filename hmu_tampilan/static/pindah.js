@@ -21,6 +21,7 @@
 
   var simpan = {};        // alamat -> HTML utuh yang terakhir dilihat
   var sedang = {};        // alamat -> janji yang sedang berjalan (jangan dobel)
+  var gagal = {};         // hanya membedakan putus jaringan dari pengalihan sesi
   var bingkai = null;
   var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
   var nomorPindah = 0, tujuanPindah = null, nomorSentuhan = 0;
@@ -145,6 +146,7 @@
   /* ── Mengambil, dan hanya sekali untuk alamat yang sama ── */
   function ambil(alamat) {
     if (sedang[alamat]) { return sedang[alamat]; }
+    delete gagal[alamat];
     var bolehSimpan = true;
     var batas = new AbortController();
     var pewaktu = setTimeout(function () { batas.abort(); }, 15000);
@@ -166,6 +168,7 @@
       if (pulih) { bolehSimpan = false; delete simpan[alamat]; }
       return r.text();
     }).catch(function () {
+      gagal[alamat] = true;
       return null;              // jaringan putus — biarkan peramban mencoba
     }).then(function (teks) {
       clearTimeout(pewaktu);
@@ -339,6 +342,7 @@
 
   function pembacaEditor() { var editor=document.querySelector('[data-editor-perintah]'); return editor && typeof editor.pfReadRefresh==='function' ? editor : null; }
   function muatPerubahan() {
+    if (tujuanPindah !== null) return;
     var editor=pembacaEditor();
     if(editor){ if(sedangSegar||document.visibilityState!=='visible')return; sedangSegar=true; Promise.resolve(editor.pfReadRefresh()).then(function(ok){if(ok)perluSegar=false;}).finally(function(){sedangSegar=false;});return; }
     if (sedangSegar || !bolehDiam() || document.querySelector("[data-editor-perintah],[data-kemas-ulang]")) return;
@@ -559,7 +563,66 @@
     else { bingkai.removeAttribute("aria-busy"); }
   }
 
-  function pindah(alamat, dorong) {
+  function gantiIsiHalaman(html) {
+    var main = document.getElementById('isi-halaman');
+    if (!main) return null;
+    var nodes = Array.prototype.slice.call(main.childNodes);
+    var awal = nodes.find(function (n) { return n.nodeType === 8 && n.data.trim() === 'isi-halaman:mulai'; });
+    var akhir = nodes.find(function (n) { return n.nodeType === 8 && n.data.trim() === 'isi-halaman:akhir'; });
+    if (!awal || !akhir) return null;
+    while (awal.nextSibling && awal.nextSibling !== akhir) awal.nextSibling.remove();
+    var isi = document.createElement('section'); isi.className = 'halaman-memuat';
+    isi.innerHTML = html; main.insertBefore(isi, akhir);
+    return isi;
+  }
+
+  function kerangka(alamat, judul) {
+    var isi = gantiIsiHalaman('<h1></h1><p role="status" aria-live="polite">Memuat data…</p><div class="halaman-memuat__baris" aria-hidden="true"><i></i><i></i><i></i></div>');
+    if (!isi) { return false; }
+    isi.setAttribute('aria-busy', 'true');
+    cabutSemua();
+    var lembarLama = document.getElementById('lembar');
+    if (lembarLama) lembarLama.remove();
+    // Kerangka tidak membawa angka, izin, atau formulir dari halaman lama.
+    // Sidebar dan tombol menu tetap hidup saat pembaca data masih bekerja.
+    var nama = judul || 'Halaman';
+    isi.querySelector('h1').textContent = nama;
+    var merek = document.querySelector('.bar__merek');
+    if (merek) merek.textContent = nama;
+    var crumb = document.querySelector('.desktop-breadcrumb');
+    if (crumb) { crumb.textContent = nama; }
+    document.title = nama + ' · PT Hadi Mulya Utama';
+    var terpilih = null;
+    document.querySelectorAll('#laci summary.pintu').forEach(function (a) { a.classList.remove('pintu--kini'); a.removeAttribute('aria-current'); });
+    document.querySelectorAll('#laci a[href]').forEach(function (a) {
+      var cocok = a.pathname + a.search === alamat;
+      a.classList.toggle('pintu--kini', cocok && a.classList.contains('pintu'));
+      a.classList.toggle('pintu-sub__satu--kini', cocok && a.classList.contains('pintu-sub__satu'));
+      if (cocok) { a.setAttribute('aria-current', 'page'); terpilih = a; }
+      else a.removeAttribute('aria-current');
+    });
+    if (terpilih) {
+      var grup = terpilih.closest('details');
+      if (grup) { grup.open = true; var head = grup.querySelector('summary'); if (head) head.classList.add('pintu--kini'); }
+    }
+    var laci = document.getElementById('laci');
+    if (laci) laci.hidden = true;
+    var buka = document.getElementById('buka-laci');
+    if (buka) buka.setAttribute('aria-expanded', 'false');
+    var gulung = document.querySelector('.isi');
+    if (gulung) gulung.scrollTop = 0;
+    return true;
+  }
+
+  function gagalMuat(alamat, judul) {
+    var isi = gantiIsiHalaman('<h1></h1><p role="alert">Data belum dapat dimuat. Periksa koneksi Anda.</p><button type="button" class="btn">Coba lagi</button> <a class="btn" data-utuh>Muat ulang halaman</a>');
+    if (!isi) { location.href = alamat; return; }
+    isi.querySelector('h1').textContent = judul || 'Halaman';
+    isi.querySelector('button').addEventListener('click', function () { pindah(alamat, false, judul); });
+    isi.querySelector('a').href = alamat;
+  }
+
+  function pindah(alamat, dorong, judul) {
     // Hanya pilihan terakhir yang boleh memasang HTML, termasuk bila
     // respons lama datang setelah klik sidebar/detail berikutnya.
     var nomor = ++nomorPindah;
@@ -579,7 +642,9 @@
            memang berbeda, dan tak ada lembar terbuka. Menukar isi di bawah
            jari orang yang sedang membaca laporan lebih buruk daripada angka
            yang telat setengah detik. */
-        if (nomor !== nomorPindah || !teks || teks === tersimpan) { return; }
+        if (nomor !== nomorPindah) { return; }
+        tujuanPindah = null;
+        if (!teks || teks === tersimpan) { return; }
         if (location.pathname + location.search !== alamat) { return; }
         if (lembarTerbuka()) { return; }
         // Pengguna sudah mulai memakai halaman/menu. Mengganti DOM sekarang
@@ -595,15 +660,22 @@
       return;
     }
 
-    // Belum ada: tunggu, sambil menunjukkan bahwa sesuatu sedang berjalan.
+    // Navigasi tidak lagi menunggu pembacaan data pada kunjungan pertama.
+    // URL hanya didorong sekali; respons lama tetap kalah dari pilihan baru.
+    var bertahap = kerangka(alamat, judul);
+    if (bertahap && dorong) { history.pushState({ pindah: 1 }, '', alamat); }
     sibuk(true);
     ambil(alamat).then(function (teks) {
       if (nomor !== nomorPindah) { return; }
       sibuk(false);
       tujuanPindah = null;
-      if (!teks) { location.href = alamat; return; }
-      if (!pasang(teks, alamat, true)) { return; }
-      if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
+      if (!teks) {
+        if (bertahap && gagal[alamat]) { gagalMuat(alamat, judul); }
+        else { location.href = alamat; }
+        return;
+      }
+      if (!pasang(teks, alamat, !bertahap)) { return; }
+      if (!bertahap && dorong) { history.pushState({ pindah: 1 }, "", alamat); }
     });
   }
 
@@ -617,12 +689,12 @@
     var a = e.target.closest ? e.target.closest("a") : null;
     if (!bolehDitangani(a)) { return; }
     var alamat = a.pathname + a.search;
+    if (tujuanPindah === alamat) { e.preventDefault(); return; }
     if (alamat === location.pathname + location.search) {
       // Klik kembali ke halaman kini juga membatalkan tujuan yang menunggu.
       ++nomorPindah; tujuanPindah = null; sibuk(false);
       e.preventDefault(); return;
     }
-    if (tujuanPindah === alamat) { e.preventDefault(); return; }
     e.preventDefault();
 
     /* Tab yang ditekan menyala SEKARANG, bukan setelah halamannya datang.
@@ -634,7 +706,8 @@
           t.classList.toggle("bilah__tab--aktif", t === tab);
         });
     }
-    pindah(alamat, true);
+    var label = a.querySelector('.pintu__nama') || a.querySelector('.benda__judul');
+    pindah(alamat, true, (label || a).textContent.trim().replace(/\s+/g, ' ').slice(0, 90));
   });
 
   /* Mulai mengambil saat jari MENYENTUH, bukan saat diangkat. Jeda antara

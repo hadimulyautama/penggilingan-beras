@@ -12,9 +12,10 @@
       var item = cache.get(url);
       return item && ops.waktu() - item.saat < 30000 ? item.html : null;
     }
-    async function pindah(url, dorong, gulung) {
+    async function pindah(url, dorong, gulung, judul) {
       var nomor = ++urutan, lama = terakhir(url), sentuhan;
       if (lama && !ops.pasang(lama, url, dorong, gulung)) { ops.utuh(url); return; }
+      var bertahap = !lama && ops.kerangka ? ops.kerangka(url, dorong, gulung, judul) : false;
       sentuhan = ops.sentuhan(); menavigasi = true;
       ops.status(lama ? 'memperbarui' : 'memuat');
       var baru;
@@ -23,7 +24,11 @@
       menavigasi = false;
       if (baru && typeof baru.html === 'string') { url = baru.url; baru = baru.html; }
       if (!baru || typeof baru !== 'string') {
-        ops.utuh(baru && baru.login ? '/pelanggan/masuk' : url); return;
+        if (baru && baru.login) { ops.utuh('/pelanggan/masuk'); }
+        else if (baru && baru.utuh) { ops.utuh(baru.utuh); }
+        else if (bertahap && ops.gagal) { ops.gagal(url, function () { return pindah(url, false, gulung, judul); }); }
+        else ops.utuh(url);
+        return;
       }
       ingat(url, baru);
       // Respons yang sama tidak perlu mengganti rincian yang sudah dibuka
@@ -38,7 +43,7 @@
         }
         ops.status('selesai'); return;
       }
-      if (!ops.pasang(baru, url, lama ? false : dorong, gulung)) { ops.utuh(url); return; }
+      if (!ops.pasang(baru, url, lama || bertahap ? false : dorong, gulung)) { ops.utuh(url); return; }
       ops.status('selesai');
     }
     return {
@@ -82,6 +87,39 @@
       && !/\/(masuk|keluar|sw\.js|manifest\.webmanifest)$/.test(url.pathname)
       && !/\.(pdf|csv)$/i.test(url.pathname) && !url.hash;
   }
+  function kerangka(url, dorong, gulung, judul) {
+    if (nonce() !== sesi) return false;
+    if (dorong) {
+      history.replaceState(Object.assign({}, history.state, { portalScroll: main.scrollTop }), '', alamat());
+      history.pushState({ portal: 1, portalScroll: 0 }, '', url);
+    }
+    var nom = judul || 'Halaman';
+    main.innerHTML = '<section class="halaman-memuat" aria-busy="true"><h1></h1><p role="status" aria-live="polite">Memuat data…</p><div class="halaman-memuat__baris" aria-hidden="true"><i></i><i></i><i></i></div></section>';
+    main.querySelector('h1').textContent = nom;
+    document.title = nom + ' · PadiFlow Pelanggan';
+    var path = new URL(url, location.origin).pathname;
+    document.querySelectorAll('.portal-sidebar nav a[href],.portal-bawah a[href]').forEach(function (link) {
+      var p = new URL(link.href, location.origin).pathname;
+      var aktif = p === path || p !== '/pelanggan/' && path.indexOf(p + '/') === 0;
+      if (aktif) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+      if (link.classList.contains('pintu')) link.classList.toggle('pintu--kini', aktif);
+    });
+    var menu = document.getElementById('menu-pelanggan');
+    if (menu) {
+      if (document.querySelector('.portal-bawah a[aria-current]')) menu.removeAttribute('data-current');
+      else menu.setAttribute('data-current', 'true');
+    }
+    main.scrollTop = gulung || 0;
+    main.focus({ preventScroll: true });
+    window.dispatchEvent(new Event('portal:halaman'));
+    return true;
+  }
+  function gagal(url, ulangi) {
+    status('selesai');
+    main.innerHTML = '<section class="halaman-memuat"><h1>Data belum dapat dimuat</h1><p role="alert">Periksa koneksi Anda, lalu coba lagi.</p><button class="btn" type="button">Coba lagi</button> <a class="btn" data-utuh>Muat ulang halaman</a></section>';
+    main.querySelector('button').addEventListener('click', ulangi);
+    main.querySelector('a').href = url;
+  }
   function status(mode, muat) {
     if (timer) clearTimeout(timer);
     if (pesan) pesan.remove();
@@ -89,6 +127,9 @@
     pesan = null;
     if (mode === 'selesai') return;
     if (mode === 'tertunda') { mode = 'gagal'; muat = function () { segarkan(true); }; }
+    if (mode === 'memuat' && main.querySelector('.halaman-memuat')) {
+      main.setAttribute('aria-busy', 'true'); return;
+    }
     function tampilkan() {
       var tempat = document.querySelector('.portal-top-identitas');
       if (!tempat) return;
@@ -118,11 +159,11 @@
     var p = fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: { 'X-Portal-Navigasi': '1', 'Accept': 'text/html' } }).then(function (r) {
         if (r.status === 401) return { login: true };
-        if (!r.ok || !(r.headers.get('Content-Type') || '').startsWith('text/html')) return null;
+        if (!r.ok || !(r.headers.get('Content-Type') || '').startsWith('text/html')) return { utuh: r.url || url };
         if (r.redirected) {
           var cible = new URL(r.url, location.href);
           if (cible.origin === location.origin && cible.pathname === '/pelanggan/masuk') return { login: true };
-          if (!aman(cible)) return null;
+          if (!aman(cible)) return { utuh: r.url || url };
           return r.text().then(function (html) { return { html: html, url: cible.pathname + cible.search }; });
         }
         return r.text();
@@ -172,11 +213,11 @@
     return true;
   }
   var router = pengarah({ waktu: Date.now, sentuhan: function () { return sentuhan; }, ambil: ambil,
-    pasang: pasang, status: status, siap: siapSegar, utuh: function (url) { location.assign(url); } });
-  window.PORTAL_NAV = { buka: function (url) {
+    pasang: pasang, kerangka: kerangka, gagal: gagal, status: status, siap: siapSegar, utuh: function (url) { location.assign(url); } });
+  window.PORTAL_NAV = { buka: function (url, judul) {
     var u = new URL(url, location.href);
     if (!aman(u) || nonce() !== sesi) { router.bersihkan(); location.assign(u.href); return; }
-    return router.pindah(u.pathname + u.search, u.pathname + u.search !== alamat(), 0);
+    return router.pindah(u.pathname + u.search, u.pathname + u.search !== alamat(), 0, judul);
   } };
   router.ingat(alamat(), document.documentElement.outerHTML);
   document.addEventListener('pointerdown', function () { sentuhan++; }, true);
@@ -188,7 +229,7 @@
     if (!a || a.target || a.hasAttribute('download') || a.hasAttribute('data-utuh')) return;
     var url = new URL(a.href, location.href);
     if (!aman(url)) return;
-    e.preventDefault(); window.PORTAL_NAV.buka(url.href);
+    e.preventDefault(); window.PORTAL_NAV.buka(url.href, a.textContent.trim().replace(/\s+/g, ' ').slice(0, 90));
   });
   document.addEventListener('submit', function (e) {
     if (e.defaultPrevented || e.target.target) return;
