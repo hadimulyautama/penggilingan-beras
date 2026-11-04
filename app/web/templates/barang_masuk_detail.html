@@ -43,7 +43,7 @@
 <div class="bm-status" aria-label="Status timbang, penerimaan, dan QC">
  <div><span>Timbang / tiket</span><strong>{{ label_tiket(tiket.status_tiket) }}</strong></div>
  <div><span>Penerimaan</span><strong>{{ awal.status_penerimaan }}</strong></div>
- <div><span>QC penerimaan</span>{% for g in qc_penerimaan %}<strong>{{ g.kode }} · {{ g.status }}</strong>{% else %}<strong>{{ 'Mengikuti catatan penerimaan' if not diterima else 'Belum diperiksa' if jenis in ['gabah_basah','gabah_kering','pk'] else 'Pencatatan QC penerimaan jenis barang ini belum tersedia' }}</strong>{% endfor %}</div>
+ <div data-qc-penerimaan-status><span>QC penerimaan</span>{% for g in qc_penerimaan %}<strong>{{ g.kode }} · {{ g.status }}</strong>{% else %}<strong>{{ 'Mengikuti catatan penerimaan' if not diterima else 'Belum diperiksa' if jenis in ['gabah_basah','gabah_kering','pk'] else 'Pencatatan QC penerimaan jenis barang ini belum tersedia' }}</strong>{% endfor %}</div>
 </div>
  <ul class="terima-lokasi">{% for l in lokasi %}<li>{{ l }}</li>{% else %}<li>{{ 'Belum ada lokasi lanjutan tercatat.' if catatan else 'Tujuan dan pencatatan mengikuti pilihan serta pemeriksaan formulir.' }}</li>{% endfor %}</ul>
  {% for kode,url in proses %}<p><a href="{{ url }}">{{ kode }} →</a></p>{% endfor %}
@@ -58,7 +58,7 @@
 <section class="terima-panel bm-rincian"><h2>Rincian penerimaan</h2>
 <details id="terima-panel-tiket"{% if tab_detail=='tiket' %} open{% endif %}><summary>Data timbang lengkap</summary>{% with bobot_terbuka=true %}{% include '_penerimaan_timbang.html' %}{% endwith %}{% if not timbang %}<p>Rincian timbang belum tersedia pada catatan ini.</p>{% endif %}</details>
 <details id="terima-identitas"><summary>Identitas & dokumen asal</summary><dl class="bm-valores">{% for label,v in [('Tiket',tiket.kode),('Jenis',nama_jenis),('Pelanggan / pemilik' if tiket.jasa else 'Supplier',tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama),('Pesanan jasa',tiket.jasa_kode),('Armada',tiket.nomor_polisi),('Sopir',tiket.nama_sopir),('Arah',tiket.arah),('Cara timbang',timbang.cara_timbang if timbang else none)] %}<div><dt>{{ label }}</dt><dd>{{ label_tiket(v) if label in ['Arah','Cara timbang'] else v or 'Belum tercatat' }}</dd></div>{% endfor %}</dl>{% if timbang %}{% for m in timbang.muatan %}<p>{{ m.jenis_nama or m.jenis_kode }} · Nota {{ m.nomor_acuan or 'belum tercatat' }}{% if m.catatan %} · {{ m.catatan }}{% endif %}</p>{% endfor %}{% endif %}</details>
-<details id="terima-panel-qc"{% if tab_detail=='qc' %} open{% endif %}><summary>QC · seluruh putaran & rata-rata</summary>{% include '_penerimaan_qc_ringkas.html' %}</details>
+<details id="terima-panel-qc"{% if tab_detail=='qc' %} open{% endif %}><summary>QC · seluruh putaran & rata-rata</summary><p class="bm-meta" data-qc-refresh-status role="status" hidden></p>{% include '_penerimaan_qc_ringkas.html' %}</details>
 <details id="terima-panel-riwayat"{% if tab_detail=='riwayat' %} open{% endif %}><summary>Jejak penerimaan & hubungan barang</summary>{% include '_penerimaan_catatan.html' %}
 {% with tanpa_navigasi_umum=true %}{% include '_penerimaan_lokasi.html' %}{% endwith %}
  {% if retur_supplier_terkait %}<h3>Pengajuan Retur ke Supplier terkait</h3><ul>{% for r in retur_supplier_terkait %}<li><a href="/retur-supplier/{{ r.id }}">{{ r.kode }}</a> · {{ 'Selesai di gudang' if r.status=='selesai_gudang' else r.status }}</li>{% endfor %}</ul>{% endif %}
@@ -68,7 +68,7 @@
 </main>
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
 <script id="penerimaan-awal" type="application/json">{{ awal|tojson }}</script>
-<script src="/static/penerimaan-ringkas.js?v={{ VERSI }}&bm=20261101.4" defer></script>
+<script src="/static/penerimaan-ringkas.js?v={{ VERSI }}&bm=20261104.qc4" defer></script>
 <script src="/static/pdf-penerimaan.js?v={{ VERSI }}&bagikan=1" defer></script>
 {% endblock %}
 {% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka_lama,nilai if buka_lama else '') }}{% endblock %}

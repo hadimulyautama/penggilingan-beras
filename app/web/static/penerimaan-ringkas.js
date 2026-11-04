@@ -94,6 +94,41 @@
     root.querySelector('[data-nav-guard]')?.remove();const p=el('section',null,'terima-panel');p.dataset.navGuard='';const saved=persist();p.append(el('h2','Isian belum disimpan'),el('p',saved?'Isian tetap disimpan pada perangkat ini. Berpindah halaman tidak mencatat penerimaan atau stok.':'Perangkat belum dapat menyimpan isian. Tetap di halaman ini agar isian tidak hilang.'),button('Tetap di halaman ini',()=>p.remove()));if(saved)p.append(button('Lanjut dengan isian tersimpan',()=>{markReturn(a);leaving=true;location.assign(a.href);}));root.prepend(p);p.scrollIntoView({block:'start'});
   },true);
   window.addEventListener('beforeunload',e=>{if(root.isConnected&&!leaving&&(busy||state.dirty||state.uncertain)){persist();e.preventDefault();e.returnValue='';}});
+  // Refresh QC saja: jangan render ulang host formulir atau menyalin snapshot
+  // isian ke data transaksi. Draf dan fokus tetap pada simpul yang sama.
+  let readBusy=false;
+  const bolehBacaQC=()=>root.isConnected&&!busy&&!state.inflight&&!state.uncertain&&!checked;
+  function withReadState(change){
+    const view=window.KEADAAN_BACA.ambil(root);view.fields=[];
+    // Baris tabel tanpa ID/tautan bisa berulang di timbang dan penilaian.
+    // Jangan cocokkan TR: ke baris pertama; gunakan offset gulir tersimpan.
+    if(view.anchor&&view.anchor.key.endsWith(':'))view.anchor=null;
+    change();window.KEADAAN_BACA.pulihkan(root,view);
+  }
+  root.pfReadRefresh=async()=>{
+    if(readBusy||!bolehBacaQC()||!window.KEADAAN_BACA)return false;
+    const path=location.pathname+location.search,abort=new AbortController();
+    const timer=setTimeout(()=>abort.abort(),25000);readBusy=true;
+    try{
+      session();
+      const r=await fetch(path,{credentials:'same-origin',cache:'no-store',signal:abort.signal,headers:{'X-Pindah':'1'}});
+      if(r.redirected||!r.ok)throw Error('Pembaruan QC belum dapat dibaca.');
+      const doc=new DOMParser().parseFromString(await r.text(),'text/html'),fresh=doc.querySelector('[data-penerimaan-ringkas]');
+      if(!bolehBacaQC()||path!==location.pathname+location.search)return false;
+      session();
+      if(!fresh||fresh.dataset.tiket!==root.dataset.tiket||fresh.dataset.actor!==root.dataset.actor)throw Error('Konteks penerimaan berubah.');
+      const qc=root.querySelector('#terima-panel-qc'),next=fresh.querySelector('#terima-panel-qc');
+      const status=root.querySelector('[data-qc-penerimaan-status]'),nextStatus=fresh.querySelector('[data-qc-penerimaan-status]');
+      if(!qc||!next||!status||!nextStatus)throw Error('Rincian QC terbaru belum lengkap.');
+      withReadState(()=>{window.KEADAAN_BACA.tukar(qc,next);window.KEADAAN_BACA.tukar(status,nextStatus);});
+      return true;
+    }catch(_){
+      if(bolehBacaQC()&&path===location.pathname+location.search){
+        withReadState(()=>{const note=root.querySelector('[data-qc-refresh-status]');if(note){note.textContent='Pembaruan QC belum dapat dibaca. Data sebelumnya tetap ditampilkan.';note.hidden=false;}});
+      }
+      return false;
+    }finally{clearTimeout(timer);readBusy=false;}
+  };
   function openFragment(){let id;try{id=decodeURIComponent(location.hash.slice(1));}catch(_){return;}const target=document.getElementById(id);if(target&&root.contains(target))for(let n=target;n&&n!==root;n=n.parentElement)if(n.tagName==='DETAILS')n.open=true;}
   window.addEventListener('hashchange',openFragment);render();openFragment();
 })();
