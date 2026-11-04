@@ -64,3 +64,19 @@ def test_kembali_pencarian_tetap_aman():
  assert parse_qs(urlsplit(kembali_aman(url)).query)['cari']==['Hadi 25']
  assert kembali_aman('https://asing.invalid/stok?cari=apa')==''
  assert 'pelanggan_id' not in alamat('produk','pabrik',pelanggan_id=7)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('source', ['stok_produk.html', 'stok_produk_jasa.html',
+                                   'stok_karung.html', 'stok_karung_jasa.html'])
+async def test_kontrol_stok_pada_pembungkus_kepemilikan(source):
+ from starlette.requests import Request
+ from app.web.stok_navigasi import siapkan, HALAMAN
+ request = Request(dict(type='http', method='GET', path='/stok',
+                        query_string=b'', headers=[], state={'view': 'super'}))
+ context = dict(template_kepemilikan_asal=source, daftar=[], karung=[])
+ await siapkan(request, 'stok_kepemilikan.html', context)
+ kind, owner = HALAMAN[source]
+ assert context['STOK_NAV']['jenis'] == kind
+ assert context['STOK_NAV']['pemilik'] == owner
+ assert context['daftar'] == [] and context['karung'] == []

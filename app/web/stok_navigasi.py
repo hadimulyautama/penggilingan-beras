@@ -66,6 +66,9 @@ def kembali_aman(nilai):
 
 
 async def siapkan(request, nama, konteks):
+    # Pembungkus kepemilikan tetap memakai kontrol template Stok asal.
+    nama = (konteks.get("template_stok_asal")
+            or konteks.get("template_kepemilikan_asal") or nama)
     if konteks.get('detail') or nama == 'stok_produk_detail.html':
         balik = kembali_aman(request.query_params.get('kembali_stok', ''))
         if balik:
