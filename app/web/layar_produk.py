@@ -461,7 +461,17 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
             continue
         rows.append(dict(bentuk='Curah tercatat',kg=float(fg.berat_total_kg),karung=0,ukuran=0,merk='',bahan='',href=None,pindah=None,sumber=None,
             kemas=kemas_href(fg.product_sku_id,fg.rice_quality_standard_id,fg.jasa_id) if boleh_kemas else None))
-    return await render_laci(request, "stok_produk_detail.html",
+    asal_pengemasan=[]
+    if otomatis and boleh_kemas and not getattr(request.state,'portal_scope',None):
+        # Kode asal yang memang sudah dibaca kartu; tidak menggunakan bobot
+        # FIFO perkiraan untuk menghitung koreksi transaksi.
+        from app.models import PolishingProcess
+        codes=[r.kode for r in k.hasil]
+        async with SessionLocal() as db:
+            asal_pengemasan=list((await db.scalars(select(PolishingProcess).where(
+                PolishingProcess.kode_proses.in_(codes)).order_by(PolishingProcess.id.desc()))).all())
+        asal_pengemasan=[r for r in asal_pengemasan if can_see_financials(user) or r.status=='proses']
+    return await render_laci(request, "stok_produk_koreksi_asal.html", asal_pengemasan=asal_pengemasan,
         layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",
         breadcrumb_detail=k.nama, k=k, beras=svc.adalah_beras(k.jenis), pemilik=pemilik or "Pabrik",
         pelanggan_id=pelanggan_id, jasa_ids=jasa_ids, kemasan=kemasan,

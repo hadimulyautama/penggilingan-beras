@@ -122,8 +122,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         for row in output_logs:
             if row.jenis in hasil_awal:
                 hasil_awal[row.jenis] += float(row.berat_kg or 0)
-        penghalang = (await alasan_koreksi_hasil(db, process_id)
-                      if kartu and akun.is_admin else None)
+        penghalang = None  # Pemeriksaan kini per jenis dan target saat disimpan.
     if not kartu:
         raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
     from app.services.riwayat_jeda import riwayat_jeda

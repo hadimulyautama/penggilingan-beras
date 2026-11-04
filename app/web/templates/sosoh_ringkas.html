@@ -2,6 +2,7 @@
 {% block judul %}Penyosohan {{ awal.kode_proses }}{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/sosoh-ringkas.css?v={{ VERSI }}&amp;sr=20261104.auto1">
+{% if akun.is_admin or boleh %}<details class="pp-panel"><summary>Catatan asal pengemasan otomatis</summary><p>Koreksi satu catatan hasil; karung dan curah mengikuti saldo. Bukan pengemasan manual.</p>{% for j in ['broken','bekatul','menir','reject'] %}<a class="btn btn--kecil" data-utuh href="/pengemasan-otomatis/sosoh/{{ awal.proses_id }}/{{ j }}">{{ j|title }} · catatan asal</a> {% endfor %}</details>{% endif %}
 <main class="sr" data-sosoh-ringkas data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
  <div data-pesan role="status" hidden></div><div data-galat role="alert" hidden></div>
  <div data-pemulihan hidden><button type="button" class="btn" data-terbaru>Baca status terbaru</button><p>Isian tetap tersedia. Periksa data terbaru sebelum konfirmasi ulang.</p></div>

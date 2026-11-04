@@ -1895,7 +1895,8 @@ async def stok_produk(db: AsyncSession, *,
                      - beras_dipindah_proc.get(jenis, 0.0)
                      - keluar_curah.get(jenis, 0.0))
         sisa = punya_rumah + curah - pindah_silo.get(jenis, 0.0)
-        if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
+        if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5
+                and (jenis not in _UKURAN_KEMASAN_OTOMATIS or abs(sisa)<0.000001)):
             continue
         sisa_curah = sisa_kemas.get(jenis,0)
         kemasan_stok -= sisa_curah

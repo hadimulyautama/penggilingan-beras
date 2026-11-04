@@ -657,7 +657,7 @@ async def alasan_koreksi_hasil(db: AsyncSession, process_id: int) -> str | None:
 async def koreksi_hasil_sosoh(
     db: AsyncSession, *, user, process_id: int,
     perubahan: dict[str, float], dasar: dict[str, float], alasan: str,
-    berjalan: bool = False, simpan: bool = True,
+    berjalan: bool = False, simpan: bool = True, catatan_id: int | None = None,
 ) -> PolishingProcess:
     """Ubah catatan hasil selesai dengan audit dan sinkronkan neraca lintas-app.
 
@@ -665,15 +665,14 @@ async def koreksi_hasil_sosoh(
     stok lanjutannya harus dibalik lebih dulu agar angka asal dan turunannya
     tidak berpisah.
     """
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     proc = (await db.execute(
         select(PolishingProcess).where(PolishingProcess.id == process_id)
         .with_for_update()
     )).scalar_one_or_none()
     if proc is None or proc.status != ("proses" if berjalan else "selesai"):
         raise Gudang2Error("Koreksi hanya tersedia untuk proses sosoh yang selesai.")
-    penghalang = None if berjalan else await alasan_koreksi_hasil(db, proc.id)
-    if penghalang:
-        raise Gudang2Error(penghalang)
     alasan = (alasan or "").strip()
     if not alasan:
         raise Gudang2Error("Tuliskan alasan koreksi hasil.")
@@ -689,6 +688,9 @@ async def koreksi_hasil_sosoh(
         .order_by(PolishingOutputLog.id)
         .with_for_update()
     )).scalars().all()
+    from app.services.koreksi_pengemasan_asal import batal_ids
+    canceled=await batal_ids(db,proc.id)
+    baris=[r for r in baris if r.id not in canceled]
     berubah = False
     per_jenis: dict[str, list[PolishingOutputLog]] = {jenis: [] for jenis in _ALL_JENIS}
     for row in baris:
@@ -703,6 +705,19 @@ async def koreksi_hasil_sosoh(
         raise Gudang2Error(
             "Catatan hasil berubah sejak halaman dibuka. Muat ulang lalu coba lagi.")
 
+    from app.services.pengemasan_otomatis import pastikan_hasil, pastikan_saldo
+    from app.services.stok import _UKURAN_KEMASAN_OTOMATIS
+    if not berjalan and any(float(perubahan[k])!=float(dasar[k]) for k in _ALL_JENIS if k not in _UKURAN_KEMASAN_OTOMATIS):
+        penghalang=await alasan_koreksi_hasil(db,proc.id)
+        if penghalang:raise Gudang2Error(penghalang)
+    try:await pastikan_hasil(db,proc,dasar,perubahan)
+    except ValueError as e:raise Gudang2Error(str(e)) from e
+    if catatan_id is not None:
+        selected=next((r for r in baris if r.id==catatan_id),None)
+        if not selected or any(float(perubahan[k])!=float(dasar[k]) for k in _ALL_JENIS if k!=selected.jenis):
+            raise Gudang2Error('Catatan terpilih tidak sesuai jenis/proses atau mengubah hasil lain.')
+        target_note=float(selected.berat_kg)+float(perubahan[selected.jenis])-float(dasar[selected.jenis])
+        if target_note<0:raise Gudang2Error('Koreksi catatan terpilih tidak boleh mengurangi hasil catatan lain.')
     for jenis, nilai in perubahan.items():
         target = round(float(nilai), 2)
         rows = per_jenis[jenis]
@@ -730,7 +745,7 @@ async def koreksi_hasil_sosoh(
         # catatan pertama, atau kurangi dari catatan terakhir ke awal tanpa
         # membuat nilai negatif.
         sisa = abs(delta)
-        sasaran = rows if delta > 0 else list(reversed(rows))
+        sasaran = ([selected] if catatan_id is not None else rows if delta > 0 else list(reversed(rows)))
         for row in sasaran:
             lama = float(row.berat_kg)
             if delta > 0:
@@ -755,6 +770,9 @@ async def koreksi_hasil_sosoh(
     if not berubah:
         raise Gudang2Error("Tidak ada perubahan hasil yang dimasukkan.")
 
+    await db.flush()
+    try:await pastikan_saldo(db,proc,[k for k in perubahan if float(perubahan[k])!=float(dasar[k])])
+    except ValueError as e:raise Gudang2Error(str(e)) from e
     if berjalan:
         # Jalur aktif tidak menutup ProsesTerpadu, tidak memverifikasi hasil,
         # dan tidak menyentuh status/jeda. Transaksi dimiliki pemanggil.
@@ -795,7 +813,8 @@ async def koreksi_hasil_sosoh(
         metadata_tambahan={"rendemen_beras_persen": rendemen,
                            "berat_pk_terpakai_kg": pk_terpakai},
     )
-    await db.commit()
+    if simpan:await db.commit()
+    else:await db.flush()
     return proc
 
 

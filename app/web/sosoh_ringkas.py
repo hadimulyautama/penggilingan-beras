@@ -66,6 +66,7 @@ async def baca(db,kode):
     aktif=await jeda.jeda_terbuka(db,'penyosohan',proc.id)
     penutup=await db.scalar(select(ActivityLog).where(ActivityLog.table_name=='polishing_process',ActivityLog.record_id==proc.id,ActivityLog.aksi=='akhiri_penyosohan',ActivityLog.dibatalkan_pada.is_(None)).order_by(ActivityLog.id.desc()).limit(1)) if proc.status=='selesai' else None
     closer=await db.get(User,penutup.changed_by) if penutup and penutup.changed_by else None
+    data['proses_id']=proc.id
     data.update(dasar=dasar,aktif=proc.status=='proses',gudang='Gudang 2 · Penyosohan',
         waktu=dict(mulai=proc.waktu_mulai.isoformat() if proc.waktu_mulai else None,
             selesai=proc.waktu_selesai.isoformat() if proc.waktu_selesai else None,

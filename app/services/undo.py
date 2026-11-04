@@ -728,6 +728,9 @@ async def _undo_last_progress(db: AsyncSession, proc_id: int) -> str:
 
 
 async def _undo_output_sosoh(db: AsyncSession, log_id: int) -> str:
+    from app.models import Peristiwa
+    if await db.scalar(select(Peristiwa.id).where(Peristiwa.jenis=='koreksi_asal_pengemasan',Peristiwa.muatan['catatan_id'].as_integer()==log_id).limit(1)):
+        raise UndoError('Catatan hasil sudah memiliki koreksi/pembatalan per transaksi. Gunakan catatan asal dan versi efektifnya; Undo lama tidak boleh menghapus riwayat tersebut.')
     """Cabut SATU entri hasil penyosohan.
 
     Pasangan wajib dari perubahan kumulatif → per-prosesan (28 September 2026):

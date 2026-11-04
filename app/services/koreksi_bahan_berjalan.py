@@ -326,33 +326,8 @@ async def hasil_berjalan(db,jenis,pr,targets,user,alasan):
     else:
         if not set(targets)<=p._ALL_JENIS:raise ValueError('Jenis hasil penyosohan tidak dikenal.')
         old=await p._output_map(db,pr.id);new={k:old.get(k,0) for k in p._ALL_JENIS}
-        from app.penggilingan.inventory.models import FinishedGoodsStock,ByproductStock,ProductSku
-        from app.models import BerasKeSilo,HasilSampingKeSilo
         for kind,v in targets.items():
-            target=angka(v,'Total '+kind,presisi=2)
-            if target==D(str(new[kind])):continue
-            if target>D(str(new[kind])):
-                # Menambah hasil tidak membatalkan pemakaian/kemasan lama.
-                new[kind]=float(target);continue
-            # Catatan hilir hanya memblokir jenis yang sedang dikoreksi.
-            from app.services.stok import kategori_dan_mutu
-            from app.penggilingan.inventory.finished_goods import get_standard
-            kategori,mutu=kategori_dan_mutu(kind)
-            std=await get_standard(db,mutu) if mutu else None
-            blockers=[]
-            stock=await db.scalar(select(FinishedGoodsStock).join(ProductSku,ProductSku.id==FinishedGoodsStock.product_sku_id).where(FinishedGoodsStock.source_type=='polishing',FinishedGoodsStock.source_id==pr.id,
-                ProductSku.kategori==kategori,FinishedGoodsStock.rice_quality_standard_id==(std.id if std else None)).limit(1))
-            if stock:blockers.append(f'Catatan kemasan/curah #{stock.id}: {stock.berat_total_kg} kg (/koreksi-catatan/packing/{stock.id})')
-            for model,where in [(ByproductStock,ByproductStock.jenis_produk==kind),
-                (BerasKeSilo,BerasKeSilo.jenis==kind),(HasilSampingKeSilo,HasilSampingKeSilo.jenis==kind)]:
-                q=select(model).where(where)
-                if model==ByproductStock:q=q.where(model.source_type=='polishing',model.source_id==pr.id)
-                else:q=q.where(model.polishing_process_id==pr.id)
-                for row in (await db.scalars(q)).all():
-                    if model==ByproductStock and D(str(row.berat_kg))==0:continue
-                    blockers.append(f'{model.__tablename__} #{row.id}: {getattr(row,"berat_kg",None)} kg')
-            if blockers:raise ValueError('Koreksi '+kind+' ditahan oleh '+ '; '.join(blockers)+'. Perbaiki catatan terkait melalui alur yang sah.')
-            new[kind]=float(target)
+            new[kind]=float(angka(v,'Total '+kind,presisi=2))
         if all(new[k]==old.get(k,0) for k in new):raise ValueError('Tidak ada perubahan hasil.')
         await p.koreksi_hasil_sosoh(db,user=user,process_id=pr.id,perubahan=new,dasar={k:old.get(k,0) for k in p._ALL_JENIS},alasan=alasan,berjalan=True,simpan=False)
 
@@ -651,12 +626,13 @@ async def simpan(db,*,jenis,kode,user,req):
         return dict(sudah_tercatat=True,peristiwa_id=old.id,hasil=old.muatan['hasil'])
     await kunci(db,jenis,kode,user)
     if req.get('konfirmasi') is not True or not hmac.compare_digest(req.get('pemeriksaan',''),tanda(jenis,kode,user,req)):raise ValueError('Periksa dampak terbaru dan konfirmasikan sebelum menyimpan.')
-    result=await terapkan(db,jenis=jenis,kode=kode,user=user,req=req)
-    event=await buku.catat(db,jenis=JENIS,pelaku_id=user.id,kunci_kiriman=key,
-        muatan=dict(isian=[jenis,kode,clean],hasil=result),terapkan=False)
-    # Proyeksi pemindahan memakai peristiwa koreksi ini juga saat replay.
-    await buku.terapkan_ke_proyeksi(db,event)
-    await db.flush()
+    async with db.begin_nested():
+        result=await terapkan(db,jenis=jenis,kode=kode,user=user,req=req)
+        event=await buku.catat(db,jenis=JENIS,pelaku_id=user.id,kunci_kiriman=key,
+            muatan=dict(isian=[jenis,kode,clean],hasil=result),terapkan=False)
+        # Proyeksi pemindahan memakai peristiwa koreksi ini juga saat replay.
+        await buku.terapkan_ke_proyeksi(db,event)
+        await db.flush()
     return dict(sudah_tercatat=False,peristiwa_id=event.id,hasil=buku.bersih(result))
 
 

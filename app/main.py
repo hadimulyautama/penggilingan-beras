@@ -660,3 +660,6 @@ app.include_router(koreksi_bahan_berjalan_router)
 
 from app.web.kepemilikan import router as kepemilikan_router
 app.include_router(kepemilikan_router)
+
+from app.web.pengemasan_otomatis import router as pengemasan_otomatis_router
+app.include_router(pengemasan_otomatis_router)
