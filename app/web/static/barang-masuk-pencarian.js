@@ -6,6 +6,7 @@
   const originalName=root.dataset.pemasokTertampil;
   function changed(){root.querySelector('#bm-belum-cari').hidden=input.value.trim()===root.dataset.cariTertampil&&name.value===originalName;}
   search.addEventListener('input',changed);search.addEventListener('change',changed);
+  search.addEventListener('pf:read-state-restored',changed);
   async function baca(url){if(busy)return;busy=true;lastURL=url;lastDraft=[input.value,name.value];root.setAttribute('aria-busy','true');root.querySelectorAll('button').forEach(b=>b.disabled=true);
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
    try{const r=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{'X-Barang-Masuk-Cari':'1'},signal:controller.signal});

@@ -37,4 +37,4 @@
 {% endif %}
 </section><dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
 {% endblock %}
-{% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}<script src="/static/barang-masuk-pencarian.js?bm=2" defer></script><script src="/static/penerimaan-posisi.js?v={{ VERSI }}&bm=20261101.4" data-posisi-penerimaan="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" defer></script>{% endblock %}
+{% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}<script src="/static/barang-masuk-pencarian.js?bm=3" defer></script><script src="/static/penerimaan-posisi.js?v={{ VERSI }}&bm=20261101.4" data-posisi-penerimaan="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" defer></script>{% endblock %}

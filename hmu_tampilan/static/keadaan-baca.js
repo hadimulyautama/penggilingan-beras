@@ -21,6 +21,9 @@ function pulihkan(root,s){
  if(!s)return;
  root.querySelectorAll('details').forEach(function(e,i){var k=keyDetail(e,i);if(s.details.has(k))e.open=s.details.get(k);});
  root.querySelectorAll('input:not([type=hidden]):not([type=password]):not([type=file]),select,textarea').forEach(function(e,i){var x=s.fields.find(function(v){return v.key===(e.id||e.name||String(i))&&v.tag===e.tagName&&v.type===e.type;});if(!x)return;if(x.selected)Array.from(e.options).forEach(function(o){o.selected=x.selected.includes(o.value);});else e.value=x.value;if(e.type==='checkbox'||e.type==='radio')e.checked=x.checked;});
+ // Sinyal khusus pemulihan baca: perbarui petunjuk turunan sebelum mengukur
+ // jangkar/gulir. Jangan kirim input/change: keduanya dapat memicu autosave.
+ root.querySelectorAll('input:not([type=hidden]):not([type=password]):not([type=file]),select,textarea').forEach(function(e){e.dispatchEvent(new CustomEvent('pf:read-state-restored',{bubbles:true}));});
  (s.controls||[]).forEach(function(x){var e=Array.from(root.querySelectorAll('[aria-controls]')).find(function(e){return e.getAttribute('aria-controls')===x.id;}),panel=document.getElementById(x.id);if(e&&panel&&!e.disabled){if(x.expanded!==null)e.setAttribute('aria-expanded',x.expanded);if(x.selected!==null)e.setAttribute('aria-selected',x.selected);panel.hidden=x.hidden;}});
  s.scroll.forEach(function(x){var e=x.node.isConnected?x.node:x.selector&&root.querySelector(x.selector);if(e){e.scrollTop=x.top;e.scrollLeft=x.left;}});
  if(s.anchor){var a=s.anchor,e=Array.from(root.querySelectorAll('[data-kode-proses],[data-id],[data-kode],[id],article,tr,details')).find(function(e){return identitas(e)===a.key;}),sc=a.scroll?.isConnected?a.scroll:a.selector&&root.querySelector(a.selector);if(e&&sc)sc.scrollTop+=e.getBoundingClientRect().top-a.top;}
