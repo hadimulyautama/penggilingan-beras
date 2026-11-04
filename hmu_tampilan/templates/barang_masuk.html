@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/static/barang-masuk.css?v={{ VERSI }}">
 <header class="kerja-kepala bm-kepala" data-saring-kerja>
 <div class="bm-judul"><h1>Barang Masuk</h1>
-<div class="bm-tindakan-desktop"><button class="btn btn--kecil" type="button" data-bm-buka="bm-panduan">Panduan</button><button class="btn btn--kecil" type="button" data-bm-cetak>Print</button></div>
+<div class="bm-tindakan-desktop"><button class="btn btn--kecil" type="button" data-bm-buka="bm-panduan">ⓘ Panduan</button><button class="btn btn--kecil" type="button" data-bm-cetak>Print</button></div>
 <div class="bm-tindakan-ponsel"><button class="btn bm-ikon" type="button" data-bm-buka="bm-filter" aria-label="Buka filter{{ ' · ' ~ filter_jumlah ~ ' aktif' if filter_jumlah }}" aria-haspopup="dialog"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v8l-4-2v-6z"/></svg>{% if filter_jumlah %}<span class="bm-titik"></span>{% endif %}</button><button class="btn bm-ikon" type="button" data-bm-buka="bm-tindakan" aria-label="Panduan dan print" aria-haspopup="dialog">⋮</button></div></div>
 <div class="bm-alat"><button class="btn btn--kecil bm-filter-desktop" type="button" data-bm-buka="bm-filter" aria-haspopup="dialog">Filter{% if filter_jumlah %} · {{ filter_jumlah }}{% endif %}</button>
 <label class="bm-cari"><span class="sr-only">Cari nama, kode atau plat</span><input class="cari" type="search" name="cari" aria-label="Cari nama, kode atau plat" placeholder="Cari nama, kode atau plat…" value="{{ request.query_params.get('cari','') }}"></label></div>
