@@ -1,6 +1,6 @@
 /* Pendengar terikat kepala halaman yang ikut diganti oleh PINDAH. */
 (function () {
-  var root = document.querySelector('.bm-kepala');
+  function pasang(root) {
   if (!root || root.dataset.bmTerpasang) return;
   root.dataset.bmTerpasang = "1";
   var asal;
@@ -26,4 +26,13 @@
       window.print();
     });
   });
+  var filter = root.querySelector('.bm-form-filter');
+  if (filter) filter.addEventListener('submit', function () {
+    var input = filter.querySelector('[name=cari]');
+    if (!input) { input = document.createElement('input'); input.type='hidden'; input.name='cari'; filter.appendChild(input); }
+    input.value = root.querySelector('[name=cari][type=search]').value;
+  });
+  }
+  window.PADIFLOW_MASUK = pasang;
+  pasang(document.querySelector('.bm-kepala'));
 })();

@@ -23,6 +23,7 @@
   root.querySelectorAll('[data-bm-form]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();const url=new URL(f.action,location.href);url.search=new URLSearchParams(new FormData(f)).toString();baca(url.pathname+url.search);}));
   root.addEventListener('click',e=>{const a=e.target.closest('[data-bm-nav] a');if(a&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey&&e.button===0){e.preventDefault();e.stopPropagation();baca(a.pathname+a.search);}});
   changed();
+  if(window.PADIFLOW_MASUK)window.PADIFLOW_MASUK(root.querySelector('.bm-kepala'));
   root.querySelector('[data-bm-retry]').addEventListener('click',()=>{if(lastURL&&input.value===lastDraft[0]&&name.value===lastDraft[1])baca(lastURL);else search.requestSubmit();});
  }
  pasang(document.querySelector('[data-bm-page]'));

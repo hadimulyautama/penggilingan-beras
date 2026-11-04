@@ -46,3 +46,13 @@ body.padiflow-ui .bm-form-filter .fld { width:100%; min-width:0; min-height:48px
     body:has(.bm-kepala) .masuk-baris { border:1px solid var(--pd-line); border-radius:12px; padding:16px; background:var(--pd-sheet); }
   }
 }
+
+.bm-pencarian { display:flex; align-items:center; gap:8px; flex-wrap:wrap; width:min(460px,100%); margin:0; }
+.bm-pencarian .bm-cari { flex:1; min-width:0; width:auto; }
+.bm-pencarian > .btn { min-height:44px; }
+.bm-pencarian > p { flex-basis:100%; margin:0; }
+.bm-pencarian [hidden] { display:none!important; }
+@media(max-width:650px) { .bm-pencarian { width:100%; } }
+@media print { .bm-pencarian { display:none!important; } }
+body.padiflow-ui .bm-pencarian .bm-cari { margin:0; }
+body.padiflow-ui .bm-pencarian > .btn { width:auto; flex:0 0 auto; min-width:64px; }
