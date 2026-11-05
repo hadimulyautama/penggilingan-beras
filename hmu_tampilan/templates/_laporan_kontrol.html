@@ -1,0 +1,18 @@
+{% macro kepala() -%}
+<div class="lk-kepala">
+  <h1>Laporan &amp; Riwayat</h1>
+  <div class="lk-desktop lk-aksi"><button class="btn btn--kecil" type="button" data-lk-buka="lk-panduan">ⓘ Panduan</button><button class="btn btn--kecil" type="button" data-lk-cetak>Print</button></div>
+  <div class="lk-ponsel lk-aksi">{% if LAPORAN_NAV.aktif == 'audit' %}<button class="btn lk-ikon" type="button" data-lk-buka="lk-filter" aria-label="Filter audit" aria-haspopup="dialog"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v8l-4-2v-6z"/></svg></button>{% endif %}<button class="btn lk-ikon" type="button" data-lk-buka="lk-menu" aria-label="Panduan dan print" aria-haspopup="dialog">⋮</button></div>
+</div>
+{%- endmacro %}
+{% macro panel() -%}
+{% from '_panduan.html' import panel as panduan %}
+{% call panduan('lk-panduan','Panduan laporan & riwayat',penutup={'data-lk-tutup':''}) %}
+<p><strong>Proses.</strong> Pilih pengeringan, penggilingan, penyosohan, transfer, atau retur ke supplier. Buka catatan untuk rincian dan dokumen yang tersedia.</p>
+<p><strong>QC.</strong> Pilih jenis bahan atau hasil untuk melihat asal, nomor polisi, rata-rata QC, dan seluruh putaran pemeriksaan pada detail.</p>
+<p><strong>Laporan.</strong> Angka dibuat saat laporan dibuka. Periode tersedia pada laporan yang mendukung rentang waktu. Serah Terima · Penerimaan &amp; Pengeluaran tetap dibuka dari tab Laporan.</p>
+<p><strong>Audit.</strong> Cari kode, pemasok, atau isi catatan. Filter rentang dan kelompok aktivitas mengikuti pilihan yang sudah tersedia. Pembatalan hanya berlaku pada catatan terakhir yang memenuhi syarat; jejak audit tetap tersimpan.</p>
+<p>Print mencetak bagian yang sedang dibuka. Saat isi laporan dibuka, gunakan Print di kepala laporan. Akses dan tindakan tetap mengikuti peran serta gudang efektif.</p>
+{% endcall %}
+<dialog class="lk-panel lk-menu" id="lk-menu" aria-labelledby="lk-menu-judul"><header class="lk-panel-kepala"><h2 id="lk-menu-judul">Tindakan</h2><button class="btn lk-ikon" type="button" data-lk-tutup aria-label="Tutup tindakan">×</button></header><button class="btn" type="button" data-lk-buka="lk-panduan">ⓘ Panduan</button><button class="btn" type="button" data-lk-cetak>Print</button></dialog>
+{%- endmacro %}

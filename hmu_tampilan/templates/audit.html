@@ -10,26 +10,7 @@
 {% if pesan %}<div class="nota nota--baik">{{ pesan }}</div>{% endif %}
 {% if err %}<div class="nota nota--buruk">{{ err }}</div>{% endif %}
 
-<form class="saring" method="get" action="/audit">
-  {# Saringan sebagai TAUTAN, bukan kotak pilih: satu ketukan, dan yang
-     sedang aktif terlihat tanpa dibuka. #}
-  <div class="pil-baris">
-    {% for kunci, nama, _ in RENTANG %}
-      <a class="pil{{ ' pil--on' if rentang == kunci }}"
-         href="/audit?rentang={{ kunci }}&kelompok={{ kelompok }}&cari={{ cari|urlencode }}">{{ nama }}</a>
-    {% endfor %}
-  </div>
-  <div class="pil-baris">
-    {% for kunci, nama, _ in KELOMPOK %}
-      <a class="pil{{ ' pil--on' if kelompok == kunci }}"
-         href="/audit?rentang={{ rentang }}&kelompok={{ kunci }}&cari={{ cari|urlencode }}">{{ nama }}</a>
-    {% endfor %}
-  </div>
-  <input type="hidden" name="rentang" value="{{ rentang }}">
-  <input type="hidden" name="kelompok" value="{{ kelompok }}">
-  <input class="fld" type="search" name="cari" value="{{ cari }}" autocomplete="off" aria-label="Cari catatan audit"
-         placeholder="Cari kode, pemasok, atau isi catatan…">
-</form>
+{% include '_laporan_audit_kontrol.html' %}
 
 <div class="hitungan">
   {{ catatan|length }} dari {{ semua }} catatan{% if rentang == '48j' %} ·
