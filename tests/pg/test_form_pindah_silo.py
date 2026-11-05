@@ -100,7 +100,8 @@ async def test_pendinginan_tidak_dilewati(pg,siap,keadaan):
 async def test_tujuan_lot_tidak_sah_tanpa_tulisan(pg,siap,kode,silo):
  before=await fakta(pg)
  async with await _klien(pg,peran='admin') as c:
-  assert (await post(c,'pindah-silo',{'kode_lot':siap['kode'] if kode is None else kode,'silo':silo})).status_code==400
+  # Lot tak dikenal tidak lolos pemeriksaan cakupan, termasuk untuk Admin.
+  assert (await post(c,'pindah-silo',{'kode_lot':siap['kode'] if kode is None else kode,'silo':silo})).status_code==(403 if kode=='TIDAK-ADA' else 400)
  assert await fakta(pg)==before
 
 @pytest.mark.parametrize('peran,view,izin',[('operator',None,True),('admin',None,True),('superadmin',None,True),('admin','operator:g1',True),('operator','operator:g2',False),('admin','operator:g2',False),('superadmin','operator:g2',False),('staff',None,False)])

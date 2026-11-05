@@ -110,7 +110,7 @@ async def act_undo(req: UndoReq, user: User = Depends(pengguna_aksi)) -> dict:
 
     wajib(log_id is not None, "Buka ulang pratinjau pembatalan dan pilih catatan yang diperiksa.")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             c = await svc.cakupan(db, scope=lingkup, nama=None, self_id=user.id)
             pesan = await svc.undo_last(db, actor=u, cakupan=c, log_id=log_id)

@@ -1847,7 +1847,7 @@ async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
             jumlah_sak = int(nilai_sak)
         from app.penggilingan.gudang1.services.qc_gabah import catat_qc_gabah
         async with SessionLocal() as db:
-            u = await db.get(User, user.id)
+            u = user
             qc, rata, jumlah = await catat_qc_gabah(
                 db, user=u, kode_batch=kode,
                 kadar_air_1=payload.get("kadar_air_1"),
@@ -1886,7 +1886,7 @@ async def act_tutup_qc_gabah(payload: dict = Body(...),
     try:
         from app.penggilingan.gudang1.services.qc_gabah import tutup_qc_gabah
         async with SessionLocal() as db:
-            u = await db.get(User, user.id)
+            u = user
             dasar = str(payload.get("dasar") or "")
             if not dasar:
                 raise HTTPException(409, "Periksa ringkasan QC terbaru sebelum konfirmasi.")
@@ -2098,7 +2098,7 @@ async def act_tempatkan_gabah(req: PindahTumpukanReq,
     _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.tumpukan import TumpukanError, tempatkan
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             jenis, mesin_id = _urai_tujuan(req.tujuan)
             batch, tempat, peringatan = await tempatkan(
@@ -2396,7 +2396,7 @@ async def act_tambah_silo_giling(req: TambahSiloGilingReq,
         raise HTTPException(400, "Pilih silo yang ditambahkan dulu.")
     from app.penggilingan.gudang1.services.milling import MillingError, tambah_silo_giling
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await tambah_silo_giling(db, user=u, kode_proses=req.kode_proses,
                                          nama_silo=req.silo.upper())
@@ -2991,7 +2991,7 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
               else [req.tes_1, req.tes_2, req.tes_3, req.tes_4])
     indikator = req.indikator if req.indikator is not None else req.kadar_air
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await log_moisture(db, user=u, kode_lot=req.kode_lot,
                                    indikator=indikator, sampel=sampel,
@@ -3036,7 +3036,7 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_ak
         raise HTTPException(400, "Pilih proses giling dulu.")
     from app.penggilingan.gudang1.services.milling import log_progress
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await log_progress(db, user=u, kode_proses=req.kode_proses,
                                    berat_kumulatif=req.berat_kumulatif)
@@ -3065,7 +3065,6 @@ async def act_mulai_pengeringan(req: MulaiPengeringanReq | None = None,
     _require(await _is_drying_operator(user,dryer_id=(req.dryer_id if req else None)))
     from app.penggilingan.gudang1.services.drying import start_drying, DryingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
         try:
             r = await start_drying(
                 db, user=user,
@@ -3117,7 +3116,7 @@ async def act_ubah_target(req: UbahTargetReq, user: User = Depends(pengguna_aksi
         raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import ubah_target, DryingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             lot, lama = await ubah_target(db, user=u, kode_lot=req.kode_lot,
                                           target=req.target)
@@ -3141,7 +3140,7 @@ async def act_selesai_pengeringan(
         raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import finish_drying, DryingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             lot, jam = await finish_drying(db, user=u, kode_lot=req.kode_lot,
                                            kadar_air_akhir=req.kadar_air)
@@ -3162,7 +3161,7 @@ async def act_mulai_pendinginan_ulang(req: KodeLotReq, user: User = Depends(peng
     from app.penggilingan.gudang1.services.drying import mulai_pendinginan_ulang, DryingError
     async with SessionLocal() as db:
         try:
-            await mulai_pendinginan_ulang(db, user=await db.get(User, user.id), kode_lot=req.kode_lot)
+            await mulai_pendinginan_ulang(db, user=user, kode_lot=req.kode_lot)
         except DryingError as e:
             raise _err(e, "Gagal memulai pendinginan ulang.")
     return {"ok": True, "pesan": "Pendinginan ulang dimulai. Nyatakan sudah dingin sebelum pindah ke silo."}
@@ -3175,7 +3174,7 @@ async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna
         raise HTTPException(400, "Pilih pengeringan yang didinginkan dulu.")
     from app.penggilingan.gudang1.services.drying import finish_cooling, DryingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             lot, jam = await finish_cooling(db, user=u, kode_lot=req.kode_lot)
         except DryingError as e:
@@ -3213,7 +3212,7 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi
         raise HTTPException(400, "Pilih silo tujuannya dulu.")
     from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await masuk_silo(db, user=u, nama_silo=req.silo.upper(),
                                  kode_lot=req.kode_lot, kode_batch=None)
@@ -3288,7 +3287,7 @@ async def act_gabah_kering_keluarkan(
     from app.penggilingan.gudang1.services.gabah_kering import (
         GabahKeringError, keluarkan_untuk_kemasan)
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await keluarkan_untuk_kemasan(
                 db, user=u, silo_storage_id=req.silo_storage_id,
@@ -3339,7 +3338,7 @@ async def act_gabah_kering_timbang_ulang(
     from app.penggilingan.gudang1.services.gabah_kering import (
         GabahKeringError, timbang_ulang)
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             lot = await timbang_ulang(db, user=u, kode_lot=req.kode_lot,
                                       berat_kg=float(req.berat_kg))
@@ -3362,7 +3361,7 @@ async def act_gabah_kering_bongkar_silo(
     _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     from app.penggilingan.gudang1.services.silo import SiloError, masuk_silo
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await masuk_silo(db, user=u, nama_silo=req.silo.upper(),
                                  kode_lot=None, kode_batch=None,
@@ -3426,7 +3425,7 @@ async def act_hentikan_proses(req: HentikanReq,
     if not kode:
         raise HTTPException(400, "Pilih proses yang mau dihentikan dulu.")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await hentikan(db, user=u, jenis=jenis, kode=kode,
                                sebab=req.sebab, sebab_lain=req.sebab_lain,
@@ -3448,7 +3447,7 @@ async def act_lanjutkan_proses(req: LanjutkanReq,
     if not kode:
         raise HTTPException(400, "Pilih proses yang mau dilanjutkan dulu.")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await lanjutkan(db, user=u, jenis=jenis, kode=kode, **_waktu_jeda(req))
         except JedaError as e:
@@ -3491,7 +3490,7 @@ async def act_ubah_kondisi_jeda(req: HentikanReq, user: User = Depends(pengguna_
     _require(await _is_proses_operator(user,jenis,kode))
     async with SessionLocal() as db:
         try:
-            await perbarui_kondisi(db, user=await db.get(User,user.id), jenis=jenis, kode=kode,
+            await perbarui_kondisi(db, user=user, jenis=jenis, kode=kode,
                 sebab=req.sebab, sebab_lain=req.sebab_lain, catatan=req.catatan, **_waktu_jeda(req))
         except JedaError as e:
             raise HTTPException(409,str(e))
@@ -3519,7 +3518,7 @@ async def act_tutup_silo_giling(req: TutupSiloGilingReq,
     silo = (req.silo or "").strip().upper() or None
     from app.penggilingan.gudang1.services.milling import MillingError, tutup_silo_giling
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             # Silo kosong DITERUSKAN, tidak dihadang: yang tahu berapa silo
             # yang masih terbuka untuk proses ini adalah layanannya, bukan
@@ -3561,7 +3560,6 @@ async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_ak
 
     from app.penggilingan.gudang1.services.milling import start_milling, MillingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
         try:
             r = await start_milling(db, user=user, nama_silo=pilih, lini_id=req.lini_id)
         except MillingError as e:
@@ -3621,7 +3619,7 @@ async def act_selesai_giling(req: SelesaiGilingReq, user: User = Depends(penggun
         raise HTTPException(409, "Periksa ringkasan penyelesaian giling terlebih dahulu.")
     from app.penggilingan.gudang1.services.milling import finish_milling, MillingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await finish_milling(db, user=u, kode_proses=req.kode_proses,
                                      berat_akhir=req.berat_akhir, dasar=req.dasar)
@@ -3647,7 +3645,7 @@ async def act_verify_output(req: VerifyOutputReq, user: User = Depends(pengguna_
         raise HTTPException(400, "Isi berat PK final dulu.")
     from app.penggilingan.gudang1.services.milling import verify_milling_output, MillingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await verify_milling_output(db, user=u, kode_proses=req.kode_proses,
                                             berat_output=req.berat_output)
@@ -3667,7 +3665,7 @@ async def act_betulkan_bobot_giling(req: KodeProsesReq, user: User = Depends(pen
     from app.penggilingan.gudang1.services.koreksi_bobot import (
         KoreksiError, betulkan_bobot_masuk)
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await betulkan_bobot_masuk(db, user=u, kode_proses=req.kode_proses.strip())
         except KoreksiError as e:
@@ -3702,7 +3700,7 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(pengguna_aksi)) -
         raise HTTPException(400, "Isi minimal salah satu komponen QC.")
     from app.penggilingan.gudang1.services.milling import log_qc_milling, MillingError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await log_qc_milling(db, user=u, kode_proses=req.kode_proses,
                                      kadar_air=req.kadar_air, broken=req.broken,
@@ -3974,7 +3972,7 @@ async def act_tolak_pk_luar(req: TolakPkLuarReq, user: User = Depends(pengguna_a
         raise HTTPException(400, "Sebutkan alasan menolaknya.")
     from app.penggilingan.gudang2.service import create_pk_rejection_dari_timbang, Gudang2Error
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await create_pk_rejection_dari_timbang(
                 db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
@@ -4024,7 +4022,7 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
                                  "penyusutan / butir kuning / gabah / merang / catatan.")
     from app.penggilingan.gudang2.service import log_pk_qc, Gudang2Error
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await log_pk_qc(
                 db, user=u, kode=req.kode_batch, kadar_air=req.kadar_air,
@@ -4202,7 +4200,7 @@ async def act_acc_permintaan_pk(req: AccPermintaanReq,
         raise HTTPException(400, "Permintaan yang mana?")
     from app.services.permintaan_pk import PermintaanError, setujui
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             b = await setujui(db, user=u, permintaan_id=pid, tujuan=req.tujuan,
                               berat=req.berat)
@@ -4261,7 +4259,7 @@ async def act_kirim_permintaan_pk(req: KirimPermintaanReq,
         raise HTTPException(400, "Permintaan yang mana?")
     from app.services.permintaan_pk import PermintaanError, kirim
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             b = await kirim(db, user=u, permintaan_id=pid, berat=berat)
         except PermintaanError as e:
@@ -4300,7 +4298,7 @@ async def act_tutup_permintaan_pk(req: TutupPermintaanReq,
         raise HTTPException(400, "Permintaan yang mana?")
     from app.services.permintaan_pk import PermintaanError, tutup_admin
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             b, catatan = await tutup_admin(db, user=u, permintaan_id=pid,
                                            berat_final=req.berat)
@@ -4333,7 +4331,7 @@ async def act_tolak_permintaan_pk(req: TolakPermintaanReq,
         raise HTTPException(400, "Permintaan yang mana?")
     from app.services.permintaan_pk import PermintaanError, tolak
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             await tolak(db, user=u, permintaan_id=pid, sebab=req.sebab)
         except PermintaanError as e:
@@ -4362,7 +4360,7 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(pengguna_aksi))
         raise HTTPException(400, "Pilih tujuan dulu.")
     from app.services.transfer import create_internal_transfer, TransferError
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await create_internal_transfer(
                 db, user=u, kode_proses=req.kode_proses,
@@ -4408,7 +4406,7 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
 
     from app.penggilingan.gudang2.service import masukkan_pk_luar, Gudang2Error
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await masukkan_pk_luar(db, user=u, kode=req.kode_batch,
                                        kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
@@ -4447,7 +4445,6 @@ async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pen
         raise HTTPException(400, "Pilih dulu silo bahannya.")
     from app.penggilingan.gudang2.polishing import mulai_penyosohan, Gudang2Error
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
         try:
             r = await mulai_penyosohan(db, user=user, nama_silos=silos, lini_id=req.lini_id)
         except Gudang2Error as e:
@@ -4474,7 +4471,7 @@ async def act_tambah_silo_penyosohan(req: TambahSiloPenyosohanReq,
         raise HTTPException(400, "Pilih proses penyosohannya dulu.")
     from app.penggilingan.gudang2.polishing import Gudang2Error, tambah_silo_penyosohan
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await tambah_silo_penyosohan(db, user=u, kode=req.kode, nama_silos=silos)
         except Gudang2Error as e:
@@ -4516,7 +4513,7 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
         raise HTTPException(400, "Pilih jenis hasil dulu.")
     from app.penggilingan.gudang2.polishing import catat_output, Gudang2Error
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await catat_output(db, user=u, kode=req.kode_proses,
                                    jenis=req.jenis, berat_kg=req.berat_kg,
@@ -4549,7 +4546,7 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
     silo = (req.silo or "").strip().upper() or None
     from app.penggilingan.gudang2.polishing import selesai_penyosohan, Gudang2Error
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             # Silo kosong DITERUSKAN, tidak dihadang: yang tahu berapa silo
             # yang dipakai proses ini adalah layanannya, bukan borangnya.
@@ -4662,7 +4659,7 @@ async def act_akhiri_penyosohan(req: AkhiriPenyosohanReq, user: User = Depends(p
     from app.penggilingan.gudang2.polishing import akhiri_penyosohan, Gudang2Error
     async with SessionLocal() as db:
         try:
-            r = await akhiri_penyosohan(db, user=await db.get(User,user.id),
+            r = await akhiri_penyosohan(db, user=user,
                                       kode=req.kode_proses, dasar=req.dasar)
         except (Gudang2Error, ValueError) as e:
             raise HTTPException(409, str(e))

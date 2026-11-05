@@ -14,9 +14,18 @@ from app.models import User, ProduksiAkun, MillingProcess, ActivityLog
 from app.database import now_local
 from app.web import csrf, security
 from app.services import undo
-from tests.pg.test_riwayat_giling import pabrik, _giling_selesai
+from tests.pg.test_riwayat_giling import pabrik as pabrik_asal, _giling_selesai
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture
+async def pabrik(pg, pabrik_asal):
+    # Kasus hilir membuat transfer/sosoh G2. Skema yang di-TRUNCATE tidak
+    # membawa master gudang/line itu; bentuk fasilitas seperti app asli.
+    from app.services.seed import seed_master
+    await seed_master()
+    return pabrik_asal
 
 
 def cap(c, token=None, gudang=None):
@@ -181,11 +190,13 @@ async def test_simpan_yang_sudah_diterima_tetap_milik_A_saat_cookie_berganti(pg,
 
 @pytest.mark.parametrize('jenis', ['sosoh','transfer'])
 async def test_koreksi_sosoh_transfer_ditolak_menjaga_semua_isian(pg,pabrik,jenis):
-    c,_ = await klien(pg)
+    c,uid = await klien(pg)
     if jenis == 'sosoh':
         from tests.pg.test_riwayat_sosoh import _sosoh_selesai
         from app.models import PolishingProcess
-        kode = await _sosoh_selesai(pg,pabrik['user'],hasil=(('medium',500),('broken',200)))
+        # Akun penguji koreksi adalah Super Admin, yang berwenang membuat
+        # skenario G2. Operator G1 dari fixture tidak berhak menyosoh di G2.
+        kode = await _sosoh_selesai(pg,uid,hasil=(('medium',500),('broken',200)))
         async with pg() as db:
             id_ = await db.scalar(select(PolishingProcess.id).where(PolishingProcess.kode_proses==kode))
         data={'hasil_medium':'501','hasil_broken':'-2.50','dasar_medium':'500','dasar_broken':'200'}

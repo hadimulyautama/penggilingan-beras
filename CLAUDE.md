@@ -137,8 +137,8 @@ Tangga: `operator` · `admin` · `superadmin`. `staff`/`staf` nama LAMA yang
 masih sah dibaca. Pintu per aplikasi (keputusan pemilik): operator → app
 operator, admin → Meja, timbangan → operator & admin, superadmin → semua;
 Pos Produksi masih menerima admin sampai Meja dipakai sungguhan.
-**Operator tidak terikat satu gudang** (pemilik 13 Sep: saling menggantikan):
-gudang utama = layar pertama; berpindah lewat "Kerja di gudang" di Pengaturan
+**Operator tidak terikat satu gudang** (pemilik 13 Sep, ditegaskan 5 Nov):
+tidak ada gudang utama; berpindah lewat "Kerja di gudang" di Pengaturan
 (`/lihat-sebagai` dengan `operator:g1|g2`, ditetapkan per permintaan di
 `akun_opsional`). Aplikasi Gudang 2 mengirim `X-Meja-Lihat: operator:g2`
 di tiap panggilan. `_is_g1_operator`/`_is_g2_operator` memeriksa gudang yang
@@ -1434,3 +1434,29 @@ pada bahan terkait, tanpa mengembalikan stok lagi. Total rinci 26.177,5 →
 23.677,5 kg (dibulatkan tampilan menjadi 23.678 kg). Tetap melalui endpoint
 periksa/simpan aplikasi beserta CSRF, review dan audit; jangan memakai UPDATE
 SQL atau menyesuaikan bahan lain untuk memaksakan pembulatan.
+
+## Gudang kerja operator — 5 November 2026 malam
+
+Pemilik menegaskan: tidak ada gudang utama untuk operator. Saat memilih
+Gudang 1 ia operator G1; saat memilih Gudang 2 ia operator G2. Lokasi profil
+lama hanya dipakai untuk membuka sesi awal demi kompatibilitas, bukan batas
+kewenangan. Pilihan tetap per perangkat, tidak mengubah profil atau transaksi.
+Pita selalu menyebut tempat bertugas dengan Ganti gudang; Pengaturan hanya
+menawarkan tujuan G1/G2. Payload reset lama tidak boleh mengembalikan operator
+ke lokasi profil tanpa pilihan tujuan eksplisit. Jalan selesai samaran tetap
+berfungsi bagi Admin/Super Admin.
+
+Bug penempatan gabah GB-20261105-02: picker memakai aktor sesi G1, POST
+pindah-tumpukan memuat ulang User dari DB dan kembali memakai lokasi profil
+G2. pilih_dryer lalu menganggap tidak ada mesin. Semua pemuatan ulang aktor
+berdasarkan user.id pada api.py, aksi_inventory.py dan aksi_undo.py diganti
+penerusan aktor efektif pengguna_aksi, agar tindakan lanjutan memakai konteks
+yang sama. Pemeriksaan akun aktif tetap di setiap permintaan; izin, validasi
+pemilik, kapasitas, kondisi bahan dan gudang tujuan tidak dilonggarkan.
+
+Uji HTTP memakai login asli + kuki gudang + CSRF, untuk profil G1/G2/kosong,
+pabrik/jasa, pergantian shift, G2 sosoh, penolakan gudang lain, dan formulir
+lama. Uji browser mencakup ponsel/desktop dari Pekerjaan sampai penempatan
+serta penggantian gudang. Uji AST mencegah pola pemuatan profil sebagai aktor
+kembali ke tiga modul tersebut. Tidak ada migrasi, backfill, atau penempatan
+barang produksi otomatis sebagai bagian perbaikan/deploy ini.

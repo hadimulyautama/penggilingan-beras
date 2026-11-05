@@ -69,8 +69,9 @@ async def pilih(request: Request, peran: str = Form(""), _=Depends(butuh_akun)):
     if P.operator_saja(pilih_) and gudang:
         pilih_ = f"{P.OPERATOR}:{gudang}"
     if P.operator_saja(asli) and not gudang:
-        # Operator tanpa pilihan gudang = kembali ke gudang utamanya.
-        peran = ""
+        # Formulir lama mungkin masih menawarkan reset. Jangan mengubah
+        # tempat kerja tanpa operator memilih gudang tujuan secara jelas.
+        return balasan
     if not peran or pilih_ == P.normal(asli):
         balasan.delete_cookie(NAMA_KUKI, path="/")
     else:
@@ -89,6 +90,8 @@ async def selesai(request: Request, _=Depends(butuh_akun)):
     punya hak admin, dan jalan pulang yang menuntut hak yang baru saja
     dilepas adalah pintu yang terkunci dari dalam.
     """
+    if P.operator_saja(getattr(request.state, "peran_asli", None)):
+        return RedirectResponse('/pengaturan/peran', status_code=303)
     balasan = RedirectResponse(request.headers.get("referer") or "/",
                                status_code=303)
     balasan.delete_cookie(NAMA_KUKI, path="/")

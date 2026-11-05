@@ -348,7 +348,7 @@ async def act_beli_kemasan(req: BeliKemasanReq,
         raise HTTPException(400, "Isi jumlah lembar lebih dari 0.")
 
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await kms.beli_kemasan(
                 db, user=u, material_kode=material, ukuran=ukuran,
@@ -386,7 +386,7 @@ async def act_pindah_kepemilikan_karung(req: PindahKepemilikanKarungReq,
         raise HTTPException(400, "Isi jumlah lembar yang dipindah lebih dari 0.")
 
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             jumlah = await kms.pindah_kepemilikan_karung(
                 db, user=u, material_kode=material_kode, ukuran=ukuran,
@@ -473,7 +473,7 @@ async def act_catat_packing(req: PackingReq,
         raise HTTPException(400, "Isi jumlah karung lebih dari 0.")
 
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             r = await bj.catat_packing(
                 db, user=u, kode_pol=kode_pol, kategori=kategori,
@@ -524,7 +524,7 @@ async def act_catat_curah(req: CurahReq,
     async with SessionLocal() as db:
         try:
             berat = await bj.catat_curah(
-                db, user=await db.get(User, user.id), kode_pol=kode, jenis=jenis)
+                db, user=user, kode_pol=kode, jenis=jenis)
         except bj.InventoryError as e:
             raise galat(e, "Gagal mencatat hasil curah.")
     return {"ok": True, "pesan": (
@@ -550,7 +550,7 @@ async def act_catat_curah(req: CurahReq,
     async with SessionLocal() as db:
         try:
             berat = await bj.catat_curah(
-                db, user=await db.get(User, user.id), kode_pol=kode, jenis=jenis)
+                db, user=user, kode_pol=kode, jenis=jenis)
         except bj.InventoryError as e:
             raise galat(e, "Gagal mencatat hasil curah.")
     return {"ok": True, "pesan": (
@@ -571,7 +571,7 @@ async def act_catat_bekatul(req: BekatulReq,
     if float(req.berat_kg or 0) <= 0:
         raise HTTPException(400, "Isi berat bekatul lebih dari 0.")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             berat = await bj.catat_bekatul(
                 db, user=u, kode_pol=req.kode_pol, berat_kg=float(req.berat_kg))
@@ -597,7 +597,7 @@ async def act_catat_broken(req: BrokenReq,
     if float(req.berat_kg or 0) <= 0:
         raise HTTPException(400, "Isi berat broken lebih dari 0.")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             berat = await bj.catat_broken(
                 db, user=u, kode_pol=req.kode_pol, berat_kg=float(req.berat_kg))
@@ -696,7 +696,7 @@ async def act_pindah_kepemilikan_produk(req: PindahKepemilikanProdukReq,
     tipe, _, sisa = (req.item or "").partition(":")
     bagian = sisa.split("|")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             if tipe == "bj" and len(bagian) == 3:
                 sku_id_s, std_id_s, jasa_id_s = bagian
@@ -1330,7 +1330,7 @@ async def act_perintah_keluar(req: PerintahKeluarReq,
     """LANGKAH 1 — Admin menerbitkan perintah muat. Stok BELUM berkurang."""
     wajib(can_see_financials(user))
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         kelompok = await _kelompok_dari_borang(db, req)
         try:
             hasil = await bk.buat_kiriman(
@@ -1368,7 +1368,7 @@ async def act_tambah_barang_keluar(req: TambahBarangKeluarReq,
     """
     wajib(can_see_financials(user))
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         baris = await _baris_dari_borang(db, req)
         if not baris:
             raise HTTPException(400, "Pilih barang yang ditambahkan.")
@@ -1420,7 +1420,7 @@ async def _ubah_item_perintah(req, user, *, hapus=False):
         raise HTTPException(400, "Pilih item dari detail perintah.")
     async with SessionLocal() as db:
         try:
-            await bk.ubah_baris_perintah(db, user=await db.get(User, user.id),
+            await bk.ubah_baris_perintah(db, user=user,
                 rec_id=int(bagian[0]), item_id=int(bagian[1]), dasar=bagian[2],
                 jumlah=req.jumlah, alasan=req.alasan, hapus=hapus)
         except bk.BarangKeluarError as e:
@@ -1582,7 +1582,7 @@ async def act_batal_perintah_keluar(req: BatalPerintahReq,
                                     user: User = Depends(pengguna_aksi)) -> dict:
     wajib(can_see_financials(user))
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             rec = await bk.batalkan(db, user=u, rec_id=_id(req.perintah),
                                     sebab=req.sebab)
@@ -1661,7 +1661,7 @@ async def act_keluar_cepat(req: KeluarCepatReq,
     async with SessionLocal() as db:
         try:
             hasil = await bk.konfirmasi_keluar_cepat(db,
-                user=await db.get(User, user.id), rec_id=_id(req.perintah),
+                user=user, rec_id=_id(req.perintah),
                 baris=[b.model_dump() for b in req.baris], dasar=req.dasar,
                 diserahkan=req.diserahkan, sebab=req.sebab)
             kode = hasil.rec.kode
@@ -1687,7 +1687,7 @@ async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> d
     from app.web.muatan import boleh_catat
     wajib(await boleh_catat(user))
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             _wajib_periksa_muat(req.dasar)
             rec = await bk._kunci_muat(db,_id(req.perintah),dasar=req.dasar)
@@ -1725,7 +1725,7 @@ async def act_muat_barang(req: MuatBarisReq,
     if float(req.jumlah or 0) <= 0:
         raise HTTPException(400, "Isi jumlah yang dimuat lebih dari 0.")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         it = await db.get(OutgoingItem, _id(req.baris))
         if it is None or it.outgoing_record_id != _id(req.perintah):
             raise HTTPException(400, "Barang itu bukan bagian dari perintah yang dipilih.")
@@ -1775,7 +1775,7 @@ async def act_selesai_muat(req: SelesaiMuatReq, user: User = Depends(pengguna_ak
     from app.web.muatan import boleh_catat
     wajib(await boleh_catat(user))
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             _wajib_periksa_muat(req.dasar)
             rec=await bk._kunci_muat(db,_id(req.perintah),dasar=req.dasar)
@@ -1820,7 +1820,7 @@ async def act_verifikasi_keluar(req: VerifikasiKeluarReq,
         except ValueError:
             raise HTTPException(400, "Kode timbang yang mana?") from None
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             if req.dasar is not None:
                 from app.services.pemeriksaan_pengiriman import periksa_konteks
@@ -1842,7 +1842,7 @@ async def act_auto_taut_keluar(user: User = Depends(pengguna_aksi)) -> dict:
     tak pernah menebak yang ambigu). Tanpa medan: satu tombol, jalankan."""
     wajib(can_see_financials(user))
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         hasil = await bk.auto_tautkan(db, user=u)
     return {"ok": True, "pesan": f"✓ {hasil.ringkas}."}
 
@@ -2688,7 +2688,7 @@ async def act_ambil_jasa(req: AmbilJasaReq,
     if not (req.pelanggan or "").isdigit():
         raise HTTPException(400, "Pilih pelanggan yang barangnya diambil.")
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         baris = await _baris_pengambilan_jasa(db, req)
         try:
             r = await bk.buat_perintah(
@@ -2714,7 +2714,7 @@ async def act_tutup_jasa(req: JasaReq,
     from app.services.jasa import JasaError, tutup_pesanan
 
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             pesan = await tutup_pesanan(db, user=u, jasa_id=int(req.jasa))
         except (JasaError, ValueError) as e:
@@ -2730,7 +2730,7 @@ async def act_batalkan_jasa(req: JasaBatalReq,
     from app.services.jasa import JasaError, batalkan_pesanan
 
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
         try:
             pesan = await batalkan_pesanan(db, user=u, jasa_id=int(req.jasa),
                                            sebab=req.sebab)
