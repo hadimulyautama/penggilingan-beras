@@ -620,6 +620,8 @@ async def log_progress(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     await db.refresh(proc, with_for_update=True)
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
@@ -661,6 +663,9 @@ async def log_progress(
             "periksa angkanya lalu ketik ulang."
         )
 
+    from app.services.pk_persediaan import pastikan_hasil_giling_aman
+    try:await pastikan_hasil_giling_aman(db,proc.id,berat_kumulatif)
+    except ValueError as e:raise MillingError(str(e)) from None
     db.add(
         MillingProgressLog(
             milling_process_id=proc.id,
@@ -1007,6 +1012,8 @@ async def finish_milling(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     await db.refresh(proc, with_for_update=True)
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
@@ -1073,6 +1080,9 @@ async def finish_milling(
         if berat_akhir >= terpakai:
             raise MillingError("Hasil PK harus lebih ringan dari bahan yang benar-benar terpakai setelah sisa silo dikurangkan. Periksa hasil dan sisa yang dicatat.")
 
+    from app.services.pk_persediaan import pastikan_hasil_giling_aman
+    try:await pastikan_hasil_giling_aman(db,proc.id,berat_akhir)
+    except ValueError as e:raise MillingError(str(e)) from None
     # Dicatat sebagai progres kumulatif, bukan kolom baru: `_produced_pk` sudah
     # membacanya, dan kolom kedua untuk fakta yang sama akan berselisih.
     if sudah is None or berat_akhir != sudah:
@@ -1778,9 +1788,9 @@ async def verify_milling_output(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
-    from app.services.pk_persediaan import pastikan_sumber_tidak_diubah
-    try:await pastikan_sumber_tidak_diubah(db,'giling:'+str(proc.id))
-    except ValueError as e:raise MillingError(str(e)) from None
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
+    await db.refresh(proc,with_for_update=True)
     if berat_output is None:
         raise MillingError("Sebutkan berat output PK final-nya, mis. `... 14 ton`.")
     # Rendemen final dan HPP berdiri di atas bahan masuk. Selama bahannya
@@ -1812,6 +1822,15 @@ async def verify_milling_output(
         )
     ).scalars().first()
     re_verified = verif is not None
+    from app.services.pk_persediaan import ada_pengalihan, pastikan_hasil_giling_aman, pastikan_sumber_tidak_diubah
+    if await ada_pengalihan(db,sumber='giling:'+str(proc.id)):
+        if re_verified:
+            try:await pastikan_sumber_tidak_diubah(db,'giling:'+str(proc.id))
+            except ValueError as e:raise MillingError(str(e)) from None
+        if proc.status != 'selesai':
+            raise MillingError('Selesaikan penggilingan sebelum verifikasi akhir hasil yang sudah dialihkan.')
+        try:await pastikan_hasil_giling_aman(db,proc.id,berat_output)
+        except ValueError as e:raise MillingError(str(e)) from None
     if verif is None:
         verif = MillingProcessVerification(milling_process_id=proc.id)
         db.add(verif)

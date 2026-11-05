@@ -56,6 +56,17 @@ Uji PostgreSQL/HTTP: `tests/pg/test_tiket_produk_sekali.py`.
 
 ## Tempat kerja
 
+**Stok PK dan kepemilikan, 5 November 2026:** Stok → Bahan & PK secara
+default menampilkan semua kepemilikan, pabrik maupun jasa. Filter eksplisit
+tetap tersedia dan cakupan gudang tidak berubah. Hasil PK yang sudah dicatat
+boleh dialihkan pabrik ↔ jasa walau penggilingan masih berjalan; tidak perlu
+menutup penggilingan. Yang dialihkan hanya hasil bebas, bukan bahan silo atau
+bagian yang sudah terpakai/dialokasikan. Tambahan hasil tetap milik pemilik
+asal. Koreksi hasil, penyelesaian, dan verifikasi pertama wajib menjaga hak
+yang sudah dialihkan; verifikasi ulang atas sumber berpengalihan tetap
+ditahan seperti sebelumnya. Lokasi catatan lama dibaca melalui cakupan
+fasilitas, tanpa menulis ulang gudangnya.
+
 **Estimasi nota PK, keputusan pemilik 5 November 2026:** untuk PK berkarung,
 sebelum timbang kedua gunakan total nota atau jumlah karung × ukuran nominal
 sebagai `sumber_berat='perkiraan'`. Ini belum bobot aktual total/per karung.

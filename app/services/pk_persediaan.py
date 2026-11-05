@@ -79,7 +79,7 @@ async def ada_pengalihan(db, *, sumber=None):
 
 
 @baca_sekali
-async def baca(db, *, warehouse_id=None):
+async def baca(db, *, warehouse_id=None, hasil_giling=None):
     from app.penggilingan.gudang1.services.milling import pk_saldo_query
     from app.penggilingan.gudang2.service import sisa_tumpukan_banyak
     from app.penggilingan.gudang2.models import PkTumpukanToSilo, PkPurchaseBatch
@@ -105,23 +105,27 @@ async def baca(db, *, warehouse_id=None):
     result = {}
     timeline = []
     processes = list((await db.scalars(select(MillingProcess))).all())
+    from app.services.cakupan_fasilitas import lokasi_banyak
+    lokasi_proses = await lokasi_banyak(db, MillingProcess, [p.id for p in processes])
     balances = {r.id: r for r in (await db.execute(pk_saldo_query())).all()}
     for p in processes:
-        w = warehouses.get(p.warehouse_id)
+        w = warehouses.get(lokasi_proses.get(p.id,{}).get('warehouse_id'))
         if w is None or warehouse_id is not None and w.id != warehouse_id:
             continue
-        amount = D(balances[p.id].produced)
-        # Sumber proses yang masih berjalan tidak ditawarkan untuk dialihkan.
+        amount = D((hasil_giling or {}).get(p.id, balances[p.id].produced))
+        # Hasil yang sudah tercatat sudah berupa PK di lantai, meski mesin
+        # masih berjalan. Bahan silo tidak ditambahkan sebagai hasil baru.
         key = 'giling:' + str(p.id)
-        stock = StokPK(w, key, [], p.status == 'selesai')
+        stock = StokPK(w, key, [], p.status in ('proses', 'selesai'))
         from app.domain.gudang import BagianPK
         stock.bagian.append(BagianPK(p.jasa_id, amount, 0))
         result[key] = SumberPK(stock, p, p.kode_proses, _waktu(p, p.waktu_mulai), p.jasa_id)
 
     intakes = list((await db.scalars(select(PkGudang2Intake).where(
         PkGudang2Intake.tujuan == 'ditumpuk', PkGudang2Intake.dibatalkan_pada.is_(None)))).all())
-    intakes = [i for i in intakes if i.warehouse_id in warehouses and
-               (warehouse_id is None or i.warehouse_id == warehouse_id)]
+    lokasi_intake = await lokasi_banyak(db, PkGudang2Intake, [i.id for i in intakes])
+    intakes = [i for i in intakes if lokasi_intake.get(i.id,{}).get('warehouse_id') in warehouses and
+               (warehouse_id is None or lokasi_intake[i.id]['warehouse_id'] == warehouse_id)]
     saldo = await sisa_tumpukan_banyak(db, intakes)
     ids = [i.id for i in intakes]
     moves = list((await db.scalars(select(PkTumpukanToSilo).where(
@@ -147,7 +151,7 @@ async def baca(db, *, warehouse_id=None):
     reservations = await terikat_banyak(db, ['pk:'+str(b) for b in batch_ids])
     for i in intakes:
         key = 'tumpukan:' + str(i.id)
-        w = warehouses[i.warehouse_id]
+        w = warehouses[lokasi_intake[i.id]['warehouse_id']]
         value = saldo.get(i.id)
         batch = batches.get(i.pk_purchase_batch_id)
         stock = StokPK(w, key, [], bool(i.bobot_final and value is not None))
@@ -170,13 +174,14 @@ async def baca(db, *, warehouse_id=None):
     items = (await db.execute(select(OutgoingItem, OutgoingRecord)
         .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
         .where(OutgoingItem.item_type.in_(['pk_langsung', 'pk_g2'])))).all()
+    lokasi_keluar=await lokasi_banyak(db,OutgoingRecord,{r.id for _,r in items})
     for item, record in items:
         if item.item_type == 'pk_langsung':
             timeline.append((_waktu(item, record.waktu), 'pakai',
                              ('giling:'+str(item.milling_process_id), item.jasa_id, D(item.berat_kg))))
         elif item.silo_id is None:
             timeline.append((_waktu(item, record.waktu), 'pool',
-                             (record.warehouse_id, item.jasa_id, D(item.berat_kg))))
+                             (lokasi_keluar[record.id]['warehouse_id'], item.jasa_id, D(item.berat_kg))))
 
     returns = (await db.execute(select(CustomerReturnItem, OutgoingItem)
         .join(OutgoingItem, CustomerReturnItem.outgoing_item_id == OutgoingItem.id)
@@ -248,6 +253,10 @@ async def baca(db, *, warehouse_id=None):
         .join(OutgoingRecord,OutgoingRecord.id==OutgoingItem.outgoing_record_id)
         .where(OutgoingRecord.status==OUT_PERINTAH,
                OutgoingItem.item_type.in_(['pk_langsung','pk_g2'])))).all()
+    # Permintaan yang baru masuk di antara dua SELECT tetap membawa lokasi
+    # efektif yang sama dengan pengeluaran dan sumber stok lama.
+    missing={r.id for _,r in pending}-lokasi_keluar.keys()
+    if missing:lokasi_keluar.update(await lokasi_banyak(db,OutgoingRecord,missing))
     for source in result.values():
         if source.reservasi>0:source.tahan(source.pemilik_awal,source.reservasi)
     for item,record in pending:
@@ -257,7 +266,7 @@ async def baca(db, *, warehouse_id=None):
             if source is not None:source.tahan(owner,value)
         elif item.silo_id is None:
             for source in sorted((source for key,source in result.items()
-                    if key.startswith('tumpukan:') and source.stok.gudang.id==record.warehouse_id),key=lambda v:v.waktu):
+                    if key.startswith('tumpukan:') and source.stok.gudang.id==lokasi_keluar[record.id]['warehouse_id']),key=lambda v:v.waktu):
                 value=source.tahan(owner,value)
                 if value<=0:break
     return result
@@ -271,6 +280,25 @@ def pecah_kode(kode):
     if not token.isascii() or not token.isdigit() or int(token)<=0:
         raise PersediaanError('Identitas pemilik PK tidak sah.')
     return base,int(token)
+
+
+async def pastikan_hasil_giling_aman(db, process_id, hasil):
+    """Hasil boleh bertambah sesudah pengalihan, hak pemilik tetap dijaga.
+
+    Memakai ulang buku bagian dan arus keluar yang sama untuk pratinjau
+    hasil pengganti. Pengurangan hanya boleh mengambil bagian bebas pemilik
+    asal; bagian pemilik baru, alokasi, serta pemakaian tidak boleh hilang.
+    Pemanggil memegang kunci saldo sebelum mengunci baris proses.
+    """
+    key='giling:'+str(process_id)
+    if not await ada_pengalihan(db,sumber=key):return
+    before=(await baca(db)).get(key)
+    after=(await baca(db,hasil_giling={process_id:hasil})).get(key)
+    if before is None or after is None or before.masalah or after.masalah:
+        raise PersediaanError('Hasil PK tidak cukup untuk mempertahankan pengalihan atau pemakaian yang sudah tercatat. Periksa transaksi terkait.')
+    turun=max(D(0),before.stok.fisik_kg-after.stok.fisik_kg)
+    if turun>before.bebas(before.pemilik_awal):
+        raise PersediaanError('Pengurangan hasil PK melebihi bagian bebas pemilik asal setelah pengalihan dan alokasi.')
 
 
 async def pastikan_sumber_tidak_diubah(db, sumber):
