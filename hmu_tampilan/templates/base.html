@@ -90,6 +90,12 @@
    itu, dan jalan pulang yang menuntut hak yang baru dilepas adalah
    pintu yang terkunci dari dalam. #}
 {% if LIHAT_SEBAGAI %}
+{% if PITA_SAMAR %}
+<div class="pita-samar">
+  <span>{{ PITA_SAMAR }}</span>
+  <a href="/pengaturan/peran">Ganti gudang</a>
+</div>
+{% else %}
 <form method="post" action="/lihat-sebagai/selesai" class="pita-samar">
   <input type="hidden" name="_csrf" value="{{ CSRF }}">
   {# Teksnya boleh diganti aplikasi: operator yang sungguh bekerja di gudang
@@ -97,6 +103,7 @@
   <span>{{ PITA_SAMAR or ("MELIHAT SEBAGAI " ~ LIHAT_SEBAGAI|upper) }}</span>
   <button type="submit">kembali</button>
 </form>
+{% endif %}
 {% endif %}
 {% endblock %}
 

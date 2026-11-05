@@ -81,7 +81,7 @@ async def pabrik(pg, pemasok):
     """Dua gudang, silo G2, satu operator berprofil Gudang 1, satu admin, dan
     satu PK luar 15 t yang sudah ditumpuk di Gudang 2 (pekerjaan admin)."""
     from app.database import now_local
-    from app.models import Silo, Warehouse
+    from app.models import Silo, Warehouse, Dryer
     from app.penggilingan.gudang2.models import PkPurchaseBatch
     from app.penggilingan.gudang2.service import masukkan_pk_luar
     from app.models import User
@@ -95,6 +95,10 @@ async def pabrik(pg, pemasok):
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id), Silo(nama_silo="Silo B", warehouse_id=g2.id)])
         await db.commit()
         g1_id, g2_id = g1.id, g2.id
+        db.add(Dryer(nama='Pengering uji sesi', warehouse_id=g1_id, kapasitas_kg=30000, status='aktif'))
+        from app.services.fasilitas import seed_fasilitas
+        await seed_fasilitas(db)
+        await db.commit()
     op_akun, op = await _orang(pg, nama="Marno", role=P.OPERATOR, username="marno", gudang_id=g1_id)
     adm_akun, adm = await _orang(pg, nama="Elfira", role=P.ADMIN, username="elfira", gudang_id=None)
     async with pg() as db:
@@ -115,7 +119,7 @@ G2_SAJA = "/api/actions/polishing-active"   # gerbang _is_g2_operator
 
 
 async def test_operator_bergantian_gudang_tanpa_admin(pg, pabrik):
-    """G1 → pindah ke G2 → kembali, semuanya dari layarnya sendiri. Dan satu
+    """G1 → pindah ke G2 → pilih G1, semuanya dari layarnya sendiri. Dan satu
     sesi hanya satu gudang: yang di seberang tertutup sampai ia berpindah."""
     async with _klien(pabrik["token"]) as c:
         assert (await c.get(G1_SAJA)).status_code == 200
@@ -130,6 +134,10 @@ async def test_operator_bergantian_gudang_tanpa_admin(pg, pabrik):
         from app.web import csrf
         c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
         r = await c.post("/lihat-sebagai/selesai", data={"_csrf": cap_formulir(c)})
+        assert r.status_code == 303
+        assert c.cookies.get(KUKI_GUDANG) == "operator:g2"
+        assert (await c.get(G2_SAJA)).status_code == 200
+        r = await c.post("/lihat-sebagai", data={"peran": "operator:g1", "_csrf": cap_formulir(c)})
         assert r.status_code == 303
         assert (await c.get(G1_SAJA)).status_code == 200
         assert (await c.get(G2_SAJA)).status_code == 403
@@ -178,12 +186,13 @@ async def test_catatan_jatuh_ke_gudang_yang_aktif_saat_itu(pg, pabrik):
 
 async def test_operator_tahu_sedang_di_gudang_mana(pg, pabrik):
     """Salah kira gudang = mencatat ke tempat yang salah. Pita di atas setiap
-    layar menyebutnya, dan hilang begitu ia kembali ke gudang utamanya."""
+    layar menyebutnya, baik di Gudang 1 maupun Gudang 2."""
     async with _klien(pabrik["token"], gudang="g2") as a, _klien(pabrik["token"]) as b:
         di_g2 = (await a.get("/")).text
         di_g1 = (await b.get("/")).text
-    assert "BEKERJA DI GUDANG 2" in di_g2 and "bukan gudang utama" in di_g2
-    assert "BEKERJA DI GUDANG" not in di_g1
+    assert "BEKERJA DI GUDANG 2" in di_g2 and "Ganti gudang" in di_g2
+    assert "BEKERJA DI GUDANG 1" in di_g1 and "Ganti gudang" in di_g1
+    assert "gudang utama" not in di_g1.lower()+di_g2.lower()
     assert "Operator polesan" in di_g2 and "Operator selepan" in di_g1
 
 

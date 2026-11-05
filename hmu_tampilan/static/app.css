@@ -1344,10 +1344,11 @@ body.terik .beranda-sambut__tanda {
 }
 .pita-uji + .pita-samar { padding-top: 4px; }
 .pita-samar + .bar { padding-top: 11px; }
-.pita-samar button {
+.pita-samar button, .pita-samar > a {
   background: transparent; color: inherit; cursor: pointer;
   border: 1px solid currentColor; border-radius: 999px;
   font: inherit; padding: 1px 9px;
+  text-decoration: none; white-space: nowrap;
 }
 
 /* ══ Layar Catat: bendanya dulu, tindakannya menyusul ══

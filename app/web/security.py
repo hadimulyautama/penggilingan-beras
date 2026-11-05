@@ -187,6 +187,7 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
     request.state.peran_asli = None
     request.state.lihat_sebagai = None
     request.state.pita_samar = None
+    request.state.gudang_kerja = None
     if akun is not None and akun.user is not None:
         asli = akun.user.role
         request.state.peran_asli = asli
@@ -205,8 +206,8 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
         # Samaran admin → operator mewarisi gudang si penyamar (yang biasanya
         # tak punya), jadi gudangnya ditetapkan dari permintaannya. Dan sejak
         # 13 Sep 2026 operator SENDIRI boleh berpindah gudang (keputusan
-        # pemilik: operator saling menggantikan) — gudang utamanya hanya layar
-        # pertama, bukan pagar. Hak dan layar mengikuti gudang yang dipilih.
+        # pemilik: operator saling menggantikan). Lokasi tersimpan hanya
+        # membuka sesi awal; hak dan layar mengikuti gudang yang dipilih.
         _, gd = P.urai(diminta)
         if P.operator_saja(efektif) and gd and P.boleh_ganti_gudang(asli):
             from sqlalchemy import select as _select
@@ -218,16 +219,21 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
             if wid is not None and wid != akun.user.default_warehouse_id:
                 akun.user.default_warehouse_id = wid
                 request.state.lihat_sebagai = f"operator {gd.upper()}"
-                if P.operator_saja(asli):
-                    # Bukan "melihat sebagai": ia sungguh bekerja di sana.
-                    # Pitanya menyebut gudangnya dengan huruf besar di atas
-                    # SETIAP layar — operator yang salah kira sedang di
-                    # gudang lain akan mencatat ke tempat yang salah, dan
-                    # itu lebih buruk daripada tak bisa menggantikan.
-                    request.state.pita_samar = (
-                        f"BEKERJA DI GUDANG {gd[-1]} · bukan gudang utama Anda")
             elif wid is not None and efektif != P.normal(asli):
                 request.state.lihat_sebagai = f"operator {gd.upper()}"
+
+        if P.operator_saja(asli) and akun.user.default_warehouse_id:
+            # Gudang kerja selalu terlihat, juga ketika cocok dengan lokasi
+            # awal akun. Tidak ada gudang utama atau jalan kembali tersembunyi:
+            # operator berganti tugas lewat pilihan gudang yang eksplisit.
+            from app.models import Warehouse as _W
+            async with SessionLocal() as db2:
+                gudang = await db2.get(_W, akun.user.default_warehouse_id)
+            if gudang is not None and gudang.aktif:
+                request.state.lihat_sebagai = f"operator {gudang.nama_gudang}"
+                request.state.pita_samar = f"BEKERJA DI {gudang.nama_gudang.upper()}"
+                if gudang.kode_fungsi in GUDANG:
+                    request.state.gudang_kerja = f"operator:{gudang.kode_fungsi}"
 
     # ── View: layar siapa yang sedang digambar ──
     #

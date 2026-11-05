@@ -16,7 +16,13 @@ from app.models import User
 
 
 async def pengguna_aksi(request: Request) -> User:
-    """Pemakai endpoint aksi — dari sesi Pos Produksi."""
+    """Aktor efektif dari sesi Pos Produksi, termasuk gudang kerja saat ini.
+
+    Teruskan objek ini ke layanan tulis. Memuat ulang User dengan ID yang
+    sama mengambil lokasi/peran profil dan membuang pilihan gudang sesi;
+    tombol, pratinjau dan penyimpanan lalu memakai kewenangan yang berbeda.
+    Objeknya lepas dari sesi DB: konteks kerja tidak boleh disimpan ke profil.
+    """
     from app.web.security import akun_opsional
 
     akun = await akun_opsional(request)

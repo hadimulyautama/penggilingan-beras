@@ -35,8 +35,9 @@ async def test_penolakan_sebelum_penulisan(pg,pengeringan,nilai):
 async def test_lot_tidak_sah(pg,pengeringan,kode):
  before=await fakta(pg,pengeringan)
  async with await _klien(pg,peran='admin') as c:
-  assert (await post(c,'selesai-pengeringan',{'kode_lot':kode,'kadar_air':14})).status_code==400
-  assert (await c.get('/api/actions/ringkasan-selesai-pengeringan',params={'kode_lot':kode})).status_code==400
+  # Lot tak dikenal ditolak gerbang cakupan sebelum layanan memeriksa isian.
+  assert (await post(c,'selesai-pengeringan',{'kode_lot':kode,'kadar_air':14})).status_code==(400 if kode=='' else 403)
+  assert (await c.get('/api/actions/ringkasan-selesai-pengeringan',params={'kode_lot':kode})).status_code==(400 if kode=='' else 403)
  assert await fakta(pg,pengeringan)==before
 
 @pytest.mark.parametrize('nilai,target',[(15,13),(12.2,13),(13.4567,13),(100,13),(16,None)])

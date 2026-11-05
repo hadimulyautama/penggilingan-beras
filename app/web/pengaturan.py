@@ -221,7 +221,8 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
 
         BAGIAN=bagian, kelompok_pengaturan=kelompok, judul_pengaturan=judul,
         akun_peran_label=_P.LABEL.get(_P.normal(peran_asli), 'Peran tidak dikenal'),
-        PILIHAN_TAMPILAN=request.cookies.get(NAMA_KUKI, ''),
+        PILIHAN_TAMPILAN=(getattr(request.state, 'gudang_kerja', None)
+                          or request.cookies.get(NAMA_KUKI, '')),
         **await lencana(akun.user),
         versi=versi,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
