@@ -187,7 +187,10 @@ async def context(db, *, user, ident):
     logs = [dict(id=e.id,actor=actors.get(e.pelaku_id,'Tidak tersedia'),time=e.waktu.isoformat(),
                  reason=e.muatan['request']['reason'],before=e.muatan['before'],after=e.muatan['after'],pk_chain=e.muatan.get('pk_chain')) for e in history]
     names = {str(o):await umum.pihak(db,o,'pk') for o in set(state['owners'])|{state['customer'],None}|{b.pemilik_id for b in source.stok.bagian}}
+    from app.services.pk_koreksi_rantai import rancang_perbaikan_tertinggal
+    repair=await rancang_perbaikan_tertinggal(db,ident=ident,user=user)
     return dict(id=ident,code='AM-PK-'+str(ident),state=state,original=event.muatan,lines=rows,
+        pending_chain_repair=bool(repair),
         available=str(available),names=names,balances=balances(source.stok),actor=actors.get(event.pelaku_id,'Tidak tersedia'),
         time=event.waktu.isoformat(),history=logs,source_facts=[],
         description=dict(label=state['label'],unit='kg',warehouses=[source.stok.gudang.nama],
@@ -200,7 +203,7 @@ async def _plan(db, *, user, ident, req):
     if req.get('baseline') != current['baseline']:
         raise umum.InventoryError('Sumber, saldo, atau transaksi berubah. Baca data terbaru dan periksa ulang.')
     before = current['state']
-    if before['status']=='dibatalkan':
+    if before['status']=='dibatalkan' and not current['pending_chain_repair']:
         raise umum.InventoryError('Pengalihan PK sudah dibatalkan.')
     body = umum.normalized(req)
     if body['mode'] not in ['ubah','batal'] or not body['reason']:
@@ -222,12 +225,18 @@ async def _plan(db, *, user, ident, req):
         if not j or j.status in ['digabung','dibatalkan']:
             raise umum.InventoryError('Pesanan tujuan tidak berlaku.')
     old = D(before['quantity'])
+    repair=None
+    if current['pending_chain_repair']:
+        if amount!=old or dest!=previous_dest:
+            raise umum.InventoryError('Selesaikan penyesuaian bahan yang tertinggal dahulu dengan jumlah kepemilikan tetap; setelah itu koreksi atau pembatalan dapat dilanjutkan.')
+        from app.services.pk_koreksi_rantai import rancang_perbaikan_tertinggal
+        repair=await rancang_perbaikan_tertinggal(db,ident=ident,user=user)
     if source_owner is not None and (amount<old or dest!=previous_dest):
         origin=await db.get(Jasa,source_owner,with_for_update=True,populate_existing=True)
         if origin is None or origin.status!='berjalan':
             raise umum.InventoryError('Pesanan jasa asal sudah tidak berjalan. Gunakan pengalihan baru ke pesanan aktif pemilik tersebut; stok tidak dikembalikan ke pesanan yang sudah ditutup.')
     moves = []
-    chain=None
+    chain=repair
     reversal=old if dest!=previous_dest else max(D(0),old-amount)
     restored=max(D(0),reversal-source.bebas(previous_dest,transaksi_id=ident))
     if restored:
@@ -289,7 +298,7 @@ async def simpan(db, *, user, ident, req):
     if not hmac.compare_digest(req.get('review',''),token):
         raise umum.InventoryError('Rancangan berubah; periksa dampak lagi.')
     e=Peristiwa(jenis=umum.UBAH,pelaku_id=user.id,kunci_kiriman=key,muatan=plan,
-        waktu=now_local(),membatalkan_id=ident if plan['after']['status']=='dibatalkan' else None)
+        waktu=now_local(),membatalkan_id=ident if plan['after']['status']=='dibatalkan' and plan['before']['status']!='dibatalkan' else None)
     db.add(e)
     await db.flush()
     if plan.get('pk_chain'):

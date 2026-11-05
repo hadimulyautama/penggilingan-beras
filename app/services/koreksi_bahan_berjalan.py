@@ -311,7 +311,10 @@ async def siklus_g2(db,move):
     ends={}
     if rows:
         logs=(await db.scalars(select(ActivityLog).where(ActivityLog.table_name=='polishing_silo_usage',ActivityLog.aksi=='tutup_silo_sosoh',ActivityLog.record_id.in_([u.id for u,pr in rows])).order_by(ActivityLog.id))).all()
-        ends={x.record_id:x.waktu_perubahan for x in logs}
+        # ID siklus dapat dipakai ulang oleh data lama. Log sebelum siklus
+        # ini lahir bukan bukti penutupan siklus yang sedang dikoreksi.
+        mulai={u.id:max(pr.waktu_mulai,u.created_at or pr.waktu_mulai) for u,pr in rows}
+        ends={x.record_id:x.waktu_perubahan for x in logs if x.waktu_perubahan>=mulai[x.record_id]}
     for u,pr in rows:
         end=ends.get(u.id,pr.waktu_selesai)
         if pr.waktu_mulai<=move.waktu and ((end is not None and move.waktu<=end) or (end is None and u.berat_akhir_kg is None and pr.status=='proses')):

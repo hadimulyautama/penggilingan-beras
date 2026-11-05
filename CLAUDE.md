@@ -1411,3 +1411,26 @@ Pada semua endpoint Masukkan ke silo, pertahankan aktor efektif dari sesi.
 Memuat ulang User berdasarkan ID menghilangkan gudang kerja operator yang
 berbeda dari default profil, sehingga opsi/pratinjau G2 tampil tetapi simpan
 menolak sumber. Jangan menimpa default profil untuk memperbaikinya.
+
+## Siklus silo dan pelengkapan koreksi — 5 November 2026
+
+Log tutup silo lama dengan record_id yang sama harus disaring berdasarkan
+kelahiran siklus/proses saat mencari kaitan bahan. Silo yang ditambahkan
+ketika proses sudah berjalan mempunyai snapshot awal sendiri; awalnya tidak
+boleh diganti dengan waktu mulai proses induk. Koreksi bobot memakai waktu
+pembuatan sumber dan siklus untuk membedakan bahan awal vs tambahan.
+
+Koreksi PK yang sudah mengembalikan stok tetapi melewatkan kaitan siklus dapat
+dilengkapi lewat tombol Sesuaikan bahan lanjutan pada AM-PK. Peristiwa baru
+mengacu koreksi lama (repair_of), tanpa pk_moves/flows baru atau perubahan
+transfer/pemasukan. Jangan memotong siklus yang baru lahir sesudah koreksi
+lama; siklus baru sudah memakai bobot efektif. Penyesuaian idempoten dan
+pratinjau menunjukkan bahwa kepemilikan serta stok tetap.
+
+Untuk AM-PK-10, setelah pengguna sendiri berhasil mengubah kepemilikan ke
+10.000 kg, pengguna secara eksplisit meminta asisten menyelesaikan bahan
+sosoh yang tertinggal melalui app. Lingkupnya hanya pengurangan 2.500 kg
+pada bahan terkait, tanpa mengembalikan stok lagi. Total rinci 26.177,5 →
+23.677,5 kg (dibulatkan tampilan menjadi 23.678 kg). Tetap melalui endpoint
+periksa/simpan aplikasi beserta CSRF, review dan audit; jangan memakai UPDATE
+SQL atau menyesuaikan bahan lain untuk memaksakan pembulatan.
