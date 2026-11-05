@@ -113,7 +113,7 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     async with SessionLocal() as db:
         catatan_penghalang = await daftar(db, "giling", process_id) if akun.is_admin and penghalang else []
     return await render_laci(
-        request, "riwayat_detail.html", jenis="giling", k=kartu[0], qc_gabah_asal=qc_gabah_asal,
+        request, "riwayat_giling_detail.html", jenis="giling", k=kartu[0], qc_gabah_asal=qc_gabah_asal,
         catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-giling", breadcrumb_detail=kartu[0].kode,
         layar="riwayat_giling", boleh_koreksi=akun.is_admin,
