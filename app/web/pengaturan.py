@@ -232,6 +232,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         kledo=kledo,
         ada_super=ada_super,
         blok_kelola=view == V_SUPER or (tuan and not ada_super),
+        blok_perusahaan=akun.is_super,
         kelola_darurat=view != V_SUPER,
         blok_lihat_sebagai=_P.admin_keatas(peran_asli),
         blok_kerja_gudang=_P.boleh_ganti_gudang(peran_asli),

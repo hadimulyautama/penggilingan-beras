@@ -1,21 +1,28 @@
-"""Data perusahaan dikelola melalui izin pengelolaan Pengaturan yang sama."""
-from fastapi import APIRouter, Depends, Request
+"""Data perusahaan hanya tersedia untuk Super Admin, tanpa pintu darurat."""
+from fastapi import APIRouter, Depends, Request, HTTPException
 from app.database import SessionLocal
-from app.web.security import butuh_super
+from app.web.security import butuh_akun
 from app.web.tampilan import render, redirect
 from app.services.perusahaan import simpan, BATAS_LOGO
 from hmu_dokumen.perusahaan import baca
 
 router=APIRouter(tags=['webapp'])
 
+async def butuh_perusahaan(akun=Depends(butuh_akun)):
+    # Pemulihan akun pertama tetap milik pengelolaan pengguna. Identitas
+    # penerbit dokumen tidak ikut dibuka ketika belum ada Super Admin aktif.
+    if not akun.is_super:
+        raise HTTPException(403, 'Data perusahaan hanya tersedia untuk Super Admin.')
+    return akun
+
 @router.get('/pengaturan/perusahaan')
-async def halaman(request:Request,akun=Depends(butuh_super)):
+async def halaman(request:Request,akun=Depends(butuh_perusahaan)):
     async with SessionLocal() as db:data=await baca(db)
     return render(request,'perusahaan.html',layar='pengaturan',kembali='/pengaturan',
         perusahaan=data.data(),tersimpan=request.query_params.get('tersimpan')=='1',err='')
 
 @router.post('/pengaturan/perusahaan')
-async def ubah(request:Request,akun=Depends(butuh_super)):
+async def ubah(request:Request,akun=Depends(butuh_perusahaan)):
     form=await request.form()
     data={k:str(form.get(k,'')) for k in ('nama','alamat','telepon','email','website')}
     unggahan=form.get('logo');raw=None

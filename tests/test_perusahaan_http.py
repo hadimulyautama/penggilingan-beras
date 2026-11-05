@@ -13,7 +13,7 @@ from tests.test_perusahaan_dokumen import gambar
 async def test_simpan_formulir_dan_pdf_memakai_data_baru(monkeypatch):
     from app.web import perusahaan as web,pdf_dokumen
     from app.services import perusahaan as service
-    from app.web.security import butuh_super
+    from app.web.perusahaan import butuh_perusahaan
     from app.web.rekap_jasa import buat_pdf
     from tests.test_pdf_rekap_jasa import contoh
     engine=create_async_engine('sqlite+aiosqlite:///:memory:')
@@ -24,7 +24,7 @@ async def test_simpan_formulir_dan_pdf_memakai_data_baru(monkeypatch):
     async def audit(*args,**kwargs):pass
     monkeypatch.setattr(service,'log_activity',audit)
     app=FastAPI();app.include_router(web.router)
-    app.dependency_overrides[butuh_super]=lambda:N(user=N(id=1))
+    app.dependency_overrides[butuh_perusahaan]=lambda:N(user=N(id=1))
     async with AsyncClient(transport=ASGITransport(app=app),base_url='http://uji') as client:
         r=await client.get('/pengaturan/perusahaan');assert r.status_code==200 and 'multipart/form-data' in r.text
         data=dict(nama='PT Perusahaan Baru',alamat='Jalan Baru 123',telepon='080000',email='baru@example.com',website='https://example.com')
@@ -45,3 +45,29 @@ async def test_pengaturan_perusahaan_memerlukan_login():
     async with AsyncClient(transport=ASGITransport(app=app),base_url='http://uji') as client:
         r=await client.get('/pengaturan/perusahaan')
         assert r.status_code in (303,401)
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('metode',['GET','POST'])
+@pytest.mark.parametrize('peran',['admin','operator'])
+async def test_non_super_ditolak_meski_tanpa_super_aktif(monkeypatch,metode,peran):
+    from app.web import perusahaan as web,security
+    from hmu_identitas import peran as P
+    app=FastAPI();app.include_router(web.router)
+    app.dependency_overrides[security.butuh_akun]=lambda:N(is_super=P.super_saja(peran))
+    def jangan_buka_db():raise AssertionError('Izin harus ditolak sebelum membaca atau menulis data perusahaan')
+    monkeypatch.setattr(web,'SessionLocal',jangan_buka_db)
+    async def tanpa_super():raise AssertionError('Halaman perusahaan tidak memakai pintu darurat')
+    monkeypatch.setattr(security,'ada_superadmin',tanpa_super)
+    async with AsyncClient(transport=ASGITransport(app=app),base_url='http://uji') as client:
+        response=await client.request(metode,'/pengaturan/perusahaan')
+        assert response.status_code==403
+
+@pytest.mark.parametrize('boleh',[False,True])
+def test_menu_perusahaan_hanya_terlihat_super(boleh):
+    from pathlib import Path
+    from jinja2 import Environment,DictLoader
+    source=(Path(__file__).parents[1]/'app/web/templates/pengaturan_fasilitas.html').read_text()
+    env=Environment(loader=DictLoader({'pengaturan.html':'{% block isi %}{% endblock %}', 'uji':source}))
+    html=env.get_template('uji').render(BAGIAN='',blok_kelola=True,blok_perusahaan=boleh)
+    assert ('/pengaturan/perusahaan' in html)==boleh
+    assert '/pengaturan/fasilitas' in html
