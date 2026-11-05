@@ -33,7 +33,7 @@ def test_filter_cari_tab_menu_dan_cetak(width, status):
         href=lambda **p: '/barang-masuk?' + urlencode(p), detail_tiket=lambda _: '/barang-masuk/1',
     )
     prefix = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    css = ''.join((ROOT / 'static' / f).read_text() for f in ('app.css', 'komponen-portal.css'))
+    css = ''.join((ROOT / 'static' / f).read_text() for f in ('app.css', 'komponen-portal.css','panduan.css'))
     html = prefix + '<style>' + css + '</style><body class="padiflow-ui terik">' + html + '</body>'
     with sync_playwright() as p:
         browser = p.chromium.launch()

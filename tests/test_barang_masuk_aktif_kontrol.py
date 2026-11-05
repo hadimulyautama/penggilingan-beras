@@ -14,7 +14,7 @@ def test_halaman_aktif_dan_pencarian_server(width,status):
   u=urlsplit(url);q={k:v[0] for k,v in parse_qs(u.query,keep_blank_values=True).items()};calls.append(q)
   req=Request(dict(type='http',path='/barang-masuk',query_string=u.query.encode(),headers=[],scheme='http',server=('uji.local',80)))
   html=env.get_template('barang_masuk_pencarian.html').render(request=req,VERSI='501',TAMPILAN_INDUK=True,VIEW='super',V_MEJA=['super'],status=q.get('status',status),jenis=q.get('jenis',''),pemilik=q.get('kepemilikan',''),gudang=q.get('gudang',''),cari=q.get('cari',''),pemasok=q.get('pemasok',''),total_belum=0,total_diterima=0,jumlah=0,menunggu=[],riwayat=[],gagal=False,pelanggan_saring='',nama_saring=['Pak Suroto'],jenis_barang=[('gabah','Gabah'),('pk','PK')],halaman_akhir=1,href=lambda **p:'/barang-masuk?'+urlencode(dict(q,**p)))
-  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css'])
+  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css'])
   return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui terik">'+html+'<script src="/static/barang-masuk.js?v=501"></script><script src="/static/barang-masuk-pencarian.js?v=501"></script></body>'
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=844));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))

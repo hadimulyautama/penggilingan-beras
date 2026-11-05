@@ -10,9 +10,9 @@ R=Path(__file__).resolve().parents[1]
 
 def document():
     env=Environment(loader=ChoiceLoader([DictLoader({'base.html':'{% block isi %}{% endblock %}',
-        '_retur_supplier_navigasi.html':"{% extends 'base.html' %}"}),FileSystemLoader(R/'app/web/templates')]),autoescape=True)
+        '_retur_supplier_navigasi.html':"{% extends 'base.html' %}"}),FileSystemLoader([R/'app/web/templates',R/'hmu_tampilan/templates'])]),autoescape=True)
     html=env.get_template('pk_kepemilikan_baru.html').render(VERSI='513',akun=N(user=N(id=1)),VIEW='super',LIHAT_SEBAGAI='',kembali='/kepemilikan?kind=pk')
-    css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','padiflow-brand.css'])
+    css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css','padiflow-brand.css'])
     return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui terik"><style>body{padding-left:0!important}</style><div id="formulir-sesi" data-token="csrf-uji"></div><main class="isi">'+html+'</main></body>'
 
 @pytest.mark.parametrize('width',[320,390,1440])

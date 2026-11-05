@@ -1,0 +1,10 @@
+{# Satu kerangka tampilan. Isi, aksi, dan izin tetap milik halaman pemanggil. #}
+{% macro panel(id, judul, atribut={}, penutup={}) -%}
+<dialog class="pd-panduan" id="{{ id }}" aria-labelledby="{{ id }}-judul"{{ atribut|xmlattr }}>
+  <header class="pd-panduan__kepala">
+    <h2 id="{{ id }}-judul"><span aria-hidden="true">ⓘ</span> {{ judul }}</h2>
+    <button class="btn pd-panduan__tutup" type="button" aria-label="Tutup panduan"{{ penutup|xmlattr }}>×</button>
+  </header>
+  <div class="pd-panduan__isi">{{ caller() }}</div>
+</dialog>
+{%- endmacro %}

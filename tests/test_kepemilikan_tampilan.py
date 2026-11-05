@@ -26,7 +26,7 @@ def detail(kind='karung'):
 
 def document(data,theme):
  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in
-             ['app.css','komponen-portal.css','padiflow-brand.css','stok-seragam.css'])
+             ['app.css','komponen-portal.css','panduan.css','padiflow-brand.css','stok-seragam.css'])
  css+=(R/'app/web/static/kepemilikan.css').read_text()
  return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui '+theme+'"><style>body{padding-left:0!important}</style><main class="isi"><section data-kepemilikan data-actor="uji"><div data-ko-controls></div><div data-ko-message role="status"></div><div data-ko-error role="alert"></div><div data-ko-recovery hidden><button data-ko-latest>Baca status terbaru</button></div><div data-ko-body></div></section></main><script type="application/json" id="kepemilikan-awal">'+json.dumps(data)+'</script><script src="/static/kepemilikan.js"></script></body>'
 

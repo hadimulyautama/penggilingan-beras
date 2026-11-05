@@ -9,7 +9,7 @@ R=Path(__file__).resolve().parents[1]
 @pytest.mark.parametrize('tab',['bahan','produk','karung'])
 @pytest.mark.parametrize('owner',['pabrik','jasa'])
 def test_informasi_saldo_detail_dan_kontrol(width,tab,owner):
- css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','tabel-standar.css','komponen-portal.css','padiflow-brand.css','stok-seragam.css'])
+ css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','tabel-standar.css','komponen-portal.css','panduan.css','padiflow-brand.css','stok-seragam.css'])
  def render(url):
   q={k:v[0] for k,v in parse_qs(urlsplit(url).query,keep_blank_values=True).items()}
   v=views['|'.join([q.get('tab',tab),q.get('pemilik',owner),q.get('gudang','')])]

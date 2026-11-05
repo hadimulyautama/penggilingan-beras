@@ -44,8 +44,8 @@ function controlsHeader(title,{params=null,total=null}={}){
  controls.replaceChildren();const header=el('header',null,'kerja-kepala sk-kepala ko-kepala'),top=el('div',null,'sk-judul');
  const desktop=el('div',null,'sk-tindakan-desktop'),mobile=el('div',null,'sk-tindakan-ponsel');
  top.append(el('h1',title),desktop,mobile);header.append(top);controls.append(header);
- const guide=panel('ⓘ Panduan kepemilikan');
- guide.append(el('p','Riwayat kepemilikan menampilkan transaksi pengalihan yang sudah tercatat. Pilih PK, Produk, atau Karung, lalu gunakan pencarian dan filter status.'),el('p','Buka nomor transaksi untuk melihat pemilik, jumlah, gudang, pemakaian, saldo tersedia, dan riwayat perubahan.'),el('p','Koreksi dan pembatalan tersedia pada detail sesuai izin. Periksa dampak dan konfirmasi sebelum menyimpan. Draf serta pemeriksaan dampak tidak mengubah stok.'),el('p','Catatan lama tetap tersedia melalui tautan di daftar.'));
+ const guide=panel('ⓘ Panduan kepemilikan');guide.classList.replace('sk-panel','pd-panduan');guide.querySelector('.sk-panel-kepala').className='pd-panduan__kepala';guide.querySelector('button').className='btn pd-panduan__tutup';
+ const guideBody=el('div',null,'pd-panduan__isi');guide.append(guideBody);guideBody.append(el('p','Riwayat kepemilikan menampilkan transaksi pengalihan yang sudah tercatat. Pilih PK, Produk, atau Karung, lalu gunakan pencarian dan filter status.'),el('p','Buka nomor transaksi untuk melihat pemilik, jumlah, gudang, pemakaian, saldo tersedia, dan riwayat perubahan.'),el('p','Koreksi dan pembatalan tersedia pada detail sesuai izin. Periksa dampak dan konfirmasi sebelum menyimpan. Draf serta pemeriksaan dampak tidak mengubah stok.'),el('p','Catatan lama tetap tersedia melalui tautan di daftar.'));
  const menu=panel('Tindakan');menu.classList.add('sk-menu');
  const showGuide=()=>{if(menu.open)menu.close();guide.showModal();};
  const print=()=>{if(menu.open)menu.close();window.print();};

@@ -1,0 +1,39 @@
+/* Kontrak tampilan Panduan bersama. Isi dan perilaku spesifik tetap per halaman.
+   Dipakai melalui _panduan.html atau kelas yang sama untuk panel dinamis. */
+body.padiflow-ui dialog.pd-panduan {
+  box-sizing:border-box; width:min(440px,calc(100% - 32px)); max-width:calc(100% - 32px);
+  height:fit-content; min-height:0; max-height:calc(100dvh - 96px); inset:64px 16px auto auto; margin:0;
+  padding:22px; overflow:auto; border:1px solid var(--pd-line); border-radius:12px;
+  background:var(--pd-sheet); color:var(--pd-ink); box-shadow:0 16px 40px #0002;
+}
+.pd-panduan::backdrop { background:#0007; }
+body.padiflow-ui .pd-panduan__kepala {display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px;padding:0;border:0;background:transparent;}
+body.padiflow-ui .pd-panduan__kepala h2 {font-size:20px;line-height:1.4;font-weight:600;margin:0;color:var(--pd-ink);}
+body.padiflow-ui .pd-panduan .pd-panduan__tutup {display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;min-width:44px;min-height:44px;margin:0;padding:8px;border:0;background:transparent!important;color:var(--pd-ink)!important;box-shadow:none;font-size:24px;}
+body.padiflow-ui .pd-panduan__isi {display:grid;gap:16px;min-width:0;}
+body.padiflow-ui .pd-panduan :is(p,ul,ol,li) {font-size:14px;line-height:1.7;}
+body.padiflow-ui .pd-panduan :is(p,ul,ol) {margin:0;}
+body.padiflow-ui .pd-panduan :is(ul,ol) {padding-left:22px;}
+body.padiflow-ui .pd-panduan li {margin:0;}
+body.padiflow-ui .pd-panduan li+li {margin-top:6px;}
+body.padiflow-ui .pd-panduan h3 {margin:0 0 8px;font-size:16px;line-height:1.5;}
+body.padiflow-ui .pd-panduan .bantu {color:var(--pd-muted);}
+body.padiflow-ui .pd-panduan__tahap button {background:var(--pd-sheet)!important;color:var(--pd-ink)!important;border-color:var(--pd-line)!important;}
+body.padiflow-ui .pd-panduan__tahap {display:flex;gap:8px;margin:0;}
+body.padiflow-ui .pd-panduan__tahap button {flex:1;min-width:0;min-height:48px;padding:10px 6px;border:1px solid var(--pd-line);border-radius:7px;background:var(--pd-sheet);color:var(--pd-ink);font:inherit;text-align:center;}
+body.padiflow-ui .pd-panduan__tahap button strong {display:block;font-size:14px;}
+body.padiflow-ui .pd-panduan__tahap button small {display:block;font-size:12px;color:var(--pd-muted);}
+body.padiflow-ui .pd-panduan__tahap button[aria-selected=true] {background:var(--pd-soft)!important;border-color:var(--pd-green)!important;color:var(--pd-green)!important;}
+body.padiflow-ui .pd-panduan__panel h2 {font-size:16px;line-height:1.5;margin:0;}
+body.padiflow-ui .pd-panduan__panel {display:grid;gap:10px;min-width:0;}
+body.padiflow-ui .pd-panduan__panel[hidden] {display:none;}
+body.padiflow-ui .pd-panduan__panel>.btn {justify-self:start;min-height:44px;width:auto;white-space:normal;}
+body.padiflow-ui .pd-panduan__tambahan {padding-top:12px;border-top:1px solid var(--pd-line);}
+body.padiflow-ui .pd-panduan__tambahan>summary {min-height:44px;align-content:center;}
+body.padiflow-ui .pd-panduan__tambahan>p {margin-top:8px;}
+@media(max-width:650px) {
+  body.padiflow-ui dialog.pd-panduan {inset:64px 8px auto auto;margin:0;width:calc(100% - 16px);max-width:440px;max-height:calc(100dvh - 80px);padding:18px;}
+  body.padiflow-ui .pd-panduan__kepala h2 {font-size:18px;}
+  body.padiflow-ui .pd-panduan__tahap {gap:6px;}
+}
+@media print {.pd-panduan {display:none!important;}}

@@ -24,13 +24,13 @@ def test_isi_daftar_dan_kartu_tetap_sama():
 @pytest.mark.parametrize('width',[320,390,1440])
 @pytest.mark.parametrize('tab',['tindakan','berjalan'])
 def test_kontrol_saja(width,tab):
- env=Environment(loader=FileSystemLoader(R/'app/web/templates'),autoescape=True)
+ env=Environment(loader=FileSystemLoader([R/'app/web/templates',R/'hmu_tampilan/templates']),autoescape=True)
  calls=[]
  def render(url):
   u=urlsplit(url);q={k:v[0] for k,v in parse_qs(u.query,keep_blank_values=True).items()};calls.append(q)
   req=Request(dict(type='http',path='/pekerjaan',query_string=u.query.encode(),headers=[],scheme='http',server=('uji.local',80)))
   h=env.get_template('_pekerjaan_kontrol.html').render(request=req,VERSI='502',TAMPILAN_INDUK=True,VIEW='super',V_MEJA=['super'],tab=q.get('tab',tab),jenis=q.get('jenis',''),gudang=q.get('gudang',''),total_tindakan=3,total_jalan=2,nama_saring=['Pak Suroto'],pelanggan_saring='',per_jenis=[('giling','Giling',2)],href=lambda **p:'/pekerjaan?'+urlencode(dict(q,**p)))
-  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css'])
+  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css'])
   return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui terik"><div class="bingkai"><main class="isi">'+h+'<section id="daftar-asli">Daftar pekerjaan tetap di sini.</section></main></div></body>'
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=844));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
