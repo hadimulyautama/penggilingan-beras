@@ -45,7 +45,7 @@
   if (!root) return;
   var lembar = document.getElementById('lembar');
   var sesi = document.querySelector('meta[name="formulir-sesi"]');
-  var kunci = root.querySelector('h1').textContent + '|' + (sesi ? sesi.content : '');
+  var kunci = (root.dataset.kode || root.querySelector('h1').textContent) + '|' + (sesi ? sesi.content : '');
   var arsip = window.PENGERINGAN_DRAFT;
   var draft = arsip && arsip.kunci === kunci ? arsip.isi : null;
   if (!lembar) return;

@@ -61,6 +61,13 @@
       return;
     }
     var t = $("kabar");
+    // Pergantian fase dapat menukar bingkai sebelum slot kabar hadir.
+    // Sediakan slot tampilan agar hasil simpan tidak memicu galat atau hilang.
+    if (!t) {
+      t = document.createElement("div");
+      t.id = "kabar"; t.setAttribute("role", "status");
+      (document.querySelector(".bingkai") || document.body).appendChild(t);
+    }
     var teks;
     if (jenis === "err") {
       /* Sebab dari server sudah satu kalimat; awalannya saja yang dibuang
