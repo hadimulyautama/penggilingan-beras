@@ -573,7 +573,13 @@ async def pk_gudang1(db: AsyncSession, *, user=None) -> list[LotPk]:
                           and peta_minta[proc.id].status == DISETUJUI),
             belum_dicatat=belum,
         ))
-    return await _pk_bagian(db, keluar, "giling")
+    keluar=await _pk_bagian(db, keluar, "giling")
+    # Operator G2 membaca calon bahan milik pabrik di G1. Saring SETELAH
+    # pemecahan pemilik: lot asal jasa dapat sudah mempunyai bagian pabrik.
+    from hmu_identitas import peran as P
+    if user is not None and P.operator_saja(user.role):
+        keluar=[l for l in keluar if l.warehouse_id==user.default_warehouse_id or l.jasa_id is None]
+    return keluar
 
 
 # ─────────────────────────── Gudang 2 — Penyosohan ───────────────────────────

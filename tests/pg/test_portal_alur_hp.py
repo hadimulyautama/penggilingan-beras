@@ -21,6 +21,7 @@ pytestmark=pytest.mark.asyncio
 async def alur(pg,portal,catatan):
     from app.penggilingan.gudang1.services import drying
     from app.penggilingan.gudang2.service import _add_intake
+    from app.models import LiniProduksi,JenisProsesProduksi
     paths={k:'/pelanggan/'+v for k,v in dict(beranda='ringkasan',stok='barang-saya',
         proses='jasa-saya',riwayat='riwayat-proses',masuk='barang-masuk',ambil='barang-keluar',dokumen='laporan').items()}
     async with pg() as db:
@@ -45,6 +46,9 @@ async def alur(pg,portal,catatan):
         g1=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g1'))
         for n,jenis in enumerate(('pengeringan','pendinginan')):
             dryer=Dryer(nama='Pengering HP '+str(n),warehouse_id=g1.id,kapasitas_kg=50000,status='aktif');db.add(dryer);await db.flush()
+            jenis_id=await db.scalar(select(JenisProsesProduksi.id).where(JenisProsesProduksi.kode=='pengeringan'))
+            db.add(LiniProduksi(kode='pengering-hp-'+str(n),nama=dryer.nama,warehouse_id=g1.id,
+                jenis_proses_id=jenis_id,dryer_id=dryer.id,aktif=True,versi=1))
             code='GB-HP-'+str(n)
             db.add(PurchaseBatch(kode_batch=code,jasa_id=order.id,berat_total_kg=8000,kondisi_gabah='basah',
                 tanggal_pembelian=now_local().date(),waktu_pembelian=now_local(),input_by=1,status_batch='baru',

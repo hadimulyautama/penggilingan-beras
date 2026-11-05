@@ -374,6 +374,8 @@ async def test_penutupan_ditolak_bila_pk_sudah_dipakai_menyosoh(pg, pabrik):
     from app.models import User
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
     from app.services.permintaan_pk import PermintaanError, tutup_admin
+    from app.services.seed import seed_master
+    await seed_master()
 
     pid = await _minta(pg, pabrik)
     b = await _acc(pg, pabrik, pid, tujuan="A", berat=6_000)

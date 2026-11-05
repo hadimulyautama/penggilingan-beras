@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% from 'portal/_komoditas.html' import daftar_komoditas %}
 {% from 'portal/_pembaruan_proses.html' import pembaruan %}
+{% from 'portal/_bobot_proses.html' import kemajuan %}
 {% block isi %}
 <div class="pelanggan-halaman pelanggan-beranda">
 <header class="pelanggan-sapaan"><h1>Beranda</h1></header>
@@ -13,13 +14,13 @@
 <section class="pelanggan-panel pelanggan-progres pelanggan-progres-beranda" aria-labelledby="judul-proses-beranda">
 <div class="pelanggan-judul"><h2 id="judul-proses-beranda">Proses berjalan</h2>{% if progres or transit %}<a class="pelanggan-tautan" href="/pelanggan/jasa-saya">Semua proses</a>{% endif %}</div>
 {% set urutan_progres=progres|sort(attribute='status') %}
-{% for r in urutan_progres[:3] %}<article class="pelanggan-proses-ringkas">
+{% for r in urutan_progres[:3] %}<article class="pelanggan-proses-ringkas" data-kode-proses="{{ r.kode }}">
 <a href="{{ r.href }}" aria-label="Lihat proses {{ r.judul }} {{ r.kode }}"><span class="pelanggan-proses-judul">{{ r.judul }}</span><span class="pelanggan-penanda{% if r.status=='Dijeda' %} pelanggan-penanda--hati{% endif %}">{{ 'Sedang diproses' if r.status=='Sedang berjalan' else r.status }}</span><span class="pelanggan-kode">{{ r.kode }}</span><span class="pelanggan-proses-panah" aria-hidden="true">→</span></a>
 {% if r.judul=='Penyosohan bahan campuran' or r.barang=='Jenis bahan belum tercatat' %}<p class="pelanggan-redup">{{ r.barang }}</p>{% endif %}
 {{ pembaruan(r) }}
 <p class="pelanggan-petunjuk-proses">{{ r.petunjuk }}</p>
 {% if r.catatan %}<p class="pelanggan-redup">{{ r.catatan }}</p>{% endif %}
-{% if r.maju is not none %}<div class="pelanggan-kemajuan"><label for="progres-{{ loop.index }}">Kemajuan menuju target kadar air · {{ '%.0f'|format(r.maju * 100) }}%</label><progress id="progres-{{ loop.index }}" value="{{ r.maju }}" max="1">{{ '%.0f'|format(r.maju * 100) }}%</progress></div>{% endif %}
+{{ kemajuan(r,'progres-' ~ loop.index) }}
 {% for k,v in r.fakta if k in ('Kadar air','Target kadar air','Hasil sementara') %}<p class="pelanggan-redup">{{ k }}: {{ v.partition(' · rasio hasil')[0] }}</p>{% endfor %}
 </article>{% endfor %}
 {% if progres|length > 3 %}<p class="pelanggan-redup">{{ progres|length - 3 }} proses lainnya tersedia di Semua proses.</p>{% endif %}

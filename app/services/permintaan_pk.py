@@ -166,14 +166,22 @@ def _kg(n) -> str:
     return f"{float(n or 0):,.0f}".replace(",", ".")
 
 
-async def _proses(db: AsyncSession, kode: str | None) -> MillingProcess:
+def pastikan_pemilik_minta(user,owner):
+    from hmu_identitas import peran as P
+    if P.operator_saja(user.role) and owner is not None:
+        raise PermintaanError('Operator Gudang 2 hanya dapat meminta PK milik pabrik. Kepemilikan bagian ini harus dialihkan ke pabrik terlebih dahulu.')
+
+
+async def _proses(db: AsyncSession, kode: str | None, *, user) -> MillingProcess:
     from app.services.pk_persediaan import pecah_kode
+    from app.services.cakupan_fasilitas import batas
     kode, owner = pecah_kode(kode)
     p = (await db.execute(select(MillingProcess).where(
-        MillingProcess.kode_proses == (kode or "").strip()))).scalars().first()
+        MillingProcess.kode_proses == (kode or "").strip(),batas(user,MillingProcess,baca_pk=True)))).scalars().first()
     if p is None:
         raise PermintaanError(f"Lot {kode} tidak ditemukan.")
     p._pk_owner = p.jasa_id if owner is ... else owner
+    pastikan_pemilik_minta(user,p._pk_owner)
     return p
 
 
@@ -206,7 +214,7 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None,
 
     from app.services.barang_keluar import _kunci_saldo_keluar
     await _kunci_saldo_keluar(db)
-    p = await _proses(db, kode_proses)
+    p = await _proses(db, kode_proses,user=user)
     # Lot yang sudah habis tak bisa diminta: permintaan atas barang yang tak ada
     # akan berdiri di layar Admin sampai seseorang menyadarinya. Sisanya dibaca
     # lewat `_pk_breakdown` — SATU jawaban untuk "berapa PK lot ini masih ada",

@@ -117,7 +117,10 @@ async def test_hasil_giling_berjalan_tampil_sementara_tanpa_persen_selesai(pg,po
             assert s and '2.500' in s.get_text() and 'Hasil sementara' in s.get_text()
             assert 'rasio hasil' not in s.get_text().lower()
             assert 'jumlah akhir tersedia setelah proses selesai' not in s.get_text()
-            assert not s.select('progress')
+            bar=s.select_one('progress')
+            assert bar and float(bar['value'])==pytest.approx(2500/10000*100)
+            assert 'Rendemen sementara' in s.get_text()
+            assert 'bukan persentase proses selesai' in s.get_text()
 
 
 async def test_kemajuan_pengeringan_sama_dengan_perhitungan_produksi(pg,pengeringan):

@@ -171,9 +171,10 @@ async def siapkan_detail(request,name,ctx):
         inti['petunjuk']=''
     if lokasi:inti['lokasi']=('Gudang 1 · '+lokasi) if jenis in ('pengeringan','pendinginan') else lokasi
     if d:
-        from .proses_ringkas import siapkan
+        from .proses_ringkas import siapkan,indikator_hasil
         inti.update(ringkas_aktif=True,jenis=jenis,tab_aktif=request.query_params.get('tab_detail','ringkasan'),
             maju=getattr(kartu,'maju',None) if jenis=='pengeringan' else None,
+            indikator_hasil=indikator_hasil(kartu,jenis),
             fakta=[({'Target':'Target kadar air'}.get(k,k),v) for k,v in getattr(kartu,'fakta',[])],
             bobot_pengeringan=[d['bobot_pengeringan']] if d.get('bobot_pengeringan') else [])
         if jenis in ('pengeringan','pendinginan') and inti['angka']:inti['angka']=('Gabah basah saat masuk',inti['angka'][1])
