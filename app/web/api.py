@@ -4743,7 +4743,7 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
                     return {"teks": "Jumlah seluruh karung separtai belum tercatat. Isi sesuai surat jalan, lalu isi jumlah yang dipindah; keduanya berbeda.",
                             "nonaktif": ["berat_kg", "berat_curah_kg"]}
                 from app.penggilingan.gudang2.service import acuan_karung_surat_jalan
-                batch = await acuan_karung_surat_jalan(db, batch, int(n))
+                ukuran = None
                 if ukuran_karung_kg.strip():
                     try:
                         ukuran = Decimal(ukuran_karung_kg.replace(",", "."))
@@ -4751,7 +4751,7 @@ async def pratinjau_pk_karung(tumpukan: str = "", jumlah_karung: str = "",
                             raise ValueError
                     except (InvalidOperation, ValueError):
                         return {"teks": "Ukuran nominal karung harus lebih dari nol.", "nonaktif": ["berat_kg", "berat_curah_kg"]}
-                    batch.ukuran_karung_kg = ukuran
+                batch = await acuan_karung_surat_jalan(db, batch, int(n), ukuran=ukuran)
                 baru = True
                 tambahan = " Jumlah karung surat jalan akan disimpan bersama pemindahan pertama."
         nonaktif_partai = ["berat_curah_kg"] + ([] if baru else ["jumlah_karung_partai", "ukuran_karung_kg"])

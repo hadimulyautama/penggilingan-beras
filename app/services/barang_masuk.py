@@ -309,12 +309,18 @@ async def rincian_lokasi(db, catatan):
                 proses.append((f'Penerimaan PK #{it.id}', f'/stok/pk/detail?gudang=g2&id={it.id}'))
             from app.models import PkTumpukanToSilo
             for pindah,nama in (await db.execute(select(PkTumpukanToSilo,Silo.nama_silo).join(Silo, Silo.id==PkTumpukanToSilo.silo_id).where(PkTumpukanToSilo.pk_gudang2_intake_id==it.id))).all():
-                # Karung historis dapat belum mempunyai rasio bobot partai.
-                # Gunakan pembaca lama; yang belum diketahui bukan nol.
-                kg=pindah.berat_kg
-                berat='Bobot belum tersedia' if kg is None else f'{float(kg):g} kg'
-                karung=f'{pindah.jumlah_karung} karung · ' if pindah.jumlah_karung is not None else ''
-                lokasi.append(f'{pindah.kode_pindah} · {karung}{berat} ke {nama}')
+                # Pemindahan karung boleh mendahului timbang kedua. Kg-nya
+                # mengikuti bobot batch terkini; NULL bukan nol maupun hasil
+                # perkalian ukuran nominal karung pada surat jalan.
+                kg = pindah.berat_kg
+                rincian = f'{float(kg):g} kg' if kg is not None else 'Bobot belum tersedia'
+                if kg is not None and pindah.jumlah_karung is not None:
+                    from app.penggilingan.gudang1.services.bobot import dari_batch
+                    if not dari_batch(pindah.batch).pasti:
+                        rincian = f'± {float(kg):g} kg (estimasi, menunggu timbang kedua)'
+                if pindah.jumlah_karung is not None:
+                    rincian = f'{pindah.jumlah_karung} karung · {rincian}'
+                lokasi.append(f'{pindah.kode_pindah} · {rincian} ke {nama}')
     if any(x['model'] in ('beras', 'broken') for x in catatan):
         lokasi.extend('Stok produk · '+c.get('gudang_nama','Lokasi belum tercatat') for c in catatan if c['model'] in ('beras','broken'))
     # Tautan stok mengikuti pemilik CATATAN, bukan pihak pada tiket yang bisa

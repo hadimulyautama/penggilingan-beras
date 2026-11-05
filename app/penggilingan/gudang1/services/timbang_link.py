@@ -680,7 +680,28 @@ async def sinkron_perkiraan(db: AsyncSession) -> int:
     from app.services.setelan import toleransi_nota_persen
 
     tol = await toleransi_nota_persen(db)
-    total = 0
+    # PK berkarung yang sudah diterima (termasuk sudah masuk silo) memakai
+    # nota sebagai estimasi sebelum timbang kedua. Hanya bobot sementara
+    # yang berubah; sumber pasti, tiket batal, dan dokumen asal tetap utuh.
+    nota_pk = 'COALESCE(NULLIF(t.berat_acuan_kg, 0), b.jumlah_karung * b.ukuran_karung_kg)'
+    res = await db.execute(text('''
+        UPDATE pk_purchase_batches b SET
+            berat_total_kg = ''' + nota_pk + ''',
+            berat_perkiraan_kg = ''' + nota_pk + ''', sumber_berat = 'perkiraan'
+          FROM timbangan_transaksi t
+         WHERE b.timbangan_transaksi_id = t.id
+           AND b.dibatalkan_pada IS NULL -- cermin bertanda
+           AND b.jumlah_karung > 0
+           AND b.sumber_berat IN ('menunggu', 'perkiraan')
+    ''' + SYARAT_TIKET_SAH + '''
+           AND t.timbang2_kg IS NULL
+           AND ''' + SQL_REAL_TIKET + ''' IS NULL
+           AND ''' + nota_pk + ''' > 0
+           AND (b.berat_total_kg IS DISTINCT FROM ''' + nota_pk + '''
+                OR b.berat_perkiraan_kg IS DISTINCT FROM ''' + nota_pk + '''
+                OR b.sumber_berat <> 'perkiraan')
+    '''))
+    total = res.rowcount or 0
     for tbl in ("purchase_batches", "pk_purchase_batches"):
         res = await db.execute(text(_sql_bobot_batch(_SQL_PERKIRAAN, tbl)),
                                {"tol_persen": tol})

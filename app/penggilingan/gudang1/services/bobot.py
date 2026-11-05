@@ -88,6 +88,8 @@ class Bobot:
         if self.keadaan == PERKIRAAN:
             if self.asal == "tiket":
                 return f"{_fmt(self.angka())} kg · tiket belum ditutup"
+            if self.asal == "nota":
+                return f"± {_fmt(self.angka())} kg (estimasi nota)"
             return f"± {_fmt(self.angka())} kg" + (" (dari tara lama)" if self.asal == "tara" else "")
         if self.kg is None:
             return "menunggu timbang" + (
@@ -167,6 +169,13 @@ def dari_batch(b) -> Bobot:
         return Bobot(None, TAK_DIKETAHUI, 1)
     nilai=dari_nilai(getattr(b, "berat_total_kg", None), getattr(b, "sumber_berat", None),
                       getattr(b, "berat_perkiraan_kg", None))
+    if nilai.keadaan == PERKIRAAN and getattr(b, 'jumlah_karung', None):
+        # PK berkarung dapat memakai nota sampai timbang kedua. Jangan
+        # menyebutnya tara lama atau bobot per karung hasil pengukuran.
+        asal = nilai.asal
+        if asal == 'tara':
+            asal = 'nota' if getattr(b, 'ukuran_karung_kg', None) else ''
+        nilai = Bobot(nilai.kg, PERKIRAAN, asal=asal)
     return kurang(nilai,getattr(b,'retur_supplier_keluar_kg',0) or 0)
 
 
