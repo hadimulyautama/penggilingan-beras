@@ -668,6 +668,9 @@ async def _undo_transfer(db: AsyncSession, transfer_id: int, *,
                          user_id: int | None = None,
                          alasan: str | None = None) -> str:
     """Batalkan transfer PK ke Gudang 2 — stok siap kirim kembali bertambah."""
+    from app.services.pk_koreksi_rantai import alasan_perubahan_terpisah
+    reason=await alasan_perubahan_terpisah(db,'transfers',transfer_id)
+    if reason:raise UndoError(reason)
     t = await db.get(InternalTransfer, transfer_id)
     if t is None:
         raise UndoError("Transfer sudah tidak ada.")
@@ -1108,6 +1111,9 @@ async def _tolak_bila_silo_dipakai(db: AsyncSession, silo_id: int, sejak, lok: s
 async def _undo_pindah_tumpukan(db: AsyncSession, move_id: int) -> str:
     """Batalkan pindah tumpukan → silo: PK kembali ke tumpukan (P-K-10 dijaga)."""
     from app.models import PkTumpukanToSilo, Silo
+    from app.services.pk_koreksi_rantai import alasan_perubahan_terpisah
+    reason=await alasan_perubahan_terpisah(db,'moves',move_id)
+    if reason:raise UndoError(reason)
 
     m = await _ambil_termasuk_batal(db, PkTumpukanToSilo, move_id)
     if m is None:

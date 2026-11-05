@@ -115,3 +115,44 @@ def test_detail_koreksi_pemeriksaan_konfirmasi_dan_batal(width,kind):
   expect(page.get_by_role('button',name='Konfirmasi pembatalan')).to_be_disabled();no_overflow(page)
   assert not errors
   b.close()
+
+
+@pytest.mark.parametrize('width',[390,1440])
+@pytest.mark.parametrize('mode',['ubah','batal'])
+def test_pratinjau_pk_berantai_menampilkan_bobot_transfer_silo_dan_bahan_sosoh(width,mode):
+ data=detail('pk');data['state'].update(quantity=12500,kg=12500,status='aktif',version=0)
+ data['code']='AM-PK-10';data['description']['warehouses']=['Gudang 1']
+ plan=dict(before=data['state'],after={**data['state'],'quantity':10000 if mode=='ubah' else 0},
+  balances_before={'None':{'kg':0},'7':{'kg':0}},balances_after={'None':{'kg':0},'7':{'kg':2500 if mode=='ubah' else 12500}},
+  pk_chain=dict(transfers=[dict(id=1,kode='TRF-UJI-01',effective_before='12500',effective_after='10000' if mode=='ubah' else '0')],
+   intakes=[dict(id=2,effective_before='12500',effective_after='10000' if mode=='ubah' else '0')],moves=[],
+   processes=[dict(id=1,kode='POL-UJI-01',bahan_before='22477.5',bahan_after='19977.5' if mode=='ubah' else '9977.5')],
+   warnings=['Hasil tercatat perlu diperiksa setelah pembatalan.'] if mode=='batal' else []))
+ with sync_playwright() as p:
+  b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1100));calls=[];errors=[]
+  page.on('pageerror',lambda e:errors.append(str(e)));route_for(page,data,'terik',calls)
+  def review(route):
+   calls.append(('periksa',route.request.post_data_json));route.fulfill(json=dict(plan=plan,review='review-rantai'))
+  def save(route):
+   calls.append(('simpan',route.request.post_data_json));route.fulfill(json=dict(event_id=99,plan=plan))
+  page.route('**/api/kepemilikan/128/periksa',review);page.route('**/api/kepemilikan/128/simpan',save)
+  page.goto('https://uji.local/kepemilikan/128')
+  page.get_by_role('button',name='Koreksi transaksi' if mode=='ubah' else 'Batalkan perpindahan',exact=True).click()
+  if mode=='ubah':page.get_by_role('spinbutton').fill('10000')
+  page.get_by_role('textbox',name='Alasan '+('koreksi' if mode=='ubah' else 'pembatalan')+' (wajib)').fill('Betulkan angka berantai melalui aplikasi')
+  page.get_by_role('button',name='Periksa dampak',exact=True).click()
+  expect(page.locator('[data-ko-chain]')).to_be_visible()
+  text=page.locator('[data-ko-chain]').inner_text()
+  assert 'TRF-UJI-01' in text and 'POL-UJI-01' in text and '22.477,5 kg' in text
+  assert ('19.977,5 kg' if mode=='ubah' else '9.977,5 kg') in text
+  if mode=='batal':assert page.locator('[data-ko-chain] [role=alert]').is_visible()
+  assert 'Lokasi tetap' not in page.locator('[data-ko-body]').inner_text()
+  button=page.get_by_role('button',name='Simpan koreksi' if mode=='ubah' else 'Konfirmasi pembatalan',exact=True)
+  expect(button).to_be_disabled();assert not any(c[0]=='simpan' for c in calls)
+  no_overflow(page)
+  out=Path('/private/tmp/pk-koreksi-rantai-visual');out.mkdir(exist_ok=True)
+  page.screenshot(path=str(out/f'{mode}-{width}.png'),full_page=True)
+  page.get_by_role('checkbox',name='Saya sudah memeriksa pemilik, bobot transfer, bahan proses lanjutan, dan seluruh peringatan.').check()
+  button.click();expect(page.locator('[data-ko-message]')).to_contain_text('bahan proses terkait sudah disesuaikan')
+  assert next(c[1] for c in calls if c[0]=='simpan')['review']=='review-rantai'
+  assert not errors;b.close()

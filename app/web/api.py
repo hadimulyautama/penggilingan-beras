@@ -5276,7 +5276,7 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
                  "kotaknya untuk memindahkan seluruh sisanya.")
     from app.penggilingan.gudang2.service import Gudang2Error, pindah_tumpukan_ke_silo
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
             r = await pindah_tumpukan_ke_silo(
                 db, user=u, intake_id=iid, nama_silo=req.silo.strip(),pemilik_id=owner,
@@ -5376,7 +5376,7 @@ async def act_pindah_broken_silo(req: PindahBrokenSiloReq,
                  "kotaknya untuk memindahkan seluruh sisanya.")
     from app.penggilingan.gudang2.service import Gudang2Error, pindah_broken_ke_silo
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
             r = await pindah_broken_ke_silo(
                 db, user=u, byproduct_stock_id=int(req.broken), nama_silo=req.silo.strip(),
@@ -5615,7 +5615,7 @@ async def _act_masukkan_hasil_samping(req: MasukkanHasilSampingSiloReq,
         raise HTTPException(422, "Pilih pemilik stok yang valid.")
     from app.penggilingan.gudang2.service import Gudang2Error, masukkan_hasil_samping_ke_silo
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
             result = await masukkan_hasil_samping_ke_silo(
                 db, user=u, jenis=jenis,
@@ -5726,7 +5726,7 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
     from app.penggilingan.gudang2.service import (Gudang2Error,
         masukkan_broken_ke_silo, masukkan_stok_broken_pemilik_ke_silo)
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
             if pilihan.startswith("pemilik|"):
                 owner = pilihan.partition("|")[2]
@@ -5999,7 +5999,7 @@ async def act_masukkan_beras_silo(req: MasukkanBerasSiloReq,
         jasa_id = int(owner_token)
     from app.penggilingan.gudang2.service import Gudang2Error, masukkan_beras_ke_silo
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
             r = await masukkan_beras_ke_silo(
                 db, user=u, jenis=jenis, nama_silo=req.silo.strip(),

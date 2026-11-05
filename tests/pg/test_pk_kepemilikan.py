@@ -125,11 +125,11 @@ async def test_pk_g1_yang_dialihkan_dapat_dikirim_dengan_pemilik_baru(pg,world):
         ctx=await umum.context(db,user=user,ident=result['id'])
         req=dict(mode='batal',quantity=None,customer=None,source_ids=[],reason='Sudah dipakai',
                  baseline=ctx['baseline'],key=uuid.uuid4().hex)
-        with pytest.raises((umum.InventoryError,PersediaanError)):
-            await umum.inspect(db,user=user,ident=result['id'],req=req)
+        review=await umum.inspect(db,user=user,ident=result['id'],req=req)
+        assert review['plan']['pk_chain']['transfers'][0]['effective_after']=='0.00'
 
 
-async def test_pk_tumpukan_pemilik_baru_masuk_silo_dan_bagian_terpakai_dijaga(pg,world):
+async def test_pk_tumpukan_pemilik_baru_masuk_silo_dan_pratinjau_batal_berantai(pg,world):
     from app.penggilingan.gudang2.service import pindah_tumpukan_ke_silo,hitung_stok_silo
     from app.services.jasa import pemilik_silo_g2
     w=world
@@ -148,8 +148,8 @@ async def test_pk_tumpukan_pemilik_baru_masuk_silo_dan_bagian_terpakai_dijaga(pg
         ctx=await umum.context(db,user=user,ident=result['id'])
         req=dict(mode='batal',quantity=None,customer=None,source_ids=[],reason='Sudah dipakai',
                  baseline=ctx['baseline'],key=uuid.uuid4().hex)
-        with pytest.raises((umum.InventoryError,PersediaanError)):
-            await umum.inspect(db,user=user,ident=result['id'],req=req)
+        review=await umum.inspect(db,user=user,ident=result['id'],req=req)
+        assert D(review['plan']['pk_chain']['moves'][0]['effective_after'])==0
 
 
 @pytest.mark.parametrize('role,allowed',[('admin',True),('operator',False)])

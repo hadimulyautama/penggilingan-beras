@@ -346,6 +346,9 @@ async def hasil_berjalan(db,jenis,pr,targets,user,alasan):
 
 
 async def bahan_g2(db,entry,change,pr,user,alasan,*,gabungan=False):
+    from app.services.pk_koreksi_rantai import alasan_perubahan_terpisah
+    reason=await alasan_perubahan_terpisah(db,'moves',entry['id'])
+    if reason:raise ValueError(reason)
     move=await db.get(PkTumpukanToSilo,entry['id'],populate_existing=True)
     if not move or move.dibatalkan_pada:raise Konflik('Catatan bahan sudah dibatalkan.')
     before=raw(move);oldkg=move.berat_kg
