@@ -1,18 +1,16 @@
 {% extends "base.html" %}
-{% block judul %}Pengiriman · Barang Retur{% endblock %}
+{% block judul %}Barang Retur{% endblock %}
 {% block isi %}
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
 <link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
-<div class="keluar-halaman">
-<header class="keluar-kepala"><h1>Pengiriman</h1>
-<p>Barang keluar dan retur pelanggan.</p>
-<details><summary>Bantuan alur retur</summary><p>Buka pengiriman yang sudah keluar → ajukan retur → timbang dan periksa barang → terima ke stok.</p></details></header>
-{% set tab_pengiriman = 'retur' %}{% include "_pengiriman_tabs.html" %}
+<link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
+<div class="keluar-halaman keluar-ringkas">
+{% include "_barang_retur_kontrol.html" %}
 {% if pesan %}<p role="status">{{ pesan }}</p>{% endif %}{% if gagal %}<p role="alert">{{ gagal }}</p>{% endif %}
-<section><h2>Pengajuan retur</h2>
+<section class="keluar-ringkas__bagian"><h2>Pengajuan retur</h2>
 <p>Buat retur dari detail pengiriman yang sudah keluar. Setiap penerimaan memiliki tiket dan pemeriksaan sendiri.</p>
-<a class="btn" href="/barang-keluar?status=selesai#judul-riwayat-keluar">Buka riwayat pengiriman</a>
+
 {% if pengajuan %}
 <div class="tabel-standar__scroll">
   <table class="tabel-standar" data-ponsel="ringkas" role="table">
@@ -30,8 +28,8 @@
 {% else %}<p class="bantu">Tidak ada pengajuan retur menunggu pemeriksaan.</p>{% endif %}
 {% if pengajuan_berikut %}<a class="btn" href="/retur?sebelum_pengajuan={{ pengajuan_berikut }}">Pengajuan sebelumnya</a>{% endif %}
 </section>
-{% if lama %}<section><h2>Rincian lama belum terhubung</h2><p>Hubungan pengiriman tidak ditebak. Periksa tiket dan pilih pengiriman asal yang terbukti sebelum mengajukan penerimaan.</p>{% for r in lama %}<p>{{ r.kode_tiket or 'Tiket tidak tersedia' }} · belum masuk stok</p>{% endfor %}</section>{% endif %}
-<section><h2>Riwayat penerimaan retur</h2>
+{% if lama %}<section class="keluar-ringkas__bagian"><h2>Rincian lama belum terhubung</h2><p>Hubungan pengiriman tidak ditebak. Periksa tiket dan pilih pengiriman asal yang terbukti sebelum mengajukan penerimaan.</p>{% for r in lama %}<p>{{ r.kode_tiket or 'Tiket tidak tersedia' }} · belum masuk stok</p>{% endfor %}</section>{% endif %}
+<section class="keluar-ringkas__bagian"><h2>Riwayat penerimaan retur</h2>
 {% if recent %}
     <div class="tabel-standar__scroll">
       <table class="tabel-standar" data-ponsel="ringkas" role="table">

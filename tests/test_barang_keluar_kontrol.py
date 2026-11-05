@@ -14,15 +14,15 @@ def test_kontrol_pengiriman_dan_panduan_bersama(width,admin):
   u=urlsplit(url);q={k:v[0] for k,v in parse_qs(u.query,keep_blank_values=True).items()};calls.append(q)
   request=Request(dict(type='http',path='/barang-keluar',query_string=u.query.encode(),headers=[],scheme='http',server=('uji.local',80)))
   html=env.get_template('_barang_keluar_kontrol.html').render(request=request,VERSI='514',BOLEH_PERINTAH=admin,tab_pengiriman='keluar',pencarian=q.get('q',''),status_filter=q.get('status',''),sejak_filter=q.get('sejak',''),n_perintah=2,n_dimuat=1)
-  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css'])+(R/'app/web/static/barang-keluar-kontrol.css').read_text()
-  return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui terik"><style>body{padding-left:0!important}</style><main class="isi"><div class="keluar-ringkas">'+html+'</div></main><script>window.print=()=>window.cetakan=(window.cetakan||0)+1</script><script src="/static/bantuan_pengiriman.js"></script><script src="/static/barang-keluar-kontrol.js"></script></body>'
+  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css'])+(R/'hmu_tampilan/static/pengiriman-kontrol.css').read_text()
+  return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui terik"><style>body{padding-left:0!important}</style><main class="isi"><div class="keluar-ringkas">'+html+'</div></main><script>window.print=()=>window.cetakan=(window.cetakan||0)+1</script><script src="/static/bantuan_pengiriman.js"></script><script src="/static/pengiriman-kontrol.js"></script></body>'
  with sync_playwright() as p:
   browser=p.chromium.launch();page=browser.new_page(viewport=dict(width=width,height=900));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   def route(r):
    path=urlsplit(r.request.url).path
    if path=='/barang-keluar':r.fulfill(body=document(r.request.url),content_type='text/html')
    else:
-    f=R/'app/web'/path.lstrip('/')
+    f=next((f for f in [R/'app/web'/path.lstrip('/'),R/'hmu_tampilan'/path.lstrip('/')] if f.is_file()),R/'tidak-ada')
     if f.is_file():r.fulfill(path=f)
     else:r.fulfill(body='')
   page.route('**/*',route);page.goto('http://uji.local/barang-keluar?pelanggan_id=7&sebelum=51')

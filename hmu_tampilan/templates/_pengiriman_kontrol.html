@@ -1,0 +1,17 @@
+{# Kontrak kontrol bersama. Halaman hanya memasok aksi, filter, cakupan dan isi panduan. #}
+{% macro kontrol_pengiriman(judul, tab_pengiriman, filter=false, filter_jumlah=0) -%}
+<section class="pengiriman-kontrol bk-kontrol" data-pengiriman-controls data-bk-controls aria-label="Kontrol {{ judul }}">
+<div class="bk-judul"><h1>{{ judul }}</h1><div class="bk-tindakan">
+{{ caller('tindakan') }}
+<button class="btn btn--kecil bk-desktop" type="button" data-bk-buka="bk-panduan">ⓘ Panduan</button><button class="btn btn--kecil bk-desktop" type="button" data-bk-cetak>Print</button>
+{% if filter %}<button class="btn bk-ikon bk-ponsel" type="button" data-bk-buka="bk-filter" aria-label="Buka filter {{ judul|lower }}{{ ' · ' ~ filter_jumlah ~ ' aktif' if filter_jumlah }}" aria-haspopup="dialog"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v8l-4-2v-6z"/></svg>{% if filter_jumlah %}<span class="bk-titik"></span>{% endif %}</button>{% endif %}
+<button class="btn bk-ikon bk-ponsel" type="button" data-bk-buka="bk-tindakan" aria-label="Panduan dan print" aria-haspopup="dialog">⋮</button>
+</div></div>
+{{ caller('alat') }}
+{% include '_pengiriman_tabs.html' %}
+{{ caller('cakupan') }}
+{{ caller('panel') }}
+<dialog class="bk-panel bk-menu" id="bk-tindakan" aria-labelledby="bk-tindakan-judul"><div class="bk-panel-kepala"><h2 id="bk-tindakan-judul">Tindakan</h2><button class="btn bk-ikon" type="button" data-bk-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-bk-buka="bk-panduan">ⓘ Panduan</button><button class="btn" type="button" data-bk-cetak>Print daftar {{ judul|lower }}</button></dialog>
+</section>
+<script src="/static/pengiriman-kontrol.js?v={{ VERSI }}" defer></script>
+{%- endmacro %}

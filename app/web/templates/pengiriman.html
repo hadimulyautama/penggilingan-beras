@@ -13,7 +13,6 @@
 {% if BOLEH_PERINTAH %}<p><a class="btn" href="/barang-keluar/{{ k.rec.id }}/perbaikan?{{ filter_query }}" data-utuh>Perbaiki pengiriman</a></p>{% endif %}
 {% else %}
 <link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/barang-keluar-kontrol.css?v={{ VERSI }}">
 <div class="keluar-halaman keluar-ringkas">
 {% include "_barang_keluar_kontrol.html" %}
 
@@ -47,7 +46,7 @@
 {% endblock %}
 
 {% block kaki %}
-{% if not detail %}<script src="/static/bantuan_pengiriman.js?v={{ VERSI }}" defer></script><script src="/static/barang-keluar-kontrol.js?v={{ VERSI }}" defer></script>{% endif %}
+{% if not detail %}<script src="/static/bantuan_pengiriman.js?v={{ VERSI }}" defer></script>{% endif %}
 <script src="/static/daftar-keluar.js?v={{ VERSI }}" defer></script>
 {% if BOLEH_PERINTAH or BOLEH_MUAT %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer
