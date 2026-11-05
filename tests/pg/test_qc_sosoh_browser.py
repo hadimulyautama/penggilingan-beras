@@ -96,6 +96,7 @@ async def test_kartu_detail_sampel_lab_dan_riwayat_di_browser(pg,dunia):
             assert await page.get_by_role('link',name='Buka QC penyosohan').count()==0
             await page.goto('https://uji/riwayat-sosoh/'+str(dunia['proc'].id))
             assert await page.locator('[data-qc-baru]').count()==0
+            await page.locator('[data-rhs-tab=qc]').click()
             await page.locator('[data-qc-lengkapi]').click()
             assert await page.locator('[data-qc-editor]').is_visible()
             assert 'Medium' in await page.locator('[data-qc-identitas]').inner_text()

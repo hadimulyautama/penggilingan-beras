@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% from '_bahan_silo.html' import riwayat_bahan_sosoh %}
+{% import '_stok.html' as st with context %}
+{% set kg = st.kg_rinci %}
+{% from '_riwayat_jeda.html' import riwayat_jeda_blok with context %}
+{% set tab_awal=request.query_params.get('tab_detail','ringkasan') %}
+{% if tab_awal not in ['ringkasan','bahan','hasil','qc','riwayat'] %}{% set tab_awal='ringkasan' %}{% endif %}
+{% if gagal_koreksi or hasil_koreksi %}{% set tab_awal='hasil' %}{% endif %}
+{% block judul %}Riwayat penyosohan {{ k.kode }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
+<main class="riwayat-detail rhs" data-riwayat-sosoh data-editor-perintah data-tab-awal="{{ tab_awal }}" data-rhs-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}:{{ k.id }}" data-rhs-return="{{ '1' if gagal_koreksi or hasil_koreksi else '0' }}">
+<a class="rhs-back" href="{{ kembali }}">← Kembali ke Riwayat Penyosohan</a>
+<header class="rhs-header"><h1>Riwayat penyosohan</h1><p class="rhs-code">{{ k.kode }}</p>
+<div class="rhs-identity"><span class="rhs-status">Selesai</span><strong>{% if k.jasa %}{{ k.nama_pemilik or 'Pemilik belum tercatat' }} · Jasa{% else %}Milik pabrik{% endif %}</strong></div>
+<p class="rhs-meta">Selesai {{ k.selesai|jam('%d/%m/%Y %H:%M') or '—' }} · {{ k.oleh or '—' }}{% if k.jasa %}<br>{{ k.kode_jasa or 'ID jasa belum tercatat' }}{% endif %}</p>
+<div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rhs-guide>ⓘ Panduan</button><details class="rhs-menu"><summary class="btn" aria-label="Tindakan riwayat">⋮</summary><div class="rhs-menu-body">{% if LAPORAN_NAV %}<button class="btn" type="button" data-rhs-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}<button class="btn" type="button" data-rhs-guide>ⓘ Panduan</button><a class="btn" href="/riwayat-sosoh/{{ k.id }}/laporan">Lihat / bagikan laporan PDF</a>{% if boleh_koreksi %}<button class="btn" type="button" data-rhs-edit>Koreksi hasil</button>{% endif %}<button class="btn" type="button" data-rhs-print>Print detail</button></div></details></div>
+</header>
+<div class="rhs-actions"><a class="btn" href="/riwayat-sosoh/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>{% if boleh_koreksi %}<button class="btn" type="button" data-rhs-edit>Koreksi hasil</button>{% endif %}</div>
+<nav class="rhs-tabs" role="tablist" aria-label="Detail riwayat sosoh">{% for id,label in [('ringkasan','Ringkasan'),('bahan','Bahan & silo'),('hasil','Hasil'),('qc','QC'),('riwayat','Riwayat')] %}<a id="rhs-tab-{{ id }}" role="tab" aria-controls="rhs-panel-{{ id }}" aria-selected="{{ 'true' if tab_awal==id else 'false' }}" href="{{ request.url.include_query_params(tab_detail=id) }}#rhs-panel-{{ id }}" data-rhs-tab="{{ id }}">{{ label }}</a>{% endfor %}</nav>
+<section id="rhs-panel-ringkasan" data-rhs-panel="ringkasan" role="tabpanel" aria-labelledby="rhs-tab-ringkasan" {% if tab_awal!='ringkasan' %}hidden{% endif %}>
+<section class="riwayat-detail__card rhs-overview"><div class="rhs-section-head"><h2>Neraca hasil</h2><span class="rhs-status">{{ 'Bahan diketahui' if k.bahan_pasti else 'Belum final' }}</span></div>
+{% if not k.bahan_pasti %}<p class="nota">{{ k.bahan_teks }} · bobot truk belum final. Susut dan rendemen belum dapat dipastikan.</p>{% endif %}
+{% if k.neraca_tercatat %}<p class="nota">Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan {{ kg(k.neraca_tercatat.bahan_kg) }} kg, susut {{ kg(k.neraca_tercatat.susut.kg) }} kg. Catatan penutupan tetap tersimpan.</p>{% endif %}
+{% if k.bahan_pasti and k.neraca.timpang %}<p class="riwayat-detail__warning">Hasil melebihi bahan baku ({{ kg(k.neraca.keluar_kg) }} kg keluar dari {{ kg(k.neraca.bahan_kg) }} kg). Periksa catatan hasil.</p>{% endif %}
+<div class="rhs-mass"><div><span>Bahan terpakai</span><strong>{{ kg(k.neraca.bahan_kg) ~ ' kg' if k.bahan_pasti else k.bahan_teks }}</strong><small>Setelah sisa tiap siklus</small></div><div><span>Seluruh hasil tercatat</span><strong>{{ kg(k.neraca.keluar_kg) }} kg</strong><small>Total hasil produksi proses ini</small></div><div><span>Susut neraca</span><strong>{{ kg(k.neraca.susut.kg) ~ ' kg' if k.bahan_pasti and k.neraca.bisa_dihitung else 'Belum dapat dipastikan' }}</strong><small>{{ ('%.1f'|format(k.neraca.susut.persen)|replace('.',',') ~ '% dari bahan') if k.bahan_pasti and k.neraca.susut.persen is not none else 'Menunggu kepastian bahan' }}</small></div></div>
+<p class="rhs-help rhs-yield">Rendemen beras {{ ('%.1f'|format(k.rendemen)|replace('.',',') ~ '%') if k.rendemen is not none else 'belum dapat dipastikan' }} · hasil beras {{ kg(k.neraca.beras.kg) }} kg. Saldo tersedia mengikuti pemakaian dan halaman Stok.</p>
+<a class="rhs-link" href="#rhs-panel-hasil" data-rhs-go="hasil">Lihat rincian seluruh hasil →</a>
+</section>
+<section class="riwayat-detail__card rhs-shortcuts"><h2>Telusuri proses ini</h2>{% for id,label,info in [('bahan','Bahan & silo','Asal, tambahan, sisa dan pemakaian tiap siklus'),('hasil','Seluruh hasil & catatan asal','Rincian hasil, koreksi dan pengemasan otomatis'),('qc','QC beras','Sampel, hasil lab dan pemetaan estimasi'),('riwayat','Identitas, waktu & jeda','Mulai, selesai, operator, durasi dan sebab')] %}<a href="#rhs-panel-{{ id }}" data-rhs-go="{{ id }}"><span>{{ label }}<small>{{ info }}</small></span><span aria-hidden="true">›</span></a>{% endfor %}</section>
+</section>
+<section id="rhs-panel-bahan" data-rhs-panel="bahan" role="tabpanel" aria-labelledby="rhs-tab-bahan" {% if tab_awal!='bahan' %}hidden{% endif %}>
+<section class="riwayat-detail__card">
+      <h2>Bahan &amp; pemakaian silo</h2>
+      {{ riwayat_bahan_sosoh(k.silo) }}
+    </section>
+</section>
+<section id="rhs-panel-hasil" data-rhs-panel="hasil" role="tabpanel" aria-labelledby="rhs-tab-hasil" {% if tab_awal!='hasil' %}hidden{% endif %}>
+<section class="riwayat-detail__card">
+      {% if not k.bahan_pasti %}<p class="nota">{{ k.bahan_teks }} · bobot truk belum final. Susut dan rendemen belum dapat dipastikan.</p>{% endif %}
+      {% if k.neraca_tercatat %}<p class="nota">Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan {{ kg(k.neraca_tercatat.bahan_kg) }} kg, susut {{ kg(k.neraca_tercatat.susut.kg) }} kg. Catatan penutupan tetap tersimpan.</p>{% endif %}
+      <h2>Neraca hasil</h2>
+      {% if k.bahan_pasti and k.neraca.timpang %}<p class="riwayat-detail__warning">Hasil melebihi bahan baku ({{ kg(k.neraca.keluar_kg) }} kg keluar dari {{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}). Periksa catatan hasil.</p>{% endif %}
+      {% if k.bahan_pasti and k.neraca.bisa_dihitung %}<div class="riwayat-detail__table tabel-standar"><div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Persentase bahan</span></div>
+        <div class="riwayat-detail__table-row"><strong>{{ k.neraca.beras.nama }}</strong><span>{{ kg(k.neraca.beras.kg) }} kg</span><span>{{ "%.1f"|format(k.neraca.beras.persen)|replace(".", ",") }}%</span></div>
+        {% for b in k.beras %}<div class="riwayat-detail__table-row"><strong class="riwayat-detail__indent">{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
+        {% for b in k.neraca.samping %}<div class="riwayat-detail__table-row"><strong>{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
+        <div class="riwayat-detail__table-row"><strong>{{ k.neraca.susut.nama }}</strong><span>{{ kg(k.neraca.susut.kg) ~ " kg" if k.bahan_pasti else "Belum dapat dipastikan" }}</span><span>{{ "%.1f"|format(k.neraca.susut.persen)|replace(".", ",") if k.neraca.susut.persen is not none else "—" }}%</span></div>
+        <div class="riwayat-detail__table-row riwayat-detail__table-row--total"><strong>Total bahan</strong><span>{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</span><span>100%</span></div>
+      </div>{% else %}<p class="riwayat-detail__empty">Bahan baku belum tercatat sehingga neraca belum dapat dihitung.</p>{% endif %}
+    </section>
+<section class="riwayat-detail__card"><h2>Seluruh jenis hasil</h2><p class="rhs-help">Berat hasil proses per jenis. Angka ini bukan saldo yang masih tersedia.</p><dl class="rhs-all-results">{% for j in jenis_hasil %}{% set ns=namespace(kg=0) %}{% for b in (k.beras|list)+(k.neraca.samping|list) %}{% if b.jenis==j %}{% set ns.kg=b.kg %}{% endif %}{% endfor %}<div><dt>{{ nama_hasil(j) }}</dt><dd>{{ kg(ns.kg) }} kg</dd></div>{% endfor %}</dl></section>
+{% if boleh_koreksi %}<details class="riwayat-detail__card rhs-pack"><summary>Catatan asal pengemasan otomatis</summary><p>Koreksi atau batalkan satu catatan asal. Perhitungan karung dan curah mengikuti hasil efektif.</p><div class="rhs-actions">{% for j in ['broken','bekatul','menir','reject'] %}<a class="btn btn--kecil" data-utuh href="/pengemasan-otomatis/sosoh/{{ k.id }}/{{ j }}">{{ j|title }} · catatan asal</a>{% endfor %}</div></details>{% endif %}
+<div data-rhs-correction>
+{% set isian_koreksi = isian_koreksi|default({}) %}
+    {% if boleh_koreksi %}
+      {% if jenis == 'sosoh' and catatan_penghalang and not penghalang_koreksi %}
+        <details class="riwayat-detail__card"><summary>Catatan hilir terkait</summary>
+          <p>Periksa transaksi terkait bila koreksi hasil ditahan oleh pemakaian yang sudah tercatat.</p>
+          <ul>{% for c in catatan_penghalang %}<li><a href="{{ c.url }}">{{ c.kode }}</a> · {{ c.jumlah }} kg · {{ c.status }}</li>{% endfor %}</ul>
+        </details>
+      {% endif %}
+      {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi hasil tersimpan.</p>{% endif %}
+      {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
+      {% if penghalang_koreksi %}
+        <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+        {% include '_penghalang_koreksi.html' %}
+        {% if isian_koreksi %}<details open><summary>Isian yang belum tersimpan</summary>{% for nama, nilai in isian_koreksi.items() %}<label>{{ 'Alasan koreksi' if nama == 'alasan' else (nama_hasil(nama.removeprefix('hasil_')) if jenis == 'sosoh' else ('PK hasil giling' if jenis == 'giling' else 'Berat transfer')) }}<textarea readonly>{{ nilai }}</textarea></label>{% endfor %}</details>{% endif %}
+      {% else %}
+        <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi %}open{% endif %}>
+          <summary><h2>Catatan hasil</h2></summary>
+          <form method="post" action="/riwayat-sosoh/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            {% if gagal_koreksi %}<p role="alert">{{ gagal_koreksi }} Isian Anda dipertahankan.</p>{% endif %}
+            {% for jenis in jenis_hasil %}
+              <label class="riwayat-koreksi__field">
+                <span>{{ nama_hasil(jenis) }}</span>
+                <input type="hidden" name="dasar_{{ jenis }}" value="{{ '%.2f'|format(hasil_awal.get(jenis, 0)) }}">
+                <span class="riwayat-koreksi__input"><input type="number" name="hasil_{{ jenis }}" min="0" step="0.01" value="{{ isian_koreksi.get('hasil_' ~ jenis, '%.2f'|format(hasil_awal.get(jenis, 0))) }}" required><small>kg</small></span>
+              </label>
+            {% endfor %}
+            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi">{{ isian_koreksi.get('alasan', '') }}</textarea></label>
+            {% if gagal_koreksi %}
+            <p>Nilai terbaru: {% if jenis == 'sosoh' %}{% for j, v in hasil_awal.items() %}{{ nama_hasil(j) }} {{ v }} kg; {% endfor %}{% else %}{{ hasil_awal }} kg{% endif %}. Bandingkan dengan angka yang Anda ketik.</p>
+            <input type="hidden" name="wajib_periksa" value="1">
+            <label><input type="checkbox" name="periksa_ulang" value="ya" required> Saya sudah memeriksa nilai terbaru dan koreksi ini.</label>
+            {% endif %}
+            <button class="btn btn--utama" type="submit">Simpan koreksi</button>
+          </form>
+        </details>
+      {% endif %}
+    {% endif %}
+
+</div>
+</section>
+<section id="rhs-panel-qc" data-rhs-panel="qc" role="tabpanel" aria-labelledby="rhs-tab-qc" {% if tab_awal!='qc' %}hidden{% endif %}>
+{% if qc_sosoh %}{% include '_qc_sosoh.html' %}{% else %}<section class="riwayat-detail__card"><h2>QC beras hasil sosoh</h2><p>Catatan QC belum tersedia.</p></section>{% endif %}
+</section>
+<section id="rhs-panel-riwayat" data-rhs-panel="riwayat" role="tabpanel" aria-labelledby="rhs-tab-riwayat" {% if tab_awal!='riwayat' %}hidden{% endif %}>
+<section class="riwayat-detail__card">
+      <h2>Informasi proses</h2>
+      <dl class="riwayat-detail__facts">
+        <div><dt>Mulai</dt><dd>{{ k.mulai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Selesai</dt><dd>{{ k.selesai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Durasi</dt><dd>{{ k.lama or "—" }}</dd></div>
+        <div><dt>Dijalankan oleh</dt><dd>{{ k.oleh or "—" }}</dd></div>
+        <div><dt>Total bahan baku</dt><dd>{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</dd></div>
+        <div><dt>Rendemen beras</dt><dd>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</dd></div>
+        {% if k.spek %}<div><dt>Spek</dt><dd>{{ k.spek|join(", ") }}</dd></div>{% endif %}
+        {% if k.jasa %}<div><dt>ID jasa</dt><dd>{{ k.kode_jasa or "belum tercatat" }}</dd></div>{% endif %}
+      </dl>
+    </section>
+{% if jeda_riwayat is defined %}{{ riwayat_jeda_blok(jeda_riwayat) }}{% endif %}
+</section>
+{% from '_panduan.html' import panel as panduan %}
+{% call panduan('rhs-panduan','Panduan riwayat sosoh',penutup={'data-rhs-guide-close':'','data-lk-tutup':''}) %}
+<p><strong>Neraca.</strong> Bahan, rendemen dan susut mengikuti kepastian sumber. Jika bobot truk dikoreksi, perhitungan efektif dan bukti saat penutupan tetap dapat diperiksa.</p>
+<p><strong>Bahan &amp; hasil.</strong> Asal, tambahan, sisa dan pemakaian tetap dibaca per siklus silo. Berat hasil adalah produksi proses, bukan saldo persediaan yang masih tersedia.</p>
+<p><strong>Koreksi.</strong> Semua jenis hasil dan alasan tetap menggunakan formulir koreksi asli. Data terbaru, hak akses dan pemakaian terkait diperiksa layanan saat menyimpan. Catatan hilir tidak dibatalkan otomatis.</p>
+<p><strong>Pengemasan otomatis.</strong> Catatan asal dapat dibuka melalui tab Hasil sesuai izin. Perubahan catatan asal berbeda dari perubahan kemasan fisik; perhitungan karung dan curah tetap mengikuti layanan yang ada.</p>
+<p><strong>QC.</strong> Sampel, jenis dan waktu pengambilan, hasil lab, catatan, pembatalan, serta pemetaan sesi tetap tersedia. Total timbang aktual dipisahkan dari estimasi waktu, durasi aktif dan bobot sesi/sampel.</p>
+<p><strong>Riwayat &amp; PDF.</strong> Identitas, operator, waktu, jeda, sebab dan alasan tetap dapat ditelusuri. Laporan PDF menggunakan tautan laporan yang sama.</p>
+{% endcall %}
+{% if LAPORAN_NAV %}{% call panduan('rhs-navigation','Navigasi Laporan & Riwayat',penutup={'data-rhs-nav-close':'','data-lk-tutup':''}) %}<div data-rhs-parent-nav-slot></div>{% endcall %}{% endif %}
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<noscript>Gunakan tautan tab untuk membuka rincian. Formulir koreksi dan tautan laporan tetap tersedia.</noscript>
+</main>
+<script src="/static/riwayat-sosoh-desain.js?v={{ VERSI }}"></script>
+{% endblock %}
+{% block kaki %}{% if not PORTAL_READ_ONLY %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ request.query_params.get('buka','') }}" data-nilai="{{ request.query_params.get('nilai','') }}"></script>{% endif %}{% endblock %}
