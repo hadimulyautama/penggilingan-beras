@@ -107,19 +107,8 @@ class Laporan(PenyajiDokumen):
     def __init__(self,d):
         super().__init__()
         self.d=d
-        self.ink=colors.HexColor('#21332b')
-        self.green=colors.HexColor('#32694b')
-        self.pale=colors.HexColor('#eff4ee')
-        self.border=colors.HexColor('#d1ded3')
-        self.normal=ParagraphStyle('TerimaIsi',fontName='Helvetica',fontSize=8.5,
-            leading=10.6,textColor=self.ink,splitLongWords=True)
-        self.small=ParagraphStyle('TerimaKecil',parent=self.normal,fontSize=7.8,
-            leading=9.8,textColor=colors.HexColor('#596f64'))
-        self.bold=ParagraphStyle('TerimaTebal',parent=self.normal,fontName='Helvetica-Bold')
         self.head=ParagraphStyle('TerimaKepalaTabel',parent=self.bold,textColor=colors.white)
-        self.section=ParagraphStyle('TerimaBagian',parent=self.bold,fontSize=9.5,
-            leading=12,textColor=self.green,keepWithNext=True)
-        self.width=182*mm
+        self.width=(210-2*self.tema.margin_mm)*mm
 
     def p(self,value,style=None):
         # Label/data tidak ditafsirkan sebagai markup, termasuk catatan lab.
@@ -151,55 +140,18 @@ class Laporan(PenyajiDokumen):
         t.setStyle(TableStyle(style))
         return warnai_tabel(t)
 
-    def kop(self,c,doc):
-        c.saveState();w,h=A4;left=14*mm
-        c.setFillColor(self.green);c.rect(0,h-2*mm,w,2*mm,fill=1,stroke=0)
-        c.setFont('Helvetica-Bold',11);c.drawString(left,h-11*mm,NAMA_PERUSAHAAN)
-        c.setFillColor(self.ink);c.setFont('Helvetica-Bold',20)
-        c.drawString(left,h-22*mm,JUDUL)
-        p=self.p('Tiket TeraFlow: '+self.d['tiket']['kode'],self.bold);_,ph=p.wrap(self.width*.55,100)
-        p.drawOn(c,left,h-29*mm-ph+8)
-        label='PENERIMAAN: '+self.d['status'].upper()+('' if self.d['final'] else ' | BELUM FINAL')
-        c.setFont('Helvetica-Bold',8);c.setFillColor(self.green if self.d['final'] else colors.HexColor('#9b4c24'))
-        c.drawRightString(w-left,h-29*mm,label)
-        c.setStrokeColor(self.border);c.line(left,h-33*mm,w-left,h-33*mm)
-        c.restoreState()
-
-    def footer(self,c,n,total):
-        c.saveState();left=14*mm
-        if total>1:
-            c.setFillColor(colors.HexColor('#9b4c24'));c.setFont('Helvetica-Bold',7)
-            c.drawString(left,A4[1]-36*mm,'MELEBIHI SATU HALAMAN - seluruh catatan tetap dicetak lengkap')
-        c.setStrokeColor(self.border);c.line(left,15*mm,A4[0]-left,15*mm)
-        stamp=waktu(self.d['dibuat'])+' '+(berzona(self.d['dibuat']).tzname() or '')
-        p=self.p('PadiFlow | Dibuat '+stamp+' | '+self.d['pembuat'],self.small)
-        _,h=p.wrap(155*mm,40);p.drawOn(c,left,13*mm-h)
-        c.setFillColor(self.small.textColor);c.setFont('Helvetica',7.6)
-        c.drawRightString(A4[0]-left,10*mm,f'{n} / {total}')
-        c.restoreState()
-
     def pdf(self,story):
-        penyaji=self
-        class Halaman(Canvas):
-            def __init__(self,*args,**kwargs):
-                super().__init__(*args,**kwargs);self.halaman=[]
-            def showPage(self):
-                self.halaman.append(dict(self.__dict__));self._startPage()
-            def save(self):
-                total=len(self.halaman)
-                for state in self.halaman:
-                    self.__dict__.update(state)
-                    penyaji.footer(self,self._pageNumber,total)
-                    super().showPage()
-                super().save()
-        out=BytesIO()
-        doc=BaseDocTemplate(out,pagesize=A4,leftMargin=14*mm,rightMargin=14*mm,
-            topMargin=37*mm,bottomMargin=17*mm,title=getattr(self,'judul',JUDUL),author=self.d['pembuat'])
-        frame=Frame(doc.leftMargin,doc.bottomMargin,doc.width,doc.height,
-            leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)
-        doc.addPageTemplates(PageTemplate(id='penerimaan',frames=[frame],onPage=self.kop))
-        doc.build(story,canvasmaker=Halaman)
-        return out.getvalue()
+        judul=getattr(self,'judul',JUDUL)
+        if 'tiket' in self.d:
+            referensi=self.d['tiket']['kode']
+            status='PENERIMAAN: '+self.d['status'].upper()+('' if self.d['final'] else ' | BELUM FINAL')
+        else:
+            referensi=self.d['kode']
+            status='PENGGILINGAN '+self.d.get('status','selesai').upper()
+            status+=' | '+(self.d.get('verification_status') or 'Verifikasi belum tercatat').replace('_',' ').upper()
+        story=list(story)+[Spacer(1,5),self.p('Dibuat '+waktu(self.d['dibuat'])+' | '+self.d['pembuat'],self.small)]
+        pembuka=[self.p(judul,self.title),self.p(referensi,self.bold),self.p(status,self.small),Spacer(1,8)]
+        return super().pdf(pembuka+story,judul=judul,referensi=referensi)
 
 
 def buat_pdf(d):

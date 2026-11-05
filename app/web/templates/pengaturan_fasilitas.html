@@ -1,2 +1,9 @@
 {% extends "pengaturan.html" %}
-{% block isi %}{{ super() }}{% if blok_kelola and not BAGIAN %}<section class="kartu"><h2>Fasilitas produksi</h2><a class="btn" href="/pengaturan/fasilitas">Gudang, line / alat & jenis proses</a></section>{% endif %}{% endblock %}
+{% block isi %}{{ super() }}
+{% if not BAGIAN %}
+<section class="kartu"><h2>Perusahaan</h2>
+{% if blok_kelola %}<a class="btn" href="/pengaturan/perusahaan">Data perusahaan &amp; logo dokumen</a>
+{% else %}<span class="btn akses-terkunci" aria-disabled="true">Data perusahaan &amp; logo dokumen</span>{% endif %}
+</section>
+{% if blok_kelola %}<section class="kartu"><h2>Fasilitas produksi</h2><a class="btn" href="/pengaturan/fasilitas">Gudang, line / alat &amp; jenis proses</a></section>{% endif %}
+{% endif %}{% endblock %}

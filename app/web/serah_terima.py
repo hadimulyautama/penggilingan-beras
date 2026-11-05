@@ -1,4 +1,5 @@
 """Rute baca dan PDF serah terima, dipakai bersama portal dan app internal."""
+from app.web.pdf_dokumen import buat_pdf_terkini
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from app.database import SessionLocal
@@ -52,7 +53,7 @@ async def detail(ident:int,request:Request,akun=Depends(butuh_akun)):
         if not d['siap']:raise HTTPException(409,d['status'])
         from app.web.pdf_serah_terima import buat_pdf
         unduh=request.query_params.get('unduh')=='1'
-        return Response(buat_pdf(d),media_type='application/pdf',headers={
+        return Response(await buat_pdf_terkini(buat_pdf,d),media_type='application/pdf',headers={
             'Content-Disposition':f'{"attachment" if unduh else "inline"}; filename="{d["nomor"]}.pdf"',
             'Cache-Control':'no-store, private','Vary':'Cookie'})
     return await render_laci(request,'serah_terima.html',d=d,layar='laporan',MENU_AKTIF='laporan_riwayat',page_title=d['judul'])

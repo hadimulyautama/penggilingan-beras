@@ -26,6 +26,7 @@ from app.web.laporan_navigasi import router as laporan_navigasi_router
 from app.web.layar_audit import router as audit_router
 from app.web.layar_berjalan import router as berjalan_router
 from app.web.pengaturan import router as pengaturan_router
+from app.web.perusahaan import router as perusahaan_router
 from app.web.mode_uji import router as mode_uji_router
 from app.web.layar_gudang import router as gudang_router
 from app.web.layar_keputusan import router as keputusan_router
@@ -92,6 +93,7 @@ app.include_router(audit_router)
 from app.web.fasilitas import router as fasilitas_router
 app.include_router(fasilitas_router)
 app.include_router(pengaturan_router)
+app.include_router(perusahaan_router)
 app.include_router(mode_uji_router)
 app.include_router(keputusan_router)
 app.include_router(gudang_router)

@@ -58,21 +58,6 @@ class LaporanGiling(Laporan):
     def __init__(self,d):
         super().__init__(d)
         self.judul='Laporan Penggilingan'
-        # Ukuran tetap, tidak mengecil mengikuti jumlah catatan.
-        self.normal=ParagraphStyle('GilingIsi',parent=self.normal,fontSize=8,leading=9.6)
-        self.small=ParagraphStyle('GilingCatatan',parent=self.small,fontSize=7.5,leading=9)
-        self.bold=ParagraphStyle('GilingTebal',parent=self.normal,fontName='Helvetica-Bold')
-        self.head=ParagraphStyle('GilingKepala',parent=self.bold,textColor=colors.white)
-    def kop(self,c,doc):
-        c.saveState();w,h=A4;left=14*mm
-        c.setFillColor(self.green);c.rect(0,h-2*mm,w,2*mm,fill=1,stroke=0)
-        c.setFont('Helvetica-Bold',11);c.drawString(left,h-11*mm,NAMA_PERUSAHAAN)
-        c.setFillColor(self.ink);c.setFont('Helvetica-Bold',20);c.drawString(left,h-22*mm,'Laporan Penggilingan')
-        c.setFont('Helvetica-Bold',8);c.drawString(left,h-29*mm,self.d['kode'])
-        status='PENGGILINGAN '+self.d.get('status','selesai').upper()
-        status+=' | '+(self.d.get('verification_status') or 'Verifikasi belum tercatat').replace('_',' ').upper()
-        c.setFillColor(self.green);c.drawRightString(w-left,h-29*mm,status)
-        c.setStrokeColor(self.border);c.line(left,h-33*mm,w-left,h-33*mm);c.restoreState()
 
 
 def buat_pdf(data):

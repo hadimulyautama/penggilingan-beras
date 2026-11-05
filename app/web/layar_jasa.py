@@ -13,6 +13,7 @@ menutup lubang yang dibuat saringan itu.
 """
 from __future__ import annotations
 
+from app.web.pdf_dokumen import buat_pdf_terkini
 from app.web.portal.scope import is_customer_read
 from urllib.parse import urlencode
 
@@ -165,6 +166,6 @@ async def rekap_pdf(jasa_id: int, request: Request, unduh: int = 0,
     if data['digabung']:
         suffix = "?unduh=1" if unduh else ""
         return RedirectResponse(f"/jasa/{data['digabung']['id']}/nota.pdf{suffix}", 303)
-    return Response(buat_pdf(data), media_type="application/pdf", headers={
+    return Response(await buat_pdf_terkini(buat_pdf,data), media_type="application/pdf", headers={
         "Content-Disposition": f'{"attachment" if unduh else "inline"}; filename="rekap-barang-jasa-{data["kode"]}.pdf"',
         "Cache-Control": "no-store, private", "Vary": "Cookie"})

@@ -394,24 +394,25 @@ def buat_pdf(data: dict) -> bytes:
     from app.penggilingan.gudang2.polishing import GRADES
     from app.services.stok import nama_produk
 
-    navy, teal = colors.HexColor("#173042"), colors.HexColor("#0B6D83")
-    muted, pale, border = (colors.HexColor("#52636D"), colors.HexColor("#EAF2F5"),
-                           colors.HexColor("#CCD9DE"))
+    from app.web.pdf_dokumen import PenyajiDokumen
+    view = PenyajiDokumen()
+    navy, teal = view.green, view.green
+    muted, pale, border = view.muted, view.pale, view.border
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="SosohTitle", parent=styles["Title"],
-        fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=navy,
+    styles.add(ParagraphStyle(name="SosohTitle", parent=view.title,
+        fontName=view.tema.font_tebal, fontSize=view.tema.ukuran_judul, leading=20, textColor=navy,
         alignment=TA_LEFT, spaceAfter=3))
-    styles.add(ParagraphStyle(name="SosohSub", parent=styles["BodyText"],
-        fontSize=8.5, leading=12, textColor=muted, spaceAfter=8))
-    styles.add(ParagraphStyle(name="SosohSection", parent=styles["Heading2"],
-        fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=teal,
+    styles.add(ParagraphStyle(name="SosohSub", parent=view.normal,
+         textColor=muted, spaceAfter=8))
+    styles.add(ParagraphStyle(name="SosohSection", parent=view.section,
+        fontName=view.tema.font_tebal, fontSize=10.5, leading=13, textColor=teal,
         spaceBefore=7, spaceAfter=4))
-    styles.add(ParagraphStyle(name="SosohCell", parent=styles["BodyText"],
-        fontSize=7.1, leading=9, wordWrap=None))
+    styles.add(ParagraphStyle(name="SosohCell", parent=view.normal,
+         wordWrap=None))
     styles.add(ParagraphStyle(name="SosohHead", parent=styles["SosohCell"],
-        fontName="Helvetica-Bold", textColor=colors.white))
-    styles.add(ParagraphStyle(name="SosohNote", parent=styles["BodyText"],
-        fontSize=7.7, leading=10, textColor=muted))
+        fontName=view.tema.font_tebal, textColor=colors.white))
+    styles.add(ParagraphStyle(name="SosohNote", parent=view.normal,
+         textColor=muted))
 
     def p(value, style="SosohCell"):
         return paragraf(value if value not in (None, "") else "—", styles[style], teks_angka)
@@ -624,19 +625,4 @@ def buat_pdf(data: dict) -> bytes:
     story.append(p("QC proses sosoh belum memiliki catatan terpisah di sistem.", "SosohNote"))
 
     bagian_jeda(story, data.get("jeda"), p, grid, "SosohSection")
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm,
-        topMargin=15*mm, bottomMargin=19*mm, title=f"Laporan Penyosohan {proc.kode_proses}")
-
-    def footer(canvas, document):
-        canvas.saveState()
-        canvas.setStrokeColor(border)
-        canvas.line(18*mm, 14*mm, A4[0]-18*mm, 14*mm)
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(muted)
-        canvas.drawString(18*mm, 9*mm, f"Laporan {proc.kode_proses}")
-        canvas.drawRightString(A4[0]-18*mm, 9*mm, f"Halaman {document.page}")
-        canvas.restoreState()
-
-    doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    return buffer.getvalue()
+    return view.pdf(story, judul="Laporan Penyosohan "+proc.kode_proses, referensi=proc.kode_proses)

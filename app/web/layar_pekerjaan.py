@@ -1,5 +1,6 @@
 """Barang Masuk dan Pekerjaan: susunan baru atas layanan serta tindakan lama."""
 
+from app.web.pdf_dokumen import buat_pdf_terkini
 from app.web.portal.scope import is_customer_read
 from urllib.parse import urlencode, urlsplit
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -345,7 +346,7 @@ async def laporan_penerimaan_pdf(tid:int, request:Request, akun=Depends(butuh_ak
         data, tiket, jenis = await sumber_detail_barang_masuk(db, tid, request, akun)
         dokumen = await baca(db, tiket, jenis, data[0]['catatan'] if data else [],
                              pembuat=akun.user.nama,scope=getattr(request.state,'portal_scope',None))
-    return Response(buat_pdf(dokumen), media_type='application/pdf', headers={
+    return Response(await buat_pdf_terkini(buat_pdf,dokumen), media_type='application/pdf', headers={
         'Content-Disposition': f'{"inline" if unduh == 0 else "attachment"}; filename="laporan-penerimaan-{tid}.pdf"',
         'Cache-Control':'no-store, private', 'Vary':'Cookie',
         'X-Content-Type-Options':'nosniff'})

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block judul %}Data perusahaan{% endblock %}
+{% block isi %}
+<section class="kartu">
+<a href="/pengaturan">← Pengaturan</a><h1>Data perusahaan</h1>
+<p>Identitas pada laporan PadiFlow, dokumen portal pelanggan, serta bukti timbang TeraFlow.</p>
+{% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
+{% if tersimpan %}<div class="pesan pesan--ok" role="status">Data perusahaan tersimpan.</div>{% endif %}
+<form action="/pengaturan/perusahaan" method="post" enctype="multipart/form-data">
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+<label for="nama">Nama perusahaan</label><input class="fld" id="nama" name="nama" required maxlength="120" value="{{ perusahaan.nama }}">
+<label for="alamat">Alamat</label><textarea class="fld" id="alamat" name="alamat" required maxlength="500" rows="3">{{ perusahaan.alamat }}</textarea>
+<label for="telepon">Nomor telepon</label><input class="fld" id="telepon" name="telepon" type="tel" maxlength="80" value="{{ perusahaan.telepon }}">
+<label for="email">Email</label><input class="fld" id="email" name="email" type="email" maxlength="150" value="{{ perusahaan.email }}">
+<label for="website">Website</label><input class="fld" id="website" name="website" type="url" placeholder="https://perusahaan.co.id" maxlength="200" value="{{ perusahaan.website }}">
+<h2>Logo</h2>
+<div>{% if perusahaan.logo %}<img src="data:image/png;base64,{{ perusahaan.logo }}" width="96" height="96" style="object-fit:contain" alt="Logo perusahaan saat ini">{% else %}<img src="/static/hmu-company-logo.png" width="96" height="96" alt="Logo perusahaan saat ini">{% endif %}</div>
+<label for="logo">Ganti logo perusahaan</label><input class="fld" id="logo" name="logo" type="file" accept="image/png,image/jpeg">
+<p>PNG atau JPEG, maksimal 2 MB dan 2048 × 2048 piksel. Kosongkan untuk mempertahankan logo saat ini.</p>
+<label><input type="checkbox" name="logo_bawaan" value="1"> Gunakan logo bawaan</label>
+<p>Perubahan dipakai saat dokumen dibuat kembali. PDF yang sudah diunduh tetap seperti semula.</p>
+<button class="btn btn--utama" type="submit">Simpan data perusahaan</button>
+</form></section>
+{% endblock %}

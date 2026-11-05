@@ -8,6 +8,7 @@ sendiri tetapi berbagi gerbang (`_is_g1_operator`) dan bentuk kursor
 (`?sebelum=<id>`, pola sama `layar_sosoh.py`).
 """
 from __future__ import annotations
+from app.web.pdf_dokumen import buat_pdf_terkini
 from app.web.qc_warna import NilaiQC, paragraf, warnai_tabel
 
 from app.web.portal.scope import is_customer_read
@@ -408,7 +409,7 @@ async def laporan_giling_pdf(process_id: int, unduh: int = 0, *, pembuat: str | 
     """Shared PDF response; caller authorizes the process before invoking it."""
     data = await _ambil_data_laporan_giling(process_id)
     data["pembuat"] = pembuat or "PadiFlow"
-    pdf = _pdf_laporan_giling(data)
+    pdf = await buat_pdf_terkini(_pdf_laporan_giling,data)
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'{"attachment" if unduh else "inline"}; filename="laporan-penggilingan-{data["kode"]}.pdf"'})
 
@@ -512,27 +513,26 @@ def _pdf_pengeringan(data: dict) -> bytes:
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
 
-    navy = colors.HexColor("#173042")
-    teal = colors.HexColor("#0B6D83")
-    muted = colors.HexColor("#52636D")
-    pale = colors.HexColor("#EAF2F5")
-    border = colors.HexColor("#CCD9DE")
+    from app.web.pdf_dokumen import PenyajiDokumen
+    view = PenyajiDokumen()
+    navy, teal = view.green, view.green
+    muted, pale, border = view.muted, view.pale, view.border
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="ReportTitle", parent=styles["Title"],
-                              fontName="Helvetica-Bold", fontSize=18, leading=22,
+    styles.add(ParagraphStyle(name="ReportTitle", parent=view.title,
+                              fontName=view.tema.font_tebal, fontSize=view.tema.ukuran_judul, leading=20,
                               textColor=navy, alignment=TA_LEFT, spaceAfter=3))
-    styles.add(ParagraphStyle(name="ReportSub", parent=styles["BodyText"],
-                              fontSize=8.5, leading=12, textColor=muted,
+    styles.add(ParagraphStyle(name="ReportSub", parent=view.normal,
+                               textColor=muted,
                               spaceAfter=10))
-    styles.add(ParagraphStyle(name="ReportSection", parent=styles["Heading2"],
-                              fontName="Helvetica-Bold", fontSize=11, leading=14,
+    styles.add(ParagraphStyle(name="ReportSection", parent=view.section,
+                              fontName=view.tema.font_tebal, fontSize=11, leading=14,
                               textColor=teal, spaceBefore=9, spaceAfter=5))
-    styles.add(ParagraphStyle(name="ReportCell", parent=styles["BodyText"],
-                              fontSize=7.5, leading=9.5, wordWrap=None))
+    styles.add(ParagraphStyle(name="ReportCell", parent=view.normal,
+                               wordWrap=None))
     styles.add(ParagraphStyle(name="ReportHead", parent=styles["ReportCell"],
-                              fontName="Helvetica-Bold", textColor=colors.white))
-    styles.add(ParagraphStyle(name="ReportNote", parent=styles["BodyText"],
-                              fontSize=8, leading=10, textColor=muted))
+                              fontName=view.tema.font_tebal, textColor=colors.white))
+    styles.add(ParagraphStyle(name="ReportNote", parent=view.normal,
+                               textColor=muted))
 
     def para(value, style="ReportCell"):
         return paragraf(value if value not in (None, "") else "—", styles[style], teks_angka)
@@ -625,23 +625,7 @@ def _pdf_pengeringan(data: dict) -> bytes:
         story.extend(Paragraph(escape(note), styles["ReportNote"]) for note in data["cooling_notes"])
 
     bagian_jeda(story, data.get("jeda"), para, grid, "ReportSection")
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18 * mm,
-                            rightMargin=18 * mm, topMargin=16 * mm,
-                            bottomMargin=20 * mm, title=f"Laporan Pengeringan {data['kode']}")
-
-    def footer(canvas, document):
-        canvas.saveState()
-        canvas.setStrokeColor(border)
-        canvas.line(18 * mm, 15 * mm, A4[0] - 18 * mm, 15 * mm)
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(muted)
-        canvas.drawString(18 * mm, 10 * mm, f"Laporan {data['kode']}")
-        canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"Halaman {document.page}")
-        canvas.restoreState()
-
-    doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    return buffer.getvalue()
+    return view.pdf(story, judul="Laporan Pengeringan "+data["kode"], referensi=data["kode"])
 
 
 @router.get("/riwayat-pengeringan/{lot_id}/laporan.pdf")
@@ -767,7 +751,7 @@ async def laporan_pengeringan_pdf(lot_id: int, unduh: int = 0):
             "cool_start": lot.waktu_mulai_pendinginan,
             "cool_end": lot.waktu_selesai_pendinginan,
         }
-        pdf = _pdf_pengeringan(payload)
+        pdf = await buat_pdf_terkini(_pdf_pengeringan,payload)
 
     return Response(
         content=pdf, media_type="application/pdf",

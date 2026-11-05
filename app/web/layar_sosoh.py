@@ -23,6 +23,7 @@ akhir — lalu dipakai menilai mesin.
 """
 from __future__ import annotations
 
+from app.web.pdf_dokumen import buat_pdf_terkini
 from app.web.portal.scope import is_customer_read
 
 from urllib.parse import urlencode
@@ -228,7 +229,7 @@ async def laporan_sosoh_pdf(process_id: int, unduh: int = 0):
     mode = "attachment" if unduh else "inline"
     filename = f"laporan-penyosohan-{data['process'].kode_proses}.pdf"
     return Response(
-        content=buat_pdf(data), media_type="application/pdf",
+        content=await buat_pdf_terkini(buat_pdf,data), media_type="application/pdf",
         headers={"Content-Disposition": f'{mode}; filename="{filename}"',
                  "Cache-Control": "private, no-store"},
     )
