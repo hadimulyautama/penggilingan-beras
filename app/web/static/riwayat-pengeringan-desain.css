@@ -1,0 +1,21 @@
+/* Kelas riwayat bersama; penyesuaian ini dibatasi pada pengeringan selesai. */
+.rhpd .pengeringan-tabs{display:flex;grid-template-columns:none;gap:0 24px}
+.rhpd .pengeringan-tahap{display:flex;flex-wrap:wrap;gap:12px 20px;padding:0;margin:0 0 22px;list-style:none}
+.rhpd .pengeringan-tahap li{display:block;border:0;background:transparent;color:var(--pd-muted);padding:6px 0;font-size:13px}
+.rhpd .pengeringan-tahap li.aktif{background:transparent;color:var(--pd-green);font-weight:600}
+.rhpd .rhs-header{border:0;background:transparent}
+.rhpd .rhs-header .kepemilikan{margin:0}
+.rhpd .proses-detail__aksi{display:flex;flex-wrap:wrap;gap:12px}
+.rhpd .proses-detail__aksi>a{flex:1 1 200px}
+.rhpd .pendinginan-kondisi{background:var(--pd-soft)}
+.rhpd .rhs-help{margin:16px 0}
+.rhpd .pengeringan-baris{margin:16px 0}
+.rhpd .pengeringan-panel{display:block;min-width:0}
+.rhpd .pengeringan-bacaan{gap:16px}
+.rhpd .pengeringan-bacaan>div{background:var(--pd-soft);border-color:var(--pd-line)}
+.rhpd .pendinginan-putaran article{border-color:var(--pd-line)}
+.rhpd #rhp-navigation .laporan-nav{margin:0;padding:0;border:0}
+.rhpd #rhp-navigation .lk-kepala{margin-bottom:16px}
+@media(max-width:700px){.rhpd .pengeringan-tabs{gap:0 16px}.rhpd .pengeringan-tahap{gap:8px 16px}.rhpd .pengeringan-tahap li{font-size:12px}}
+@media print{.rhpd .rhs-tools,.rhpd .rhs-actions,.rhpd .pengeringan-tabs,.rhpd #tindakan-proses,.rhpd dialog{display:none!important}.rhpd .pengeringan-panel[hidden]{display:block!important}}
+.rhpd .rhs-back{font-weight:400}

@@ -491,7 +491,7 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
     def halaman(parameter, nomor):
         return str(dasar.include_query_params(**{parameter: nomor}))
     return await render_laci(
-        request, "detail_pendinginan.html", d=detail, proses=proses, k=kartu[0],
+        request, "riwayat_pengeringan_detail.html", d=detail, proses=proses, k=kartu[0],
         tab_pengeringan=(request.query_params.get("tab_detail") if request.query_params.get("tab_detail") in
                         {"ringkasan", "bahan", "pengukuran", "riwayat"} else
                         "pengukuran" if request.query_params.get("halaman_ukur") else
