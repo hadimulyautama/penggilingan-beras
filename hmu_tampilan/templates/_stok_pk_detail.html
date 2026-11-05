@@ -9,7 +9,7 @@
     <div class="pk-detail__heading">
       <div class="pk-detail__eyebrow">
         <span class="pk-detail__chip {{ 'pk-detail__chip--jasa' if JASA_SAJA else 'pk-detail__chip--pabrik' }}">{{ "Jasa" if JASA_SAJA else "Pabrik" }}</span>
-        <span>{{ "Gudang 1" if g1 else "Gudang 2" }}</span>
+        <span>{{ t.gudang_nama or "Lokasi belum tercatat" }}</span>
         {% if not g1 %}<span class="pk-detail__dot">·</span><span>{{ "Giling sendiri" if giling_sendiri else "Pembelian dari luar" }}</span>{% endif %}
       </div>
       <h1>{{ nama_kode }}</h1>
@@ -37,7 +37,7 @@
     <section class="pk-detail__panel pk-detail__summary">
       <div class="pk-detail__section-head"><div><span class="pk-detail__overline">INFORMASI</span><h2>Ringkasan stok</h2></div></div>
       <dl class="pk-detail__facts">
-        <div><dt>Letak</dt><dd>{{ "Gudang 1 · hasil giling" if g1 else "Gudang 2 · tumpukan" }}</dd></div>
+        <div><dt>Letak</dt><dd>{{ t.gudang_nama or "Lokasi belum tercatat" }} · {{ "hasil giling" if g1 else "tumpukan" }}</dd></div>
         {% if g1 %}
           <div><dt>Hasil giling</dt><dd>{% if t.belum_dicatat %}Belum dicatat{% else %}{{ kg(t.dihasilkan) }} kg{% endif %}</dd></div>
           {% if t.bahan_kg %}<div><dt>Bahan masuk</dt><dd>{{ kg(t.bahan_kg) }} kg{% if not t.bahan_final %}<small>Belum final</small>{% endif %}</dd></div>{% endif %}

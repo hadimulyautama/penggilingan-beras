@@ -8,6 +8,7 @@ kemasan − nilai byproduct) ÷ total beras. Biaya penyosohan = konversi PK→be
 penjualan, DI LUAR HPP. Broken internal GRATIS; broken beli-luar & Beras B menyusul.
 """
 from __future__ import annotations
+from app.services.cakupan_fasilitas import lokasi
 
 from dataclasses import dataclass
 
@@ -202,7 +203,8 @@ async def catat_packing(
             f"{sudah:,.0f} kg, dipindah ke silo {dipindah:,.0f} kg.)".replace(",", "."))
 
     now = input_time(tanggal, jam)
-    wid = await _g2_warehouse_id(db)
+    from app.services.cakupan_fasilitas import lokasi
+    wid = await db.scalar(select(lokasi(PolishingProcess)).where(PolishingProcess.id==proc.id))
     # ── Pemiliknya diturunkan dari PROSESNYA, lewat satu tempat ──
     #
     # `pemilik_hasil()` yang memutuskan, bukan cabang di sini: beras, menir,
@@ -293,7 +295,7 @@ async def catat_curah(
     fg = FinishedGoodsStock(
         product_sku_id=sku.id, rice_quality_standard_id=std.id if std else None,
         source_type="polishing", source_id=proc.id, jumlah_karung=0,
-        berat_total_kg=berat, warehouse_id=await _g2_warehouse_id(db),
+        berat_total_kg=berat, warehouse_id=await db.scalar(select(lokasi(PolishingProcess)).where(PolishingProcess.id==proc.id)),
         waktu=now_local(), input_by=user.id,
         jasa_id=await pemilik_hasil_proses(db, proc.jasa_id, jenis),
         curah_kemas_ulang=True, kemasan_mengurangi_stok=False,
@@ -489,7 +491,7 @@ async def catat_broken(
 
 # ─────────────────────────── Stok ───────────────────────────
 async def hitung_stok_bekatul(
-    db: AsyncSession, *, jasa_id: int | list[int] | None = None,
+    db: AsyncSession, *, jasa_id: int | list[int] | None = None, user=None,
 ) -> float:
     """Stok bekatul curah (kg) = masuk − keluar (barang keluar byproduct_curah).
 
@@ -501,12 +503,15 @@ async def hitung_stok_bekatul(
     `HASIL_DITAHAN_BAWAAN`, dan parameter ini yang membuat pembalikannya tak
     perlu menulis ulang fungsi ini — cuma memanggilnya dengan `jasa_id` terisi.
     """
-    def milik(k):
+    from app.services.cakupan_fasilitas import batas
+    def milik_asal(k):
         if jasa_id is None:
             return k.jasa_id.is_(None)
         if isinstance(jasa_id, (list, tuple, set, frozenset)):
             return k.jasa_id.in_(jasa_id)
         return k.jasa_id == jasa_id
+
+    def milik(k):return milik_asal(k) & batas(user,k)
 
     masuk = (
         await db.execute(
@@ -529,7 +534,7 @@ async def hitung_stok_bekatul(
 
 
 async def hitung_stok_broken_curah(
-    db: AsyncSession, *, jasa_id: int | list[int] | None = None,
+    db: AsyncSession, *, jasa_id: int | list[int] | None = None, user=None,
 ) -> float:
     """Stok broken curah (kg), BELUM dipindah ke silo = masuk − keluar − terpakai.
 
@@ -557,12 +562,15 @@ async def hitung_stok_broken_curah(
     broken curah sudah ADA sejak "Pengambilan barang jasa" (11 Oktober
     2026), jadi suku ini tak lagi dorman — tetap perlu benar sekarang.
     """
-    def milik(k):
+    from app.services.cakupan_fasilitas import batas
+    def milik_asal(k):
         if jasa_id is None:
             return k.jasa_id.is_(None)
         if isinstance(jasa_id, (list, tuple, set, frozenset)):
             return k.jasa_id.in_(jasa_id)
         return k.jasa_id == jasa_id
+
+    def milik(k):return milik_asal(k) & batas(user,k)
 
     masuk = float((
         await db.execute(
@@ -588,7 +596,7 @@ async def hitung_stok_broken_curah(
         )
     ).scalar_one())
     from app.services.retur_supplier_stok import keluar as keluar_supplier
-    retur=await keluar_supplier(db,tipe='byproduct_curah',jenis='broken') if jasa_id is None else (0,0)
+    retur=await keluar_supplier(db,tipe='byproduct_curah',jenis='broken',user=user) if jasa_id is None else (0,0)
     return masuk - keluar - terpakai - float(retur[0])
 
 
@@ -671,7 +679,7 @@ async def hitung_stok_byproduct_total(
 
 async def hitung_stok_finished_goods(
     db: AsyncSession, sku_id: int, standard_id: int | None,
-    *, jasa_id: int | None = None,
+    *, jasa_id: int | None = None, user=None,
 ) -> dict:
     """Stok barang jadi (karung, kg) per SKU+grade = masuk produksi − keluar.
 
@@ -685,7 +693,9 @@ async def hitung_stok_finished_goods(
     pesanan itu yang belum diambil pemiliknya. Satu fungsi, satu rumus, dua
     pertanyaan — bukan dua fungsi yang suatu hari berbeda cara menghitungnya.
     """
+    from app.services.cakupan_fasilitas import batas
     def _std(q):
+        q=q.where(batas(user,FinishedGoodsStock))
         if standard_id is None:
             return q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
         return q.where(FinishedGoodsStock.rice_quality_standard_id == standard_id)
@@ -730,13 +740,14 @@ async def hitung_stok_finished_goods(
         OutgoingItem.jasa_id.is_(None) if jasa_id is None
         else OutgoingItem.jasa_id == jasa_id,
     )
+    oq=oq.where(batas(user,OutgoingItem))
     if standard_id is None:
         oq = oq.where(OutgoingItem.rice_quality_standard_id.is_(None))
     else:
         oq = oq.where(OutgoingItem.rice_quality_standard_id == standard_id)
     ok, okg = (await db.execute(oq)).one()
     from app.services.retur_supplier_stok import keluar as keluar_supplier
-    rk,rn=await keluar_supplier(db,tipe='finished_goods',sku=sku_id,std=standard_id) if jasa_id is None else (0,0)
+    rk,rn=await keluar_supplier(db,tipe='finished_goods',sku=sku_id,std=standard_id,user=user) if jasa_id is None else (0,0)
     return {"karung": int(mk) - int(ok) - int(rn), "kg": float(mkg) - float(okg) - float(rk)}
 
 

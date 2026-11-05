@@ -85,6 +85,9 @@ async def view_untuk(user: User | None) -> str:
             return P.view(user.role, P.G2)
         if await _is_g1_operator(user):
             return P.view(user.role, P.G1)
+        from app.web.api import _is_milling_operator,_is_polishing_operator,_is_drying_operator
+        if await _is_polishing_operator(user):return P.view(user.role,P.G2)
+        if await _is_milling_operator(user) or await _is_drying_operator(user):return P.view(user.role,P.G1)
         return P.view(user.role, P.TANPA)
     return P.view(user.role, P.SEMUA)
 

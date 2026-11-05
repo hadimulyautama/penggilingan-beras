@@ -27,8 +27,8 @@ def cap(value):
 
 
 async def konteks(db, *, lot_id, user, kunci=False):
-    from app.web.api import _is_g1_operator
-    if not await _is_g1_operator(user):
+    from app.services.cakupan_fasilitas import boleh_objek
+    if not await boleh_objek(db,user,DryingLot,lot_id):
         raise PermissionError('Pencatatan bobot pengeringan mengikuti izin Gudang 1 pada peran efektif.')
     q=select(DryingLot).where(DryingLot.id==lot_id)
     lot=await db.scalar(q.with_for_update() if kunci else q)

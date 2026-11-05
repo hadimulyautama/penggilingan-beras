@@ -14,10 +14,10 @@
 {%- endmacro %}
 {% set diterima=catatan|rejectattr('status','equalto','ditolak')|list %}
 {% set nama_jenis=tiket.jenis_nama or {'gabah_basah':'Gabah basah','gabah_kering':'Gabah kering','pk':'PK','beras':'Beras','broken':'Broken'}.get(jenis,tiket.jenis_kode) %}
-{% set nama_gudang='Gudang 1' if jenis in ['gabah_basah','gabah_kering'] else 'Gudang 2' if jenis in ['pk','beras','broken'] else 'Gudang belum diketahui' %}
+{% set nama_gudang=(catatan|map(attribute='gudang_nama')|unique|join(' · ')) if catatan else ('Gudang dipilih saat penerimaan' if jenis in ['gabah_basah','gabah_kering','pk','beras','broken'] else 'Gudang belum diketahui') %}
 <main class="penerimaan-detail bm" data-penerimaan-ringkas data-editor-perintah data-tiket="{{ tiket.id }}" data-kembali="{{ kembali }}" data-buka="{{ buka }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
 <header class="bm-kepala">
- <p class="bm-meta">{{ nama_gudang }} · Barang Masuk</p>
+ <p class="bm-meta" data-gudang-penerima-label>{{ nama_gudang }} · Barang Masuk</p>
  <h1>{{ nama_jenis }}</h1><p><strong>{{ tiket.kode }}</strong></p>
  <p>{{ 'Pelanggan / pemilik' if tiket.jasa else 'Supplier' }}: {{ (tiket.nama_pelanggan or tiket.pihak_nama or 'Belum tercatat') if tiket.jasa else tiket.nama_supplier or tiket.pihak_nama or 'Belum tercatat' }}{% if tiket.jasa_kode and tiket.jasa_id %} · {% if awal.boleh_audit %}<a href="/jasa/{{ tiket.jasa_id }}">{{ tiket.jasa_kode }}</a>{% else %}{{ tiket.jasa_kode }}{% endif %}{% endif %}</p>
  <p class="bm-meta">{% if timbang and timbang.cara_timbang=='PARTAI' %}Partai kecil{% else %}{{ tiket.nomor_polisi or 'Nomor polisi belum tercatat' }} · {{ tiket.nama_sopir or 'Sopir belum tercatat' }}{% endif %}</p>
@@ -33,7 +33,7 @@
 <section class="terima-panel" aria-label="Penerimaan dan tindakan berikutnya">
  {% if catatan %}
  <h2>{{ 'Penerimaan sudah tercatat' if diterima else 'Penolakan tercatat' }}</h2>
- {% for c in catatan %}<article class="bm-catatan"><h3>{{ c.kode }}{% if c.penolakan %} · {{ c.penolakan.kode }}{% endif %}</h3><dl class="bm-valores"><div><dt>Bobot {{ 'ditolak' if c.status=='ditolak' else 'penerimaan' }}</dt><dd>{{ kg(c.berat) }}</dd></div><div><dt>Sumber / kepastian</dt><dd>{{ c.sumber_berat }}{% if c.sumber_berat in ['perkiraan','menunggu'] %} · Belum final{% endif %}</dd></div><div><dt>Pemilik stok</dt><dd>{{ c.pemilik }}{% if c.pesanan %} · {% if awal.boleh_audit %}<a href="/jasa/{{ c.jasa_id }}">{{ c.pesanan }}</a>{% else %}{{ c.pesanan }}{% endif %}{% endif %}</dd></div><div><dt>Status catatan</dt><dd>{{ c.status|replace('_',' ') }}</dd></div></dl><p class="bm-meta">{{ c.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu belum tercatat' }} · {{ petugas.get(c.petugas_id,'Pencatat belum diketahui') }}</p>{% if c.penolakan %}<p>Alasan penolakan: {{ c.penolakan.alasan }}</p><p class="bm-meta">PK ditolak tidak ditambahkan ke stok.</p>{% endif %}</article>{% endfor %}
+ {% for c in catatan %}<article class="bm-catatan"><div><h3>{{ c.kode }}{% if c.penolakan %} · {{ c.penolakan.kode }}{% endif %}</h3><dl class="bm-valores"><div><dt>Bobot {{ 'ditolak' if c.status=='ditolak' else 'penerimaan' }}</dt><dd>{{ kg(c.berat) }}</dd></div><div><dt>Sumber / kepastian</dt><dd>{{ c.sumber_berat }}{% if c.sumber_berat in ['perkiraan','menunggu'] %} · Belum final{% endif %}</dd></div><div><dt>Gudang penerima</dt><dd>{{ c.gudang_nama or "Lokasi belum tercatat" }}</dd></div><div><dt>Pemilik stok</dt><dd>{{ c.pemilik }}{% if c.pesanan %} · {% if awal.boleh_audit %}<a href="/jasa/{{ c.jasa_id }}">{{ c.pesanan }}</a>{% else %}{{ c.pesanan }}{% endif %}{% endif %}</dd></div><div><dt>Status catatan</dt><dd>{{ c.status|replace('_',' ') }}</dd></div></dl><p class="bm-meta">{{ c.waktu|jam('%d/%m/%Y · %H:%M') or 'Waktu belum tercatat' }} · {{ petugas.get(c.petugas_id,'Pencatat belum diketahui') }}</p>{% if c.penolakan %}<p>Alasan penolakan: {{ c.penolakan.alasan }}</p><p class="bm-meta">PK ditolak tidak ditambahkan ke stok.</p>{% endif %}</div>{% if awal.boleh_audit and c.status!='ditolak' %}<section class="kgp" data-koreksi-gudang data-tiket="{{ tiket.id }}" data-jenis="{{ c.model }}" data-id="{{ c.id }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}"><button class="btn" type="button" data-kgp-buka>Koreksi gudang penerimaan</button><div data-kgp-panel hidden aria-live="polite"></div></section>{% endif %}</article>{% endfor %}
  {% endif %}
  <div data-formulir></div>
  {% if not menunggu %}<p class="bm-meta">{{ 'Penerimaan tidak otomatis memulai proses atau menyelesaikan QC. Lokasi dan pekerjaan lanjutan mengikuti keadaan barang.' if diterima else 'Tiket ini tidak sedang ditawarkan untuk penerimaan. Periksa status dan catatan terkait.' }}</p>{% endif %}
@@ -67,8 +67,10 @@
 </section>
 </main>
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<link rel="stylesheet" href="/static/koreksi-gudang-penerimaan.css?v=20261105.1">
+<script src="/static/koreksi-gudang-penerimaan.js?v=20261105.1" defer></script>
 <script id="penerimaan-awal" type="application/json">{{ awal|tojson }}</script>
-<script src="/static/penerimaan-ringkas.js?v={{ VERSI }}&bm=20261104.qc4" defer></script>
+<script src="/static/penerimaan-ringkas.js?v={{ VERSI }}&bm=20261105.fasilitas1" defer></script>
 <script src="/static/pdf-penerimaan.js?v={{ VERSI }}&bagikan=1" defer></script>
 {% endblock %}
 {% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka_lama,nilai if buka_lama else '') }}{% endblock %}

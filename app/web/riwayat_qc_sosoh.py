@@ -5,13 +5,14 @@ from sqlalchemy import func, select
 from app.database import SessionLocal
 from app.models import PolishingProcess, SampelQcSosoh
 from app.services.qc_sosoh import data_proses
+from app.services.cakupan_fasilitas import batas
 from app.web.portal.scope import is_customer_read
 from app.web.tampilan import render_laci
 
 
 async def halaman(request, referensi=None):
     lingkup = (PolishingProcess.id.in_(request.state.portal_scope.ids(PolishingProcess))
-               if is_customer_read(request) else True)
+               if is_customer_read(request) else batas(request.state.akun.user,PolishingProcess))
     async with SessionLocal() as db:
         if referensi is not None:
             proc = await db.scalar(select(PolishingProcess).where(

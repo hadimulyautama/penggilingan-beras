@@ -19,8 +19,12 @@ def kueri():
     return select(func.coalesce(func.sum(efektif('bobot_kg')),0),func.coalesce(func.sum(efektif('jumlah')),0)).select_from(A).join(I,I.id==A.item_id).join(K,K.retur_supplier_id==I.retur_supplier_id)
 
 
-async def keluar(db,*,sumber=None,tipe=None,sku=None,std=None,jenis=None):
+async def keluar(db,*,sumber=None,tipe=None,sku=None,std=None,jenis=None,user=None):
     q=kueri()
+    if user is not None:
+        from hmu_identitas import peran as P
+        if getattr(user,'stock_warehouse_filter',None) is not None:q=q.where(I.warehouse_id==user.stock_warehouse_filter)
+        elif not P.admin_keatas(user.role):q=q.where(I.warehouse_id==user.default_warehouse_id)
     if sumber is not None:q=q.where(I.kunci_sumber==sumber)
     if tipe is not None:q=q.where(I.tipe_pool==tipe)
     if sku is not None:q=q.where(I.product_sku_id==sku,I.rice_quality_standard_id==std)

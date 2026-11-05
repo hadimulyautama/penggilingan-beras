@@ -20,10 +20,10 @@
     let j;try{j=await r.json();}catch(_){const e=Error('Balasan server belum lengkap.');e.status=r.status>=500?r.status:undefined;throw e;}
     if(!r.ok){const e=Error(typeof j.detail==='string'?j.detail:Array.isArray(j.detail)?j.detail.map(x=>(x.loc||[]).filter(v=>v!=='body').join('.')+': '+x.msg).join(' • '):'Pencatatan belum dapat dilakukan. Periksa status dan isian.');e.status=r.status;throw e;}return j;
   }finally{clearTimeout(timer);}}
-  function selectField(field,values,value){const l=el('label',field.label),s=el('select');s.name=field.name;s.setAttribute('aria-label',field.label);s.append(new Option('Pilih '+(field.name==='tujuan'?'tujuan penerimaan':'nilai'),''));
+  function selectField(field,values,value){const l=el('label',field.label),s=el('select');s.name=field.name;s.required=!!field.wajib;s.setAttribute('aria-label',field.label);s.append(new Option('Pilih '+(field.name==='tujuan'?'tujuan penerimaan':field.name==='warehouse_id'?'gudang penerima':'nilai'),''));
     for(const o of values){if(o.value==='')continue;const item=new Option(o.label+(o.alasan?' · '+o.alasan:''),o.value);item.disabled=!!o.alasan;s.append(item);}
     if(value&&!values.some(x=>String(x.value)===String(value)))s.append(new Option(value+' · pilihan sebelumnya, periksa ketersediaannya',value));
-    s.value=value??'';s.onchange=()=>{state.forms[state.active][field.name]=s.value;state.dirty=true;persist();};l.append(s);return l;
+    s.value=value??'';s.onchange=()=>{state.forms[state.active][field.name]=s.value;state.dirty=true;if(field.name==='warehouse_id'){const tag=root.querySelector('[data-gudang-penerima-label]');if(tag)tag.textContent=(data.gudang_penerima.find(w=>String(w.value)===s.value)?.label||'Gudang dipilih saat penerimaan')+' · Barang Masuk';state.forms[state.active].tujuan='';persist();render();host.querySelector('[name=warehouse_id]')?.focus();}else persist();};l.append(s);return l;
   }
   function inputField(field,value){const l=el('label',field.label),inp=el(field.name==='alasan'?'textarea':'input');if(inp.tagName==='INPUT')inp.type=field.type==='number'?'number':'text';inp.name=field.name;inp.value=value??'';inp.setAttribute('aria-label',field.label);
     if(field.type==='number'){inp.step=field.name==='jumlah_karung'?'1':'any';inp.inputMode=field.name==='jumlah_karung'?'numeric':'decimal';}
@@ -36,11 +36,14 @@
     if(!a||!data.pending){if(!data.catatan.length)host.append(el('p','Tindakan penerimaan mengikuti status tiket dan catatan terbaru.','bm-meta'));return;}
     if(!a.boleh){host.append(el('h2','Akses pencatatan'),el('p',a.alasan_akses||'Tindakan tidak diizinkan untuk peran efektif ini.'));return;}
     state.active=a.id;state.forms[a.id]??={};
+    if(!state.forms[a.id].warehouse_id&&data.gudang_penerima?.length===1)state.forms[a.id].warehouse_id=String(data.gudang_penerima[0].value);
+    const tag=root.querySelector('[data-gudang-penerima-label]');if(tag)tag.textContent=(data.gudang_penerima?.find(w=>String(w.value)===String(state.forms[a.id].warehouse_id))?.label||'Gudang dipilih saat penerimaan')+' · Barang Masuk';
     const f=el('form',null,'bm-form');f.append(el('h2',a.id==='gabah_masuk'?'Tentukan tujuan penerimaan':a.id==='tolak_pk_luar'?'Tolak PK luar':a.label.replace(/^\S+\s/,'')));
     f.append(el('p',data.tiket.kode+' · '+(data.tiket.nama_pelanggan||data.tiket.nama_supplier||data.tiket.pihak_nama||'Pihak belum tercatat'),'bm-meta'));
     for(const field of a.fields){if(!field.name||field.name==='timbangan_transaksi_id')continue;
       const value=state.forms[a.id][field.name];
-      if(field.name==='tujuan')f.append(selectField(field,data.tujuan,value));
+      if(field.name==='warehouse_id')f.append(selectField(field,data.gudang_penerima||[],value));
+      else if(field.name==='tujuan')f.append(selectField(field,data.tujuan.filter(x=>!x.warehouse_id||String(x.warehouse_id)===String(state.forms[a.id].warehouse_id)),value));
       else if(field.type==='select')f.append(selectField(field,(field.options||[]).map(x=>({value:x[0],label:x[1]})),value));
       else f.append(inputField(field,value));
     }
@@ -75,7 +78,7 @@
     finally{if(!automatic)busy=false;render();}
   }
   async function submit(a){if(busy||state.uncertain||!a.boleh)return;error.hidden=true;message.hidden=true;checked=null;
-    const body=payload(a);state.before=ids(data);state.inflight=true;persist();busy=true;render();
+    const body=payload(a);if(a.id!=='tolak_pk_luar'&&!body.warehouse_id){notice('Pilih gudang penerima.',true);return;}state.before=ids(data);state.inflight=true;persist();busy=true;render();
     try{const out=await call(a.post,body);if(out.ok!==true)throw Error('Hasil pencatatan belum lengkap.');await readStatus(true,out.pesan||'');}
     catch(e){state.inflight=false;state.uncertain=!e.status||e.status>=500||e.status===409;
       notice(state.uncertain?'Status pencatatan perlu diperiksa. '+(e.status===409?e.message:'Balasan belum dapat dipastikan; isian dipertahankan. Jangan mengirim ulang sebelum membaca status terbaru.'):e.message,true);persist();}

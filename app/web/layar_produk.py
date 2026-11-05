@@ -33,6 +33,7 @@ pada perubahan berikutnya.
 """
 from __future__ import annotations
 
+from app.web.portal.scope import is_customer_read
 from app.peran import can_see_financials
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -59,8 +60,8 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis:
     if view == SELEPAN:
         raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
-        kartu = await svc.stok_produk(db)
-        bj = await svc.barang_jadi_g2(db)
+        kartu = await svc.stok_produk(db, user=None if is_customer_read(request) else akun.user)
+        bj = await svc.barang_jadi_g2(db, user=None if is_customer_read(request) else akun.user)
     # Rincian kemasan digantung ke kartu kategorinya lewat `jenis` — kunci yang
     # sama yang dipakai `stok.jenis_produk`, jadi tak ada pemetaan kedua yang
     # bisa berselisih. Angkanya NETO (masuk − keluar) seperti di layar barang
@@ -281,10 +282,10 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
             proc_per_jasa.setdefault(jid, []).append(pid)
 
         boleh_pindah = can_see_financials(akun.user)
-        bj = await svc.barang_jadi_g2(db)
+        bj = await svc.barang_jadi_g2(db, user=None if is_customer_read(request) else akun.user)
         daftar = []
         for pelanggan_id, jasa_ids in jasa_per_pelanggan.items():
-            kartu = await svc.stok_produk(db, jasa_id=jasa_ids)
+            kartu = await svc.stok_produk(db, jasa_id=jasa_ids, user=None if is_customer_read(request) else akun.user)
             bekatul_kg = sum(
                 bekatul_per_proc.get(pid, 0.0)
                 for jid in jasa_ids for pid in proc_per_jasa.get(jid, []))
@@ -392,16 +393,17 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
     if len(owners) > 1:
         async with SessionLocal() as db:
             for owner in owners:
-                cards[owner] = next((c for c in await svc.stok_produk(db,jasa_id=owner)
+                cards[owner] = next((c for c in await svc.stok_produk(db,jasa_id=owner,user=None if is_customer_read(request) else user)
                                      if c.jenis == jenis), None)
 
     from app.models import FinishedGoodsStock, ProductSku, RiceQualityStandard
     from sqlalchemy import select
+    from app.services.cakupan_fasilitas import batas
     async with SessionLocal() as db:
         sisa_rows=(await db.execute(select(FinishedGoodsStock,ProductSku.kategori,RiceQualityStandard.kode)
             .join(ProductSku,ProductSku.id==FinishedGoodsStock.product_sku_id)
             .outerjoin(RiceQualityStandard,RiceQualityStandard.id==FinishedGoodsStock.rice_quality_standard_id)
-            .where(FinishedGoodsStock.curah_kemas_ulang.is_(True),FinishedGoodsStock.berat_total_kg>0,
+            .where(FinishedGoodsStock.curah_kemas_ulang.is_(True),FinishedGoodsStock.berat_total_kg>0,batas(None if is_customer_read(request) else user,FinishedGoodsStock),
                 FinishedGoodsStock.jasa_id.is_(None) if owners == [None] else FinishedGoodsStock.jasa_id.in_(owners)))).all()
         sisa_rows=[r for r in sisa_rows if svc.jenis_produk(r[1],r[2])==jenis]
     def kemas_href(sku_id,std_id,owner):

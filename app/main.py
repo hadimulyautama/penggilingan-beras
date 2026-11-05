@@ -42,6 +42,7 @@ from app.web.riwayat_retur_supplier import router as riwayat_retur_supplier_rout
 from app.web.retur_supplier_koreksi import router as retur_supplier_koreksi_router
 from app.web.layar_produk import router as produk_router
 from app.web.layar_riwayat import router as riwayat_router
+from app.web.koreksi_gudang_penerimaan import router as koreksi_gudang_penerimaan_router
 from app.web.penerimaan_ringkas import router as penerimaan_ringkas_router
 from app.web.giling_ringkas import router as giling_ringkas_router
 from app.web.sosoh_ringkas import router as sosoh_ringkas_router
@@ -88,6 +89,8 @@ from app.web.layar_pekerjaan import router as pekerjaan_router
 app.include_router(pekerjaan_router)
 app.include_router(berjalan_router)
 app.include_router(audit_router)
+from app.web.fasilitas import router as fasilitas_router
+app.include_router(fasilitas_router)
 app.include_router(pengaturan_router)
 app.include_router(mode_uji_router)
 app.include_router(keputusan_router)
@@ -114,6 +117,7 @@ app.include_router(retur_supplier_koreksi_router)
 app.include_router(jasa_router)
 app.include_router(serah_terima_router)
 app.include_router(penerimaan_ringkas_router)
+app.include_router(koreksi_gudang_penerimaan_router)
 app.include_router(giling_ringkas_router)
 app.include_router(sosoh_ringkas_router)
 app.include_router(sosoh_router)
@@ -665,3 +669,4 @@ app.include_router(kepemilikan_router)
 
 from app.web.pengemasan_otomatis import router as pengemasan_otomatis_router
 app.include_router(pengemasan_otomatis_router)
+

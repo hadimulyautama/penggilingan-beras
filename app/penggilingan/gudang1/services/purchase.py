@@ -267,6 +267,7 @@ async def create_purchase_batch(
     db: AsyncSession,
     *,
     user: User,
+    warehouse_id: int | None = None,
     nama_supplier: str,
     berat_kg: float,
     kondisi_gabah: str,
@@ -293,6 +294,7 @@ async def create_purchase_batch(
     hari = tanggal_lokal(now)
     kode = await next_purchase_batch_code(db, hari)
     batch = PurchaseBatch(
+        warehouse_id=warehouse_id,
         kode_batch=kode,
         supplier_id=supplier.id,
         berat_total_kg=berat_kg,
@@ -331,6 +333,7 @@ async def create_purchase_batch_dari_timbang(
     db: AsyncSession,
     *,
     user: User,
+    warehouse_id: int | None = None,
     timbangan_transaksi_id: int,
     kadar_air_awal_persen: float | None = None,
     kondisi_gabah: str | None = None,
@@ -431,6 +434,9 @@ async def create_purchase_batch_dari_timbang(
     if kunci_kiriman:
         ada = await _batch_dari_kunci(db, kunci_kiriman)
         if ada is not None:
+            from app.services.cakupan_fasilitas import lokasi
+            if warehouse_id is not None and await db.scalar(select(lokasi(PurchaseBatch)).where(PurchaseBatch.id==ada.id))!=warehouse_id:
+                raise ValueError('Penerimaan sudah tercatat pada gudang berbeda. Periksa catatan tersimpan.')
             # Kiriman ULANG: pesanannya — kalau ada — sudah lahir di kiriman
             # pertama. Membuatnya lagi di sini berarti satu truk melahirkan dua
             # pesanan hanya karena jaringannya buruk.
@@ -450,6 +456,7 @@ async def create_purchase_batch_dari_timbang(
 
     kode = await next_purchase_batch_code(db, hari)
     muatan = {
+        "warehouse_id": warehouse_id,
         "kode_batch": kode, "timbangan_transaksi_id": timbangan_transaksi_id,
         "tiket_kode": tiket.get("kode"),
         "supplier_id": supplier.id if supplier else None,
@@ -475,6 +482,8 @@ async def create_purchase_batch_dari_timbang(
     if not e.baru:
         ada = await _batch_dari_kunci(db, kunci_kiriman)
         if ada is not None:
+            if warehouse_id is not None and ada.warehouse_id not in (None,warehouse_id):
+                raise ValueError("Penerimaan sudah tercatat pada gudang berbeda.")
             return CreatedBatch(batch=ada, supplier=supplier, supplier_created=False,
                                 jasa=jasa_ini)
 
@@ -483,6 +492,7 @@ async def create_purchase_batch_dari_timbang(
     # Cermin untuk layar & laporan lama — bentuknya persis seperti sebelum
     # Tahap 3, ditambah penunjuk ke peristiwanya.
     batch = PurchaseBatch(
+        warehouse_id=warehouse_id,
         kode_batch=kode,
         # TEPAT SATU dari keduanya — `ck_purchase_batches_beli_atau_jasa`.
         supplier_id=supplier.id if supplier else None,

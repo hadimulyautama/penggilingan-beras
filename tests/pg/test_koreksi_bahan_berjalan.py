@@ -214,7 +214,7 @@ async def test_sisa_sosoh_mengalir_ke_siklus_berikutnya_yang_masih_berjalan(pg,r
     uid,kode,mid,it=running
     async with pg() as db:
         u=await db.get(User,uid)
-        next_pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'])).proc
+        next_pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'],lini_id=await line_kedua_khusus_uji(db))).proc
         nid=next_pr.id
         assert (await db.scalar(select(PolishingSiloUsage).where(PolishingSiloUsage.polishing_process_id==nid))).berat_awal_kg==500
     r,_=await save(pg,uid,kode,bahan=[dict(id=mid,sumber=str(it),jumlah=56)])
@@ -411,7 +411,7 @@ async def test_siklus_lanjutan_selesai_dilindungi_dari_koreksi_bahan(pg,running)
     uid,kode,mid,it=running
     async with pg() as db:
         u=await db.get(User,uid)
-        nxt=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'])).proc
+        nxt=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'],lini_id=await line_kedua_khusus_uji(db))).proc
         await p.catat_output(db,user=u,kode=nxt.kode_proses,jenis='medium',berat_kumulatif=450)
         await p.catat_output(db,user=u,kode=nxt.kode_proses,jenis='broken',berat_kumulatif=50)
         await p.selesai_penyosohan(db,user=u,kode=nxt.kode_proses,nama_silo='A',sisa_kg=0)
@@ -449,15 +449,15 @@ async def test_jawaban_http_putus_setelah_commit_diperiksa_sebelum_retry(pg,runn
         assert await db.scalar(select(func.count()).select_from(Peristiwa).where(Peristiwa.jenis==s.JENIS))==1
 
 @pytest.mark.parametrize('kind,scope,allowed',[('giling','g1',True),('giling','g2',False),('sosoh','g2',True),('sosoh','g1',False),('giling','none',False),('sosoh','none',False)])
-async def test_operator_scope_koreksi_tetap_terbatas(monkeypatch,kind,scope,allowed):
-    from types import SimpleNamespace
-    import app.peran
-    async def wh(db,user):return scope
-    monkeypatch.setattr(app.peran,'user_wh_scope',wh)
-    user=SimpleNamespace(role='operator')
-    if allowed:await s.izin(None,user,kind)
-    else:
-        with pytest.raises(PermissionError):await s.izin(None,user,kind)
+async def test_operator_scope_koreksi_tetap_terbatas(pg,kind,scope,allowed):
+    from tests.pg.test_fasilitas import dunia as fasilitas_uji
+    from app.models import User
+    _,wh,ops=await fasilitas_uji(pg)
+    user=ops[0] if scope=='g1' else ops[1] if scope=='g2' else User(role='operator',nama='Tanpa gudang')
+    async with pg() as db:
+        if allowed:await s.izin(db,user,kind)
+        else:
+            with pytest.raises(PermissionError):await s.izin(db,user,kind)
 
 async def test_operator_koreksi_hasil_sosoh_saat_jeda(pg,running):
     uid,kode,mid,it=running
@@ -480,3 +480,11 @@ async def test_operator_koreksi_giling_bahan_hasil(pg,hasil):
         st=await db.get(SiloStorage,src.silo_storage_id);key=f'batch:{st.purchase_batch_id}'
     r,_=await save(pg,u.id,pr.kode_proses,jenis='giling',bahan=[dict(id=st.id,sumber=key,jumlah=5800)],hasil={'pk':5900})
     assert r['hasil']['sesudah']['outputs']['pk']==5900
+
+async def line_kedua_khusus_uji(db):
+    # Dua proses berbarengan memerlukan dua alat eksplisit, bukan dua run pada line yang sama.
+    from app.models import LiniProduksi,JenisProsesProduksi,Warehouse
+    jid=await db.scalar(select(JenisProsesProduksi.id).where(JenisProsesProduksi.kode=='penyosohan'))
+    wid=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g2'))
+    row=LiniProduksi(kode='sosoh-koreksi-uji-2',nama='Line kedua hanya data uji',warehouse_id=wid,jenis_proses_id=jid,aktif=True,versi=1)
+    db.add(row);await db.flush();return row.id

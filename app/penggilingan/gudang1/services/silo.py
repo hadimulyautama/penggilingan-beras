@@ -73,7 +73,7 @@ async def _g1_warehouse_id(db: AsyncSession) -> int:
 
 
 @baca_sesi
-async def silos_g1(db: AsyncSession) -> list[Silo]:
+async def silos_g1(db: AsyncSession, warehouse_id: int | None = None) -> list[Silo]:
     """Semua silo gabah kering Gudang 1, urut nama.
 
     Jumlahnya BUKAN dua. Ia ditentukan baris yang ada di tabel, dan Direksi
@@ -85,8 +85,8 @@ async def silos_g1(db: AsyncSession) -> list[Silo]:
     # memakai _g1_warehouse_id/silo_g1_by_id dan menolak tujuan tak sah.
     return list((await db.execute(
         select(Silo).join(Warehouse, Silo.warehouse_id == Warehouse.id)
-        .where(Warehouse.kode_fungsi == "g1", Warehouse.aktif.is_(True),
-               Silo.aktif.is_(True)).order_by(Silo.nama_silo)
+        .where((Warehouse.id == warehouse_id if warehouse_id is not None else Warehouse.kode_fungsi == "g1"), Warehouse.aktif.is_(True),
+               Silo.aktif.is_(True), ((Warehouse.kode_fungsi == "g1") | (Silo.jenis_isi == "gabah"))).order_by(Silo.nama_silo)
     )).scalars().all())
 
 
@@ -97,8 +97,8 @@ async def silo_g1_by_id(db: AsyncSession, silo_id: int) -> Silo | None:
     )).scalars().first()
 
 
-async def get_g1_silo(db: AsyncSession, letter: str) -> Silo | None:
-    wid = await _g1_warehouse_id(db)
+async def get_g1_silo(db: AsyncSession, letter: str, warehouse_id: int | None = None) -> Silo | None:
+    wid = warehouse_id if warehouse_id is not None else await _g1_warehouse_id(db)
     nama = (letter or "").strip()
     stmt = select(Silo).where(
         Silo.warehouse_id == wid,
@@ -494,7 +494,22 @@ async def masuk_silo(
 ) -> MasukResult:
     if not nama_silo:
         raise SiloError("Sebutkan silo A atau B, contoh: `masukkan PGR-... ke silo A`")
-    silo = await get_g1_silo(db, nama_silo)
+    warehouse_id = None
+    if kode_lot:
+        from app.services.fasilitas import izin_gudang
+        from app.models import Dryer
+        mesin = await db.scalar(select(Dryer).join(DryingLot,DryingLot.dryer_id==Dryer.id).where(DryingLot.kode_lot==kode_lot))
+        if mesin:
+            if not izin_gudang(user,mesin.warehouse_id):raise SiloError('Pengeringan berada di luar gudang kerja Anda.')
+            warehouse_id=mesin.warehouse_id
+    if kode_batch:
+        from app.services.cakupan_fasilitas import lokasi
+        from app.services.fasilitas import izin_gudang
+        batch_wid=await db.scalar(select(lokasi(PurchaseBatch)).where(PurchaseBatch.kode_batch==kode_batch))
+        if batch_wid is not None:
+            if not izin_gudang(user,batch_wid):raise SiloError('Bahan berada di luar gudang kerja Anda.')
+            warehouse_id=batch_wid
+    silo = await get_g1_silo(db, nama_silo, warehouse_id=warehouse_id)
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
     from app.penggilingan.silo_policy import boleh_masuk
@@ -631,6 +646,9 @@ async def masuk_silo(
         ).scalars().first()
         if batch is None:
             raise SiloError(f"Batch {kode_batch} tidak ditemukan.")
+        from app.services.cakupan_fasilitas import lokasi
+        actual=await db.scalar(select(lokasi(PurchaseBatch)).where(PurchaseBatch.id==batch.id))
+        if actual!=silo.warehouse_id:raise SiloError('Gudang sumber berubah. Periksa kembali bahan dan silo tujuan sebelum menyimpan.')
         from app.services.retur_supplier_reservasi import pastikan_sumber_bebas
         try:await pastikan_sumber_bebas(db,f'gabah:{batch.id}')
         except ValueError as exc:raise SiloError(str(exc)) from exc
@@ -951,7 +969,9 @@ async def moving_finished(
 
     # Belum di silo -> lakukan intake (state: di silo + dryer kosong).
     res = await masuk_silo(db, user=user, nama_silo=nama_silo, kode_lot=kode_lot, kode_batch=None)
-    silo = await get_g1_silo(db, res.nama_silo)
+    from app.models import Dryer
+    dryer = await db.get(Dryer,lot.dryer_id) if lot.dryer_id else None
+    silo = await get_g1_silo(db, res.nama_silo,warehouse_id=dryer.warehouse_id if dryer else None)
     ml = SiloMovingLog(
         drying_lot_id=lot.id, silo_id=silo.id if silo else None, tipe="selesai",
         waktu=now_local(), input_by=user.id,

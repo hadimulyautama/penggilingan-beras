@@ -66,7 +66,8 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
 
     if jenis not in proses_aktif.JENIS:
         raise HTTPException(404, "Jenis proses tidak ditemukan.")
-    boleh = await (_is_g2_operator(akun.user) if jenis == "sosoh" else _is_g1_operator(akun.user))
+    from app.web.api import _is_drying_operator
+    boleh = await (_is_drying_operator(akun.user,kode_lot=kode) if jenis in ("pengeringan","pendinginan") else _is_g2_operator(akun.user) if jenis == "sosoh" else _is_g1_operator(akun.user))
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Proses ini berada di gudang lain. Pilih gudang kerja yang sesuai.")
     model, kolom = ((PolishingProcess, PolishingProcess.kode_proses) if jenis == "sosoh"

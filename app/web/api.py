@@ -12,6 +12,7 @@ tak perlu layar baru, dan peran yang tak berhak tak pernah menerima bentuk
 formulirnya.
 """
 from __future__ import annotations
+from app.services.cakupan_fasilitas import batas as batas_lokasi
 
 import logging
 from datetime import date, datetime
@@ -320,6 +321,40 @@ async def _is_wh_operator(user: User, kode_fungsi: str) -> bool:
     return wid is not None and user.default_warehouse_id == wid
 
 
+
+async def _is_drying_operator(user, *, kode_lot=None, dryer_id=None):
+    from sqlalchemy import select
+    from app.models import Dryer, DryingLot, Warehouse
+    from app.services.fasilitas import izin_gudang
+    from hmu_identitas import peran as P
+    if not (P.admin_keatas(user.role) or P.normal(user.role)==P.OPERATOR):return False
+    async with SessionLocal() as db:
+        q=select(Dryer).join(Warehouse).where(Warehouse.aktif.is_(True))
+        if kode_lot:
+            q=q.join(DryingLot,DryingLot.dryer_id==Dryer.id).where(DryingLot.kode_lot==kode_lot)
+        if dryer_id:q=q.where(Dryer.id==dryer_id)
+        ds=(await db.execute(q)).scalars()
+        return any(izin_gudang(user,d.warehouse_id) for d in ds)
+
+async def _is_proses_operator(user,jenis,kode):
+    from sqlalchemy import select
+    from app.models import DryingLot,MillingProcess,PolishingProcess
+    from app.services.cakupan_fasilitas import batas,boleh_jenis
+    model= {'pengeringan':DryingLot,'penggilingan':MillingProcess,'giling':MillingProcess,'penyosohan':PolishingProcess,'sosoh':PolishingProcess}.get(jenis)
+    if not model:return False
+    async with SessionLocal() as db:
+        if not await boleh_jenis(db,user,'penggilingan' if model is MillingProcess else 'penyosohan' if model is PolishingProcess else 'pengeringan'):return False
+        col=model.kode_lot if model is DryingLot else model.kode_proses
+        return bool(await db.scalar(select(model.id).where(col==kode,batas(user,model))))
+
+async def _is_jenis_operator(user,kode):
+    from app.services.cakupan_fasilitas import boleh_jenis
+    async with SessionLocal() as db:return await boleh_jenis(db,user,kode)
+
+async def _is_milling_operator(user):return await _is_jenis_operator(user,'penggilingan')
+async def _is_polishing_operator(user):return await _is_jenis_operator(user,'penyosohan')
+async def _is_gabah_operator(user):return await _is_g1_operator(user) or await _is_drying_operator(user)
+
 async def _is_g1_operator(user: User) -> bool:
     """Admin selalu boleh; operator hanya bila Gudang 1 yang sedang dikerjakannya."""
     return await _is_wh_operator(user, "g1")
@@ -330,14 +365,14 @@ async def _is_g2_operator(user: User) -> bool:
     return await _is_wh_operator(user, "g2")
 
 
-async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:
+async def _pilihan_tujuan_gabah(kondisi: str, user=None, warehouse_id=None) -> list[list[str]]:
     """Daftar tujuan yang sah untuk gabah, mesinnya disebut satu per satu.
 
     Mesin tidak digabung jadi satu pilihan "Dryer" lalu ditanya lagi mesin
     mana: itu dua ketukan untuk satu keputusan, dan yang menekannya sedang
     berdiri memegang layar dengan satu tangan.
     """
-    from app.penggilingan.gudang1.services.drying import dryers_g1, isi_dryer
+    from app.penggilingan.gudang1.services.drying import dryers_untuk, isi_dryer
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     jenis = "GABAH_BASAH" if kondisi == "basah" else "GABAH_KERING"
@@ -345,7 +380,7 @@ async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:
     opsi: list[list[str]] = [["", "— belum ditentukan —"]]
     if "dryer" in sah:
         async with SessionLocal() as db:
-            mesin = await dryers_g1(db)
+            mesin = [d for d in await dryers_untuk(db,user) if warehouse_id is None or d.warehouse_id==warehouse_id]
             # ISI mesin ikut disebut. Larangan mencampur gabah basah dengan
             # gabah kering ditegakkan di `masuk_dryer`, tetapi penolakan di
             # sana datang SESUDAH batch-nya tercatat. Yang menekan layar perlu
@@ -367,7 +402,7 @@ async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:
     if "silo" in sah:
         from app.penggilingan.gudang1.services.silo import silos_g1
         async with SessionLocal() as db:
-            for si in await silos_g1(db):
+            for si in await silos_g1(db,warehouse_id=warehouse_id):
                 opsi.append([f"silo:{si.id}", f"{si.nama_silo} (gabah kering)"])
     if "tumpuk" in sah:
         opsi.append(["tumpuk", f"Ditumpuk di lantai (gabah {kondisi})"])
@@ -461,8 +496,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     if g1:
         # Dibangkitkan per permintaan: mesin bisa bertambah lewat Pengaturan,
         # dan daftar tujuan yang ditulis tetap akan diam-diam ketinggalan.
-        TUJUAN_BASAH = await _pilihan_tujuan_gabah("basah")
-        TUJUAN_KERING = await _pilihan_tujuan_gabah("kering")
+        TUJUAN_BASAH = await _pilihan_tujuan_gabah("basah", user)
+        TUJUAN_KERING = await _pilihan_tujuan_gabah("kering", user)
         # Urut sesuai alur kerja operator Gudang 1: terima → keringkan →
         # dinginkan/pindah silo → giling.
         # ATURAN PENAMAAN — label menyebut ISI DAFTARNYA, bukan nama bendanya.
@@ -490,7 +525,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "remote", "source": "/api/actions/timbang-masuk-aktif",
                   "kosong": "Tidak ada tiket timbang gabah yang aktif 7 hari terakhir. Gabah dicatat dari tiket timbang — bukan diketik manual."},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "remote",
-                  "induk": "timbangan_transaksi_id", "source": "/api/actions/tujuan-gabah",
+                  "induk": "timbangan_transaksi_id", "parameter":["warehouse_id"], "source": "/api/actions/tujuan-gabah",
                   "kosong": "Belum ada tujuan yang tersedia untuk tiket ini."},
              ]},
             *[
@@ -701,7 +736,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/drying-done",
                   "kosong": "Tidak ada pengeringan yang sudah selesai didinginkan. Selesaikan pendinginan dulu sebelum memindahkannya ke silo."},
                  {"name": "silo", "label": "Silo tujuan (wajib pilih)",
-                  "type": "remote", "source": "/api/actions/silo-g1",
+                  "type": "remote", "induk": "kode_lot", "source": "/api/actions/silo-g1",
                   "kosong": "Tidak ada silo gabah kering. Tambahkan silo di Pengaturan → Alat."},
              ]},
             # BEBERAPA silo boleh dicentang sekaligus, dan hasilnya TETAP satu
@@ -717,8 +752,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "— boleh beberapa silo sekaligus, dan semuanya jadi SATU "
                      "lot dengan satu rendemen. Di sinilah lot terbentuk.",
              "fields": [
+                 {"name": "lini_id", "label": "Line / alat", "auto_satu": True, "type": "remote", "source": "/api/actions/lini-produksi?jenis=penggilingan", "kosong": "Tidak ada fasilitas yang dapat digunakan."},
                  {"name": "silo", "label": "Silo berisi gabah kering (boleh lebih dari satu)",
-                  "type": "remote_banyak",
+                  "type": "remote_banyak", "parameter": ["lini_id"],
                   "source": "/api/actions/silo-siap-giling",
                   "kosong": "Tidak ada silo berisi gabah kering yang siap digiling."},
              ]},
@@ -1019,8 +1055,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "hint": "Boleh beberapa silo sekaligus — hasilnya satu proses "
                      "penyosohan, dan sisanya dicatat per silo saat selesai.",
              "fields": [
+                 {"name": "lini_id", "label": "Line / alat", "auto_satu": True, "type": "remote", "source": "/api/actions/lini-produksi?jenis=penyosohan", "kosong": "Tidak ada fasilitas yang dapat digunakan."},
                  {"name": "silo", "label": "Silo bahan (boleh lebih dari satu)",
-                  "type": "remote_banyak",
+                  "type": "remote_banyak", "parameter": ["lini_id"],
                   "source": "/api/actions/silo-bahan-g2",
                   "kosong": "Tidak ada silo Gudang 2 berisi bahan yang siap disosoh."},
              ]},
@@ -1383,6 +1420,16 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 {"name": "tanggal", "label": "Tanggal penyesuaian", "type": "date"},
                 {"name": "alasan", "label": "Alasan dan dasar koreksi", "type": "text"}]})
 
+    from app.services.cakupan_fasilitas import pilihan_gudang
+    async with SessionLocal() as db:
+        daftar_gudang = await pilihan_gudang(db,user)
+    gudang_field={"name":"warehouse_id","label":"Gudang penerima","type":"select",
+        "wajib":True,"options":[["","— pilih gudang penerima —"]]+[[w.id,w.nama_gudang] for w in daftar_gudang]}
+    if len(daftar_gudang)==1:gudang_field['bawaan']=daftar_gudang[0].id
+    for aksi in actions:
+        if aksi['id'] in {'gabah_masuk','catat_pk_luar','catat_beras_timbang_masuk','catat_broken_timbang_masuk'}:
+            aksi['fields'].insert(1,dict(gudang_field))
+
     _lengkapi_formulir_jeda(actions)
 
     # Tandai gudang tiap aksi → dipakai layar Catat memisah tab G1/G2 (admin/staff).
@@ -1410,12 +1457,20 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # tempat yang harus sepakat.
     if actions:
         actions[0]["urut_grup"] = URUT_GRUP
+    izin_milling=await _is_milling_operator(user)
+    izin_polishing=await _is_polishing_operator(user)
+    izin_drying=await _is_drying_operator(user)
+    aksi_drying={'gabah_masuk','mulai_pengeringan','kadar_air','ubah_target','selesai_pengeringan','pendinginan','selesai_pendinginan','mulai_pendinginan_ulang','pindah_silo','hentikan_proses','lanjutkan_proses','ubah_kondisi_proses'}
     for a in actions:
         akses = a.get("akses", "catat" if a["id"] == "undo" else "")
         if not akses:
             raise ValueError(f"Aksi belum memiliki aturan akses: {a['id']}")
         a["akses"] = akses
-        a["boleh"] = izin.get(akses, False)
+        a["boleh"] = izin.get(akses, False) or (izin_drying and a["id"] in aksi_drying)
+        if akses=='g1' and a['id'] in {'mulai_giling','hasil_giling','selesai_giling','tutup_silo_giling','tambah_silo_giling','hentikan_proses','lanjutkan_proses','ubah_kondisi_proses'}:
+            a['boleh']=a['boleh'] or izin_milling
+        if akses=='g2' and a['id'] in {'mulai_penyosohan','hasil_penyosohan','selesai_penyosohan','akhiri_penyosohan','tambah_silo_penyosohan','hentikan_penyosohan','lanjutkan_penyosohan','ubah_kondisi_penyosohan'}:
+            a['boleh']=a['boleh'] or izin_polishing
         a["izin_peran"] = matriks(akses)
         a["alasan_akses"] = "" if a["boleh"] else "Tidak diizinkan untuk peran atau gudang kerja Anda."
     return actions
@@ -1670,19 +1725,26 @@ async def _pemilik_isi_silo(db, silo_id: int) -> str | None:
 
 
 @router.get("/actions/silo-g1")
-async def silo_g1(user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def silo_g1(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo gabah kering Gudang 1, beserta isinya sekarang.
 
     Isinya ikut ditampilkan karena silo yang sudah berisi TETAP boleh
     menerima — tetapi orang berhak tahu sebelum memilih, bukan diberi tahu
     lewat peringatan sesudahnya.
     """
-    _require(await _is_g1_operator(user))
+    from sqlalchemy import select
+    _require(await _is_drying_operator(user,kode_lot=induk) if induk else await _is_g1_operator(user) or await _is_drying_operator(user))
     from app.penggilingan.gudang1.services.silo import (
         _silo_content_bobot, _silo_active_rows, isi_silo, silos_g1)
     out = []
     async with SessionLocal() as db:
-        for si in await silos_g1(db):
+        wid=None
+        if induk:
+            from app.models import Dryer, DryingLot
+            _require(await _is_drying_operator(user,kode_lot=induk))
+            wid=await db.scalar(select(Dryer.warehouse_id).join(DryingLot,DryingLot.dryer_id==Dryer.id).where(DryingLot.kode_lot==induk))
+        elif not can_see_financials(user):wid=user.default_warehouse_id
+        for si in await silos_g1(db,warehouse_id=wid):
             bobot = await _silo_content_bobot(db, si.id)
             berisi = bool(await _silo_active_rows(db, si.id))
             isi = f"berisi {bobot.teks()}" if berisi else "kosong"
@@ -1716,7 +1778,7 @@ async def gabah_qc(kondisi: str, user: User = Depends(pengguna_aksi)) -> list[di
                      .where(PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
                      .correlate(PurchaseBatch).scalar_subquery())
         rows = (await db.execute(
-            select(PurchaseBatch, jumlah_qc.label("jumlah_qc")).where(
+            select(PurchaseBatch, jumlah_qc.label("jumlah_qc")).where(batas_lokasi(user,PurchaseBatch)).where(
                 PurchaseBatch.kondisi_gabah == kondisi,
                 PurchaseBatch.dibatalkan_pada.is_(None),
                 jumlah_qc < 5,
@@ -1746,7 +1808,7 @@ async def gabah_qc_bisa_ditutup(user: User = Depends(pengguna_aksi)) -> list[dic
                      .where(PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
                      .correlate(PurchaseBatch).scalar_subquery())
         rows = (await db.execute(
-            select(PurchaseBatch, jumlah_qc.label("jumlah_qc"))
+            select(PurchaseBatch, jumlah_qc.label("jumlah_qc")).where(batas_lokasi(user,PurchaseBatch))
             .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
             .where(PurchaseBatch.dibatalkan_pada.is_(None),
                    PurchaseBatchQc.ditutup_pada.is_(None),
@@ -1843,12 +1905,12 @@ async def dryer_menunggu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     Bukan seluruh mesin: menawarkan mesin kosong hanya menghasilkan penolakan
     "tidak ada gabah di mesin itu" setelah orang memilihnya.
     """
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user))
     from app.penggilingan.gudang1.services.drying import (
-        _loose_dryer_batches, dryers_g1, mode_disarankan)
+        _loose_dryer_batches, dryers_untuk, mode_disarankan)
     out = []
     async with SessionLocal() as db:
-        for d in await dryers_g1(db):
+        for d in await dryers_untuk(db,user):
             batches = await _loose_dryer_batches(db, d.id)
             if not batches:
                 continue
@@ -2061,13 +2123,14 @@ async def act_tempatkan_gabah(req: PindahTumpukanReq,
 
 @router.get("/actions/drying-active")
 async def drying_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user))
     from sqlalchemy import select
-    from app.models import DryingLot
+    from app.models import Dryer, DryingLot
     async with SessionLocal() as db:
         lots = (
             await db.execute(
-                select(DryingLot.kode_lot).where(DryingLot.status == "proses")
+                select(DryingLot.kode_lot).where(batas_lokasi(user,DryingLot)).join(Dryer,Dryer.id==DryingLot.dryer_id).where(
+                    *([] if can_see_financials(user) else [Dryer.warehouse_id==user.default_warehouse_id]),DryingLot.status == "proses")
                 .order_by(DryingLot.id.desc())
             )
         ).scalars().all()
@@ -2082,21 +2145,21 @@ async def proses_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
     lebih dulu: yang berdiri di depan mesin tahu mesin mana yang berhenti,
     bukan istilah apa yang dipakai aplikasi untuknya.
     """
-    _require(await _is_g1_operator(user))
+    _require(await _is_g1_operator(user) or await _is_drying_operator(user) or await _is_milling_operator(user))
     from sqlalchemy import select
     from app.models import DryingLot, MillingProcess
     from app.penggilingan.gudang1.services.jeda import jeda_terbuka
     keluar = []
     async with SessionLocal() as db:
         for lot in (await db.execute(
-            select(DryingLot).where(DryingLot.status == "proses")
+            select(DryingLot).where(batas_lokasi(user,DryingLot)).where(DryingLot.status == "proses")
             .order_by(DryingLot.id.desc())
         )).scalars().all():
             if await jeda_terbuka(db, "pengeringan", lot.id) is None:
                 keluar.append({"value": f"pengeringan:{lot.kode_lot}",
                                "label": f"{lot.kode_lot} · pengeringan"})
         for p in (await db.execute(
-            select(MillingProcess).where(MillingProcess.status == "proses")
+            select(MillingProcess).where(batas_lokasi(user,MillingProcess)).where(MillingProcess.status == "proses")
             .order_by(MillingProcess.id.desc())
         )).scalars().all():
             if await jeda_terbuka(db, "giling", p.id) is None:
@@ -2108,7 +2171,7 @@ async def proses_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
 @router.get("/actions/proses-berhenti")
 async def proses_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Yang sedang berhenti, berikut sebab & sejak kapan."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_g1_operator(user) or await _is_drying_operator(user) or await _is_milling_operator(user))
     from sqlalchemy import select
     from app.database import now_local
     from app.models import DryingLot, JedaProses, MillingProcess
@@ -2137,13 +2200,13 @@ async def proses_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/milling-active")
 async def milling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    _require(await _is_g1_operator(user))
+    _require(await _is_jenis_operator(user,'penggilingan'))
     from sqlalchemy import select
     from app.models import MillingProcess
     async with SessionLocal() as db:
         procs = (
             await db.execute(
-                select(MillingProcess.kode_proses).where(MillingProcess.status == "proses")
+                select(MillingProcess.kode_proses).where(batas_lokasi(user,MillingProcess)).where(MillingProcess.status == "proses")
                 .order_by(MillingProcess.id.desc())
             )
         ).scalars().all()
@@ -2155,7 +2218,7 @@ async def ringkasan_kadar_air(kode_lot: str, tes: list[float] = Query(default=[]
                             indikator: float | None = None,
                             user: User = Depends(pengguna_aksi)):
     """Bantuan baca formulir; tidak mencatat pengukuran atau mengubah target."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=kode_lot))
     from fastapi.responses import JSONResponse
     from app.web.form_kadar_air import ringkasan
     from app.penggilingan.gudang1.services.drying import DryingError
@@ -2171,7 +2234,7 @@ async def ringkasan_kadar_air(kode_lot: str, tes: list[float] = Query(default=[]
 async def ringkasan_selesai_pengeringan(kode_lot: str,
                                       user: User = Depends(pengguna_aksi)):
     """Konteks dan status terbaru, tanpa menulis atau mengganti validasi aksi."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=kode_lot))
     from fastapi.responses import JSONResponse
     from app.web.form_selesai_pengeringan import ringkasan
     from app.penggilingan.gudang1.services.drying import DryingError
@@ -2187,7 +2250,7 @@ async def ringkasan_selesai_pengeringan(kode_lot: str,
 async def ringkasan_hasil_giling(kode_proses: str, berat_kumulatif: float | None = None,
                                 user: User = Depends(pengguna_aksi)):
     """Konteks dan perkiraan baca saja; tidak menjadi syarat baru penyimpanan."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',kode_proses))
     from fastapi.responses import JSONResponse
     from app.web.form_hasil_giling import ringkasan
     from app.penggilingan.gudang1.services.milling import MillingError
@@ -2215,7 +2278,7 @@ async def silo_giling_terbuka(induk: str = "", user: User = Depends(pengguna_aks
     `milling.tutup_silo_giling`), jadi angka yang ditawarkan di sini harus
     sudah menjumlahkannya — bukan baris pertama yang kebetulan ditemukan.
     """
-    _require(await _is_g1_operator(user))
+    _require(await _is_jenis_operator(user,'penggilingan'))
     kode = (induk or "").strip()
     if not kode:
         return []
@@ -2223,7 +2286,7 @@ async def silo_giling_terbuka(induk: str = "", user: User = Depends(pengguna_aks
 
     from app.models import MillingProcess, MillingProcessSource, Silo, SiloStorage
     async with SessionLocal() as db:
-        proc = (await db.execute(select(MillingProcess).where(
+        proc = (await db.execute(select(MillingProcess).where(batas_lokasi(user,MillingProcess)).where(
             MillingProcess.kode_proses == kode))).scalars().first()
         if proc is None:
             return []
@@ -2249,7 +2312,7 @@ async def silo_giling_terbuka(induk: str = "", user: User = Depends(pengguna_aks
 @router.get("/actions/ringkasan-bebaskan-silo-giling")
 async def konteks_bebaskan_silo_giling(kode_proses: str, silo: str = "", sisa: float | None = None,
                                       user: User = Depends(pengguna_aksi)):
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',kode_proses))
     from math import isfinite
     if sisa is not None and not isfinite(sisa):
         raise HTTPException(422, "Sisa harus berupa angka terbatas.")
@@ -2266,7 +2329,7 @@ async def konteks_bebaskan_silo_giling(kode_proses: str, silo: str = "", sisa: f
 
 @router.get("/actions/ringkasan-tambah-silo-giling")
 async def konteks_tambah_silo_giling(kode_proses: str, silo: str = "", user: User = Depends(pengguna_aksi)):
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',kode_proses))
     from fastapi.responses import JSONResponse
     from app.web.form_tambah_silo_giling import ringkasan
     from app.penggilingan.gudang1.services.milling import MillingError
@@ -2307,7 +2370,7 @@ async def silo_g1_tambah(induk: str = "", user: User = Depends(pengguna_aksi)) -
     from app.penggilingan.gudang1.services.silo import (
         _silo_active_rows, _silo_content_kg, giling_berjalan_untuk_silo, silos_g1)
     async with SessionLocal() as db:
-        proc = (await db.execute(select(MillingProcess).where(
+        proc = (await db.execute(select(MillingProcess).where(batas_lokasi(user,MillingProcess)).where(
             MillingProcess.kode_proses == kode))).scalars().first()
         if proc is None:
             return []
@@ -2334,7 +2397,7 @@ class TambahSiloGilingReq(BaseModel):
 @router.post("/actions/tambah-silo-giling")
 async def act_tambah_silo_giling(req: TambahSiloGilingReq,
                                  user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',req.kode_proses))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses gilingnya dulu.")
     if not (req.silo or "").strip():
@@ -2361,14 +2424,15 @@ async def act_tambah_silo_giling(req: TambahSiloGilingReq,
 async def cooling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Lot selesai dikeringkan, masih DIDINGINKAN (belum dinyatakan selesai
     pendinginan) & masih di dryer."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user))
     from sqlalchemy import exists, select
-    from app.models import DryingLot, SiloStorage
+    from app.models import Dryer, DryingLot, SiloStorage
     async with SessionLocal() as db:
         belum_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
         lots = (
             await db.execute(
-                select(DryingLot.kode_lot).where(
+                select(DryingLot.kode_lot).where(batas_lokasi(user,DryingLot)).join(Dryer,Dryer.id==DryingLot.dryer_id).where(
+                    *([] if can_see_financials(user) else [Dryer.warehouse_id==user.default_warehouse_id]),
                     DryingLot.status == "selesai",
                     DryingLot.dryer_id.is_not(None),
                     DryingLot.waktu_selesai_pendinginan.is_(None),
@@ -2383,14 +2447,15 @@ async def cooling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
 async def drying_done(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Lot yang sudah SELESAI PENDINGINAN (dryer idle) tapi belum dipindah ke
     silo — siap dipindah."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user))
     from sqlalchemy import exists, select
-    from app.models import DryingLot, SiloStorage
+    from app.models import Dryer, DryingLot, SiloStorage
     async with SessionLocal() as db:
         belum_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
         lots = (
             await db.execute(
-                select(DryingLot.kode_lot).where(
+                select(DryingLot.kode_lot).where(batas_lokasi(user,DryingLot)).join(Dryer,Dryer.id==DryingLot.dryer_id).where(
+                    *([] if can_see_financials(user) else [Dryer.warehouse_id==user.default_warehouse_id]),
                     DryingLot.status == "selesai",
                     DryingLot.dryer_id.is_not(None),  # kering-langsung sudah di silo
                     DryingLot.waktu_selesai_pendinginan.is_not(None),
@@ -2402,9 +2467,9 @@ async def drying_done(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/silo-siap-giling")
-async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def silo_siap_giling(lini_id: int | None = None, user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 1 yang ADA isinya & tak sedang digiling."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_jenis_operator(user,'penggilingan'))
     from sqlalchemy import select
     from app.models import Silo
     from app.penggilingan.gudang1.services.silo import (
@@ -2413,7 +2478,12 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
     from app.web.form_mulai_giling import baca_silo
     out: list[dict] = []
     async with SessionLocal() as db:
-        wid = await _g1_warehouse_id(db)
+        from app.services.fasilitas import pilih_lini,FasilitasError
+        if lini_id is not None:
+            try:wid=(await pilih_lini(db,user=user,kode_jenis='penggilingan',lini_id=lini_id)).warehouse_id
+            except FasilitasError as exc:raise HTTPException(400,str(exc))
+        else:
+            wid=user.default_warehouse_id if not can_see_financials(user) else await _g1_warehouse_id(db)
         silos = (
             await db.execute(
                 select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
@@ -2438,12 +2508,15 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/ringkasan-mulai-giling")
 async def ringkasan_mulai_giling(silo: Annotated[list[str], Query()] = [],
-                               user: User = Depends(pengguna_aksi)):
+                               lini_id: int | None = None, user: User = Depends(pengguna_aksi)):
     from fastapi.responses import JSONResponse
     from app.web.form_mulai_giling import ringkasan
-    _require(await _is_g1_operator(user))
+    _require(await _is_jenis_operator(user,'penggilingan'))
     async with SessionLocal() as db:
-        data = await ringkasan(db, silo)
+        from app.services.fasilitas import pilih_lini,FasilitasError
+        try:lini=await pilih_lini(db,user=user,kode_jenis='penggilingan',lini_id=lini_id)
+        except FasilitasError as exc:raise HTTPException(400,str(exc))
+        data = await ringkasan(db, silo,warehouse_id=lini.warehouse_id)
     return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 
@@ -2462,7 +2535,7 @@ async def pk_transfer_list(user: User = Depends(pengguna_aksi)) -> list[dict]:
             cards=await pk_gudang1(db)
             return [dict(value=c.kode_aksi or c.kode,label=c.kode+' · '+(c.pemilik or 'Pabrik')+' · '+str(c.tersedia)+' kg') for c in cards if c.tersedia>0]
         procs = (
-            await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
+            await db.execute(select(MillingProcess).where(batas_lokasi(user,MillingProcess)).order_by(MillingProcess.kode_proses))
         ).scalars().all()
         for p in procs:
             avail = await pending_transfer_kg(db, p.id)
@@ -2475,13 +2548,13 @@ async def pk_transfer_list(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/polishing-active")
 async def polishing_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    _require(await _is_g2_operator(user))
+    _require(await _is_jenis_operator(user,'penyosohan'))
     from sqlalchemy import select
     from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
     async with SessionLocal() as db:
         procs = (
             await db.execute(
-                select(PolishingProcess.kode_proses).where(PolishingProcess.status == "proses")
+                select(PolishingProcess.kode_proses).where(batas_lokasi(user,PolishingProcess)).where(PolishingProcess.status == "proses")
                 .order_by(PolishingProcess.id.desc())
             )
         ).scalars().all()
@@ -2492,7 +2565,7 @@ async def polishing_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
 async def ringkasan_hasil_penyosohan(kode_proses: str, jenis: str = "",
                                    user: User = Depends(pengguna_aksi)):
     """Bantuan baca formulir; penyimpanan tetap memeriksa total di bawah lock."""
-    _require(await _is_g2_operator(user))
+    _require(await _is_proses_operator(user,'penyosohan',kode_proses))
     from fastapi.responses import JSONResponse
     from app.web.form_hasil_sosoh import ringkasan
     from app.penggilingan.gudang2.polishing import Gudang2Error
@@ -2522,7 +2595,7 @@ async def pk_intake_pending(user: User = Depends(pengguna_aksi)) -> list[dict]:
             PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id)
         rows = (
             await db.execute(
-                select(PkPurchaseBatch).where(
+                select(PkPurchaseBatch).where(batas_lokasi(user,PkPurchaseBatch)).where(
                     PkPurchaseBatch.status_batch == "diterima", ada_intake
                 ).order_by(PkPurchaseBatch.id.desc()).limit(30)
             )
@@ -2578,7 +2651,7 @@ async def milling_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
         )
         baris = (
             await db.execute(
-                select(MillingProcess.kode_proses, sudah.label("sudah"))
+                select(MillingProcess.kode_proses, sudah.label("sudah")).where(batas_lokasi(user,MillingProcess))
                 .where(MillingProcess.status == "selesai")
                 .order_by(case((sudah, 1), else_=0),
                           MillingProcess.kode_proses.desc())
@@ -2617,7 +2690,7 @@ async def milling_noqc(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 .scalar_subquery())
         baris = (
             await db.execute(
-                select(MillingProcess.kode_proses, jalan.label("jalan"), n_qc.label("n"))
+                select(MillingProcess.kode_proses, jalan.label("jalan"), n_qc.label("n")).where(batas_lokasi(user,MillingProcess))
                 .where(MillingProcess.status.in_(("proses", "selesai")))
                 .order_by(case((jalan, 0), (ada_qc, 2), else_=1),
                           MillingProcess.kode_proses.desc())
@@ -2639,7 +2712,7 @@ async def pk_luar_qc(user: User = Depends(pengguna_aksi)) -> list[dict]:
     n = (select(func.count()).select_from(PkPurchaseQcLog)
          .where(PkPurchaseQcLog.pk_purchase_batch_id == PkPurchaseBatch.id).scalar_subquery())
     async with SessionLocal() as db:
-        rows = (await db.execute(select(PkPurchaseBatch, n.label("n"))
+        rows = (await db.execute(select(PkPurchaseBatch, n.label("n")).where(batas_lokasi(user,PkPurchaseBatch))
             .where(PkPurchaseBatch.status_batch.in_(("diterima", "di_silo", "ditumpuk", "disosoh")))
             .order_by(case((n == 0, 0), else_=1), PkPurchaseBatch.id.desc()))).all()
     return [{"value": b.kode_batch,
@@ -2650,6 +2723,7 @@ async def pk_luar_qc(user: User = Depends(pengguna_aksi)) -> list[dict]:
 # ─────────────────────── Aksi cepat: eksekusi (POST) ───────────────────────
 
 class GabahMasukReq(BaseModel):
+    warehouse_id: int | None = None
     # Operator hanya memilih TIKET TIMBANG aktif — supplier/bobot/nopol dari timbang.
     timbangan_transaksi_id: int
     tujuan: str | None = None       # dryer / silo_a / silo_b
@@ -2663,7 +2737,7 @@ class GabahMasukReq(BaseModel):
 @router.get("/actions/timbang-masuk-aktif")
 async def timbang_masuk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar tiket timbang MASUK gabah yang masih AKTIF & belum tertaut batch."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_gabah_operator(user))
     from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
     async with SessionLocal() as db:
         tk = await tiket_masuk_aktif(db)
@@ -2687,9 +2761,9 @@ async def timbang_masuk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]
 
 
 @router.get("/actions/tujuan-gabah")
-async def tujuan_gabah(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def tujuan_gabah(induk: str = "", warehouse_id: int | None = None, user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Pilihan mengikuti jenis tiket, sehingga gabah basah tidak ditawari silo."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_gabah_operator(user))
     if not induk:
         return []
     from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
@@ -2700,19 +2774,27 @@ async def tujuan_gabah(induk: str = "", user: User = Depends(pengguna_aksi)) -> 
     except ValueError:
         raise HTTPException(400, "Pilih tiket timbang gabah yang sah.")
     async with SessionLocal() as db:
+        if warehouse_id is not None:
+            from app.services.cakupan_fasilitas import pilih_gudang_penerima
+            try:
+                await pilih_gudang_penerima(db,user,warehouse_id)
+            except PermissionError as e:
+                raise HTTPException(403,str(e)) from e
+            except ValueError as e:
+                raise HTTPException(400,str(e)) from e
         tiket = await ambil_tiket(db, tiket_id)
     info = intake_dari_jenis(tiket.get("jenis_kode", "")) if tiket else None
     if info is None or info.model != "gabah":
         raise HTTPException(400, "Tiket ini bukan gabah masuk.")
     tujuan_sah = {"dryer"} if info.kondisi == "basah" else {"dryer", "silo"}
     return [{"value": nilai, "label": nama}
-            for nilai, nama in await _pilihan_tujuan_gabah(info.kondisi)
+            for nilai, nama in await _pilihan_tujuan_gabah(info.kondisi, user, warehouse_id=warehouse_id)
             if _urai_tujuan(nilai)[0] in tujuan_sah]
 
 
 @router.post("/actions/gabah-masuk")
 async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_gabah_operator(user))
 
     from app.penggilingan.peta_jenis import intake_dari_jenis
     from app.penggilingan.gudang1.services.purchase import create_purchase_batch_dari_timbang
@@ -2720,7 +2802,11 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
     from app.penggilingan.gudang1.services.drying import masuk_dryer, DryingError
     from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError, silo_g1_by_id
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
+        from app.services.cakupan_fasilitas import pilih_gudang_penerima
+        from app.services.fasilitas import FasilitasError,izin_gudang
+        try:wid=await pilih_gudang_penerima(db,user,req.warehouse_id,legacy='g1')
+        except FasilitasError as exc:raise HTTPException(403,str(exc))
         tiket = await ambil_tiket(db, req.timbangan_transaksi_id)
         if tiket is None:
             raise HTTPException(400, "Tiket timbang tak ditemukan.")
@@ -2769,6 +2855,12 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                 "Gabah basah JASA tidak boleh menumpuk — harus langsung ke "
                 "pengering. Basah yang menunggu akan rusak, dan ini barang "
                 "titipan pelanggan.")
+        if tujuan == "dryer":
+            from app.penggilingan.gudang1.services.drying import pilih_dryer
+            try:mesin=await pilih_dryer(db,mesin_id,user=user)
+            except DryingError as exc:raise HTTPException(400,str(exc))
+            if mesin.warehouse_id!=wid:raise HTTPException(400,'Dryer bukan milik gudang penerima yang dipilih.')
+            mesin_id=mesin.id
         if tujuan == "dryer" and mesin_id:
             from app.penggilingan.gudang1.services.drying import isi_dryer
             ada = await isi_dryer(db, mesin_id)
@@ -2785,12 +2877,16 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         # batch yang sudah tercatat. Kegagalan penempatan sesudah penerimaan
         # tetap mengikuti penanganan peringatan lama.
         if tujuan == "silo":
-            si = await silo_g1_by_id(db, mesin_id) if mesin_id else None
+            from app.models import Silo
+            from app.penggilingan.silo_policy import boleh_masuk
+            si=await db.get(Silo,mesin_id) if mesin_id else None
+            if si and (si.warehouse_id!=wid or not si.aktif or not boleh_masuk(si,'gabah_kering','g1')):
+                raise HTTPException(400,'Silo bukan tujuan gabah yang sah pada gudang penerima.')
             if si is None:
                 raise HTTPException(400, "Pilih silo tujuannya dulu.")
         try:
             r = await create_purchase_batch_dari_timbang(
-                db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
+                db, user=u, warehouse_id=wid, timbangan_transaksi_id=req.timbangan_transaksi_id,
                 kondisi_gabah=kondisi, kunci_kiriman=(req.kunci_kiriman or "")[:120] or None,
             )
         except ValueError as e:
@@ -2892,7 +2988,7 @@ class KadarAirReq(BaseModel):
 
 @router.post("/actions/kadar-air")
 async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import log_moisture
@@ -2943,7 +3039,7 @@ class HasilGilingReq(BaseModel):
 
 @router.post("/actions/hasil-giling")
 async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',req.kode_proses))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
     from app.penggilingan.gudang1.services.milling import log_progress
@@ -2974,13 +3070,13 @@ class MulaiPengeringanReq(BaseModel):
 async def act_mulai_pengeringan(req: MulaiPengeringanReq | None = None,
                                 user: User = Depends(pengguna_aksi)) -> dict:
     """Gabungkan gabah yang menunggu di SATU mesin jadi 1 pengeringan."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,dryer_id=(req.dryer_id if req else None)))
     from app.penggilingan.gudang1.services.drying import start_drying, DryingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
             r = await start_drying(
-                db, user=u,
+                db, user=user,
                 dryer_id=(req.dryer_id if req else None),
                 target_kadar_air=(req.target_kadar_air if req else None),
                 mode_dryer=(req.mode_dryer if req else None),
@@ -3024,7 +3120,7 @@ class UbahTargetReq(BaseModel):
 
 @router.post("/actions/ubah-target")
 async def act_ubah_target(req: UbahTargetReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import ubah_target, DryingError
@@ -3048,7 +3144,7 @@ async def act_ubah_target(req: UbahTargetReq, user: User = Depends(pengguna_aksi
 async def act_selesai_pengeringan(
     req: SelesaiPengeringanReq, user: User = Depends(pengguna_aksi)
 ) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import finish_drying, DryingError
@@ -3070,7 +3166,7 @@ async def act_selesai_pengeringan(
 
 @router.post("/actions/mulai-pendinginan-ulang")
 async def act_mulai_pendinginan_ulang(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     from app.penggilingan.gudang1.services.drying import mulai_pendinginan_ulang, DryingError
     async with SessionLocal() as db:
         try:
@@ -3082,7 +3178,7 @@ async def act_mulai_pendinginan_ulang(req: KodeLotReq, user: User = Depends(peng
 
 @router.post("/actions/selesai-pendinginan")
 async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan yang didinginkan dulu.")
     from app.penggilingan.gudang1.services.drying import finish_cooling, DryingError
@@ -3100,7 +3196,7 @@ async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna
 @router.get("/actions/ringkasan-pindah-silo")
 async def ringkasan_pindah_silo(kode_lot: str, silo: str = "", user: User = Depends(pengguna_aksi)):
     from fastapi.responses import JSONResponse
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=kode_lot))
     from app.web.form_pindah_silo import ringkasan
     from app.penggilingan.gudang1.services.silo import SiloError
     async with SessionLocal() as db:
@@ -3118,7 +3214,7 @@ class PindahSiloReq(BaseModel):
 
 @router.post("/actions/pindah-silo")
 async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan yang mau dipindah dulu.")
     if not (req.silo or "").strip():
@@ -3247,7 +3343,7 @@ class GabahKeringTimbangUlangReq(BaseModel):
 async def act_gabah_kering_timbang_ulang(
     req: GabahKeringTimbangUlangReq, user: User = Depends(pengguna_aksi)) -> dict:
     """Timbang ULANG satu lot (sesudah dikeringkan lagi) — bobot lama DIGANTI."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     from app.penggilingan.gudang1.services.gabah_kering import (
         GabahKeringError, timbang_ulang)
     async with SessionLocal() as db:
@@ -3271,7 +3367,7 @@ class GabahKeringBongkarReq(BaseModel):
 async def act_gabah_kering_bongkar_silo(
     req: GabahKeringBongkarReq, user: User = Depends(pengguna_aksi)) -> dict:
     """Bongkar SELURUH sisa satu lot gabah kering kembali ke silo."""
-    _require(await _is_g1_operator(user))
+    _require(await _is_drying_operator(user,kode_lot=req.kode_lot))
     from app.penggilingan.gudang1.services.silo import SiloError, masuk_silo
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -3334,7 +3430,7 @@ async def act_hentikan_proses(req: HentikanReq,
     from app.penggilingan.gudang1.services.jeda import JedaError, hentikan
     jenis, kode = _urai_proses(req.proses)
     # Penyosohan milik operator Gudang 2; pengeringan & giling milik Gudang 1.
-    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    _require(await _is_proses_operator(user,jenis,kode))
     if not kode:
         raise HTTPException(400, "Pilih proses yang mau dihentikan dulu.")
     async with SessionLocal() as db:
@@ -3356,7 +3452,7 @@ async def act_lanjutkan_proses(req: LanjutkanReq,
                                user: User = Depends(pengguna_aksi)) -> dict:
     from app.penggilingan.gudang1.services.jeda import JedaError, lanjutkan
     jenis, kode = _urai_proses(req.proses)
-    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    _require(await _is_proses_operator(user,jenis,kode))
     if not kode:
         raise HTTPException(400, "Pilih proses yang mau dilanjutkan dulu.")
     async with SessionLocal() as db:
@@ -3375,7 +3471,7 @@ async def act_lanjutkan_proses(req: LanjutkanReq,
 async def acuan_jeda(proses: str, user: User = Depends(pengguna_aksi)):
     from app.penggilingan.gudang1.services.jeda import ringkasan_jeda, JedaError
     jenis,kode = _urai_proses(proses)
-    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    _require(await _is_proses_operator(user,jenis,kode))
     async with SessionLocal() as db:
         try:
             return await ringkasan_jeda(db, jenis=jenis, kode=kode)
@@ -3390,7 +3486,7 @@ async def pilihan_sebab_jeda(induk: str = "", user: User = Depends(pengguna_aksi
     jenis,kode = _urai_proses(induk)
     if not kode or jenis not in SEBAB:
         return []
-    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    _require(await _is_proses_operator(user,jenis,kode))
     async with SessionLocal() as db:
         daftar = (await sebab_jeda(db))[jenis]
     return [{'value':v,'label':v} for v in daftar] + [{'value':SEBAB_LAIN,'label':'Lainnya — tulis sendiri'}]
@@ -3400,7 +3496,7 @@ async def pilihan_sebab_jeda(induk: str = "", user: User = Depends(pengguna_aksi
 async def act_ubah_kondisi_jeda(req: HentikanReq, user: User = Depends(pengguna_aksi)):
     from app.penggilingan.gudang1.services.jeda import perbarui_kondisi, JedaError
     jenis,kode = _urai_proses(req.proses)
-    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    _require(await _is_proses_operator(user,jenis,kode))
     async with SessionLocal() as db:
         try:
             await perbarui_kondisi(db, user=await db.get(User,user.id), jenis=jenis, kode=kode,
@@ -3423,7 +3519,7 @@ class TutupSiloGilingReq(BaseModel):
 @router.post("/actions/tutup-silo-giling")
 async def act_tutup_silo_giling(req: TutupSiloGilingReq,
                                 user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',req.kode_proses))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
     if not req.dasar:
@@ -3448,6 +3544,7 @@ async def act_tutup_silo_giling(req: TutupSiloGilingReq,
 
 
 class MulaiGilingReq(BaseModel):
+    lini_id: int | None = None
     #: Satu huruf, atau beberapa — satu lot boleh datang dari beberapa silo
     #: (keputusan pemilik 24 September 2026). Bentuk tunggal tetap diterima:
     #: ia yang dikirim borang lama dan tombol pada kartu silo.
@@ -3456,7 +3553,7 @@ class MulaiGilingReq(BaseModel):
 
 @router.post("/actions/mulai-giling")
 async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_jenis_operator(user,'penggilingan'))
     # ── Tak ada lagi daftar huruf tertulis-tangan ──
     #
     # Dulu di sini `not in ("A", "B")`. Silo Gudang 1 bisa ditambah lewat
@@ -3474,7 +3571,7 @@ async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_ak
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await start_milling(db, user=u, nama_silo=pilih)
+            r = await start_milling(db, user=user, nama_silo=pilih, lini_id=req.lini_id)
         except MillingError as e:
             raise _err(e, "Gagal mulai giling.")
         except IntegrityError:
@@ -3505,7 +3602,7 @@ async def konteks_selesai_giling(kode_proses: str, berat_akhir: float | None = N
     from fastapi.responses import JSONResponse
     from app.web.form_selesai_giling import ringkasan
     from app.penggilingan.gudang1.services.milling import MillingError
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',kode_proses))
     async with SessionLocal() as db:
         try:
             data = await ringkasan(db, kode_proses=kode_proses, berat_akhir=berat_akhir)
@@ -3525,7 +3622,7 @@ class SelesaiGilingReq(BaseModel):
 
 @router.post("/actions/selesai-giling")
 async def act_selesai_giling(req: SelesaiGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
+    _require(await _is_proses_operator(user,'penggilingan',req.kode_proses))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
     if not req.dasar:
@@ -3640,6 +3737,7 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(pengguna_aksi)) -
 
 
 class CatatPkLuarReq(BaseModel):
+    warehouse_id: int | None = None
     # Pilih TIKET TIMBANG PK aktif — supplier/bobot/nopol dari timbang.
     timbangan_transaksi_id: int
     jenis_pk: str
@@ -3650,6 +3748,7 @@ class CatatPkLuarReq(BaseModel):
 
 
 class CatatProdukTimbangMasukReq(BaseModel):
+    warehouse_id: int | None = None
     timbangan_transaksi_id: int
 
 
@@ -3690,6 +3789,10 @@ async def act_catat_produk_timbang_masuk(
     from app.services.activity_log import log_activity
 
     async with SessionLocal() as db:
+        from app.services.cakupan_fasilitas import pilih_gudang_penerima
+        from app.services.fasilitas import FasilitasError
+        try:wid=await pilih_gudang_penerima(db,user,req.warehouse_id,legacy='g2')
+        except FasilitasError as exc:raise HTTPException(403,str(exc))
         try:
             await kunci_tiket_untuk_ditaut(db, req.timbangan_transaksi_id)
         except TiketSudahDipakai as e:
@@ -3719,14 +3822,14 @@ async def act_catat_produk_timbang_masuk(
                 product_sku_id=sku.id, rice_quality_standard_id=medium.id,
                 source_type="timbangan", source_id=ticket["id"],
                 jumlah_karung=max(1, int((float(weight) + 49.999) // 50)),
-                berat_total_kg=float(weight), warehouse_id=await _g2_warehouse_id(db),
+                berat_total_kg=float(weight), warehouse_id=wid,
                 waktu=now, input_by=user.id, jasa_id=jasa_id,
                 kemasan_mengurangi_stok=False)
             db.add(row)
             table, target = "finished_goods_stock", "Beras Medium · karung putih polos tanpa merek 50 kg"
         else:
             row = ByproductStock(
-                jenis_produk="broken", source_type="timbangan", source_id=ticket["id"],
+                warehouse_id=wid, jenis_produk="broken", source_type="timbangan", source_id=ticket["id"],
                 berat_kg=float(weight), tanggal=now.date(), waktu=now,
                 input_by=user.id, jasa_id=jasa_id)
             db.add(row)
@@ -3803,10 +3906,14 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
     from app.penggilingan.gudang2.service import (
         create_pk_purchase_dari_timbang, masukkan_pk_luar, Gudang2Error)
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
+        u = user
+        from app.services.cakupan_fasilitas import pilih_gudang_penerima
+        from app.services.fasilitas import FasilitasError
+        try:wid=await pilih_gudang_penerima(db,user,req.warehouse_id,legacy='g2')
+        except FasilitasError as exc:raise HTTPException(403,str(exc))
         try:
             r = await create_pk_purchase_dari_timbang(
-                db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
+                db, user=u, warehouse_id=wid, timbangan_transaksi_id=req.timbangan_transaksi_id,
                 jenis_pk=req.jenis_pk, jumlah_karung=req.jumlah_karung,
                 ukuran_karung_kg=req.ukuran_karung_kg,
                 kunci_kiriman=(req.kunci_kiriman or "")[:120] or None,
@@ -3978,7 +4085,7 @@ async def pratinjau_unit_transfer_pk(tahap: str, kode_proses: str = '',
         kode_proses,owner=pecah_kode(kode_proses)
         b = None
         if tahap == 'minta':
-            proc = await db.scalar(select(MillingProcess).where(MillingProcess.kode_proses == kode_proses.strip()))
+            proc = await db.scalar(select(MillingProcess).where(batas_lokasi(user,MillingProcess)).where(MillingProcess.kode_proses == kode_proses.strip()))
         else:
             try:
                 pid = int(permintaan)
@@ -4323,6 +4430,7 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
 
 
 class MulaiPenyosohanReq(BaseModel):
+    lini_id: int | None = None
     #: Satu huruf, atau beberapa. Bentuk tunggal tetap diterima: ia yang
     #: dikirim tombol pada kartu silo.
     silo: str | list[str]
@@ -4330,7 +4438,7 @@ class MulaiPenyosohanReq(BaseModel):
 
 @router.post("/actions/mulai-penyosohan")
 async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g2_operator(user))
+    _require(await _is_jenis_operator(user,'penyosohan'))
     # ── Tak ada lagi tupel A / B / AB ──
     #
     # Peta itu bisa menjawab tiga kemungkinan saja, dan ketiganya menyebut silo
@@ -4346,7 +4454,7 @@ async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pen
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await mulai_penyosohan(db, user=u, nama_silos=silos)
+            r = await mulai_penyosohan(db, user=user, nama_silos=silos, lini_id=req.lini_id)
         except Gudang2Error as e:
             raise _err(e, "Gagal mulai penyosohan.")
     pesan = (f"✓ Penyosohan *{r.proc.kode_proses}* mulai — silo "
@@ -4362,7 +4470,7 @@ class TambahSiloPenyosohanReq(BaseModel):
 @router.post("/actions/tambah-silo-penyosohan")
 async def act_tambah_silo_penyosohan(req: TambahSiloPenyosohanReq,
                                      user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g2_operator(user))
+    _require(await _is_jenis_operator(user,'penyosohan'))
     silos = [req.silo] if isinstance(req.silo, str) else list(req.silo or [])
     silos = [str(x).strip().upper() for x in silos if str(x or "").strip()]
     if not silos:
@@ -4406,7 +4514,7 @@ class HasilPenyosohanReq(BaseModel):
 
 @router.post("/actions/hasil-penyosohan")
 async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g2_operator(user))
+    _require(await _is_proses_operator(user,'penyosohan',req.kode_proses))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses penyosohan dulu.")
     if not (req.jenis or "").strip():
@@ -4438,7 +4546,7 @@ class SelesaiPenyosohanReq(BaseModel):
 
 @router.post("/actions/selesai-penyosohan")
 async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g2_operator(user))
+    _require(await _is_proses_operator(user,'penyosohan',req.kode_proses))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses penyosohan dulu.")
     if not req.dasar:
@@ -4512,7 +4620,7 @@ class AkhiriPenyosohanReq(BaseModel):
 async def konteks_selesai_penyosohan(kode_proses: str, user: User = Depends(pengguna_aksi)):
     from fastapi.responses import JSONResponse
     from app.web.form_selesai_penyosohan import ringkasan
-    _require(await _is_g2_operator(user))
+    _require(await _is_proses_operator(user,'penyosohan',kode_proses))
     async with SessionLocal() as db:
         try:
             data = await ringkasan(db, kode_proses=kode_proses)
@@ -4553,7 +4661,7 @@ async def pratinjau_selesai_proses(jenis: str, kode_proses: str,
 
 @router.post("/actions/akhiri-penyosohan")
 async def act_akhiri_penyosohan(req: AkhiriPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g2_operator(user))
+    _require(await _is_proses_operator(user,'penyosohan',req.kode_proses))
     if not req.dasar:
         raise HTTPException(409, "Periksa ringkasan penyelesaian penyosohan terlebih dahulu.")
     from app.penggilingan.gudang2.polishing import akhiri_penyosohan, Gudang2Error
@@ -4757,7 +4865,7 @@ async def rincian_masukkan_silo(tumpukan: str='', silo: str='', jumlah_karung: s
             dest=await get_g2_silo(db,silo) if any(o['value']==silo for o in opsi) else None
             proses=[]
             if dest:
-                proses=list((await db.scalars(select(PolishingProcess.kode_proses).join(PolishingSiloUsage).where(
+                proses=list((await db.scalars(select(PolishingProcess.kode_proses).where(batas_lokasi(user,PolishingProcess)).join(PolishingSiloUsage).where(
                     PolishingSiloUsage.silo_id==dest.id,PolishingSiloUsage.berat_akhir_kg.is_(None),
                     PolishingProcess.status=='proses'))).all())
             out={'sumber':src,'sejawat':[s for s in rows if s['value']!=src['value']],
@@ -4784,7 +4892,7 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
     keluar = []
     async with SessionLocal() as db:
         for p in (await db.execute(
-            select(PolishingProcess).where(PolishingProcess.status == "proses")
+            select(PolishingProcess).where(batas_lokasi(user,PolishingProcess)).where(PolishingProcess.status == "proses")
             .order_by(PolishingProcess.id.desc())
         )).scalars().all():
             if await jeda_terbuka(db, "penyosohan", p.id) is None:
@@ -4829,6 +4937,10 @@ async def silo_g2_daftar(komoditas: str = "pk", induk: str = "",
             intake = await db.get(PkGudang2Intake,iid)
             if intake is None:
                 return []
+            from app.services.cakupan_fasilitas import batas,lokasi
+            if not await db.scalar(select(PkGudang2Intake.id).where(PkGudang2Intake.id==iid,batas(user,PkGudang2Intake))):
+                return []
+            wid=await db.scalar(select(lokasi(PkGudang2Intake)).where(PkGudang2Intake.id==iid))
         for s in (await db.execute(
             select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
             .order_by(Silo.nama_silo)
@@ -4862,7 +4974,7 @@ async def tujuan_pk_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/silo-bahan-g2")
-async def silo_bahan_g2(induk: str = "", rincian: bool = False, user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def silo_bahan_g2(induk: str = "", rincian: bool = False, lini_id: int | None = None, user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo berisi atau silo kosong yang dibebaskan oleh proses yang dipilih.
 
     Daftarnya dari MASTER, bukan tupel huruf yang diketik di kode: silo Gudang
@@ -4885,7 +4997,7 @@ async def silo_bahan_g2(induk: str = "", rincian: bool = False, user: User = Dep
     `tambah_silo_penyosohan` tetap diperiksa saat simpan. Bila picker
     dipanggil dengan `induk`, pilihan juga disaring ke pemilik proses itu.
     """
-    _require(await _is_g2_operator(user))
+    _require(await _is_jenis_operator(user,'penyosohan'))
     from sqlalchemy import select
 
     from app.models import Silo
@@ -4898,7 +5010,7 @@ async def silo_bahan_g2(induk: str = "", rincian: bool = False, user: User = Dep
         pemilik_target = None
         dibebaskan = set()
         if induk.strip():
-            proc = (await db.execute(select(PolishingProcess).where(
+            proc = (await db.execute(select(PolishingProcess).where(batas_lokasi(user,PolishingProcess)).where(
                 PolishingProcess.kode_proses == induk.strip(),
                 PolishingProcess.status == "proses",
             ))).scalars().first()
@@ -4916,7 +5028,12 @@ async def silo_bahan_g2(induk: str = "", rincian: bool = False, user: User = Dep
             .where(PolishingProcess.status == "proses",
                    PolishingSiloUsage.berat_akhir_kg.is_(None))
         )).scalars().all())
-        wid = await _g2_warehouse_id(db)
+        from app.services.fasilitas import pilih_lini,FasilitasError
+        if lini_id is not None:
+            try:wid=(await pilih_lini(db,user=user,kode_jenis='penyosohan',lini_id=lini_id)).warehouse_id
+            except FasilitasError as exc:raise HTTPException(400,str(exc))
+        else:
+            wid=user.default_warehouse_id if not can_see_financials(user) else await _g2_warehouse_id(db)
         for s in (await db.execute(
             select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
         )).scalars().all():
@@ -4946,12 +5063,15 @@ async def silo_bahan_g2(induk: str = "", rincian: bool = False, user: User = Dep
 
 @router.get("/actions/ringkasan-mulai-penyosohan")
 async def ringkasan_mulai_penyosohan(silo: Annotated[list[str] | None, Query()] = None,
-                                   user: User = Depends(pengguna_aksi)):
-    _require(await _is_g2_operator(user))
+                                   lini_id: int | None = None, user: User = Depends(pengguna_aksi)):
+    _require(await _is_jenis_operator(user,'penyosohan'))
     from fastapi.responses import JSONResponse
     from app.web.form_mulai_penyosohan import ringkasan
     async with SessionLocal() as db:
-        return JSONResponse(await ringkasan(db, silo or []), headers={"Cache-Control": "no-store"})
+        from app.services.fasilitas import pilih_lini,FasilitasError
+        try:lini=await pilih_lini(db,user=user,kode_jenis='penyosohan',lini_id=lini_id)
+        except FasilitasError as exc:raise HTTPException(400,str(exc))
+        return JSONResponse(await ringkasan(db, silo or [],warehouse_id=lini.warehouse_id), headers={"Cache-Control": "no-store"})
 
 
 @router.get("/actions/silo-broken-g2")
@@ -4995,7 +5115,7 @@ async def broken_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
     keluar: list[dict] = []
     async with SessionLocal() as db:
         rows = (await db.execute(
-            select(ByproductStock, PolishingProcess.kode_proses)
+            select(ByproductStock, PolishingProcess.kode_proses).where(batas_lokasi(user,PolishingProcess))
             .join(PolishingProcess,
                   PolishingProcess.id == ByproductStock.source_id,
                   isouter=True)
@@ -5036,7 +5156,7 @@ async def sosoh_silo(induk: str = "", user: User = Depends(pengguna_aksi)) -> li
     from app.models import Silo
     from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
     async with SessionLocal() as db:
-        proc = (await db.execute(select(PolishingProcess).where(
+        proc = (await db.execute(select(PolishingProcess).where(batas_lokasi(user,PolishingProcess)).where(
             PolishingProcess.kode_proses == kode))).scalars().first()
         if proc is None:
             return []
@@ -5072,7 +5192,7 @@ async def sosoh_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         kini = now_local()
         for j, kode in (await db.execute(
-            select(JedaProses, PolishingProcess.kode_proses)
+            select(JedaProses, PolishingProcess.kode_proses).where(batas_lokasi(user,PolishingProcess))
             .join(PolishingProcess, PolishingProcess.id == JedaProses.polishing_process_id)
             .where(JedaProses.jenis == "penyosohan", JedaProses.selesai.is_(None),
                    JedaProses.dibatalkan_pada.is_(None),
@@ -5317,7 +5437,7 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
     keluar: list[dict] = []
     async with SessionLocal() as db:
         proses_sumber = {p.id: p for p in (await db.execute(
-            select(PolishingProcess).where(
+            select(PolishingProcess).where(batas_lokasi(user,PolishingProcess)).where(
                 PolishingProcess.status.in_(("proses", "selesai")))
         )).scalars().all()}
 
@@ -5442,7 +5562,7 @@ async def hasil_samping_pemilik_tersedia(jenis: str = "menir",
     from app.services.stok import stok_produk
 
     async with SessionLocal() as db:
-        owners = set((await db.execute(select(PolishingProcess.jasa_id))).scalars().all())
+        owners = set((await db.execute(select(PolishingProcess.jasa_id).where(batas_lokasi(user,PolishingProcess)))).scalars().all())
         owners.update((await db.execute(
             select(FinishedGoodsStock.jasa_id).join(
                 ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
@@ -5734,7 +5854,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
             owners = [None]
         else:
             owners = set((await db.execute(
-                select(PolishingProcess.jasa_id)
+                select(PolishingProcess.jasa_id).where(batas_lokasi(user,PolishingProcess))
                 .join(PolishingOutputLog,
                       PolishingOutputLog.polishing_process_id == PolishingProcess.id)
                 .where(PolishingProcess.jasa_id.is_not(None),
@@ -5757,7 +5877,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
             owner_suffix = f" · {owner_label}" if owner_label else ""
 
             proc_rows = (await db.execute(
-                select(PolishingProcess.id)
+                select(PolishingProcess.id).where(batas_lokasi(user,PolishingProcess))
                 .join(PolishingOutputLog,
                       PolishingOutputLog.polishing_process_id == PolishingProcess.id)
                 .where(PolishingOutputLog.jenis == jenis,
@@ -5937,7 +6057,7 @@ async def pk_lama_penyesuaian(user: User = Depends(pengguna_aksi)):
     from sqlalchemy import select
     from app.models import PkGudang2Intake, PkPurchaseBatch
     async with SessionLocal() as db:
-        rows = (await db.execute(select(PkGudang2Intake.id,PkPurchaseBatch.kode_batch)
+        rows = (await db.execute(select(PkGudang2Intake.id,PkPurchaseBatch.kode_batch).where(batas_lokasi(user,PkPurchaseBatch))
             .join(PkPurchaseBatch,PkPurchaseBatch.id == PkGudang2Intake.pk_purchase_batch_id)
             .where(PkGudang2Intake.tujuan == "ditumpuk",PkPurchaseBatch.jumlah_karung.is_(None))
             .order_by(PkGudang2Intake.id))).all()
@@ -5970,7 +6090,10 @@ class BobotPengeringanReq(BaseModel):
 async def baca_bobot_pengeringan(lot_id: int,response: Response,user: User=Depends(pengguna_aksi)):
     response.headers['Cache-Control']='no-store'
     from app.services.bobot_pengeringan import konteks
-    _require(await _is_g1_operator(user))
+    from app.models import DryingLot
+    from app.services.cakupan_fasilitas import boleh_objek
+    async with SessionLocal() as izin_db:
+        _require(await boleh_objek(izin_db,user,DryingLot,lot_id))
     async with SessionLocal() as db:
         try:return (await konteks(db,lot_id=lot_id,user=user))[0]
         except (ValueError,PermissionError) as e:raise HTTPException(400,str(e))
@@ -5979,10 +6102,27 @@ async def baca_bobot_pengeringan(lot_id: int,response: Response,user: User=Depen
 @router.post('/actions/bobot-pengeringan')
 async def catat_bobot_pengeringan(req: BobotPengeringanReq,user: User=Depends(pengguna_aksi)):
     from app.services.bobot_pengeringan import simpan
-    _require(await _is_g1_operator(user))
+    from app.models import DryingLot
+    from app.services.cakupan_fasilitas import boleh_objek
+    async with SessionLocal() as izin_db:
+        _require(await boleh_objek(izin_db,user,DryingLot,req.lot_id))
     async with SessionLocal() as db:
         try:
             async with db.begin():
                 data=await simpan(db,user=user,**req.model_dump())
         except (ValueError,PermissionError) as e:raise HTTPException(400,str(e))
     return {'ok':True,'pesan':'Bobot hasil flowing scale tercatat. Penerimaan dan saldo stok tidak diubah.','data':data}
+
+@router.get('/actions/lini-produksi')
+async def pilihan_lini_produksi(jenis: str, user: User = Depends(pengguna_aksi)) -> list[dict]:
+    from sqlalchemy import select
+    from app.models import LiniProduksi, JenisProsesProduksi, Warehouse
+    from app.services.fasilitas import izin_gudang
+    # Mempertahankan pemisahan izin tindakan lama.
+    _require(await _is_jenis_operator(user,jenis))
+    async with SessionLocal() as db:
+        q=select(LiniProduksi).join(JenisProsesProduksi).join(Warehouse).where(
+            JenisProsesProduksi.kode==jenis,JenisProsesProduksi.aktif.is_(True),
+            LiniProduksi.aktif.is_(True),Warehouse.aktif.is_(True))
+        rows=(await db.execute(q.order_by(LiniProduksi.id))).scalars()
+        return [{'value':r.id,'label':r.nama} for r in rows if izin_gudang(user,r.warehouse_id)]

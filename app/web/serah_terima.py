@@ -11,9 +11,9 @@ router=APIRouter(tags=['serah-terima'])
 
 
 async def izin(request,akun):
-    from app.web.api import _is_g1_operator,_is_g2_operator
+    from app.web.api import _is_gabah_operator,_is_g2_operator
     if is_customer_read(request):return True,True
-    return await _is_g1_operator(akun.user),await _is_g2_operator(akun.user)
+    return await _is_gabah_operator(akun.user),await _is_g2_operator(akun.user)
 
 
 @router.get('/serah-terima')
@@ -23,7 +23,7 @@ async def daftar(request:Request,akun=Depends(butuh_akun)):
     try:page=max(1,int(request.query_params.get('halaman','1')))
     except ValueError:raise HTTPException(422,'Halaman tidak valid.')
     async with SessionLocal() as db:
-        rows=await svc.daftar(db,scope=getattr(request.state,'portal_scope',None),g1=g1,g2=g2)
+        rows=await svc.daftar(db,scope=getattr(request.state,'portal_scope',None),g1=g1,g2=g2,user=None if is_customer_read(request) else akun.user)
     last=max(1,(len(rows)+24)//25);page=min(page,last)
     return await render_laci(request,'serah_terima_daftar.html',layar='laporan',MENU_AKTIF='laporan_riwayat',serah_terima=rows[(page-1)*25:page*25],
         halaman=page,halaman_akhir=last,page_title='Serah Terima')
@@ -39,6 +39,9 @@ async def detail(ident:int,request:Request,akun=Depends(butuh_akun)):
     if not(g1 or g2):raise HTTPException(403,'Dokumen tidak tersedia untuk peran Anda.')
     async with SessionLocal() as db:
         if masuk:
+            if not is_customer_read(request):
+                from app.web.layar_pekerjaan import sumber_detail_barang_masuk
+                await sumber_detail_barang_masuk(db,ident,request,akun)
             d=await svc.penerimaan(db,ident,scope=getattr(request.state,'portal_scope',None))
             allowed=g1 if d['jenis'].startswith('gabah') else g2
         else:

@@ -3,7 +3,7 @@
   <div class="jumlah">
     <span class="lbl">{% if gudang == "g1" %}Stok PK · Gudang 1{% elif gudang == "g2" %}Stok PK · Gudang 2{% else %}Stok PK · seluruh gudang{% endif %}{% if STOK_NAV %} · {{ STOK_NAV.nama_pemilik }}{% endif %}</span>
     <div class="jumlah__angka">{{ kg(total + (tempat|sum(attribute="tersedia") if tempat else 0)) }}<small>kg</small></div>
-    <div class="jumlah__ket">Gudang 1 · {{ lot|length }} lot &nbsp;·&nbsp; Gudang 2 · {{ tempat|length }} kode</div>
+    <div class="jumlah__ket">Hasil penggilingan · {{ lot|length }} lot &nbsp;·&nbsp; Tumpukan PK · {{ tempat|length }} kode</div>
   </div>
   <div class="stok-desktop stok-desktop--gabungan{{ ' stok-desktop--tanpa-mutu' if not mutu_aktif }}">
     <table class="stok-tabel tabel-standar">
@@ -19,7 +19,7 @@
         <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}{% if l.bagian_pemilik %}&amp;pemilik_id={{ l.jasa_id if l.jasa_id else 'pabrik' }}{% endif %}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
           <span class="stok-baris__kode"><span>{{ l.kode }}</span><small>{{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
           <span>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }}</span>
-          <span>Gudang 1</span>
+          <span>{{ l.gudang_nama or "Lokasi belum tercatat" }}</span>
           <span><span class="stok-status {{ 'stok-status--jasa' if l.jasa_id else 'stok-status--pabrik' }}">{{ "Jasa" if l.jasa_id else "Pabrik" }}</span></span>
           {% if mutu_aktif %}<span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
           <span class="stok-kualitas-ringkas">{% if l.nilai_kualitas is not none %}<span>{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} <b>{{ l.kelas_kualitas }}</b></span><small>{{ l.komponen_kualitas }}/{{ JUMLAH_KOMPONEN_QC_PK }} komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>{% endif %}
@@ -39,7 +39,7 @@
         <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}{% if t.bagian_pemilik %}&amp;pemilik_id={{ t.jasa_id if t.jasa_id else 'pabrik' }}{% endif %}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
           <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{% if t.tanggal %}{{ t.tanggal }}{% endif %}{% if t.lama %}{% if t.tanggal %} · {% endif %}{{ t.lama }}{% endif %}</small>{% if t.ringkasan_karung|default('') %}<small class="stok-pk-unit">{{ t.ringkasan_karung }}</small>{% endif %}</span>
           <span>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }}</span>
-          <span>Gudang 2</span>
+          <span>{{ t.gudang_nama or "Lokasi belum tercatat" }}</span>
           <span><span class="stok-status {{ 'stok-status--jasa' if t.pemilik else 'stok-status--pabrik' }}">{{ "Jasa" if t.pemilik else "Pabrik" }}</span></span>
           {% if mutu_aktif %}<span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
           <span class="stok-kualitas-ringkas">{% if t.nilai_kualitas is not none %}<span>{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} <b>{{ t.kelas_kualitas }}</b></span><small>{{ t.komponen_kualitas }}/{{ JUMLAH_KOMPONEN_QC_PK }} komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>{% endif %}
@@ -48,7 +48,7 @@
           <span class="stok-baris__buka" aria-hidden="true">›</span>
         </a></td></tr>
       {% endfor %}
-      {% if not lot and not tempat %}<tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-gabungan__kosong">Belum ada stok PK di kedua gudang.</td></tr>{% endif %}
+      {% if not lot and not tempat %}<tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-gabungan__kosong">Belum ada stok PK pada cakupan ini.</td></tr>{% endif %}
       </tbody>
     </table>
   </div>

@@ -43,8 +43,9 @@ class DryingError(Exception):
     """Kesalahan proses pengeringan dengan pesan siap-tampil (args[0])."""
 
 
-async def get_lot_by_kode(db: AsyncSession, kode: str) -> DryingLot | None:
-    stmt = select(DryingLot).where(DryingLot.kode_lot == kode)
+async def get_lot_by_kode(db: AsyncSession, kode: str, user=None) -> DryingLot | None:
+    from app.services.cakupan_fasilitas import batas
+    stmt = select(DryingLot).where(batas(user,DryingLot),DryingLot.kode_lot == kode)
     return (await db.execute(stmt)).scalars().first()
 
 
@@ -154,7 +155,7 @@ async def dryers_g1(db: AsyncSession) -> list[Dryer]:
     )).scalars().all())
 
 
-async def pilih_dryer(db: AsyncSession, dryer_id: int | None) -> Dryer:
+async def pilih_dryer(db: AsyncSession, dryer_id: int | None, *, user=None) -> Dryer:
     """Mesin yang dimaksud — atau satu-satunya, bila memang hanya satu.
 
     Tiap dryer berjalan sendiri-sendiri (Direksi, 3 September 2026), jadi
@@ -162,9 +163,14 @@ async def pilih_dryer(db: AsyncSession, dryer_id: int | None) -> Dryer:
     satu: menyuruh orang memilih dari daftar berisi satu pilihan bukan
     ketelitian, melainkan pekerjaan tambahan tanpa isi.
     """
-    mesin = await dryers_g1(db)
+    if user is None:
+        mesin = await dryers_g1(db)
+    else:
+        from app.services.fasilitas import izin_gudang
+        mesin = list((await db.execute(select(Dryer).join(Warehouse).where(Warehouse.aktif.is_(True)).order_by(Dryer.id))).scalars())
+        mesin = [d for d in mesin if izin_gudang(user,d.warehouse_id)]
     if not mesin:
-        raise DryingError("Belum ada mesin pengering terdaftar di Gudang 1.")
+        raise DryingError("Belum ada mesin pengering yang tersedia di gudang kerja Anda.")
     if dryer_id is None:
         if len(mesin) == 1:
             return mesin[0]
@@ -173,7 +179,7 @@ async def pilih_dryer(db: AsyncSession, dryer_id: int | None) -> Dryer:
     for d in mesin:
         if d.id == dryer_id:
             return d
-    raise DryingError("Mesin pengering itu tidak ada di Gudang 1.")
+    raise DryingError("Mesin pengering itu tidak tersedia di gudang kerja Anda.")
 
 
 async def _g1_dryer(db: AsyncSession) -> Dryer | None:
@@ -548,7 +554,7 @@ async def masuk_dryer(
         try:await pastikan_sumber_bebas(db,f'gabah:{b.id}')
         except ValueError as exc:raise DryingError(str(exc)) from exc
 
-    dryer = await pilih_dryer(db, dryer_id)
+    dryer = await pilih_dryer(db, dryer_id, user=user)
     occupied = await active_drying_lot(db, dryer.id)
     if occupied is not None:
         raise DryingError(
@@ -921,13 +927,18 @@ def mode_disarankan(kg: float) -> str:
 async def start_drying(
     db: AsyncSession, *, user, dryer_id: int | None = None,
     target_kadar_air: float | None = None, mode_dryer: str | None = None,
-    tanggal=None, jam=None,
+    tanggal=None, jam=None, lini_id: int | None = None,
 ) -> LotResult:
     """MULAI pengeringan: bentuk 1 LOT dari SEMUA batch yang menunggu di dryer,
     lalu status 'proses'. Lot lahir di sini (bukan saat masuk dryer).
 
     Masuk dryer ≠ mulai pengeringan — ini input terpisah (operator G1 utama)."""
-    dryer = await pilih_dryer(db, dryer_id)
+    dryer = await pilih_dryer(db, dryer_id, user=user)
+    from app.services.fasilitas import pilih_lini, FasilitasError
+    try:
+        lini = await pilih_lini(db,user=user,kode_jenis='pengeringan',lini_id=lini_id,dryer_id=dryer.id)
+    except FasilitasError as exc:
+        raise DryingError(str(exc)) from exc
     # Dikunci sebelum isinya dibaca, sama seperti `masuk_dryer`: gabah bisa
     # masuk mesin pada detik lot ini dibentuk, dan lot yang lahir dari isi yang
     # sudah bergeser akan mewarisi pemilik yang bukan pemilik seluruh isinya.
@@ -962,6 +973,7 @@ async def start_drying(
         raise DryingError(f"❌ {e.args[0]}") from None
     now = input_time(tanggal, jam)
     lot = DryingLot(
+        lini_produksi_id=lini.id,
         kode_lot=await next_drying_lot_code(db),
         dryer_id=dryer.id,
         jasa_id=pemilik_lot,
@@ -1510,8 +1522,9 @@ class KartuPengeringan:
 async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
                               sebelum: int | None = None,
                               lot_id: int | None = None,
-                        allowed_ids: frozenset[int] | None = None
-                              ) -> tuple[list[KartuPengeringan], bool]:
+                        allowed_ids: frozenset[int] | None = None,
+    user=None
+) -> tuple[list[KartuPengeringan], bool]:
     """Kartu lot pengeringan SELESAI (kering+dingin), terbaru dulu.
 
     `sebelum` = id lot TERAKHIR yang sudah digambar (kursor) — pola sama
@@ -1532,6 +1545,9 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
          .where(DryingLot.waktu_selesai_pendinginan.isnot(None))
          .order_by(DryingLot.id.desc())
          .limit(batas + 1))
+    if user is not None:
+        from app.services.cakupan_fasilitas import batas as batas_lokasi
+        q=q.where(batas_lokasi(user,DryingLot))
     if allowed_ids is not None:
         q = q.where(DryingLot.id.in_(allowed_ids))
     if lot_id is not None:
@@ -1657,3 +1673,10 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
             waktu_masuk_silo=tgl_masuk, bobot_pengeringan=dua_bobot[lot.id],
         ))
     return kartu, lagi
+
+async def dryers_untuk(db, user=None):
+    """Dryer mengikuti gudang fisik dan peran efektif, bukan kode lokasi G1."""
+    from app.services.fasilitas import izin_gudang
+    if user is None:return await dryers_g1(db)
+    rows=(await db.execute(select(Dryer).join(Warehouse).where(Warehouse.aktif.is_(True)).order_by(Dryer.id))).scalars()
+    return [d for d in rows if izin_gudang(user,d.warehouse_id)]

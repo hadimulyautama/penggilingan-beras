@@ -58,11 +58,11 @@ async def baca_silo(db, silo):
         final=bobot.pasti, belum_dikenal=bool(komposisi.get('belum_dikenal')))
     return data, bobot, ids
 
-async def ringkasan(db, pilihan):
+async def ringkasan(db, pilihan, warehouse_id=None):
     pilihan = list(dict.fromkeys(str(x).strip().upper() for x in pilihan if str(x or '').strip()))
     silos, bobots, ids, peringatan = [], [], [], []
     for n in pilihan:
-        silo = await get_g2_silo(db, n)
+        silo = await get_g2_silo(db, n,warehouse_id=warehouse_id)
         if silo is None:
             silos.append(dict(nama='Silo '+n, bobot='Belum tersedia', siap=False, sumber=[], komposisi=[]))
             peringatan.append('Silo '+n+' tidak ditemukan atau tidak aktif di Gudang 2.')

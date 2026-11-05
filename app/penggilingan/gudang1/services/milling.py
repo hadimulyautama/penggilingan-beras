@@ -1,5 +1,6 @@
 """Logika bisnis proses milling / pecah kulit (Gudang 1)."""
 from __future__ import annotations
+from app.services.cakupan_fasilitas import lokasi as lokasi_proses
 
 from app.performa import dalam, tampilan_singkat
 
@@ -48,9 +49,10 @@ class MillingError(Exception):
     """Kesalahan proses milling dengan pesan siap-tampil (args[0])."""
 
 
-async def get_process_by_kode(db: AsyncSession, kode: str) -> MillingProcess | None:
+async def get_process_by_kode(db: AsyncSession, kode: str, user=None) -> MillingProcess | None:
+    from app.services.cakupan_fasilitas import batas
     return (
-        await db.execute(select(MillingProcess).where(MillingProcess.kode_proses == kode))
+        await db.execute(select(MillingProcess).where(batas(user,MillingProcess),MillingProcess.kode_proses == kode))
     ).scalars().first()
 
 
@@ -122,7 +124,7 @@ def _rangkai(nama: list[str]) -> str:
 
 async def start_milling(
     db: AsyncSession, *, user, nama_silo: str | list[str] | tuple | None,
-    tanggal=None, jam=None
+    tanggal=None, jam=None, lini_id: int | None = None
 ) -> StartResult:
     """Mulai satu giling dari SATU ATAU BEBERAPA silo — hasilnya SATU lot.
 
@@ -136,6 +138,12 @@ async def start_milling(
     seluruh baris. Yang berubah di sini hanya: barisnya boleh datang dari
     beberapa silo, dan SELURUH silo itu diperiksa sebelum satu pun ditulis.
     """
+    from app.services.fasilitas import pilih_lini, FasilitasError
+    try:
+        lini = await pilih_lini(db, user=user, kode_jenis="penggilingan",
+                                lini_id=lini_id)
+    except FasilitasError as exc:
+        raise MillingError(str(exc)) from exc
     pilihan = ([nama_silo] if isinstance(nama_silo, str)
                else list(nama_silo or []))
     # Dirapikan, bukan ditolak: orang yang mencentang silo yang sama dua kali
@@ -158,7 +166,7 @@ async def start_milling(
     silo_pilih: list = []
     rows: list[SiloStorage] = []
     for nama in nama_pilih:
-        silo = await get_g1_silo(db, nama)
+        silo = await get_g1_silo(db, nama, warehouse_id=lini.warehouse_id)
         if silo is None:
             raise MillingError(f"Silo {nama} Gudang 1 tidak ditemukan.")
         baris = await _silo_active_rows(db, silo.id)
@@ -243,6 +251,7 @@ async def start_milling(
     # peninggalan adalah kolom yang akan dipakai lagi oleh orang berikutnya.
     st = next((r for r in rows if r.drying_lot_id), rows[0])
     proc = MillingProcess(
+        lini_produksi_id=lini.id,
         warehouse_id=silo.warehouse_id,
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
@@ -390,7 +399,7 @@ async def tambah_silo_giling(
     silo_pilih: list = []
     rows: list[SiloStorage] = []
     for nama in nama_pilih:
-        silo = await get_g1_silo(db, nama)
+        silo = await get_g1_silo(db, nama, warehouse_id=await db.scalar(select(lokasi_proses(MillingProcess)).where(MillingProcess.id==proc.id)))
         if silo is None:
             raise MillingError(f"Silo {nama} Gudang 1 tidak ditemukan.")
         baris = [r for r in await _silo_active_rows(db, silo.id) if r.id not in sudah]
@@ -848,7 +857,7 @@ async def tutup_silo_giling(
                 f"Sebutkan silo mana yang dibebaskan dari {proc.kode_proses} "
                 "— prosesnya memakai lebih dari satu.")
     else:
-        silo = await get_g1_silo(db, nama_silo)
+        silo = await get_g1_silo(db, nama_silo, warehouse_id=await db.scalar(select(lokasi_proses(MillingProcess)).where(MillingProcess.id==proc.id)))
         if silo is None:
             raise MillingError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
 
@@ -2200,8 +2209,9 @@ class KartuGiling:
 async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
                          sebelum: int | None = None,
                          process_id: int | None = None,
-                        allowed_ids: frozenset[int] | None = None
-                         ) -> tuple[list[KartuGiling], bool]:
+                        allowed_ids: frozenset[int] | None = None,
+    user=None
+) -> tuple[list[KartuGiling], bool]:
     """Kartu giling SELESAI, terbaru lebih dulu. → (kartu, ada lanjutannya)
 
     `sebelum` = id proses TERAKHIR yang sudah digambar (kursor), bukan nomor
@@ -2222,6 +2232,9 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
          .where(MillingProcess.status == "selesai")
          .order_by(MillingProcess.id.desc())
          .limit(batas + 1))
+    if user is not None:
+        from app.services.cakupan_fasilitas import batas as batas_lokasi
+        q=q.where(batas_lokasi(user,MillingProcess))
     if allowed_ids is not None:
         q = q.where(MillingProcess.id.in_(allowed_ids))
     if process_id is not None:

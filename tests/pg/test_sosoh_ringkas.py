@@ -150,7 +150,11 @@ async def test_bobot_dinamis_belum_final_bukan_nol_dan_snapshot_angka_asli(pg,pr
   it=(await g2.masukkan_pk_luar(db,user=u,kode=batch.kode_batch)).intake
   await g2.pindah_tumpukan_ke_silo(db,user=u,intake_id=proses['intake_tumpukan'],nama_silo='Timur',berat=100)
   await g2.pindah_tumpukan_ke_silo(db,user=u,intake_id=it.id,nama_silo='Timur',jumlah_karung=50)
-  proc=(await p.mulai_penyosohan(db,user=u,nama_silos=['Timur'])).proc;w={'kode':proc.kode_proses,'pid':proc.id}
+  # Skenario ini menjalankan dua proses bersamaan: fasilitas kedua hanya data uji.
+  from app.models import LiniProduksi,JenisProsesProduksi
+  jid=await db.scalar(select(JenisProsesProduksi.id).where(JenisProsesProduksi.kode=='penyosohan'))
+  line=LiniProduksi(kode='uji-timur',nama='Line uji Timur',warehouse_id=u.default_warehouse_id,jenis_proses_id=jid,aktif=True,versi=1);db.add(line);await db.commit()
+  proc=(await p.mulai_penyosohan(db,user=u,nama_silos=['Timur'],lini_id=line.id)).proc;w={'kode':proc.kode_proses,'pid':proc.id}
  async with await _klien(pg,peran='admin') as c:
   before=await fakta(pg);r=await c.get(url(w));assert r.status_code==200,r.text;d=r.json()
   assert not d['sumber_final'] and not d['bobot_final'] and d['sumber'][0]['awal'] is None and d['rendemen'] is None

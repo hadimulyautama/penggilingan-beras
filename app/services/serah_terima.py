@@ -142,11 +142,11 @@ async def pengeluaran(db, oid, *, scope=None):
         serah='Penyerah di pabrik',terima='Pelanggan / penerima')
 
 
-async def daftar(db, *, scope=None, g1=True, g2=True):
+async def daftar(db, *, scope=None, g1=True, g2=True, user=None):
     """Daftar hanya dokumen yang siap, seluruh gerbang dibaca secara batch."""
     from sqlalchemy import bindparam
     from app.models import PurchaseBatch, PkPurchaseBatch, FinishedGoodsStock, ByproductStock, OutgoingItem
-    incoming=await masuk.riwayat(db,g1=g1,g2=g2,jasa_ids=scope.jasa_ids if scope else None)
+    incoming=await masuk.riwayat(db,g1=g1,g2=g2,jasa_ids=scope.jasa_ids if scope else None,user=user)
     gates=await kesiapan_banyak(db,[c for t in incoming for c in t['catatan']])
     ids={t['id'] for t in incoming}
     valid=set((await db.scalars(text("SELECT id FROM timbangan_transaksi WHERE id IN :ids AND status_transaksi='AKTIF' AND status_tiket<>'DITUTUP_PAKSA'").bindparams(bindparam('ids',expanding=True)),{'ids':sorted(ids)})).all()) if ids else set()

@@ -229,9 +229,9 @@ async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
 async def sumber_detail_barang_masuk(db, tid, request, akun):
     """Gerbang dan catatan asal untuk detail serta PDF; tidak menyusun aksi."""
     from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
-    from app.web.api import _is_g1_operator,_is_g2_operator
-    g1,g2 = (True,True) if is_customer_read(request) else (await _is_g1_operator(akun.user),await _is_g2_operator(akun.user))
-    data = await masuk.riwayat(db,g1=g1,g2=g2,tid=tid,
+    from app.web.api import _is_g1_operator,_is_g2_operator,_is_gabah_operator
+    g1,g2 = (True,True) if is_customer_read(request) else (await _is_gabah_operator(akun.user),await _is_g2_operator(akun.user))
+    data = await masuk.riwayat(db,g1=True,g2=True,tid=tid,user=None if is_customer_read(request) else akun.user,
         jasa_ids=request.state.portal_scope.jasa_ids if is_customer_read(request) else None)
     t = await ambil_tiket(db,tid)
     if t is None and data:
@@ -240,7 +240,10 @@ async def sumber_detail_barang_masuk(db, tid, request, akun):
         raise HTTPException(404,'Tiket masuk tidak ditemukan.')
     jenis = masuk.jenis_tiket(t['jenis_kode'])
     from app.peran import can_see_financials
-    boleh = g1 if jenis.startswith('gabah') else g2 if jenis!='lain' else can_see_financials(akun.user)
+    boleh = bool(data) or (g1 if jenis.startswith('gabah') else g2 if jenis!='lain' else can_see_financials(akun.user))
+    if not is_customer_read(request) and not data:
+        all_rows=await masuk.riwayat(db,g1=True,g2=True,tid=tid)
+        if all_rows:boleh=False
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403,'Tiket ini berada di gudang lain.')
     return data, t, jenis

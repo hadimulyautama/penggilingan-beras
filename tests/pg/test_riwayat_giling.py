@@ -40,6 +40,8 @@ async def pabrik(pg, pemakai, pemasok):
             await db.flush()
         u = await db.get(User, pemakai.id)
         u.default_warehouse_id = g1.id
+        from app.services.fasilitas import seed_fasilitas
+        await seed_fasilitas(db)
         await db.commit()
         return {"user": u.id, "silo": s1.id, "pemasok": pemasok.id}
 

@@ -40,6 +40,7 @@ class MillingProcess(Base, TimestampMixin):
               sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
+    lini_produksi_id: Mapped[int | None] = mapped_column(ForeignKey("lini_produksi.id"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)

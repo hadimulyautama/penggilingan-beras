@@ -35,6 +35,12 @@ from app.database import SessionLocal
 from app.web.security import butuh_akun
 from app.web.tampilan import render_laci
 
+async def _izin_lokasi(user,model,id):
+    from app.services.cakupan_fasilitas import boleh_objek
+    async with SessionLocal() as db:
+        if not await boleh_objek(db,user,model,id):
+            raise HTTPException(403,'Catatan tidak tersedia dalam gudang kerja Anda.')
+
 router = APIRouter()
 
 #: Sekali muat. Cukup besar untuk memuat sebulan penyosohan di pabrik ini,
@@ -46,7 +52,7 @@ SEKALI = 30
 async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
     """Kartu penyosohan selesai, terbaru lebih dulu, berikut neraca bobotnya."""
     from app.penggilingan.gudang2.polishing import SAMPING_DISEBUT, riwayat_sosoh
-    from app.web.api import _is_g2_operator
+    from app.web.api import _is_jenis_operator
 
     # ⚠ DIJAGA DI RUTENYA, bukan cuma di daftar pintu. Keputusan pemilik:
     # "hanya super admin, admin dan operator gudang 2 yang bisa lihat" —
@@ -59,7 +65,7 @@ async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
     # Menuliskan sendiri "superadmin atau admin atau operator g2" di sini
     # berarti menyebut peran harfiah, dan peran baru di puncak sudah sembilan
     # kali tertinggal di gerbang yang menyebut nama.
-    if not await _is_g2_operator(akun.user):
+    if not await _is_jenis_operator(akun.user,"penyosohan"):
         raise HTTPException(
             403, "Riwayat sosoh milik Admin ke atas dan operator Gudang 2.")
 
@@ -73,7 +79,7 @@ async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
         sebelum_id = None
 
     async with SessionLocal() as db:
-        kartu, lagi = await riwayat_sosoh(db, batas=SEKALI, sebelum=sebelum_id)
+        kartu, lagi = await riwayat_sosoh(db, batas=SEKALI, sebelum=sebelum_id, user=akun.user)
         from app.services.qc_sosoh import rekap_proses
         qc_rekap = await rekap_proses(db, [k.id for k in kartu])
     return await render_laci(
@@ -90,8 +96,8 @@ async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
 
 
 async def _pastikan_akses_sosoh(user):
-    from app.web.api import _is_g2_operator
-    if not await _is_g2_operator(user):
+    from app.web.api import _is_polishing_operator
+    if not await _is_polishing_operator(user):
         raise HTTPException(403, "Laporan sosoh hanya untuk Admin ke atas dan operator Gudang 2.")
 
 
@@ -107,6 +113,9 @@ async def detail_proses_sosoh(kode_proses: str, request: Request,
 async def detail_riwayat_sosoh(process_id: int, request: Request,
                                akun=Depends(butuh_akun)):
     if not is_customer_read(request):
+        from app.models import PolishingProcess
+        await _izin_lokasi(akun.user,PolishingProcess,process_id)
+    if not is_customer_read(request):
         await _pastikan_akses_sosoh(akun.user)
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.gudang2.polishing import (
@@ -114,7 +123,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
     )
     from app.services.stok import nama_produk
     async with SessionLocal() as db:
-        kartu, _ = await riwayat_sosoh(db, batas=1, process_id=process_id)
+        kartu, _ = await riwayat_sosoh(db, batas=1, process_id=process_id, user=None if is_customer_read(request) else akun.user)
         from app.models import PolishingProcess
         from app.services.qc_sosoh import data_proses
         proc_qc = await db.get(PolishingProcess, process_id) if kartu else None
@@ -158,6 +167,9 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
 @router.post("/riwayat-sosoh/{process_id}/koreksi")
 async def koreksi_riwayat_sosoh(process_id: int, request: Request,
                                 akun=Depends(butuh_akun)):
+    if True:
+        from app.models import PolishingProcess
+        await _izin_lokasi(akun.user,PolishingProcess,process_id)
     """Koreksi hasil sosoh selesai dengan audit, tanpa tahap verifikasi."""
     if not akun.is_admin:
         raise HTTPException(403, "Koreksi hasil sosoh hanya untuk Admin ke atas.")
@@ -201,6 +213,9 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
 @router.get("/riwayat-sosoh/{process_id}/laporan.pdf")
 async def pdf_riwayat_sosoh(process_id: int, request: Request,
                             unduh: int = 0, akun=Depends(butuh_akun)):
+    if True:
+        from app.models import PolishingProcess
+        await _izin_lokasi(akun.user,PolishingProcess,process_id)
     """PDF proses sosoh selesai, siap dibuka, diunduh, atau dibagikan."""
     await _pastikan_akses_sosoh(akun.user)
     return await laporan_sosoh_pdf(process_id, unduh)
@@ -222,6 +237,9 @@ async def laporan_sosoh_pdf(process_id: int, unduh: int = 0):
 @router.get("/riwayat-sosoh/{process_id}/laporan")
 async def halaman_pdf_riwayat_sosoh(request: Request, process_id: int,
                                     akun=Depends(butuh_akun)):
+    if True:
+        from app.models import PolishingProcess
+        await _izin_lokasi(akun.user,PolishingProcess,process_id)
     await _pastikan_akses_sosoh(akun.user)
     from app.penggilingan.gudang2.models import PolishingProcess
     async with SessionLocal() as db:

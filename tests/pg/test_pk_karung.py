@@ -24,6 +24,8 @@ async def dunia(pg):
         user = User(nama='Operator karung', role=P.OPERATOR, status='aktif', default_warehouse_id=gudang.id)
         db.add_all([user, Silo(nama_silo='Silo A', warehouse_id=gudang.id),
                     Silo(nama_silo='Silo B', warehouse_id=gudang.id)])
+        from app.services.fasilitas import seed_fasilitas
+        await seed_fasilitas(db)
         await db.commit()
         return user.id, pemasok.id
 

@@ -367,3 +367,8 @@ async def _koreksi_bahan_aktif(db, e):
     await db.flush()
 
 PENANGAN['koreksi_bahan_hasil_berjalan']=_koreksi_bahan_aktif
+
+async def _koreksi_gudang_penerimaan(db,e):
+    from app.services.koreksi_gudang_penerimaan import terapkan_peristiwa
+    await terapkan_peristiwa(db,e)
+PENANGAN['koreksi_gudang_penerimaan']=_koreksi_gudang_penerimaan

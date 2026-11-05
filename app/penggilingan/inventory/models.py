@@ -247,6 +247,7 @@ class ByproductStock(Base, TimestampMixin):
               sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     jenis_produk: Mapped[str] = mapped_column(String(20), nullable=False)
     # polishing / reject_reprocessing

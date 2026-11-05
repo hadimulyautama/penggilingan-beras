@@ -128,14 +128,15 @@ async def test_tujuan_diubah_setelah_dibaca_memakai_validasi_lama(pg,lengkap):
    dryer.warehouse_id=lengkap['gudang']['g2'];await db.commit()
   before=await snapshot(pg)
   r=await c.post('/api/actions/gabah-masuk',json=dict(timbangan_transaksi_id=tid,tujuan='dryer:'+str(did)))
-  # Layanan lama dapat menyimpan penerimaan, lalu penempatan tertunda.
-  # Jangan mengklaim seluruh tindakan gagal dan mengirim ulang penerimaan.
-  assert r.status_code==200 and 'Belum ditempatkan' in r.json()['pesan'],r.text
-  latest=await read(c,tid);assert not latest['pending'] and len(latest['catatan'])==1
-  assert latest['catatan'][0]['status']=='baru'
-  async with pg() as db:
-   b=await db.get(PurchaseBatch,latest['catatan'][0]['id']);assert b.dryer_id is None
-  saved=await snapshot(pg);r=await c.post('/api/actions/gabah-masuk',json=dict(timbangan_transaksi_id=tid,tujuan='tumpuk'))
+  # Gudang penerima kini eksplisit. Alat yang berpindah gudang tidak boleh
+  # menciptakan penerimaan parsial pada lokasi lama.
+  assert r.status_code==400 and 'gudang penerima' in r.json()['detail'],r.text
+  latest=await read(c,tid);assert latest['pending'] and not latest['catatan']
+  assert await snapshot(pg)==before
+  r=await c.post('/api/actions/gabah-masuk',json=dict(timbangan_transaksi_id=tid,warehouse_id=lengkap['gudang']['g1'],tujuan='tumpuk'))
+  assert r.status_code==200,r.text
+  saved=await snapshot(pg)
+  r=await c.post('/api/actions/gabah-masuk',json=dict(timbangan_transaksi_id=tid,warehouse_id=lengkap['gudang']['g1'],tujuan='tumpuk'))
   assert r.status_code in (400,409) and await snapshot(pg)==saved
 
 @pytest.mark.parametrize('path',['/barang-masuk','/pekerjaan'])

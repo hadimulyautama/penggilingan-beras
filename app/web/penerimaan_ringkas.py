@@ -26,10 +26,30 @@ async def keadaan(ctx,b,user):
     specs={a['id']:a for a in await actions_menu(user)}
     t=ctx['tiket'];jenis=ctx['jenis'];pending=ctx['menunggu']
     action=('gabah_masuk' if jenis.startswith('gabah_') else {'pk':'catat_pk_luar','beras':'catat_beras_timbang_masuk','broken':'catat_broken_timbang_masuk'}.get(jenis))
+    from app.database import SessionLocal
+    from app.services.cakupan_fasilitas import pilihan_gudang
+    async with SessionLocal() as db:
+        warehouses=await pilihan_gudang(db,user)
+        if jenis.startswith('gabah_') and not pending and not ctx['catatan']:
+            from app.web.api import _is_gabah_operator
+            from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+            from app.services.berjalan import _tiket_belum_ditaut
+            if await _is_gabah_operator(user):
+                eligible=next((x for x in await tiket_masuk_aktif(db) if x['id']==t['id']),None)
+                if eligible:pending=await _tiket_belum_ditaut(db,tiket=[eligible])
+        all_dest=[]
+        if jenis.startswith('gabah_'):
+            from app.services.berjalan import _tujuan_gabah
+            for w in warehouses:
+                choices=await _tujuan_gabah(db,'basah' if jenis=='gabah_basah' else 'kering',
+                    post='/api/actions/gabah-masuk',data={'timbangan_transaksi_id':t['id']},
+                    tiket=t,warehouse_id=w.id)
+                all_dest.extend(dict(value=x.data['tujuan'],label=x.nama,keterangan=x.ket,
+                    alasan=x.mati or '',warehouse_id=w.id) for x in choices if x.data and 'tujuan' in x.data)
     # Pilihan kartu lama mencakup tumpukan, kondisi alat dan kepemilikan.
     # Jangan menggantinya dengan subset picker remote atau simulasi mockup.
     destinations=[dict(value=x.data['tujuan'],label=x.nama,keterangan=x.ket,alasan=x.mati or '') for row in pending for x in row.tombol if x.data and 'tujuan' in x.data]
-    destinations=list({d['value']:d for d in destinations}.values())
+    destinations=all_dest if jenis.startswith('gabah_') else list({d['value']:d for d in destinations}.values())
     forms=[]
     for id_ in ([action,'tolak_pk_luar'] if jenis=='pk' else [action]):
         if id_ and id_ in specs:
@@ -53,7 +73,7 @@ async def keadaan(ctx,b,user):
     # Tiket diberi whitelist: pembaca timbang juga membawa data harga untuk
     # pemanggil lain, yang tidak boleh ikut tersebar ke operator lewat JSON.
     safe={k:t.get(k) for k in ['id','kode','jenis_kode','jenis_nama','arah','status_tiket','status_transaksi','jasa','jasa_kode','nomor_polisi','nama_sopir','nama_supplier','nama_pelanggan','pihak_nama','berat_hpp_kg','sumber_berat']}
-    return jsonable_encoder(dict(tiket=safe,jenis=jenis,formulir=forms,tujuan=destinations,
+    return jsonable_encoder(dict(tiket=safe,jenis=jenis,formulir=forms,tujuan=destinations,gudang_penerima=[dict(value=w.id,label=w.nama_gudang) for w in warehouses],
         pending=bool(pending),catatan=ctx['catatan'],berat_diterima=ctx['berat_diterima'],keterangan_berat=ctx['keterangan_berat'],
         status_penerimaan='Penerimaan tercatat' if received else 'Ditolak' if ctx['catatan'] else 'Belum diterima',
         bobot_masuk=ctx['bobot_masuk'],status_qc=qc,qc_tindakan=tasks,tindak_lanjut=lanjutan,boleh_audit=can_see_financials(user)))

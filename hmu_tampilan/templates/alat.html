@@ -11,7 +11,7 @@
     {% for d in mesin %}
       <div class="baris daftar-standar__baris">
         <div class="baris__isi">
-          <div class="baris__nama">{{ d.nama }}</div>
+          <div class="baris__nama">{{ d.nama }}</div><div class="baris__ket">{{ d.gudang_nama }}</div>
           {# `kapasitas` dalam KG — satuannya dipakai di baris ini, bukan di
              nama medannya. Nama itu dulu bentuk JSON `/internal/meja/alat`
              yang menyeberangi batas repo; pintunya dicabut 24 September 2026
@@ -169,7 +169,7 @@
 </div>
 
 <div>
-  <span class="lbl">Silo Gudang 2</span>
+  <span class="lbl">Silo bahan penyosohan</span>
   <div class="kartu daftar-standar">
     {# Silo Gudang 2 adalah satu kolam campuran; jenis historis pada master
        tidak menjadi batasan isi. #}

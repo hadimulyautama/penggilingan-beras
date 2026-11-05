@@ -19,6 +19,8 @@ disosoh — dan menempelkannya di halaman yang sama akan membuat satu layar
 menjawab dua pertanyaan sekaligus.
 """
 from __future__ import annotations
+from hmu_identitas import peran as P
+from app.services.cakupan_fasilitas import batas as batas_lokasi
 from app.performa import dalam
 
 from app.performa import baca_sekali, tampilan_singkat
@@ -152,6 +154,10 @@ class LotPk:
     jasa_id: int | None = None
     #: "JAS-2610-007 Pak Budi" — dicetak di kartunya. None untuk barang pabrik.
     pemilik: str | None = None
+
+    warehouse_id: int | None = None
+    gudang_nama: str = ''
+    gudang_kode: str = ''
 
 
 def _tgl(d) -> str:
@@ -486,7 +492,7 @@ def _keadaan_minta(status: str) -> str:
 
 @baca_sekali
 @tampilan_singkat
-async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
+async def pk_gudang1(db: AsyncSession, *, user=None) -> list[LotPk]:
     """Tiap lot giling yang PK-nya masih tersisa di Gudang 1, terbaru dulu.
 
     Yang sudah habis terkirim tidak ditampilkan: stok adalah apa yang ADA, dan
@@ -500,7 +506,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         (saldo.c.status=='selesai') & (saldo.c.produced<=0) & (saldo.c.transferred<=0))))).all()
     rincian={r.id:PkBreakdown(float(r.produced),float(r.transferred),float(r.tersedia)) for r in rows}
     proses=list((await db.scalars(select(MillingProcess)
-        .where(dalam(db,MillingProcess.id,rincian)).order_by(MillingProcess.id.desc()))).all()) if rows else []
+        .where(dalam(db,MillingProcess.id,rincian),batas_lokasi(user,MillingProcess,baca_pk=True)).order_by(MillingProcess.id.desc()))).all()) if rows else []
     # Nilai QC untuk seluruh lot sekaligus. Satu kueri, bukan satu per lot.
     peta_mutu = await _mutu_banyak(db, [p.id for p in proses])
     peta_bahan = await _bahan_banyak(db, proses)
@@ -513,6 +519,8 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     # lot. Layar ini membaca setiap giling yang pernah ada (temuan QA P-S-02).
     peta_pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p in proses})
 
+    from app.services.cakupan_fasilitas import lokasi_banyak
+    lokasi_kartu=await lokasi_banyak(db,MillingProcess,[p.id for p in proses])
     keluar: list[LotPk] = []
     for proc in proses:
         bd = rincian[proc.id]
@@ -529,6 +537,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         bahan, kondisi = peta_bahan[proc.id]
         nilai_kualitas, komponen_kualitas = _nilai_kualitas(peta_mutu.get(proc.id, []))
         keluar.append(LotPk(
+            **lokasi_kartu.get(proc.id,{}),
             kode=proc.kode_proses,
             tersedia=bd.tersedia,
             jasa_id=proc.jasa_id,
@@ -717,9 +726,13 @@ class LotPkG2:
     peringatan_karung: str | None = None
     jumlah_karung: int | None = None
 
+    warehouse_id: int | None = None
+    gudang_nama: str = ''
+    gudang_kode: str = ''
+
 
 @baca_sekali
-async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
+async def pk_gudang2(db: AsyncSession, *, user=None) -> list[LotPkG2]:  # noqa: C901
     """Tiap pemasukan PK yang masih menumpuk di Gudang 2, terbaru dulu.
 
     Silo TIDAK didaftar di sini (lihat catatan di atas): isinya bukan stok
@@ -741,35 +754,15 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     from app.services.jasa import nama_pemilik_banyak
     from sqlalchemy import func, or_
 
-    from app.penggilingan.gudang2.service import _g2_warehouse_id
-    warehouse_id=await _g2_warehouse_id(db)
-    tump = float(await hitung_stok_tumpukan(db))
-    if tump <= 0:
-        # ⚠ `hitung_stok_tumpukan` menjumlah `berat_kg`, dan SQL `SUM`
-        # mengabaikan NULL — truk yang belum ditimbang kedua (P6-02) ikut
-        # TERABAIKAN, bukan ikut terhitung sebagai nol. Jadi tumpukan yang
-        # isinya CUMA pemasukan berbobot-belum-diketahui terbaca "kosong"
-        # oleh ukuran itu, padahal barangnya sudah ada di lantai — pagar
-        # cepat ini tak boleh percaya begitu saja sebelum memastikan tak
-        # ada pemasukan begitu (kueri kedua ini HANYA berjalan saat `tump`
-        # memang nol, jadi jalur umum — tumpukan sungguh berisi — tak
-        # membayar kueri tambahan ini sama sekali).
-        ada_belum_ditimbang = (await db.execute(
-            select(PkGudang2Intake.id)
-            .where(PkGudang2Intake.tujuan == "ditumpuk",
-                  PkGudang2Intake.berat_kg.is_(None))
-            .limit(1)
-        )).scalars().first()
-        if not ada_belum_ditimbang:
-            return []
-
     intakes = list((await db.execute(
         select(PkGudang2Intake)
-        .where(PkGudang2Intake.tujuan == "ditumpuk",or_(PkGudang2Intake.warehouse_id==warehouse_id,PkGudang2Intake.warehouse_id.is_(None)))
+        .where(PkGudang2Intake.tujuan == "ditumpuk",batas_lokasi(user,PkGudang2Intake))
         .order_by(PkGudang2Intake.id.desc())
     )).scalars().all())
     if not intakes:
         return []
+    from app.services.cakupan_fasilitas import lokasi_banyak
+    lokasi_kartu=await lokasi_banyak(db,PkGudang2Intake,[i.id for i in intakes])
     ids = [i.id for i in intakes]
 
     # Sudah berapa yang dipindah ke silo per pemasukan — SATU kueri terkelompok,
@@ -914,6 +907,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
 
         nilai_kualitas, komponen_kualitas = _nilai_kualitas(mutu)
         keluar.append(LotPkG2(
+            **lokasi_kartu.get(i.id,{}),
             kode=judul, tersedia=sisa, bobot_final=bobot_final,
             tanggal=_tgl(i.tanggal_masuk), lama=_hari(i.waktu_masuk),
             pemilik=peta_pemilik.get(i.jasa_id) if i.jasa_id else None,
@@ -1467,7 +1461,7 @@ def _fifo_sisa(baris: list[RincianProduk], keluar_kg: float) -> list[RincianProd
 
 @baca_sekali
 async def stok_produk(db: AsyncSession, *,
-                      jasa_id: int | list[int] | None = None) -> list[KartuProduk]:
+                      jasa_id: int | list[int] | None = None, user=None) -> list[KartuProduk]:
     """Satu kartu per kategori, dengan persamaan empat sukunya.
 
     Tiga sumber angkanya, semuanya sudah ada sebelum hari ini:
@@ -1523,12 +1517,14 @@ async def stok_produk(db: AsyncSession, *,
         ByproductStock, FinishedGoodsStock, OutgoingItem, OutgoingRecord,
         ProductSku, RiceQualityStandard)
 
-    def milik_proc(k):
+    def milik_asal(k):
         if jasa_id is None:
             return k.jasa_id.is_(None)
         if isinstance(jasa_id, (list, tuple, set, frozenset)):
             return dalam(db,k.jasa_id,jasa_id)
         return k.jasa_id == jasa_id
+
+    def milik_proc(k):return milik_asal(k) & batas_lokasi(user,k)
 
     # SATU kueri untuk seluruh proses, dan SATU lagi untuk seluruh catatan
     # hasilnya — bukan dua kueri per proses. Gelungnya sendiri yang dulu
@@ -1728,7 +1724,7 @@ async def stok_produk(db: AsyncSession, *,
             .join(ReturSupplier,ReturSupplier.id==ReturSupplierItem.retur_supplier_id)
             .outerjoin(ProductSku,ProductSku.id==ReturSupplierItem.product_sku_id)
             .outerjoin(RiceQualityStandard,RiceQualityStandard.id==ReturSupplierItem.rice_quality_standard_id)
-            .where(ReturSupplierItem.tipe_pool.in_(('finished_goods','fg_curah','byproduct_curah')),ReturSupplierAktual.bobot_kg>0))).all():
+            .where(ReturSupplierItem.tipe_pool.in_(('finished_goods','fg_curah','byproduct_curah')),ReturSupplierAktual.bobot_kg>0,True if user is None or P.admin_keatas(user.role) and getattr(user,'stock_warehouse_filter',None) is None else ReturSupplierItem.warehouse_id==(getattr(user,'stock_warehouse_filter',None) or user.default_warehouse_id)))).all():
             j=jenis_produk(kat or jp,None if tipe=='byproduct_curah' else mutu)
             if j:
                 keluar.setdefault(j,[]).append(RincianProduk(kode=kode,kg=float(kg),waktu=tgl,ket='Retur supplier · '+supplier['supplier']))
@@ -1887,7 +1883,7 @@ async def stok_produk(db: AsyncSession, *,
                            else hitung_stok_broken_curah)
             dikarungi = dikemas.get(jenis, 0.0)
             keluar_karung = k - keluar_curah.get(jenis, 0.0)
-            curah_stok = await fungsi_stok(db, jasa_id=jasa_id)
+            curah_stok = await fungsi_stok(db, jasa_id=jasa_id,user=user)
             kemasan_stok = dikarungi - keluar_karung
             punya_rumah = curah_stok + kemasan_stok
             curah = (h - masuk_curah_proc.get(jenis, 0.0)
@@ -1976,7 +1972,7 @@ class BarangJadiG2:
     samping: list[dict]
 
 
-async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
+async def barang_jadi_g2(db: AsyncSession, *, user=None) -> BarangJadiG2:
     """Stok barang jadi Gudang 2 — satu kartu per SKU × mutu × PEMILIK.
 
     Satu kartu = satu SKU × mutu (jenis · merk · kemasan · ukuran) × pemilik;
@@ -2042,7 +2038,7 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
               & (FinishedGoodsStock.source_type == "polishing"), isouter=True)
         # PABRIK *dan* TITIPAN — lihat catatan ⚠⚠ di atas. Penyaringan untuk
         # borang penjualan terjadi DI PEMAKAINYA, bukan di sini.
-        .where(FinishedGoodsStock.curah_kemas_ulang.is_(False))
+        .where(FinishedGoodsStock.curah_kemas_ulang.is_(False),batas_lokasi(user,FinishedGoodsStock))
         .order_by(FinishedGoodsStock.waktu.desc())
     )).all()
 
@@ -2075,7 +2071,7 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
         k = kartu.get(kunci)
         if k is None:
             stok_ = await bj.hitung_stok_finished_goods(
-                db, sku.id, fg.rice_quality_standard_id, jasa_id=fg.jasa_id)
+                db, sku.id, fg.rice_quality_standard_id, jasa_id=fg.jasa_id,user=user)
             if stok_["karung"] <= 0 and stok_["kg"] <= 0:
                 kartu[kunci] = None
                 continue
@@ -2158,13 +2154,13 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
          else samping).append(k)
 
     # Bekatul curah — masuk − keluar, rincian per proses.
-    curah = await bj.hitung_stok_bekatul(db)
+    curah = await bj.hitung_stok_bekatul(db,user=user)
     if curah > 0:
         per_pol = (await db.execute(
             select(PolishingProcess.kode_proses, ByproductStock.berat_kg)
             .join(PolishingProcess, PolishingProcess.id == ByproductStock.source_id)
             .where(ByproductStock.jenis_produk == "bekatul",
-                   ByproductStock.source_type == "polishing")
+                   ByproductStock.source_type == "polishing",batas_lokasi(user,ByproductStock))
             .order_by(ByproductStock.waktu.desc())
         )).all()
         samping.append({

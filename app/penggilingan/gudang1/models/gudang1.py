@@ -34,6 +34,7 @@ class PurchaseBatch(Base, TimestampMixin):
 
     __tablename__ = "purchase_batches"
 
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_batch: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     #: Dari siapa gabah ini DIBELI — kosong bila ia tidak dibeli.
@@ -233,6 +234,7 @@ class DryingLot(Base, TimestampMixin):
               sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
+    lini_produksi_id: Mapped[int | None] = mapped_column(ForeignKey("lini_produksi.id"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_lot: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     dryer_id: Mapped[int | None] = mapped_column(ForeignKey("dryers.id"))

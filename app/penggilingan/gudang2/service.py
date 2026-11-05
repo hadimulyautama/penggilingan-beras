@@ -152,8 +152,8 @@ async def _g2_warehouse_id(db: AsyncSession) -> int:
     return wid
 
 
-async def get_g2_silo(db: AsyncSession, letter: str) -> Silo | None:
-    wid = await _g2_warehouse_id(db)
+async def get_g2_silo(db: AsyncSession, letter: str, warehouse_id: int | None = None) -> Silo | None:
+    wid = warehouse_id if warehouse_id is not None else await _g2_warehouse_id(db)
     nama = (letter or "").strip()
     return (
         await db.execute(
@@ -757,6 +757,7 @@ async def create_pk_purchase(
 async def create_pk_purchase_dari_timbang(
     db: AsyncSession, *, user: User, timbangan_transaksi_id: int, jenis_pk: str | None,
     kadar_air: float | None = None, tanggal: date | None = None, jam: time | None = None,
+    warehouse_id: int | None = None,
     kunci_kiriman: str | None = None,
     jumlah_karung: int | None = None, ukuran_karung_kg: Decimal | None = None,
 ) -> PkPurchaseResult:
@@ -841,6 +842,9 @@ async def create_pk_purchase_dari_timbang(
     if kunci_kiriman:
         ada = await _pk_batch_dari_kunci(db, kunci_kiriman)
         if ada is not None:
+            from app.services.cakupan_fasilitas import lokasi
+            if warehouse_id is not None and await db.scalar(select(lokasi(PkPurchaseBatch)).where(PkPurchaseBatch.id==ada.id)) != warehouse_id:
+                raise Gudang2Error('Kiriman ini sudah tercatat pada gudang berbeda. Periksa penerimaan tersimpan.')
             return PkPurchaseResult(batch=ada, supplier_nama=_sebut(), supplier_created=False)
     else:
         urutan = await buku.jumlah_jenis(db, PK_LUAR_MASUK, "timbangan_transaksi_id",
@@ -855,6 +859,7 @@ async def create_pk_purchase_dari_timbang(
 
     kode = await next_pk_purchase_code(db, now.date())
     muatan = {
+        "warehouse_id": warehouse_id,
         "kode_batch": kode, "timbangan_transaksi_id": timbangan_transaksi_id,
         "tiket_kode": tiket.get("kode"),
         "supplier_id": supplier.id if supplier else None,
@@ -878,12 +883,16 @@ async def create_pk_purchase_dari_timbang(
     if not e.baru:
         ada = await _pk_batch_dari_kunci(db, kunci_kiriman)
         if ada is not None:
+            from app.services.cakupan_fasilitas import lokasi
+            if warehouse_id is not None and await db.scalar(select(lokasi(PkPurchaseBatch)).where(PkPurchaseBatch.id==ada.id)) != warehouse_id:
+                raise Gudang2Error('Kiriman ini sudah tercatat pada gudang berbeda. Periksa penerimaan tersimpan.')
             return PkPurchaseResult(batch=ada, supplier_nama=_sebut(), supplier_created=False)
 
     armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"), dari_tiket_lama=True)
 
     # Cermin untuk layar & laporan lama, ditambah penunjuk ke peristiwanya.
     batch = PkPurchaseBatch(
+        warehouse_id=warehouse_id,
         # TEPAT SATU dari keduanya — `ck_pk_purchase_batches_beli_atau_jasa`.
         kode_batch=kode, supplier_id=supplier.id if supplier else None,
         jasa_id=jasa_ini.id if jasa_ini else None, berat_total_kg=berat,
@@ -1901,23 +1910,20 @@ async def pindah_tumpukan_ke_silo(
     """
     from app.services.barang_keluar import _kunci_saldo_keluar
     await _kunci_saldo_keluar(db)
-    g2_wid = await _g2_warehouse_id(db)
-    if not is_operator_gudang2(user, g2_wid):
-        raise Gudang2Error(
-            "🔒 Pemindahan tumpukan ke silo hanya bisa dilakukan oleh "
-            "Operator Gudang 2 (atau admin)."
-        )
-    if not nama_silo:
-        raise Gudang2Error("Pilih nama silo tujuan Gudang 2.")
-    silo = await get_g2_silo(db, nama_silo)
-    if silo is None:
-        raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
-    _pastikan_komoditas_silo(silo, "pk")
-    intake = (await db.execute(
-        select(PkGudang2Intake).where(PkGudang2Intake.id == intake_id).with_for_update()
-    )).scalars().first()
+    from app.services.cakupan_fasilitas import batas,lokasi
+    intake = (await db.execute(select(PkGudang2Intake).where(
+        PkGudang2Intake.id==intake_id,batas(user,PkGudang2Intake)).with_for_update())).scalars().first()
     if intake is None:
-        raise Gudang2Error("Tumpukan sumber tidak ditemukan.")
+        raise Gudang2Error('Tumpukan sumber tidak ditemukan dalam gudang kerja Anda.')
+    wid=await db.scalar(select(lokasi(PkGudang2Intake)).where(PkGudang2Intake.id==intake_id))
+    if not is_operator_gudang2(user,wid):
+        raise Gudang2Error('Pemindahan memerlukan petugas gudang yang berwenang.')
+    if not nama_silo:
+        raise Gudang2Error('Pilih silo tujuan pada gudang sumber.')
+    silo=await get_g2_silo(db,nama_silo,warehouse_id=wid)
+    if silo is None:
+        raise Gudang2Error('Silo tujuan tidak tersedia pada gudang sumber.')
+    _pastikan_komoditas_silo(silo,'pk')
     if intake.warehouse_id is not None and intake.warehouse_id!=silo.warehouse_id:
         raise Gudang2Error("Gudang sumber PK berbeda dari silo tujuan; gunakan alur pemindahan fisik antargudang.")
     if intake.tujuan != "ditumpuk":

@@ -14,7 +14,7 @@ LABEL_KOMODITAS = {
 
 
 def daftar_diizinkan(silo, gudang: str) -> tuple[str, ...]:
-    bawaan = KOMODITAS_G1 if gudang == "g1" else KOMODITAS_G2
+    bawaan = KOMODITAS_G1 if gudang == "g1" or silo.jenis_isi == "gabah" else KOMODITAS_G2
     tersimpan = silo.komoditas_diizinkan
     if not isinstance(tersimpan, list):
         return bawaan

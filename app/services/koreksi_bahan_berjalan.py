@@ -54,12 +54,12 @@ async def izin(db,user,jenis):
     if jenis not in ('giling','sosoh'):raise ValueError('Jenis proses tidak dikenal.')
     if not user or not (P.admin_keatas(user.role) or P.operator_saja(user.role)):
         raise PermissionError('Koreksi proses berjalan memerlukan petugas operasional yang berwenang.')
-    from app.peran import user_wh_scope
-    if await user_wh_scope(db,user) not in ('all','g1' if jenis=='giling' else 'g2'):
+    from app.services.cakupan_fasilitas import boleh_jenis
+    if not await boleh_jenis(db,user,'penggilingan' if jenis=='giling' else 'penyosohan'):
         raise PermissionError('Gudang efektif tidak mengizinkan koreksi proses ini.')
 
 
-async def proses(db,jenis,kode,*,kunci=False):
+async def proses(db,jenis,kode,*,kunci=False,user=None):
     if kode.startswith('catatan-'):
         ident=kode.removeprefix('catatan-').split('-')
         if len(ident)==2 and jenis=='sosoh':
@@ -71,6 +71,9 @@ async def proses(db,jenis,kode,*,kunci=False):
         q=select(model).where(model.id==identitas).execution_options(populate_existing=True)
         entry=await db.scalar(q.with_for_update() if kunci else q)
         if entry is None:raise ValueError('Catatan masuk silo tidak ditemukan.')
+        from app.services.cakupan_fasilitas import boleh_objek
+        if user is not None and not await boleh_objek(db,user,Silo,entry.silo_id):
+            raise PermissionError('Catatan tidak tersedia dalam gudang kerja Anda.')
         if jenis=='sosoh':
             if entry.dibatalkan_pada:raise ValueError('Catatan sudah dibatalkan.')
             if await siklus_g2(db,entry):raise ValueError('Catatan sudah terkait proses. Buka koreksi dari proses yang bersangkutan.')
@@ -84,7 +87,8 @@ async def proses(db,jenis,kode,*,kunci=False):
             owner=entry.jasa_id
         return SimpleNamespace(id=None,kode_proses=kode,status='proses',jasa_id=owner,catatan=entry)
     model=MillingProcess if jenis=='giling' else PolishingProcess
-    q=select(model).where(model.kode_proses==kode).execution_options(populate_existing=True)
+    from app.services.cakupan_fasilitas import batas
+    q=select(model).where(model.kode_proses==kode,batas(user,model)).execution_options(populate_existing=True)
     pr=await db.scalar(q.with_for_update() if kunci else q)
     if not pr:raise ValueError('Proses tidak ditemukan.')
     if pr.status!='proses':raise ValueError('Proses sudah ditutup. Gunakan mekanisme koreksi proses selesai.')
@@ -124,7 +128,9 @@ async def g1_sumber(db,key):
     used=sum((D(str(r.alokasi_koreksi_kg)) if r.alokasi_koreksi_kg is not None else D(str(b.kg))) for r in rows if r.status!='batal') if b.diketahui else None
     from app.services.retur_supplier_reservasi import terikat
     reservasi=await terikat(db,sumber=f'gabah:{identitas}') if tipe=='batch' else D(0)
-    return dict(key=key,kode=kode,pemilik=owner,kg=b.kg,bebas=None if used is None else float(D(str(b.kg))-used-reservasi),final=b.pasti,rows=[raw(r) for r in rows])
+    from app.services.cakupan_fasilitas import lokasi
+    wid=await db.scalar(select(lokasi(PurchaseBatch if tipe=='batch' else DryingLot)).where((PurchaseBatch.id if tipe=='batch' else DryingLot.id)==identitas))
+    return dict(warehouse_id=wid,key=key,kode=kode,pemilik=owner,kg=b.kg,bebas=None if used is None else float(D(str(b.kg))-used-reservasi),final=b.pasti,rows=[raw(r) for r in rows])
 
 
 def g1_key(st,bongkar=None):
@@ -151,16 +157,19 @@ async def g2_sumber(db,it):
         raise ValueError('Penerimaan PK asal tidak aktif atau sudah ditolak.')
     if it.internal_transfer_id is not None and (transfer is None or transfer.status!='terkirim'):
         raise ValueError('Transfer sumber tidak lagi aktif; periksa penggantinya.')
-    return dict(key=str(it.id),kode=batch.kode_batch if batch else transfer.kode_transfer if transfer else f'Tumpukan #{it.id}',pemilik=it.jasa_id,
+    from app.services.cakupan_fasilitas import lokasi
+    wid=await db.scalar(select(lokasi(PkGudang2Intake)).where(PkGudang2Intake.id==it.id))
+    return dict(warehouse_id=wid,key=str(it.id),kode=batch.kode_batch if batch else transfer.kode_transfer if transfer else f'Tumpukan #{it.id}',pemilik=it.jasa_id,
         kg=float(it.berat_kg) if it.berat_kg is not None else None,bebas=None if saldo is None else float(D(str(saldo))-reservasi),
         satuan='karung' if n is not None else 'kg',karung=n,rasio=None if r is None else float(r),
         final=dari_batch(batch).pasti if batch else it.bobot_final,raw=raw(it),batch=raw(batch) if batch else None)
 
 
 async def konteks(db,*,jenis,kode,user):
-    await izin(db,user,jenis);pr=await proses(db,jenis,kode)
+    await izin(db,user,jenis);pr=await proses(db,jenis,kode,user=user)
     if getattr(pr,'catatan',None) is not None:
         return await konteks_belum(db,jenis,kode,user,pr)
+    from app.services.cakupan_fasilitas import batas
     entries=[];sources={};deps=[]
     if jenis=='sosoh':
         usages=list((await db.scalars(select(PolishingSiloUsage).where(PolishingSiloUsage.polishing_process_id==pr.id).order_by(PolishingSiloUsage.id))).all())
@@ -178,7 +187,7 @@ async def konteks(db,*,jenis,kode,user):
                     sumber=source['key'],kg=float(move.berat_kg) if move.berat_kg is not None else None,
                     jumlah=move.jumlah_karung if move.jumlah_karung is not None else float(move.berat_kg) if move.berat_kg is not None else None,
                     satuan='karung' if move.jumlah_karung is not None else 'kg',sisa=u.berat_akhir_kg,raw=raw(move)))
-        candidates=(await db.scalars(select(PkGudang2Intake).where(PkGudang2Intake.tujuan=='ditumpuk',PkGudang2Intake.dibatalkan_pada.is_(None),PkGudang2Intake.jasa_id==pr.jasa_id).order_by(PkGudang2Intake.id))).all()
+        candidates=(await db.scalars(select(PkGudang2Intake).where(batas(user,PkGudang2Intake),PkGudang2Intake.tujuan=='ditumpuk',PkGudang2Intake.dibatalkan_pada.is_(None),PkGudang2Intake.jasa_id==pr.jasa_id).order_by(PkGudang2Intake.id))).all()
         for it in candidates:
             s=await g2_sumber(db,it)
             if s['key'] in sources or s['bebas'] is None or s['bebas']>0:sources[s['key']]=s
@@ -201,7 +210,7 @@ async def konteks(db,*,jenis,kode,user):
             key=g1_key(st,bo);src=await g1_sumber(db,key);sources[key]=src
             initial=float(st.alokasi_koreksi_kg) if st.alokasi_koreksi_kg is not None else float(bo.berat_kg) if bo else src['kg']
             entries.append(dict(id=st.id,kode=f'Isi silo #{st.id}',silo=silo.nama_silo,silo_id=silo.id,siklus=u.id,sumber=key,kg=initial,jumlah=initial,satuan='kg',sisa=u.berat_akhir_kg,raw=raw(st)))
-        candidates=(await db.scalars(select(PurchaseBatch).where(PurchaseBatch.kondisi_gabah=='kering',PurchaseBatch.dibatalkan_pada.is_(None),PurchaseBatch.jasa_id==pr.jasa_id).order_by(PurchaseBatch.id))).all()
+        candidates=(await db.scalars(select(PurchaseBatch).where(batas(user,PurchaseBatch),PurchaseBatch.kondisi_gabah=='kering',PurchaseBatch.dibatalkan_pada.is_(None),PurchaseBatch.jasa_id==pr.jasa_id).order_by(PurchaseBatch.id))).all()
         for b in candidates:
             key=f'batch:{b.id}'
             try:s=await g1_sumber(db,key)
@@ -210,7 +219,7 @@ async def konteks(db,*,jenis,kode,user):
         for lot in (await db.scalars(select(GabahKeringLot).where(GabahKeringLot.jasa_id==pr.jasa_id).order_by(GabahKeringLot.id))).all():
             key=f'bongkar:{lot.id}';available=await g1_sumber(db,key)
             if key in sources or available['bebas']>0:sources[key]=available
-        for lot in (await db.scalars(select(DryingLot).where(DryingLot.jasa_id==pr.jasa_id,DryingLot.status=='selesai',DryingLot.waktu_selesai_pendinginan.is_not(None)).order_by(DryingLot.id))).all():
+        for lot in (await db.scalars(select(DryingLot).where(batas(user,DryingLot),DryingLot.jasa_id==pr.jasa_id,DryingLot.status=='selesai',DryingLot.waktu_selesai_pendinginan.is_not(None)).order_by(DryingLot.id))).all():
             key=f'drying:{lot.id}';available=await g1_sumber(db,key)
             if key in sources or available['bebas'] is None or available['bebas']>0:sources[key]=available
         operator=await m._latest_progress(db,pr.id);outputs={'pk':operator};jenis_hasil=['pk'];bd=await m._pk_breakdown(db,pr.id)
@@ -251,17 +260,20 @@ async def konteks(db,*,jenis,kode,user):
     return buku.bersih(values)
 
 
+
 async def konteks_belum(db,jenis,kode,user,pr):
+    from app.services.cakupan_fasilitas import batas
     row=pr.catatan;silo=await db.get(Silo,row.silo_id)
     wh=await db.get(Warehouse,silo.warehouse_id)
-    if wh.kode_fungsi!=('g1' if jenis=='giling' else 'g2'):raise ValueError('Gudang catatan tidak sesuai jenis koreksi.')
+    from app.services.cakupan_fasilitas import boleh_objek
+    if not await boleh_objek(db,user,Silo,silo.id):raise PermissionError('Gudang catatan tidak tersedia.')
     if jenis=='sosoh' and not isinstance(row,PkTumpukanToSilo):
         rows,sources=await konteks_curah(db,pr,[],catatan=row);e=rows[0]
     elif jenis=='sosoh':
         src=await g2_sumber(db,await db.get(PkGudang2Intake,row.pk_gudang2_intake_id))
         qty=row.jumlah_karung if row.jumlah_karung is not None else row.berat_kg
         e=dict(id=row.id,kode=row.kode_pindah,silo=silo.nama_silo,silo_id=silo.id,siklus=None,sumber=src['key'],kg=row.berat_kg,jumlah=qty,satuan='karung' if row.jumlah_karung is not None else 'kg',sisa=row.berat_kg,raw=raw(row))
-        candidates=(await db.scalars(select(PkGudang2Intake).where(PkGudang2Intake.jasa_id==pr.jasa_id,PkGudang2Intake.dibatalkan_pada.is_(None),PkGudang2Intake.tujuan=='ditumpuk'))).all()
+        candidates=(await db.scalars(select(PkGudang2Intake).where(batas(user,PkGudang2Intake),PkGudang2Intake.jasa_id==pr.jasa_id,PkGudang2Intake.dibatalkan_pada.is_(None),PkGudang2Intake.tujuan=='ditumpuk'))).all()
         sources={src['key']:src}
         for it in candidates:
             x=await g2_sumber(db,it)
@@ -272,14 +284,14 @@ async def konteks_belum(db,jenis,kode,user,pr):
         qty=row.alokasi_koreksi_kg if row.alokasi_koreksi_kg is not None else bo.berat_kg if bo else src['kg']
         e=dict(id=row.id,kode=f'Isi silo #{row.id}',silo=silo.nama_silo,silo_id=silo.id,siklus=None,sumber=key,kg=qty,jumlah=qty,satuan='kg',sisa=qty,raw=raw(row))
         sources={key:src}
-        for b in (await db.scalars(select(PurchaseBatch).where(PurchaseBatch.jasa_id==pr.jasa_id,PurchaseBatch.kondisi_gabah=='kering',PurchaseBatch.dibatalkan_pada.is_(None)))).all():
+        for b in (await db.scalars(select(PurchaseBatch).where(batas(user,PurchaseBatch),PurchaseBatch.jasa_id==pr.jasa_id,PurchaseBatch.kondisi_gabah=='kering',PurchaseBatch.dibatalkan_pada.is_(None)))).all():
             try:x=await g1_sumber(db,f'batch:{b.id}')
             except ValueError:continue
             if x['key'] in sources or x['bebas'] is not None and x['bebas']>0:sources[x['key']]=x
     if jenis=='giling':
         for model,prefix in ((GabahKeringLot,'bongkar'),(DryingLot,'drying')):
             q=select(model).where(model.jasa_id==pr.jasa_id)
-            if model==DryingLot:q=q.where(DryingLot.status=='selesai',DryingLot.waktu_selesai_pendinginan.is_not(None))
+            if model==DryingLot:q=q.where(batas(user,DryingLot),DryingLot.status=='selesai',DryingLot.waktu_selesai_pendinginan.is_not(None))
             for lot in (await db.scalars(q.order_by(model.id))).all():
                 x=await g1_sumber(db,f'{prefix}:{lot.id}')
                 if x['key'] in sources or x['bebas'] is None or x['bebas']>0:sources[x['key']]=x
@@ -288,6 +300,7 @@ async def konteks_belum(db,jenis,kode,user,pr):
     value=dict(jenis=jenis,kode=kode,id=None,status='belum_dipakai',pemilik=await nama_pemilik(db,pr.jasa_id) if pr.jasa_id else 'Milik pabrik',jasa_id=pr.jasa_id,entries=[e],sources=list(sources.values()),outputs={},jenis_hasil=[],basis=None,verification=None)
     value['dasar']=hash_(value)
     return buku.bersih(value)
+
 
 
 async def siklus_g2(db,move):
@@ -349,7 +362,7 @@ async def bahan_g2(db,entry,change,pr,user,alasan,*,gabungan=False):
     silo=await db.get(Silo,move.silo_id)
     if not silo or not silo.aktif:raise ValueError('Silo tujuan tidak lagi aktif.')
     g2._pastikan_komoditas_silo(silo,'pk')
-    if await g2._g2_warehouse_id(db)!=silo.warehouse_id:raise ValueError('Gudang silo tidak sesuai.')
+    if source.get('warehouse_id')!=silo.warehouse_id:raise ValueError('Gudang sumber dan silo tidak sesuai.')
     unit=source['satuan'];qty=D(0) if cancel else angka(change.get('jumlah'),'Jumlah bahan',nol=False)
     if unit=='karung' and qty!=qty.to_integral_value():raise ValueError('Jumlah karung harus bilangan bulat.')
     if unit=='karung':
@@ -396,15 +409,16 @@ async def bahan_g2(db,entry,change,pr,user,alasan,*,gabungan=False):
 async def bahan_g1(db,entry,change,pr,user,alasan,*,gabungan=False):
     st=await db.get(SiloStorage,entry['id'],populate_existing=True)
     if not st or st.status=='batal':raise Konflik('Catatan isi silo tidak aktif.')
-    silo=await si.silo_g1_by_id(db,st.silo_id)
+    silo=await db.get(Silo,st.silo_id)
     from app.penggilingan.silo_policy import boleh_masuk
-    if not silo or not boleh_masuk(silo,'gabah_kering','g1'):
+    if not silo or not silo.aktif or not boleh_masuk(silo,'gabah_kering','g1'):
         raise ValueError('Silo Gudang 1 atau kompatibilitas gabah berubah; periksa tujuan terkait.')
     before=raw(st)
     if st.status=='koreksi':before['status']=entry['raw']['status']
     oldkey=entry['sumber'];newkey=change.get('sumber',oldkey)
     cancel=change.get('hapus',False);oldkg=angka(entry['kg'],'Bobot sebelumnya')
     target=await g1_sumber(db,newkey)
+    if target.get('warehouse_id',silo.warehouse_id)!=silo.warehouse_id:raise ValueError('Sumber pengganti harus berada pada gudang silo yang sama.')
     if newkey!=oldkey and newkey.startswith('drying:'):
         lot=await db.get(DryingLot,int(newkey.split(':')[1]))
         if lot.status!='selesai' or lot.waktu_selesai_pendinginan is None:raise ValueError('Lot pengganti harus selesai pengeringan dan pendinginan melalui alur lama.')
@@ -500,7 +514,7 @@ async def bahan_g1(db,entry,change,pr,user,alasan,*,gabungan=False):
 async def terapkan(db,*,jenis,kode,user,req):
     before=await konteks(db,jenis=jenis,kode=kode,user=user)
     if before['dasar']!=req['dasar']:raise Konflik('Data/saldo berubah sejak dibaca. Isian dipertahankan; baca data terbaru lalu periksa ulang.')
-    pr=await proses(db,jenis,kode)
+    pr=await proses(db,jenis,kode,user=user)
     if getattr(pr,'catatan',None) is not None:pr=None
     changes=req.get('bahan',[]);entries={x['id']:x for x in before['entries']}
     if len({x['id'] for x in changes})!=len(changes):raise ValueError('Satu catatan bahan tidak boleh dikoreksi dua kali dalam rancangan yang sama.')
@@ -576,21 +590,21 @@ async def kunci(db,jenis,kode,user):
     for model in (PurchaseBatch,DryingLot,GabahKeringLot,PkPurchaseBatch,PkGudang2Intake):
         # Batasi ke pemilik proses; semua sumber alternatif yang boleh dipilih
         # ikut dikunci agar dua penggantian tak memakai saldo bebas yang sama.
-        pr=await proses(db,jenis,kode)
+        pr=await proses(db,jenis,kode,user=user)
         q=select(model).where(model.jasa_id==pr.jasa_id).order_by(model.id)
         await db.scalars(q.with_for_update().execution_options(populate_existing=True))
-    pr=await proses(db,jenis,kode)
+    pr=await proses(db,jenis,kode,user=user)
     ctx=await konteks(db,jenis=jenis,kode=kode,user=user)
     for id_ in sorted({x['silo_id'] for x in ctx['entries']}|{x['silo_id'] for x in ctx.get('broken_terkait',[])}):
         await db.scalar(select(Silo).where(Silo.id==id_).with_for_update())
-    await proses(db,jenis,kode,kunci=True)
+    await proses(db,jenis,kode,kunci=True,user=user)
     ids=[e['id'] for e in ctx['entries'] if isinstance(e['id'],int)]
     if jenis=='sosoh':
         for model in (BrokenKeSilo,BerasKeSilo,HasilSampingKeSilo):
             list((await db.scalars(select(model).where(model.silo_id.in_([x['silo_id'] for x in ctx['entries']])).order_by(model.id).with_for_update())).all())
     model=SiloStorage if jenis=='giling' else PkTumpukanToSilo
     list((await db.scalars(select(model).where(model.id.in_(ids)).order_by(model.id).with_for_update().execution_options(populate_existing=True))).all())
-    return await proses(db,jenis,kode,kunci=True)
+    return await proses(db,jenis,kode,kunci=True,user=user)
 
 
 def tanda(jenis,kode,user,req):
@@ -689,7 +703,7 @@ async def alir_sisa_g1(db,st,src,sebelum,sesudah,user,alasan):
         if nxt.berat_akhir_kg is None:break
 
 
-async def sumber_bebas_g1(db,*,jasa=False,pelanggan_id=None):
+async def sumber_bebas_g1(db,*,jasa=False,pelanggan_id=None,user=None):
     """Saldo sumber yang dilepas oleh koreksi alokasi, bukan stok masuk baru.
 
     Hanya sumber dengan jejak koreksi yang diperiksa. Tidak menyusun ulang
@@ -702,7 +716,15 @@ async def sumber_bebas_g1(db,*,jasa=False,pelanggan_id=None):
         keys.update(x['sumber'] for x in e.muatan['hasil']['sebelum']['entries'] if x['sumber'].startswith(('batch:','drying:')))
     result=[]
     from app.services.jasa import nama_pemilik
+    allowed=None
+    if user is not None:
+        from app.services.cakupan_fasilitas import batas
+        allowed=set()
+        for prefix,model in [('batch',PurchaseBatch),('drying',DryingLot)]:
+            ids=[int(k.split(':')[1]) for k in keys if k.startswith(prefix+':')]
+            allowed.update(prefix+':'+str(i) for i in (await db.scalars(select(model.id).where(model.id.in_(ids),batas(user,model)))).all())
     for key in sorted(keys):
+        if allowed is not None and key not in allowed:continue
         src=await g1_sumber(db,key)
         if bool(src['pemilik'])!=jasa or src['bebas'] is None or src['bebas']<=0:continue
         if pelanggan_id is not None:

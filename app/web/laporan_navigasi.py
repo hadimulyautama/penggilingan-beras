@@ -30,9 +30,9 @@ async def pilihan(akun):
     if isinstance(akun.user,CustomerReader):
         return {"laporan":[("laporan","Laporan","/laporan",None)],"proses":[x for x in PROSES if x[3]!='semua'],"qc":list(QC),"audit":[("audit","Transfer kepemilikan","/audit",None)]}
     # Gerbang yang sama dengan halaman lama, memakai peran/gudang efektif.
-    from app.web.api import _is_g1_operator, _is_g2_operator
-    izin = {"g1": await _is_g1_operator(akun.user),
-            "g2": await _is_g2_operator(akun.user)}
+    from app.web.api import _is_milling_operator, _is_polishing_operator,_is_drying_operator
+    izin = {"g1": await _is_milling_operator(akun.user) or await _is_drying_operator(akun.user),
+            "g2": await _is_polishing_operator(akun.user)}
     izin['semua']=izin['g1'] or izin['g2']
     return {"laporan": [("laporan", "Laporan", "/laporan", None)],
             "proses": [x for x in PROSES if izin[x[3]]],

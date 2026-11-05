@@ -32,7 +32,7 @@ async def ringkasan(db, *, kode_lot, silo=""):
         detail=f"/riwayat-pengeringan/{lot.id}", tujuan=None, peringatan=[])
     if not silo.strip():
         return data
-    tujuan = await si.get_g1_silo(db, silo)
+    tujuan = await si.get_g1_silo(db, silo,warehouse_id=mesin.warehouse_id if mesin else None)
     if tujuan is None:
         raise si.SiloError("Silo tujuan Gudang 1 tidak ditemukan atau tidak aktif.")
     rinci = await si.isi_silo(db, tujuan.id)

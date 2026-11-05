@@ -33,6 +33,7 @@ class PkPurchaseBatch(Base, TimestampMixin):
               sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_batch: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     #: Dari siapa PK ini DIBELI — kosong bila ia tidak dibeli.
@@ -423,6 +424,7 @@ class PolishingProcess(Base, TimestampMixin):
               sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
+    lini_produksi_id: Mapped[int | None] = mapped_column(ForeignKey("lini_produksi.id"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     waktu_mulai: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

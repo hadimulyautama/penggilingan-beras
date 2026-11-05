@@ -31,12 +31,12 @@ async def baca_silo(db, silo):
     return data, rows
 
 
-async def ringkasan(db, pilihan):
+async def ringkasan(db, pilihan, warehouse_id=None):
     # Ikuti normalisasi/urutan aksi; tidak menyimpulkan pemilik dari namanya.
     pilihan = list(dict.fromkeys(str(x).strip().upper() for x in pilihan if str(x or "").strip()))
     silos, rows, peringatan = [], [], []
     for nama in pilihan:
-        silo = await si.get_g1_silo(db, nama)
+        silo = await si.get_g1_silo(db, nama,warehouse_id=warehouse_id)
         if silo is None:
             silos.append(dict(nama=f"Silo {nama}", bobot="Belum tersedia", siap=False,
                               proses=None, detail=None))

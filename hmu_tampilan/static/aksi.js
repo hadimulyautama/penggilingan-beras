@@ -1484,7 +1484,7 @@
       $("mg-per-silo").textContent = "";if(mulaiSosoh){$("ms-rinci").textContent="";$("ms-sumber").hidden=!pilihan.length;}$("mg-peringatan").textContent = "";$("mg-tautan").textContent = "";
       $("mg-final").textContent = pilihan.length ? "Ringkasan baca saja. Kondisi terbaru diperiksa saat menyimpan." : "Centang minimal satu silo sumber.";
       if (!pilihan.length) { periksaMulai = false;$("simpan").disabled = !borangHasil.querySelector('#b_silo input');return Promise.resolve(null); }
-      return fetch(mulaiBahan.source + "?" + pilihan.map(function (n) { return "silo=" + encodeURIComponent(n); }).join("&"),
+      return fetch(mulaiBahan.source + "?" + pilihan.map(function (n) { return "silo=" + encodeURIComponent(n); }).join("&") + (nilaiMedan("lini_id") ? "&lini_id="+encodeURIComponent(nilaiMedan("lini_id")) : ""),
         {credentials:"same-origin",cache:"no-store"}).then(function (r) { if (!r.ok) throw new Error("Ringkasan belum tersedia");return r.json(); }).then(function (d) {
         if (nomor !== urutanMulai || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil || pilihanMulai().join(",") !== kunci) return null;
         if ((d.pilihan || []).join(",") !== kunci.toUpperCase()) throw new Error("Pilihan sudah berubah");
@@ -2137,10 +2137,12 @@
         sumber += (sumber.indexOf("?") >= 0 ? "&" : "?") + "induk=" +
           encodeURIComponent(nilaiInduk);
       }
+      var parameterBanyak=(f.parameter||[]).map(function(n){return [n,nilaiMedan(n)];});
+      parameterBanyak.forEach(function(v){if(v[1])sumber+=(sumber.indexOf('?')>=0?'&':'?')+encodeURIComponent(v[0])+'='+encodeURIComponent(v[1]);});
       var borangBanyak = lembar.querySelector(".lembar__isi");
       var indukTs=f.induk?nilaiMedan(f.induk):null,nomorDaftarTs=tambahSosoh?++nomorOpsiTs:0;
       ambil(sumber).then(function (daftar) {
-        if (!daftar || (mulaiBahan && lembar.querySelector(".lembar__isi") !== borangBanyak)) { return; }
+        if (!daftar || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];}) || (mulaiBahan && lembar.querySelector(".lembar__isi") !== borangBanyak)) { return; }
         if(tambahSosoh && (nomorDaftarTs!==nomorOpsiTs||lembar.querySelector(".lembar__isi")!==borangBanyak||(f.induk && nilaiMedan(f.induk)!==indukTs)))return;
         var wadah = $("b_" + f.name);
         var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
@@ -2370,11 +2372,13 @@
         sumber += (sumber.indexOf("?") >= 0 ? "&" : "?") + "induk=" +
           encodeURIComponent(nilaiInduk);
       }
+      var parameterDiminta = (f.parameter || []).map(function(n){return [n,nilaiMedan(n)];});
+      parameterDiminta.forEach(function(v){if(!v[1])return;sumber += (sumber.indexOf('?')>=0?'&':'?')+encodeURIComponent(v[0])+'='+encodeURIComponent(v[1]||'');});
       var indukDiminta = f.induk ? nilaiMedan(f.induk) : null;
       var borangDiminta = lembar.querySelector(".lembar__isi");
       ambil(sumber).then(function (daftar) {
         if (!daftar || lembar.querySelector(".lembar__isi") !== borangDiminta ||
-            (f.induk && nilaiMedan(f.induk) !== indukDiminta)) return;
+            (f.induk && nilaiMedan(f.induk) !== indukDiminta) || parameterDiminta.some(function(v){return nilaiMedan(v[0])!==v[1];})) return;
         if (kunciMedan(f)) {
           if (segar) { return; }
           /* Nama bendanya baru diketahui sesudah daftarnya datang. Kalau
@@ -2389,6 +2393,8 @@
             kotak.textContent = cocok.label;
             if (cocok.berat_kg != null) { kotak.dataset.beratKg = String(cocok.berat_kg); }
             perbaruiMaksimalKemas();
+    (a.fields || []).forEach(function(f){(f.parameter||[]).forEach(function(n){var parent=$('f_'+n);if(parent)parent.addEventListener('change',function(){var child=$('f_'+f.name);if(child){child.value='';child.innerHTML='<option value="">memuat…</option>'; }muatPilihan(false,f.name);});});});
+
             perbaruiPratinjau();
             perbaruiRingkasanHasil();
             perbaruiRingkasanGiling();

@@ -188,7 +188,7 @@ async def tiket_riwayat(db, tid):
     return {**dict(r), 'berat_hpp_kg':None, 'sumber_berat':'lihat catatan penerimaan'} if r else None
 
 
-async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None, batas_per_jenis=None):
+async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None, batas_per_jenis=None, user=None):
     # Sumbernya sama dengan pemeriksaan tiket yang telah tertaut. Tidak
     # memakai saldo tersedia sebagai tanda diterima: barang yang sudah habis
     # diproses tetap memiliki catatan penerimaan.
@@ -204,6 +204,9 @@ async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None, batas_
                       (ByproductStock, ByproductStock.source_id, 'broken')))
     for model, kolom, jenis in specs:
         q = select(model).where(kolom.is_not(None))
+        if user is not None:
+            from app.services.cakupan_fasilitas import batas
+            q=q.where(batas(user,model))
         if jasa_ids is not None:
             q=q.where(dalam(db,model.jasa_id,jasa_ids))
         if tid is not None:
@@ -216,8 +219,12 @@ async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None, batas_
             if jenis=='gabah':q=q.where(model.status_batch!='ditolak')
             if jenis=='pk':q=q.where(model.status_batch.not_in(('baru','ditolak')))
             q=q.order_by(model.id.desc()).limit(batas_per_jenis)
-        for x in (await db.scalars(q)).all():
+        rows=list((await db.scalars(q)).all())
+        from app.services.cakupan_fasilitas import lokasi_banyak
+        locations=await lokasi_banyak(db,model,[r.id for r in rows])
+        for x in rows:
             hasil[int(getattr(x, kolom.key))].append({
+                **locations.get(x.id,{}),
                 'id': x.id, 'model': jenis,
                 'kode': getattr(x, 'kode_batch', None) or f"{'BJ' if jenis == 'beras' else 'HS'} #{x.id}",
                 'jasa_id': x.jasa_id,
@@ -267,6 +274,7 @@ async def rincian_lokasi(db, catatan):
                             MillingProcess, MillingProcessSource, PkGudang2Intake,
                             User)
     lokasi, proses = [], []
+    nama_lokasi={(c['model'],c['id']):c.get('gudang_nama') or 'Lokasi belum tercatat' for c in catatan}
     g = [x['id'] for x in catatan if x['model'] == 'gabah']
     pk = [x['id'] for x in catatan if x['model'] == 'pk']
     lot_ids = []
@@ -288,22 +296,22 @@ async def rincian_lokasi(db, catatan):
                 d = await db.get(Dryer, b.dryer_id)
                 lokasi.append(d.nama if d else 'Mesin pengering')
             elif b.status_batch == 'ditumpuk':
-                lokasi.append(f'Tumpukan gabah {b.kondisi_gabah} · Gudang 1')
+                lokasi.append(f'Tumpukan gabah {b.kondisi_gabah} · '+nama_lokasi.get(('gabah',b.id),'Lokasi belum tercatat'))
             elif b.status_batch == 'baru':
-                lokasi.append('Menunggu penempatan · Gudang 1')
+                lokasi.append('Menunggu penempatan · '+nama_lokasi.get(('gabah',b.id),'Lokasi belum tercatat'))
     if pk:
         from app.services.stok import pk_gudang2
         tersedia = {x.intake_id for x in await pk_gudang2(db)}
         for it in (await db.scalars(select(PkGudang2Intake).where(PkGudang2Intake.pk_purchase_batch_id.in_(pk)))).all():
             s = await db.get(Silo, it.silo_id) if it.silo_id else None
-            lokasi.append('Lokasi penerimaan: '+(s.nama_silo if s else 'Tumpukan Gudang 2'))
+            lokasi.append('Lokasi penerimaan: '+(s.nama_silo if s else 'Tumpukan · '+nama_lokasi.get(('pk',it.pk_purchase_batch_id),'Lokasi belum tercatat')))
             if it.id in tersedia:
                 proses.append((f'Penerimaan PK #{it.id}', f'/stok/pk/detail?gudang=g2&id={it.id}'))
             from app.models import PkTumpukanToSilo
             for pindah,nama in (await db.execute(select(PkTumpukanToSilo,Silo.nama_silo).join(Silo, Silo.id==PkTumpukanToSilo.silo_id).where(PkTumpukanToSilo.pk_gudang2_intake_id==it.id))).all():
                 lokasi.append(f'{pindah.kode_pindah} · {float(pindah.berat_kg):g} kg ke {nama}')
     if any(x['model'] in ('beras', 'broken') for x in catatan):
-        lokasi.append('Stok produk · Gudang 2')
+        lokasi.extend('Stok produk · '+c.get('gudang_nama','Lokasi belum tercatat') for c in catatan if c['model'] in ('beras','broken'))
     # Tautan stok mengikuti pemilik CATATAN, bukan pihak pada tiket yang bisa
     # sudah dikoreksi. Tidak menebak alokasi satu tiket ke mesin dari sekadar
     # kesamaan silo: silo dapat dipakai ulang dengan bahan berbeda.
@@ -312,7 +320,7 @@ async def rincian_lokasi(db, catatan):
     for c in catatan:
         params = {'tab':'bahan' if c['model'] in ('gabah','pk') else 'produk',
                   'pemilik':'jasa' if c['jasa_id'] else 'pabrik',
-                  'gudang':'g1' if c['model']=='gabah' else 'g2'}
+                  'gudang':c.get('gudang_kode','')}
         if c['jasa_id']:
             pesanan = await db.get(Jasa,c['jasa_id'])
             if pesanan:

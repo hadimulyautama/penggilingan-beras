@@ -37,6 +37,12 @@ from app.services.mutu_pk import rincian_kualitatif, penilaian_dari_log
 
 from app.web.pdf_proses import angka, persen as persen_pdf, teks_angka, laju_kadar_air, jeda_laporan, bagian_jeda, bagian_silo, durasi as durasi_teks
 
+async def _izin_lokasi(user,model,id):
+    from app.services.cakupan_fasilitas import boleh_objek
+    async with SessionLocal() as db:
+        if not await boleh_objek(db,user,model,id):
+            raise HTTPException(403,'Catatan tidak tersedia dalam gudang kerja Anda.')
+
 router = APIRouter()
 
 #: Sekali muat — sama `layar_sosoh.SEKALI`, alasan yang sama: cukup besar
@@ -59,11 +65,11 @@ def _sebelum_id(request: Request) -> int | None:
 @router.get("/riwayat-giling")
 async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
     """Kartu giling selesai, terbaru lebih dulu, berikut PK yang jadi."""
-    from app.web.api import _is_g1_operator
+    from app.web.api import _is_jenis_operator
 
     # ⚠ DIJAGA DI RUTENYA, bukan cuma di daftar pintu — alamatnya tetap bisa
     # diketik, sama alasan yang menjaga `/riwayat-sosoh`.
-    if not await _is_g1_operator(akun.user):
+    if not await _is_jenis_operator(akun.user,"penggilingan"):
         raise HTTPException(
             403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
 
@@ -71,7 +77,7 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
 
     sebelum_id = _sebelum_id(request)
     async with SessionLocal() as db:
-        kartu, lagi = await riwayat_giling(db, batas=SEKALI, sebelum=sebelum_id)
+        kartu, lagi = await riwayat_giling(db, batas=SEKALI, sebelum=sebelum_id, user=None if is_customer_read(request) else akun.user)
     return await render_laci(
         request, "riwayat_giling.html",
         kartu=kartu, lagi=lagi, SEKALI=SEKALI,
@@ -83,14 +89,16 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
 @router.get("/riwayat-giling/{process_id}")
 async def detail_riwayat_giling(process_id: int, request: Request,
                                akun=Depends(butuh_akun)):
-    from app.web.api import _is_g1_operator
-    if not is_customer_read(request) and not await _is_g1_operator(akun.user):
+    if not is_customer_read(request):
+        await _izin_lokasi(akun.user,MillingProcess,process_id)
+    from app.web.api import _is_jenis_operator
+    if not is_customer_read(request) and not await _is_jenis_operator(akun.user,"penggilingan"):
         raise HTTPException(403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
     from app.penggilingan.gudang1.services.milling import (
         alasan_koreksi_hasil_giling, riwayat_giling,
     )
     async with SessionLocal() as db:
-        kartu, _ = await riwayat_giling(db, batas=1, process_id=process_id)
+        kartu, _ = await riwayat_giling(db, batas=1, process_id=process_id, user=None if is_customer_read(request) else akun.user)
     if not kartu:
         raise HTTPException(404, "Riwayat penggilingan tidak ditemukan.")
     async with SessionLocal() as db:
@@ -120,6 +128,8 @@ async def detail_riwayat_giling(process_id: int, request: Request,
 @router.post("/riwayat-giling/{process_id}/koreksi")
 async def koreksi_riwayat_giling(process_id: int, request: Request,
                                  akun=Depends(butuh_akun)):
+    if True:
+        await _izin_lokasi(akun.user,MillingProcess,process_id)
     if not akun.is_admin:
         raise HTTPException(403, "Koreksi hasil penggilingan hanya untuk Admin ke atas.")
     from app.penggilingan.gudang1.services.milling import MillingError, koreksi_hasil_giling
@@ -136,7 +146,7 @@ async def koreksi_riwayat_giling(process_id: int, request: Request,
     async with SessionLocal() as db:
         try:
             await koreksi_hasil_giling(
-                db, user=akun.user, process_id=process_id,
+                db, user=None if is_customer_read(request) else akun.user, process_id=process_id,
                 hasil_kg=hasil, dasar_kg=dasar, alasan=alasan,
             )
         except MillingError as exc:
@@ -386,8 +396,10 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
 @router.get("/riwayat-giling/{process_id}/laporan.pdf")
 async def unduh_laporan_giling(process_id: int, unduh: int = 0,
                               akun=Depends(butuh_akun)):
-    from app.web.api import _is_g1_operator
-    if not await _is_g1_operator(akun.user):
+    if True:
+        await _izin_lokasi(akun.user,MillingProcess,process_id)
+    from app.web.api import _is_jenis_operator
+    if not await _is_jenis_operator(akun.user,"penggilingan"):
         raise HTTPException(403, "Laporan Penggilingan hanya untuk Admin ke atas dan operator Gudang 1.")
     return await laporan_giling_pdf(process_id, unduh, pembuat=akun.user.nama)
 
@@ -404,8 +416,10 @@ async def laporan_giling_pdf(process_id: int, unduh: int = 0, *, pembuat: str | 
 @router.get("/riwayat-giling/{process_id}/laporan")
 async def halaman_laporan_giling(request: Request, process_id: int,
                                 akun=Depends(butuh_akun)):
-    from app.web.api import _is_g1_operator
-    if not await _is_g1_operator(akun.user):
+    if True:
+        await _izin_lokasi(akun.user,MillingProcess,process_id)
+    from app.web.api import _is_jenis_operator
+    if not await _is_jenis_operator(akun.user,"penggilingan"):
         raise HTTPException(403, "Laporan Penggilingan hanya untuk Admin ke atas dan operator Gudang 1.")
     async with SessionLocal() as db:
         process = await db.get(MillingProcess, process_id)
@@ -421,9 +435,9 @@ async def halaman_laporan_giling(request: Request, process_id: int,
 @router.get("/riwayat-pengeringan")
 async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)):
     """Kartu lot pengeringan selesai (kering+dingin), terbaru lebih dulu."""
-    from app.web.api import _is_g1_operator
+    from app.web.api import _is_jenis_operator
 
-    if not await _is_g1_operator(akun.user):
+    if not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(
             403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
 
@@ -431,7 +445,7 @@ async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)
 
     sebelum_id = _sebelum_id(request)
     async with SessionLocal() as db:
-        kartu, lagi = await riwayat_pengeringan(db, batas=SEKALI, sebelum=sebelum_id)
+        kartu, lagi = await riwayat_pengeringan(db, batas=SEKALI, sebelum=sebelum_id, user=None if is_customer_read(request) else akun.user)
     return await render_laci(
         request, "riwayat_pengeringan.html",
         kartu=kartu, lagi=lagi, SEKALI=SEKALI,
@@ -443,8 +457,10 @@ async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)
 @router.get("/riwayat-pengeringan/{lot_id}")
 async def detail_riwayat_pengeringan(lot_id: int, request: Request,
                                      akun=Depends(butuh_akun)):
-    from app.web.api import _is_g1_operator
-    if not is_customer_read(request) and not await _is_g1_operator(akun.user):
+    if not is_customer_read(request):
+        await _izin_lokasi(akun.user,DryingLot,lot_id)
+    from app.web.api import _is_jenis_operator
+    if not is_customer_read(request) and not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
     from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
     from app.services import berjalan, proses_aktif
@@ -459,7 +475,7 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
         if lot.waktu_selesai_pendinginan is None:
             fase = "pengeringan" if lot.status == "proses" else "pendinginan"
             return await _alih_proses(request, f"/proses-aktif/{fase}/{lot.kode_lot}")
-        kartu, _ = await riwayat_pengeringan(db, batas=1, lot_id=lot_id)
+        kartu, _ = await riwayat_pengeringan(db, batas=1, lot_id=lot_id, user=None if is_customer_read(request) else akun.user)
         if not kartu:
             raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
         pekerjaan = await berjalan.untuk(db, akun.user)
@@ -481,7 +497,7 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
                         "riwayat" if request.query_params.get("halaman_dingin") or request.query_params.get("halaman_jeda") else "ringkasan"),
         kembali=konteks_aman(request.query_params.get("kembali_kerja")) or "/riwayat-pengeringan",
         dari_riwayat=True, breadcrumb_detail=lot.kode_lot, layar="riwayat_pengeringan",
-        boleh_catat_bobot_pengeringan=not is_customer_read(request) and await _is_g1_operator(akun.user),
+        boleh_catat_bobot_pengeringan=not is_customer_read(request) and await _is_jenis_operator(akun.user,"pengeringan"),
         alamat=request.url.path, halaman_proses=halaman, buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
@@ -631,11 +647,13 @@ def _pdf_pengeringan(data: dict) -> bytes:
 @router.get("/riwayat-pengeringan/{lot_id}/laporan.pdf")
 async def unduh_laporan_pengeringan(lot_id: int, unduh: int = 0,
                                     akun=Depends(butuh_akun)):
+    if True:
+        await _izin_lokasi(akun.user,DryingLot,lot_id)
     """Tampilkan PDF inline, atau unduh sebagai lampiran bila diminta."""
-    from app.web.api import _is_g1_operator
+    from app.web.api import _is_jenis_operator
     from app.models import DryingLotBatch
 
-    if not await _is_g1_operator(akun.user):
+    if not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(403, "Laporan Pengeringan hanya untuk Admin ke atas dan operator Gudang 1.")
 
     return await laporan_pengeringan_pdf(lot_id, unduh)
@@ -760,10 +778,12 @@ async def laporan_pengeringan_pdf(lot_id: int, unduh: int = 0):
 @router.get("/riwayat-pengeringan/{lot_id}/laporan")
 async def halaman_laporan_pengeringan(request: Request, lot_id: int,
                                      akun=Depends(butuh_akun)):
+    if True:
+        await _izin_lokasi(akun.user,DryingLot,lot_id)
     """Penampil laporan di dalam aplikasi dengan kontrol kembali dan berbagi."""
-    from app.web.api import _is_g1_operator
+    from app.web.api import _is_jenis_operator
 
-    if not await _is_g1_operator(akun.user):
+    if not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(403, "Laporan Pengeringan hanya untuk Admin ke atas dan operator Gudang 1.")
     async with SessionLocal() as db:
         lot = await db.get(DryingLot, lot_id)
@@ -825,7 +845,7 @@ async def koreksi_riwayat_transfer(transfer_id: int, request: Request,
     async with SessionLocal() as db:
         try:
             pengganti = await koreksi_hasil_transfer(
-                db, user=akun.user, transfer_id=transfer_id,
+                db, user=None if is_customer_read(request) else akun.user, transfer_id=transfer_id,
                 berat_kg=berat, dasar_kg=dasar, alasan=alasan,
             )
         except TransferError as exc:
@@ -866,9 +886,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     if jenis not in QC_PAGES:
         raise HTTPException(404, "Kategori riwayat QC tidak ditemukan.")
     judul, gudang = QC_PAGES[jenis]
-    from app.web.api import _is_g1_operator, _is_g2_operator
-    boleh = await (_is_g1_operator(akun.user) if gudang == "g1"
-                   else _is_g2_operator(akun.user))
+    from app.web.api import _is_g1_operator, _is_g2_operator, _is_gabah_operator, _is_jenis_operator
+    from app.services.cakupan_fasilitas import batas as batas_qc
+    baca_user=None if is_customer_read(request) else akun.user
+    boleh = await (_is_gabah_operator(akun.user) if jenis in ("gabah-basah","gabah-kering") else _is_jenis_operator(akun.user,"penggilingan") if jenis=="pk-hasil-giling" else _is_jenis_operator(akun.user,"penyosohan") if jenis=="beras-hasil-sosoh" else _is_g2_operator(akun.user))
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
 
@@ -903,7 +924,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             batch_terbaru = (select(PurchaseBatch.id)
                 .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
                 .join(PurchaseBatchQcSample, PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
-                .where(PurchaseBatch.kondisi_gabah == kondisi,
+                .where(batas_qc(baca_user,PurchaseBatch),PurchaseBatch.kondisi_gabah == kondisi,
                        PurchaseBatch.dibatalkan_pada.is_(None),
                        PurchaseBatch.id.in_(request.state.portal_scope.ids(PurchaseBatch)) if is_customer_read(request) else True)
                 .group_by(PurchaseBatch.id)
@@ -916,7 +937,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .join(PurchaseBatchQcSample, PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
                 .outerjoin(Supplier, Supplier.id == PurchaseBatch.supplier_id)
                 .outerjoin(User, User.id == PurchaseBatchQcSample.input_by)
-                .where(PurchaseBatch.kondisi_gabah == kondisi,
+                .where(batas_qc(baca_user,PurchaseBatch),PurchaseBatch.kondisi_gabah == kondisi,
                        PurchaseBatch.dibatalkan_pada.is_(None),
                        PurchaseBatch.id.in_(request.state.portal_scope.ids(PurchaseBatch)) if is_customer_read(request) else True,
                        PurchaseBatch.kode_batch == referensi if referensi is not None else
@@ -930,7 +951,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 batch, header, *_ = hasil[0]
                 # Nilai parent diperbarui layanan catat_qc_gabah dari seluruh
                 # bacaan/sak, bukan menghitung ulang angka berformat di layar.
-                qc_detail = dict(gudang="Gudang 1", titipan=bool(batch.jasa_id),
+                qc_detail = dict(gudang=await _nama_gudang_qc(db,PurchaseBatch,batch.id), titipan=bool(batch.jasa_id),
                     sumber=f"/barang-masuk/{batch.timbangan_transaksi_id}" if batch.timbangan_transaksi_id else None,
                     air=batch.kadar_air_awal_persen, lamur=header.jumlah_sak_lamur,
                     ditutup=header.ditutup_pada, penutup=None, alasan=None)
@@ -964,7 +985,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         elif jenis == "pk-luar":
             from app.models import PkPurchaseQcLog, User
             batch_terbaru = (select(PkPurchaseQcLog.pk_purchase_batch_id)
-                .where(PkPurchaseQcLog.pk_purchase_batch_id.in_(request.state.portal_scope.ids(PkPurchaseBatch)) if is_customer_read(request) else True)
+                .join(PkPurchaseBatch,PkPurchaseBatch.id==PkPurchaseQcLog.pk_purchase_batch_id)
+                .where(batas_qc(baca_user,PkPurchaseBatch),PkPurchaseQcLog.pk_purchase_batch_id.in_(request.state.portal_scope.ids(PkPurchaseBatch)) if is_customer_read(request) else True)
                 .group_by(PkPurchaseQcLog.pk_purchase_batch_id)
                 .order_by(func.max(PkPurchaseQcLog.waktu).desc()).limit(200))
             hasil = (await db.execute(
@@ -972,7 +994,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .join(PkPurchaseQcLog, PkPurchaseQcLog.pk_purchase_batch_id == PkPurchaseBatch.id)
                 .outerjoin(Supplier, Supplier.id == PkPurchaseBatch.supplier_id)
                 .outerjoin(User, User.id == PkPurchaseQcLog.input_by)
-                .where(PkPurchaseBatch.id.in_(request.state.portal_scope.ids(PkPurchaseBatch)) if is_customer_read(request) else True,
+                .where(batas_qc(baca_user,PkPurchaseBatch),PkPurchaseBatch.id.in_(request.state.portal_scope.ids(PkPurchaseBatch)) if is_customer_read(request) else True,
                        PkPurchaseBatch.kode_batch == referensi if referensi is not None else
                        PkPurchaseQcLog.pk_purchase_batch_id.in_(batch_terbaru))
                 .order_by(PkPurchaseQcLog.waktu.desc(), PkPurchaseQcLog.id.desc())
@@ -980,7 +1002,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             if referensi:
                 if hasil:
                     batch = hasil[0][0]
-                    qc_detail = dict(gudang="Gudang 2", titipan=bool(batch.jasa_id),
+                    qc_detail = dict(gudang=await _nama_gudang_qc(db,PkPurchaseBatch,batch.id), titipan=bool(batch.jasa_id),
                         sumber=f"/barang-masuk/{batch.timbangan_transaksi_id}" if batch.timbangan_transaksi_id else None)
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _ in hasil})
@@ -1000,14 +1022,15 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                        plat=batch.no_polisi_truk, qc_pk=qc)
         elif jenis == "pk-hasil-giling":
             proses_terbaru = (select(MillingQcLog.milling_process_id)
-                .where(MillingQcLog.milling_process_id.in_(request.state.portal_scope.ids(MillingProcess)) if is_customer_read(request) else True)
+                .join(MillingProcess,MillingProcess.id==MillingQcLog.milling_process_id)
+                .where(batas_qc(baca_user,MillingProcess),MillingQcLog.milling_process_id.in_(request.state.portal_scope.ids(MillingProcess)) if is_customer_read(request) else True)
                 .group_by(MillingQcLog.milling_process_id)
                 .order_by(func.max(MillingQcLog.waktu).desc()).limit(200))
             hasil = (await db.execute(
                 select(MillingProcess, MillingQcLog, User.nama)
                 .join(MillingQcLog, MillingQcLog.milling_process_id == MillingProcess.id)
                 .outerjoin(User, User.id == MillingQcLog.input_by)
-                .where(MillingProcess.id.in_(request.state.portal_scope.ids(MillingProcess)) if is_customer_read(request) else True,
+                .where(batas_qc(baca_user,MillingProcess),MillingProcess.id.in_(request.state.portal_scope.ids(MillingProcess)) if is_customer_read(request) else True,
                        MillingProcess.kode_proses == referensi if referensi is not None else
                        MillingQcLog.milling_process_id.in_(proses_terbaru))
                 .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
@@ -1015,7 +1038,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             if referensi:
                 if hasil:
                     process = hasil[0][0]
-                    qc_detail = dict(gudang="Gudang 1", titipan=bool(process.jasa_id),
+                    qc_detail = dict(gudang=await _nama_gudang_qc(db,MillingProcess,process.id), titipan=bool(process.jasa_id),
                         sumber=f"/proses-aktif/giling/{process.kode_proses}" if process.status != 'selesai' else f"/riwayat-giling/{process.id}")
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _, _ in hasil})
@@ -1148,12 +1171,19 @@ async def detail_catatan_penghalang(tipe: str, id_: int, request: Request, akun=
 
 @router.get('/riwayat-pengeringan/{lot_id}/bobot')
 async def formulir_bobot_pengeringan(lot_id: int,request: Request,akun=Depends(butuh_akun)):
+    if not is_customer_read(request):
+        await _izin_lokasi(akun.user,DryingLot,lot_id)
     from app.services.bobot_pengeringan import konteks
-    from app.web.api import _is_g1_operator
-    if is_customer_read(request) or not await _is_g1_operator(akun.user):
+    from app.web.api import _is_jenis_operator
+    if is_customer_read(request) or not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(403,'Pencatatan bobot pengeringan hanya untuk petugas Gudang 1 yang berhak.')
     async with SessionLocal() as db:
-        try:data=(await konteks(db,lot_id=lot_id,user=akun.user))[0]
+        try:data=(await konteks(db,lot_id=lot_id,user=None if is_customer_read(request) else akun.user))[0]
         except ValueError as e:raise HTTPException(400,str(e))
     from fastapi.encoders import jsonable_encoder
     return await render_laci(request,'bobot_pengeringan.html',d=jsonable_encoder(data))
+
+async def _nama_gudang_qc(db,model,id):
+    from app.services.cakupan_fasilitas import lokasi_banyak
+    rows=await lokasi_banyak(db,model,[id])
+    return rows.get(id,{}).get('gudang_nama','Lokasi belum tercatat')

@@ -1,4 +1,6 @@
 """Lembar kerja giling: adaptor konteks/pratinjau, memakai layanan operasional lama."""
+from app.services.fasilitas import label_fasilitas
+from app.web.api import _is_jenis_operator
 import hashlib,hmac,json
 from types import SimpleNamespace
 from fastapi import APIRouter,Depends,HTTPException,Request
@@ -24,8 +26,12 @@ router=APIRouter()
 
 def raw(r):return [getattr(r,c.name) for c in r.__table__.columns]
 def hash_(v):return hashlib.sha256(json.dumps(v,sort_keys=True,default=str).encode()).hexdigest()
-async def izin(user):
- if not await _is_g1_operator(user):raise HTTPException(403,'Penggilingan mengikuti akses Gudang 1 yang sedang berlaku.')
+async def izin(user,kode=None):
+ if not await _is_jenis_operator(user,'penggilingan'):raise HTTPException(403,'Penggilingan mengikuti akses Gudang 1 yang sedang berlaku.')
+ if kode:
+  from app.services.cakupan_fasilitas import batas
+  async with SessionLocal() as db:
+   if not await db.scalar(select(MillingProcess.id).where(MillingProcess.kode_proses==kode,batas(user,MillingProcess))):raise HTTPException(403,'Proses berada di luar gudang kerja Anda.')
 async def rows(db,model,kolom,pid):
  return list((await db.scalars(select(model).where(kolom==pid).order_by(model.id).execution_options(populate_existing=True))).all())
 async def sidik(db,pr):
@@ -57,7 +63,7 @@ async def baca(db,kode,user):
  sources=await rows(db,MillingProcessSource,MillingProcessSource.milling_process_id,pr.id)
  bobot=mix.bobot_proses(pr,sources)
  d.update(dasar=dasar,aktif=pr.status=='proses',bahan=bobot.teks(),bobot_diketahui=bobot.diketahui,
-     jenis_pk=await m.pk_jenis(db,pr),gudang='Gudang 1 · Selepan',siap=False,penghalang=None)
+     jenis_pk=await m.pk_jenis(db,pr),gudang=await label_fasilitas(db,pr),siap=False,penghalang=None)
  d['bobot_acuan']=bobot.angka() if bobot.diketahui else None
  d['rendemen']=m.hitung_rendemen(d['tercatat'],d['bobot_acuan']) if d['bobot_acuan'] is not None else None
  order=await db.get(Jasa,pr.jasa_id) if pr.jasa_id else None;d['pesanan']=order.kode if order else None
@@ -104,14 +110,14 @@ async def baca(db,kode,user):
  return jsonable_encoder(d)
 
 async def halaman(kode,request,akun):
- await izin(akun.user)
+ await izin(akun.user,kode)
  async with SessionLocal() as db:d=await baca(db,kode,akun.user)
  from app.web.layar_pekerjaan import konteks_aman
  return await render_laci(request,'giling_ringkas.html',awal=d,boleh=True,layar='pekerjaan',kembali=konteks_aman(request.query_params.get('kembali_kerja')) or '/pekerjaan?tab=berjalan',breadcrumb_detail=kode,buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''))
 
 @router.get('/api/actions/giling-ringkas/{kode}')
 async def papan(kode:str,user:User=Depends(pengguna_aksi)):
- await izin(user)
+ await izin(user,kode)
  async with SessionLocal() as db:return JSONResponse(await baca(db,kode,user),headers={'Cache-Control':'no-store'})
 
 class Permintaan(BaseModel):
@@ -185,7 +191,7 @@ def cap(user,act,plan):return hmac.new(_kunci(),json.dumps([user.id,str(user.rol
 
 @router.post('/api/actions/giling-ringkas/{kode}/{act}/{step}')
 async def tindakan(kode:str,act:str,step:str,req:Permintaan,user:User=Depends(pengguna_aksi)):
- await izin(user)
+ await izin(user,kode)
  if step not in ('periksa','simpan'):raise HTTPException(404,'Langkah tidak dikenali.')
  async with SessionLocal() as db:
   try:

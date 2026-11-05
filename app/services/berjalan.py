@@ -15,6 +15,7 @@ membuka lembar aksi yang benar dalam satu ketukan. Itu bedanya dengan laporan
 status gudang — laporan memberi tahu, layar ini menyelesaikan.
 """
 from __future__ import annotations
+from app.services.cakupan_fasilitas import batas as batas_lokasi
 
 from app.performa import baca_sekali, tampilan_singkat
 
@@ -1396,7 +1397,7 @@ async def _pemilik_silo(db: AsyncSession, silo_id: int,
 async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
                         post: str, data: dict,
                         jasa_id: int | None = None,
-                        tiket: dict | None = None) -> list[Tombol]:
+                        tiket: dict | None = None, warehouse_id: int | None = None) -> list[Tombol]:
     """Tujuan yang sah untuk gabah sekondisi ini — mesinnya disebut satu per satu.
 
     Alasan sebuah tujuan dimatikan diambil dari ATURAN YANG SAMA yang menolak
@@ -1451,10 +1452,12 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
     if ini_jasa and kondisi == "basah":
         from app.penggilingan.gudang1.services.tumpukan import tujuan_sah
         sah = tuple(t for t in sah if t in tujuan_sah(kondisi, 1))
+    from app.models import Dryer
     keluar: list[Tombol] = []
 
     if "dryer" in sah:
-        for d in await dryers_g1(db):
+        dryers=await dryers_g1(db) if warehouse_id is None else list((await db.execute(select(Dryer).where(Dryer.warehouse_id==warehouse_id))).scalars())
+        for d in dryers:
             isi = await isi_dryer(db, d.id)
             lot = await active_drying_lot(db, d.id)
             mati = ""
@@ -1475,7 +1478,7 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
 
     if "silo" in sah:
         from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
-        silo = await silos_g1(db)
+        silo = await silos_g1(db,warehouse_id=warehouse_id)
         # Disorot HANYA bila memang cuma ada satu. Dua tombol tersorot
         # sekaligus bukan rekomendasi melainkan hiasan — dan sorotan yang
         # muncul di mana-mana berhenti menandakan apa pun. Kalau silonya lebih
@@ -1801,7 +1804,7 @@ def _cap_gudang(b: Berjalan, gid: str) -> Berjalan:
 
 
 @tampilan_singkat
-async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan:
+async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False, user=None) -> Berjalan:
     """Pekerjaan operator Gudang 1, dari truk masuk sampai giling ditutup.
 
     `boleh_qc` — pembacanya boleh mencatat mutu (admin ke atas). Mutu dicatat
@@ -1819,7 +1822,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     # kalau tak ditampilkan, gabah bisa bermalam di dryer tanpa dipanaskan dan
     # tak ada satu layar pun yang menyebutnya.
     from app.penggilingan.gudang1.services.drying import (
-        _loose_dryer_batches, dryers_g1, mode_disarankan)
+        _loose_dryer_batches, dryers_untuk, mode_disarankan)
 
     # SATU KARTU PER MESIN, bukan satu kartu untuk semua.
     #
@@ -1829,7 +1832,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     # menjumlahkan gabah dari mesin yang berbeda — bobot yang tak pernah ada
     # di satu tempat, dan mode yang disarankan dari jumlah itu. Padahal
     # `_loose_dryer_batches` sendiri sudah memperingatkannya di docstring-nya.
-    for mesin in await dryers_g1(db):
+    for mesin in await dryers_untuk(db,user):
         isi_mesin = await _loose_dryer_batches(db, mesin.id)
         if not isi_mesin:
             continue
@@ -1875,7 +1878,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     # tumpukan. Tanpa baris ini, gabah itu berdiri di halaman tanpa ada satu
     # layar pun yang menyebutnya.
     batch_baru = (await db.execute(
-        select(PurchaseBatch, Supplier.nama_supplier)
+        select(PurchaseBatch, Supplier.nama_supplier).where(batas_lokasi(user,PurchaseBatch))
         .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
         .where(PurchaseBatch.status_batch == "baru")
         .order_by(PurchaseBatch.id.desc())
@@ -2022,7 +2025,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     # Giling yang sudah ditutup tetapi belum di-QC / belum diverifikasi TIDAK
     # masuk sini: itu pekerjaan staff, bukan operator. Lihat `untuk_staff`.
     for lot in (await db.execute(
-        select(DryingLot).where(DryingLot.status == "proses")
+        select(DryingLot).where(batas_lokasi(user,DryingLot)).where(DryingLot.status == "proses")
         .order_by(DryingLot.id.desc())
     )).scalars().all():
         # Kadar air terakhir disebut di kartunya sendiri — KEDUANYA.
@@ -2217,7 +2220,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         ))
 
     giling_jalan = (await db.execute(
-        select(MillingProcess).where(MillingProcess.status == "proses")
+        select(MillingProcess).where(batas_lokasi(user,MillingProcess)).where(MillingProcess.status == "proses")
         .order_by(MillingProcess.id.desc())
     )).scalars().all()
     # Rata-rata QC seluruh proses yang menyala, SATU kueri — kartu ini disusun
@@ -2383,7 +2386,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     # juga, dan penolakannya datang sesudah orangnya berjalan ke tumpukan.
     await _pmt.gugurkan_yang_habis(db)
     for baris, kode_lot in (await db.execute(
-        select(PermintaanPk, MillingProcess.kode_proses)
+        select(PermintaanPk, MillingProcess.kode_proses).where(batas_lokasi(user,MillingProcess))
         .join(MillingProcess, MillingProcess.id == PermintaanPk.milling_process_id)
         .where(PermintaanPk.status == _pmt.DISETUJUI)
         .order_by(PermintaanPk.waktu_setuju)
@@ -2437,7 +2440,7 @@ _DI_MANA = {
 
 
 @tampilan_singkat
-async def untuk_gudang2(db: AsyncSession, *, read_scope=None) -> Berjalan:
+async def untuk_gudang2(db: AsyncSession, *, read_scope=None, user=None) -> Berjalan:
     """Pekerjaan Gudang 2: PK yang datang dari luar, dan penyosohan.
 
     Sampai sekarang seluruh alur ini hanya bisa dijangkau lewat katalog
@@ -2525,7 +2528,7 @@ async def untuk_gudang2(db: AsyncSession, *, read_scope=None) -> Berjalan:
         ))
 
     # ── Penyosohan yang sedang berputar ──
-    b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
+    b.berjalan += await _kartu_penyosohan_g2(db, asal_silo, user=user)
 
     # ── Silo Gudang 2 berisi PK, menunggu disosoh ──
     b.transit += await _kartu_silo_g2(db, asal_silo, read_scope=read_scope)
@@ -2584,7 +2587,7 @@ async def untuk_gudang2(db: AsyncSession, *, read_scope=None) -> Berjalan:
 
 async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
                               kode_proses: str | None = None,
-                              lengkap: bool = False) -> list[Baris]:
+                              lengkap: bool = False, user=None) -> list[Baris]:
     """Kartu penyosohan yang sedang berputar — berikut keadaan BERHENTI-nya.
 
     Sejak 12 September 2026 penyosohan pun bisa dijeda (keputusan pemilik).
@@ -2600,7 +2603,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
                                                  PolishingSiloUsage)
 
     keluar: list[Baris] = []
-    q = select(PolishingProcess).where(PolishingProcess.status == "proses")
+    from app.services.cakupan_fasilitas import batas
+    q = select(PolishingProcess).where(PolishingProcess.status == "proses",batas(user,PolishingProcess))
     if kode_proses is not None:
         q = q.where(PolishingProcess.kode_proses == kode_proses)
     for pr in (await db.execute(q.order_by(PolishingProcess.id.desc()))).scalars().all():
@@ -2854,7 +2858,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
     return keluar
 
 
-async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None) -> list[Baris]:
+async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None, warehouse_id=None) -> list[Baris]:
     """Silo Gudang 2 yang berisi PK — menunggu disosoh."""
     from app.models import Silo
     from app.penggilingan.gudang2.models import PolishingProcess
@@ -2895,24 +2899,23 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None) -> lis
     #: Sisanya sudah dicatat, mesinnya masih memakai silo lain — berkartu,
     #: tanpa tombol, dan keterangannya menyebut keadaan itu apa adanya.
     sisa_dicatat = {sid for sid, akhir in baris_pakai if akhir is not None} - dipakai
-    # Bendera global TETAP dipakai, dan di sini ia masih benar: mesinnya satu,
-    # jadi silo LAIN memang belum bisa dimulai selama ada yang jalan.
-    # Kode prosesnya ikut diambil, bukan cuma "ada atau tidak": kartu silo yang
-    # kehilangan tombolnya WAJIB menyebut apa yang memakainya. Sejak 28
-    # September 2026 pintu katalognya pun dicabut (satu pekerjaan, satu pintu),
-    # jadi ini satu-satunya tempat orang bisa membaca sebabnya — dan kartu
-    # tanpa tombol tanpa keterangan dibaca sebagai app yang rusak.
-    kode_jalan = (await db.execute(
-        select(PolishingProcess.kode_proses)
-        .where(PolishingProcess.status == "proses")
-        .order_by(PolishingProcess.id.desc())
-    )).scalars().first()
-    sedang = bool(dipakai) or bool(kode_jalan)
-    # Ketersediaan mesin boleh diketahui pelanggan. Nomor proses pelanggan
-    # lain yang sedang memakai mesin tidak ikut diumumkan pada kartu silonya.
-    if read_scope is not None and kode_jalan not in read_scope.codes:
-        kode_jalan = None
-    wid2 = await _g2_warehouse_id(db)
+    # Ketersediaan mengikuti line aktif pada lokasi ini. Run lama yang belum
+    # mempunyai ID line ditahan secara konservatif dalam gudangnya sendiri.
+    wid2 = warehouse_id if warehouse_id is not None else await _g2_warehouse_id(db)
+    from app.models import Warehouse,LiniProduksi,JenisProsesProduksi
+    from app.services.cakupan_fasilitas import lokasi
+    wh=await db.get(Warehouse,wid2)
+    tag=(wh.kode_fungsi or f'wh:{wid2}') if wh else None
+    nama_gudang=wh.nama_gudang if wh else 'Lokasi belum tercatat'
+    aktif=list((await db.execute(select(PolishingProcess.lini_produksi_id,PolishingProcess.kode_proses).where(
+        PolishingProcess.status=='proses',lokasi(PolishingProcess)==wid2))).all())
+    lines=list((await db.scalars(select(LiniProduksi.id).join(JenisProsesProduksi).where(
+        LiniProduksi.warehouse_id==wid2,LiniProduksi.aktif.is_(True),JenisProsesProduksi.aktif.is_(True),JenisProsesProduksi.kode=='penyosohan'))).all())
+    busy={line for line,_ in aktif}
+    if lines:sedang=(None in busy) or not any(line not in busy for line in lines)
+    else:sedang=bool(aktif)
+    kode_jalan=aktif[0][1] if aktif else None
+    if read_scope is not None and kode_jalan not in read_scope.codes:kode_jalan=None
     for silo in (await db.execute(
         select(Silo).where(Silo.warehouse_id == wid2, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
     )).scalars().all():
@@ -2951,7 +2954,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None) -> lis
             # Menunggu mesin dan siap mulai tetap satu antrean. Tanpa penanda
             # ini kartu berpindah grup saat tombolnya hilang karena mesin sibuk.
             kelompok="penyosohan",
-            judul=f"{silo.nama_silo} · Gudang 2",
+            judul=f"{silo.nama_silo} · {nama_gudang}", gudang=tag,
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
             # Kalimat bawahnya ikut menyebutnya: "menunggu disosoh" atas sisa
             # 500 kg yang baru ditutup terbaca seperti muatan penuh yang belum
@@ -3150,7 +3153,7 @@ async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str,
     return keluar
 
 
-async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
+async def untuk_operator_gudang2(db: AsyncSession, *, user=None) -> Berjalan:
     """Layar OPERATOR Gudang 2, menurut pemilik 12 September 2026:
 
       · `menunggu` = stok PK di silo Gudang 2 (→ mulai penyosohan);
@@ -3317,7 +3320,7 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     # katalog aksi saja — perintah yang terbit pukul tujuh pagi baru dilihat
     # pukul sebelas, sebab tak ada satu kartu pun yang menyebutnya.
     b.menunggu += await _kartu_barang_keluar(db, gudang="g2")
-    b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
+    b.berjalan += await _kartu_penyosohan_g2(db, asal_silo, user=user)
     return _cap_gudang(b, "g2")
 
 
@@ -3652,8 +3655,24 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
     # QC hasil giling tetap Admin; QC gabah juga tugas operator G1. Sekali:
     # kartu giling yang sama disusun lewat dua cabang di bawah.
     boleh_qc = can_see_financials(user)
+    from app.models import Dryer, Warehouse
+    from app.services.fasilitas import izin_gudang
+    dryers=list((await db.execute(select(Dryer))).scalars())
+    dryer_wid={d.id:d.warehouse_id for d in dryers}
+    allowed_dryers={d.id for d in dryers if izin_gudang(user,d.warehouse_id)}
+    lot_dryer=dict((await db.execute(select(DryingLot.kode_lot,DryingLot.dryer_id).where(DryingLot.status.in_(['proses','selesai']),~exists().where(SiloStorage.drying_lot_id==DryingLot.id)))).all())
+    warehouses=dict((await db.execute(select(Warehouse.id,Warehouse.kode_fungsi))).all())
+    def drying_card(k):
+        return k.fase=='dryer' or k.kode in lot_dryer
+    def scoped_drying(k):
+        did=k.ruang_baca[1] if k.ruang_baca and k.ruang_baca[0]=='dryer' else lot_dryer.get(k.kode)
+        if did not in allowed_dryers:return False
+        k.gudang=warehouses.get(dryer_wid.get(did))
+        return True
     if await _is_g1_operator(user):
-        g = await untuk_gudang1(db, boleh_qc=boleh_qc)
+        g = await untuk_gudang1(db, boleh_qc=boleh_qc,user=user)
+        for name in ('menunggu','berjalan','transit'):
+            setattr(g,name,[k for k in getattr(g,name) if not drying_card(k) or scoped_drying(k)])
         b.menunggu += g.menunggu
         b.berjalan += g.berjalan
         # Transit ikut. Sebelumnya tidak, dan akibatnya blok Transit di layar
@@ -3666,6 +3685,16 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
             b.mutu_aktif = await fitur_mutu(db)
             if b.mutu_aktif:
                 b.meja += await _kartu_qc_gabah(db)
+    from app.services.cakupan_fasilitas import boleh_jenis
+    if not await _is_g1_operator(user) and (allowed_dryers or await boleh_jenis(db,user,"penggilingan")):
+        drying = await untuk_gudang1(db,boleh_qc=False,user=user)
+        for name in ('menunggu','berjalan','transit'):
+            for k in getattr(drying,name):
+                if k.fase not in ('baru','dryer','giling','silo','tumpuk'):continue
+                if drying_card(k):
+                    if not scoped_drying(k):continue
+                else:k.gudang=warehouses.get(user.default_warehouse_id) or f'wh:{user.default_warehouse_id}'
+                getattr(b,name).append(k)
     if can_see_financials(user):
         s = await untuk_staff(db)
         # Pencatatan mutu bisa dimatikan seluruhnya di Pengaturan. Yang membaca
@@ -3701,11 +3730,17 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
         # silo, berjalan = mesin. Tumpukan pindah ke tombol di kartu Stok
         # sejak 5 Oktober 2026 (lihat `untuk_operator_gudang2`). Penempatan
         # PK datang bukan tugasnya (keputusan pemilik 12 September 2026).
-        g2 = await untuk_operator_gudang2(db)
+        g2 = await untuk_operator_gudang2(db,user=user)
         b.menunggu += g2.menunggu
         b.berjalan += g2.berjalan
         b.transit += g2.transit
         b.jumlah_produk = g2.jumlah_produk
+
+    elif await boleh_jenis(db,user,'penyosohan'):
+        # Fasilitas sosoh di lokasi lain memberi konteks proses, bukan seluruh kewenangan G2.
+        async def asal_lokal(silo_id):return await _isian_silo(db,silo_id)
+        b.berjalan+=await _kartu_penyosohan_g2(db,asal_lokal,user=user)
+        b.menunggu+=await _kartu_silo_g2(db,asal_lokal,warehouse_id=user.default_warehouse_id)
 
     # Super Admin melihat tugas muat kedua gudang, termasuk perintah yang
     # juga dapat diserahkan lewat jalur cepat. Satu perintah cukup satu kartu
@@ -3737,8 +3772,8 @@ async def untuk(db: AsyncSession, user: User, *, read_scope=None) -> Berjalan:
     # dropdown yang sesuai pada permintaan BERIKUTNYA, bukan menunggu bendera
     # lama. Admin/Superadmin: keduanya `True` (`admin_keatas` di masing-masing
     # fungsi) — mereka memegang kedua gudang.
-    b.boleh_riwayat_sosoh = await _is_g2_operator(user)
-    b.boleh_riwayat_g1 = await _is_g1_operator(user)
+    b.boleh_riwayat_sosoh = await boleh_jenis(db,user,'penyosohan')
+    b.boleh_riwayat_g1 = await boleh_jenis(db,user,'penggilingan') or await boleh_jenis(db,user,'pengeringan')
 
     # ── Lencana Kabar ──
     #
@@ -3800,3 +3835,9 @@ async def untuk_pelanggan(db, pelanggan_id, *, scope=None):
             safe.append(row)
         setattr(b, name, safe)
     return b
+
+async def silos_bahan_gabah(db,user=None):
+    from app.models import Silo,Warehouse
+    from app.services.cakupan_fasilitas import batas
+    return list((await db.execute(select(Silo).join(Warehouse).where(Silo.aktif.is_(True),Warehouse.aktif.is_(True),
+        (Silo.jenis_isi=='gabah') | (Warehouse.kode_fungsi=='g1'),batas(user,Silo)).order_by(Silo.id))).scalars())

@@ -228,6 +228,10 @@ async def seed_master() -> None:
                                    tara_per_karung_kg=Decimal(tara)))
                 created.append(f'tara {kode} {ukuran} kg')
 
+        from app.services.fasilitas import seed_fasilitas
+        if await seed_fasilitas(db):
+            created.append("fasilitas produksi")
+
         if created:
             await db.commit()
             log.info("Seed master: menambah %s", ", ".join(created))

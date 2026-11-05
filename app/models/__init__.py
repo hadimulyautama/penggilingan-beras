@@ -174,3 +174,5 @@ from app.models.retur_supplier import pasang_saldo_sumber as _pasang_saldo_retur
 _pasang_saldo_retur_supplier()
 
 __all__.append("SampelQcSosoh")
+
+from app.models.fasilitas import JenisProsesProduksi, LiniProduksi, AuditFasilitas

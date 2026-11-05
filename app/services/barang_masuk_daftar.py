@@ -28,22 +28,26 @@ _JOINS = '''LEFT JOIN timbangan_jenis j ON j.kode=t.jenis_kode
  LEFT JOIN pelanggan p ON p.id=t.pelanggan_id LEFT JOIN jasa ja ON ja.id=t.jasa_id'''
 
 
-def sumber_diterima(g1, g2):
-    sumber = []
-    if g1:
-        sumber.append('SELECT timbangan_transaksi_id AS tid,jasa_id FROM purchase_batches WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL')
+def sumber_diterima(g1, g2, terbatas=False):
+    sumber=[]
+    specs=[]
+    if g1:specs.append(('purchase_batches','timbangan_transaksi_id',"timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL",'g1'))
     if g2:
-        sumber.extend(['SELECT timbangan_transaksi_id AS tid,jasa_id FROM pk_purchase_batches WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL',
-            "SELECT source_id AS tid,jasa_id FROM finished_goods_stock WHERE source_type='timbangan'",
-            "SELECT source_id AS tid,jasa_id FROM byproduct_stock WHERE source_type='timbangan'"])
-    return ' UNION ALL '.join(sumber) or 'SELECT NULL::integer AS tid,NULL::integer AS jasa_id WHERE false'
+        specs += [('pk_purchase_batches','timbangan_transaksi_id',"timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL",'g2'),('finished_goods_stock','source_id',"source_type='timbangan'",'g2'),('byproduct_stock','source_id',"source_type='timbangan'",'g2')]
+    for table,tid,where,old in specs:
+        lokasi=f"coalesce(warehouse_id,(SELECT id FROM warehouses WHERE kode_fungsi='{old}'))"
+        if table=='purchase_batches':
+            lokasi="coalesce(warehouse_id,(SELECT warehouse_id FROM dryers WHERE id=purchase_batches.dryer_id),(SELECT d.warehouse_id FROM dryers d JOIN drying_lots dl ON dl.dryer_id=d.id JOIN drying_lot_batches lb ON lb.drying_lot_id=dl.id WHERE lb.purchase_batch_id=purchase_batches.id LIMIT 1),(SELECT id FROM warehouses WHERE kode_fungsi='g1'))"
+        if terbatas:where+=' AND '+lokasi+'=:lokasi_id'
+        sumber.append(f'SELECT {tid} AS tid,jasa_id,{lokasi} AS warehouse_id FROM {table} WHERE {where}')
+    return ' UNION ALL '.join(sumber) or 'SELECT NULL::integer AS tid,NULL::integer AS jasa_id,NULL::integer AS warehouse_id WHERE false'
 
 
-def dasar_diterima(g1, g2):
+def dasar_diterima(g1, g2, terbatas=False):
     # Semua catatan pada tiket tetap ikut menentukan pemilik; filter pelanggan
     # memakai EXISTS, bukan memangkas catatan pemilik lain dari tiket staf.
-    arsip = penerimaan_historis.SQL if g2 else 'SELECT NULL::integer AS tid WHERE false'
-    return f'''WITH sumber AS ({sumber_diterima(g1,g2)}),
+    arsip = ('SELECT * FROM ('+penerimaan_historis.SQL+") old WHERE :lokasi_id=(SELECT id FROM warehouses WHERE kode_fungsi='g2')" if terbatas else penerimaan_historis.SQL) if g2 else 'SELECT NULL::integer AS tid WHERE false'
+    return f'''WITH sumber AS ({sumber_diterima(g1,g2,terbatas)}),
  arsip AS ({arsip}),
  kelompok AS (SELECT tid,bool_or(jasa_id IS NULL) AS pabrik,bool_or(jasa_id IS NOT NULL) AS jasa
               FROM sumber GROUP BY tid UNION ALL
@@ -53,7 +57,7 @@ def dasar_diterima(g1, g2):
  {_jenis_sql()} AS jenis,
  CASE WHEN {_JASA} THEN {_NAMA} ELSE coalesce(nullif(s.nama_supplier,''),nullif(t.pihak_nama,''),'?') END AS nama,
  CASE WHEN k.pabrik AND k.jasa THEN 'campuran' WHEN k.jasa THEN 'jasa' WHEN k.pabrik THEN 'pabrik' ELSE 'periksa' END AS kepemilikan,
- CASE WHEN {_jenis_sql()} LIKE 'gabah_%' THEN 'g1' ELSE 'g2' END AS gudang,
+ coalesce((SELECT min(coalesce(w.kode_fungsi,'wh:'||w.id)) FROM sumber src JOIN warehouses w ON w.id=src.warehouse_id WHERE src.tid=t.id),CASE WHEN {_jenis_sql()} LIKE 'gabah_%' THEN 'g1' ELSE 'g2' END) AS gudang,
  concat_ws(' ',t.kode,s.nama_supplier,p.nama_pelanggan,t.pihak_nama,t.nomor_polisi,t.nama_sopir,j.nama,t.jenis_kode,ja.kode) AS cari,
  EXISTS(SELECT 1 FROM sumber src JOIN jasa js ON js.id=src.jasa_id
         WHERE src.tid=t.id AND js.pelanggan_id=:pid) AS pelanggan_cocok
@@ -77,7 +81,7 @@ def dasar_belum(g1, g2, admin):
  (t.jasa_id IN (SELECT id FROM jasa WHERE pelanggan_id=:pid)
  OR (t.jasa AND t.pelanggan_id=:pid)) AS pelanggan_cocok
  FROM tiket t LEFT JOIN pelanggan p ON p.id=t.pelanggan_id LEFT JOIN jasa ja ON ja.id=t.jasa_id),
- dasar AS (SELECT bernama.*, CASE WHEN jenis LIKE 'gabah_%' THEN 'g1' WHEN jenis!='lain' THEN 'g2' END AS gudang,
+ dasar AS (SELECT bernama.*, coalesce((SELECT coalesce(w.kode_fungsi,'wh:'||w.id) FROM warehouses w WHERE w.id=:lokasi_id),nullif(:gudang,''),CASE WHEN jenis LIKE 'gabah_%' THEN 'g1' WHEN jenis!='lain' THEN 'g2' END) AS gudang,
  concat_ws(' ',kode,nama,jenis_nama,jenis_kode,nomor_polisi,nama_sopir,jasa_kode,
  CASE WHEN kepemilikan='jasa' THEN 'jasa' ELSE 'bukan jasa' END,
  CASE WHEN status_tiket='SELESAI' THEN 'susulan' ELSE '' END,
@@ -99,12 +103,15 @@ def _pola(q):
 
 
 async def daftar(db, *, g1, g2, admin, status, jenis='', pemilik='', gudang='', pid=None,
-                 cari='', pemasok='', halaman=1):
+                 cari='', pemasok='', halaman=1, user=None):
     from app.services import setelan
     tol=await setelan.toleransi_nota_persen(db)
     p = dict(tol_persen=tol,jenis=jenis,pemilik=pemilik,gudang=gudang,pid=pid,
              hari=timbang.HARI_SUSULAN,cari=_pola(cari.strip()),pemasok=pemasok)
-    bases = {'belum':dasar_belum(g1,g2,admin),'diterima':dasar_diterima(g1,g2)}
+    from hmu_identitas import peran as P
+    terbatas=user is not None and not P.admin_keatas(user.role)
+    p['lokasi_id']=user.default_warehouse_id if terbatas else None
+    bases = {'belum':dasar_belum(g1,g2,admin),'diterima':dasar_diterima(g1,g2,terbatas)}
     totals = {}
     for key,base in bases.items():
         totals[key] = await db.scalar(text(base + ' SELECT count(*) FROM dasar WHERE '+_filter()),p)
@@ -121,7 +128,7 @@ async def daftar(db, *, g1, g2, admin, status, jenis='', pemilik='', gudang='', 
     rows=(await db.execute(text(base+' SELECT * FROM dasar WHERE '+where+' ORDER BY '+order+' LIMIT :limit OFFSET :offset'),p)).all()
     cards=[];history=[];meta={}
     if status=='diterima':
-        history=await masuk.riwayat(db,g1=g1,g2=g2,ids_tiket=[r.id for r in rows])
+        history=await masuk.riwayat(db,g1=g1,g2=g2,ids_tiket=[r.id for r in rows],user=user)
         arsip=await penerimaan_historis.baca(db,[r.id for r in rows if r.id not in {t['id'] for t in history}]) if g2 else []
         history+=arsip
         history.sort(key=lambda t:t['id'],reverse=True)
@@ -144,6 +151,7 @@ async def daftar(db, *, g1, g2, admin, status, jenis='', pemilik='', gudang='', 
         rank={r.kode:i for i,r in enumerate(rows)}
         cards.sort(key=lambda c:rank[c.kode])
         meta={r.kode:dict(r._mapping) for r in rows}
+        for c in cards:c.gudang=meta.get(c.kode,{}).get('gudang',c.gudang)
     return dict(menunggu=cards,riwayat=history,meta_tiket=meta,nama_saring=names,
                 total_belum=totals['belum'],total_diterima=totals['diterima'],
                 jumlah=count,halaman=page,halaman_akhir=last)

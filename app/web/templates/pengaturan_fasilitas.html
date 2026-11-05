@@ -1,0 +1,2 @@
+{% extends "pengaturan.html" %}
+{% block isi %}{{ super() }}{% if blok_kelola and not BAGIAN %}<section class="kartu"><h2>Fasilitas produksi</h2><a class="btn" href="/pengaturan/fasilitas">Gudang, line / alat & jenis proses</a></section>{% endif %}{% endblock %}

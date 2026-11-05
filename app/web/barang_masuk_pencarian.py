@@ -14,7 +14,7 @@ async def halaman(request, akun):
     from app.web.layar_pekerjaan import pilihan, tautan
     from app.web.stok_navigasi import pelanggan_diminta
     from app.services.kelompok_kerja import JENIS_BARANG
-    from app.web.api import _is_g1_operator, _is_g2_operator
+    from app.web.api import _is_g1_operator, _is_g2_operator, _is_gabah_operator
     from app.peran import can_see_financials
     from app.models import Pelanggan
     status=pilihan(request,'status',{'belum','diterima'},'belum')
@@ -34,9 +34,9 @@ async def halaman(request, akun):
             if pid:
                 pelanggan_saring=await db.scalar(select(Pelanggan.nama_pelanggan).where(Pelanggan.id==pid)) or 'Pelanggan tidak ditemukan'
             d=await barang_masuk_daftar.daftar(db,
-                g1=await _is_g1_operator(akun.user),g2=await _is_g2_operator(akun.user),admin=can_see_financials(akun.user),
+                g1=await _is_gabah_operator(akun.user),g2=await _is_g2_operator(akun.user),admin=can_see_financials(akun.user),
                 status=status,jenis=jenis,pemilik=pemilik,gudang=gudang,pid=pid,cari=cari,pemasok=pemasok,
-                halaman=request.query_params.get('halaman','1'))
+                halaman=request.query_params.get('halaman','1'),user=akun.user)
     except SQLAlchemyError:
         log.exception('Pembacaan daftar Barang Masuk gagal')
         gagal=True

@@ -50,6 +50,8 @@ async def pabrik(pg, pemasok):
         await db.flush()
         db.add(MillingProgressLog(milling_process_id=proc.id, waktu_update=kini - timedelta(hours=1),
                                   berat_kumulatif_kg=6_000, input_by=u.id))
+        from app.services.fasilitas import seed_fasilitas
+        await seed_fasilitas(db)
         await db.commit()
         return {"user_id": u.id, "kode": "LOT-UJI-01", "proc_id": proc.id}
 

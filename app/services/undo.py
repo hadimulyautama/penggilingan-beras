@@ -1249,6 +1249,8 @@ async def _undo_beras_masuk_silo(db: AsyncSession, log: ActivityLog, *, actor_id
 
 
 async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str:
+    if log.aksi == 'koreksi_gudang_penerimaan':
+        raise UndoError('Koreksi gudang diperbaiki melalui detail Barang Masuk dengan pemeriksaan dampak terbaru; undo umum tidak memindahkan saldo.')
     if log.aksi == 'koreksi_bahan_hasil_berjalan':
         raise UndoError('Koreksi bahan/hasil tersimpan sebagai satu rancangan atomik. Gunakan koreksi proses berjalan dengan nilai efektif terbaru; jangan membatalkan satu jejak anak secara terpisah.')
     tag = getattr(log, "aksi", None)

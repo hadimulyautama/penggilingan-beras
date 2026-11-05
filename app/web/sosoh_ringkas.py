@@ -1,4 +1,6 @@
 """Penyajian proses sosoh; mutasi tetap melalui layanan domain yang sudah ada."""
+from app.services.fasilitas import label_fasilitas
+from app.web.api import _is_jenis_operator
 import hashlib
 import hmac
 import json
@@ -21,9 +23,13 @@ from app.services.stok import nama_produk
 
 router=APIRouter()
 
-async def izin(user):
-    if not await _is_g2_operator(user):
+async def izin(user,kode=None):
+    if not await _is_jenis_operator(user,'penyosohan'):
         raise HTTPException(403,'Penyosohan mengikuti akses Gudang 2 yang sedang berlaku.')
+    if kode:
+     from app.services.cakupan_fasilitas import batas
+     async with SessionLocal() as db:
+      if not await db.scalar(select(PolishingProcess.id).where(PolishingProcess.kode_proses==kode,batas(user,PolishingProcess))):raise HTTPException(403,'Proses berada di luar gudang kerja Anda.')
 
 
 def _raw(row):
@@ -67,7 +73,7 @@ async def baca(db,kode):
     penutup=await db.scalar(select(ActivityLog).where(ActivityLog.table_name=='polishing_process',ActivityLog.record_id==proc.id,ActivityLog.aksi=='akhiri_penyosohan',ActivityLog.dibatalkan_pada.is_(None)).order_by(ActivityLog.id.desc()).limit(1)) if proc.status=='selesai' else None
     closer=await db.get(User,penutup.changed_by) if penutup and penutup.changed_by else None
     data['proses_id']=proc.id
-    data.update(dasar=dasar,aktif=proc.status=='proses',gudang='Gudang 2 · Penyosohan',
+    data.update(dasar=dasar,aktif=proc.status=='proses',gudang=await label_fasilitas(db,proc),
         waktu=dict(mulai=proc.waktu_mulai.isoformat() if proc.waktu_mulai else None,
             selesai=proc.waktu_selesai.isoformat() if proc.waktu_selesai else None,
             durasi=lama_kata(durasi) if durasi is not None else 'Belum tersedia',
@@ -119,7 +125,7 @@ async def baca(db,kode):
 
 
 async def halaman(kode,request,akun):
-    await izin(akun.user)
+    await izin(akun.user,kode)
     async with SessionLocal() as db:
         data=await baca(db,kode)
         from app.services.qc_sosoh import data_proses
@@ -136,7 +142,7 @@ async def halaman(kode,request,akun):
 
 @router.get('/api/actions/sosoh-ringkas/{kode}')
 async def papan(kode:str,user:User=Depends(pengguna_aksi)):
-    await izin(user)
+    await izin(user,kode)
     async with SessionLocal() as db:return JSONResponse(await baca(db,kode),headers={'Cache-Control':'no-store'})
 
 
@@ -215,7 +221,7 @@ async def rencana(db,kode,req,user,action):
 
 @router.post('/api/actions/sosoh-ringkas/{kode}/{action}/{langkah}')
 async def tindakan(kode:str,action:str,langkah:str,req:Permintaan,user:User=Depends(pengguna_aksi)):
-    await izin(user)
+    await izin(user,kode)
     if langkah not in ('periksa','simpan'):raise HTTPException(404,'Langkah tidak dikenali.')
     async with SessionLocal() as db:
         try:

@@ -10,6 +10,7 @@ Acuan: MASTER_RULES_AND_LOGIC.md §12.
   produk-jadi. Di sini fokus: run + konsumsi PK + output + rendemen.
 """
 from __future__ import annotations
+from app.services.cakupan_fasilitas import lokasi as lokasi_proses
 
 from dataclasses import dataclass, field
 from datetime import datetime, time
@@ -168,16 +169,22 @@ class MulaiPenyosohanResult:
 
 
 async def mulai_penyosohan(
-    db: AsyncSession, *, user, nama_silos: list[str] | None, tanggal=None, jam=None,
+    db: AsyncSession, *, user, nama_silos: list[str] | None, tanggal=None, jam=None, lini_id: int | None = None,
 ) -> MulaiPenyosohanResult:
     """Mulai penyosohan dari satu/lebih silo Gudang 2 (snapshot berat awal)."""
+    from app.services.fasilitas import pilih_lini, FasilitasError
+    try:
+        lini = await pilih_lini(db, user=user, kode_jenis="penyosohan",
+                                lini_id=lini_id)
+    except FasilitasError as exc:
+        raise Gudang2Error(str(exc)) from exc
     letters = [s.upper() for s in (nama_silos or []) if s]
     if not letters:
         raise Gudang2Error("Sebutkan silo bahannya, contoh: `mulai penyosohan silo A`")
 
     silos: list[Silo] = []
     for letter in dict.fromkeys(letters):  # dedupe, jaga urutan
-        silo = await get_g2_silo(db, letter)
+        silo = await get_g2_silo(db, letter, warehouse_id=lini.warehouse_id)
         if silo is None:
             # ── Halaman lama yang masih memegang pilihan "AB" ──
             #
@@ -238,6 +245,7 @@ async def mulai_penyosohan(
 
     now = input_time(tanggal, jam)
     proc = PolishingProcess(
+        lini_produksi_id=lini.id,
         kode_proses=await next_polishing_code(db),
         waktu_mulai=now, status="proses", created_by=user.id,
         # Dari sinilah hasilnya mewarisi pemilik — lewat `jasa.pemilik_hasil()`.
@@ -340,7 +348,7 @@ async def tambah_silo_penyosohan(
     )).scalars().all())
     silos: list[Silo] = []
     for letter in dict.fromkeys(letters):
-        silo = await get_g2_silo(db, letter)
+        silo = await get_g2_silo(db, letter, warehouse_id=await db.scalar(select(lokasi_proses(PolishingProcess)).where(PolishingProcess.id==proc.id)))
         if silo is None:
             raise Gudang2Error(f"Silo {letter} Gudang 2 tidak ditemukan.")
         await kunci_silo(db, silo.id)
@@ -499,12 +507,13 @@ async def tambah_silo_penyosohan(
 
 
 # ─────────────────────────── Output (kumulatif) ───────────────────────────
-async def _get_proc(db: AsyncSession, kode: str | None) -> PolishingProcess:
+async def _get_proc(db: AsyncSession, kode: str | None, user=None) -> PolishingProcess:
+    from app.services.cakupan_fasilitas import batas
     if not kode:
         # Bila hanya satu proses 'proses' berjalan, pakai itu.
         rows = (
             await db.execute(
-                select(PolishingProcess).where(PolishingProcess.status == "proses")
+                select(PolishingProcess).where(batas(user,PolishingProcess),PolishingProcess.status == "proses")
             )
         ).scalars().all()
         if len(rows) == 1:
@@ -512,7 +521,7 @@ async def _get_proc(db: AsyncSession, kode: str | None) -> PolishingProcess:
         raise Gudang2Error("Sebutkan kode prosesnya, contoh: `hasil premium 2 ton POL-...`")
     proc = (
         await db.execute(
-            select(PolishingProcess).where(PolishingProcess.kode_proses == kode)
+            select(PolishingProcess).where(batas(user,PolishingProcess),PolishingProcess.kode_proses == kode)
         )
     ).scalars().first()
     if proc is None:
@@ -937,7 +946,7 @@ async def selesai_penyosohan(
     target = None
     terbuka = [u for u in usages if u.berat_akhir_kg is None]
     if nama_silo:
-        silo = await get_g2_silo(db, nama_silo.upper())
+        silo = await get_g2_silo(db, nama_silo.upper(), warehouse_id=await db.scalar(select(lokasi_proses(PolishingProcess)).where(PolishingProcess.id==proc.id)))
         # Dipilih dari yang MASIH TERBUKA, bukan dari seluruh baris.
         #
         # Sampai 25 September 2026 di sini tertulis `usages`, dan akibatnya
@@ -1344,7 +1353,9 @@ class KartuSosoh:
 async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
                         sebelum: int | None = None,
                         process_id: int | None = None,
-                        allowed_ids: frozenset[int] | None = None) -> tuple[list[KartuSosoh], bool]:
+                        allowed_ids: frozenset[int] | None = None,
+    user=None
+) -> tuple[list[KartuSosoh], bool]:
     """Kartu penyosohan SELESAI, terbaru lebih dulu. → (kartu, ada lanjutannya)
 
     Hanya yang selesai, dan itu keputusan pemilik ("kartu proses sosoh yang
@@ -1386,6 +1397,9 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
          .where(PolishingProcess.status == "selesai")
          .order_by(PolishingProcess.id.desc())
          .limit(batas + 1))
+    if user is not None:
+        from app.services.cakupan_fasilitas import batas as batas_lokasi
+        q=q.where(batas_lokasi(user,PolishingProcess))
     if allowed_ids is not None:
         q = q.where(PolishingProcess.id.in_(allowed_ids))
     if process_id is not None:

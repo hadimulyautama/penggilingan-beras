@@ -44,6 +44,14 @@ async def simpan_proses_bersama(
             ProsesTerpadu.id_sumber == str(id_sumber),
         ).with_for_update()
     )).scalar_one_or_none()
+    from app.models import DryingLot, MillingProcess, PolishingProcess, LiniProduksi
+    model = {m.__tablename__:m for m in (DryingLot,MillingProcess,PolishingProcess)}.get(tabel_sumber)
+    if model:
+        native = await db.get(model,int(id_sumber))
+        line = await db.get(LiniProduksi,native.lini_produksi_id) if native and native.lini_produksi_id else None
+        if line:
+            metadata_domain = {**(metadata_domain or {}), 'lini_produksi_id':line.id,
+                               'jenis_proses_id':line.jenis_proses_id,'warehouse_id':line.warehouse_id}
     sumber = proses.ke_entitas(
         tabel_sumber=tabel_sumber, id_sumber=id_sumber,
         metadata_domain=metadata_domain,
