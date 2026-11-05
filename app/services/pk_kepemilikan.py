@@ -77,7 +77,7 @@ async def sumber(db, user, key, warehouse_id=None, *, menulis=True):
     if source.masalah:
         raise umum.InventoryError(source.masalah)
     if not source.stok.bebas:
-        raise umum.InventoryError('Hanya PK bebas di tumpukan yang dapat dialihkan; PK di silo/proses tidak termasuk.')
+        raise umum.InventoryError('Hanya hasil PK tercatat yang masih bebas dapat dialihkan; bahan di silo atau bobot belum pasti tidak termasuk.')
     if key.startswith('giling:'):
         pending = await db.scalar(select(PermintaanPk.id).where(
             PermintaanPk.milling_process_id == source.model.id,

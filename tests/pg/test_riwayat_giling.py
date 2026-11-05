@@ -240,7 +240,9 @@ async def test_giling_habis_terkirim_tetap_tercatat_di_riwayat(pg, pabrik):
     from sqlalchemy.orm import selectinload
     from app.models import User
     from app.services.transfer import create_internal_transfer
+    from app.services.seed import seed_master
 
+    await seed_master()  # Pengiriman riwayat ini memerlukan Gudang 2 tujuan.
     kode = await _giling_selesai(pg, pabrik, berat_akhir=5_000)
     from hmu_core.proses_db import ProsesTerpadu
     async with pg() as db:

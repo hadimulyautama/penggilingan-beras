@@ -92,7 +92,7 @@
     {% include "_stok_pk_qc.html" %}
   {% endif %}
 
-  {% set boleh_alih_pk = BOLEH_KEPEMILIKAN and t.tersedia>0 and ((g1 and not t.berjalan and not t.belum_dicatat and not t.diminta_oleh) or (not g1 and t.bobot_final)) %}
+  {% set boleh_alih_pk = BOLEH_KEPEMILIKAN and t.tersedia>0 and ((g1 and not t.belum_dicatat and not t.diminta_oleh) or (not g1 and t.bobot_final)) %}
   {# Satu panel sticky: panel terpisah saling menutupi pada layar ponsel. #}
   {% if (g1 and not t.berjalan and (boleh_minta or boleh_ubah or TAMPILAN_INDUK)) or (not g1 and ((t.bobot_final and (boleh_pindah_tumpukan or TAMPILAN_INDUK)) or (boleh_ubah and mutu_aktif and t.qc_kode))) or boleh_alih_pk %}
   <section class="pk-detail__actions" aria-label="Tindakan stok">

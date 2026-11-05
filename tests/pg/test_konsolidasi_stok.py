@@ -67,7 +67,7 @@ async def stok_lengkap(pg, sosoh_jasa, pemakai):
     return {**sosoh_jasa, 'lain': pel.id, 'gudang': gudang, 'kemasan': ids}
 
 
-PASANGAN = [('/stok', 'bahan', 'pabrik'), ('/stok-pk-jasa', 'bahan', 'jasa'),
+PASANGAN = [('/stok?pemilik=pabrik', 'bahan', 'pabrik'), ('/stok-pk-jasa', 'bahan', 'jasa'),
             ('/stok-produk', 'produk', 'pabrik'), ('/stok-produk-jasa', 'produk', 'jasa'),
             ('/stok-karung', 'karung', 'pabrik'), ('/stok-karung-jasa', 'karung', 'jasa')]
 
@@ -89,7 +89,9 @@ def navigasi_stok(html):
     assert nav and len(nav.select('a,span[aria-disabled]')) == 3
     form = s.select_one('#sk-filter form[method="get"][action="/stok"]')
     assert form
-    assert {o['value'] for o in form.select('select[name="pemilik"] option')} == {'pabrik', 'jasa'}
+    pemilik={'pabrik','jasa'}
+    if form.select_one('input[name=tab]')['value']=='bahan':pemilik.add('semua')
+    assert {o['value'] for o in form.select('select[name="pemilik"] option')} == pemilik
     assert {o['value'] for o in form.select('select[name="gudang"] option')} == {'', 'g1', 'g2'}
 
 
@@ -103,7 +105,7 @@ async def test_enam_alias_saldo_dan_aksi_sama(pg, stok_lengkap, monkeypatch, lam
         return asli(request, nama, **konteks)
     monkeypatch.setattr(tampilan, 'render', rekam)
     async with await _klien(pg, role='admin') as c:
-        a = await c.get(lama + '?buka=pindah_kepemilikan_karung&nilai=laminasi%7C25%7CPenyunesia')
+        a = await c.get(lama + ('&' if '?' in lama else '?') + 'buka=pindah_kepemilikan_karung&nilai=laminasi%7C25%7CPenyunesia')
         b = await c.get(f'/stok?tab={tab}&pemilik={pemilik}&buka=pindah_kepemilikan_karung&nilai=laminasi%7C25%7CPenyunesia')
         assert a.status_code == b.status_code == 200, b.text
     assert hasil[0][0] == hasil[1][0]
@@ -198,7 +200,7 @@ async def test_detail_dan_kembali_mempertahankan_filter(pg, stok_lengkap):
 
 async def test_parameter_tidak_sah_tidak_membuka_semua_pemilik(pg, stok_lengkap):
     async with await _klien(pg, role='admin') as c:
-        for url in ['/stok?tab=salah', '/stok?pemilik=semua', '/stok?pemilik=jasa&pelanggan_id=x']:
+        for url in ['/stok?tab=salah', '/stok?pemilik=asing', '/stok?tab=produk&pemilik=semua', '/stok?pemilik=jasa&pelanggan_id=x']:
             assert (await c.get(url)).status_code == 422
         assert (await c.get('/stok?pemilik=jasa&pelanggan_id=99999')).status_code == 404
 

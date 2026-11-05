@@ -60,8 +60,8 @@ async def _pk_tidak_tersedia(request: Request, pesan: str):
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     # Satu pintu navigasi, tetapi tetap memakai pembaca dan gerbang lama.
     tab = request.query_params.get("tab", "bahan")
-    pemilik = request.query_params.get("pemilik", "pabrik")
-    if tab not in {"bahan", "produk", "karung"} or pemilik not in {"pabrik", "jasa"}:
+    pemilik = request.query_params.get("pemilik", "semua" if tab == "bahan" else "pabrik")
+    if tab not in {"bahan", "produk", "karung"} or pemilik not in ({"semua", "pabrik", "jasa"} if tab == "bahan" else {"pabrik", "jasa"}):
         raise HTTPException(422, "Pilihan stok tidak dikenal.")
     if tab != "bahan":
         from app.web import layar_produk
@@ -91,10 +91,8 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         gudang=request.query_params.get('gudang') or ''
         if gudang not in {g for g,_,_ in saring}:gudang=''
         baca_user=None if is_customer_read(request) else await konteks_baca_gudang(db,akun.user,gudang)
-        # PK milik pabrik saja di halaman ini: PK jasa punya halaman khusus
-        # `/stok-pk-jasa`, seperti produk jasa dipisah dari Stok Produk.
-        # Layanan tetap membaca semua pemilik agar picker proses dan halaman
-        # khusus bisa memakai sumber data yang sama.
+        # Awalnya semua kepemilikan ditampilkan. Filter pabrik tetap memakai
+        # pembaca yang sama; filter jasa menuju halaman khusus di atas.
         #
         # ── PK Gudang 1 TERLIHAT oleh operator Gudang 2 ──
         #
@@ -128,9 +126,9 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # diberikan kepada operator, syarat ini harus ditinjau ulang: bagi
         # operator polesan, "Gudang 1" berarti melihat BAHAN, bukan melihat
         # gudang orang lain.
-        lot = ([l for l in await svc.pk_gudang1(db, user=baca_user) if not l.pemilik]
+        lot = ([l for l in await svc.pk_gudang1(db, user=baca_user) if pemilik == 'semua' or not l.pemilik]
                if (gudang1(view) or gudang2(view))  else [])
-        tempat = ([t for t in await svc.pk_gudang2(db, user=baca_user) if not t.pemilik]
+        tempat = ([t for t in await svc.pk_gudang2(db, user=baca_user) if pemilik == 'semua' or not t.pemilik]
                   if (gudang1(view) or gudang2(view)) else [])
         mutu_aktif = await fitur_mutu(db)
         from app.services.koreksi_bahan_berjalan import sumber_bebas_g1
@@ -148,6 +146,7 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
               else svc.BarangJadiG2(produk=[], samping=[]))
     return await render_laci(
         request, "stok_dengan_koreksi.html", template_stok_asal="stok.html", layar="stok", sisa_koreksi_g1=sisa_koreksi_g1,
+        semua_kepemilikan=pemilik == 'semua',
         lot=lot, tempat=tempat,
         # `SARING_GUDANG` = nama kontrak templat bersama (Tahap 2). Kosong untuk
         # operator: ia sudah diberi satu gudang lewat view-nya, dan pil tunggal
@@ -204,9 +203,9 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     yaitu Stok PK Jasa. semua kartu PK Jasa nanti disitu. sama seperti stok
     pk yaitu dibagi blok menjadi di gudang 1 atau gudang 2."*
 
-    PK jasa hanya ditampilkan di halaman ini. `/stok` hanya menampilkan PK
-    milik pabrik, sedangkan data layanan tetap mencakup kedua pemilik untuk
-    dipakai picker proses dan tampilan ini menyaring `pemilik`.
+    Halaman ini mempertahankan filter khusus PK jasa. `/stok` secara default
+    menampilkan kedua pemilik; tampilan ini menyaring `pemilik` dari pembaca
+    yang sama.
 
     MERENDER `stok_pk_jasa.html` — templat BERISI SATU BARIS, `{% extends
     "stok.html" %}` tanpa satu pun blok ditimpa, jadi keluarannya PERSIS
