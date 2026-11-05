@@ -225,3 +225,40 @@ async def test_curah_seluruh_dan_pembatalan_memulihkan_dua_bentuk(pg,pabrik):
         rows=await sumber(db,await db.get(PkGudang2Intake,ids[1]))
         assert [(s['bentuk'],s['saldo_kg']) for s in rows]==[('karung',6400),('curah',20)]
         assert await g2.hitung_stok_silo(db,(await g2.get_g2_silo(db,'A')).id)==0
+
+async def test_gudang_aktif_sesi_dipakai_saat_simpan_50_karung_dan_profil_tetap(pg,dunia):
+    from app.models import Warehouse
+    from app.web.lihat_sebagai import NAMA_KUKI
+    async with pg() as db:
+        u,b,it=await batch_baru(db,dunia,n=50,w=2500,kode='PKB-20261105-02')
+        g2id=u.default_warehouse_id
+        g1=Warehouse(nama_gudang='Gudang 1 - Profil',kode_fungsi='g1',aktif=True)
+        db.add(g1);await db.flush();g1id=g1.id
+        u.default_warehouse_id=g1id;await db.commit();uid,iid=u.id,it.id
+    async with await _klien(pg,uid,'masuk-silo-sesi-g2',mode='operator') as c:
+        c.cookies.set(NAMA_KUKI,'operator:g2')
+        choices=await c.get('/api/actions/sumber-masukkan-silo')
+        assert choices.status_code==200 and any(x['value']==f'{iid}:karung' for x in choices.json())
+        preview=await c.get('/api/actions/rincian-masukkan-silo',params=dict(tumpukan=f'{iid}:karung',silo='A',jumlah_karung=50))
+        assert preview.status_code==200 and preview.json()['berat_masuk']==2500,preview.text
+        result=await post(c,iid,'karung',jumlah_karung=50,kunci_kiriman='foto-sesi-g2')
+        assert result.status_code==200,result.text
+        # Retry tidak mencatat pemindahan yang sama dua kali.
+        assert (await post(c,iid,'karung',jumlah_karung=50,kunci_kiriman='foto-sesi-g2')).status_code==200
+    async with pg() as db:
+        assert (await db.get(User,uid)).default_warehouse_id==g1id
+        moves=(await db.scalars(select(PkTumpukanToSilo))).all()
+        assert len(moves)==1 and moves[0].berat_kg==2500
+        assert await g2._sisa_tumpukan_intake(db,iid)==0
+
+async def test_pilihan_sesi_g1_tidak_membuka_pemindahan_sumber_g2(pg,dunia):
+    from app.models import Warehouse
+    from app.web.lihat_sebagai import NAMA_KUKI
+    async with pg() as db:
+        u,b,it=await batch_baru(db,dunia,n=50,w=2500)
+        db.add(Warehouse(nama_gudang='Gudang 1 - Uji tolak',kode_fungsi='g1',aktif=True));await db.commit();uid,iid=u.id,it.id
+    async with await _klien(pg,uid,'masuk-silo-sesi-g1',mode='operator') as c:
+        c.cookies.set(NAMA_KUKI,'operator:g1')
+        r=await post(c,iid,'karung',jumlah_karung=50)
+        assert r.status_code==403,r.text
+    async with pg() as db:assert await db.scalar(select(func.count()).select_from(PkTumpukanToSilo))==0

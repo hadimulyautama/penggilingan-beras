@@ -368,6 +368,14 @@ async def _koreksi_bahan_aktif(db, e):
 
 PENANGAN['koreksi_bahan_hasil_berjalan']=_koreksi_bahan_aktif
 
+
+async def _koreksi_kepemilikan_rantai(db,e):
+    if e.muatan.get('pk_chain'):
+        from app.services.pk_koreksi_rantai import proyeksi
+        await proyeksi(db,e)
+
+PENANGAN['koreksi_kepemilikan_rinci']=_koreksi_kepemilikan_rantai
+
 async def _koreksi_gudang_penerimaan(db,e):
     from app.services.koreksi_gudang_penerimaan import terapkan_peristiwa
     await terapkan_peristiwa(db,e)

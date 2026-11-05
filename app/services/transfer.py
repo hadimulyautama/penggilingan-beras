@@ -337,6 +337,9 @@ async def create_internal_transfer(
 
 async def alasan_koreksi_transfer(db: AsyncSession, transfer_id: int) -> str | None:
     """Periksa apakah transfer masih aman dibatalkan untuk koreksi."""
+    from app.services.pk_koreksi_rantai import alasan_perubahan_terpisah
+    reason=await alasan_perubahan_terpisah(db,'transfers',transfer_id)
+    if reason:return reason
     from app.penggilingan.gudang2.models import PkGudang2Intake
     from app.penggilingan.gudang2.service import label_tujuan
     from app.services.undo import UndoError, _tolak_bila_pk_sudah_dipakai

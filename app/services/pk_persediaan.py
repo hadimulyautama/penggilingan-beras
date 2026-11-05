@@ -33,6 +33,28 @@ class SumberPK:
     aliases: dict = field(default_factory=dict)
     terikat: dict = field(default_factory=dict)
     kepemilikan_net: dict = field(default_factory=dict)
+    pemakaian: list = field(default_factory=list)
+
+    def pakai(self,owner,jumlah,ref=None):
+        """Simpan asal bagian FIFO yang sama dengan pengurangan fisiknya."""
+        sisa=D(jumlah);taken=[]
+        for b in self.stok.bagian:
+            if b.pemilik_id!=owner:continue
+            n=min(sisa,b.berat_kg)
+            if n>0:taken.append(dict(owner=owner,tag=b.transaksi_id,kg=n,ref=ref));sisa-=n
+            if sisa<=0:break
+        self.stok.ambil(owner,jumlah)
+        self.pemakaian.extend(taken)
+
+    def pulihkan(self,owner,jumlah,tag,ref):
+        from app.domain.gudang import BagianPK
+        sisa=D(jumlah)
+        for used in reversed(self.pemakaian):
+            if used['owner']!=owner or used['tag']!=tag or used['ref']!=ref:continue
+            n=min(sisa,used['kg']);used['kg']-=n;sisa-=n
+            if sisa<=0:break
+        if sisa>0:raise PersediaanError('Jejak bagian transfer yang dikoreksi tidak mencukupi.')
+        self.stok.bagian.append(BagianPK(owner,D(jumlah),tag))
 
     def pemilik(self, ident):
         return self.aliases.get(ident, ident)
@@ -104,6 +126,17 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
     canon=lambda ident:aliases.get(ident,ident)
     result = {}
     timeline = []
+    events = list((await db.scalars(select(Peristiwa).where(
+        Peristiwa.jenis.in_([AWAL, UBAH])).order_by(Peristiwa.id))).all())
+    # Bobot awal tetap diputar pada waktunya. Koreksi fisik berikutnya
+    # adalah arus lawan pada waktu koreksi, bukan menulis ulang sejarah FIFO.
+    transfer_awal={};move_awal={}
+    for event in events:
+        for row in event.muatan.get('pk_chain',{}).get('transfers',[]):
+            transfer_awal.setdefault(row['id'],D(row['before']['berat_kg']))
+        if event.muatan.get('before',{}).get('identity',{}).get('sumber','').startswith('tumpukan:'):
+            for row in event.muatan.get('pk_chain',{}).get('moves',[]):
+                move_awal.setdefault(row['id'],D(row['effective_before']))
     processes = list((await db.scalars(select(MillingProcess))).all())
     from app.services.cakupan_fasilitas import lokasi_banyak
     lokasi_proses = await lokasi_banyak(db, MillingProcess, [p.id for p in processes])
@@ -128,8 +161,9 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
                (warehouse_id is None or lokasi_intake[i.id]['warehouse_id'] == warehouse_id)]
     saldo = await sisa_tumpukan_banyak(db, intakes)
     ids = [i.id for i in intakes]
-    moves = list((await db.scalars(select(PkTumpukanToSilo).where(
-        PkTumpukanToSilo.pk_gudang2_intake_id.in_(ids)))).all()) if ids else []
+    moves = [m for m in (await db.scalars(select(PkTumpukanToSilo).where(
+        PkTumpukanToSilo.pk_gudang2_intake_id.in_(ids)).execution_options(termasuk_dibatalkan=True))).all()
+        if m.dibatalkan_pada is None or m.id in move_awal] if ids else []
     batch_ids = {i.pk_purchase_batch_id for i in intakes if i.pk_purchase_batch_id}
     batches = {b.id: b for b in (await db.scalars(select(PkPurchaseBatch).where(
         PkPurchaseBatch.id.in_(batch_ids)))).all()} if batch_ids else {}
@@ -144,8 +178,9 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
         if value is None:
             value = D(0)
         move_weights[m.id] = value
-        moved[i.id] = moved.get(i.id, D(0)) + value
-    transfers=list((await db.scalars(select(InternalTransfer).where(InternalTransfer.status=='terkirim'))).all())
+        if m.dibatalkan_pada is None:moved[i.id] = moved.get(i.id, D(0)) + value
+    transfers=[t for t in (await db.scalars(select(InternalTransfer))).all()
+               if t.status=='terkirim' or t.id in transfer_awal]
     transfers_by_id={t.id:t for t in transfers}
     processes_by_id={p.id:p for p in processes}
     reservations = await terikat_banyak(db, ['pk:'+str(b) for b in batch_ids])
@@ -164,10 +199,12 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
                                D(reservations.get('pk:'+str(i.pk_purchase_batch_id))))
     for m in moves:
         timeline.append((_waktu(m, m.waktu), 'pakai',
-                         ('tumpukan:'+str(m.pk_gudang2_intake_id), m.jasa_id, move_weights[m.id])))
+                         ('tumpukan:'+str(m.pk_gudang2_intake_id), m.jasa_id,
+                          move_awal.get(m.id,move_weights[m.id]),'move:'+str(m.id))))
     for t in transfers:
         timeline.append((_waktu(t, t.waktu), 'pakai',
-                         ('giling:'+str(t.milling_process_id), t.jasa_id, D(t.berat_kg))))
+                         ('giling:'+str(t.milling_process_id), t.jasa_id,
+                          transfer_awal.get(t.id,D(t.berat_kg)), 'transfer:'+str(t.id))))
 
     # Pengeluaran lama bertipe tumpukan tidak mempunyai alokasi intake.
     # FIFO tetap dibatasi gudang DAN pemilik yang tersimpan pada pengiriman.
@@ -190,12 +227,12 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
         timeline.append((_waktu(ret), 'credit',
                          ('giling:'+str(item.milling_process_id), ret.jasa_id, D(ret.berat_total_kg))))
 
-    events = list((await db.scalars(select(Peristiwa).where(
-        Peristiwa.jenis.in_([AWAL, UBAH])).order_by(Peristiwa.id))).all())
     for event in events:
         state = event.muatan if event.jenis == AWAL else event.muatan.get('after', {})
         if state.get('kind') != 'pk':
             continue
+        for flow in event.muatan.get('pk_chain',{}).get('flows',[]):
+            timeline.append((_waktu(event,event.waktu),'pulihkan',flow))
         for delta in event.muatan.get('pk_moves', []):
             timeline.append((_waktu(event, event.waktu), 'alih', delta))
     for source in result.values():
@@ -215,6 +252,11 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
                 source.kepemilikan_net[ke]=source.kepemilikan_net.get(ke,D(0))+D(payload['kg'])
             except PersediaanError as e:
                 source.masalah = str(e)
+        elif kind == 'pulihkan':
+            source=result.get(payload['sumber'])
+            if source is not None:
+                try:source.pulihkan(canon(payload['owner']),payload['kg'],payload['tag'],payload['ref'])
+                except PersediaanError as e:source.masalah=str(e)
         elif kind == 'credit':
             key, owner, value = payload
             owner=canon(owner)
@@ -223,13 +265,13 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
                 from app.domain.gudang import BagianPK
                 source.stok.bagian.append(BagianPK(owner, value, 0))
         elif kind == 'pakai':
-            key, owner, value = payload
+            key, owner, value, *ref = payload
             owner=canon(owner)
             source = result.get(key)
             if source is None or value <= 0:
                 continue
             try:
-                source.stok.ambil(owner, value)
+                source.pakai(owner, value, ref[0] if ref else None)
             except PersediaanError as e:
                 source.masalah = str(e)
         else:
@@ -241,7 +283,7 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
                 take = min(value, max(D(0), source.stok.saldo(owner) -
                     (source.reservasi if owner == source.pemilik_awal else D(0))))
                 if take > 0:
-                    source.stok.ambil(owner, take)
+                    source.pakai(owner, take)
                     value -= take
             if value > D('.001'):
                 for source in sources:

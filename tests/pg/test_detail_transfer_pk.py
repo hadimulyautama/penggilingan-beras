@@ -150,6 +150,8 @@ async def test_riwayat_paginasi_tidak_mengubah_saldo_dan_tab(pg,pabrik):
 
 
 async def test_penghalang_tidak_memblokir_tutup_bobot_sama(pg,pabrik):
+    from app.services.seed import seed_master
+    await seed_master()
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
     from app.web import csrf
     pid=await _minta(pg,pabrik)

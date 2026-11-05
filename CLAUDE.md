@@ -1382,3 +1382,32 @@ di gudang sendiri, portal pemilik, dan Admin tidak berubah. Hasil pabrik yang
 sudah tercatat boleh diminta saat giling berjalan; permintaan tidak memindah
 stok, ACC Admin dan pengiriman G1 tetap memakai alur lama. Pratinjau minta
 memakai hak BACA PK lintas gudang, bukan izin mengoperasikan proses G1.
+
+## Koreksi kepemilikan PK dan bobot lanjutan — 5 November 2026
+
+Penurunan/pembatalan AM-PK boleh mengikuti bagian yang sudah ditransfer,
+masuk silo, atau menjadi bahan sosoh. Pemilik menegaskan bahwa kelebihan
+catat pada bobot transfer juga harus mengurangi pemasukan dan bahan proses
+lanjutan, bukan hanya memindahkan label pemilik. Rancangan mengikuti bagian
+FIFO transaksi asal; tidak mengambil bagian transaksi lain. Pratinjau tidak
+menulis. Penyimpanan melalui aplikasi memperbarui cermin, proyeksi, bahan
+ProsesTerpadu, dan audit dalam satu transaksi, dengan baseline/review serta
+kunci kiriman yang sama. Peristiwa asli tetap immutable; arus lawan tercatat
+pada waktu koreksi agar koreksi berulang tidak menggandakan saldo.
+
+Hasil produksi terukur tidak otomatis diskalakan. Jika pembatalan membuat
+hasil tercatat melebihi bahan baru, pratinjau menampilkan selisih itu untuk
+diperiksa pengguna. Pengeluaran keluar gudang/alokasi atau pengalihan lain
+yang tidak mempunyai jejak transfer lengkap tidak boleh dibuatkan saldo
+pengganti tanpa bukti. Perubahan terpisah pada transfer/pindah silo yang
+sudah ikut rantai harus melalui AM-PK terkait agar jejak FIFO tetap konsisten.
+
+Kasus AM-PK-10: pengguna akan mengoreksi sendiri melalui aplikasi. Deploy
+kode tidak menjalankan koreksi/pembatalan, pemindahan silo, atau penyesuaian
+transaksi produksi apa pun. Jangan mengirim POST transaksi atas nama pengguna
+untuk kasus ini.
+
+Pada semua endpoint Masukkan ke silo, pertahankan aktor efektif dari sesi.
+Memuat ulang User berdasarkan ID menghilangkan gudang kerja operator yang
+berbeda dari default profil, sehingga opsi/pratinjau G2 tampil tetapi simpan
+menolak sumber. Jangan menimpa default profil untuk memperbaikinya.

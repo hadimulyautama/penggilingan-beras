@@ -179,19 +179,19 @@ async def context(db, *, user, ident):
         available = D(0)
     rows = [dict(**line,free=str(available),used=str(max(D(0),D(state['quantity'])-available)),
                  consistent=True,availability_known=True,
-                 blocker='Bagian PK telah dipakai atau dialihkan lagi.' if available<D(state['quantity']) else None)
+                 blocker='Bagian PK telah berpindah atau terikat. Pratinjau koreksi menelusuri transfer dan bahan proses terkait.' if available<D(state['quantity']) else None)
             for line in state['lines']]
     history = list((await db.scalars(select(Peristiwa).where(Peristiwa.jenis==umum.UBAH,
         Peristiwa.muatan['root_id'].as_integer()==ident).order_by(Peristiwa.id))).all())
     actors = {u.id:u.nama for u in (await db.scalars(select(User))).all()}
     logs = [dict(id=e.id,actor=actors.get(e.pelaku_id,'Tidak tersedia'),time=e.waktu.isoformat(),
-                 reason=e.muatan['request']['reason'],before=e.muatan['before'],after=e.muatan['after']) for e in history]
+                 reason=e.muatan['request']['reason'],before=e.muatan['before'],after=e.muatan['after'],pk_chain=e.muatan.get('pk_chain')) for e in history]
     names = {str(o):await umum.pihak(db,o,'pk') for o in set(state['owners'])|{state['customer'],None}|{b.pemilik_id for b in source.stok.bagian}}
     return dict(id=ident,code='AM-PK-'+str(ident),state=state,original=event.muatan,lines=rows,
         available=str(available),names=names,balances=balances(source.stok),actor=actors.get(event.pelaku_id,'Tidak tersedia'),
         time=event.waktu.isoformat(),history=logs,source_facts=[],
         description=dict(label=state['label'],unit='kg',warehouses=[source.stok.gudang.nama],
-                         capacity_note='Pengalihan hanya mengubah pemilik bagian PK; lokasi dan total fisik tetap.'),
+                         capacity_note='Penurunan atau pembatalan dapat mengoreksi bobot transfer, silo, dan bahan proses terkait. Periksa seluruh dampak sebelum menyimpan.'),
         baseline=umum.sign(dict(facts=facts(source),state=state)))
 
 
@@ -227,9 +227,17 @@ async def _plan(db, *, user, ident, req):
         if origin is None or origin.status!='berjalan':
             raise umum.InventoryError('Pesanan jasa asal sudah tidak berjalan. Gunakan pengalihan baru ke pesanan aktif pemilik tersebut; stok tidak dikembalikan ke pesanan yang sudah ditutup.')
     moves = []
+    chain=None
+    reversal=old if dest!=previous_dest else max(D(0),old-amount)
+    restored=max(D(0),reversal-source.bebas(previous_dest,transaksi_id=ident))
+    if restored:
+        from app.services.pk_koreksi_rantai import rancang
+        from app.domain.gudang import BagianPK
+        chain=await rancang(db,source=source,ident=ident,owner=previous_dest,jumlah=restored,user=user)
+        projected.bagian.append(BagianPK(previous_dest,restored,ident))
     def move(a,b,n,tag=None,receipt=ident):
         if n<=0:return
-        if tag is not None and n>source.bebas(a,transaksi_id=tag):
+        if tag is not None and n>source.bebas(a,transaksi_id=tag)+(restored if a==previous_dest and tag==ident else D(0)):
             raise umum.InventoryError('Bagian transaksi sudah dipakai atau dialokasikan; hanya bagian bebas yang dapat dibalik.')
         projected.alihkan(a,b,n,transaksi_id=receipt,sumber_transaksi_id=tag)
         moves.append(dict(sumber=source.stok.sumber,dari=a,ke=b,kg=str(n),
@@ -251,9 +259,11 @@ async def _plan(db, *, user, ident, req):
                  status='dibatalkan' if body['mode']=='batal' else 'terkoreksi')
     after['lines'][0].update(quantity=str(amount),kg=str(amount))
     after['parties']={str(o):await umum.pihak(db,o,'pk') for o in {source_owner,dest,None}}
-    return dict(root_id=ident,before=before,after=after,request=body,pk_moves=moves,
+    result=dict(root_id=ident,before=before,after=after,request=body,pk_moves=moves,
                 balances_before=balances(source.stok),balances_after=balances(projected),
                 physical_before=str(source.stok.fisik_kg),physical_after=str(projected.fisik_kg))
+    if chain:result['pk_chain']=chain
+    return result
 
 
 async def periksa(db, *, user, ident, req):
@@ -282,6 +292,9 @@ async def simpan(db, *, user, ident, req):
         waktu=now_local(),membatalkan_id=ident if plan['after']['status']=='dibatalkan' else None)
     db.add(e)
     await db.flush()
+    if plan.get('pk_chain'):
+        from app.services.pk_koreksi_rantai import terapkan
+        await terapkan(db,event=e,user=user)
     await umum.audit(db,user,'pk',ident,plan['before'],plan['after'],plan['request']['reason'],
                       'batal_kepemilikan' if plan['after']['status']=='dibatalkan' else 'koreksi_kepemilikan')
     return dict(recorded=True,event_id=e.id,plan=plan)
