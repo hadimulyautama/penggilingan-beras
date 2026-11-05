@@ -1,0 +1,9 @@
+{% macro bahan(d,kg) -%}
+<section class="jasa-bahan" aria-label="Bahan titipan sesuai tahap">
+<h3>Bahan titipan</h3>
+{% for b in d.bahan_titipan|default([]) %}<div class="jasa-bahan__baris" data-tahap="{{ b.tahap }}"><span>{{ b.label }}</span><span class="jasa-bahan__bobot">
+{% if b.belum_diketahui and not b.kg %}<strong>Belum diketahui</strong>{% else %}<strong>{{ kg(b.kg) }}{% if b.belum_diketahui %} tercatat{% endif %}</strong>{% endif %}
+{% if b.belum_diketahui %}<small>{{ b.belum_diketahui }} catatan belum memiliki bobot</small>{% elif b.belum_final %}<small>Bobot / saldo proses belum final</small>{% endif %}
+</span></div>{% endfor %}
+</section>
+{%- endmacro %}

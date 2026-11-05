@@ -17,6 +17,7 @@ from app.models import (Jasa, Pelanggan, PurchaseBatch, DryingLot, DryingLotBatc
                         OutgoingRecord, OutgoingItem, BrokenKeSilo, BerasKeSilo,
                         HasilSampingKeSilo)
 from app.services import stok
+from app.services import jasa_bahan
 from app.services.bahan_silo import kg_rinci
 
 STATUS = (('','Semua pesanan'), ('berjalan','Berjalan'), ('selesai','Selesai'),
@@ -178,10 +179,15 @@ async def _pelanggan(db,pid,*,rinci=True,pk=None,read_scope=None,ringkasan_pesan
                 href = '/stok/pk/detail?' + urlencode({'gudang':gudang,'kode' if gudang=='g1' else 'id':ident,'jasa':1})
                 final = not r.berjalan and not r.belum_dicatat if gudang=='g1' else r.bobot_final
                 d['stok'].append(dict(nama='PK',kode=r.kode,kg=r.tersedia,
-                    lokasi='Tumpukan · Gudang '+('1' if gudang=='g1' else '2'),
+                    lokasi='Tumpukan · '+(r.gudang_nama or ('Gudang '+('1' if gudang=='g1' else '2'))),
                     final=final,href=href,pesanan=kode.get(r.jasa_id),rincian=r.bahan))
                 if gudang=='g1' and r.belum_dicatat:
                     d['stok'][-1]['kg']=None
+                if not final:
+                    row=d['stok'][-1]
+                    if not r.tersedia:row['kg']=None
+                    row.update(jenis_bahan='PK',tahap_bahan=('hasil_giling' if gudang=='g1' and r.berjalan else 'tumpukan'),label_bahan=('PK hasil giling · belum final' if gudang=='g1' and r.berjalan else 'PK di tumpukan · bobot belum final'),
+                        sumber_bahan=f'pk-tumpukan:{gudang}:{ident}')
         for k in produk:
             if abs(k.sisa_kg)<0.0001 and not k.alarm:
                 continue
@@ -198,7 +204,7 @@ async def _pelanggan(db,pid,*,rinci=True,pk=None,read_scope=None,ringkasan_pesan
     from app.penggilingan.gudang1.services.bobot import dari_batch
     from app.penggilingan.gudang1.services.silo import _row_bobot
     q_batches=select(PurchaseBatch.id,PurchaseBatch.jasa_id,PurchaseBatch.status_batch,
-        PurchaseBatch.kode_batch,PurchaseBatch.kondisi_gabah,PurchaseBatch.berat_total_kg,
+        PurchaseBatch.kode_batch,PurchaseBatch.kondisi_gabah,PurchaseBatch.berat_total_kg,PurchaseBatch.warehouse_id,
         PurchaseBatch.sumber_berat,PurchaseBatch.berat_perkiraan_kg,PurchaseBatch.retur_supplier_keluar_kg,
         PurchaseBatch.timbangan_transaksi_id,PurchaseBatch.waktu_pembelian).where(dalam(db, PurchaseBatch.jasa_id, ids))
     if not baca_masuk or rincian is not None:q_batches=q_batches.where(PurchaseBatch.status_batch.in_(('baru','ditumpuk','di_dryer','dikeringkan')))
@@ -209,25 +215,40 @@ async def _pelanggan(db,pid,*,rinci=True,pk=None,read_scope=None,ringkasan_pesan
         q_batches=q_batches.where(or_(PurchaseBatch.status_batch.in_(('baru','ditumpuk','di_dryer','dikeringkan')),PurchaseBatch.id.in_(terakhir)))
     batches = (await db.execute(q_batches)).all() if baca_stok or baca_masuk else []
     if baca_stok:
+        nama_gudang=await jasa_bahan.gudang_nama(db)
         for b in batches:
             if b.status_batch in ('baru','ditumpuk','di_dryer','dikeringkan'):
                 bobot = dari_batch(b)
+                stage=('pengering' if b.status_batch in ('di_dryer','dikeringkan') else 'penempatan' if b.status_batch=='baru' else 'tumpukan')
+                label=dict(jasa_bahan.TAHAP_GABAH)[stage]
                 d['stok'].append(dict(nama='Gabah '+b.kondisi_gabah,kode=b.kode_batch,
                     kg=bobot.kg if bobot.diketahui else None,final=bobot.pasti,
-                    lokasi=('Pengering · Gudang 1' if b.status_batch in ('di_dryer','dikeringkan') else 'Menunggu penempatan · Gudang 1' if b.status_batch=='baru' else 'Tumpukan · Gudang 1'),
+                    lokasi=label+' · '+nama_gudang.get(b.warehouse_id,'Gudang belum tercatat'),
+                    jenis_bahan='Gabah',tahap_bahan=stage,label_bahan=label,terikat_proses=stage=='pengering',sumber_bahan=f'batch:{b.id}',
                     pesanan=kode[b.jasa_id],href='/barang-masuk/'+str(b.timbangan_transaksi_id) if b.timbangan_transaksi_id else '',rincian=[]))
-        for r,nama in (await db.execute(select(SiloStorage,Silo.nama_silo).join(Silo,Silo.id==SiloStorage.silo_id)
+        for r,nama,wid in (await db.execute(select(SiloStorage,Silo.nama_silo,Silo.warehouse_id).join(Silo,Silo.id==SiloStorage.silo_id)
                 .where(dalam(db, SiloStorage.jasa_id, ids),SiloStorage.status=='terisi'))).all():
             b = await _row_bobot(db,r)
             d['stok'].append(dict(nama='Gabah · bahan proses',kode=nama,kg=b.kg if b.diketahui else None,
-                final=b.pasti, lokasi='Silo · Gudang 1',pesanan=kode[r.jasa_id],href='',rincian=[]))
+                final=b.pasti,terikat_proses=r.milling_process_id is not None,
+                lokasi=nama+' · '+nama_gudang.get(wid,'Gudang belum tercatat'),
+                jenis_bahan='Gabah',tahap_bahan='silo_giling',label_bahan='Gabah di silo / proses giling',
+                sumber_bahan=f'storage:{r.id}',pesanan=kode[r.jasa_id],href='',rincian=[]))
         from app.models import GabahKeringLot
         from app.penggilingan.gudang1.services.gabah_kering import pending_gabah_kering_kg
         for lot in (await db.scalars(select(GabahKeringLot).where(dalam(db, GabahKeringLot.jasa_id, ids)))).all():
             kg = await pending_gabah_kering_kg(db,lot.id)
             if kg>0:
                 d['stok'].append(dict(nama='Gabah kering ditimbang',kode=lot.kode_lot,kg=kg,final=True,
-                    lokasi='Tumpukan · Gudang 1',pesanan=kode[lot.jasa_id],href='',rincian=[]))
+                    lokasi='Tumpukan · '+nama_gudang.get(await db.scalar(select(Silo.warehouse_id).join(SiloStorage,SiloStorage.silo_id==Silo.id).where(SiloStorage.id==lot.silo_storage_id)),'Gudang belum tercatat'),
+                    jenis_bahan='Gabah',tahap_bahan='tumpukan',label_bahan='Gabah di tumpukan',
+                    sumber_bahan=f'gabah-kering:{lot.id}',pesanan=kode[lot.jasa_id],href='',rincian=[]))
+        d['stok'].extend(await jasa_bahan.menunggu(db,ids))
+        # Bahan yang sudah masuk silo G2 tidak lagi berada pada stok bebas.
+        # Saldo produk lama tidak diubah atau ditambah dengan bahan proses.
+        d['stok'].extend({k:v for k,v in row.items() if k!='owner'}
+            for row in await jasa_bahan.silo_bahan(db) if row['owner'] in ids)
+    d['bahan_titipan']=jasa_bahan.ringkas(d['stok']) if baca_stok else []
     # Riwayat penerimaan yang sudah dicatat tetap memakai pembaca Barang
     # Masuk; tiket asal terpisah dari pesanan pemilik catatan saat ini.
     penerimaan_sql = rincian is not None
@@ -323,7 +344,7 @@ async def _pelanggan(db,pid,*,rinci=True,pk=None,read_scope=None,ringkasan_pesan
         d['kondisi'].append('Hasil belum diambil')
     if d['berjalan']:
         d['kondisi'].append('Proses berjalan')
-    if any(r['nama'].startswith('Gabah') for r in d['stok']):
+    if any(r['kg']>0 or r['belum_diketahui'] for r in d['bahan_titipan']):
         d['kondisi'].append('Bahan masih di pabrik')
     return d
 

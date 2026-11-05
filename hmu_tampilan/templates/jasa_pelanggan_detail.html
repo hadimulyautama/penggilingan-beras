@@ -6,14 +6,16 @@
 {% macro tab_ke(k) -%}?{{ dict({'tab':k,'status':request.query_params.get('status',''),'cari':request.query_params.get('cari',''),'halaman':request.query_params.get('halaman','')}, **(pesanan_query or {}))|urlencode }}{%- endmacro %}
 <div class="jasa-detail">
 <a class="jasa-kembali" href="{{ kembali }}">← Kembali ke Pesanan Jasa</a>
-<header class="jasa-kepala">
- <div class="jasa-kepala__atas"><span>Pesanan Jasa · Detail pelanggan</span><span class="lencana">Titipan jasa</span></div>
- <h1>{{ d.nama }}</h1>
- <p>{{ d.penerimaan_jumlah|default(d.penerimaan|length) }} penerimaan · {{ d.pesanan_jumlah|default(d.pesanan|length) }} pesanan · {{ d.proses_jumlah|default(d.proses|length) }} proses terkait</p>
- <p>Kontak #{{ d.id }} · {{ d.pesanan_berjalan|default(d.pesanan|selectattr('status','equalto','berjalan')|list|length) }} pesanan berjalan</p>
-</header>
+{% from '_jasa_kontrol.html' import kontrol with context %}
+{{ kontrol(detail=true,nama=d.nama) }}
+<div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span> · <span class="lencana">Titipan jasa</span>
+<p>{{ d.penerimaan_jumlah|default(d.penerimaan|length) }} penerimaan · {{ d.pesanan_jumlah|default(d.pesanan|length) }} pesanan · {{ d.proses_jumlah|default(d.proses|length) }} proses terkait</p>
+<p>Kontak #{{ d.id }} · {{ d.pesanan_berjalan|default(d.pesanan|selectattr('status','equalto','berjalan')|list|length) }} pesanan berjalan</p></div>
+
 <nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for k,n in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a href="{{ tab_ke(k) }}"{% if tab==k %} aria-current="page"{% endif %}>{{ n }}</a>{% endfor %}</nav>
 {% if tab=='ringkasan' %}
+{% from '_jasa_bahan.html' import bahan %}{{ bahan(d,kg) }}
+<p class="jasa-produk-label">PK dan hasil yang tersedia</p>
 <div class="jasa-detail-angka" aria-label="Saldo terpisah menurut jenis">{% for label,n in [('PK tersedia',d.pk_kg),('Beras tersisa',d.beras_kg),('Hasil samping',d.samping_kg)] %}<div><span>{{ label }}</span><strong>{{ kg(n) }}</strong></div>{% endfor %}</div>
 {% if d.stok|selectattr('kg','none')|list %}<p class="jasa-peringatan">Sebagian bobot belum diukur. Angka Ringkasan mengikuti bobot yang sudah tercatat; periksa rincian pada <a href="{{ tab_ke('stok') }}">Stok</a>.</p>{% elif d.berjalan or d.stok|rejectattr('final')|list %}<p class="jasa-peringatan">Proses atau bobot belum final. Hasil dan sisa bahan mengikuti catatan yang tersedia; periksa <a href="{{ tab_ke('proses') }}">Proses</a> dan <a href="{{ tab_ke('stok') }}">Stok</a>.</p>{% endif %}
 <section class="kartu"><h2>Tindak lanjut pelanggan</h2>

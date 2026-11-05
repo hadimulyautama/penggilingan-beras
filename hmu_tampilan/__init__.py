@@ -47,7 +47,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "517"
+VERSI = "518"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -57,7 +57,7 @@ TEMPLATES_DIR = AKAR / "templates"
 #: bernama ini di luar folder vendored berarti menyalin lagi — ditolak
 #: `penjaga.salinan_terlarang`.
 BERKAS_PAKET = (
-    "pengiriman-kontrol.css", "pengiriman-kontrol.js", "_pengiriman_kontrol.html", "panduan.css", "_panduan.html", "app.css", "komponen-portal.css", "_ikon_portal.html", "aksi.js", "pindah.js", "sw.js",
+    "jasa-kontrol.css", "jasa-kontrol.js", "_jasa_kontrol.html", "_jasa_bahan.html", "pengiriman-kontrol.css", "pengiriman-kontrol.js", "_pengiriman_kontrol.html", "panduan.css", "_panduan.html", "app.css", "komponen-portal.css", "_ikon_portal.html", "aksi.js", "pindah.js", "sw.js",
     "ikon-180.png", "ikon-192.png", "ikon-512.png",
     "base.html", "_benda.html", "_kepemilikan.html", "_proses_visual.html", "_operasional.html", "luring.html",
     # ── Delapan LAYAR yang naik ke paket 23 September 2026 ──
