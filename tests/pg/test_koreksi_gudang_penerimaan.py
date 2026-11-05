@@ -262,6 +262,23 @@ async def test_beberapa_penerimaan_satu_tiket_hanya_baris_dipilih_berubah(pg):
         await s.simpan(db,**kw(d),req=body);await db.commit()
         assert s.raw(await db.get(FinishedGoodsStock,oid))==before
 
+@pytest.mark.parametrize('karung,partai,kg,teks',[(2,None,None,'Bobot belum tersedia'),(2,196,None,'100 kg'),(None,None,150.25,'150.25 kg')])
+async def test_detail_pk_perpindahan_karung_tanpa_bobot_tetap_terbaca(pg,karung,partai,kg,teks):
+    from app.models import PkGudang2Intake,PkTumpukanToSilo
+    d=await terima(pg,await dunia(pg),'BERAS_PK')
+    async with pg() as db:
+        batch=await db.get(PkPurchaseBatch,d['id']);batch.jumlah_karung=partai
+        intake=await db.scalar(select(PkGudang2Intake).where(PkGudang2Intake.pk_purchase_batch_id==batch.id))
+        silo=Silo(nama_silo='Silo PK uji rincian',warehouse_id=d['wh'][1].id,jenis_isi='pk',aktif=True);db.add(silo);await db.flush()
+        move=PkTumpukanToSilo(pk_gudang2_intake_id=intake.id,silo_id=silo.id,kode_pindah='PK-UJI-RINCIAN',jumlah_karung=karung,berat_timbang_kg=kg,tanggal=now_local().date(),waktu=now_local(),input_by=d['user'].id)
+        db.add(move);await db.commit();before=s.raw(move);mid=move.id
+    async with await _klien(pg,role='admin') as c:
+        response=await c.get('/barang-masuk/'+str(d['tid']))
+        assert response.status_code==200,response.text
+        assert 'PK-UJI-RINCIAN' in response.text and teks in response.text
+        if karung is not None:assert '2 karung' in response.text
+    async with pg() as db:assert s.raw(await db.get(PkTumpukanToSilo,mid))==before
+
 @pytest.mark.parametrize('jenis',['BERAS_MASUK','BROKEN_MASUK'])
 async def test_perpindahan_kepemilikan_menahan_relabel_satu_pecahan(pg,jenis):
     d=await terima(pg,await dunia(pg),jenis)

@@ -309,7 +309,12 @@ async def rincian_lokasi(db, catatan):
                 proses.append((f'Penerimaan PK #{it.id}', f'/stok/pk/detail?gudang=g2&id={it.id}'))
             from app.models import PkTumpukanToSilo
             for pindah,nama in (await db.execute(select(PkTumpukanToSilo,Silo.nama_silo).join(Silo, Silo.id==PkTumpukanToSilo.silo_id).where(PkTumpukanToSilo.pk_gudang2_intake_id==it.id))).all():
-                lokasi.append(f'{pindah.kode_pindah} · {float(pindah.berat_kg):g} kg ke {nama}')
+                # Karung historis dapat belum mempunyai rasio bobot partai.
+                # Gunakan pembaca lama; yang belum diketahui bukan nol.
+                kg=pindah.berat_kg
+                berat='Bobot belum tersedia' if kg is None else f'{float(kg):g} kg'
+                karung=f'{pindah.jumlah_karung} karung · ' if pindah.jumlah_karung is not None else ''
+                lokasi.append(f'{pindah.kode_pindah} · {karung}{berat} ke {nama}')
     if any(x['model'] in ('beras', 'broken') for x in catatan):
         lokasi.extend('Stok produk · '+c.get('gudang_nama','Lokasi belum tercatat') for c in catatan if c['model'] in ('beras','broken'))
     # Tautan stok mengikuti pemilik CATATAN, bukan pihak pada tiket yang bisa
