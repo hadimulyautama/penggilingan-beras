@@ -2916,6 +2916,16 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None, wareho
     else:sedang=bool(aktif)
     kode_jalan=aktif[0][1] if aktif else None
     if read_scope is not None and kode_jalan not in read_scope.codes:kode_jalan=None
+    from app.models import PkGudang2Intake, PkTumpukanToSilo, PkPurchaseBatch
+    # Angkanya tetap saldo silo yang sama. Karung yang belum diikat proses
+    # membawa estimasi nota/tara sampai timbang kedua, bukan kg fisik pasti.
+    estimasi_silo=set((await db.scalars(select(PkTumpukanToSilo.silo_id)
+        .join(PkGudang2Intake,PkGudang2Intake.id==PkTumpukanToSilo.pk_gudang2_intake_id)
+        .join(PkPurchaseBatch,PkPurchaseBatch.id==PkGudang2Intake.pk_purchase_batch_id)
+        .join(Silo,Silo.id==PkTumpukanToSilo.silo_id)
+        .where(Silo.warehouse_id==wid2,PkTumpukanToSilo.jumlah_karung.is_not(None),
+               PkTumpukanToSilo.pemakaian_silo_id.is_(None),
+               PkPurchaseBatch.sumber_berat=='perkiraan'))).all())
     for silo in (await db.execute(
         select(Silo).where(Silo.warehouse_id == wid2, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
     )).scalars().all():
@@ -2936,8 +2946,14 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None, wareho
         isian = await asal_silo(silo.id)
         asal = isian.baris
         pemasok = _pemasok_ringkas(asal)
+        from app.penggilingan.gudang1.services.bobot import PERKIRAAN, PASTI
+        bobot=Bobot(kg,PERKIRAAN if silo.id in estimasi_silo else PASTI)
+        nota_isian=(f"Mesin sosoh sedang dipakai {kode_jalan} — silo ini menunggu giliran."
+                    if sedang and kode_jalan and silo.id not in sisa_dicatat else _nota_isian(isian))
+        if silo.id in estimasi_silo:
+            nota_isian=' · '.join(filter(None,[nota_isian,'Bobot estimasi; bobot aktual menunggu timbang kedua.']))
         keluar.append(Baris(
-            kode=silo.nama_silo, pemilik_ids=tuple(await pemilik_silo_g2(db, silo.id)), isi=f"Bahan campuran · {_kg(kg)}",
+            kode=silo.nama_silo, pemilik_ids=tuple(await pemilik_silo_g2(db, silo.id)), isi=f"Bahan campuran · {bobot.teks()}",
             ruang_baca=("silo_pk", silo.id),
             # Tiga keadaan, tiga kalimat. Silo yang sisanya sudah dicatat
             # BUKAN silo yang sedang menunggu mesin: yang membacanya perlu tahu
@@ -2955,7 +2971,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None, wareho
             # ini kartu berpindah grup saat tombolnya hilang karena mesin sibuk.
             kelompok="penyosohan",
             judul=f"{silo.nama_silo} · {nama_gudang}", gudang=tag,
-            utama=(_kg(kg).removesuffix(" kg"), "kg"),
+            utama=_utama(bobot),
             # Kalimat bawahnya ikut menyebutnya: "menunggu disosoh" atas sisa
             # 500 kg yang baru ditutup terbaca seperti muatan penuh yang belum
             # tersentuh, dan operator yang membacanya akan mencari 500 kg yang
@@ -2974,10 +2990,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo, *, read_scope=None, wareho
             # mendahului catatan selisih: yang membaca kartu tanpa tombol
             # mencari sebabnya lebih dulu. Sesudah pintu katalognya dicabut
             # (28 September 2026), tak ada tempat lain untuk membacanya.
-            nota=(f"Mesin sosoh sedang dipakai {kode_jalan} — silo ini "
-                  "menunggu giliran."
-                  if sedang and kode_jalan and silo.id not in sisa_dicatat
-                  else _nota_isian(isian)),
+            nota=nota_isian,
             ringkas=(f"Bahan dari {pemasok}"
                      if pemasok else "Bahan menunggu disosoh"),
             pilihan=([] if sedang else [

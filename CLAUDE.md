@@ -56,6 +56,17 @@ Uji PostgreSQL/HTTP: `tests/pg/test_tiket_produk_sekali.py`.
 
 ## Tempat kerja
 
+**Estimasi nota PK, keputusan pemilik 5 November 2026:** untuk PK berkarung,
+sebelum timbang kedua gunakan total nota atau jumlah karung × ukuran nominal
+sebagai `sumber_berat='perkiraan'`. Ini belum bobot aktual total/per karung.
+Setelah bobot barang/netto tersedia, angka tersebut menggantikan estimasi;
+bobot aktual per karung = bobot aktual total / jumlah karung. Nota tidak
+menimpa hasil timbang. Jalur tanpa nota tetap tara/menunggu. Sinkronisasi
+normal boleh melengkapi batch sementara yang telah diterima/dipindah ke silo,
+tanpa membuat penerimaan atau pemindahan pengganti. Detail Barang Masuk dan
+API Pos Timbang tetap bisa dibaca saat kg belum diketahui. Uji:
+`test_penerimaan_pk_belum_bobot.py`, `test_pk_estimasi_nota.py`.
+
 Repo BERSEBELAHAN di satu folder induk (`Hadi Mulya Systems/`): `produksi/`
 (ini), `core/`, `tampilan/`, `kantor/`, `timbangan/`, `website/`. App Gudang 2
 dan app Meja pernah ada di sini; keduanya dihapus 24 September 2026.

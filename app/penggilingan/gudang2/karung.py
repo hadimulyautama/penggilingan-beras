@@ -4,6 +4,31 @@ from decimal import Decimal
 from sqlalchemy import Numeric, cast, func
 
 
+async def bobot_awal_karung(db, tiket, jumlah, ukuran):
+    """Nota membantu operasi sebelum timbang kedua, bukan bobot truk pasti.
+
+    Bobot barang/netto menang atas nota, termasuk bila hanya berselisih
+    sedikit. Selama belum ada, pakai total nota atau jumlah × ukuran nominal
+    sebagai PERKIRAAN. Tanpa nota tetap memakai tangga tara/menunggu lama.
+    """
+    from app.penggilingan.gudang1.services.timbang_link import bobot_awal_dari_tiket
+    real = next((v for v in (tiket.get('berat_barang_kg'), tiket.get('netto_timbangan_kg'))
+                 if v is not None and Decimal(str(v)) > 0), None)
+    if real is not None:
+        return float(real), 'timbangan', None
+    # Timbang kedua yang disimpan sementara lebih baru daripada nota.
+    if tiket.get('timbang2_kg') is not None and tiket.get('timbang1_kg') is not None:
+        netto = Decimal(str(tiket['timbang1_kg'])) - Decimal(str(tiket['timbang2_kg']))
+        if netto > 0:
+            return float(netto), 'perkiraan', None
+    nota = tiket.get('berat_acuan_kg')
+    if nota is None or Decimal(str(nota)) <= 0:
+        nota = Decimal(str(jumlah)) * Decimal(str(ukuran)) if jumlah and ukuran else None
+    if nota is not None and Decimal(str(nota)) > 0:
+        return float(nota), 'perkiraan', float(nota)
+    return await bobot_awal_dari_tiket(db, {**tiket, 'berat_hpp_kg': None, 'sumber_berat': 'timbangan'})
+
+
 def bobot_per_karung(batch, *, jumlah=1) -> Decimal | None:
     """Satu pembagi untuk pembaca Python dan SQL, tanpa menyimpan R.
 

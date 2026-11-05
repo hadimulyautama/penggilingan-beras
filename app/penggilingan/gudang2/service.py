@@ -795,17 +795,11 @@ async def create_pk_purchase_dari_timbang(
     if info is None or info.model != "pk":
         raise Gudang2Error("Tiket ini bukan PK masuk.")
 
-    # Tiga keadaan (QA P6, 21 September 2026): pasti / perkiraan dari tara
-    # truk yang sama / tak diketahui. Lihat `bobot_awal_dari_tiket`.
-    tiket_bobot = dict(tiket)
     if jumlah_karung is not None:
-        # Nota karung bukan W. Bobot yang belum ada tetap memakai mekanisme
-        # perkiraan dari tara truk; tidak ditetapkan pasti dari surat jalan.
-        real = next((v for v in (tiket.get("berat_barang_kg"), tiket.get("netto_timbangan_kg"))
-                     if v is not None and float(v) > 0), None)
-        tiket_bobot["berat_hpp_kg"] = real
-        tiket_bobot["sumber_berat"] = "timbangan"
-    berat, sumber, berat_perkiraan = await bobot_awal_dari_tiket(db, tiket_bobot)
+        from .karung import bobot_awal_karung
+        berat, sumber, berat_perkiraan = await bobot_awal_karung(db, tiket, jumlah_karung, ukuran_karung_kg)
+    else:
+        berat, sumber, berat_perkiraan = await bobot_awal_dari_tiket(db, tiket)
     ada_bobot = berat is not None
 
     now = input_time(tanggal, jam)
@@ -1871,25 +1865,22 @@ async def _catat_pindah(
 TOLERANSI_PINDAH_KG = 1.0
 
 
-async def acuan_karung_surat_jalan(db, batch, jumlah):
+async def acuan_karung_surat_jalan(db, batch, jumlah, *, ukuran=None):
     """Bobot produksi untuk surat jalan yang baru dilengkapi, tanpa menulis.
 
-    Batch yang dahulu memakai nota harus mengambil W dari barang/netto tiket,
-    sama seperti penerimaan berkarung baru. Pratinjau dan simpan membaca jalur
-    yang sama agar nota nominal tidak menyamar sebagai bobot truk yang pasti.
+    Nota adalah estimasi sebelum timbang kedua; sesudahnya bobot barang/netto
+    menang. Pratinjau dan simpan wajib memakai acuan dan kepastian yang sama.
     """
     from types import SimpleNamespace
+    ukuran = ukuran if ukuran is not None else batch.ukuran_karung_kg
     berat, sumber, perkiraan = batch.berat_total_kg, batch.sumber_berat, batch.berat_perkiraan_kg
     if batch.timbangan_transaksi_id:
         tiket = await ambil_tiket(db, batch.timbangan_transaksi_id)
         if tiket is None:
             raise Gudang2Error("Tiket timbang batch tidak tersedia. Periksa penerimaannya dulu.")
-        tiket = dict(tiket)
-        real = next((v for v in (tiket.get("berat_barang_kg"), tiket.get("netto_timbangan_kg"))
-                     if v is not None and float(v) > 0), None)
-        tiket["berat_hpp_kg"], tiket["sumber_berat"] = real, "timbangan"
-        berat, sumber, perkiraan = await bobot_awal_dari_tiket(db, tiket)
-    return SimpleNamespace(jumlah_karung=jumlah, ukuran_karung_kg=batch.ukuran_karung_kg,
+        from .karung import bobot_awal_karung
+        berat, sumber, perkiraan = await bobot_awal_karung(db, tiket, jumlah, ukuran)
+    return SimpleNamespace(jumlah_karung=jumlah, ukuran_karung_kg=ukuran,
                            berat_total_kg=berat,
                            sumber_berat=sumber, berat_perkiraan_kg=perkiraan)
 
@@ -2028,7 +2019,7 @@ async def pindah_tumpukan_ke_silo(
                 raise Gudang2Error("Batch sudah mempunyai pemindahan kg lama. Gunakan kg agar riwayat lama tetap utuh.")
             if ukuran_karung_kg is not None and (not Decimal(str(ukuran_karung_kg)).is_finite() or ukuran_karung_kg <= 0):
                 raise Gudang2Error("Ukuran nominal karung harus lebih dari nol.")
-            acuan = await acuan_karung_surat_jalan(db, batch, int(n))
+            acuan = await acuan_karung_surat_jalan(db, batch, int(n), ukuran=ukuran_karung_kg)
             batch.jumlah_karung = int(n)
             # Nota sudah tercatat saat penerimaan; tidak perlu diketik ulang.
             # Payload lama tetap boleh melengkapinya secara eksplisit.
