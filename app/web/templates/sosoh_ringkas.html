@@ -1,20 +1,32 @@
 {% extends 'base.html' %}
 {% block judul %}Penyosohan {{ awal.kode_proses }}{% endblock %}
 {% block isi %}
+<link rel="stylesheet" href="/static/sosoh-desain.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/sosoh-ringkas.css?v={{ VERSI }}&amp;sr=20261104.auto1">
-{% if akun.is_admin or boleh %}<details class="pp-panel"><summary>Catatan asal pengemasan otomatis</summary><p>Koreksi satu catatan hasil; karung dan curah mengikuti saldo. Bukan pengemasan manual.</p>{% for j in ['broken','bekatul','menir','reject'] %}<a class="btn btn--kecil" data-utuh href="/pengemasan-otomatis/sosoh/{{ awal.proses_id }}/{{ j }}">{{ j|title }} · catatan asal</a> {% endfor %}</details>{% endif %}
-<main class="sr" data-sosoh-ringkas data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
+<main class="sr" data-sosoh-ringkas data-kembali="{{ kembali }}" data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
  <div data-pesan role="status" hidden></div><div data-galat role="alert" hidden></div>
  <div data-pemulihan hidden><button type="button" class="btn" data-terbaru>Baca status terbaru</button><p>Isian tetap tersedia. Periksa data terbaru sebelum konfirmasi ulang.</p></div>
- <nav class="sr-actions" aria-label="Bagian penyosohan"><a class="btn" href="#hasil">Hasil &amp; bahan</a><a class="btn" href="#qc-sosoh">QC beras</a>{% if not PORTAL_READ_ONLY and akun.is_admin and MUTU_AKTIF and qc_sosoh.sementara %}<a class="btn btn--utama" href="#qc-sosoh" data-qc-baru>Catat QC</a>{% endif %}</nav>
+
 <div data-proses-isi></div>
+{% if akun.is_admin or boleh %}<details class="pp-panel sr-card" data-sr-pack><summary>Catatan asal pengemasan otomatis</summary><p>Koreksi satu catatan hasil; karung dan curah mengikuti saldo. Bukan pengemasan manual.</p>{% for j in ['broken','bekatul','menir','reject'] %}<a class="btn btn--kecil" data-utuh href="/pengemasan-otomatis/sosoh/{{ awal.proses_id }}/{{ j }}">{{ j|title }} · catatan asal</a> {% endfor %}</details>{% endif %}
+<section data-sr-qc>
  {% with qc_tunda_script=true %}{% include '_qc_sosoh.html' %}{% endwith %}
+</section>
  <noscript>Aktifkan JavaScript untuk mengerjakan proses. Membuka halaman tidak mengubah hasil, silo, maupun status.</noscript>
+{% from '_panduan.html' import panel as panduan %}
+{% call panduan('sr-panduan','Panduan penyosohan aktif',penutup={'data-sr-guide-close':''}) %}
+<p><strong>Bahan &amp; silo.</strong> Bahan awal, penambahan, sisa, dan bahan terpakai tetap dibaca per siklus. Catatan sumber menjelaskan asal isi; bobot asal tidak ditambahkan lagi ke total masuk.</p>
+<p><strong>Hasil.</strong> Isi total kumulatif sejak awal proses. Pemeriksaan menampilkan angka sebelumnya, total baru, dan pertambahannya. Seluruh jenis hasil dan koreksi tetap tersedia.</p>
+<p><strong>Neraca sementara.</strong> Selisih dapat mencakup bahan di mesin dan hasil yang belum dicatat. Kepastian bahan dan rendemen tetap mengikuti layanan sumber.</p>
+<p><strong>Jeda dan penyelesaian.</strong> Catatan hasil/sisa tidak otomatis melanjutkan mesin. Penyelesaian tetap memeriksa sisa tiap siklus, hasil, bobot sumber, data terbaru dan konfirmasi.</p>
+<p><strong>QC &amp; riwayat.</strong> Seluruh sampel, hasil lab, estimasi sesi, waktu aktual, alasan dan jejak koreksi tetap tersedia. Draf serta status penyimpanan yang belum pasti tetap dipertahankan.</p>
+{% endcall %}
 </main>
 <script id="sosoh-awal" type="application/json">{{ awal|tojson }}</script>
 <link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?kb=20261104.auto1">
 <script src="/static/koreksi-bahan-berjalan.js?kb=20261104.auto1" defer></script>
-<script src="/static/koreksi-di-detail.js?kb=20261104.auto1" defer></script>
+<script src="/static/koreksi-di-detail.js?v={{ VERSI }}" defer></script>
+<script src="/static/sosoh-desain.js?v={{ VERSI }}" defer></script>
 <script src="/static/sosoh-ringkas.js?v={{ VERSI }}&amp;sr=20261104.auto1" defer></script>
 {% if not PORTAL_READ_ONLY and akun.is_admin and MUTU_AKTIF %}<script src="/static/qc-sosoh.js?v={{ VERSI }}" defer></script>{% endif %}
 {% endblock %}

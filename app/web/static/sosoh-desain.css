@@ -1,0 +1,90 @@
+/* Hanya penyajian proses aktif; penggambar/editor lama tetap dipakai. */
+.sr.sr-redesign{max-width:none}.sr-redesign [hidden]{display:none!important}
+.sr-redesign [data-proses-isi]>header{position:relative;padding-right:190px;margin-bottom:18px;min-height:120px}
+.sr-redesign header>small:first-of-type{display:none}.sr-redesign header h1{font-size:28px;line-height:1.3;margin:0 0 6px;letter-spacing:-.5px}
+.sr-redesign .sr-design-code{font-size:13px;color:var(--pd-muted);margin:0 0 16px}
+.sr-redesign .sr-design-back{display:inline-block;color:var(--pd-muted);font-size:13px;text-decoration:none;margin-bottom:20px}
+.sr-redesign .sr-context{justify-content:flex-start;gap:12px;margin-bottom:10px}
+.sr-redesign .sr-status{border:0;background:var(--pd-soft);color:var(--pd-green);border-radius:5px;white-space:normal}
+.sr-design-tools{position:absolute;right:0;top:45px;display:flex;align-items:start;gap:8px}
+.sr-design-tools>.btn{min-height:44px;white-space:nowrap}
+.sr-redesign details.sr-design-menu{border:0;padding:0;margin:0;position:relative}
+.sr-redesign .sr-design-menu>summary{display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;list-style:none;padding:8px;font-size:20px}
+.sr-design-menu>summary::-webkit-details-marker{display:none}
+.sr-design-menu-body{display:grid;gap:8px;padding:12px;position:absolute;right:0;top:50px;z-index:3;background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:10px;min-width:220px;box-shadow:0 12px 30px #0002}
+.sr-redesign .sr-design-menu-body>.btn{width:100%;text-align:left;justify-content:flex-start}
+.sr-redesign .sr-design-actions{gap:8px;margin:18px 0 20px}
+.sr-redesign .sr-design-actions>.btn{width:auto;min-height:46px;flex:0 0 auto}
+.sr-design-tabs{display:flex;flex-wrap:wrap;gap:0 24px;border-bottom:1px solid var(--pd-line);margin:0 0 22px}
+.sr-design-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--pd-muted);font:inherit;font-size:14px;padding:10px 0 12px;min-height:48px;cursor:pointer}
+.sr-design-tabs button[aria-selected=true]{color:var(--pd-green);border-bottom-color:var(--pd-green);font-weight:600}
+.sr-redesign .sr-card{border-color:var(--pd-line);border-radius:12px;background:var(--pd-sheet);padding:20px;box-shadow:none}
+.sr-redesign .sr-design-overview-title{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:20px}
+.sr-redesign .sr-design-overview-title h2{margin:0}
+.sr-design-mass{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-bottom:18px}
+.sr-design-mass>div+div{border-left:1px solid var(--pd-line);padding-left:18px}
+.sr-design-mass span{display:block;font-size:13px;color:var(--pd-muted);margin-bottom:10px}
+.sr-design-mass strong{display:block;font-size:25px;line-height:1.3;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.sr-design-mass small{display:block;font-size:12px;color:var(--pd-muted);margin-top:8px}
+.sr-redesign .sr-original-metrics{border-top:1px solid var(--pd-line);padding-top:14px;margin:16px 0;background:transparent}
+.sr-original-metrics .sr-metric{border:0;background:transparent;padding:0}
+.sr-original-metrics .sr-metric strong{font-size:17px}
+.sr-redesign .sr-design-shortcuts>.sr-shortcut{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:64px;padding:14px 0;border:0;border-top:1px solid var(--pd-line);background:transparent;text-align:left;color:var(--pd-ink);font:inherit;font-size:14px;cursor:pointer}
+.sr-shortcut small{display:block;color:var(--pd-muted);font-size:12px;margin-top:5px}
+.sr-redesign #sumber{padding:0;border:0;background:transparent}
+.sr-redesign #sumber>.sr-silo{background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:12px;padding:18px;margin:16px 0}
+.sr-redesign .sr-output input{min-height:48px;font-size:16px}
+.sr-redesign .sr-source-details{margin-top:18px;padding-top:8px}
+.sr-redesign .sr-source-details>summary{font-size:14px;font-weight:600;min-height:44px}
+.sr-source-composition{display:flex;flex-wrap:wrap;gap:12px 24px;margin:12px 0}
+.sr-source-composition>div{display:flex;gap:10px;font-size:13px}.sr-source-composition dd{margin:0;font-weight:600}
+.sr-source-table{border-collapse:collapse;width:100%;font-size:13px;table-layout:fixed;margin-top:12px}
+.sr-source-table th,.sr-source-table td{padding:12px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--pd-line);overflow-wrap:anywhere}
+.sr-source-table th:first-child,.sr-source-table td:first-child{padding-left:0;width:50%}
+.sr-source-table thead th{font-size:12px;font-weight:400;color:var(--pd-muted)}
+.sr-redesign .sr-source-entries .kb-detail-entry{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(160px,1.5fr) auto auto;gap:12px;align-items:start;padding:14px 0;margin:0;border:0;border-bottom:1px solid var(--pd-line);border-radius:0;background:transparent}
+.sr-entry-meta{font-size:13px}.sr-entry-meta small{font-size:12px}
+.sr-redesign .sr-source-entries .kb-detail-entry>.btn{min-height:44px;margin:0}
+.sr-redesign .sr-source-entries .kb-detail-entry>details{margin:0;padding:0;border:0}
+.sr-redesign .sr-source-entries .kb-detail-entry>details>summary{min-height:44px;align-content:center}
+.sr-redesign .sr-pair{font-size:14px;gap:16px}
+.sr-redesign .sr-help{font-size:13px;line-height:1.65}
+.sr-redesign .sr-log{overflow-wrap:anywhere}
+@media(max-width:650px){
+ .sr-redesign [data-proses-isi]>header{padding-right:0}.sr-redesign header h1{font-size:24px;padding-right:52px}.sr-redesign .sr-design-code{padding-right:52px}
+ .sr-design-tools{top:48px}.sr-design-tools>.btn{display:none}
+ .sr-redesign .sr-design-menu-body{min-width:210px}
+ .sr-design-tabs{gap:0 18px;margin-bottom:18px}.sr-design-tabs button{font-size:13px}
+ .sr-redesign .sr-design-actions>.btn{flex:1 1 135px}.sr-redesign .sr-design-actions>.btn:first-child{flex-basis:100%}
+ .sr-redesign .sr-card{padding:16px}
+ .sr-design-mass{grid-template-columns:1fr;gap:14px}
+ .sr-design-mass>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+ .sr-design-mass>div+div{border:0;border-top:1px solid var(--pd-line);padding:14px 0 0}
+ .sr-design-mass span{margin:0;font-size:12px}.sr-design-mass strong{font-size:23px}.sr-design-mass small{grid-column:1/-1;margin:0}
+ .sr-redesign .sr-original-metrics{grid-template-columns:1fr;gap:12px}.sr-original-metrics .sr-metric{display:flex;align-items:start;justify-content:space-between;gap:12px}
+ .sr-redesign .sr-source-entries .kb-detail-entry{grid-template-columns:1fr auto;gap:10px}
+ .sr-redesign .sr-source-entries .kb-detail-entry>.sr-entry-meta{grid-column:1/-1}
+ .sr-redesign .sr-source-entries .kb-detail-entry>div:not(.sr-entry-meta){grid-column:1/-1}
+ .sr-source-table,.sr-source-table tbody,.sr-source-table tr,.sr-source-table td,.sr-source-table th{display:block;width:100%!important}
+ .sr-source-table thead{display:none}.sr-source-table tr{border-bottom:1px solid var(--pd-line);padding:10px 0}
+ .sr-source-table th,.sr-source-table td{padding:5px 0;border:0}
+ .sr-source-table td::before{content:attr(data-label);display:block;font-size:12px;color:var(--pd-muted);margin-bottom:4px}
+}
+@media print{
+ .sr-redesign .sr-design-tools,.sr-redesign .sr-design-actions,.sr-redesign .sr-design-tabs,.sr-redesign #sr-panduan{display:none!important}
+ .sr-redesign [data-sr-panel][hidden],.sr-redesign [data-sr-qc][hidden]{display:block!important}
+ .sr-redesign .btn{display:none!important}
+}
+
+/* Kontrak tab mengalahkan kulit tombol global; bentuk tetap sama di semua tab. */
+body.padiflow-ui .sr.sr-redesign .sr-design-tabs>button{background:transparent;color:var(--pd-muted);border:0;border-bottom:2px solid transparent;border-radius:0;box-shadow:none;width:auto;flex:0 0 auto;padding:10px 0 12px;min-height:48px;font-size:14px;font-weight:400}
+body.padiflow-ui .sr.sr-redesign .sr-design-tabs>button[aria-selected=true]{color:var(--pd-green);border-bottom-color:var(--pd-green);font-weight:600}
+.sr-redesign .sr-original-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sr-source-origin{display:inline-block;font-size:13px;margin-top:8px;color:var(--pd-green)}
+.sr-source-entries:not(:empty)::before{content:'Catatan masuk pada siklus ini';display:block;font-size:14px;font-weight:600;margin-top:18px}
+@media(max-width:650px){body.padiflow-ui .sr.sr-redesign .sr-design-tabs>button{font-size:13px}.sr-redesign .sr-original-metrics{grid-template-columns:1fr}}
+/* Kulit tombol umum memakai !important; kontrol tab mempertahankan garis bawah. */
+body.padiflow-ui .sr.sr-redesign .sr-design-tabs>button{background:transparent!important;color:var(--pd-muted)!important;border-color:transparent!important}
+body.padiflow-ui .sr.sr-redesign .sr-design-tabs>button[aria-selected=true]{color:var(--pd-green)!important;border-bottom-color:var(--pd-green)!important}
+body.padiflow-ui .sr-redesign .sr-shortcut{background:transparent!important;border-color:var(--pd-line)!important}
+body.padiflow-ui .sr-redesign .sr-shortcut small{color:var(--pd-muted)!important}

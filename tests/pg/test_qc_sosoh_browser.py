@@ -64,7 +64,9 @@ async def test_kartu_detail_sampel_lab_dan_riwayat_di_browser(pg,dunia):
             async with pg() as db:
                 assert await db.scalar(select(func.count()).select_from(SampelQcSosoh))==1
             # QC tidak boleh membuang draf hasil yang belum disimpan pada editor proses.
+            await page.locator('[data-sr-tab="hasil"]').click()
             await page.locator('[data-kb-output="medium"] input').fill('5000')
+            await page.locator('[data-sr-tab="qc"]').click()
             for nama,nilai in [('kadar_air','13,455'),('broken_persen','9,995'),('md','123,456'),
                                ('transparant','1,005'),('whiteness','45,678')]:
                 await editor.locator('[name="'+nama+'"]').fill(nilai)
@@ -79,6 +81,7 @@ async def test_kartu_detail_sampel_lab_dan_riwayat_di_browser(pg,dunia):
             await editor.get_by_role('button',name='Simpan hasil QC').click()
             await page.locator('[data-qc-sosoh]').filter(has_text='Kadar air 13,46%').wait_for()
             assert await page.locator('[data-kb-output="medium"] input').input_value()=='5000'
+            await page.locator('[data-sr-tab="hasil"]').click()
             await page.locator('[data-kb-output="medium"] input').fill('')
             async with pg() as db:
                 assert await db.scalar(select(func.count()).select_from(PolishingOutputLog))==0

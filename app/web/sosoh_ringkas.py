@@ -91,12 +91,22 @@ async def baca(db,kode):
     from app.services.riwayat_jeda import riwayat_jeda
     data['jejak_jeda']=await riwayat_jeda(db,jenis='penyosohan',id_=proc.id,semua=True)
     data['komposisi']=[]
+    data['kelompok_sumber']=[]
     from app.services import berjalan
     if data['aktif']:
         cards=await berjalan._kartu_penyosohan_g2(db,None,kode_proses=kode,lengkap=True)
         if cards:
             data['komposisi']=[dict(judul=title,baris=[list(x) for x in rows]) for title,rows in cards[0].anak_grup if title!='Hasil sosoh keluar']
             data['fakta']=cards[0].fakta
+            # Penyajian memakai pengelompokan lama; urutan diperiksa menurut
+            # ID siklus agar pemakaian ulang silo tidak tergabung karena nama.
+            from app.services.proses_aktif import kelompok_bahan_silo
+            ordered=sorted(usages,key=lambda u:u.id)
+            names=dict((await db.execute(select(Silo.id,Silo.nama_silo).where(Silo.id.in_([u.silo_id for u in ordered])))).all())
+            for title,rows in cards[0].anak_grup:
+                if title=='Bahan baku masuk per silo':
+                    groups=kelompok_bahan_silo(rows,[(u,names[u.silo_id]) for u in ordered])
+                    data['kelompok_sumber']=[dict(g,id=u.id) for g,u in zip(groups,ordered)]
             # Neraca sementara tetap dari kartu lama; tidak disamakan dengan
             # bahan terpakai final sebelum semua sisa diperiksa.
             n=cards[0].neraca

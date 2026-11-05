@@ -257,6 +257,15 @@ async def konteks(db,*,jenis,kode,user):
     from app.database import berzona
     names=dict((await db.execute(select(User.id,User.nama).where(User.id.in_({e.pelaku_id for e in audits})))).all()) if audits else {}
     values['riwayat']=[dict(id=e.id,waktu=berzona(e.waktu).strftime('%d/%m/%Y %H:%M'),petugas=names.get(e.pelaku_id,f'Petugas #{e.pelaku_id}'),alasan=e.muatan['isian'][2]['alasan']) for e in audits]
+    if jenis=='sosoh':
+        # Metadata baca untuk daftar sumber, sesudah sidik koreksi dibentuk.
+        ids={e.get('raw',{}).get('input_by') for e in entries}-{None}
+        actors=dict((await db.execute(select(User.id,User.nama).where(User.id.in_(ids)))).all()) if ids else {}
+        for e in entries:
+            r=e.get('raw',{});stamp=r.get('waktu') or r.get('created_at')
+            e['waktu_tampil']=berzona(stamp).strftime('%d/%m/%Y %H:%M') if stamp else None
+            e['pencatat_tampil']=actors.get(r.get('input_by'))
+
     return buku.bersih(values)
 
 
