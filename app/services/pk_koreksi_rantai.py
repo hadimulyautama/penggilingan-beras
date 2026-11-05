@@ -8,7 +8,7 @@ from decimal import Decimal as D
 from types import SimpleNamespace
 from sqlalchemy import select,Numeric
 from app.models import (InternalTransfer,PkGudang2Intake,PkTumpukanToSilo,
-    PolishingSiloUsage,PolishingProcess,PolishingOutputLog,PermintaanPk,Peristiwa)
+    PolishingSiloUsage,PolishingProcess,PolishingOutputLog,PermintaanPk,Peristiwa,Silo)
 from app.services import peristiwa as buku
 from app.services.koreksi_bahan_berjalan import raw,siklus_g2,sinkron_bahan
 from app.services import kepemilikan as umum
@@ -58,12 +58,20 @@ class Rancangan:
                 if nxt:await self.usage(db,nxt,tail-oldtail,'awal_tetap_kg')
 
     async def silo(self,db,entry,delta,*,dynamic=False):
+        silo=await db.get(Silo,entry.silo_id)
+        if silo is None:raise umum.InventoryError('Silo terkait tidak ditemukan.')
+        await umum.izin(db,self.user,[silo.warehouse_id])
         u=await siklus_g2(db,entry)
         self.silos.add(entry.silo_id)
         if u is None:return
         proc=await db.get(PolishingProcess,u.polishing_process_id)
-        col=None if dynamic else 'masuk_tetap_kg' if entry.waktu>proc.waktu_mulai else 'awal_tetap_kg'
+        # Silo dapat baru ditambahkan ketika proses sudah berjalan. Snapshot
+        # awalnya lahir pada siklus silo ini, bukan pada awal proses induk.
+        waktu_entry=getattr(entry,'created_at',None) or entry.waktu
+        mulai_siklus=u.created_at or proc.waktu_mulai
+        col=None if dynamic else 'masuk_tetap_kg' if waktu_entry>mulai_siklus else 'awal_tetap_kg'
         await self.usage(db,u,delta,col)
+        return u.id
 
     async def intake(self,db,it,delta):
         from app.services.cakupan_fasilitas import lokasi_banyak
@@ -75,7 +83,7 @@ class Rancangan:
         if new:item['after']['berat_kg']=str(new)
         else:item['after']['dibatalkan_pada']=SAAT
         if it.silo_id:
-            await self.silo(db,SimpleNamespace(silo_id=it.silo_id,waktu=it.waktu_masuk),-delta)
+            item['usage_id']=await self.silo(db,SimpleNamespace(silo_id=it.silo_id,waktu=it.waktu_masuk,created_at=it.created_at),-delta)
             return
         from app.services import pk_persediaan
         key='tumpukan:'+str(it.id)
@@ -108,7 +116,7 @@ class Rancangan:
         else:a['dibatalkan_pada']=SAAT
         u=await siklus_g2(db,m)
         dynamic=bool(u and m.pemakaian_silo_id==u.id)
-        await self.silo(db,m,-take,dynamic=dynamic)
+        row['usage_id']=await self.silo(db,m,-take,dynamic=dynamic)
 
     async def selesai(self,db):
         summaries=[];warnings=[]
@@ -181,7 +189,7 @@ async def rancang(db,*,source,ident,owner,jumlah,user):
     if need>0:
         raise umum.InventoryError('Sisa koreksi berada pada alokasi/pengeluaran atau pengalihan lain yang belum mempunyai rantai transfer lengkap. Periksa rincian terkait; stok tidak dibuat kembali tanpa bukti.')
     result=await plan.selesai(db)
-    result.update(flows=flows,restored_kg=str(jumlah))
+    result.update(flows=flows,restored_kg=str(jumlah),linkage_version=2)
     return result
 
 
@@ -227,3 +235,40 @@ async def terapkan(db,*,event,user):
     await sinkron_bahan(db,'sosoh',ids)
     from app.penggilingan.gudang2.service import segarkan_status_silo
     for sid in event.muatan['pk_chain'].get('silos',[]):await segarkan_status_silo(db,sid)
+
+
+async def rancang_perbaikan_tertinggal(db,*,ident,user):
+    """Lengkapi kaitan siklus yang dahulu terlewat, tanpa arus stok kedua.
+
+    Hanya siklus yang sudah ada ketika koreksi lama dicatat yang memenuhi
+    syarat. Proses yang baru dimulai sesudah koreksi telah memakai bobot
+    efektif baru dan tidak boleh dikurangi lagi.
+    """
+    events=list((await db.scalars(select(Peristiwa).where(Peristiwa.jenis==umum.UBAH,
+        Peristiwa.muatan['root_id'].as_integer()==ident).order_by(Peristiwa.id))).all())
+    repaired={eid for e in events for eid in e.muatan.get('pk_chain',{}).get('repair_of',[])}
+    plan=Rancangan();plan.user=user;repair_ids=[]
+    for event in events:
+        chain=event.muatan.get('pk_chain',{})
+        if event.id in repaired or chain.get('linkage_version',0)>=2 or chain.get('repair_of'):continue
+        changed={x['id'] for x in chain.get('usages',[])}
+        affected=False
+        for kind,model in [('intakes',PkGudang2Intake),('moves',PkTumpukanToSilo)]:
+            for item in chain.get(kind,[]):
+                delta=D(item['effective_before'])-D(item['effective_after'])
+                if delta<=0 or not item['before'].get('silo_id'):continue
+                entry=await db.scalar(select(model).where(model.id==item['id']).execution_options(termasuk_dibatalkan=True))
+                if entry is None:raise umum.InventoryError('Catatan sumber untuk penyesuaian bahan tidak ditemukan.')
+                proxy=SimpleNamespace(silo_id=entry.silo_id,waktu=entry.waktu_masuk,created_at=entry.created_at) if kind=='intakes' else entry
+                usage=await siklus_g2(db,proxy)
+                if not usage or usage.id in changed or usage.created_at>event.waktu:continue
+                if kind=='intakes':
+                    await plan.silo(db,proxy,-delta)
+                else:
+                    await plan.silo(db,proxy,-delta,dynamic=entry.pemakaian_silo_id==usage.id)
+                affected=True
+        if affected:repair_ids.append(event.id)
+    if not repair_ids:return None
+    result=await plan.selesai(db)
+    result.update(flows=[],restored_kg='0',repair_of=repair_ids,linkage_version=2)
+    return result

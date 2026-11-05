@@ -156,3 +156,29 @@ def test_pratinjau_pk_berantai_menampilkan_bobot_transfer_silo_dan_bahan_sosoh(w
   button.click();expect(page.locator('[data-ko-message]')).to_contain_text('bahan proses terkait sudah disesuaikan')
   assert next(c[1] for c in calls if c[0]=='simpan')['review']=='review-rantai'
   assert not errors;b.close()
+
+@pytest.mark.parametrize('width',[390,1440])
+def test_tombol_penyesuaian_bahan_tidak_mengubah_jumlah_dan_stok(width):
+ data=detail('pk');data['pending_chain_repair']=True
+ data['state'].update(quantity=10000,kg=10000,status='terkoreksi',version=1)
+ plan=dict(before=data['state'],after={**data['state'],'version':2},balances_before={'7':{'kg':2500}},balances_after={'7':{'kg':2500}},
+  pk_chain=dict(repair_of=[16],flows=[],transfers=[],intakes=[],moves=[],warnings=[],processes=[dict(id=1,kode='POL-20261105-01',bahan_before='26177.5',bahan_after='23677.5')]))
+ with sync_playwright() as p:
+  b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1000));calls=[]
+  route_for(page,data,'terik',calls)
+  def review(route):
+   body=route.request.post_data_json;assert body['quantity']==10000
+   calls.append(('periksa',body));route.fulfill(json=dict(plan=plan,review='repair-proof'))
+  page.route('**/api/kepemilikan/128/periksa',review)
+  page.goto('https://uji.local/kepemilikan/128')
+  page.get_by_role('button',name='Sesuaikan bahan lanjutan',exact=True).click()
+  assert page.get_by_role('spinbutton').count()==0
+  assert 'pengembalian stok tidak diulang' in page.locator('[data-ko-body]').inner_text()
+  page.get_by_role('textbox',name='Alasan penyesuaian (wajib)').fill('Lengkapi bahan sosoh yang tertinggal')
+  page.get_by_role('button',name='Periksa dampak',exact=True).click()
+  expect(page.get_by_role('heading',name='Penyesuaian bahan yang tertinggal')).to_be_visible()
+  assert '23.677,5 kg' in page.locator('[data-ko-chain]').inner_text()
+  assert 'saldo stok tidak diubah lagi' in page.locator('[data-ko-chain]').inner_text()
+  expect(page.get_by_role('button',name='Simpan penyesuaian bahan',exact=True)).to_be_disabled()
+  assert not any(c[0].endswith('/simpan') for c in calls)
+  no_overflow(page);b.close()
