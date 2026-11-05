@@ -1,9 +1,7 @@
 {% from '_pengiriman_kontrol.html' import kontrol_pengiriman with context %}
 {% from '_panduan.html' import panel as panel_panduan %}
 {% call(slot) kontrol_pengiriman('Barang Retur', 'retur') %}
-{% if slot=='tindakan' %}
-<a class="btn pengiriman-aksi" href="/barang-keluar?status=selesai#judul-riwayat-keluar" aria-label="Buka riwayat pengiriman"><span class="bk-buat-label">Buka riwayat pengiriman</span><span class="bk-buat-ikon" aria-hidden="true">↗</span></a>
-{% elif slot=='cakupan' %}
+{% if slot=='cakupan' %}
 <p class="bk-cakupan">Barang keluar dan retur pelanggan.</p>
 {% elif slot=='panel' %}
 {% call panel_panduan('bk-panduan', 'Panduan barang retur', penutup={'data-bk-tutup':''}) %}

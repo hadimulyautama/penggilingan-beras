@@ -41,10 +41,11 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
    tab=page.locator('.pengiriman-tab a[aria-current]');styles.append(tab.evaluate('(e)=>{const s=getComputedStyle(e);return [s.fontSize,s.padding,s.borderBottomWidth,s.borderBottomColor,s.backgroundColor]}'))
    if path=='/retur':
     assert page.get_by_role('searchbox').count()==0
+    assert page.get_by_role('link',name='Buka riwayat pengiriman').count()==0
     assert page.locator('[data-bk-buka="bk-filter"]').count()==0
     for text in ['OUT-UJI-88','Pak Suroto','TT-UJI-12','TIKET-LAMA-19','RET-UJI-22','CV Makmur','AD 1234 ZX','TT-UJI-10','250','5','2 jenis barang','Belum masuk stok','Pemeriksaan disimpan','Tiket perlu diperiksa']:
      assert text in page.locator('main').inner_text(),text
-    for href in ['/retur/pengajuan/8','/retur/22','/retur?sebelum_pengajuan=7','/retur?sebelum=21','/barang-keluar?status=selesai#judul-riwayat-keluar']:
+    for href in ['/retur/pengajuan/8','/retur/22','/retur?sebelum_pengajuan=7','/retur?sebelum=21']:
      assert page.locator('a[href="'+href+'"]').count()==1,href
    if width==1440:page.locator('.bk-desktop[data-bk-buka="bk-panduan"]').click()
    else:page.locator('[data-bk-buka="bk-tindakan"]').click();page.locator('#bk-tindakan [data-bk-buka="bk-panduan"]').click()

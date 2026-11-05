@@ -3,6 +3,7 @@
 .bk-judul,.bk-alat,.bk-panel-kepala {display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .bk-judul h1 {margin:0;font-size:28px;line-height:1.3;}
 .bk-tindakan {display:flex;align-items:center;gap:8px;}
+body.padiflow-ui .pengiriman-kontrol .bk-tindakan>.bk-desktop {flex:0 0 auto;width:auto;min-height:44px;padding:8px 12px;white-space:nowrap;}
 body.padiflow-ui .bk-tindakan>.bk-ponsel {display:none;}
 body.padiflow-ui .bk-ikon {display:inline-flex;align-items:center;justify-content:center;position:relative;min-width:44px;min-height:44px;padding:8px;}
 .bk-titik {position:absolute;right:6px;top:6px;width:7px;height:7px;border-radius:50%;background:var(--pd-green);}
@@ -43,7 +44,3 @@ body.padiflow-ui .pengiriman-kontrol .bk-buat>summary.btn {background:var(--pd-g
  body:has(.pengiriman-kontrol) :is(.bingkai,.isi) {height:auto!important;max-height:none!important;overflow:visible!important;}
  .pengiriman-kontrol__tab a:not([aria-current=page]) {display:none;}
 }
-
-/* Aksi berbeda per tab, tetapi ukuran/warna/posisi mengikuti kontrol yang sama. */
-body.padiflow-ui .pengiriman-kontrol .pengiriman-aksi.btn {display:inline-flex;align-items:center;justify-content:center;min-height:44px;background:var(--pd-green)!important;color:var(--pd-sheet)!important;border-color:var(--pd-green)!important;}
-@media(max-width:650px){body.padiflow-ui .pengiriman-kontrol .pengiriman-aksi.btn {width:44px;min-width:44px;padding:8px;}}
