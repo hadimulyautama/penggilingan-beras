@@ -2,13 +2,25 @@
 {% block judul %}Penggilingan {{ awal.kode_proses }}{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/giling-ringkas.css?v={{ VERSI }}&amp;gr=20261104.auto1">
-<main class="sr gr" data-giling-ringkas data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-user="{{ akun.user.id }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
+<link rel="stylesheet" href="/static/sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/giling-desain.css?v={{ VERSI }}">
+<main class="sr gr" data-kembali="{{ kembali }}" data-giling-ringkas data-editor-perintah data-kode="{{ awal.kode_proses }}" data-boleh="{{ '1' if boleh else '0' }}" data-user="{{ akun.user.id }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-buka="{{ buka }}" data-nilai="{{ nilai }}">
 <div data-pesan role="status" hidden></div><div data-galat role="alert" hidden></div>
 <div data-pemulihan hidden><button class="btn" type="button" data-terbaru>Baca status terbaru</button><p>Isian tetap tersedia. Periksa data terbaru dan riwayat sebelum konfirmasi ulang.</p></div>
 <div data-proses-isi></div><noscript>Aktifkan JavaScript untuk mengerjakan proses. Membuka halaman tidak mengubah hasil, QC, silo atau status.</noscript>
+{% from '_panduan.html' import panel as panduan %}
+{% call panduan('gr-panduan','Panduan penggilingan aktif',penutup={'data-gr-guide-close':''}) %}
+<p><strong>Hasil PK.</strong> Isi total kumulatif sejak awal penggilingan, bukan tambahannya. Periksa catatan sebelumnya, total baru dan perubahannya sebelum menyimpan.</p>
+<p><strong>Stok PK.</strong> Catatan operator, verifikasi Admin dan saldo tersedia adalah angka berbeda. Verifikasi Admin menjadi dasar stok bila tersedia. Transfer, penjualan langsung dan retur tetap mengikuti layanan stok.</p>
+<p><strong>Bahan &amp; silo.</strong> Seluruh sumber, asal gabah dan QC bahan tetap tersedia. Catat sisa fisik tiap silo; kosong berbeda dari nol. Membebaskan silo tidak menyelesaikan penggilingan dan sisa positif tetap gabah.</p>
+<p><strong>QC.</strong> Penilaian mempertahankan enam komponen, seluruh putaran, aturan dan catatan lab. Susut uji QC berbeda dari rendemen proses. Pencatatan mengikuti izin dan keadaan mesin yang berlaku.</p>
+<p><strong>Jeda &amp; penyelesaian.</strong> Pencatatan hasil tidak otomatis melanjutkan mesin. Penyelesaian tetap memeriksa sumber, sisa silo, hasil akhir, data terbaru dan konfirmasi; bukan verifikasi Admin atau pengiriman PK.</p>
+<p><strong>Draf &amp; riwayat.</strong> Isian dipertahankan saat berpindah tab. Catatan PK kumulatif tidak dijumlahkan antarpencatatan. Waktu aktual, alasan terlambat, pencatat dan jejak koreksi tetap dapat ditelusuri.</p>
+{% endcall %}
 </main><script id="giling-awal" type="application/json">{{ awal|tojson }}</script>
 <link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?kb=20261104.auto1">
 <script src="/static/koreksi-bahan-berjalan.js?kb=20261104.auto1" defer></script>
 <script src="/static/koreksi-di-detail.js?kb=20261104.auto1" defer></script>
+<script src="/static/giling-desain.js?v={{ VERSI }}" defer></script>
 <script src="/static/giling-ringkas.js?v={{ VERSI }}&amp;gr=20261104.auto1" defer></script>
 {% endblock %}
