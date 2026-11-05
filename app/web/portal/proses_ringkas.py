@@ -32,6 +32,14 @@ def waktu_timbang(e):
     return dt if dt.tzinfo else dt.replace(tzinfo=ZoneInfo(settings.app_timezone))
 
 
+def indikator_hasil(kartu,jenis):
+    """Hanya angka untuk visual bersama; tidak membawa aksi atau data aktor."""
+    if jenis not in ('giling','sosoh') or kartu is None:return None
+    return dict(fase=jenis,aksi=None,
+        rendemen_sementara=getattr(kartu,'rendemen_sementara',None),
+        neraca=getattr(kartu,'neraca',None))
+
+
 def siapkan(r):
     """DTO baru saja; tidak mengubah Baris produksi atau dasar estimasi."""
     r['status_tampil']=r.get('status_tampil') or status_tahap(r['jenis'],r['status'])

@@ -1366,3 +1366,19 @@ Pengaturan. Setiap aksi katalog wajib punya aturan akses. Super Admin mendapat
 seluruh aksi, termasuk Minta lot dan Batalkan input terakhir, serta seluruh
 Kabar operator/Admin. Status baca Kabar tetap per pengguna. Setiap endpoint
 tetap memeriksa izin dan keadaan barang; tampilan terkunci bukan pengaman.
+
+## Portal dan permintaan PK — keputusan pemilik 5 November 2026
+
+Portal menampilkan indikator hasil giling dan neraca sosoh di Beranda, Proses
+berjalan, serta detail memakai macro visual produksi yang sama. Rendemen/neraca
+sementara adalah hasil terhadap bahan, bukan persen selesai; tidak mengubah
+rumus, waktu, atau transaksi. Pengeringan tetap memakai kemajuan kadar air.
+
+Operator G2 boleh membaca dan meminta PK G1 hanya BAGIAN PABRIK, termasuk bagian
+yang sudah dialihkan dari jasa. Saring setelah pemecahan kepemilikan; asal lot
+jasa tidak berarti seluruh saldo masih jasa. Bagian pelanggan G1 tertutup bagi
+G2 pada stok, detail, opsi, pratinjau, dan payload langsung. Hak baca milik jasa
+di gudang sendiri, portal pemilik, dan Admin tidak berubah. Hasil pabrik yang
+sudah tercatat boleh diminta saat giling berjalan; permintaan tidak memindah
+stok, ACC Admin dan pengiriman G1 tetap memakai alur lama. Pratinjau minta
+memakai hak BACA PK lintas gudang, bukan izin mengoperasikan proses G1.

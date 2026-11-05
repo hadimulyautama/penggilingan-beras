@@ -2033,22 +2033,14 @@ async def pk_g1_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
     terbuka per lot dijaga indeks, dan menawarkan lot yang sudah diminta cuma
     melahirkan penolakan yang bisa dihindari sebelum orangnya menekan.
 
-    ⚠ PK JASA JUSTRU DITAWARKAN — dan itu kebalikan dari dua picker PENJUALAN
-    (`barang-bisa-keluar`, `pk-siap-keluar`) yang membuangnya. Bedanya bukan
-    kelalaian: menyosoh barang pelanggan adalah PEKERJAAN YANG DIPESAN, dan
-    jasa memang hidup sampai beras putih sejak migrasi 0065. Yang dilarang
-    menjualnya, bukan memindahkannya.
-
-    Tetapi pemiliknya DISEBUT di labelnya. Operator yang memindahkan tujuh ton
-    tanpa tahu itu barang titipan akan memperlakukannya seperti stok pabrik di
-    Gudang 2 — dan keputusan paling mahal di jalur ini (dijual atau
-    dikembalikan) diambil berdasarkan label yang dibacanya di sini.
+    Operator G2 hanya melihat bagian pabrik, termasuk hasil pengalihan dari
+    jasa. Super Admin tetap dapat mengurus kedua kepemilikan.
     """
     _require(await _is_g2_operator(user))
     from app.services.stok import pk_gudang1
 
     async with SessionLocal() as db:
-        lot = await pk_gudang1(db)
+        lot = await pk_gudang1(db,user=user)
     return [{"value": l.kode_aksi or l.kode,
              "label": (f"{l.kode} · {_kg(l.tersedia)}"
                        + (f" · {l.kelas}" if l.kelas else "")
@@ -4085,7 +4077,7 @@ async def pratinjau_unit_transfer_pk(tahap: str, kode_proses: str = '',
         kode_proses,owner=pecah_kode(kode_proses)
         b = None
         if tahap == 'minta':
-            proc = await db.scalar(select(MillingProcess).where(batas_lokasi(user,MillingProcess)).where(MillingProcess.kode_proses == kode_proses.strip()))
+            proc = await db.scalar(select(MillingProcess).where(batas_lokasi(user,MillingProcess,baca_pk=True)).where(MillingProcess.kode_proses == kode_proses.strip()))
         else:
             try:
                 pid = int(permintaan)
@@ -4098,6 +4090,10 @@ async def pratinjau_unit_transfer_pk(tahap: str, kode_proses: str = '',
         if proc is None:
             raise HTTPException(404, 'Lot PK tidak ditemukan.')
         owner=(proc.jasa_id if owner is ... else owner) if b is None else b.jasa_id
+        if tahap=='minta':
+            from app.services.permintaan_pk import pastikan_pemilik_minta,PermintaanError
+            try:pastikan_pemilik_minta(user,owner)
+            except PermintaanError as e:raise HTTPException(403,str(e)) from None
         saldo = await pending_transfer_kg(db,proc.id,pemilik_id=owner,bebas=True)
         pemilik = await nama_pemilik(db, owner) if owner else 'Milik pabrik'
         dasar = f'{proc.kode_proses} · {pemilik or "Pemilik belum tercatat"}\nSisa PK G1 {angka(saldo)} kg'
@@ -4164,9 +4160,8 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
     berat = _bobot_unit_transfer(req)
     from app.services.permintaan_pk import PermintaanError, minta
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
         try:
-            b = await minta(db, user=u, kode_proses=req.kode_proses,
+            b = await minta(db, user=user, kode_proses=req.kode_proses,
                             berat=berat)
         except PermintaanError as e:
             raise _err(e, "Gagal meminta lot PK.")

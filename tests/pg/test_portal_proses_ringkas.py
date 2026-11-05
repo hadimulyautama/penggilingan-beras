@@ -147,3 +147,54 @@ async def test_waktu_timbang_berbeda_dari_pembaruan_proses_dan_tidak_dikarang_ji
             assert '26.000,25 kg' in hero.get_text() and 'pengambilan' not in hero.get_text()
             (OUT/(name+'.html')).write_text(r.text)
         assert await sidik(pg)==before
+
+
+async def test_bar_hasil_ada_di_beranda_daftar_detail_dan_mengikuti_catatan_terbaru(pg,portal,alur):
+    from app.database import now_local
+    from app.models import MillingProcess,MillingProgressLog,PolishingProcess,PolishingOutputLog
+    from tests.pg.test_masuk_detail_timbang import sidik
+    # Sisakan giling/sosoh pada tiga kartu ringkas Beranda. Fixture proses
+    # lengkap tetap dipakai untuk sumber dan kepemilikan yang sesungguhnya.
+    async with pg() as db:
+        for lot in (await db.scalars(select(DryingLot))).all():
+            lot.status='selesai';lot.waktu_selesai_pengeringan=now_local();lot.waktu_selesai_pendinginan=now_local()
+        mill=await db.get(MillingProcess,portal.process[0]['giling'])
+        pol=await db.get(PolishingProcess,portal.process[0]['sosoh'])
+        # Jumlah bahan sosoh yang sudah dipakai adalah 1.000 kg. Hasil
+        # sementara 600 kg beras dan 100 kg bekatul menyisakan 300 kg.
+        for log in (await db.scalars(select(PolishingOutputLog).where(PolishingOutputLog.polishing_process_id==pol.id))).all():
+            await db.delete(log)
+        for jenis,n in [('medium',600),('bekatul',100)]:
+            db.add(PolishingOutputLog(polishing_process_id=pol.id,jenis=jenis,berat_kg=n,waktu_update=now_local(),input_by=1))
+        db.add(MillingProgressLog(milling_process_id=mill.id,berat_kumulatif_kg=2500,waktu_update=now_local(),input_by=1))
+        await db.commit()
+    async with client(portal.accounts[0]) as c:
+        for hasil in [2500,3000]:
+            if hasil==3000:
+                async with pg() as db:
+                    db.add(MillingProgressLog(milling_process_id=mill.id,berat_kumulatif_kg=hasil,waktu_update=now_local(),input_by=1))
+                    await db.commit()
+            async with pg() as db:before=await sidik(db)
+            for path in ['/pelanggan/','/pelanggan/jasa-saya',alur['giling'],alur['sosoh']]:
+                response=await c.get(path,headers={'X-Portal-Navigasi':'1'})
+                assert response.status_code==200 and 'no-store' in response.headers['cache-control']
+                s=BeautifulSoup(response.text,'html.parser')
+                if path not in (alur['giling'],alur['sosoh']):
+                    g=s.select_one('[data-kode-proses="'+mill.kode_proses+'"]')
+                    p=s.select_one('[data-kode-proses="'+pol.kode_proses+'"]')
+                else:
+                    g=s.select_one('.pelanggan-hero-proses') if path==alur['giling'] else None
+                    p=s.select_one('.pelanggan-hero-proses') if path==alur['sosoh'] else None
+                if g:
+                    bar=g.select_one('progress')
+                    assert bar and float(bar['value'])==pytest.approx(hasil/10000*100)
+                    assert 'bukan persentase proses selesai' in g.get_text()
+                if p:
+                    bar=p.select_one('.neraca')
+                    assert bar and 'beras 60,0%' in bar['aria-label'] and 'hasil samping 10,0%' in bar['aria-label']
+                    assert 'belum keluar/susut 30,0%' in bar['aria-label']
+                assert not s.select('[data-aksi],[data-post]')
+                assert 'Rahasia Pelanggan B' not in response.text
+            async with pg() as db:assert await sidik(db)==before
+    async with client(portal.accounts[1]) as c:
+        for path in [alur['giling'],alur['sosoh']]:assert (await c.get(path)).status_code==404

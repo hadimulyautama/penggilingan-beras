@@ -58,7 +58,9 @@ async def test_default_semua_pemilik_filter_tetap_bekerja_dan_get_tidak_menulis(
         assert r.status_code == 200, r.text[:300]
         soup = BeautifulSoup(r.text,'html.parser')
         assert soup.select_one('#sk-filter [name=pemilik] option[selected]')['value']=='semua'
-        assert 'LOT-PK-001' in r.text and w['code'] in r.text and 'Pemilik jasa PK' in r.text
+        assert 'LOT-PK-001' in r.text
+        if gudang_index==1:assert w['code'] not in r.text and 'Pemilik jasa PK' not in r.text
+        else:assert w['code'] in r.text and 'Pemilik jasa PK' in r.text
         assert 'Semua kepemilikan' in soup.select_one('.sk-cakupan').get_text()
         assert soup.select_one('#sk-filter [name=gudang] option[selected]')['value']==''
         reset = soup.find('a',string='Atur ulang filter')['href']
@@ -69,11 +71,12 @@ async def test_default_semua_pemilik_filter_tetap_bekerja_dan_get_tidak_menulis(
         jasa = await c.get('/stok?pemilik=jasa')
         assert pabrik.status_code==jasa.status_code==200
         assert w['code'] not in pabrik.text and 'LOT-PK-001' in pabrik.text
-        assert w['code'] in jasa.text and 'LOT-PK-001' not in jasa.text
+        assert ('LOT-PK-001' not in jasa.text)
+        assert (w['code'] in jasa.text)==(gudang_index!=1)
         g1 = await c.get('/stok?gudang=g1')
         g2 = await c.get('/stok?gudang=g2')
         assert g1.status_code==g2.status_code==200
-        assert w['code'] in g1.text
+        assert (w['code'] in g1.text)==(gudang_index!=1)
         # Selepan mempertahankan cakupan gudang lamanya; perubahan ini hanya
         # membuka seluruh pemilik pada gudang yang boleh dibaca.
         if gudang_index != 0:assert w['code'] not in g2.text

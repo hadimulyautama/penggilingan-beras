@@ -102,6 +102,7 @@ def progres_berjalan(rows,scope):
     """Angka kemajuan/hasil dari pembaca produksi; rendemen bukan persen selesai."""
     from app.services.proses_aktif import alamat_detail
     from .identitas_proses import identitas
+    from .proses_ringkas import indikator_hasil
     hasil=[]
     for r in rows:
         href=alamat_detail(r)
@@ -115,6 +116,7 @@ def progres_berjalan(rows,scope):
             href=portal_url(href),mulai=r.sejak,status='Dijeda' if r.nota_jenis=='hati' else 'Sedang berjalan',
             catatan=r.nota if r.nota_jenis=='hati' else None,
             maju=r.maju if jenis=='pengeringan' else None,
+            indikator_hasil=indikator_hasil(r,jenis),
             fakta=[({'Alat tes':'Kadar air','Mesin':'Bacaan mesin','Target':'Target kadar air',
                 'Bahan':'Bahan masuk','Hasil':'Hasil sementara','Mutu':'Pemeriksaan mutu'}.get(k,k),
                 v.replace('rendemen','rasio hasil')) for k,v in r.fakta if k!='Mode'],neraca=neraca,

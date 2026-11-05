@@ -94,12 +94,12 @@
 
   {% set boleh_alih_pk = BOLEH_KEPEMILIKAN and t.tersedia>0 and ((g1 and not t.belum_dicatat and not t.diminta_oleh) or (not g1 and t.bobot_final)) %}
   {# Satu panel sticky: panel terpisah saling menutupi pada layar ponsel. #}
-  {% if (g1 and not t.berjalan and (boleh_minta or boleh_ubah or TAMPILAN_INDUK)) or (not g1 and ((t.bobot_final and (boleh_pindah_tumpukan or TAMPILAN_INDUK)) or (boleh_ubah and mutu_aktif and t.qc_kode))) or boleh_alih_pk %}
+  {% if (g1 and (boleh_minta or (not t.berjalan and (boleh_ubah or TAMPILAN_INDUK)))) or (not g1 and ((t.bobot_final and (boleh_pindah_tumpukan or TAMPILAN_INDUK)) or (boleh_ubah and mutu_aktif and t.qc_kode))) or boleh_alih_pk %}
   <section class="pk-detail__actions" aria-label="Tindakan stok">
   {% if boleh_alih_pk %}
     <a class="btn" href="/kepemilikan/pk/baru?{% if g1 %}kode={{ t.kode|urlencode }}{% else %}sumber=tumpukan:{{ t.intake_id }}{% endif %}&amp;pemilik_id={{ t.jasa_id if t.jasa_id else 'pabrik' }}{% if kembali %}&amp;kembali_stok={{ kembali|urlencode }}{% endif %}">{{ 'Alihkan ke pabrik' if t.jasa_id else 'Alihkan ke pelanggan' }}</a>
   {% endif %}
-  {% if g1 and (boleh_minta or TAMPILAN_INDUK) and not t.berjalan %}
+  {% if g1 and (boleh_minta or TAMPILAN_INDUK) and (not t.berjalan or t.tersedia>0) %}
       {% if t.diminta_siap %}<span class="pk-detail__action-state">Disetujui Admin · Gudang 1 menyiapkan pengiriman</span>
       {% elif t.diminta_oleh %}<span class="pk-detail__action-state">Sudah diminta {{ t.diminta_oleh }}{% if t.diminta_keadaan %} · {{ t.diminta_keadaan }}{% endif %}</span>
       {% elif not boleh_minta %}<button class="btn" disabled title="Memerlukan operator Gudang 2 atau Super Admin">Minta lot ini</button>
