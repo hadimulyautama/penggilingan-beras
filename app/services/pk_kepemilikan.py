@@ -110,6 +110,10 @@ async def validasi(db, user, req):
                 raise umum.InventoryError('Pilih pesanan pelanggan jasa yang masih berlaku.')
     if body['ke'] is not None and (await db.get(Jasa,body['ke'])).status!='berjalan':
         raise umum.InventoryError('Pesanan jasa tujuan harus masih berjalan.')
+    if body['ke'] is not None:
+        target=await db.get(Pelanggan,(await db.get(Jasa,body['ke'])).pelanggan_id)
+        if not target or target.status!='aktif' or target.deleted_at is not None:raise umum.InventoryError('Pelanggan tujuan tidak aktif.')
+        if body['dari'] is not None and (await db.get(Jasa,body['dari'])).pelanggan_id==target.id:raise umum.InventoryError('Pemilik tujuan sama dengan pelanggan asal.')
     if amount > source.bebas(body['dari']):
         raise umum.InventoryError('Bobot melebihi bagian bebas pemilik sumber setelah alokasi dan pemakaian.')
     projected = copy.deepcopy(source.stok)

@@ -89,7 +89,10 @@
 <td>{{ b.nama }}<span class="karung-ukuran-ponsel"> · {{ b.ukuran }} kg</span></td><td>{{ b.ukuran }} kg</td><td class="karung-tabel__jumlah"><strong>{{ kg(b.lembar) }}</strong> lembar</td>
 <td><div class="karung-tabel__status">
 {% if b.menipis %}<span class="karung-menipis">Menipis</span>{% else %}<span aria-label="Stok cukup">Cukup</span>{% endif %}
-{% if boleh_pindah and b.lembar > 0 %}
+{% if b.pemilik_tunggal|default(false) and not request.state.portal_scope|default(none) %}
+<a class="btn btn--kecil" href="/stok/karung/detail?material={{ b.kode|urlencode }}&amp;ukuran={{ b.ukuran }}&amp;merk={{ (b.merk or '')|urlencode }}&amp;pemilik={{ b.pemilik_id if b.pemilik_id else 'pabrik' }}">Detail karung</a>
+{% endif %}
+{% if boleh_pindah and b.lembar > 0 and not b.pemilik_tunggal|default(false) %}
 <details class="karung-aksi"><summary class="btn btn--kecil" aria-label="Aksi {{ b.merk or 'tanpa merek' }} {{ b.nama }} {{ b.ukuran }} kg">⋯</summary>
 <div><a class="btn btn--kecil" href="{{ STOK_NAV.url ~ '&' if STOK_NAV else '/stok-karung?' }}buka=pindah_kepemilikan_karung&amp;nilai={{ b.kode }}|{{ b.ukuran }}|{{ (b.merk or '')|urlencode }}">Alihkan ke pelanggan</a></div></details>
 {% endif %}

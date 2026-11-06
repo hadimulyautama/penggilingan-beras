@@ -243,7 +243,13 @@ async def hitung_stok_kemasan(
             ProductSku.packaging_material_id==material_id,ProductSku.package_size_id==size_id,
             _brand(ProductSku.brand_id),BrokenKarungDibongkar.mengurangi_stok.is_(True),
             _jasa_milik_pelanggan(BrokenKarungDibongkar.jasa_id)))
-    return int(beli) - int(hilang) - int(terpakai) - int(lama) - int(dibongkar)
+    # Alih milik isi tidak mengembalikan lembar kosong atau memindahkan
+    # pihak yang dahulu memakai kemasan. Bukti hanya dari operasi rinci baru.
+    from app.services.kepemilikan import pemakaian_karung_asli
+    rekening=set(pelanggan_id) if isinstance(pelanggan_id,list) else {pelanggan_id}
+    delta=sum(n for (m,z,b,p),n in (await pemakaian_karung_asli(db)).items()
+              if (m,z,b)==(material_id,size_id,brand_id) and p in rekening)
+    return int(beli) - int(hilang) - int(terpakai) - int(lama) - int(dibongkar) - int(delta)
 
 
 # `hpp_kemasan_wavg` DIBUANG 28 September 2026. Satu-satunya pembacanya
@@ -434,6 +440,8 @@ async def stok_kemasan_rinci(
             "ukuran": int(size.ukuran_kg) if size else 0,
             "lembar": int(stok),
             "menipis": stok <= minimum,
+            "pemilik_id": pelanggan_id if not isinstance(pelanggan_id,list) else None,
+            "pemilik_tunggal": not isinstance(pelanggan_id,list),
         })
     keluar.sort(key=lambda b: (_URUT_GUDANG.index(b["gudang"])
                                if b["gudang"] in _URUT_GUDANG else 9,

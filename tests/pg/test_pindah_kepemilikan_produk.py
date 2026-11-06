@@ -417,14 +417,16 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
             teks, aksi = _isi_html(detail.text)
             assert "Bu Sri" in teks
             assert jenis in expected_bj
-            assert any("buka=pindah_kepemilikan_produk" in h
-                       and f"nilai={expected_bj[jenis]}" in h for h in aksi), (
-                f"tombol transfer karung {jenis} tidak ada di detail pemiliknya")
-            if jenis == "broken":
-                cocok = next(h for h in aksi if "nilai=cr:broken|" in h)
-                ids = parse_qs(urlsplit(cocok).query)["nilai"][0].split("|")[-1]
-                assert {int(x) for x in ids.split(",")} == {
-                    titipan["jasa1"], titipan["jasa2"]}
+            # Alur baru memulai dari baris sumber, bukan gabungan pesanan.
+            assert any(h.startswith('/stok/sumber/barang/') for h in aksi), (
+                f'detail sumber karung {jenis} tidak tersedia')
+            if jenis == 'broken':
+                curah=[h for h in aksi if h.startswith('/stok/sumber/curah/')]
+                assert curah
+                for href_sumber in curah:
+                    sumber=await c.get(href_sumber)
+                    assert sumber.status_code==200 and 'Bu Sri' in sumber.text
+
 
 
 async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
@@ -478,8 +480,7 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
     # manual 20 karung tetap mempunyai aksi pindah dengan SKU/pemilik asli.
     assert "22 karung × 40 kg" in teks and "20 kg" in teks
     assert "20 karung" in teks
-    assert any("buka=pindah_kepemilikan_produk" in h and "nilai=bj:" in h
-               and h.endswith(f"|{titipan['jasa1']}") for h in tautan)
+    assert any(h.startswith('/stok/sumber/barang/') for h in tautan)
 
 
 # ═══ Kartu Stok Produk — curah BENAR-BENAR berpindah, bukan cuma bergeser ═══

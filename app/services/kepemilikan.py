@@ -18,12 +18,14 @@ from app.models import (Peristiwa,ActivityLog,User,Jasa,Pelanggan,Warehouse,
 from app.peran import can_see_financials,user_wh_scope
 from app.penggilingan.inventory.finished_goods import InventoryError
 from app.services.activity_log import log_activity
+from app.performa import baca_sekali
 
 AWAL='pindah_kepemilikan_rinci'
 UBAH='koreksi_kepemilikan_rinci'
-MODELS={'barang':FinishedGoodsStock,'curah':ByproductStock,'karung':PackagingPurchase}
-AKSI={'barang':'pindah_kepemilikan_produk','curah':'pindah_kepemilikan_produk','karung':'pindah_kepemilikan_karung'}
+MODELS={'barang':FinishedGoodsStock,'curah':ByproductStock,'curah_barang':FinishedGoodsStock,'karung':PackagingPurchase}
+AKSI={'barang':'pindah_kepemilikan_produk','curah':'pindah_kepemilikan_produk','curah_barang':'pindah_kepemilikan_produk','karung':'pindah_kepemilikan_karung'}
 D=lambda x:Decimal(str(x))
+CURAH=('curah','curah_barang')
 
 def raw(row):
     def val(v,c):
@@ -36,11 +38,12 @@ def raw(row):
 
 def owner(row,kind):return row.pelanggan_id if kind=='karung' else row.jasa_id
 
-def qty(row,kind):return D(row.jumlah_lembar if kind=='karung' else row.jumlah_karung if kind=='barang' else row.berat_kg)
-def kg(row,kind):return None if kind=='karung' else D(row.berat_total_kg if kind=='barang' else row.berat_kg)
+def qty(row,kind):return D(row.jumlah_lembar if kind=='karung' else row.jumlah_karung if kind=='barang' else row.berat_total_kg if kind=='curah_barang' else row.berat_kg)
+def kg(row,kind):return None if kind=='karung' else D(row.berat_total_kg if kind=='barang' else row.berat_total_kg if kind=='curah_barang' else row.berat_kg)
 def set_qty(row,kind,n,w=None):
     if kind=='karung':row.jumlah_lembar=int(n)
     elif kind=='barang':row.jumlah_karung=int(n);row.berat_total_kg=w
+    elif kind=='curah_barang':row.berat_total_kg=n
     else:row.berat_kg=n
 
 def set_owner(row,kind,value):
@@ -81,22 +84,52 @@ async def pelanggan_ids(db,kind,ids):
 
 def conditions(kind,identity):
     M=MODELS[kind]
-    if kind=='barang':return [M.product_sku_id==identity['sku'],M.rice_quality_standard_id==identity['std'],M.curah_kemas_ulang.is_(False)]
+    if kind in ('barang','curah_barang'):return [M.product_sku_id==identity['sku'],M.rice_quality_standard_id==identity['std'],M.curah_kemas_ulang.is_(kind=='curah_barang')]
     if kind=='curah':return [M.jenis_produk==identity['jenis']]
     return [M.packaging_material_id==identity['material'],M.package_size_id==identity['size'],M.brand_id==identity['brand']]
 
 async def balance(db,kind,identity,ident):
     from app.penggilingan.inventory import finished_goods as fg,packaging as pk
     if kind=='barang':return await fg.hitung_stok_finished_goods(db,identity['sku'],identity['std'],jasa_id=ident)
+    if kind=='curah_barang':
+        rows=(await db.scalars(select(MODELS[kind]).where(*conditions(kind,identity),FinishedGoodsStock.jasa_id==ident))).all()
+        return {'kg':sum((max(D(0),kg(r,kind)-D(r.retur_supplier_keluar_kg)) for r in rows),D(0))}
     if kind=='curah':return {'kg':await fg.hitung_stok_byproduct_curah(db,identity['jenis'],jasa_id=ident)}
     return {'lembar':await pk.hitung_stok_kemasan(db,identity['material'],identity['size'],identity['brand'],pelanggan_id=ident)}
 
 async def physical(db,kind,identity):
     M=MODELS[kind]
     if kind=='barang':cols=[func.coalesce(func.sum(M.jumlah_karung),0),func.coalesce(func.sum(M.berat_total_kg),0)]
+    elif kind=='curah_barang':cols=[func.coalesce(func.sum(M.berat_total_kg),0)]
     elif kind=='curah':cols=[func.coalesce(func.sum(M.berat_kg),0)]
     else:cols=[func.coalesce(func.sum(M.jumlah_lembar),0)]
     return [str(x) for x in (await db.execute(select(*cols).where(*conditions(kind,identity)))).one()]
+
+@baca_sekali
+async def pemakaian_karung_asli(db):
+    """Payer kemasan tetap, hanya dari bukti rinci perpindahan baru.
+
+    Koreksi memakai versi efektif; pembatalan nol tidak menambah lembar.
+    Hasil dibaca sekali per GET dan tidak membukukan pemakaian baru.
+    """
+    from sqlalchemy.orm import aliased
+    from sqlalchemy.dialects.postgresql import JSONB
+    R=aliased(Peristiwa)
+    effective=func.coalesce(select(R.muatan['after']).where(R.jenis==UBAH,R.muatan['root_id'].as_integer()==Peristiwa.id).order_by(R.id.desc()).limit(1).correlate(Peristiwa).scalar_subquery(),Peristiwa.muatan).cast(JSONB)
+    states=list((await db.scalars(select(effective).where(Peristiwa.jenis==AWAL,Peristiwa.muatan['kind'].as_string()=='barang',Peristiwa.muatan['detail'].as_boolean().is_(True)))).all())
+    if not states:return {}
+    skus={x.id:x for x in (await db.scalars(select(ProductSku).where(ProductSku.id.in_({v['identity']['sku'] for v in states})))).all()}
+    owners={v.get('customer') for v in states}|{line['source_owner'] for v in states for line in v['lines']}
+    contacts=dict((await db.execute(select(Jasa.id,Jasa.pelanggan_id).where(Jasa.id.in_(owners-{None})))).all())
+    result={}
+    for state in states:
+        sku=skus[state['identity']['sku']]
+        for line in state['lines']:
+            if not line['source_before'].get('kemasan_mengurangi_stok') or D(line['quantity'])<=0:continue
+            for who,signum in [(line['source_owner'],1),(state.get('customer'),-1)]:
+                key=(sku.packaging_material_id,sku.package_size_id,sku.brand_id,contacts.get(who) if who is not None else None)
+                result[key]=result.get(key,D(0))+D(line['quantity'])*signum
+    return result
 
 async def free_rows(db,kind,identity,ident,*,allocating=False):
     """Bukti ketersediaan per sumber, bukan sekadar saldo pemilik gabungan."""
@@ -107,6 +140,9 @@ async def free_rows(db,kind,identity,ident,*,allocating=False):
         available,_=await sumber_karung_beras(db,identity['sku'],identity['std'],ident)
         by={r.id:D(n) for r,n,_ in available}
         return [(r,max(D(0),by.get(r.id,D(0)))) for r in rows]
+    if kind=='curah_barang':
+        from app.services.retur_supplier_reservasi import terikat
+        return [(r,max(D(0),kg(r,kind)-D(r.retur_supplier_keluar_kg)-await terikat(db,sumber=f'beras:{r.id}'))) for r in rows]
     if kind=='curah':
         from app.services.retur_supplier_reservasi import terikat
         from app.penggilingan.gudang2 import service as g2
@@ -114,13 +150,13 @@ async def free_rows(db,kind,identity,ident,*,allocating=False):
             return [(r,max(D(0),D(await g2._sisa_broken_row(db,r.id))-await terikat(db,sumber=f'broken:{r.id}'))) for r in rows]
         # Bekatul outgoing is pooled. FIFO consumes the same ordered source rows;
         # no inference from the owner's remaining combined balance alone.
-        outgoing=D(await db.scalar(select(func.coalesce(func.sum(OutgoingItem.berat_kg),0)).where(OutgoingItem.item_type=='byproduct_curah',OutgoingItem.jenis_byproduct=='bekatul',OutgoingItem.jasa_id==ident)))
+        outgoing=D(await db.scalar(select(func.coalesce(func.sum(OutgoingItem.berat_kg),0)).where(OutgoingItem.item_type=='byproduct_curah',OutgoingItem.jenis_byproduct==identity['jenis'],OutgoingItem.jasa_id==ident)))
         from app.services.retur_supplier_stok import keluar_banyak
-        returns=await keluar_banyak(db,[f'bekatul:{r.id}' for r in rows]) if ident is None else {}
+        returns=await keluar_banyak(db,[f"{identity['jenis']}:{r.id}" for r in rows]) if ident is None else {}
         result=[]
         for r in rows:
-            n=max(D(0),qty(r,kind)-returns.get(f'bekatul:{r.id}',(D(0),0))[0]);used=min(n,outgoing);outgoing-=used
-            result.append((r,max(D(0),n-used-await terikat(db,sumber=f'bekatul:{r.id}'))))
+            n=max(D(0),qty(r,kind)-returns.get(f"{identity['jenis']}:{r.id}",(D(0),0))[0]);used=min(n,outgoing);outgoing-=used
+            result.append((r,max(D(0),n-used-await terikat(db,sumber=f"{identity['jenis']}:{r.id}"))))
         return result
     # Karung kosong has no persisted purchase -> packing allocation. Once
     # any packaging is consumed from this account, a particular purchase
@@ -135,10 +171,10 @@ async def free_rows(db,kind,identity,ident,*,allocating=False):
     return [(r,qty(r,kind)) for r in rows]
 
 async def warehouse_ids(db,kind,identity,rows):
-    if kind=='barang':return sorted({r.warehouse_id for r in rows if r.warehouse_id})
-    if kind=='curah':
-        from app.penggilingan.gudang2.service import _g2_warehouse_id
-        return [await _g2_warehouse_id(db)]
+    if kind!='karung':
+        from app.services.cakupan_fasilitas import lokasi_banyak
+        found=await lokasi_banyak(db,MODELS[kind],[r.id for r in rows])
+        return sorted({x['warehouse_id'] for x in found.values() if x['warehouse_id']})
     from app.penggilingan.inventory.packaging import kemasan_gudang
     from hmu_core import PackagingMaterial
     material=await db.get(PackagingMaterial,identity['material'])
@@ -154,15 +190,21 @@ async def clone_part(db,row,kind,n,w,new_owner,user):
         data['kode']=await next_packaging_purchase_code(db,now_local().date());data['tanggal']=now_local().date();data.pop('harga_per_lembar',None)
     created=MODELS[kind](**data);set_qty(created,kind,n,w);set_owner(created,kind,new_owner);db.add(created);await db.flush();return created
 
-async def allocate(db,kind,identity,owners,amount,dest,user,*,source_ids=None):
+async def free_guard(db,kind,identity,ident,*,detail=False,allocating=False):
+    if detail:
+        from app.services.kepemilikan_detail import bagian_bebas
+        return await bagian_bebas(db,kind,identity,ident)
+    return await free_rows(db,kind,identity,ident,allocating=allocating)
+
+async def allocate(db,kind,identity,owners,amount,dest,user,*,source_ids=None,detail=False):
     """One FIFO stock writer shared by initial transfer and later adjustment."""
     from app.penggilingan.gudang2.rencana_beras import berat_karung_nyata
     candidates=[]
-    for ident in owners:candidates.extend(await free_rows(db,kind,identity,ident,allocating=True))
+    for ident in owners:candidates.extend(await free_guard(db,kind,identity,ident,allocating=True,detail=detail))
     ids=sorted({r.id for r,_ in candidates})
     if ids:await db.scalars(select(MODELS[kind]).where(MODELS[kind].id.in_(ids)).order_by(MODELS[kind].id).with_for_update().execution_options(populate_existing=True))
     candidates=[]
-    for ident in owners:candidates.extend(await free_rows(db,kind,identity,ident,allocating=True))
+    for ident in owners:candidates.extend(await free_guard(db,kind,identity,ident,allocating=True,detail=detail))
     candidates.sort(key=lambda x:(x[0].tanggal,x[0].waktu,x[0].id) if kind=='karung' else (x[0].waktu,x[0].id))
     if source_ids is not None:candidates=[(r,n) for r,n in candidates if r.id in source_ids]
     left=amount;lines=[]
@@ -173,7 +215,7 @@ async def allocate(db,kind,identity,owners,amount,dest,user,*,source_ids=None):
         await db.refresh(r,with_for_update=True)
         # Snapshot of every original row; actual kg rounded by the old helper.
         before=raw(r);original_owner=owner(r,kind)
-        weight=berat_karung_nyata(r,int(take)) if kind=='barang' else take if kind=='curah' else None
+        weight=berat_karung_nyata(r,int(take)) if kind=='barang' else take if kind in CURAH else None
         if take==qty(r,kind):set_owner(r,kind,dest);target=r
         else:
             target=await clone_part(db,r,kind,take,weight,dest,user)
@@ -189,6 +231,7 @@ def audit_summary(state):
         tujuan=state.get('parties',{}).get(str(state.get('customer')),'Pabrik')
         return str(state['quantity'])+' kg PK → '+tujuan
     kind=state['kind'];n=format(D(state['quantity']).normalize(),'f')
+    if state.get('detail'):return n+(' lembar' if kind=='karung' else ' karung' if kind=='barang' else ' kg')+' → '+state.get('parties',{}).get(str(state.get('customer')),'Pabrik')
     if kind=='karung':return n+' lembar → pelanggan'
     weight=format(D(state['kg']).normalize(),'f')
     return (n+' karung ('+weight+'kg)' if kind=='barang' else weight+' kg')+' → pabrik'
@@ -200,12 +243,16 @@ async def audit(db,user,kind,root_id,before,after,reason,aksi):
     new_summary='Koreksi pemilik tercatat; rincian sumber tersimpan pada transaksi kepemilikan.' if changed_party else audit_summary(after)
     await log_activity(db,table_name='peristiwa',record_id=root_id,action='UPDATE' if before else 'INSERT',changed_by=user.id,field_name='kepemilikan',old_value=old_summary,new_value=new_summary,alasan=reason,aksi=aksi,gudang=after.get('warehouse_scope'),pelanggan_ids=ids)
 
-async def initial(db,*,user,kind,identity,owners,amount,customer=None,commit=True,key=None):
+async def initial(db,*,user,kind,identity,owners,amount,customer=None,commit=True,key=None,source_ids=None,from_detail=False,note='',return_event=False):
     await lock(db);await db.flush()
     amount=D(amount)
-    if not amount.is_finite() or amount<=0 or kind!='curah' and amount!=amount.to_integral_value():raise InventoryError('Jumlah harus positif; karung dan lembar harus bilangan bulat.')
-    if kind=='curah' and amount!=amount.quantize(D('.01')):raise InventoryError('Bobot mengikuti presisi penyimpanan dua desimal kg.')
-    if kind=='karung':
+    if not amount.is_finite() or amount<=0 or kind not in CURAH and amount!=amount.to_integral_value():raise InventoryError('Jumlah harus positif; karung dan lembar harus bilangan bulat.')
+    if kind in CURAH and amount!=amount.quantize(D('.01')):raise InventoryError('Bobot mengikuti presisi penyimpanan dua desimal kg.')
+    if from_detail:
+        await izin(db,user)
+        if not source_ids or len(owners)!=1 or owners[0]==customer:raise InventoryError('Pilih satu sumber dan pemilik tujuan yang berbeda.')
+        for who in set(owners)|{customer}:await pihak(db,who,kind)
+    elif kind=='karung':
         if not customer:raise InventoryError('Sebutkan pelanggan tujuan.')
         await pihak(db,customer,kind)
     else:
@@ -218,15 +265,16 @@ async def initial(db,*,user,kind,identity,owners,amount,customer=None,commit=Tru
     total=sum((D(b['lembar' if kind=='karung' else 'karung' if kind=='barang' else 'kg']) for b in balances),D(0))
     if amount>total:raise InventoryError(f'Sisa sumber tinggal {total} '+('lembar' if kind=='karung' else 'karung' if kind=='barang' else 'kg')+'.')
     original=await physical(db,kind,identity)
-    lines=await allocate(db,kind,identity,owners,amount,customer if kind=='karung' else None,user)
+    lines=await allocate(db,kind,identity,owners,amount,customer if (kind=='karung' or from_detail) else None,user,source_ids=source_ids,detail=from_detail)
     rows=[await db.get(MODELS[kind],x['target_id']) for x in lines]
     warehouses=await warehouse_ids(db,kind,identity,rows)
     scopes={getattr(await db.get(Warehouse,w),'kode_fungsi',None) for w in warehouses};warehouse_scope=next(iter(scopes)) if len(scopes)==1 else None
-    state=dict(warehouse_scope=warehouse_scope,parties={str(o):await pihak(db,o,kind) for o in set(owners)|{customer,None}},kind=kind,identity=identity,owners=owners,customer=customer,warehouses=warehouses,lines=lines,quantity=str(amount),kg=None if kind=='karung' else str(sum((D(x['kg']) for x in lines),D(0))),version=0,status='aktif')
+    state=dict(detail=from_detail,note=note,bound_source_ids=source_ids or [],warehouse_scope=warehouse_scope,parties={str(o):await pihak(db,o,kind) for o in set(owners)|{customer,None}},kind=kind,identity=identity,owners=owners,customer=customer,warehouses=warehouses,lines=lines,quantity=str(amount),kg=None if kind=='karung' else str(sum((D(x['kg']) for x in lines),D(0))),version=0,status='aktif')
     if original!=await physical(db,kind,identity):raise InventoryError('Konservasi stok fisik gagal; seluruh perubahan harus dibatalkan.')
     event=Peristiwa(jenis=AWAL,pelaku_id=user.id,kunci_kiriman=key or 'kepemilikan:'+uuid.uuid4().hex,muatan=state);db.add(event);await db.flush()
-    await audit(db,user,kind,event.id,{},state,'Pencatatan perpindahan baru',AKSI[kind])
+    await audit(db,user,kind,event.id,{},state,note or 'Pencatatan perpindahan baru',AKSI[kind])
     if commit:await db.commit()
+    if return_event:return event
     return amount if kind=='karung' else D(state['kg'])
 
 async def root_state(db,ident,*,locked=False):
@@ -236,8 +284,8 @@ async def root_state(db,ident,*,locked=False):
     return event,copy.deepcopy(latest.muatan['after'] if latest else event.muatan),latest
 
 async def evidence(db,state,selected=()):
-    kind=state['kind'];M=MODELS[kind];identity=state['identity'];target_owner=state.get('customer') if kind=='karung' else None
-    free={r.id:n for r,n in await free_rows(db,kind,identity,target_owner)}
+    kind=state['kind'];M=MODELS[kind];identity=state['identity'];target_owner=state.get('customer')
+    free={r.id:n for r,n in await free_guard(db,kind,identity,target_owner,detail=state.get('detail',False))}
     facts=[]
     for line in state['lines']:
         r=await db.get(M,line['target_id'],populate_existing=True)
@@ -245,12 +293,12 @@ async def evidence(db,state,selected=()):
     source=[]
     for rid in sorted(set(selected)):
         r=await db.get(M,rid,populate_existing=True)
-        if not r or any(getattr(r,k)!=v for k,v in ({'product_sku_id':identity['sku'],'rice_quality_standard_id':identity['std'],'curah_kemas_ulang':False} if kind=='barang' else {'jenis_produk':identity['jenis']} if kind=='curah' else {'packaging_material_id':identity['material'],'package_size_id':identity['size'],'brand_id':identity['brand']}).items()):raise InventoryError('Jenis, SKU, mutu, atau kemasan sumber pengganti tidak sesuai transaksi asal.')
+        if not r or any(getattr(r,k)!=v for k,v in ({'product_sku_id':identity['sku'],'rice_quality_standard_id':identity['std'],'curah_kemas_ulang':False} if kind=='barang' else {'product_sku_id':identity['sku'],'rice_quality_standard_id':identity['std'],'curah_kemas_ulang':True} if kind=='curah_barang' else {'jenis_produk':identity['jenis']} if kind=='curah' else {'packaging_material_id':identity['material'],'package_size_id':identity['size'],'brand_id':identity['brand']}).items()):raise InventoryError('Jenis, SKU, mutu, atau kemasan sumber pengganti tidak sesuai transaksi asal.')
         wh=await warehouse_ids(db,kind,identity,[r])
         if kind!='karung' and set(wh)-set(state['warehouses']):raise InventoryError('Lokasi sumber pengganti harus sesuai transaksi asal.')
         who=owner(r,kind)
-        if kind!='karung' and who is None:raise InventoryError('Sumber pengganti harus milik pesanan jasa, bukan stok pabrik.')
-        availability={x.id:n for x,n in await free_rows(db,kind,identity,who,allocating=True)}
+        if kind!='karung' and who is None and not state.get('detail'):raise InventoryError('Sumber pengganti harus milik pesanan jasa, bukan stok pabrik.')
+        availability={x.id:n for x,n in await free_guard(db,kind,identity,who,allocating=True,detail=state.get('detail',False))}
         source.append(dict(id=rid,row=raw(r),free=str(availability.get(rid,D(0)))))
     owners=set(state['owners'])|({state['customer']} if state.get('customer') else set())
     balances={str(o):await balance(db,kind,identity,o) for o in owners|{None}}
@@ -294,8 +342,8 @@ def normalized(req):
 async def give_back(db,state,amount,user):
     kind=state['kind'];M=MODELS[kind]
     from app.penggilingan.gudang2.rencana_beras import berat_karung_nyata
-    dest=state.get('customer') if kind=='karung' else None
-    free={r.id:n for r,n in await free_rows(db,kind,state['identity'],dest)}
+    dest=state.get('customer')
+    free={r.id:n for r,n in await free_guard(db,kind,state['identity'],dest,detail=state.get('detail',False))}
     left=amount;changes=[]
     for line in reversed(state['lines']):
         if left<=0:break
@@ -308,7 +356,7 @@ async def give_back(db,state,amount,user):
             detail=await blocker(db,state,row)
             raise InventoryError(f"Perpindahan sumber #{row.id} hanya memiliki {free.get(row.id,D(0))} bagian bebas; perlu mengembalikan {take}. {detail}")
         original=raw(row);restored=None
-        weight=berat_karung_nyata(row,int(take)) if kind=='barang' else take if kind=='curah' else None
+        weight=berat_karung_nyata(row,int(take)) if kind=='barang' else take if kind in CURAH else None
         if take==qty(row,kind):set_owner(row,kind,line['source_owner'])
         else:
             restored=await clone_part(db,row,kind,take,weight,line['source_owner'],user)
@@ -348,30 +396,32 @@ async def apply(db,*,user,ident,req):
     if not body['reason']:raise InventoryError('Alasan koreksi atau pembatalan wajib diisi.')
     amount=D(0) if body['mode']=='batal' else D(body['quantity'] or 'NaN')
     kind=state['kind']
-    if not amount.is_finite() or amount<0 or body['mode']=='ubah' and amount==0 or kind!='curah' and amount!=amount.to_integral_value():raise InventoryError('Jumlah harus positif; gunakan Batalkan untuk pembalikan penuh. Karung dan lembar harus bulat.')
-    if kind=='curah' and amount!=amount.quantize(D('.01')):raise InventoryError('Bobot menggunakan presisi penyimpanan dua desimal kg.')
+    if not amount.is_finite() or amount<0 or body['mode']=='ubah' and amount==0 or kind not in CURAH and amount!=amount.to_integral_value():raise InventoryError('Jumlah harus positif; gunakan Batalkan untuk pembalikan penuh. Karung dan lembar harus bulat.')
+    if kind in CURAH and amount!=amount.quantize(D('.01')):raise InventoryError('Bobot menggunakan presisi penyimpanan dua desimal kg.')
     customer=state.get('customer') if body['customer'] is None else body['customer']
     if kind=='karung':await pihak(db,customer,kind)
-    elif body['customer'] is not None:raise InventoryError('Barang jasa harus memilih baris sumber/pesanan yang benar, bukan hanya nama pelanggan.')
+    elif body['customer'] is not None and not state.get('detail'):raise InventoryError('Barang jasa harus memilih baris sumber/pesanan yang benar, bukan hanya nama pelanggan.')
     selected=body['source_ids']
     facts=await evidence(db,state,selected)
     owners=list(state['owners'])
     if selected and kind!='karung':owners=sorted({x['row']['jasa_id'] for x in facts['sources']})
     if len(owners)>1 and len(await pelanggan_ids(db,kind,set(owners)))!=1:raise InventoryError('Sumber pengganti dari pelanggan berbeda tidak digabung.')
-    changed_owner=customer!=state.get('customer') if kind=='karung' else owners!=state['owners']
+    if state.get('detail') and customer in owners:raise InventoryError('Pemilik tujuan sama dengan asal.')
+    changed_owner=customer!=state.get('customer') or owners!=state['owners']
     old=D(state['quantity'])
     if amount==old and not changed_owner and not selected:raise InventoryError('Belum ada perubahan jumlah atau pemilik.')
     ids_for_balance=set(state['owners'])|set(owners)|{None}
-    if kind=='karung':ids_for_balance|={state.get('customer'),customer}
+    ids_for_balance|={state.get('customer'),customer}
     balances_before={str(i):await balance(db,kind,state['identity'],i) for i in ids_for_balance}
     original=await physical(db,kind,state['identity']);mutations=[]
     if changed_owner or selected and kind!='karung':
         mutations+=await give_back(db,state,old,user)
         state['lines']=[];state['customer']=customer
-        state['lines']=await allocate(db,kind,state['identity'],[None] if kind=='karung' else owners,amount,customer if kind=='karung' else None,user,source_ids=selected or None)
+        state['lines']=await allocate(db,kind,state['identity'],owners,amount,customer,user,source_ids=selected or state.get('bound_source_ids') or None,detail=state.get('detail',False))
     elif amount<old:mutations+=await give_back(db,state,old-amount,user)
     elif amount>old:
-        state['lines']+=await allocate(db,kind,state['identity'],[None] if kind=='karung' else owners,amount-old,customer if kind=='karung' else None,user,source_ids=selected or None)
+        state['lines']+=await allocate(db,kind,state['identity'],owners,amount-old,customer,user,source_ids=selected or state.get('bound_source_ids') or None,detail=state.get('detail',False))
+    if selected and state.get('detail'):state['bound_source_ids']=selected
     state['owners']=owners;state['parties']={str(o):await pihak(db,o,kind) for o in set(owners)|{customer,None}};state['quantity']=str(amount)
     state['kg']=None if kind=='karung' else str(sum((D(x['kg']) for x in state['lines']),D(0)))
     state['version']+=1;state['status']='dibatalkan' if body['mode']=='batal' else 'terkoreksi'
@@ -463,7 +513,7 @@ async def listing(db,*,user,kind=None,status=None,search='',page=1,legacy=False)
         total=await db.scalar(select(func.count()).select_from(q.subquery()));page=max(1,min(page,max(1,math.ceil(total/25))))
         rows=list((await db.scalars(q.order_by(ActivityLog.id.desc()).offset((page-1)*25).limit(25))).all())
         return dict(items=[dict(id='lama-'+str(e.id),code='Audit #'+str(e.id),kind='historis',status='sumber_belum_terbukti',quantity=None,kg=None,time=e.waktu_perubahan.isoformat(),summary=e.new_value or e.old_value or 'Tidak tersedia') for e in rows],total=total,page=page,pages=math.ceil(total/25),legacy=True)
-    if kind=='produk':kind_group=['barang','curah']
+    if kind=='produk':kind_group=['barang','curah','curah_barang']
     else:kind_group=[kind] if kind else []
     from sqlalchemy.orm import aliased
     from sqlalchemy.dialects.postgresql import JSONB
@@ -494,11 +544,11 @@ async def describe(db,state):
     kind=state['kind'];identity=state['identity'];grade=None
     if kind=='curah':label=identity['jenis'].title()+' curah'
     else:
-        sku=await db.get(ProductSku,identity['sku']) if kind=='barang' else None
+        sku=await db.get(ProductSku,identity['sku']) if kind in ('barang','curah_barang') else None
         material=await db.get(PackagingMaterial,sku.packaging_material_id if sku else identity['material'])
         size=await db.get(PackageSize,sku.package_size_id if sku else identity['size'])
         bid=sku.brand_id if sku else identity['brand'];brand=await db.get(Brand,bid) if bid else None
-        std=await db.get(RiceQualityStandard,identity['std']) if kind=='barang' and identity['std'] else None
+        std=await db.get(RiceQualityStandard,identity['std']) if kind in ('barang','curah_barang') and identity['std'] else None
         label=(sku.kategori.replace('_',' ').title() if sku else 'Karung kosong')+' · '+(getattr(material,'nama',None) or material.kode)+' · '+str(size.ukuran_kg)+' kg'+(' · '+brand.nama if brand else '')+(' · '+std.nama if std else '')
     whs=[await db.get(Warehouse,wid) for wid in state['warehouses']]
     return dict(label=label,unit='lembar' if kind=='karung' else 'karung' if kind=='barang' else 'kg',warehouses=[w.nama_gudang for w in whs if w],capacity_note='Ukuran kg adalah kapasitas kemasan, bukan bobot karung.' if kind=='karung' else None)

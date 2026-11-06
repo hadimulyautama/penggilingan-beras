@@ -1,0 +1,11 @@
+{% extends '_retur_supplier_navigasi.html' %}
+{% block judul %}Detail {{ sumber.parts[0].label }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/kepemilikan-detail.css?v={{ VERSI }}">
+<main class="kod" data-kepemilikan-sumber data-endpoint="/api/stok-sumber/{{ sumber.parts[0].kind }}/{{ sumber.parts[0].id }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-mulai="{{ '1' if mulai else '' }}">
+<header><h1>{{ sumber.parts[0].label }}</h1><p>{{ sumber.parts[0].code }} · {{ sumber.parts[0].gudang }}</p></header>
+<script type="application/json" data-kod-awal>{{ sumber|tojson }}</script>
+<div data-kod-isi></div><p data-kod-status role="status" aria-live="polite"></p><p data-kod-error role="alert"></p>
+</main>
+<script src="/static/kepemilikan-detail.js?v={{ VERSI }}" defer></script>
+{% endblock %}

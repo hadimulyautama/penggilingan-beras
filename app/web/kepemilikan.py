@@ -116,6 +116,40 @@ async def pk_baru_page(request:Request,akun=Depends(butuh_akun)):
         breadcrumb_detail='Alihkan kepemilikan PK')
 
 
+@router.get('/api/pk-kepemilikan/detail-sumber')
+async def pk_detail_sumber(sumber:str='',kode:str='',pemilik_id:str='pabrik',user=Depends(pengguna_aksi)):
+    from app.services import pk_kepemilikan as pk
+    from app.models import MillingProcess
+    async with SessionLocal() as db:
+        try:
+            if not sumber and kode:
+                mid=await db.scalar(select(MillingProcess.id).where(MillingProcess.kode_proses==kode))
+                if mid:sumber='giling:'+str(mid)
+            owner=None if pemilik_id=='pabrik' else int(pemilik_id)
+            src=await pk.sumber(db,user,sumber)
+            if src.bebas(owner)<=0:raise s.InventoryError('Bagian sumber ini tidak tersedia; pilih sumber melalui detail stok.')
+            label=await s.pihak(db,owner,'barang')
+            item=dict(sumber=sumber,warehouse_id=src.stok.gudang.id,gudang=src.stok.gudang.nama,label=src.label,owner=owner,pemilik=label,tersedia=str(src.bebas(owner)))
+            return JSONResponse(dict(sumber=[item],gudang=[dict(id=src.stok.gudang.id,nama=src.stok.gudang.nama)],pemilik=[]),headers={'Cache-Control':'no-store'})
+        except (ValueError,s.InventoryError,PermissionError,PersediaanError) as e:raise fail(e)
+
+@router.get('/api/pk-kepemilikan/cari-tujuan')
+async def pk_cari_tujuan(q:str=Query('',max_length=100),page:int=Query(1,ge=1),dari:int|None=None,user=Depends(pengguna_aksi)):
+    from app.models import Jasa,Pelanggan
+    from sqlalchemy import func,or_
+    async with SessionLocal() as db:
+        try:await s.izin(db,user)
+        except PermissionError as e:raise fail(e)
+        query=select(Jasa.id,Jasa.kode,Pelanggan.nama_pelanggan).join(Pelanggan,Jasa.pelanggan_id==Pelanggan.id).where(Jasa.status=='berjalan',Pelanggan.status=='aktif',Pelanggan.deleted_at.is_(None))
+        if dari:
+            origin=await db.get(Jasa,dari)
+            if not origin:raise HTTPException(409,'Pemilik asal tidak tersedia.')
+            query=query.where(Jasa.pelanggan_id!=origin.pelanggan_id)
+        if q.strip():query=query.where(or_(Pelanggan.nama_pelanggan.ilike('%'+q.strip()+'%'),Jasa.kode.ilike('%'+q.strip()+'%')))
+        total=await db.scalar(select(func.count()).select_from(query.subquery()))
+        rows=(await db.execute(query.order_by(Pelanggan.nama_pelanggan,Jasa.id).offset((page-1)*20).limit(20))).all()
+        return JSONResponse(dict(items=[dict(value=r.id,label=r.nama_pelanggan+' · '+r.kode) for r in rows],total=total,page=page,pages=__import__('math').ceil(total/20)),headers={'Cache-Control':'no-store'})
+
 @router.get('/api/pk-kepemilikan/pilihan')
 async def pk_pilihan(user=Depends(pengguna_aksi)):
     from app.services import pk_kepemilikan as pk

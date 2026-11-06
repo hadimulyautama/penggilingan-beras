@@ -473,7 +473,16 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
             asal_pengemasan=list((await db.scalars(select(PolishingProcess).where(
                 PolishingProcess.kode_proses.in_(codes)).order_by(PolishingProcess.id.desc()))).all())
         asal_pengemasan=[r for r in asal_pengemasan if can_see_financials(user) or r.status=='proses']
-    return await render_laci(request, "stok_produk_koreksi_asal.html", template_stok_asal="stok_produk_detail.html", asal_pengemasan=asal_pengemasan,
+    sumber_kepemilikan=None
+    if not is_customer_read(request):
+        from app.services.kepemilikan_detail import daftar_produk
+        try:sumber_page=max(1,int(request.query_params.get('sumber_page','1')))
+        except ValueError:sumber_page=1
+        async with SessionLocal() as db:sumber_kepemilikan=await daftar_produk(db,user=user,jenis=jenis,owners=owners,page=sumber_page)
+    if sumber_kepemilikan is not None:
+        boleh_pindah=False
+        for row in rows:row['pindah']=None
+    return await render_laci(request, "stok_produk_koreksi_asal.html", template_stok_asal="stok_produk_detail.html", asal_pengemasan=asal_pengemasan,sumber_kepemilikan=sumber_kepemilikan,
         layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",
         breadcrumb_detail=k.nama, k=k, beras=svc.adalah_beras(k.jenis), pemilik=pemilik or "Pabrik",
         pelanggan_id=pelanggan_id, jasa_ids=jasa_ids, kemasan=kemasan,

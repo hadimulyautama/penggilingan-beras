@@ -3,3 +3,5 @@
 {% if asal_pengemasan %}<section class="riwayat-detail__card"><h2>Catatan asal pengemasan otomatis</h2><p>Pilih proses asal untuk memperbaiki catatan hasil. Angka perkiraan FIFO pada kartu tidak dipakai sebagai jumlah koreksi.</p>{% for p in asal_pengemasan %}<a class="btn btn--kecil" data-utuh href="/pengemasan-otomatis/sosoh/{{ p.id }}/{{ k.jenis }}">{{ p.kode_proses }} · catatan asal</a> {% endfor %}</section>{% endif %}
 {{ super() }}
 {% endblock %}
+
+{% block sumber_kepemilikan %}{% include '_kepemilikan_sumber_daftar.html' %}{% endblock %}

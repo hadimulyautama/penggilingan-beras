@@ -233,3 +233,14 @@ async def test_alokasi_perintah_menahan_pengalihan_dan_sumber_tidak_dibatalkan(p
         with pytest.raises(UndoError,match='pengalihan'):await _undo_verify_output(db,1)
         ctx=await umum.context(db,user=await db.get(User,w['user']),ident=result['id'])
         assert ctx['state']['quantity']=='100'
+
+async def test_detail_sumber_terkunci_dan_pencarian_tujuan(pg,world):
+    from tests.pg.test_riwayat_giling import _klien
+    async with await _klien(pg,peran='admin') as c:
+        r=await c.get('/api/pk-kepemilikan/detail-sumber',params={'kode':'LOT-PK-001','pemilik_id':'pabrik'})
+        assert r.status_code==200,r.text
+        data=r.json();assert len(data['sumber'])==1 and data['sumber'][0]['sumber']==world['sources'][0]
+        assert data['pemilik']==[]
+        r=await c.get('/api/pk-kepemilikan/cari-tujuan',params={'q':'Pemilik jasa PK'})
+        assert r.status_code==200 and r.json()['total']==1
+        assert r.json()['items'][0]['value']==world['jasa']
