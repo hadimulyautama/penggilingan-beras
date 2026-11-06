@@ -144,8 +144,12 @@
   async function ambil(url) {
     var r = await fetch(url, { credentials: "same-origin" });
     if (!r.ok) {
-      if (r.status === 401 || r.status === 403) { location.href = "/masuk?next=/aksi"; return null; }
+      if (r.status === 401 && !$("lembar")?.open) { location.href = "/masuk?next=/aksi"; return null; }
       var e = await r.json().catch(function () { return {}; });
+      if (typeof e.detail !== "object" || e.detail === null) {
+        var galat = new Error(e.detail || ("Tidak bisa memuat (HTTP " + r.status + ")"));
+        galat.status = r.status;throw galat;
+      }
       throw (e.detail || ("Tidak bisa memuat (HTTP " + r.status + ")"));
     }
     return r.json();
@@ -2077,9 +2081,9 @@
       var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-cari]');
       if (!masukan || !kotak || !simpanan) { return; }
 
-      ambil(f.source).then(function (daftar) {
+      bacaPilihan(f, f.source, masukan, function () { pasangKombo(f); }).then(function (daftar) {
         if (!daftar) { return; }
-        masukan._daftarKombo = daftar;
+        masukan._daftarKombo = daftar;masukan.disabled = false;
         /* Pulih dari layar konfirmasi — oleh TULISANNYA (`terbaca()` cuma
            menyimpan label, bukan id), dicocokkan PERSIS sekali daftarnya
            datang. Sebangun `data-pulih` pada `muatBanyak`. */
@@ -2187,13 +2191,19 @@
       parameterBanyak.forEach(function(v){if(v[1])sumber+=(sumber.indexOf('?')>=0?'&':'?')+encodeURIComponent(v[0])+'='+encodeURIComponent(v[1]);});
       var borangBanyak = lembar.querySelector(".lembar__isi");
       var indukTs=f.induk?nilaiMedan(f.induk):null,nomorDaftarTs=tambahSosoh?++nomorOpsiTs:0;
-      ambil(sumber).then(function (daftar) {
+      var bacaBanyak = (mulaiBahan || tambahSosoh) ? ambil(sumber) :
+        bacaPilihan(f, sumber, kotakMuat, function () { muatPilihan(true, f.name); }, function () {
+          return (!f.induk || nilaiMedan(f.induk) === nilaiInduk) &&
+            !parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];});
+        });
+      bacaBanyak.then(function (daftar) {
         if (!daftar || kotakMuat._nomorMuat !== nomorMuat || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];}) || (mulaiBahan && lembar.querySelector(".lembar__isi") !== borangBanyak)) { return; }
         if(tambahSosoh && (nomorDaftarTs!==nomorOpsiTs||lembar.querySelector(".lembar__isi")!==borangBanyak||(f.induk && nilaiMedan(f.induk)!==indukTs)))return;
         kotakMuat._gagalMuat = 0;
         var wadah = $("b_" + f.name);
         var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
         if (!wadah || !simpanan) { return; }
+        delete wadah.dataset.pilihanGagal;var aksesLama = wadah.querySelector("[data-galat-akses]");if (aksesLama) aksesLama.remove();
         if (mulaiBahan) bersihkanStatusAlat(wadah);
 
         function sinkron() {
@@ -2266,6 +2276,13 @@
       }).catch(function (err) {
         if (!(mulaiBahan || tambahSosoh) || lembar.querySelector(".lembar__isi") !== borangBanyak ||
             kotakMuat._nomorMuat !== nomorMuat || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];})) return;
+        if (err.status >= 400 && err.status < 500 && err.status !== 429) {
+          var notaAkses = kotakMuat.querySelector("[data-galat-akses]");
+          if (!notaAkses) { notaAkses = document.createElement("p");notaAkses.dataset.galatAkses = "1";notaAkses.setAttribute("role", "status");kotakMuat.prepend(notaAkses); }
+          notaAkses.textContent = err.message + " Isian tetap tersedia.";
+          kotakMuat.dataset.pilihanGagal = notaAkses.textContent;
+          $("simpan").disabled = true;return;
+        }
         var kondisiAlat = mulaiBahan && err && err.kode === "alat_sedang_dipakai";
         var tertahan = kondisiAlat || kotakMuat.dataset.alatDipakai;
         if (kondisiAlat) tampilkanStatusAlat(err, kotakMuat);
@@ -2358,6 +2375,51 @@
     return hasil;
   }
 
+    // Satu pemulihan untuk pilihan tunggal, pencarian dan barang berulang.
+    // GET saja. Respons lama/dari formulir lain tidak boleh mengganti isian.
+    function bacaPilihan(f, sumber, wadah, ulang, cocok) {
+      if (!wadah) return Promise.resolve(null);
+      var borang = lembar.querySelector(".lembar__isi");
+      clearTimeout(wadah._jadwalMuat);
+      delete wadah._ulangiMuat;delete wadah.dataset.muatOtomatis;
+      var nomor = wadah._nomorPilihan = (wadah._nomorPilihan || 0) + 1;
+      function berlaku() {
+        return lembar.open && wadah.isConnected && lembar.querySelector(".lembar__isi") === borang &&
+          wadah._nomorPilihan === nomor && (!cocok || cocok());
+      }
+      return ambil(sumber).then(function (daftar) {
+        if (!berlaku() || !daftar) return null;
+        var nota = $("galat_pilihan_" + f.name);if (nota) nota.remove();
+        delete wadah.dataset.pilihanGagal;wadah._gagalMuat = 0;
+        return daftar;
+      }).catch(function (err) {
+        if (!berlaku()) return null;
+        var nota = $("galat_pilihan_" + f.name);
+        if (!nota) {
+          nota = document.createElement("p");nota.id = "galat_pilihan_" + f.name;
+          nota.className = "bantu";nota.setAttribute("role", "status");
+          wadah.insertAdjacentElement("afterend", nota);
+        }
+        var tetap = err.status >= 400 && err.status < 500 && err.status !== 429;
+        nota.textContent = tetap ? (err.message || String(err)) + " Isian tetap tersedia." :
+          "Pilihan " + (f.label || f.name).toLowerCase() + " belum dapat dimuat. Dicoba lagi otomatis; isian tetap tersedia.";
+        if (!f.optional) wadah.dataset.pilihanGagal = nota.textContent;
+        if (tetap) return null;
+        wadah._gagalMuat = (wadah._gagalMuat || 0) + 1;
+        wadah.dataset.muatOtomatis = "1";
+        wadah._ulangiMuat = function () {
+          if (!berlaku() || document.hidden || navigator.onLine === false) return;
+          clearTimeout(wadah._jadwalMuat);
+          delete wadah._ulangiMuat;delete wadah.dataset.muatOtomatis;
+          ulang();
+        };
+        wadah._jadwalMuat = setTimeout(function () {
+          if (wadah._ulangiMuat) wadah._ulangiMuat();
+        }, Math.min(1000 * Math.pow(2, wadah._gagalMuat - 1), 15000));
+        return null;
+      });
+    }
+
   function muatPilihan(segar, hanya) {
       terakhirMuat = Date.now();
       (a.fields || []).forEach(function (f) {
@@ -2388,7 +2450,9 @@
           sumberBarang += (sumberBarang.indexOf("?") >= 0 ? "&" : "?") +
             "induk=" + encodeURIComponent(indukBarang);
         }
-        ambil(sumberBarang).then(function (daftar) {
+        var wadahBarang = lembar.querySelector('.ulang--pasangan[data-ulang-untuk="' + f.name + '"]');
+        bacaPilihan(f, sumberBarang, wadahBarang, function () { muatPilihan(true, f.name); },
+          function () { return !f.induk || nilaiMedan(f.induk) === indukBarang; }).then(function (daftar) {
           if (!daftar) return;
           var wadah = lembar.querySelector(
             '.ulang--pasangan[data-ulang-untuk="' + f.name + '"]');
@@ -2451,7 +2515,11 @@
       parameterDiminta.forEach(function(v){if(!v[1])return;sumber += (sumber.indexOf('?')>=0?'&':'?')+encodeURIComponent(v[0])+'='+encodeURIComponent(v[1]||'');});
       var indukDiminta = f.induk ? nilaiMedan(f.induk) : null;
       var borangDiminta = lembar.querySelector(".lembar__isi");
-      ambil(sumber).then(function (daftar) {
+      var medanMuat = $("f_" + f.name) || $("t_" + f.name);
+      bacaPilihan(f, sumber, medanMuat, function () { muatPilihan(true, f.name); }, function () {
+        return (!f.induk || nilaiMedan(f.induk) === indukDiminta) &&
+          !parameterDiminta.some(function(v){return nilaiMedan(v[0])!==v[1];});
+      }).then(function (daftar) {
         if (!daftar || lembar.querySelector(".lembar__isi") !== borangDiminta ||
             (f.induk && nilaiMedan(f.induk) !== indukDiminta) || parameterDiminta.some(function(v){return nilaiMedan(v[0])!==v[1];})) return;
         if (kunciMedan(f)) {
@@ -3046,6 +3114,8 @@
     }
 
     $("simpan").onclick = async function () {
+      var gagalPilihan = lembar.querySelector("[data-pilihan-gagal]");
+      if (gagalPilihan) { salahFormulir(lembar, gagalPilihan.dataset.pilihanGagal);return; }
       if (formKhusus && lembar._menyimpan) return;
       if(selesaiGiling && memeriksaSg) return;
       if(selesaiSosoh && memeriksaSs) return;

@@ -1516,3 +1516,19 @@ serta memeriksa ulang lewat GET setiap 15 detik atau saat online/aktif kembali.
 Pilihan pulih otomatis saat alat bebas; jangan menyebut alat sibuk sebagai
 daftar silo gagal/dipulihkan. Tidak ada migrasi atau penulisan transaksi.
 Uji: tests/pg/test_status_alat.py.
+
+## Pemulihan pilihan formulir — 6 November 2026
+
+Pemulihan GET juga mencakup pilihan alat/remote tunggal, pencarian pelanggan,
+barang berulang dan remote_banyak di luar mulai proses. Retry 1/2/4/8/15 detik
+berhenti saat offline, layar tersembunyi, formulir ditutup/diganti atau induk
+berubah. Respons usang tidak mengganti pilihan, dan ketikan/jumlah tetap utuh.
+401 ketika formulir terbuka serta 403 tidak boleh mengalihkan ke halaman masuk;
+tampilkan alasan dan tahan penyimpanan pilihan wajib. Penolakan 4xx tidak
+diulang otomatis, kecuali 429. Status alat sibuk tetap panel operasional sendiri.
+Uji browser: tests/pg/test_pilihan_sosoh_browser.py.
+
+Penggabungan pesanan jasa sepemilik menyertakan PermintaanPk dan
+PkTumpukanToSilo dalam TABEL_BER_JASA_ID agar jejaknya tidak tertinggal pada
+pesanan yang diserap. Hanya ID pesanan administratif yang mengikuti gabungan;
+bobot, jumlah dan saldo tidak berubah. Tidak ada backfill data produksi.
