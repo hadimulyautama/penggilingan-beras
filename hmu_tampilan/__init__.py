@@ -37,6 +37,8 @@ tangan atau basi ketahuan di uji, bukan di gudang.
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
+import os
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request
@@ -47,17 +49,33 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "533"
+VERSI = "534"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
 TEMPLATES_DIR = AKAR / "templates"
 
+
+def cap_aset(revisi: str | None = None) -> str:
+    """Alamat cache mengikuti isi rilis, bukan hanya nomor yang bisa bersamaan.
+
+    Dua cabang pernah sama-sama menerbitkan v533 dengan aksi.js berbeda.
+    Browser/PWA sah menyimpan berkas pertama setahun karena immutable.
+    Identitas commit membedakan seluruh aset tiap deploy; manifest menjadi
+    sumber stabil di lingkungan lokal yang tidak mempunyai identitas rilis.
+    """
+    revisi = revisi or os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+    isi = revisi.encode() if revisi else (AKAR / "MANIFEST.sha256").read_bytes()
+    return VERSI + "-" + hashlib.sha256(isi).hexdigest()[:12]
+
+
+CAP_ASET = cap_aset()
+
 #: Berkas yang HANYA boleh ada di paket. Repo aplikasi yang menyimpan berkas
 #: bernama ini di luar folder vendored berarti menyalin lagi — ditolak
 #: `penjaga.salinan_terlarang`.
 BERKAS_PAKET = (
-    "laporan-kontrol.css", "laporan-kontrol.js", "_laporan_kontrol.html", "_laporan_audit_kontrol.html", "jasa-kontrol.css", "jasa-kontrol.js", "_jasa_kontrol.html", "_jasa_bahan.html", "pengiriman-kontrol.css", "pengiriman-kontrol.js", "_pengiriman_kontrol.html", "panduan.css", "_panduan.html", "app.css", "komponen-portal.css", "_ikon_portal.html", "aksi.js", "pindah.js", "sw.js",
+    "laporan-kontrol.css", "laporan-kontrol.js", "_laporan_kontrol.html", "_laporan_audit_kontrol.html", "jasa-kontrol.css", "jasa-kontrol.js", "_jasa_kontrol.html", "_jasa_bahan.html", "pengiriman-kontrol.css", "pengiriman-kontrol.js", "_pengiriman_kontrol.html", "panduan.css", "_panduan.html", "app.css", "komponen-portal.css", "_ikon_portal.html", "aksi.js", "pindah.js", "pembaruan-aplikasi.js", "sw.js",
     "ikon-180.png", "ikon-192.png", "ikon-512.png",
     "base.html", "_benda.html", "_kepemilikan.html", "_proses_visual.html", "_operasional.html", "luring.html",
     # ── Delapan LAYAR yang naik ke paket 23 September 2026 ──
@@ -143,7 +161,8 @@ def pasang_jinja(templates, *, app_nama: str, pwa_nama: str,
     """
     env = templates.env
     env.loader = ChoiceLoader([env.loader, FileSystemLoader(str(TEMPLATES_DIR))])
-    env.globals["VERSI"] = VERSI
+    env.globals["VERSI"] = CAP_ASET
+    env.globals["VERSI_APLIKASI"] = VERSI
     # Pintu laci yang tak ditawarkan pada permintaan ini (kunci layar). App yang
     # tak pernah mematikan layar apa pun tak perlu menyebutnya sama sekali —
     # tanpa bawaan ini, `kunci not in PINTU_MATI` di `base.html` akan menabrak
