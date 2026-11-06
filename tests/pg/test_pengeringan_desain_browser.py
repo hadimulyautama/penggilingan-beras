@@ -7,25 +7,61 @@ from tests.pg.test_detail_pengeringan_tab import dryer_tab,pengeringan,dryer_pab
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
 @asynccontextmanager
-async def browser(c,width):
- from playwright.async_api import async_playwright
- async with async_playwright() as pw:
-  b=await pw.chromium.launch();page=await b.new_page(viewport=dict(width=width,height=1000));errors=[];page.on('pageerror',lambda e:errors.append(e.stack))
-  await page.context.add_cookies([dict(name=k.name,value=k.value,url='https://uji') for k in c.cookies.jar])
-  async def route(r):
-   req=r.request
-   if urlsplit(req.url).netloc!='uji':await r.abort();return
-   # ASGITransport mengumpulkan seluruh body; stream SSE tidak pernah selesai.
-   # Browser memakai polling native saat stream ini tidak tersedia.
-   if urlsplit(req.url).path=='/api/aliran':await r.abort();return
-   headers={k:v for k,v in req.headers.items() if k.lower() not in ('host','cookie','content-length')}
-   response=await asyncio.wait_for(c.request(req.method,req.url,headers=headers,content=req.post_data_buffer),timeout=20)
-   await r.fulfill(status=response.status_code,body=response.content,headers={k:v for k,v in response.headers.items() if k.lower() not in ('content-length','content-encoding','set-cookie')})
-  await page.route('**/*',route)
-  try:yield page
-  finally:
-   await b.close()
-   assert not errors,errors
+async def browser(c, width):
+    from playwright.async_api import async_playwright, Error as BrowserError
+    async with async_playwright() as pw:
+        b = await pw.chromium.launch()
+        page = await b.new_page(viewport=dict(width=width, height=1000))
+        errors = []
+        pending = set()
+        closing = False
+        page.on('pageerror', lambda e: errors.append(e.stack))
+        await page.context.add_cookies([
+            dict(name=k.name, value=k.value, url='https://uji') for k in c.cookies.jar])
+
+        async def route(r):
+            task = asyncio.current_task()
+            if not closing:
+                pending.add(task)
+            try:
+                req = r.request
+                if closing or urlsplit(req.url).netloc != 'uji':
+                    await r.abort()
+                    return
+                # ASGITransport mengumpulkan seluruh body; SSE tidak berakhir.
+                # Saat stream tidak tersedia, browser memakai polling native.
+                if urlsplit(req.url).path == '/api/aliran':
+                    await r.abort()
+                    return
+                headers = {k: v for k, v in req.headers.items()
+                           if k.lower() not in ('host', 'cookie', 'content-length')}
+                response = await asyncio.wait_for(c.request(
+                    req.method, req.url, headers=headers,
+                    content=req.post_data_buffer), timeout=20)
+                await r.fulfill(status=response.status_code, body=response.content,
+                    headers={k: v for k, v in response.headers.items()
+                             if k.lower() not in ('content-length', 'content-encoding', 'set-cookie')})
+            except BrowserError as exc:
+                if not closing:
+                    errors.append(str(exc))
+                    raise
+            except Exception as exc:
+                errors.append(str(exc))
+                raise
+            finally:
+                pending.discard(task)
+
+        await page.route('**/*', route)
+        try:
+            yield page
+        finally:
+            # Jangan tinggalkan SELECT aktif saat fixture berikutnya TRUNCATE.
+            # Hentikan permintaan baru, lalu tunggu handler lama selesai/rollback.
+            closing = True
+            if pending:
+                await asyncio.gather(*tuple(pending), return_exceptions=True)
+            await b.close()
+            assert not errors, errors
 from tests.pg.test_form_kadar_air import fakta
 from tests.pg.test_riwayat_giling import _klien
 from tests.pg.formulir import cap_formulir

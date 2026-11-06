@@ -181,6 +181,8 @@ async def pg(_skema_head):
     # `alembic upgrade head` berikutnya mencoba membangun dari awal di atas
     # skema yang sudah ada.
     async with mesin.begin() as conn:
+        # Koneksi bocor harus gagal jelas, bukan menggantung seluruh CI.
+        await conn.execute(sa_text("SET LOCAL lock_timeout = '20s'"))
         await conn.execute(sa_text(_KOSONGKAN))
 
     try:

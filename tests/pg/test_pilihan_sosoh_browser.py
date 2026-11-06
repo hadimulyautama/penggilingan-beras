@@ -237,3 +237,27 @@ async def test_stream_realtime_tidak_menggantung_transport_browser_uji(pg,gudang
             })""")
             assert result=='selesai'
             assert not streams
+
+
+async def test_browser_menuntaskan_permintaan_sebelum_database_uji_dibersihkan(pg,gudang2):
+    from sqlalchemy import select
+    from app.models import User
+    await seed_master()
+    started=asyncio.Event();finished=asyncio.Event()
+    async with await _klien(pg,peran='operator',gudang='Gudang 2') as c:
+        original=c.request
+        async def request(method,url,**kw):
+            if urlsplit(str(url)).path=='/api/tes-lambat':
+                async with pg() as db:
+                    await db.scalar(select(User.id).limit(1))
+                    started.set()
+                    await asyncio.sleep(.5)
+                finished.set()
+                return httpx.Response(200,json={'selesai':True})
+            return await original(method,url,**kw)
+        c.request=request
+        async with browser(c,390) as page:
+            await page.goto('https://uji/pekerjaan')
+            await page.evaluate("() => { fetch('/api/tes-lambat').catch(() => {}); }")
+            await asyncio.wait_for(started.wait(),timeout=5)
+        assert finished.is_set(),'Permintaan masih memegang transaksi saat browser uji ditutup.'
