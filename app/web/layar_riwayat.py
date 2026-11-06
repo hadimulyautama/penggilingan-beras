@@ -585,23 +585,6 @@ def _pdf_pengeringan(data: dict) -> bytes:
     if bobot:
         story.append(Paragraph("Estimasi dari perubahan indikator mesin pertama tercatat sampai selesai; bukan hasil timbang dan tidak mengganti bobot basah asal.",styles["ReportNote"]))
 
-    story += [Paragraph("Bahan baku dan asal", styles["ReportSection"]),
-              Paragraph("Supplier atau pemilik, nomor polisi, dan berat dicantumkan untuk setiap batch.", styles["ReportNote"]),
-              Spacer(1, 4)]
-    rows = [["Kode batch", "Supplier / pemilik", "No. polisi", "Berat"]]
-    rows += [[x["kode"], x["asal"], x["plat"], kg(x["weight"])] for x in data["batches"]]
-    story.append(grid(rows, [39 * mm, 51 * mm, 38 * mm, 42 * mm]))
-
-    story += [Paragraph("Riwayat QC bahan baku", styles["ReportSection"]),
-              Paragraph("Nilai asli setiap pencatatan ditampilkan; kadar air tidak dirata-ratakan pada riwayat ini.", styles["ReportNote"]),
-              Spacer(1, 4)]
-    rows = [["Batch / QC", "Waktu", "Kadar air", "Lamur", "Biji hijau", "Densiti"]]
-    rows += [[x["batch"], stamp(x["time"]), x["moisture"], NilaiQC("Lamur",x["lamur"]), NilaiQC("Biji hijau",x["green"]), NilaiQC("Densiti",x["density"])]
-             for x in data["qc"]]
-    if len(rows) == 1:
-        rows.append(["Tidak ada catatan QC", "—", "—", "—", "—", "—"])
-    story.append(grid(rows, [32 * mm, 26 * mm, 29 * mm, 24 * mm, 34 * mm, 23 * mm]))
-
     story += [Paragraph("Pemantauan kadar air selama proses", styles["ReportSection"]),
               Paragraph("Perubahan memakai waktu antar-pengukuran (termasuk jeda). Laju per jam hanya ditampilkan setelah selang minimal 1 jam; satuannya poin persentase/jam.", styles["ReportNote"]),
               Spacer(1, 4)]
@@ -620,6 +603,23 @@ def _pdf_pengeringan(data: dict) -> bytes:
                     ["Pendinginan", stamp(data["cool_start"]), stamp(data["cool_end"]), durasi(data["cool_start"], data["cool_end"])],
                     ["Total", stamp(data["dry_start"]), stamp(data["cool_end"]), durasi(data["dry_start"], data["cool_end"]) ]],
                    [35 * mm, 47 * mm, 47 * mm, 51 * mm])]))
+    story += [Paragraph("Bahan baku dan asal", styles["ReportSection"]),
+              Paragraph("Supplier atau pemilik, nomor polisi, dan berat dicantumkan untuk setiap batch.", styles["ReportNote"]),
+              Spacer(1, 4)]
+    rows = [["Kode batch", "Supplier / pemilik", "No. polisi", "Berat"]]
+    rows += [[x["kode"], x["asal"], x["plat"], kg(x["weight"])] for x in data["batches"]]
+    story.append(grid(rows, [39 * mm, 51 * mm, 38 * mm, 42 * mm]))
+
+    story += [Paragraph("Riwayat QC bahan baku", styles["ReportSection"]),
+              Paragraph("Nilai asli setiap pencatatan ditampilkan; kadar air tidak dirata-ratakan pada riwayat ini.", styles["ReportNote"]),
+              Spacer(1, 4)]
+    rows = [["Batch / QC", "Waktu", "Kadar air", "Lamur", "Biji hijau", "Densiti"]]
+    rows += [[x["batch"], stamp(x["time"]), x["moisture"], NilaiQC("Lamur",x["lamur"]), NilaiQC("Biji hijau",x["green"]), NilaiQC("Densiti",x["density"])]
+             for x in data["qc"]]
+    if len(rows) == 1:
+        rows.append(["Tidak ada catatan QC", "—", "—", "—", "—", "—"])
+    story.append(grid(rows, [32 * mm, 26 * mm, 29 * mm, 24 * mm, 34 * mm, 23 * mm]))
+
     if data["cooling_notes"]:
         story.append(Paragraph("Catatan pendinginan", styles["ReportSection"]))
         story.extend(Paragraph(escape(note), styles["ReportNote"]) for note in data["cooling_notes"])

@@ -29,6 +29,7 @@ def test_pdf_pengeringan_memuat_asal_qc_pemantauan_dan_durasi():
         "dry_end": datetime(2026, 10, 12, 8, 0, tzinfo=timezone.utc),
         "cool_start": datetime(2026, 10, 12, 8, 0, tzinfo=timezone.utc),
         "cool_end": datetime(2026, 10, 12, 9, 0, tzinfo=timezone.utc),
+        "jeda": {"kalender": "9 jam", "tertahan": "0 detik", "efektif": "9 jam", "items": []},
         "cooling_notes": ["12/10/2026 15:00 WIB: Pendinginan selesai"],
     }
 
@@ -39,3 +40,12 @@ def test_pdf_pengeringan_memuat_asal_qc_pemantauan_dan_durasi():
                      "25,5% / 26%", "Ya · 5 sak", "18,5%", "1,50%/jam",
                      "Pengeringan", "Pendinginan", "8 jam", "Catatan pendinginan"):
         assert expected in text
+
+    headings = (
+        "Ringkasan lot", "Pemantauan kadar air selama proses",
+        "Waktu dan durasi proses", "Bahan baku dan asal",
+        "Riwayat QC bahan baku", "Catatan pendinginan", "Durasi dan riwayat jeda",
+    )
+    normalized = ' '.join(text.split())
+    positions = [normalized.index(h) for h in headings]
+    assert positions == sorted(positions)
