@@ -1532,3 +1532,12 @@ Penggabungan pesanan jasa sepemilik menyertakan PermintaanPk dan
 PkTumpukanToSilo dalam TABEL_BER_JASA_ID agar jejaknya tidak tertinggal pada
 pesanan yang diserap. Hanya ID pesanan administratif yang mengikuti gabungan;
 bobot, jumlah dan saldo tidak berubah. Tidak ada backfill data produksi.
+
+## PDF penggilingan: ruang tabel — 6 November 2026
+
+LaporanGiling memakai leading dan padding tabel yang lebih rapat dari laporan
+penerimaan, dengan ukuran huruf yang sama. Contoh 5 QC bahan + 3 QC hasil tetap
+satu halaman lengkap; laporan panjang boleh lebih dari satu halaman dan tidak
+boleh memotong catatan demi mengejar satu halaman. Kerangka/kop dan penyaji
+bersama tidak diubah. Uji tests/pg/test_pdf_giling_desain.py juga memeriksa 40
+putaran QC, kesimpulan, hak akses dan sidik seluruh tabel sebelum/sesudah GET.
