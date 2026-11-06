@@ -1,0 +1,58 @@
+/* Kerangka detail yang sama dengan riwayat proses; rincian dan formulir
+   tetap memakai data serta komponen transfer asli. */
+.rht .rhs-header p{margin:6px 0}
+.rht .rhs-header .rhs-code{margin-bottom:16px}
+.rht .transfer-tabs{margin:0 0 22px;grid-template-columns:none;gap:0 24px}
+.rht .transfer-panel{display:block}
+.rht .transfer-tahap{display:flex;flex-wrap:wrap;gap:10px 18px;margin:0 0 18px}
+.rht .transfer-tahap span{border:0;background:transparent;padding:0;text-align:left;font-size:12px}
+.rht .transfer-tahap [aria-current]{background:transparent;color:var(--pd-green)}
+.rht .transfer-fakta>div{font-size:14px;border-color:var(--pd-line)}
+.rht .transfer-fakta dd{font-weight:500}
+.rht .transfer-bobot{gap:12px;margin:18px 0}
+.rht .transfer-bobot>div{border:0;border-radius:8px;padding:14px;background:var(--pd-soft)}
+.rht .transfer-bobot span{font-size:12px}.rht .transfer-bobot strong{font-size:20px;font-weight:500}
+.rht .transfer-rute{margin:14px 0 0}.rht .transfer-rute small{line-height:1.6;font-size:13px}
+.rht .rht-explainer{padding-top:14px;border-top:1px solid var(--pd-line);margin-top:16px}
+.rht .rht-actions:empty{display:none}
+.rht .rht-actions>.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;max-width:100%}
+.rht .rht-actions .akses-terkunci{opacity:.6}
+.rht .rhs-actions>.akses-terkunci{cursor:default}
+.rht .riwayat-detail__card>h2{margin-top:0}
+.rht .riwayat-detail__card>p{font-size:13px}
+.rht .transfer-catatan{border-color:var(--pd-line)}
+.rht .transfer-catatan h3{font-size:14px}
+.rht .transfer-catatan p,.rht .transfer-catatan small{font-size:13px}
+.rht #koreksi-transfer>p.riwayat-status{display:block;white-space:normal;line-height:1.6;padding:12px 14px}
+.rht #koreksi-transfer>p.riwayat-status a{display:inline;overflow-wrap:anywhere}
+.rht .riwayat-koreksi__info{padding:0;margin-bottom:16px}
+.rht .rht-review{margin:16px 0 0}
+.rht .rht-review dl{margin:14px 0}
+.rht .rht-review dd{white-space:pre-line}
+.rht .rht-correction{width:min(640px,calc(100% - 24px));max-height:calc(100dvh - 32px);padding:20px;border:1px solid var(--pd-line);border-radius:12px;background:var(--pd-sheet);color:var(--pd-ink);overflow:auto}
+.rht-correction::backdrop{background:#0007}
+.rht .rht-correction-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
+.rht .rht-correction-head h2{margin:0;font-size:19px;flex:1 1 auto}
+.rht .rht-correction-head button{width:44px;min-width:44px;min-height:44px;flex:0 0 44px;padding:8px}
+.rht .riwayat-koreksi__input input{width:0;flex:1 1 auto}
+.rht .riwayat-koreksi__input small{flex:0 0 auto;white-space:nowrap}
+.rht .rht-correction .riwayat-koreksi{padding:0;margin:0;border:0;overflow:visible}
+.rht .rht-correction .riwayat-koreksi>summary{display:none}
+.rht #rht-navigation .laporan-nav{padding:0;border:0;margin:0}
+@media(max-width:700px){
+ .rht .transfer-tabs{gap:0 14px;margin-bottom:18px}
+ body.padiflow-ui .rht .transfer-tabs>a{font-size:12px}
+ .rht .transfer-fakta>div{font-size:13px;gap:12px}
+ .rht .transfer-fakta dd{max-width:62%}
+ .rht .transfer-bobot>div{padding:12px}
+ .rht .transfer-bobot strong{font-size:18px}
+ .rht .transfer-rute{gap:12px}
+ .rht .transfer-rute small{font-size:12px}
+ .rht .rht-correction{padding:16px}
+ .rht .rhs-review .rhs-actions>.btn{flex-basis:100%}
+ .rht .riwayat-koreksi__form input[type=number],.rht .riwayat-koreksi__form textarea{font-size:16px}
+}
+@media print{
+ .rht [role=tabpanel][hidden]{display:block!important}
+ .rht .transfer-tabs,.rht .rhs-actions,.rht .rhs-tools,.rht #koreksi-transfer{display:none!important}
+}
