@@ -98,33 +98,50 @@ def buat_pdf(data):
     rate=f"{float(d['yield']):.1f}%".replace('.',',') if d['yield'] is not None else 'Belum dihitung'
     total=Table([[[p(k,v.small),p(val,ParagraphStyle('GilingAngkaUtama',parent=v.bold,fontSize=15,leading=18))] for k,val in [('GABAH DIPAKAI',kg(d['input_kg'])),('HASIL PK',kg(d['output_kg'])),('RENDEMEN PK',rate)]]],colWidths=[v.width/3]*3)
     total.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),v.pale),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]));story.append(total)
-    section('01  Asal bahan dan pemakaian silo')
-    origins=list(dict.fromkeys(x['origin'] for x in d['batches']))
-    multi=len(origins)>1
-    headers=['Batch bahan','Netto batch asal','Sopir','Nomor polisi']+(['Asal / pemilik'] if multi else [])
-    rows=[[x['code']+'\nGabah '+x['condition'].lower(),kg(x['weight']),x.get('driver','Tidak tercatat'),x['plate']]+([x['origin']] if multi else []) for x in d['batches']]
-    table(headers,rows or [['Tidak tercatat']+['-']*(len(headers)-1)], [.22,.19,.18,.18,.23] if multi else [.32,.23,.23,.22])
-    groups=d.get('pemakaian_silo')
-    if groups:
-        rows=[]
-        for i,g in enumerate(groups,1):
-            a=dict(g['angka'])
-            rows.append([g['nama']+' / '+ ' · '.join(x['nama'] for x in g['sumber'])+f' · catatan {i}',a.get('Awal','Belum diketahui'),a.get('Tambahan','Tidak dipisahkan'),a.get('Terpakai','Belum dicatat'),a.get('Sisa akhir','Belum dicatat')+'\n'+g['status']])
-        table(['Silo / sumber','Awal','Tambahan','Dipakai','Sisa akhir'],rows,[.34,.16,.16,.16,.18])
-        # Ringkasan sisa silo memakai audit pelepasan layanan, bukan sum FIFO.
-        for g in groups:
-            if 'ringkasan_sisa' in g:note(g['nama']+' · sisa terakhir silo: '+g['ringkasan_sisa']+' · '+g['ringkasan_status'])
-        note('Tambahan yang belum dipisahkan tidak dianggap nol. Setiap pemakaian/sumber tetap terpisah.')
-    else:
-        table(['Silo / sumber','Awal','Tambahan','Dipakai','Sisa akhir'],[[x['silo']+' / '+x['source'],kg(x['weight']),'Tidak dipisahkan',kg(x['used']),kg(x['remaining'])] for x in d['sources']],[.34,.16,.16,.16,.18])
-    note('Netto batch asal bukan jumlah yang seluruhnya digiling. Sisa silo berbeda dari sisa PK.')
+    section('01  Waktu proses dan kesimpulan')
+    note('Mulai: '+stamp(d['start'])+'; selesai: '+stamp(d['end'])+'; durasi: '+duration(d['start'],d['end'])+'.')
+    jeda=d.get('jeda')
+    if jeda:
+        note('Durasi kalender: '+jeda['kalender']+'; total jeda: '+jeda['tertahan']+'; waktu aktif / Durasi efektif: '+jeda['efektif']+'.')
+        for e in jeda['items']:
+            note(e['aksi']+(' · Dibatalkan' if e['dibatalkan'] else '')+' · '+e['petugas']+' · '+e['waktu']+' · Dicatat: '+e['dicatat']+' · '+e['sebab']+(' · '+e['catatan'] if e['catatan'] else '')+(' · Alasan terlambat: '+e['alasan'] if e['alasan'] else ''))
+    else:note('Rincian jeda / waktu aktif belum tersedia.')
+    note('Kesimpulan: '+kg(d['input_kg'])+' gabah dipakai menghasilkan '+kg(d['output_kg'])+' PK (rendemen '+rate+').')
+    section('02  Hasil PK dan QC penggilingan')
+    values=[[stamp(x['time']),'Hasil PK kumulatif · '+x.get('actor','Pencatat tidak tercatat'),kg(x['weight'])] for x in d['progress']]
+    table(['Waktu','Catatan / referensi','Berat'],values or [['Belum ada catatan','-','-']],[.24,.54,.22])
+    note('Catatan hasil PK bersifat kumulatif, tidak dijumlahkan sebagai total produksi.')
+    note('Verifikasi hasil: '+stamp(d['verified_at'])+' · '+kg(d['verified_weight'])+' · '+(d.get('verification_actor') or 'Pemeriksa tidak tercatat'))
+    note('QC hasil PK - seluruh putaran dan rata-rata')
+    rows=d['qc'];rating=d.get('qc_rating')
+    if rows:
+        day=bool(tanggal_bersama(x['time'] for x in rows))
+        actors={x.get('actor','Tidak tercatat') for x in rows};same_actor=len(actors)==1
+        if day or same_actor:note(('Tanggal: '+tanggal_bersama(x['time'] for x in rows)+' | ' if day else '')+('Seluruh pemeriksaan: '+next(iter(actors)) if same_actor else ''))
+        values=[[str(x.get('number',i))+' / '+stamp(x['time'],day)+('' if same_actor else '\n'+x.get('actor','Tidak tercatat')),x['moisture'],x['broken'],x['loss'],NilaiQC('Butir kuning',x.get('yellow','Belum dinilai')),NilaiQC('Gabah',x.get('paddy','Belum dinilai')),NilaiQC('Merang',x.get('chaff','Belum dinilai'))] for i,x in enumerate(rows,1)]
+        if rating:values.append(['Rata-rata']+[NilaiQC(r['label'],r['hasil']) if i>=3 else r['hasil'] for i,r in enumerate(rating['rows'])])
+        table(['QC / waktu / pencatat','Kadar air','Butir patah','Susut uji','Butir kuning','Kandungan gabah','Merang'],values,[.25,.12,.12,.12,.13,.14,.12],bool(rating))
+        if rating:
+            note(('Nilai mutu: '+(angka(rating['nilai'])+' / 100 ('+rating['kelas']+')' if rating['nilai'] is not None else 'Belum dinilai')+'. ' if d.get('show_quality',True) else '')+'Pengukuran: '+'; '.join(r['label']+' '+str(r['n']) for r in rating['rows']))
+        notes=['QC '+str(x.get('number',i))+' · kondisi '+x['condition']+' · catatan lab: '+(x.get('note') or 'Belum dicatat') for i,x in enumerate(rows,1)]
+        for line in (['; '.join(notes)] if all(len(n)<100 for n in notes) and len(notes)<=5 else notes):note(line)
+    else:note('Belum diperiksa.')
+    if not rating:note('Rata-rata QC: '+d['qc_summary'])
+    note('Susut uji adalah parameter mutu laboratorium, terpisah dari rendemen PK. Kategori rata-rata mengikuti aturan QC; kosong tidak dianggap nol.')
+    section('03  Riwayat pengeringan bahan')
     if d['drying_lots']:
         note('Riwayat pengeringan bahan:')
         table(['Lot / batch asal','Pengeringan mulai - selesai / durasi','Pendinginan mulai - selesai / durasi'],[[x['code']+' / '+x['batches'],stamp(x['dry_start'])+' - '+stamp(x['dry_end'])+' / '+duration(x['dry_start'],x['dry_end']),stamp(x['cool_start'])+' - '+stamp(x['cool_end'])+' / '+duration(x['cool_start'],x['cool_end'])] for x in d['drying_lots']],[.3,.35,.35])
     else:note('Tidak ada hubungan pengeringan tercatat pada sumber proses ini.')
     if d['drying_moisture']:
         table(['Lot / waktu','Pembacaan sampel','Rata-rata tes','Indikator mesin'],[[x['lot']+' / '+stamp(x['time']),x['samples'],x['average'],x['machine']] for x in d['drying_moisture']],[.32,.32,.18,.18])
-    section('02  QC bahan sebelum digiling')
+    section('04  Asal bahan dan QC penerimaan')
+    origins=list(dict.fromkeys(x['origin'] for x in d['batches']))
+    multi=len(origins)>1
+    headers=['Batch bahan','Netto batch asal','Sopir','Nomor polisi']+(['Asal / pemilik'] if multi else [])
+    rows=[[x['code']+'\nGabah '+x['condition'].lower(),kg(x['weight']),x.get('driver','Tidak tercatat'),x['plate']]+([x['origin']] if multi else []) for x in d['batches']]
+    table(headers,rows or [['Tidak tercatat']+['-']*(len(headers)-1)], [.22,.19,.18,.18,.23] if multi else [.32,.23,.23,.22])
+    note('QC bahan sebelum digiling')
     rawgroups=defaultdict(list)
     for x in d['raw_qc']:rawgroups[x.get('code') or x['batch'].split(' · QC')[0]].append(x)
     for b in d['batches']:
@@ -142,35 +159,23 @@ def buat_pdf(data):
         readings=[str(x.get('number'))+': '+x['readings'] for x in rows if x.get('readings')]
         if readings:note('Bacaan 1 / 2: '+'; '.join(readings))
     if not d['batches']:note('Asal batch belum tercatat; QC tidak direka.')
-    section('03  QC hasil PK - seluruh putaran dan rata-rata')
-    rows=d['qc'];rating=d.get('qc_rating')
-    if rows:
-        day=bool(tanggal_bersama(x['time'] for x in rows))
-        actors={x.get('actor','Tidak tercatat') for x in rows};same_actor=len(actors)==1
-        if day or same_actor:note(('Tanggal: '+tanggal_bersama(x['time'] for x in rows)+' | ' if day else '')+('Seluruh pemeriksaan: '+next(iter(actors)) if same_actor else ''))
-        values=[[str(x.get('number',i))+' / '+stamp(x['time'],day)+('' if same_actor else '\n'+x.get('actor','Tidak tercatat')),x['moisture'],x['broken'],x['loss'],NilaiQC('Butir kuning',x.get('yellow','Belum dinilai')),NilaiQC('Gabah',x.get('paddy','Belum dinilai')),NilaiQC('Merang',x.get('chaff','Belum dinilai'))] for i,x in enumerate(rows,1)]
-        if rating:values.append(['Rata-rata']+[NilaiQC(r['label'],r['hasil']) if i>=3 else r['hasil'] for i,r in enumerate(rating['rows'])])
-        table(['QC / waktu / pencatat','Kadar air','Butir patah','Susut uji','Butir kuning','Kandungan gabah','Merang'],values,[.25,.12,.12,.12,.13,.14,.12],bool(rating))
-        if rating:
-            note(('Nilai mutu: '+(angka(rating['nilai'])+' / 100 ('+rating['kelas']+')' if rating['nilai'] is not None else 'Belum dinilai')+'. ' if d.get('show_quality',True) else '')+'Pengukuran: '+'; '.join(r['label']+' '+str(r['n']) for r in rating['rows']))
-        notes=['QC '+str(x.get('number',i))+' · kondisi '+x['condition']+' · catatan lab: '+(x.get('note') or 'Belum dicatat') for i,x in enumerate(rows,1)]
-        for line in (['; '.join(notes)] if all(len(n)<100 for n in notes) and len(notes)<=5 else notes):note(line)
-    else:note('Belum diperiksa.')
-    if not rating:note('Rata-rata QC: '+d['qc_summary'])
-    note('Susut uji adalah parameter mutu laboratorium, terpisah dari rendemen PK. Kategori rata-rata mengikuti aturan QC; kosong tidak dianggap nol.')
-    section('04  Pencatatan hasil, transfer dan sisa PK')
-    values=[[stamp(x['time']),'Hasil PK kumulatif · '+x.get('actor','Pencatat tidak tercatat'),kg(x['weight'])] for x in d['progress']]
-    values += [[stamp(x['time']),x['code']+' / '+x['destination'],kg(x['weight'])] for x in d['transfers']]
+    section('05  Bahan masuk dan pemakaian silo')
+    groups=d.get('pemakaian_silo')
+    if groups:
+        rows=[]
+        for i,g in enumerate(groups,1):
+            a=dict(g['angka'])
+            rows.append([g['nama']+' / '+ ' · '.join(x['nama'] for x in g['sumber'])+f' · catatan {i}',a.get('Awal','Belum diketahui'),a.get('Tambahan','Tidak dipisahkan'),a.get('Terpakai','Belum dicatat'),a.get('Sisa akhir','Belum dicatat')+'\n'+g['status']])
+        table(['Silo / sumber','Awal','Tambahan','Dipakai','Sisa akhir'],rows,[.34,.16,.16,.16,.18])
+        # Ringkasan sisa silo memakai audit pelepasan layanan, bukan sum FIFO.
+        for g in groups:
+            if 'ringkasan_sisa' in g:note(g['nama']+' · sisa terakhir silo: '+g['ringkasan_sisa']+' · '+g['ringkasan_status'])
+        note('Tambahan yang belum dipisahkan tidak dianggap nol. Setiap pemakaian/sumber tetap terpisah.')
+    else:
+        table(['Silo / sumber','Awal','Tambahan','Dipakai','Sisa akhir'],[[x['silo']+' / '+x['source'],kg(x['weight']),'Tidak dipisahkan',kg(x['used']),kg(x['remaining'])] for x in d['sources']],[.34,.16,.16,.16,.18])
+    note('Netto batch asal bukan jumlah yang seluruhnya digiling. Sisa silo berbeda dari sisa PK.')
+    section('06  Transfer dan sisa PK')
+    values = [[stamp(x['time']),x['code']+' / '+x['destination'],kg(x['weight'])] for x in d['transfers']]
     table(['Waktu','Catatan / referensi','Berat'],values or [['Belum ada catatan','-','-']],[.24,.54,.22])
-    note('Catatan hasil PK bersifat kumulatif, tidak dijumlahkan sebagai total produksi. Transfer ke Gudang 2: '+kg(d['transferred_kg'])+'. Sisa PK tersedia: '+kg(d['available_kg'])+'.')
-    note('Verifikasi hasil: '+stamp(d['verified_at'])+' · '+kg(d['verified_weight'])+' · '+(d.get('verification_actor') or 'Pemeriksa tidak tercatat'))
-    section('05  Waktu proses dan kesimpulan')
-    note('Mulai: '+stamp(d['start'])+'; selesai: '+stamp(d['end'])+'; durasi: '+duration(d['start'],d['end'])+'.')
-    jeda=d.get('jeda')
-    if jeda:
-        note('Durasi kalender: '+jeda['kalender']+'; total jeda: '+jeda['tertahan']+'; waktu aktif / Durasi efektif: '+jeda['efektif']+'.')
-        for e in jeda['items']:
-            note(e['aksi']+(' · Dibatalkan' if e['dibatalkan'] else '')+' · '+e['petugas']+' · '+e['waktu']+' · Dicatat: '+e['dicatat']+' · '+e['sebab']+(' · '+e['catatan'] if e['catatan'] else '')+(' · Alasan terlambat: '+e['alasan'] if e['alasan'] else ''))
-    else:note('Rincian jeda / waktu aktif belum tersedia.')
-    note('Kesimpulan: '+kg(d['input_kg'])+' gabah dipakai menghasilkan '+kg(d['output_kg'])+' PK (rendemen '+rate+').')
+    note('Transfer ke Gudang 2: '+kg(d['transferred_kg'])+'. Sisa PK tersedia: '+kg(d['available_kg'])+'.')
     return v.pdf(story)

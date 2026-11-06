@@ -80,3 +80,12 @@ def test_pdf_giling_memuat_asal_qc_hasil_transfer_dan_durasi():
     assert text.index("KA 14,2%") < text.index("Broken 2,5%") < text.index("Susut 1,0%")
     assert text.count("GB-20261010-01") >= 2
     assert text.count("GB-20261010-02") >= 2
+
+    headings = (
+        '01  Waktu proses dan kesimpulan', '02  Hasil PK dan QC penggilingan',
+        '03  Riwayat pengeringan bahan', '04  Asal bahan dan QC penerimaan',
+        '05  Bahan masuk dan pemakaian silo', '06  Transfer dan sisa PK',
+    )
+    normalized = ' '.join(text.split())
+    positions = [normalized.index(' '.join(h.split())) for h in headings]
+    assert positions == sorted(positions)
