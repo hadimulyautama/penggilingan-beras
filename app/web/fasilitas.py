@@ -7,6 +7,7 @@ from app.models import Warehouse, Dryer, JenisProsesProduksi, LiniProduksi
 from app.services.fasilitas import simpan_jenis, simpan_lini, FasilitasError, PENJALAN
 from app.web.security import butuh_super
 from app.web.tampilan import render_laci, redirect
+from app.web.pengaturan_alat_simpan import token_baru
 
 router = APIRouter()
 
@@ -35,7 +36,8 @@ async def halaman(request, akun, *, err='', form=None, mode=None, identitas=None
         jenis=jenis, lini=lini, gudang=gudang, dryer=dryer, penjalan=PENJALAN,
         dryer_nama={d.id:d.nama for d in dryer}, jenis_nama={j.id:j.nama for j in jenis}, gudang_nama={w.id:w.nama_gudang for w in gudang},
         detail=detail, pengering=pengering, target_global=target_global, tungku=tungku,
-        mode=mode, err=err, pesan=pesan, isian=form or {})
+        mode=mode, err=err, pesan=pesan, isian=form or {},
+        operasi_alat=token_baru)
 
 @router.get('/pengaturan/fasilitas')
 async def lama(request: Request, akun=Depends(butuh_super)):

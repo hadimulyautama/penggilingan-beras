@@ -93,6 +93,8 @@ app.include_router(audit_router)
 from app.web.fasilitas import router as fasilitas_router
 app.include_router(fasilitas_router)
 app.include_router(pengaturan_router)
+from app.web.pengaturan_alat_simpan import router as alat_simpan_router
+app.include_router(alat_simpan_router)
 app.include_router(perusahaan_router)
 app.include_router(mode_uji_router)
 app.include_router(keputusan_router)

@@ -18,7 +18,8 @@
 {% if pengering %}
 {% set d=pengering %}{% set f=isian if isian.get('dryer_id')==d.id|string else {} %}
 <section class="kartu"><h2>Pengaturan pengering</h2>
-<form method="post" action="/pengaturan/alat/dryer/edit" data-jaga-isian>
+<form method="post" action="/pengaturan/alat/dryer/edit" data-jaga-isian data-simpan-alat>
+<input type="hidden" name="_operasi_alat" value="{{ f.get('_operasi_alat',operasi_alat()) }}">
 <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="dryer_id" value="{{ d.id }}"><input type="hidden" name="kembali_pengaturan" value="{{ '/pengaturan/mesin/'~detail.id if detail else '/pengaturan/dryer/'~d.id }}">
 <div class="fasilitas-isian">
 <label>Nama pengering<input class="fld" name="nama" minlength="3" maxlength="50" value="{{ f.get('nama', d.nama) }}" required></label>
@@ -40,7 +41,8 @@
 {% for d in dryer if d.warehouse_id==w.id %}{% if not lini|selectattr('dryer_id','equalto',d.id)|list %}<a class="pg-pintu" href="/pengaturan/dryer/{{ d.id }}"><strong>{{ d.nama }}</strong><small>Pengeringan · belum ditautkan ke line</small></a>{% endif %}{% endfor %}
 </section>{% endfor %}
 <details class="kartu" {% if isian.get('objek')=='lini' and not isian.get('id') %}open{% endif %}><summary>Tambah mesin / line</summary><p>Untuk penggilingan atau penyosohan, tambahkan line. Untuk pengeringan, tambahkan dryer beserta line-nya.</p>{{ formulir('lini') }}</details>
-<details class="kartu" {% if isian.get('kapasitas_kg') and not isian.get('dryer_id') %}open{% endif %}><summary>Tambah dryer</summary><form method="post" action="/pengaturan/alat/dryer" data-jaga-isian><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/mesin"><div class="fasilitas-isian"><label>Nama dryer<input class="fld" name="nama" minlength="3" maxlength="50" value="{{ isian.get('nama','') if not isian.get('objek') else '' }}" required></label><label>Gudang<select class="fld" name="warehouse_id" required>{% for w in gudang if w.aktif %}<option value="{{ w.id }}" {% if isian.get('warehouse_id')==w.id|string %}selected{% endif %}>{{ w.nama_gudang }}</option>{% endfor %}</select></label><label>Kapasitas (kg)<input class="fld" name="kapasitas_kg" inputmode="decimal" value="{{ isian.get('kapasitas_kg','') }}" required></label></div><button class="btn btn--utama">Tambahkan dryer</button></form></details>
+<details class="kartu" {% if isian.get('kapasitas_kg') and not isian.get('dryer_id') %}open{% endif %}><summary>Tambah dryer</summary><form method="post" action="/pengaturan/alat/dryer" data-jaga-isian data-simpan-alat><input type="hidden" name="_operasi_alat" value="{{ isian.get('_operasi_alat',operasi_alat()) }}"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/mesin"><div class="fasilitas-isian"><label>Nama dryer<input class="fld" name="nama" minlength="3" maxlength="50" value="{{ isian.get('nama','') if not isian.get('objek') else '' }}" required></label><label>Gudang<select class="fld" name="warehouse_id" required>{% for w in gudang if w.aktif %}<option value="{{ w.id }}" {% if isian.get('warehouse_id')==w.id|string %}selected{% endif %}>{{ w.nama_gudang }}</option>{% endfor %}</select></label><label>Kapasitas (kg)<input class="fld" name="kapasitas_kg" inputmode="decimal" value="{{ isian.get('kapasitas_kg','') }}" required></label></div><button class="btn btn--utama">Tambahkan dryer</button></form></details>
 {% endif %}</section>
 <script src="/static/pengaturan-isian.js?v={{ VERSI }}"></script>
+<script src="/static/pengaturan-alat.js?v={{ VERSI }}"></script>
 {% endblock %}

@@ -19,8 +19,8 @@
           <div class="bantu">Filter komoditas: {{ s.komoditas_label }}</div>
           <details style="margin-top:8px">
             <summary class="btn btn--kecil" aria-label="Edit {{ s.nama_tampil }}">✎ Edit silo</summary>
-            <form method="post" data-jaga-isian action="/pengaturan/alat/silo/edit" class="grup" style="margin-top:8px">
-              <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
+            <form method="post" data-jaga-isian action="/pengaturan/alat/silo/edit" data-simpan-alat class="grup" style="margin-top:8px">
+              <input type="hidden" name="_operasi_alat" value="{{ operasi_alat() }}"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
               <input type="hidden" name="silo_id" value="{{ s.id }}">
               <label class="lbl" for="nama_g1_{{ s.id }}">Nama silo</label>
               <input class="fld" id="nama_g1_{{ s.id }}" name="nama" value="{{ s.nama_tampil }}" required>
@@ -47,8 +47,8 @@
     </p>
   </div>
 
-  <form method="post" data-jaga-isian action="/pengaturan/alat/silo" class="grup" style="margin-top:12px">
-    <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
+  <form method="post" data-jaga-isian action="/pengaturan/alat/silo" data-simpan-alat class="grup" style="margin-top:12px">
+    <input type="hidden" name="_operasi_alat" value="{{ operasi_alat() }}"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
     <input type="hidden" name="jenis_isi" value="gabah"><label class="lbl">Gudang<select class="fld" name="warehouse_id">{% for id,nama in gudang_pilihan.items() %}<option value="{{ id }}">{{ nama }}</option>{% endfor %}</select></label>
     <div>
       <label class="lbl" for="nama_silo">Nama silo baru</label>
@@ -75,8 +75,8 @@
           <div class="bantu">Komoditas yang boleh masuk: {{ s.komoditas_label }}</div>
           <details style="margin-top:8px">
             <summary class="btn btn--kecil" aria-label="Edit {{ s.nama_tampil }}">✎ Edit silo</summary>
-            <form method="post" data-jaga-isian action="/pengaturan/alat/silo/edit" class="grup" style="margin-top:8px">
-              <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
+            <form method="post" data-jaga-isian action="/pengaturan/alat/silo/edit" data-simpan-alat class="grup" style="margin-top:8px">
+              <input type="hidden" name="_operasi_alat" value="{{ operasi_alat() }}"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
               <input type="hidden" name="silo_id" value="{{ s.id }}">
               <label class="lbl" for="nama_g2_{{ s.id }}">Nama silo</label>
               <input class="fld" id="nama_g2_{{ s.id }}" name="nama" value="{{ s.nama_tampil }}" required>
@@ -105,8 +105,8 @@
     </p>
   </div>
 
-  <form method="post" data-jaga-isian action="/pengaturan/alat/silo" class="grup" style="margin-top:12px">
-    <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
+  <form method="post" data-jaga-isian action="/pengaturan/alat/silo" data-simpan-alat class="grup" style="margin-top:12px">
+    <input type="hidden" name="_operasi_alat" value="{{ operasi_alat() }}"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/silo">
     <input type="hidden" name="gudang" value="g2">
     <div>
       <label class="lbl" for="nama_silo_g2">Nama silo baru</label>
@@ -120,4 +120,5 @@
 
 {% include "_pengaturan_isian.html" %}
 </section><script src="/static/pengaturan-isian.js?v={{ VERSI }}"></script>
+<script src="/static/pengaturan-alat.js?v={{ VERSI }}"></script>
 {% endblock %}

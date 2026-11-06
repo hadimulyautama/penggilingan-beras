@@ -29,6 +29,8 @@ from app.web import versi as _versi
 from app.web.pengaturan_navigasi import HALAMAN, tujuan_form
 from hmu_core import User
 
+from app.web.pengaturan_alat_simpan import aman_simpan, mulai, catat_sukses, token_baru, json_diminta
+
 router = APIRouter(tags=["webapp"])
 
 
@@ -538,7 +540,7 @@ async def _halaman_alat(request, akun, *, isian_alat=None, kesalahan=""):
 
     return await render_laci(
         request, "silo_pengaturan.html" if request.url.path.endswith("/silo") or isian_alat is not None else "alat.html", kembali="/pengaturan", layar="pengaturan",
-        mesin=mesin, silo=silo, silo_g2=silo_g2, gudang_pilihan=warehouses, maks=MAKS_ALAT, isian_alat=({**{k:isian_alat.getlist(k) for k in isian_alat}, **({'komoditas':isian_alat.getlist('komoditas')} if request.url.path.endswith('/silo/edit') else {})} if isian_alat is not None else {}), isian_aksi=request.url.path if isian_alat is not None else "",
+        operasi_alat=token_baru, mesin=mesin, silo=silo, silo_g2=silo_g2, gudang_pilihan=warehouses, maks=MAKS_ALAT, isian_alat=({**{k:isian_alat.getlist(k) for k in isian_alat}, **({'komoditas':isian_alat.getlist('komoditas')} if request.url.path.endswith('/silo/edit') else {})} if isian_alat is not None else {}), isian_aksi=request.url.path if isian_alat is not None else "",
         sebab_pengeringan=sebab.get("pengeringan", []),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         pesan_err=(kesalahan or _ERR.get(request.query_params.get("err", ""))
@@ -571,11 +573,18 @@ async def _balik_alat(request, akun, url):
     from urllib.parse import parse_qs, urlsplit
     from app.web.fasilitas import tujuan, halaman
     form = await request.form()
-    if not form.get('kembali_pengaturan'):
-        return redirect(url)
-    balik = await tujuan(form)
     q = parse_qs(urlsplit(url).query)
     err = q.get('err_teks', [''])[0] or _ERR.get(q.get('err', [''])[0], '')
+    balik = await tujuan(form)
+    if json_diminta(request):
+        from fastapi.responses import JSONResponse
+        if err:
+            return JSONResponse({'status': 'ditolak', 'pesan': err}, status_code=422)
+        pesan = q.get('pesan', ['alat-diubah'])[0]
+        return JSONResponse({'status': 'tersimpan', 'pesan': _PESAN.get(pesan, ''),
+                             'url': balik + '?pesan=' + quote(pesan)})
+    if not form.get('kembali_pengaturan'):
+        return redirect(url)
     if err:
         if balik == '/pengaturan/silo':
             return await _halaman_alat(request, akun, isian_alat=form, kesalahan=err)
@@ -586,6 +595,7 @@ async def _balik_alat(request, akun, url):
 
 
 @router.post("/pengaturan/alat/dryer")
+@aman_simpan
 async def tambah_dryer(
     request: Request, nama: str = Form(...), kapasitas_kg: str = Form(...),
     warehouse_id: int | None = Form(None),
@@ -613,6 +623,9 @@ async def tambah_dryer(
     if kapasitas_kg <= 0:
         return await _balik_alat(request, akun, "/pengaturan/alat?err=kapasitas")
     async with SessionLocal() as db:
+        ulang = await mulai(db, request, akun)
+        if ulang:
+            return await _balik_alat(request, akun, ulang)
         from sqlalchemy import select
         from app.models import Warehouse
         wid = warehouse_id if warehouse_id is not None else await _g1_warehouse_id(db)
@@ -624,17 +637,20 @@ async def tambah_dryer(
             return await _balik_alat(request, akun, "/pengaturan/alat?err=penuh")
         if any(d.nama.lower() == nama.lower() for d in ada):
             return await _balik_alat(request, akun, "/pengaturan/alat?err=kembar")
-        db.add(Dryer(warehouse_id=wid, nama=nama,
+        dryer_baru = Dryer(warehouse_id=wid, nama=nama,
                      kapasitas_kg=kapasitas_kg, target_kadar_air=await target_kadar_air(db),
-                     status="aktif"))
+                     status="aktif")
+        db.add(dryer_baru)
         await db.flush()
         from app.services.fasilitas import seed_fasilitas
         await seed_fasilitas(db)
+        await catat_sukses(db, request, akun, dryer_baru.id, "/pengaturan/fasilitas?tersimpan=1&pesan=dryer-ditambah" if warehouse_id is not None else "/pengaturan/alat?pesan=dryer-ditambah")
         await db.commit()
     return await _balik_alat(request, akun, "/pengaturan/fasilitas?tersimpan=1&pesan=dryer-ditambah" if warehouse_id is not None else "/pengaturan/alat?pesan=dryer-ditambah")
 
 
 @router.post("/pengaturan/alat/dryer/edit")
+@aman_simpan
 async def edit_dryer(
     request: Request, dryer_id: int = Form(...), nama: str = Form(...),
     kapasitas_kg: str = Form(...), target_kadar_air: str = Form(...),
@@ -661,6 +677,9 @@ async def edit_dryer(
     if tungku is not None and len(' '.join(tungku.split())) > 50:
         return await _balik_alat(request, akun, "/pengaturan/alat?err_teks=" + quote("Nama tungku maksimal 50 karakter."))
     async with SessionLocal() as db:
+        ulang = await mulai(db, request, akun)
+        if ulang:
+            return await _balik_alat(request, akun, ulang)
         d = await db.get(Dryer, dryer_id)
         from sqlalchemy import select
         daftar = list((await db.execute(select(Dryer))).scalars())
@@ -672,11 +691,13 @@ async def edit_dryer(
         if tungku is not None:
             from app.services.alur_beranda import simpan_tungku
             await simpan_tungku(db, d.id, tungku, user=akun.user)
+        await catat_sukses(db, request, akun, d.id, "/pengaturan/alat?pesan=alat-diubah")
         await db.commit()
     return await _balik_alat(request, akun, "/pengaturan/alat?pesan=alat-diubah")
 
 
 @router.post("/pengaturan/alat/silo")
+@aman_simpan
 async def tambah_silo(
     request: Request, nama: str = Form(...), gudang: str = Form("g1"),
     jenis_isi: str = Form("campuran"), warehouse_id: int | None = Form(None),
@@ -709,6 +730,9 @@ async def tambah_silo(
     g2 = (gudang or "g1").strip().lower() == "g2"
     isi = "campuran"
     async with SessionLocal() as db:
+        ulang = await mulai(db, request, akun)
+        if ulang:
+            return await _balik_alat(request, akun, ulang)
         if warehouse_id is not None:
             from app.models import Warehouse
             wh=await db.get(Warehouse,warehouse_id)
@@ -728,14 +752,18 @@ async def tambah_silo(
             return await _balik_alat(request, akun, "/pengaturan/alat?err=penuh")
         if any(s.nama_silo.lower() == penuh.lower() for s in ada):
             return await _balik_alat(request, akun, "/pengaturan/alat?err=kembar")
-        db.add(Silo(warehouse_id=wid, nama_silo=penuh, kapasitas_ton=0,
+        silo_baru = Silo(warehouse_id=wid, nama_silo=penuh, kapasitas_ton=0,
                     jenis_isi=("gabah" if warehouse_id is not None else isi if g2 else "gabah"),
-                    komoditas_diizinkan=list(KOMODITAS_G1 if warehouse_id is not None else KOMODITAS_G2 if g2 else KOMODITAS_G1)))
+                    komoditas_diizinkan=list(KOMODITAS_G1 if warehouse_id is not None else KOMODITAS_G2 if g2 else KOMODITAS_G1))
+        db.add(silo_baru)
+        await db.flush()
+        await catat_sukses(db, request, akun, silo_baru.id, "/pengaturan/fasilitas?tersimpan=1&pesan=silo-ditambah" if warehouse_id is not None else "/pengaturan/alat?pesan=silo-ditambah")
         await db.commit()
     return await _balik_alat(request, akun, "/pengaturan/fasilitas?tersimpan=1&pesan=silo-ditambah" if warehouse_id is not None else "/pengaturan/alat?pesan=silo-ditambah")
 
 
 @router.post("/pengaturan/alat/silo/edit")
+@aman_simpan
 async def edit_silo(
     request: Request, silo_id: int = Form(...), nama: str = Form(...),
     komoditas: list[str] = Form([]),
@@ -755,6 +783,9 @@ async def edit_silo(
     nama_lengkap = nama
     pilihan = list(dict.fromkeys(komoditas))
     async with SessionLocal() as db:
+        ulang = await mulai(db, request, akun)
+        if ulang:
+            return await _balik_alat(request, akun, ulang)
         silo = (await db.execute(select(Silo).where(Silo.id == silo_id).with_for_update())).scalar_one_or_none()
         if silo is None or not silo.aktif:
             return await _balik_alat(request, akun, "/pengaturan/alat?err_teks=" + quote("Silo tidak ditemukan."))
@@ -772,6 +803,7 @@ async def edit_silo(
             return await _balik_alat(request, akun, "/pengaturan/alat?err_teks=" + quote("Nama silo sudah dipakai di gudang ini."))
         silo.nama_silo = nama_lengkap
         silo.komoditas_diizinkan = pilihan
+        await catat_sukses(db, request, akun, silo.id, "/pengaturan/alat?pesan=silo-diubah")
         await db.commit()
     return await _balik_alat(request, akun, "/pengaturan/alat?pesan=silo-diubah")
 
