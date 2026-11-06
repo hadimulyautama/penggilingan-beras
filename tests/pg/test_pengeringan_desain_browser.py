@@ -1,5 +1,6 @@
 """Desktop/ponsel dengan formulir, API dan PostgreSQL asli; tanpa handler tiruan."""
 import os
+import asyncio
 from pathlib import Path
 import pytest
 from tests.pg.test_detail_pengeringan_tab import dryer_tab,pengeringan,dryer_pabrik
@@ -14,8 +15,11 @@ async def browser(c,width):
   async def route(r):
    req=r.request
    if urlsplit(req.url).netloc!='uji':await r.abort();return
+   # ASGITransport mengumpulkan seluruh body; stream SSE tidak pernah selesai.
+   # Browser memakai polling native saat stream ini tidak tersedia.
+   if urlsplit(req.url).path=='/api/aliran':await r.abort();return
    headers={k:v for k,v in req.headers.items() if k.lower() not in ('host','cookie','content-length')}
-   response=await c.request(req.method,req.url,headers=headers,content=req.post_data_buffer)
+   response=await asyncio.wait_for(c.request(req.method,req.url,headers=headers,content=req.post_data_buffer),timeout=20)
    await r.fulfill(status=response.status_code,body=response.content,headers={k:v for k,v in response.headers.items() if k.lower() not in ('content-length','content-encoding','set-cookie')})
   await page.route('**/*',route)
   try:yield page

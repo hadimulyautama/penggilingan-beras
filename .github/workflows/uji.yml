@@ -30,6 +30,7 @@ jobs:
   uji:
     if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
     name: Uji ${{ matrix.profil }}
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -105,7 +106,7 @@ jobs:
               paths=[str(p) for p in files[int(profil[-1])::8]]
           Path('bukti').mkdir(exist_ok=True)
           Path('bukti/berkas-'+profil+'.txt').write_text('\n'.join(paths)+'\n')
-          raise SystemExit(subprocess.call([sys.executable,'-m','pytest',*paths,'-q','-m','not dua_aplikasi','--junitxml=bukti/satu-aplikasi.xml']))
+          raise SystemExit(subprocess.call([sys.executable,'-m','pytest',*paths,'-vv','-o','faulthandler_timeout=120','-m','not dua_aplikasi','--junitxml=bukti/satu-aplikasi.xml']))
           PYTHON
 
       - name: Simpan hasil satu aplikasi

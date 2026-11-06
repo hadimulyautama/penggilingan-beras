@@ -215,3 +215,25 @@ async def test_tombol_kartu_silo_memulai_giling_dengan_alat_yang_benar(pg,silos,
         assert await db.scalar(select(func.count()).select_from(MillingProcess))==1
         proc=await db.scalar(select(MillingProcess))
         assert proc.silo_id in silos['silo'].values()
+
+
+async def test_stream_realtime_tidak_menggantung_transport_browser_uji(pg,gudang2):
+    await seed_master()
+    async with await _klien(pg,peran='operator',gudang='Gudang 2') as c:
+        original=c.request
+        streams=[]
+        async def request(method,url,**kw):
+            if urlsplit(str(url)).path=='/api/aliran':
+                streams.append(str(url))
+                raise AssertionError('SSE tidak dapat dibuffer oleh ASGITransport.')
+            return await original(method,url,**kw)
+        c.request=request
+        async with browser(c,390) as page:
+            await page.goto('https://uji/pekerjaan')
+            result=await page.evaluate("""() => new Promise((resolve,reject) => {
+                const stream=new EventSource('/api/aliran');
+                const timer=setTimeout(() => {stream.close();reject(new Error('Stream menggantung'));},5000);
+                stream.onerror=() => {clearTimeout(timer);stream.close();resolve('selesai');};
+            })""")
+            assert result=='selesai'
+            assert not streams
