@@ -2133,6 +2133,8 @@
     function muatBanyak(f, segar) {
       var kotakMuat = $("b_" + f.name);
       if (!kotakMuat) return;
+      clearTimeout(kotakMuat._jadwalMuat);
+      delete kotakMuat._ulangiMuat;delete kotakMuat.dataset.muatOtomatis;
       var nomorMuat = kotakMuat._nomorMuat = (kotakMuat._nomorMuat || 0) + 1;
       var sumber = f.source;
       if((mulaiSosoh || tambahSosoh) && f.name==="silo") sumber += "?rincian=true";
@@ -2154,6 +2156,7 @@
       ambil(sumber).then(function (daftar) {
         if (!daftar || kotakMuat._nomorMuat !== nomorMuat || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];}) || (mulaiBahan && lembar.querySelector(".lembar__isi") !== borangBanyak)) { return; }
         if(tambahSosoh && (nomorDaftarTs!==nomorOpsiTs||lembar.querySelector(".lembar__isi")!==borangBanyak||(f.induk && nilaiMedan(f.induk)!==indukTs)))return;
+        kotakMuat._gagalMuat = 0;
         var wadah = $("b_" + f.name);
         var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
         if (!wadah || !simpanan) { return; }
@@ -2233,12 +2236,24 @@
         var lama = kotakMuat.querySelector("[data-muat-ulang]");
         if (lama) lama.remove();
         if (!kotakMuat.querySelector("input")) kotakMuat.replaceChildren();
-        var pemulihan = document.createElement("div"), pesan = document.createElement("p"), ulang = document.createElement("button");
+        var pemulihan = document.createElement("div"), pesan = document.createElement("p");
         pemulihan.dataset.muatUlang = "1";pesan.className = "bantu";pesan.setAttribute("role", "status");
-        pesan.textContent = typeof err === "string" ? err : "Pilihan silo belum dapat dimuat. Coba muat ulang daftar; isian tetap tersedia.";
-        ulang.type = "button";ulang.className = "btn";ulang.textContent = "Muat ulang pilihan silo";
-        ulang.onclick = function () { ulang.disabled = true;muatBanyak(f, true); };
-        pemulihan.append(pesan, ulang);kotakMuat.append(pemulihan);
+        pesan.textContent = (typeof err === "string" ? err + " " : "") + "Pilihan silo dipulihkan otomatis. Isian tetap tersedia.";
+        pemulihan.append(pesan);kotakMuat.append(pemulihan);
+        // Hanya GET, dengan jeda bertahap agar gangguan tidak membanjiri
+        // server. Berhenti saat borang ditutup/diganti; lanjut segera saat
+        // koneksi atau layar aktif kembali, tanpa menyentuh tombol Simpan.
+        kotakMuat._gagalMuat = (kotakMuat._gagalMuat || 0) + 1;
+        kotakMuat.dataset.muatOtomatis = "1";
+        kotakMuat._ulangiMuat = function () {
+          if (!lembar.open || !kotakMuat.isConnected || document.hidden || navigator.onLine === false ||
+              lembar.querySelector(".lembar__isi") !== borangBanyak || kotakMuat._nomorMuat !== nomorMuat ||
+              parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];})) return;
+          muatBanyak(f, true);
+        };
+        kotakMuat._jadwalMuat = setTimeout(function () {
+          if (kotakMuat._ulangiMuat) kotakMuat._ulangiMuat();
+        }, Math.min(1000 * Math.pow(2, kotakMuat._gagalMuat - 1), 15000));
       });
     }
 
@@ -2501,6 +2516,18 @@
            adalah langkah yang hanya bisa salah ditekan. */
         else if ((f.induk || f.auto_satu) && daftar.length === 1) {
           s.value = daftar[0].value;
+        }
+        if (f.auto_satu && (f.name === "lini_id" || f.name === "dryer_id")) {
+          var tunggal = daftar.length === 1 && !daftar[0].disabled;
+          var labelAlat = lembar.querySelector('label[for="f_' + f.name + '"]');
+          var infoAlat = $("alat_otomatis_" + f.name);
+          if (!infoAlat) {
+            infoAlat = document.createElement("p");infoAlat.id = "alat_otomatis_" + f.name;infoAlat.className = "bantu";
+            s.insertAdjacentElement("afterend", infoAlat);
+          }
+          s.hidden = tunggal;if (labelAlat) labelAlat.hidden = tunggal;
+          infoAlat.hidden = !tunggal;
+          if (tunggal) infoAlat.textContent = "Alat: " + daftar[0].label + " · ditetapkan otomatis";
         }
         if (s.value !== dipilih) {
           var perubahanOtomatis = new Event("change");
@@ -3518,6 +3545,16 @@
       e.preventDefault(); e.returnValue = "";
     }
   });
+
+  function pulihkanPilihanOtomatis() {
+    var l = $("lembar");
+    if (!l || !l.open || document.hidden || navigator.onLine === false) return;
+    l.querySelectorAll("[data-muat-otomatis]").forEach(function (wadah) {
+      if (wadah._ulangiMuat) wadah._ulangiMuat();
+    });
+  }
+  PINDAH.pasang(window, "online", pulihkanPilihanOtomatis);
+  PINDAH.pasang(document, "visibilitychange", pulihkanPilihanOtomatis);
 
   /* ── Tombol tujuan di dalam kartu ──
      Tanpa lembar sama sekali: kartunya dibentangkan, tujuannya ditekan,

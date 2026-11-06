@@ -149,6 +149,7 @@ async def _baca_penanda() -> dict:
 
     from app.models import ActivityLog
     from app.web.tampilan import VERSI
+    from hmu_tampilan import CAP_ASET
 
     async with SessionLocal() as db:
         n = (await db.execute(select(func.max(ActivityLog.id)))).scalar() or 0
@@ -163,7 +164,10 @@ async def _baca_penanda() -> dict:
         ))).first()
     # `versi` (syarat N-A-03): ponsel yang memegang berkas lama tahu dari
     # kanal yang sama, tanpa menunggu navigasi penuh.
-    return {"n": f"{n}.{t[0]}.{t[1]}", "versi": VERSI}
+    # Rilis kode juga perubahan untuk dokumen lama. Cap isi yang unik
+    # mencegah dua deployment bernomor sama mempertahankan berkas lama.
+    return {"n": f"{n}.{t[0]}.{t[1]}.{CAP_ASET}", "versi": CAP_ASET,
+            "versi_aplikasi": VERSI}
 
 
 from app.performa import NilaiSingkat as _NilaiSingkat
@@ -182,8 +186,9 @@ async def keadaan(user: User = Depends(pengguna_aksi)) -> dict:
 
 async def aliran_penanda(jeda: float = 2.0):
     """Kanal dorong (SSE): penanda dikirim seketika saat tersambung, lalu
-    hanya ketika bergerak. Di antaranya komentar `: hidup` tiap ~15 detik
-    supaya proxy Railway tidak menganggap sambungannya mati.
+    ketika bergerak, dan saat denyut hidup tiap ~15 detik. Denyut juga
+    mengingatkan dokumen lama tentang pembaruan yang ditahan selama formulir
+    terbuka, supaya sesudah ditutup ia tidak menunggu transaksi berikutnya.
 
     Penandanya SAMA dengan /api/keadaan — satu rumus, dua kanal. Yang
     dipantau tetap basis data (bukan peristiwa dalam proses), jadi tiket yang
@@ -205,6 +210,7 @@ async def aliran_penanda(jeda: float = 2.0):
             if hidup >= 15:
                 hidup = 0.0
                 yield ": hidup\n\n"
+                yield "data: " + json.dumps(p) + "\n\n"
         await asyncio.sleep(jeda)
 
 
@@ -586,7 +592,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "pengeringan (PGR-…). Gabah di mesin lain tidak ikut. "
                      "Lot belum terbentuk di sini — lot lahir saat mulai giling.",
              "fields": [
-                 {"name": "dryer_id", "label": "Mesin yang ada gabahnya", "type": "remote",
+                 {"name": "dryer_id", "label": "Mesin yang ada gabahnya", "type": "remote", "auto_satu": True,
                   "source": "/api/actions/dryer-menunggu",
                   "kosong": "Tidak ada mesin pengering yang sedang berisi gabah. Mesinnya ada — isinya yang belum. Catat gabah masuk, lalu tempatkan ke mesin pengering."},
                  {"name": "target_kadar_air",

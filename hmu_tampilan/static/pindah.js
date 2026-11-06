@@ -332,7 +332,7 @@
     if (!j) { return; }
     var n = String(j.n);
     tandaiSegar();
-    if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
+    if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(j.versi); }
     if (penanda !== null && n !== penanda) perluSegar = true;
     if (perluSegar && (bolehDiam() || pembacaEditor())) muatPerubahan();
     penanda = n;
@@ -497,20 +497,10 @@
     });
   }
 
-  /* ── Pil versi baru ──
-   *
-   * Server sudah menyajikan berkas versi lain, tetapi dokumen ini masih
-   * memegang yang lama — dan tanpa navigasi penuh service worker baru tak
-   * pernah aktif. Yang ditawarkan satu ketukan; TIDAK memuat ulang sendiri:
-   * operator yang sedang mengisi lembar akan kehilangan isiannya. */
-  function tawarkanVersi() {
-    if (document.querySelector(".pil-versi")) { return; }
-    var pil = document.createElement("button");
-    pil.type = "button";
-    pil.className = "pil-versi";
-    pil.textContent = "Versi baru — ketuk untuk muat ulang";
-    pil.addEventListener("click", function () { location.reload(); });
-    document.body.appendChild(pil);
+  /* Pembaruan rilis ditangani modul tersendiri, termasuk dokumen lama
+     yang baru menerima isi .bingkai dari server. Jangan mengganti isian. */
+  function tawarkanVersi(versi) {
+    document.dispatchEvent(new CustomEvent("padiflow:versi", {detail: {versi: String(versi)}}));
   }
 
   /* Service worker: kerangka dari cache, halaman dari jaringan, /luring
