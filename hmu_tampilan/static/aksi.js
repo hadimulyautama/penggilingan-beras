@@ -146,8 +146,9 @@
     if (!r.ok) {
       if (r.status === 401 && !$("lembar")?.open) { location.href = "/masuk?next=/aksi"; return null; }
       var e = await r.json().catch(function () { return {}; });
-      if (typeof e.detail !== "object" || e.detail === null) {
-        var galat = new Error(e.detail || ("Tidak bisa memuat (HTTP " + r.status + ")"));
+      if (typeof e.detail !== "object" || e.detail === null || Array.isArray(e.detail)) {
+        var alasan = Array.isArray(e.detail) ? e.detail.map(function(x){return x.msg || "Parameter pilihan tidak valid";}).join("; ") : e.detail;
+        var galat = new Error(alasan || ("Tidak bisa memuat (HTTP " + r.status + ")"));
         galat.status = r.status;throw galat;
       }
       throw (e.detail || ("Tidak bisa memuat (HTTP " + r.status + ")"));
@@ -366,6 +367,7 @@
     if (terkunci) {
       for (var i = 0; i < (a.fields || []).length; i++) {
         var f0 = a.fields[i];
+        if (a.kunci_kartu && f0.name !== a.kunci_kartu) continue;
         /* `remote_banyak` ikut: pada medan itu "kunci" berarti TERCENTANG DI
            AWAL, bukan tak bisa diubah (lihat cabang rendernya). Tanpa ia
            disebut di sini, kartu Silo A membuka borang yang tak mencentang
@@ -2242,8 +2244,9 @@
         var sudah = String(simpanan.value || "").split(",").filter(Boolean);
         /* Kartu yang membuka lembar ini sudah menyebut satu benda — ia
            dicentang di awal, sekali, dan boleh dilepas kembali. */
-        if (!segar && f.name === namaKunci && terkunci && sudah.indexOf(terkunci) < 0) {
-          sudah.push(terkunci);
+        if (f.name === namaKunci && terkunci && !wadah._kartuDiterapkan) {
+          if (sudah.indexOf(terkunci) < 0) sudah.push(terkunci);
+          wadah._kartuDiterapkan = true;
         }
         /* Pulih dari layar konfirmasi: KODE-nya, bukan tulisannya — tulisan
            pilihan boleh memuat "·" sendiri ("Silo A · 10.000 kg"), dan

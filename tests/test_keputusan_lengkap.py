@@ -347,14 +347,14 @@ def test_tombol_minta_aktif_untuk_polesan_dan_super_lainnya_terkunci():
     assert "boleh_minta=view in (POLESAN, SUPER)" in inspect.getsource(layar_stok.halaman_stok)
     tpl = (pathlib.Path(__file__).resolve().parents[1]
            / "hmu_tampilan/templates/_stok_pk_detail.html").read_text()
-    assert "{% if g1 and (boleh_minta or TAMPILAN_INDUK) and not t.berjalan %}" in tpl
+    assert "{% if g1 and (boleh_minta or TAMPILAN_INDUK) and (not t.berjalan or t.tersedia>0) %}" in tpl
     assert '{% elif not boleh_minta %}<button class="btn" disabled' in tpl
     # Yang sudah diminta menyebut KEADAANNYA, bukan menawarkan tombol kedua.
     # Urutannya penting, jadi diuji sebagai rantai: yang sudah disetujui punya
     # kalimatnya sendiri, sisanya yang sudah diminta, baru yang belum.
     assert "{% if t.diminta_siap %}" in tpl
     assert "{% elif t.diminta_oleh %}" in tpl
-    assert tpl.index("t.diminta_siap") < tpl.index("t.diminta_oleh")
+    assert tpl.index("{% if t.diminta_siap %}") < tpl.index("{% elif t.diminta_oleh %}")
     assert "buka=minta_pk_g1" in tpl
     # Dan TIDAK menawarkan pengiriman. Pagar ini dulu menuntut yang sebaliknya
     # ("buka=kirim_permintaan_pk" in tpl), benar selama satu hari — 26

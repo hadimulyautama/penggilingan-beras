@@ -118,7 +118,8 @@ async def test_layar_retur_memuat_tiket_terbuka_dan_rincian(pg,konteks):
     assert 'Rincian lama belum terhubung' in r.text
     assert 'name="tara_per_karung_kg"' not in r.text
     assert 'RTP-UJI' in r.text
-    assert 'Buka riwayat pengiriman' in r.text
+    assert 'Buat retur dari detail pengiriman yang sudah keluar' in r.text
+    assert '/barang-keluar' in r.text
 
 
 async def test_rincian_beberapa_kemasan_dan_revisi_sebelum_timbang(pg,konteks):
@@ -265,7 +266,8 @@ async def test_pilihan_retur_dari_master_meski_sku_belum_pernah_dibuat(pg,kontek
         assert pilihan['merek']
     r=await c.get('/retur')
     assert r.status_code==200
-    assert 'Buka riwayat pengiriman' in r.text
+    assert 'Buat retur dari detail pengiriman yang sudah keluar' in r.text
+    assert '/barang-keluar' in r.text
     assert 'name="jenis_barang"' not in r.text  # Jenis baru diturunkan dari item asal.
     async with pg() as db:
         assert await db.scalar(select(func.count()).select_from(ProductSku))==sebelum

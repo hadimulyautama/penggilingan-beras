@@ -94,7 +94,7 @@ async def _menu_g2(monkeypatch):
 
     monkeypatch.setattr(api, "SessionLocal", lambda: _Db())
 
-    async def tujuan_palsu(_kondisi):
+    async def tujuan_palsu(_kondisi,_user=None):
         return []
 
     # Katalog induk v476 juga merakit spesifikasi G1 yang terkunci.
@@ -106,7 +106,12 @@ async def _menu_g2(monkeypatch):
     async def mutu_palsu(db):
         return True
 
-    from app.services import setelan
+    from app.services import setelan,cakupan_fasilitas
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(cakupan_fasilitas,'pilihan_gudang',AsyncMock(return_value=[]))
+    monkeypatch.setattr(api,'_is_milling_operator',tidak)
+    monkeypatch.setattr(api,'_is_drying_operator',tidak)
+    monkeypatch.setattr(api,'_is_polishing_operator',ya)
     monkeypatch.setattr(setelan, "sebab_jeda", sebab_palsu)
     monkeypatch.setattr(setelan, "target_kadar_air", lambda db: _nilai(14.0))
     monkeypatch.setattr(setelan, "fitur_mutu", mutu_palsu)
@@ -214,7 +219,7 @@ def test_masukkan_pk_dan_jeda_dijaga_di_server_bukan_di_menu():
     assert "can_see_financials(user)" in kode, "entry Admin harus dijaga peran, bukan cuma disembunyikan"
     for fn in (api.act_hentikan_proses, api.act_lanjutkan_proses):
         k = kode_saja(fn)
-        assert "_is_g2_operator if jenis == 'penyosohan' else _is_g1_operator" in k, fn.__name__
+        assert "_is_proses_operator(user, jenis, kode)" in k, fn.__name__
     assert "_is_g2_operator" in kode_saja(api.act_pindah_tumpukan_silo)
 
 
@@ -273,8 +278,8 @@ def test_layar_operator_gudang2_antrean_adalah_stok_pk():
     assert "'Ditambah saat proses'" in sosoh
     # `untuk()` mengarahkan operator G2 (yang bukan meja) ke layar ini.
     untuk = kode_saja(berjalan.untuk)
-    assert "untuk_operator_gudang2(db)" in untuk
-    assert untuk.index("can_see_financials(user)") < untuk.index("untuk_operator_gudang2(db)")
+    assert "untuk_operator_gudang2(db, user=user)" in untuk
+    assert untuk.index("can_see_financials(user)") < untuk.index("untuk_operator_gudang2(db, user=user)")
 
 
 def test_stok_karung_operator_g2_hanya_gudangnya_sendiri():

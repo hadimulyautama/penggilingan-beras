@@ -1,3 +1,4 @@
+from tests.pg.fasilitas import lini_baru as _lini_uji
 """Penutupan G2: konteks baca saja, pemeriksaan server, saldo dan siklus nyata."""
 import asyncio
 from decimal import Decimal
@@ -119,7 +120,7 @@ async def test_anonim_csrf_dan_tanpa_hasil(pg,proses):
  async with await _klien(pg,peran='admin') as c:
   before=await fakta(pg);assert (await preview(c,proses['kode'])).status_code==409
   assert (await c.post('/api/actions/akhiri-penyosohan',json={'kode_proses':proses['kode'],'dasar':'x'})).status_code==403
-  assert (await baca(c,'tidak-ada')).status_code==409;assert await fakta(pg)==before
+  assert (await baca(c,'tidak-ada')).status_code==403;assert await fakta(pg)==before
  async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
   assert (await baca(c,proses['kode'])).status_code==401
 
@@ -160,7 +161,7 @@ async def test_sumber_karung_belum_pasti_tetap_dinamis_dan_bukan_nol(pg,proses):
   it=(await g2.masukkan_pk_luar(db,user=u,kode=b.kode_batch)).intake
   await g2.pindah_tumpukan_ke_silo(db,user=u,intake_id=proses['intake_tumpukan'],nama_silo='Timur',berat=100)
   await g2.pindah_tumpukan_ke_silo(db,user=u,intake_id=it.id,nama_silo='Timur',jumlah_karung=50)
-  pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['Timur'])).proc;kode=pr.kode_proses
+  pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['Timur'], lini_id=await _lini_uji(db,u,'penyosohan'))).proc;kode=pr.kode_proses
  async with await _klien(pg,peran='admin') as c:
   before=await fakta(pg);d=(await baca(c,kode)).json();assert d['sumber'][0]['awal'] is None;assert d['sumber'][0]['terpakai'] is None;assert d['rendemen'] is None;assert not d['bobot_final'];assert await fakta(pg)==before
  async with pg() as db:

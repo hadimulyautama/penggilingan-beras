@@ -140,7 +140,7 @@ async def baca(db,scope,permintaan):
 
 async def siapkan_detail(request,name,ctx):
     from app.database import SessionLocal
-    d=ctx.get('d') if name in ('detail_pengeringan.html','detail_pendinginan.html',
+    d=ctx.get('d') if name in ('detail_pengeringan.html','detail_pendinginan.html','detail_pendinginan_aktif.html','riwayat_pengeringan_detail.html',
         'detail_giling.html','detail_sosoh.html','proses_aktif_detail.html') else None
     if d:
         jenis,kode=d['jenis'],d['kode'];kartu=ctx.get('proses')
@@ -152,7 +152,7 @@ async def siapkan_detail(request,name,ctx):
             lokasi=('Gudang 2' if jenis=='sosoh' else 'Gudang 1')+(' · '+', '.join(silos) if silos else '')
         angka=next(iter(d.get('statistik',[])),None)
         if angka:angka=('Jumlah bahan',angka[1])
-    elif name=='riwayat_detail.html' and ctx.get('jenis') in TAHAP:
+    elif name in ('riwayat_detail.html','riwayat_giling_detail.html','riwayat_sosoh_detail.html','riwayat_pengeringan_detail.html') and ctx.get('jenis') in TAHAP:
         jenis=ctx['jenis'];kartu=ctx['k']
         kode=getattr(kartu,'kode_lot',None) or getattr(kartu,'kode',None)
         lokasi=None;angka=None
@@ -203,7 +203,7 @@ def tampilkan_detail(content,ctx,env):
     s=BeautifulSoup(content,'html.parser')
     if inti:
         root=s.select_one('.pelanggan-detail')
-        hero=root.select_one('.riwayat-detail__hero') if root else None
+        hero=root.select_one('.riwayat-detail__hero, .rhs-header') if root else None
         if hero:
             baru=BeautifulSoup(env.get_template('portal/_inti_proses.html').render(r=inti),'html.parser').header
             hero.replace_with(baru)

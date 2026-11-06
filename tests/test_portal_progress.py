@@ -29,7 +29,7 @@ def test_hasil_giling_tidak_diubah_menjadi_persen_selesai(rend):
 
 @pytest.mark.parametrize('width',[390,1440])
 @pytest.mark.parametrize('jenis',['giling','sosoh'])
-def test_bar_terlihat_di_ponsel_dan_desktop(width,jenis):
+def test_bar_terlihat_di_ponsel_dan_desktop(width,jenis,tmp_path):
  from playwright.sync_api import sync_playwright
  root=Path(__file__).resolve().parents[1]
  neraca=neraca_sosoh(10000,{'medium':6500,'broken':1200,'menir':700,'bekatul':1500})
@@ -45,6 +45,6 @@ def test_bar_terlihat_di_ponsel_dan_desktop(width,jenis):
    assert 'beras 65,0%' in bar.get_attribute('aria-label')
    parts=page.locator('.neraca>span').evaluate_all('(els)=>els.map(e=>e.getBoundingClientRect().width)')
    assert parts[0]>parts[1]>parts[2]>0
-  out=Path('/private/tmp/portal-progress-visual');out.mkdir(exist_ok=True)
+  out=tmp_path/'portal-progress-visual';out.mkdir(exist_ok=True)
   page.screenshot(path=str(out/f'{jenis}-{width}.png'),full_page=True)
   browser.close()

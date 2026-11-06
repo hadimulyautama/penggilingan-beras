@@ -1,3 +1,4 @@
+from tests.pg.fasilitas import lini_baru as _lini_uji
 """Selesai proses bukan pernyataan bahwa seluruh silo sudah kosong."""
 import pytest
 from sqlalchemy import select
@@ -47,7 +48,7 @@ async def test_sisa_dipakai_proses_baru_tanpa_menggandakan_berat_dan_sinkronisas
     async with pg() as db:
         u=await db.get(User,dunia['user']);kode=dunia['kode_proses']
         await m.tutup_silo_giling(db,user=u,kode_proses=kode,nama_silo='A',sisa_kg=500)
-        kedua=await m.start_milling(db,user=u,nama_silo='A')
+        kedua=await m.start_milling(db,user=u,nama_silo='A', lini_id=await _lini_uji(db,u,'penggilingan'))
         assert kedua.berat_masuk==500
         await m.resinkron_bahan_berjalan(db)
         pertama=await m.get_process_by_kode(db,kode)

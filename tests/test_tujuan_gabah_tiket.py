@@ -24,5 +24,7 @@ async def test_tujuan_mengikuti_tiket(monkeypatch, jenis, harapan):
     monkeypatch.setattr(timbang_link, 'ambil_tiket', AsyncMock(return_value={'jenis_kode': jenis}))
     monkeypatch.setattr(api, '_pilihan_tujuan_gabah', AsyncMock(return_value=[
         ['', 'Pilih'], ['dryer:1', 'Dryer 1'], ['silo:2', 'Silo 2'], ['tumpuk', 'Lantai']]))
-    hasil = await api.tujuan_gabah('1', SimpleNamespace(id=1))
+    from app.services import cakupan_fasilitas
+    monkeypatch.setattr(cakupan_fasilitas,'pilih_gudang_penerima',AsyncMock(return_value=SimpleNamespace(id=1)))
+    hasil = await api.tujuan_gabah('1', user=SimpleNamespace(id=1))
     assert {o['value'] for o in hasil} == harapan

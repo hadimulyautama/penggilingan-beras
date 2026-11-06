@@ -57,6 +57,9 @@ async def test_operator_dipisah_menurut_gudangnya(monkeypatch):
     monkeypatch.setattr(api, "_is_g2_operator", g2)
     monkeypatch.setattr(api, "_is_g1_operator", g1)
 
+    from unittest.mock import AsyncMock
+    for name in ("_is_milling_operator","_is_drying_operator","_is_polishing_operator"):
+        monkeypatch.setattr(api,name,AsyncMock(return_value=False))
     assert await view_untuk(_Orang("operator", 1)) == SELEPAN
     assert await view_untuk(_Orang("operator", 2)) == POLESAN
     # Operator tanpa gudang bukan view kelima — ia kesalahan pendaftaran.
@@ -279,7 +282,7 @@ def test_saringan_stok_ikut_ke_seluruh_blok_halamannya():
     from app.web import layar_stok
 
     kode = inspect.getsource(layar_stok.halaman_stok)
-    assert 'gudang in ("", "g1")' in kode and 'gudang in ("", "g2")' in kode
+    assert 'konteks_baca_gudang' in kode and 'user=baca_user' in kode
 
 
 def test_layar_stok_tak_menyebut_gudang_1_di_menu():
@@ -337,7 +340,7 @@ def test_tempat_hanya_tumpukan_dan_disaring_kosong():
     # Yang dilarang: membangun baris silo sama sekali — bukan sekadar
     # menyebut katanya (docstring-nya sendiri menjelaskan KENAPA tak ada).
     assert "hitung_stok_silo" not in sumber and 'kode=f"Silo' not in sumber
-    assert "if tump <= 0" in sumber and "return []" in sumber
+    assert "if sisa <= 0.5:" in sumber and "continue" in sumber
 
 
 # ─────────────────── Pengaturan: yang hanya milik pemilik ───────────────────
@@ -361,7 +364,7 @@ def test_orang_dan_alat_milik_view_super():
     assert "akun.is_admin" not in rute
 
     teks = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
-    assert "{% if blok_kelola or TAMPILAN_INDUK %}" in teks
+    assert "blok_kelola" in teks and "pintu(" in teks
     assert "VIEW == V_SUPER" not in teks, "templat bersama menebak peran lagi"
 
 

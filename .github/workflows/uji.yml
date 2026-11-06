@@ -30,11 +30,12 @@ jobs:
   uji:
     if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
     name: Uji ${{ matrix.profil }}
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        profil: [satuan, postgresql-0, postgresql-1]
+        profil: [satuan, postgresql-0, postgresql-1, postgresql-2, postgresql-3, postgresql-4, postgresql-5, postgresql-6, postgresql-7]
 
     services:
       postgres:
@@ -69,6 +70,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Pasang Chromium untuk pengujian antarmuka
+        run: python -m playwright install --with-deps chromium
+
       - name: Migrasi dari database KOSONG
         run: alembic upgrade head
 
@@ -88,6 +92,7 @@ jobs:
       - name: Uji satu aplikasi tanpa mengurangi cakupan
         env:
           PROFIL_CI: ${{ matrix.profil }}
+          UJI_BROWSER_PILIHAN_SILO: "1"
         run: |
           python - <<'PYTHON'
           import os,subprocess,sys
@@ -96,12 +101,12 @@ jobs:
           if profil=='satuan':
               paths=['tests','--ignore=tests/pg']
           else:
-              # Dua daftar berkas saling lepas; gabungannya seluruh tests/pg.
+              # Delapan daftar berkas saling lepas; gabungannya seluruh tests/pg.
               files=sorted(set(Path('tests/pg').rglob('test_*.py')) | set(Path('tests/pg').rglob('*_test.py')))
-              paths=[str(p) for p in files[int(profil[-1])::2]]
+              paths=[str(p) for p in files[int(profil[-1])::8]]
           Path('bukti').mkdir(exist_ok=True)
           Path('bukti/berkas-'+profil+'.txt').write_text('\n'.join(paths)+'\n')
-          raise SystemExit(subprocess.call([sys.executable,'-m','pytest',*paths,'-q','-m','not dua_aplikasi','--junitxml=bukti/satu-aplikasi.xml']))
+          raise SystemExit(subprocess.call([sys.executable,'-m','pytest',*paths,'-vv','-o','faulthandler_timeout=120','-m','not dua_aplikasi','--junitxml=bukti/satu-aplikasi.xml']))
           PYTHON
 
       - name: Simpan hasil satu aplikasi

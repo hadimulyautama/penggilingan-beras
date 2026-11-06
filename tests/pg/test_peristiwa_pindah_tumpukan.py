@@ -8,6 +8,7 @@ sesudahnya, atau sedang dipoles, menolak pembatalan. Tumpukan sumbernya
 dikunci saat dibaca supaya dua operator tak memindahkan sisa yang sama.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 import asyncio
 from datetime import date
@@ -131,6 +132,7 @@ async def test_pk10_batal_ditolak_bila_silonya_dipoles_sesudahnya(pg, g2):
     await _pindah(pg, g2["op"], g2["intake"], "A", 5_000)
     async with pg() as db:
         u = await db.get(User, g2["op"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         await mulai_penyosohan(db, user=u, nama_silos=["A"])
     async with pg() as db:
         log = (await db.execute(select(ActivityLog).where(ActivityLog.table_name == "pk_tumpukan_to_silo"))).scalars().one()
@@ -158,6 +160,7 @@ async def test_pk10_batal_ditolak_saat_dituang_ke_proses_berjalan(pg, g2):
         r2 = await masukkan_pk_luar(db, user=u, kode="PKB-UJI-02", tujuan="ditumpuk")
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=r2.intake.id,
                                       nama_silo="A", berat=2_000)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         await mulai_penyosohan(db, user=u, nama_silos=["A"])
     h = await _pindah(pg, g2["op"], g2["intake"], "A", 1_000)
     assert h.startswith("OK"), h

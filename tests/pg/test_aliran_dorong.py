@@ -44,7 +44,7 @@ class _Pendengar:
 async def test_sesi_b_mengubah_sesi_a_menerima_dorongan(pg, pemakai):
     from app.services.activity_log import log_activity
     from app.web import api
-    from app.web.tampilan import VERSI
+    from hmu_tampilan import CAP_ASET as VERSI
 
     a = _Pendengar(api.aliran_penanda(jeda=0.2))
     pertama = await a.ambil(3)

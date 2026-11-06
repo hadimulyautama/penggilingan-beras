@@ -58,7 +58,7 @@ async def test_dua_perubahan_dalam_satu_detik_dua_penanda(pg, pemakai, pemasok):
 
 
 async def test_penanda_membawa_versi(pg, pemakai):
-    from app.web.tampilan import VERSI
+    from hmu_tampilan import CAP_ASET as VERSI
 
     j = await _penanda(pemakai)
     assert j["versi"] == VERSI and "n" in j

@@ -27,6 +27,11 @@ async def test_qc_ditutup_hilang_dari_picker_dengan_alasan_dan_jejak(pg,pemakai,
     monkeypatch.setattr(api,'_wajib_mutu',AsyncMock())
     kode='GB-UX7-QC'
     await _buat_batch(pg,pemakai,pemasok,'basah',kode)
+    from app.services.seed import seed_master
+    from tests.pg.fasilitas import di_gudang
+    await seed_master()
+    async with pg() as db:
+        pemakai = await di_gudang(db,pemakai,'g1')
     async with pg() as db:
         u=await db.get(User,pemakai.id)
         await catat_qc_gabah(db,user=u,kode_batch=kode,**_isi(1,lamur=False,sak=0))

@@ -194,7 +194,7 @@ async def test_operator_melihat_rendemen_penyosohan_yang_sudah_selesai(pg, g2):
 
     async with pg() as db:
         silo = (await db.execute(
-            __import__("sqlalchemy").select(Silo))).scalars().first()
+            __import__("sqlalchemy").select(Silo).where(Silo.warehouse_id==g2["gd"]))).scalars().first()
         p = PolishingProcess(kode_proses="POL-RND-01", status="selesai",
                              waktu_mulai=now_local(), waktu_selesai=now_local(),
                              created_by=g2["op"])
@@ -214,8 +214,8 @@ async def test_operator_melihat_rendemen_penyosohan_yang_sudah_selesai(pg, g2):
     assert kartu[0].rendemen == pytest.approx(88.4)
     # Proses selesai sekarang berada di Riwayat Sosoh. Periksa bahwa
     # operator G2 benar-benar dapat membuka hasilnya melalui pintu sekarang.
-    from tests.pg.test_layar_gudang_http import _klien
-    c = await _klien(pg, role="operator", gudang_nama="Gudang 2 - Penyosohan")
+    from tests.pg.test_riwayat_sosoh import _klien
+    c = await _klien(pg, peran="operator", gudang="Gudang 2")
     async with c:
         r = await c.get(f"/riwayat-sosoh/{p.id}")
     assert r.status_code == 200

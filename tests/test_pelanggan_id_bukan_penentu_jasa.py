@@ -32,6 +32,11 @@ AKAR = pathlib.Path(__file__).resolve().parents[1] / "app"
 #: `pelanggan_id` secara langsung — masing-masing dengan alasannya sendiri,
 #: BUKAN sebagai penentu "ini jasa atau bukan":
 _KECUALI = {
+    # Saldo rekening karung dan metadata kontak; bukan penentu jasa tiket.
+    ("penggilingan/inventory/packaging.py","hitung_stok_kemasan",
+     "rekening=set(pelanggan_id) if isinstance(pelanggan_id,list) else {pelanggan_id}"),
+    ("penggilingan/inventory/packaging.py","stok_kemasan_rinci",
+     '"pemilik_id": pelanggan_id if not isinstance(pelanggan_id,list) else None,'),
     # Saringan pemilik yang sudah ditentukan sebagai jasa oleh argumen terpisah.
     ("services/koreksi_bahan_berjalan.py", "sumber_bebas_g1", 'if pelanggan_id is not None:'),
     # Bounds-checking two account/contact identifiers, not classifying a

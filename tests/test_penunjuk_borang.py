@@ -105,7 +105,7 @@ def test_tiap_daftar_jarak_jauh_punya_rutenya():
     """Sumber yang salah ketik tak melahirkan galat: daftarnya cuma kosong, dan
     yang terbaca orang adalah "tidak ada yang bisa dipilih"."""
     s = (AKAR / "app/web/api.py").read_text()
-    rute = set(re.findall(r'@router\.get\("(/actions/[a-z0-9\-/]+)"\)', s))
+    rute = set(re.findall(r"@router\.get\(['\"](/actions/[a-z0-9\-/]+)['\"]\)", s))
     from urllib.parse import urlsplit
     hilang = [src for src in set(re.findall(r'"source": "/api(/actions/[^"]+)"', s))
               if urlsplit(src).path not in rute]

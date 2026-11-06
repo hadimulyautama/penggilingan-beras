@@ -10,6 +10,8 @@ membuka jalan mid-proses, menyalin penjaga yang sama (satu pemilik, silo tak
 boleh dipakai proses lain) dari fungsi "mulai"-nya.
 """
 from __future__ import annotations
+from tests.pg.fasilitas import lini_baru as _lini_uji
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import date
@@ -109,6 +111,7 @@ async def test_picker_silo_g1_tambah_tak_menyembunyikan_bobot_belum_diketahui(pg
 
     async with pg() as db:
         u = await db.get(User, g1["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo="A")
 
     async with pg() as db:
@@ -127,6 +130,7 @@ async def test_tambah_silo_giling_menambah_bahan(pg, g1):
 
     async with pg() as db:
         u = await db.get(User, g1["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo="A")
     assert r.berat_masuk == 6_000
 
@@ -167,6 +171,7 @@ async def test_tambah_silo_giling_pemilik_beda_ditolak(pg, g1):
 
     async with pg() as db:
         u = await db.get(User, g1["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo="A")
 
     async with pg() as db:
@@ -184,10 +189,12 @@ async def test_tambah_silo_giling_yang_sedang_dipakai_proses_lain_ditolak(pg, g1
 
     async with pg() as db:
         u = await db.get(User, g1["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r1 = await start_milling(db, user=u, nama_silo="A")
     async with pg() as db:
         u = await db.get(User, g1["user"])
-        r2 = await start_milling(db, user=u, nama_silo="B")
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r2 = await start_milling(db, user=u, nama_silo="B", lini_id=await _lini_uji(db,u,'penggilingan'))
 
     async with pg() as db:
         u = await db.get(User, g1["user"])
@@ -205,6 +212,7 @@ async def test_tambah_silo_giling_proses_selesai_ditolak(pg, g1):
     await _isi_silo_g1(pg, g1, huruf="B", kode="GB-TSG-08", kg=3_000)
     async with pg() as db:
         u = await db.get(User, g1["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo="A")
     async with pg() as db:
         u = await db.get(User, g1["user"])
@@ -285,6 +293,7 @@ async def test_tambah_silo_penyosohan_menambah_bahan(pg, g2):
 
     async with pg() as db:
         u = await db.get(User, g2["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
     assert r.berat_awal_total == 5_000
 
@@ -332,6 +341,7 @@ async def test_tambah_silo_penyosohan_pemilik_beda_ditolak(pg, g2):
 
     async with pg() as db:
         u = await db.get(User, g2["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
 
     async with pg() as db:
@@ -352,6 +362,7 @@ async def test_tambah_silo_penyosohan_proses_selesai_ditolak(pg, g2):
     await _isi_silo_g2(pg, g2, huruf="B", kode="PKB-TSS-06", kg=2_000)
     async with pg() as db:
         u = await db.get(User, g2["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
     async with pg() as db:
         u = await db.get(User, g2["user"])
@@ -385,6 +396,7 @@ async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2, isi_d
     await _isi_silo_g2(pg, g2, huruf="B", kode="PK-ULANG-B", kg=3000)
     async with pg() as db:
         u = await db.get(User, g2["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
         kode = r.proc.kode_proses
         await catat_output(db, user=u, kode=kode, jenis="medium", berat_kg=2000)
@@ -455,6 +467,7 @@ async def test_opsi_gunakan_kembali_tetap_ada_saat_sosoh_dijeda(pg, g2):
     await _isi_silo_g2(pg, g2, huruf="A", kode="PK-JEDA-ULANG", kg=1000)
     async with pg() as db:
         u = await db.get(User, g2["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         db.add(JedaProses(jenis="penyosohan", polishing_process_id=r.proc.id,
                          sebab="Istirahat", mulai=now_local(), dicatat_oleh=u.id))

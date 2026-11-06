@@ -119,7 +119,7 @@ def test_detail_koreksi_pemeriksaan_konfirmasi_dan_batal(width,kind):
 
 @pytest.mark.parametrize('width',[390,1440])
 @pytest.mark.parametrize('mode',['ubah','batal'])
-def test_pratinjau_pk_berantai_menampilkan_bobot_transfer_silo_dan_bahan_sosoh(width,mode):
+def test_pratinjau_pk_berantai_menampilkan_bobot_transfer_silo_dan_bahan_sosoh(width,mode,tmp_path):
  data=detail('pk');data['state'].update(quantity=12500,kg=12500,status='aktif',version=0)
  data['code']='AM-PK-10';data['description']['warehouses']=['Gudang 1']
  plan=dict(before=data['state'],after={**data['state'],'quantity':10000 if mode=='ubah' else 0},
@@ -150,7 +150,7 @@ def test_pratinjau_pk_berantai_menampilkan_bobot_transfer_silo_dan_bahan_sosoh(w
   button=page.get_by_role('button',name='Simpan koreksi' if mode=='ubah' else 'Konfirmasi pembatalan',exact=True)
   expect(button).to_be_disabled();assert not any(c[0]=='simpan' for c in calls)
   no_overflow(page)
-  out=Path('/private/tmp/pk-koreksi-rantai-visual');out.mkdir(exist_ok=True)
+  out=tmp_path/'pk-koreksi-rantai-visual';out.mkdir(exist_ok=True)
   page.screenshot(path=str(out/f'{mode}-{width}.png'),full_page=True)
   page.get_by_role('checkbox',name='Saya sudah memeriksa pemilik, bobot transfer, bahan proses lanjutan, dan seluruh peringatan.').check()
   button.click();expect(page.locator('[data-ko-message]')).to_contain_text('bahan proses terkait sudah disesuaikan')

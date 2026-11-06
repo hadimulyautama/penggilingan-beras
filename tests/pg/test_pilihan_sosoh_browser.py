@@ -1,5 +1,7 @@
 """Reproduksi HP operator G2: alat dan silo pulih otomatis tanpa membuang formulir."""
 import asyncio
+import json
+from tests.pg.test_giling_beberapa_silo import silos
 import os
 from urllib.parse import urlsplit
 import httpx
@@ -12,6 +14,37 @@ from app.services.seed import seed_master
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.skipif(
     os.getenv('UJI_BROWSER_PILIHAN_SILO') != '1', reason='Browser lokal opsional')]
+
+
+@pytest.mark.parametrize('peran', ['operator','admin','superadmin'])
+@pytest.mark.parametrize('width', [390,1440])
+async def test_tombol_kartu_silo_memulai_sosoh_dengan_alat_yang_benar(pg,gudang2,peran,width):
+    from playwright.async_api import expect
+    from sqlalchemy import select,func
+    from app.models import PolishingProcess,PolishingSiloUsage
+    await seed_master()
+    async with await _klien(pg,peran=peran,gudang='Gudang 2') as c:
+        async with browser(c,width) as page:
+            await page.route('**/api/aliran',lambda r:r.abort())
+            errors=[]
+            page.on('response',lambda r:errors.append(r.status) if '/api/actions/' in r.url and r.status>=400 else None)
+            await page.goto('https://uji/pekerjaan' if peran=='operator' else 'https://uji/')
+            link=page.locator('a[href*="buka=mulai_penyosohan"][href*="nilai=B"]').first
+            await link.wait_for(state='attached')
+            if not await link.is_visible():
+                await link.locator('xpath=ancestor::details[1]/summary').click()
+            await link.click()
+            await expect(page.locator('#alat_otomatis_lini_id')).to_contain_text('Penyosohan 1')
+            assert (await page.locator('#f_lini_id').input_value()).isdigit()
+            await expect(page.locator('#b_silo input[value=B]')).to_be_checked()
+            await expect(page.locator('#mg-bobot')).to_contain_text('9.800')
+            await page.locator('#simpan').click()
+            await expect(page.locator('#lembar')).not_to_be_visible()
+            assert not errors,errors
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(PolishingProcess))==1
+        usage=await db.scalar(select(PolishingSiloUsage))
+        assert float(usage.berat_awal_kg)==9800
 
 
 @pytest.mark.parametrize('width', [390, 1440])
@@ -147,3 +180,84 @@ async def test_barang_berulang_pulih_dengan_jumlah_yang_sudah_diketik(pg, gudang
             await expect(page.locator('#galat_pilihan_barang')).to_have_count(0)
             await expect(amount).to_have_value('123')
             await expect(page.locator('[data-ulang-untuk=barang] select').first).to_contain_text('PK pelanggan uji')
+
+
+@pytest.mark.parametrize('peran', ['operator','admin','superadmin'])
+@pytest.mark.parametrize('width', [390,1440])
+async def test_tombol_kartu_silo_memulai_giling_dengan_alat_yang_benar(pg,silos,peran,width):
+    from playwright.async_api import expect
+    from urllib.parse import parse_qs
+    from sqlalchemy import select,func
+    from app.models import MillingProcess
+    await seed_master()
+    async with await _klien(pg,peran=peran,gudang='Gudang 1') as c:
+        async with browser(c,width) as page:
+            await page.route('**/api/aliran',lambda r:r.abort())
+            errors=[]
+            page.on('response',lambda r:errors.append(r.status) if '/api/actions/' in r.url and r.status>=400 else None)
+            await page.goto('https://uji/pekerjaan' if peran=='operator' else 'https://uji/')
+            if peran!='operator':
+                await page.locator('a[href="/gudang/g1"]').first.click()
+            link=page.locator('a[href*="buka=mulai_giling"][href*="nilai="]').first
+            await link.wait_for(state='attached')
+            nama=parse_qs(urlsplit(await link.get_attribute('href')).query)['nilai'][0]
+            if not await link.is_visible():
+                await link.locator('xpath=ancestor::details[1]/summary').click()
+            await link.click()
+            await expect(page.locator('#alat_otomatis_lini_id')).to_contain_text('Penggilingan 1')
+            assert (await page.locator('#f_lini_id').input_value()).isdigit()
+            await expect(page.locator('#b_silo input[value='+json.dumps(nama)+']')).to_be_checked()
+            await expect(page.get_by_role('button',name='Muat ulang pilihan silo',exact=True)).to_have_count(0)
+            await page.locator('#simpan').click()
+            await expect(page.locator('#lembar')).not_to_be_visible()
+            assert not errors,errors
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(MillingProcess))==1
+        proc=await db.scalar(select(MillingProcess))
+        assert proc.silo_id in silos['silo'].values()
+
+
+async def test_stream_realtime_tidak_menggantung_transport_browser_uji(pg,gudang2):
+    await seed_master()
+    async with await _klien(pg,peran='operator',gudang='Gudang 2') as c:
+        original=c.request
+        streams=[]
+        async def request(method,url,**kw):
+            if urlsplit(str(url)).path=='/api/aliran':
+                streams.append(str(url))
+                raise AssertionError('SSE tidak dapat dibuffer oleh ASGITransport.')
+            return await original(method,url,**kw)
+        c.request=request
+        async with browser(c,390) as page:
+            await page.goto('https://uji/pekerjaan')
+            result=await page.evaluate("""() => new Promise((resolve,reject) => {
+                const stream=new EventSource('/api/aliran');
+                const timer=setTimeout(() => {stream.close();reject(new Error('Stream menggantung'));},5000);
+                stream.onerror=() => {clearTimeout(timer);stream.close();resolve('selesai');};
+            })""")
+            assert result=='selesai'
+            assert not streams
+
+
+async def test_browser_menuntaskan_permintaan_sebelum_database_uji_dibersihkan(pg,gudang2):
+    from sqlalchemy import select
+    from app.models import User
+    await seed_master()
+    started=asyncio.Event();finished=asyncio.Event()
+    async with await _klien(pg,peran='operator',gudang='Gudang 2') as c:
+        original=c.request
+        async def request(method,url,**kw):
+            if urlsplit(str(url)).path=='/api/tes-lambat':
+                async with pg() as db:
+                    await db.scalar(select(User.id).limit(1))
+                    started.set()
+                    await asyncio.sleep(.5)
+                finished.set()
+                return httpx.Response(200,json={'selesai':True})
+            return await original(method,url,**kw)
+        c.request=request
+        async with browser(c,390) as page:
+            await page.goto('https://uji/pekerjaan')
+            await page.evaluate("() => { fetch('/api/tes-lambat').catch(() => {}); }")
+            await asyncio.wait_for(started.wait(),timeout=5)
+        assert finished.is_set(),'Permintaan masih memegang transaksi saat browser uji ditutup.'

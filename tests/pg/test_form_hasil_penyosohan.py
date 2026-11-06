@@ -41,7 +41,9 @@ async def hasil(pg, gudang2):
         await db.commit()
         intake=await masukkan_pk_luar(db,user=u,kode='PKB-UJI-JASA',tujuan='ditumpuk')
         await pindah_tumpukan_ke_silo(db,user=u,intake_id=intake.intake.id,nama_silo='C',berat=1000)
-        other=(await p.mulai_penyosohan(db,user=u,nama_silos=['C'])).proc
+        from tests.pg.fasilitas import lini_baru
+        line=await lini_baru(db,u,'penyosohan')
+        other=(await p.mulai_penyosohan(db,user=u,nama_silos=['C'],lini_id=line)).proc
         await p.catat_output(db,user=u,kode=other.kode_proses,jenis='medium',berat_kumulatif=700)
 
     return u, pr
@@ -90,7 +92,7 @@ async def test_kontrak_konteks_seluruh_log_dan_tanpa_mutasi(pg, hasil):
         assert data['tercatat']==700 and 'Pelanggan Uji Hasil' in data['pemilik']
         assert data['kepemilikan']=='Titipan jasa' and data['silos']==[{'nama':'Silo C','dipakai':True}]
         for kode,jenis in [('', 'medium'),('tidak-ada','medium'),(pr.kode_proses,'palsu')]:
-            assert (await c.get('/api/actions/ringkasan-hasil-penyosohan',params={'kode_proses':kode,'jenis':jenis})).status_code==400
+            assert (await c.get('/api/actions/ringkasan-hasil-penyosohan',params={'kode_proses':kode,'jenis':jenis})).status_code==(403 if kode in ('','tidak-ada') else 400)
         if os.environ.get('UJI_FORM_SOSOH_SEED'):
             # Hanya fixture lokal; cookie tidak masuk artefak laporan.
             Path('/tmp/form-sosoh-session.json').write_text(json.dumps({'kode':pr.kode_proses,'lain':other,'cookies':{x.name:x.value for x in c.cookies.jar}}))

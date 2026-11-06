@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 
 from hmu_core import (ArusProses, JenisPemilik, JenisProses, PemilikProses,
@@ -24,7 +25,7 @@ async def test_proses_lintas_aplikasi_menyimpan_identitas_bahan_dan_hasil(pg):
         row = proses.ke_entitas(tabel_sumber="milling_process", id_sumber=123)
         db.add(row)
         await db.commit()
-        saved = (await db.execute(select(ProsesTerpadu).where(
+        saved = (await db.execute(select(ProsesTerpadu).options(selectinload(ProsesTerpadu.arus)).where(
             ProsesTerpadu.kode == "LOT-TEST-01"
         ))).scalar_one()
         assert saved.aplikasi == "produksi"
@@ -71,7 +72,7 @@ async def test_penutupan_mempertahankan_bahan_dan_mengganti_hasil(pg):
                               "LOT-TEST-CLOSE"),),
         )
         await db.commit()
-        saved = (await db.execute(select(ProsesTerpadu).where(
+        saved = (await db.execute(select(ProsesTerpadu).options(selectinload(ProsesTerpadu.arus)).where(
             ProsesTerpadu.kode == "LOT-TEST-CLOSE"
         ))).scalar_one()
         assert saved.status == "selesai"

@@ -1,3 +1,4 @@
+from tests.pg.fasilitas import lini_baru as _lini_uji
 """Pembebasan G2: token satu siklus, sisa fisik, stok dan proses independen."""
 import asyncio
 from decimal import Decimal
@@ -143,7 +144,7 @@ async def test_sumber_karung_dinamis_berubah_setelah_pembebasan(pg,proses):
   it=(await g2.masukkan_pk_luar(db,user=u,kode=b.kode_batch)).intake
   await g2.pindah_tumpukan_ke_silo(db,user=u,intake_id=proses['intake_tumpukan'],nama_silo='Timur',berat=100)
   await g2.pindah_tumpukan_ke_silo(db,user=u,intake_id=it.id,nama_silo='Timur',jumlah_karung=50)
-  pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['Timur'])).proc;kode=pr.kode_proses;pid=pr.id
+  pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['Timur'], lini_id=await _lini_uji(db,u,'penyosohan'))).proc;kode=pr.kode_proses;pid=pr.id
  async with await _klien(pg,peran='admin') as c:
   before=await fakta(pg);d=(await baca(c,kode,'Timur')).json();assert d['awal'] is None and d['bahan'] is None and not d['bobot_final'];assert await fakta(pg)==before
  async with pg() as db:

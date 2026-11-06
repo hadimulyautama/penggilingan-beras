@@ -6,6 +6,8 @@ saldo gabungan, pewarisan pemilik, larangan memakai broken dari proses sendiri,
 dan rendemen atas seluruh bahan.
 """
 from __future__ import annotations
+from tests.pg.fasilitas import lini_baru as _lini_uji
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 from datetime import date
 
@@ -85,6 +87,7 @@ async def test_broken_bisa_masuk_silo_berlabel_pk(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kg=9_000)
@@ -120,6 +123,7 @@ async def test_stok_silo_broken_masuk_dikurangi_terpakai(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kg=9_000)
@@ -139,7 +143,8 @@ async def test_stok_silo_broken_masuk_dikurangi_terpakai(pg, dunia):
         assert await hitung_stok_silo(db, dunia["silo_broken"]) == 600
 
         # Sosoh ulang: mulai dari silo C, tutup dengan sisa 100 → terpakai 500.
-        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"], lini_id=await _lini_uji(db,u,'penyosohan'))
         assert r2.berat_awal_total == 600
         await catat_output(db, user=u, kode=r2.proc.kode_proses, jenis="premium",
                            berat_kg=400)
@@ -165,6 +170,7 @@ async def test_broken_jasa_mewarisi_pemilik_ke_silo_dan_sosoh_ulang(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         assert r.proc.jasa_id == dunia["jasa_id"]
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
@@ -183,7 +189,8 @@ async def test_broken_jasa_mewarisi_pemilik_ke_silo_dan_sosoh_ulang(pg, dunia):
                                     nama_silo="C", berat=1_000)
         assert await pemilik_silo_g2(db, dunia["silo_broken"]) == {dunia["jasa_id"]}
 
-        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"], lini_id=await _lini_uji(db,u,'penyosohan'))
         assert r2.proc.jasa_id == dunia["jasa_id"]
 
 
@@ -200,6 +207,7 @@ async def test_silo_broken_menolak_pemilik_campur(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kg=9_000)
@@ -232,7 +240,8 @@ async def test_silo_broken_menolak_pemilik_campur(pg, dunia):
         ri = await masukkan_pk_luar(db, user=u, kode="PKB-20261006-99", tujuan="ditumpuk")
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=ri.intake.id,
                                       nama_silo="A", berat=5_000)
-        r3 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r3 = await mulai_penyosohan(db, user=u, nama_silos=["A"], lini_id=await _lini_uji(db,u,'penyosohan'))
         assert r3.proc.jasa_id is None
         await catat_output(db, user=u, kode=r3.proc.kode_proses, jenis="premium",
                            berat_kg=4_500)
@@ -272,6 +281,7 @@ async def test_proses_tak_boleh_memakan_broken_sendiri(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r1 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r1.proc.kode_proses, jenis="premium",
                            berat_kg=9_500)
@@ -286,7 +296,8 @@ async def test_proses_tak_boleh_memakan_broken_sendiri(pg, dunia):
         await pindah_broken_ke_silo(db, user=u, byproduct_stock_id=row1.id,
                                    nama_silo="C", berat=500)
 
-        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"], lini_id=await _lini_uji(db,u,'penyosohan'))
         await catat_output(db, user=u, kode=r2.proc.kode_proses, jenis="broken",
                            berat_kg=50)
         await catat_broken(db, user=u, kode_pol=r2.proc.kode_proses, berat_kg=50)
@@ -316,6 +327,7 @@ async def test_rendemen_proses_campuran_pk_dan_broken_atas_seluruh_bahan(pg, dun
     async with pg() as db:
         # Lahirkan 1.000 kg broken (masih milik jasa Bu Sri — Silo A di
         # `dunia` jasa-owned) dari proses terpisah, taruh di Silo C.
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r0 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r0.proc.kode_proses, jenis="premium",
                            berat_kg=8_000)
@@ -352,7 +364,8 @@ async def test_rendemen_proses_campuran_pk_dan_broken_atas_seluruh_bahan(pg, dun
 
         # Proses campuran: Silo A (sisa 1.000 + baru 4.000 = 5.000 kg PK) +
         # Silo C (1.000 kg broken) — keduanya milik jasa yang sama.
-        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "C"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "C"], lini_id=await _lini_uji(db,u,'penyosohan'))
         assert r.berat_awal_total == 5_000 + 1_000
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kg=5_000)
@@ -385,6 +398,7 @@ async def test_sisa_jasa_broken_tak_dihitung_dua_kali_saat_disosoh_ulang(pg, dun
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kg=9_000)
@@ -405,7 +419,8 @@ async def test_sisa_jasa_broken_tak_dihitung_dua_kali_saat_disosoh_ulang(pg, dun
         sisa = await sisa_jasa(db, dunia["jasa_id"])
         assert sisa.broken_kg == pytest.approx(1_000)   # masih ada, belum disosoh
 
-        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r2 = await mulai_penyosohan(db, user=u, nama_silos=["C"], lini_id=await _lini_uji(db,u,'penyosohan'))
         await catat_output(db, user=u, kode=r2.proc.kode_proses, jenis="menir",
                            berat_kg=900)
         await selesai_penyosohan(db, user=u, kode=r2.proc.kode_proses,
@@ -430,6 +445,7 @@ async def test_hitung_stok_broken_curah_tiga_suku(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="broken",
                            berat_kg=1_000)
@@ -473,6 +489,7 @@ async def test_picker_silo_bahan_g2_menawarkan_silo_broken_berisi(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kg=9_500)
@@ -520,6 +537,7 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
     async with pg() as db:
         # P1: habiskan Silo A (10.000 kg), hasilkan 1.000 kg broken, pindah
         # ke Silo C, lalu tutup.
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r1 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r1.proc.kode_proses, jenis="premium",
                            berat_kg=9_000)
@@ -547,7 +565,8 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
                                       nama_silo="A", berat=4_000)
 
         # P2: mulai HANYA dari Silo A (PK) — Silo C belum jadi bahannya.
-        r2 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r2 = await mulai_penyosohan(db, user=u, nama_silos=["A"], lini_id=await _lini_uji(db,u,'penyosohan'))
         assert r2.berat_awal_total == 4_000
         # Picker berdasarkan proses hanya menawarkan broken yang pemiliknya
         # cocok dengan bahan proses (jasa Bu Sri).
@@ -646,6 +665,7 @@ async def test_tambah_silo_penyosohan_broken_pemilik_beda_ditolak(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r1 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r1.proc.kode_proses, jenis="premium",
                            berat_kg=9_000)
@@ -677,7 +697,8 @@ async def test_tambah_silo_penyosohan_broken_pemilik_beda_ditolak(pg, dunia):
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=ri.intake.id,
                                       nama_silo="B", berat=5_000)
 
-        r2 = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        r2 = await mulai_penyosohan(db, user=u, nama_silos=["B"], lini_id=await _lini_uji(db,u,'penyosohan'))
         assert r2.proc.jasa_id is None
         from app.web.api import silo_bahan_g2
         assert "C" not in [x["value"] for x in await silo_bahan_g2(
@@ -706,6 +727,7 @@ async def test_tambah_silo_penyosohan_menolak_broken_hasil_sendiri(pg, dunia):
 
     u = dunia["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r2 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r2.proc.kode_proses, jenis="broken",
                            berat_kg=300)

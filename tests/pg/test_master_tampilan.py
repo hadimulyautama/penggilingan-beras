@@ -89,7 +89,7 @@ async def test_kerangka_menu_dan_pengaturan_sama_bagi_semua_peran(pg, pabrik):
             (out/(label+'-menu.json')).write_text((await c.get('/api/actions/menu')).text)
             (out/(label+'-lain.html')).write_text((await c.get('/pekerjaan/catat-lain')).text)
             soup=BeautifulSoup(r.text,'html.parser')
-            assert soup.find(id='daftar-akses')
+            assert soup.select_one('a[href="/pengaturan/akses"]')
             hasil.append([n.get_text(' ',strip=True) for n in soup.select('.laci-seksi .pintu__nama')])
             assert 'Kabar' in hasil[-1]
             pengiriman=soup.select('a.pintu[href="/barang-keluar"], .desktop-chrome a[href="/barang-keluar"]')
@@ -100,7 +100,9 @@ async def test_kerangka_menu_dan_pengaturan_sama_bagi_semua_peran(pg, pabrik):
                 assert any('Pengiriman' in n.get_text() for n in soup.select('.pintu[aria-disabled="true"]'))
             else:
                 assert len(pengiriman)==2
-            assert 'Super Admin' in r.text and 'Operator G1' in r.text
+            # Matriks akses berada pada halaman khusus.
+            akses=await c.get('/pengaturan/akses')
+            assert 'Super Admin' in akses.text and 'Operator G1' in akses.text
             akses=await c.get('/pengaturan/akses')
             assert akses.status_code==200 and 'id="daftar-akses"' in akses.text
             assert (await c.get('/pekerjaan/catat-lain')).status_code==200
