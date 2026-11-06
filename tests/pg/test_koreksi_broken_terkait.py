@@ -1,3 +1,4 @@
+from tests.pg.fasilitas import lini_baru as _lini_uji
 """Reproduksi hasil 5350 -> 0 dengan perpindahan otomatis 50 yang salah."""
 import pytest
 from sqlalchemy import select,func
@@ -60,7 +61,7 @@ async def test_bahan_sudah_dipakai_proses_lain_ditolak(pg,kasus):
     uid,kode,mid,bid,sid=kasus
     async with pg() as db:
         u=await db.get(User,uid);silo=await db.get(Silo,sid)
-        await p.mulai_penyosohan(db,user=u,nama_silos=[silo.nama_silo])
+        await p.mulai_penyosohan(db,user=u,nama_silos=[silo.nama_silo], lini_id=await _lini_uji(db,u,'penyosohan'))
     with pytest.raises(ValueError,match='siklus'):await joint(pg,kasus)
     async with pg() as db:assert (await db.get(ByproductStock,bid)).berat_kg==50
 

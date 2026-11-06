@@ -1,12 +1,16 @@
 {% extends "base.html" %}
 {% block judul %}{{ judul }}{% endblock %}
 {% block isi %}
-{% import "_riwayat.html" as rh with context %}
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
 {% set jumlah_putaran = namespace(n=0) %}
 {% for row in rows %}{% set jumlah_putaran.n = jumlah_putaran.n + row.rounds|length %}{% endfor %}
-{{ rh.header("CATATAN KONTROL MUTU", judul,
-  "Pilih batch atau proses untuk melihat asal bahan, nomor polisi, dan seluruh hasil pemeriksaan QC di halaman detail.",
-  [("▤", rows|length, "Lot atau proses"), ("✓", jumlah_putaran.n, "Pencatatan QC"), ("◷", "Terbaru", "Urut berdasarkan waktu")]) }}
+{% from '_riwayat_qc_alat.html' import alat, panduan_qc with context %}
+<link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-qc-desain.css?v={{ VERSI }}">
+<main class="riwayat-detail rhs rqd rqd-list" data-riwayat-qc>
+<header class="rhs-header"><h1>{{ judul }}</h1><p class="rhs-meta">Pilih batch atau proses untuk melihat asal bahan, nomor polisi, dan seluruh hasil pemeriksaan QC di halaman detail.</p>{{ alat() }}</header>
+<div data-rqd-category-slot></div>
+<section class="riwayat-detail__card"><div class="rhs-mass"><div><span>Lot atau proses</span><strong>{{ rows|length }}</strong></div><div><span>Pencatatan QC</span><strong>{{ jumlah_putaran.n }}</strong></div><div><span>Urut berdasarkan waktu</span><strong>Terbaru</strong></div></div></section>
 <section>
 
   {% if catatan_kosong %}
@@ -45,4 +49,7 @@
     {% if rows|length >= 200 %}<p class="bantu">Menampilkan 200 batch atau proses terbaru; seluruh putaran masing-masing tetap dihitung.</p>{% endif %}
   {% endif %}
 </section>
+{{ panduan_qc() }}
+</main>
+<script src="/static/riwayat-qc-desain.js?v={{ VERSI }}"></script>
 {% endblock %}

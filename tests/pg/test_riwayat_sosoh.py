@@ -18,6 +18,7 @@ menggambar angkanya — kelas kerusakan yang sudah dibayar sekali di repo ini
 """
 from __future__ import annotations
 
+from tests.pg.fasilitas import di_gudang
 import httpx
 import pytest
 from sqlalchemy.orm import selectinload
@@ -55,16 +56,20 @@ async def _sosoh_selesai(pg, uid: int, *, huruf="A", masuk=10_000.0,
     await _silo_berisi(pg, huruf, masuk, uid)
     async with pg() as db:
         u = await db.get(User, uid)
-        kode = (await mulai_penyosohan(db, user=u,
+        from app.services.cakupan_fasilitas import KonteksGudang, lama
+        from sqlalchemy import select
+        g2 = await db.scalar(select(lama("g2")))
+        u = KonteksGudang(role=u.role,id=u.id,default_warehouse_id=g2,stock_warehouse_filter=None)
+        kode = (await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"),
                                        nama_silos=[huruf])).proc.kode_proses
     for jenis, kg in hasil:
         async with pg() as db:
             u = await db.get(User, uid)
-            await catat_output(db, user=u, kode=kode, jenis=jenis,
+            await catat_output(db, user=await di_gudang(db,u,"g2"), kode=kode, jenis=jenis,
                                berat_kg=kg, spek=spek)
     async with pg() as db:
         u = await db.get(User, uid)
-        await selesai_penyosohan(db, user=u, kode=kode, nama_silo=huruf,
+        await selesai_penyosohan(db, user=await di_gudang(db,u,"g2"), kode=kode, nama_silo=huruf,
                                  sisa_kg=sisa)
     async with pg() as db:
         from app.penggilingan.gudang2.polishing import akhiri_penyosohan
@@ -225,28 +230,28 @@ async def test_kartu_merinci_asal_lot_pk_dan_penambahan_broken(pg, pemakai, pema
             waktu_pembelian=now_local(), input_by=u.id, status_batch="diterima",
             flag_unverified=True, sumber_berat="manual"))
         await db.commit()
-        ri = await masukkan_pk_luar(db, user=u, kode="PKB-RIWAYAT-01",
+        ri = await masukkan_pk_luar(db, user=await di_gudang(db,u,"g2"), kode="PKB-RIWAYAT-01",
                                     tujuan="ditumpuk")
-        await pindah_tumpukan_ke_silo(db, user=u, intake_id=ri.intake.id,
+        await pindah_tumpukan_ke_silo(db, user=await di_gudang(db,u,"g2"), intake_id=ri.intake.id,
                                       nama_silo="A", berat=6_000)
-        kode = (await mulai_penyosohan(db, user=u, nama_silos=["A"])).proc.kode_proses
-        await catat_output(db, user=u, kode=kode, jenis="premium", berat_kg=1_000)
-        await catat_output(db, user=u, kode=kode, jenis="broken", berat_kg=1_000)
-        await catat_broken(db, user=u, kode_pol=kode, berat_kg=1_000)
+        kode = (await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"), nama_silos=["A"])).proc.kode_proses
+        await catat_output(db, user=await di_gudang(db,u,"g2"), kode=kode, jenis="premium", berat_kg=1_000)
+        await catat_output(db, user=await di_gudang(db,u,"g2"), kode=kode, jenis="broken", berat_kg=1_000)
+        await catat_broken(db, user=await di_gudang(db,u,"g2"), kode_pol=kode, berat_kg=1_000)
         row_broken = (await db.execute(
             select(ByproductStock).where(ByproductStock.jenis_produk == "broken")
         )).scalars().one()
-        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=4_000)
+        await selesai_penyosohan(db, user=await di_gudang(db,u,"g2"), kode=kode, nama_silo="A", sisa_kg=4_000)
         from app.penggilingan.gudang2.polishing import akhiri_penyosohan
-        await akhiri_penyosohan(db, user=u, kode=kode)
-        await pindah_broken_ke_silo(db, user=u, byproduct_stock_id=row_broken.id,
+        await akhiri_penyosohan(db, user=await di_gudang(db,u,"g2"), kode=kode)
+        await pindah_broken_ke_silo(db, user=await di_gudang(db,u,"g2"), byproduct_stock_id=row_broken.id,
                                     nama_silo="C", berat=1_000)
 
         # P2: sosoh ulang broken dari Silo C, supaya ia MUNCUL di riwayat.
-        kode2 = (await mulai_penyosohan(db, user=u, nama_silos=["C"])).proc.kode_proses
-        await catat_output(db, user=u, kode=kode2, jenis="menir", berat_kg=900)
-        await selesai_penyosohan(db, user=u, kode=kode2, nama_silo="C", sisa_kg=0)
-        await akhiri_penyosohan(db, user=u, kode=kode2)
+        kode2 = (await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"), nama_silos=["C"])).proc.kode_proses
+        await catat_output(db, user=await di_gudang(db,u,"g2"), kode=kode2, jenis="menir", berat_kg=900)
+        await selesai_penyosohan(db, user=await di_gudang(db,u,"g2"), kode=kode2, nama_silo="C", sisa_kg=0)
+        await akhiri_penyosohan(db, user=await di_gudang(db,u,"g2"), kode=kode2)
 
     c = await _klien(pg, peran="admin")
     try:
@@ -293,11 +298,11 @@ async def test_hanya_yang_selesai_yang_masuk_riwayat(pg, pemakai):
     await _silo_berisi(pg, "B", 5_000, pemakai.id)
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        jalan = (await mulai_penyosohan(db, user=u,
+        jalan = (await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"),
                                         nama_silos=["B"])).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        await catat_output(db, user=u, kode=jalan, jenis="medium", berat_kg=900)
+        await catat_output(db, user=await di_gudang(db,u,"g2"), kode=jalan, jenis="medium", berat_kg=900)
 
     async with pg() as db:
         kartu, _ = await riwayat_sosoh(db)

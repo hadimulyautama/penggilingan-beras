@@ -2,18 +2,26 @@
 {% block judul %}QC beras hasil sosoh{% endblock %}
 {% block isi %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
-<main class="riwayat-detail">
-  <header class="riwayat-detail__hero"><h1>QC beras hasil sosoh</h1><p>Sampel, hasil lab, estimasi sesi garapan, dan pemetaan ke hasil timbang.</p></header>
+{% from '_riwayat_qc_alat.html' import alat, panduan_qc with context %}
+<link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-qc-desain.css?v={{ VERSI }}">
+<main class="riwayat-detail rhs rqd" data-riwayat-qc data-rqd-beras>
+{% if qc_sosoh is defined %}<a class="rhs-back" href="/riwayat-qc/beras-hasil-sosoh">← Kembali ke daftar Riwayat QC beras</a>{% endif %}
+  <header class="rhs-header"><h1>Riwayat QC beras hasil sosoh</h1>{% if qc_sosoh is defined %}<p class="rhs-code">{{ qc_kode }}</p><p class="rhs-meta">{{ qc_sosoh.sampel|length }} sampel · {{ qc_sosoh.menunggu }} menunggu hasil lab</p>{% endif %}<p class="rhs-meta">Sampel, hasil lab, estimasi sesi garapan, dan pemetaan ke hasil timbang.</p>{{ alat() }}</header>
   {% if qc_sosoh is defined %}
-    <p><a class="btn btn--kecil" href="/riwayat-qc/beras-hasil-sosoh">← Semua proses QC beras</a> <a class="btn btn--kecil" href="{{ proses_href }}">Lihat proses {{ qc_kode }}</a></p>
-    <h2>{{ qc_kode }}</h2>
+    <div class="rhs-actions" data-rqd-proses-aksi><a class="btn btn--kecil" href="{{ proses_href }}">Lihat proses {{ qc_kode }}</a></div>
+    <nav class="rhs-tabs" role="tablist" aria-label="Bagian riwayat QC beras" data-rqd-beras-tabs hidden>{% for id,nama in [('ringkasan','Ringkasan'),('sampel','Sampel & hasil'),('sesi','Sesi & pemetaan'),('asal','Asal & catatan')] %}<a id="qc-tab-{{ id }}" role="tab" aria-controls="qc-panel-{{ id }}" aria-selected="{{ 'true' if loop.first else 'false' }}" href="?tab_qc={{ id }}">{{ nama }}</a>{% endfor %}</nav>
     {% include "_qc_sosoh.html" %}
+    <template data-rqd-rice-origin><section class="riwayat-detail__card"><h2>Asal pemeriksaan &amp; penelusuran</h2><dl class="qc-fields"><div><dt>Proses sosoh</dt><dd>{{ qc_kode }}</dd></div><div><dt>Sampel tercatat</dt><dd>{{ qc_sosoh.sampel|length }}</dd></div><div><dt>Menunggu hasil lab</dt><dd>{{ qc_sosoh.menunggu }}</dd></div></dl><a class="btn" href="{{ proses_href }}">Lihat proses {{ qc_kode }}</a><p>Identitas pengambil, waktu sampel, pemeriksa, waktu isi lab, catatan dan alasan pembatalan tetap tersedia pada Sampel &amp; hasil. Sampel yang dibatalkan tetap tersimpan dan dikeluarkan dari pemetaan.</p></section></template>
   {% else %}
+    <div data-rqd-category-slot></div>
     {% if not PORTAL_READ_ONLY and akun and akun.is_admin and MUTU_AKTIF %}<p><a class="btn btn--kecil" href="?buka=sampel_qc_sosoh">Ambil sampel QC beras</a> <a class="btn btn--kecil" href="?buka=qc_sosoh">Isi hasil QC beras</a></p>{% endif %}
     {% for p in proses_qc %}<section class="riwayat-detail__card"><h2><a href="/riwayat-qc/beras-hasil-sosoh/{{ p.kode }}">{{ p.kode }}</a></h2><p>{{ p.jumlah }} sampel · {{ p.menunggu }} menunggu hasil QC · {{ 'proses berjalan' if p.status == 'proses' else 'proses selesai' }}</p></section>
     {% else %}<p>Belum ada sampel QC beras. Sampel dapat dicatat sebelum hasil timbang.</p>{% endfor %}
   {% endif %}
+{{ panduan_qc() }}
 </main>
+<script src="/static/riwayat-qc-desain.js?v={{ VERSI }}"></script>
 {% if not PORTAL_READ_ONLY %}<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>{% endif %}
 {% endblock %}
 {% block kaki %}{% if not PORTAL_READ_ONLY %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ request.query_params.get('buka', '') }}" data-nilai="{{ request.query_params.get('nilai', '') }}"></script>{% endif %}{% endblock %}

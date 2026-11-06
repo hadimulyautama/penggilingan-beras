@@ -10,6 +10,7 @@ cerianya dengan keberhasilan, dan akibatnya baru terbaca di angka yang sudah
 telanjur dipakai orang lain.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 import asyncio
 from datetime import date
@@ -83,6 +84,7 @@ async def test_rendemen_di_atas_seratus_diberitahu(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A"])
         hasil = await log_progress(db, user=u, kode_proses=r.proc.kode_proses,
                                    berat_kumulatif=18_000)
@@ -105,6 +107,7 @@ async def test_rendemen_tepat_seratus_persen_diberitahu(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A"])
         hasil = await log_progress(db, user=u, kode_proses=r.proc.kode_proses,
                                    berat_kumulatif=10_000)
@@ -122,6 +125,7 @@ async def test_angka_wajar_tak_diberi_peringatan(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A"])
         hasil = await log_progress(db, user=u, kode_proses=r.proc.kode_proses,
                                    berat_kumulatif=6_000)
@@ -137,6 +141,7 @@ async def test_kumulatif_boleh_mundur_untuk_membetulkan(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A"])
         await log_progress(db, user=u, kode_proses=r.proc.kode_proses,
                            berat_kumulatif=18_000)
@@ -156,6 +161,7 @@ async def test_selesai_giling_menolak_hasil_tepat_sama_dengan_bahan(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A"])
         with pytest.raises(MillingError) as e:
             await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
@@ -202,6 +208,7 @@ async def test_silo_yang_sudah_bersisa_tak_bisa_ditutup_lagi(pg, pabrik):
     await _isi_silo_g2(pg, pabrik, "PKB-SALAH-B", 6_000, "B")
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kumulatif=3_000)
@@ -239,6 +246,7 @@ async def test_dua_hp_menutup_silo_yang_sama_bersamaan(pg, pabrik):
     await _isi_silo_g2(pg, pabrik, "PKB-BALAP-B", 6_000, "B")
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium",
                            berat_kumulatif=3_000)
@@ -284,6 +292,7 @@ async def test_undo_tak_bisa_mengenai_input_orang_lain(pg, pabrik):
 
     async with pg() as db:
         u1 = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u1, nama_silo=["A"])
         lain = User(nama="Operator Lain", role="operator", status="aktif")
         db.add(lain)
@@ -324,6 +333,7 @@ async def test_pemiliknya_sendiri_tetap_bisa_membatalkan(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A"])
         log_id = (await db.execute(
             select(ActivityLog.id).where(ActivityLog.changed_by == u.id)

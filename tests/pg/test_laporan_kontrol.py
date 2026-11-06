@@ -14,7 +14,8 @@ async def test_kontrol_bersama_dan_seluruh_pilihan_tetap(pg,qc,tmp_path):
    r=await c.get(url);assert r.status_code==200
    assert 'data-laporan-kontrol' in r.text and 'class="pd-panduan"' in r.text
    assert r.text.count('aria-label="Bagian Laporan dan Riwayat"')==1
-   assert 'laporan-kontrol.js?v=523' in r.text
+   from hmu_tampilan import CAP_ASET
+   assert f'laporan-kontrol.js?v={CAP_ASET}' in r.text
    (out/(name+'.html')).write_text(r.text)
   html=(out/'laporan.html').read_text()
   assert html.count('data-laporan="')==7

@@ -30,7 +30,7 @@
  <nav class="rsh-tabs rhs-tabs" role="tablist" aria-label="Bagian detail retur supplier">{% for k,n in tabs %}<a id="rsd-tab-{{ k }}" role="tab" aria-controls="rsd-panel" aria-selected="{{ 'true' if tab==k else 'false' }}" href="{{ tab_href(k) }}"{% if tab==k %} aria-current="page"{% endif %}>{{ n }}</a>{% endfor %}</nav>
  <div class="rsd-content"><div class="rsp-stack" id="rsd-panel" role="tabpanel" aria-labelledby="rsd-tab-{{ tab }}">
  {% if tab=='ringkasan' %}
- <section class="rsp-kartu rsd-summary"><h2>Ringkasan retur</h2><div class="rhs-mass">
+ <section class="rsp-kartu"><h2>Ringkasan retur</h2><div class="rhs-mass">
   <div><span>Diajukan</span><strong>{{ r.kg(total_pengajuan) }}</strong><small>Jumlah pengajuan awal</small></div>
   <div><span>Keluar awal tercatat</span><strong>{{ r.kg(ledger.snapshot.get('total_kg')) if ledger else 'Belum tercatat' }}</strong><small>Catatan awal tetap utuh</small></div>
   <div><span>Keluar efektif saat ini</span><strong>{{ r.kg(total_efektif) if ledger else 'Belum tercatat' }}</strong><small>Setelah seluruh koreksi yang sah</small></div>

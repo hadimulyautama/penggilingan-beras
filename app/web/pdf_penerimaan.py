@@ -109,6 +109,11 @@ class Laporan(PenyajiDokumen):
         self.d=d
         self.head=ParagraphStyle('TerimaKepalaTabel',parent=self.bold,textColor=colors.white)
         self.width=(210-2*self.tema.margin_mm)*mm
+        self.section.spaceBefore=0
+        self.section.spaceAfter=0
+        self.section.leading=12
+        for gaya in (self.normal,self.bold,self.head,self.small):
+            gaya.leading=gaya.fontSize*1.15
 
     def p(self,value,style=None):
         # Label/data tidak ditafsirkan sebagai markup, termasuk catatan lab.
@@ -120,7 +125,7 @@ class Laporan(PenyajiDokumen):
     def bagian(self,nama):
         t=Table([[self.p(nama,self.section)]],colWidths=[self.width],hAlign='LEFT')
         t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),self.pale),
-            ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
+            ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2)]))
         t.keepWithNext=True
         return t
 
@@ -132,7 +137,7 @@ class Laporan(PenyajiDokumen):
             splitByRow=1,splitInRow=1,hAlign='LEFT')
         style=[('BACKGROUND',(0,0),(-1,0),self.green),('VALIGN',(0,0),(-1,-1),'TOP'),
             ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),5),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+            ('TOPPADDING',(0,0),(-1,-1),1),('BOTTOMPADDING',(0,0),(-1,-1),1),
             ('LINEBELOW',(0,1),(-1,-1),.35,self.border)]
         if rata:
             style += [('BACKGROUND',(0,-1),(-1,-1),self.pale),('LINEABOVE',(0,-1),(-1,-1),.6,self.green)]
@@ -151,7 +156,27 @@ class Laporan(PenyajiDokumen):
             status+=' | '+(self.d.get('verification_status') or 'Verifikasi belum tercatat').replace('_',' ').upper()
         story=list(story)+[Spacer(1,5),self.p('Dibuat '+waktu(self.d['dibuat'])+' | '+self.d['pembuat'],self.small)]
         pembuka=[self.p(judul,self.title),self.p(referensi,self.bold),self.p(status,self.small),Spacer(1,8)]
-        return super().pdf(pembuka+story,judul=judul,referensi=referensi)
+        hasil=super().pdf(pembuka+story,judul=judul,referensi=referensi)
+        # Laporan panjang tetap lengkap. Identitas dan penanda lanjutan harus
+        # terlihat pada setiap lembar, termasuk lembar yang hanya berisi catatan.
+        from io import BytesIO
+        from pypdf import PdfReader,PdfWriter
+        from reportlab.pdfgen.canvas import Canvas
+        from reportlab.lib.pagesizes import A4
+        reader=PdfReader(BytesIO(hasil))
+        if len(reader.pages)==1:return hasil
+        writer=PdfWriter()
+        for i,page in enumerate(reader.pages):
+            writer.add_page(page);page=writer.pages[-1]
+            overlay=BytesIO();canvas=Canvas(overlay,pagesize=A4)
+            canvas.setFillColor(self.muted);canvas.setFont(self.tema.font,7.5)
+            y=A4[1]-48*mm
+            if i:canvas.drawString(self.tema.margin_mm*mm,y,judul)
+            canvas.drawRightString(A4[0]-self.tema.margin_mm*mm,y,'MELEBIHI SATU HALAMAN')
+            canvas.save()
+            page.merge_page(PdfReader(overlay).pages[0])
+        if reader.metadata:writer.add_metadata(dict(reader.metadata))
+        output=BytesIO();writer.write(output);return output.getvalue()
 
 
 def buat_pdf(d):
@@ -174,7 +199,7 @@ def buat_pdf(d):
                        v.fakta('Berat pada nota/acuan',kg(t.get('berat_acuan_kg')) if t.get('berat_acuan_kg') else 'Belum tercatat')))
     identitas=Table(fields,colWidths=[v.width/2]*2,hAlign='LEFT')
     identitas.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0),
-        ('BOTTOMPADDING',(0,0),(-1,-1),5),('RIGHTPADDING',(0,0),(-1,-1),8)]))
+        ('BOTTOMPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),8)]))
     story += [identitas,Spacer(1,4)]
     packs=[]
     for m in muatan:
@@ -187,7 +212,7 @@ def buat_pdf(d):
     total=Table([[[p('BERAT BARANG DITERIMA',v.bold),p(kg(d['berat']) if d['berat'] is not None else d['keterangan_berat'] or 'Belum diterima',
         ParagraphStyle('TerimaTotal',parent=v.bold,fontSize=16,leading=19,textColor=v.green))],p('\n'.join(packs) or 'Kemasan: tidak tercatat',v.small)]],colWidths=[v.width*.5]*2)
     total.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),v.pale),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-        ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
+        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
     story += [total,Spacer(1,8)]
     statuses=[ticket.get('status_tiket'),t.get('status_transaksi')]
     if ticket.get('status_tiket')=='DITUTUP_PAKSA' or t.get('status_transaksi') not in (None,'AKTIF'):
@@ -241,7 +266,7 @@ def buat_pdf(d):
                 'Pencatatan QC penerimaan jenis barang ini belum tersedia. Catatan produksi tidak dianggap QC.')
         story.append(p(kosong,v.small))
     for g in d['qc']:
-        story += [CondPageBreak(35*mm),p('Partai '+g['kode']+' | '+g['status'],v.bold)]
+        story += [CondPageBreak((35 if g['putaran'] else 12)*mm),p('Partai '+g['kode']+' | '+g['status'],v.bold)]
         if not g['putaran']:
             story += [p('Belum diperiksa. Tidak digabung dengan QC batch lain.',v.small),Spacer(1,6)];continue
         qc_ke_tabel(story,v,g)
@@ -250,7 +275,7 @@ def buat_pdf(d):
     story += [p('Rata-rata berlaku per partai dan memakai seluruh isian yang tersedia; isian kosong tidak dianggap nol. Kategori mengikuti aturan QC yang berlaku.',v.small),Spacer(1,5)]
     ringkas=Table([[v.fakta('Kesimpulan',kesimpulan(d),v.small)]],colWidths=[v.width],hAlign='LEFT')
     ringkas.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),v.pale),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
-    story += [ringkas,Spacer(1,10)]
+    story += [ringkas,Spacer(1,6)]
     tanda=Table([[p('Penyerah/sopir',v.bold),'',p('Penerima',v.bold)],['','',''],
         [p('Nama / tanda tangan',v.small),'',p('Nama / tanda tangan',v.small)]],
         colWidths=[v.width*.47,v.width*.06,v.width*.47],rowHeights=[14,38,13])

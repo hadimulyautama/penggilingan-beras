@@ -6,6 +6,7 @@ itu secara langsung, bukan cuma lewat `hitung_stok_broken_curah`-style
 fungsi lain yang sudah benar duluan.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import date
@@ -84,6 +85,7 @@ async def _pk_siap_kirim(pg, pabrik: dict, *, berat: float = 2_000.0) -> str:
         await db.commit()
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo="A")
     async with pg() as db:
         u = await db.get(User, pabrik["user"])

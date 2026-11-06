@@ -12,6 +12,7 @@ dan terutama JEBAKAN TERBESARNYA: silo yang dibebaskan lalu diisi gabah baru
 TIDAK boleh diam-diam terdaftar sebagai bahan tambahan lot LAMA.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import date
@@ -62,6 +63,7 @@ async def dunia(pg, pemakai, pemasok):
             silo[huruf].status = "terisi"
         await db.commit()
         await db.refresh(u)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A", "B"])
         return {"user": u.id, "silo": {h: s.id for h, s in silo.items()},
                 "pemasok": pemasok.id, "kode_proses": r.proc.kode_proses}

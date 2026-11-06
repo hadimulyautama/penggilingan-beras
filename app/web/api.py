@@ -752,6 +752,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # seperti penyosohan: silo Gudang 1 lebih dari dua dan bisa
             # bertambah lewat Pengaturan → Alat. Daftarnya dari master.
             {"akses": "g1", "id": "mulai_giling", "label": "⚙️ Mulai penggilingan",
+             "kunci_kartu": "silo",
              "konteks_mulai_giling": {"source": "/api/actions/ringkasan-mulai-giling"},
              "post": "/api/actions/mulai-giling",
              "hint": "Bentuk 1 LOT (LOT-…) dari SELURUH isi silo yang dicentang "
@@ -1056,6 +1057,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # Alat, dan silo ketiga itu tak akan pernah muncul di tupel yang
             # diketik seseorang bertahun lalu — juga tak ikut dalam "A+B".
             {"akses": "g2", "id": "mulai_penyosohan", "label": "🏭 Mulai penyosohan",
+             "kunci_kartu": "silo",
              "post": "/api/actions/mulai-penyosohan",
              "konteks_mulai_penyosohan": {"source": "/api/actions/ringkasan-mulai-penyosohan"},
              "hint": "Boleh beberapa silo sekaligus — hasilnya satu proses "

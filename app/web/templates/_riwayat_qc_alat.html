@@ -1,0 +1,12 @@
+{# Kontrol presentasi saja; data, izin, perhitungan dan formulir tetap milik QC. #}
+{% macro alat() %}<div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rqd-guide>ⓘ Panduan</button><details class="rhs-menu"><summary class="btn" aria-label="Panduan dan penelusuran QC">⋮</summary><div class="rhs-menu-body"><button class="btn" type="button" data-rqd-guide>ⓘ Panduan</button>{% if LAPORAN_NAV %}<button class="btn" type="button" data-rqd-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}</div></details></div>{% endmacro %}
+{% macro panduan_qc() %}
+{% from '_panduan.html' import panel as panduan %}
+{% call panduan('rqd-panduan','Panduan riwayat QC',penutup={'data-rqd-guide-close':'','data-lk-tutup':''}) %}
+<p><strong>Gabah.</strong> Dua pembacaan kadar air tiap pemeriksaan tetap terpisah pada Putaran. Ringkasan memakai seluruh pembacaan yang sah. {% if jenis|default('') == 'gabah-basah' %}Lamur gabah basah berupa total sak.{% endif %} Penutupan lebih awal menyimpan waktu, petugas dan alasan. Gabah tidak memakai skor atau kelas PK.</p>
+<p><strong>PK.</strong> Enam komponen dinilai dari rata-rata tiap komponen seluruh putaran, lalu dikonversi menjadi skor dengan bobot sama. Komponen kosong tidak dianggap nol atau Bersih dan tidak ikut pembagi. Rumus, aturan dan batas kelas tersedia pada Perhitungan.</p>
+<p><strong>Putaran &amp; catatan.</strong> Pemilihan putaran hanya mengubah tampilan. Catatan lab terakhir yang terisi tetap terbaca meski putaran sesudahnya kosong. Metadata lama yang tidak tersimpan ditandai tidak tercatat.</p>
+<p><strong>Beras hasil sosoh.</strong> Sampel, jenis dan waktu pengambilan dibedakan dari waktu isi lab dan waktu timbang. Total timbang adalah aktual; bobot sesi dan sampel adalah estimasi. Sampel yang dibatalkan tetap tersimpan dan dikeluarkan dari pemetaan. Pengambilan, pengisian dan pembatalan mengikuti izin, saklar mutu dan status proses yang berlaku.</p>
+{% endcall %}
+{% if LAPORAN_NAV %}{% call panduan('rqd-navigation','Navigasi Laporan & Riwayat',penutup={'data-rqd-nav-close':'','data-lk-tutup':''}) %}<div data-rqd-parent-nav-slot></div>{% endcall %}{% endif %}
+{% endmacro %}

@@ -128,7 +128,7 @@ async def test_form_pemetaan_tungku_superadmin_saja(pg, pengeringan):
     async with pg() as db:
         d=(await drying_daftarnya(db))[0];did=d.id;nama=d.nama
     async with await _klien(pg,peran='superadmin') as c:
-        r=await c.get('/pengaturan/alat')
+        r=await c.get(f'/pengaturan/dryer/{did}')
         assert 'name="tungku"' in r.text
         from tests.pg.formulir import cap_formulir
         token=cap_formulir(c)

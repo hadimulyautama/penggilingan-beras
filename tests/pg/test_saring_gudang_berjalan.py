@@ -10,6 +10,7 @@ membaca gudang yang dicap penyusun kartunya sendiri, dan ia TIDAK ditawarkan
 kepada operator — pil tunggal bernama "Semua" tak membedakan apa pun.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 import httpx
 import pytest
@@ -60,6 +61,7 @@ async def pabrik(pg):
         r1 = await masukkan_pk_luar(db, user=u, kode="PKB-UJI-01", tujuan="ditumpuk")
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=r1.intake.id,
                                       nama_silo="A", berat=9800)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
 
     # Kartu Gudang 1: lot yang sudah dingin, dryer-nya perlu dikosongkan.

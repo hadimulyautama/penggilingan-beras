@@ -124,6 +124,8 @@ class Pengisi:
                     rec = Dryer(warehouse_id=wh['g1'], nama=name, kapasitas_kg=30000, status='aktif')
                     db.add(rec); await db.flush()
                 data['dryer'][letter] = rec.id
+            from app.services.fasilitas import seed_fasilitas
+            await seed_fasilitas(db)
             await db.commit()
         self.state['master'] = data
         await self.simpan()
@@ -242,7 +244,24 @@ class Pengisi:
                               kode=kode, jenis=jenis, berat_kg=kg*hasil, spek='(UJI) Spek ' + ('A' if jenis in {'premium','medium'} else 'B'), **(waktu(hari,8) if not jasa_barang else {}))
         if selesai:
             await self.langkah(key + ':sosoh-selesai', polishing.selesai_penyosohan, kode=kode, nama_silo=letter, sisa_kg=0, **(waktu(hari,6) if not jasa_barang else {}))
+            await self.langkah(key + ':akhiri', polishing.akhiri_penyosohan, kode=kode, **(waktu(hari,6) if not jasa_barang else {}))
         return r['proc']
+
+    async def alat_contoh(self, key, jenis, gudang):
+        """Dua proses contoh serentak harus memakai mesin fisik berbeda."""
+        if not settings.mode_uji:
+            raise ValueError('MODE_UJI wajib untuk alat contoh.')
+        from app.models import LiniProduksi, JenisProsesProduksi
+        async with SessionLocal() as db:
+            line=await db.scalar(select(LiniProduksi).where(LiniProduksi.kode==key))
+            if line is None:
+                wid=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi==gudang))
+                jid=await db.scalar(select(JenisProsesProduksi.id).where(JenisProsesProduksi.kode==jenis))
+                line=LiniProduksi(kode=key,nama=AWALAN+key,warehouse_id=wid,jenis_proses_id=jid,aktif=True)
+                db.add(line);await db.flush()
+            ident=line.id
+            await db.commit()
+            return ident
 
     async def isi(self):
         m = await self.master()
@@ -284,15 +303,15 @@ class Pengisi:
         for i, (grade, mat, size, count, brand) in enumerate(packs):
             kategori = 'beras_putih' if grade in {'premium','medium','medsuper','sayur'} else grade
             await self.langkah(f'karung:{i}', packaging.beli_kemasan, material_kode=mat, ukuran=size, jumlah=600, brand_nama=brand or ('Polos' if mat in packaging._KARUNG_BERMERK else None))
-            await self.langkah(f'packing:{i}', finished_goods.catat_packing, kode_pol=normal['kode_proses'], kategori=kategori,
-                              grade=grade if kategori=='beras_putih' else None, brand_nama=brand, material_kode=mat, ukuran=size, jumlah_karung=count)
+            if kategori == 'beras_putih':
+                await self.langkah(f'packing:{i}', finished_goods.catat_packing, kode_pol=normal['kode_proses'], kategori=kategori,
+                                  grade=grade, brand_nama=brand, material_kode=mat, ukuran=size, jumlah_karung=count)
+            # Hasil samping tetap memakai saldo otomatis dari hasil produksi.
             async with SessionLocal() as db:
                 sku = await packaging.find_or_create_sku(db, kategori=kategori, material_kode=mat, ukuran=size, brand_nama=brand)
                 std = await packaging.get_standard(db, grade) if kategori=='beras_putih' else None
                 self.state['produk'].append(dict(sku_id=sku.id, std_id=std.id if std else None))
         await self.simpan()
-        await self.langkah('bekatul-curah', finished_goods.catat_bekatul, kode_pol=normal['kode_proses'], berat_kg=500)
-        await self.langkah('broken-curah', finished_goods.catat_broken, kode_pol=normal['kode_proses'], berat_kg=500)
         await self.langkah('jasa-karung', packaging.beli_kemasan, material_kode='biasa', ukuran=25, jumlah=200, brand_nama='LosPulen')
         await self.langkah('karung-milik-jasa', packaging.pindah_kepemilikan_karung,
                           material_kode='biasa', ukuran=25, brand_nama='LosPulen',
@@ -305,7 +324,7 @@ class Pengisi:
             baris = [bk.BarisPerintah(tipe='finished_goods', jumlah_karung=8, **produk)]
             if status == 'tanpa-tiket': baris = [bk.BarisPerintah(tipe='finished_goods', jumlah_karung=2, **self.state['produk'][0])]
             if status == 'curah': baris = [bk.BarisPerintah(tipe='byproduct_curah', jenis='bekatul', berat_kg=100)]
-            if status == 'campuran': baris += [bk.BarisPerintah(tipe='finished_goods', jumlah_karung=2, **self.state['produk'][6])]
+            if status == 'campuran': baris += [bk.BarisPerintah(tipe='byproduct_curah', jenis='reject', berat_kg=100)]
             jid = jasa_proc.get('jasa_id') if status == 'jasa' else None
             if jid: baris = [bk.BarisPerintah(tipe='finished_goods', jumlah_karung=10, **self.state['produk'][2])]
             r = await self.langkah(key + ':perintah', bk.buat_perintah, baris=baris,
@@ -354,13 +373,15 @@ class Pengisi:
             key='giling-berjalan-'+letter
             b=await self.gabah(key)
             await self.langkah(key+':silo',silo.masuk_silo,nama_silo='UJI-'+letter,kode_lot=None,kode_batch=b['kode_batch'])
-            r=await self.langkah(key+':mulai',milling.start_milling,nama_silo='UJI-'+letter)
+            r=await self.langkah(key+':mulai',milling.start_milling,nama_silo='UJI-'+letter,
+                lini_id=await self.alat_contoh(key,'penggilingan','g1'))
             await self.langkah(key+':hasil',milling.log_progress,kode_proses=r['proc']['kode_proses'],berat_kumulatif=2800)
             if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='giling',kode=r['proc']['kode_proses'],sebab='Lainnya',sebab_lain='(UJI) Pemeriksaan mesin')
         for letter,pause in [('B',False),('C',True)]:
             key='sosoh-berjalan-'+letter
             await self.pk_luar(key,tujuan='UJI-'+letter)
-            r=await self.langkah(key+':mulai',polishing.mulai_penyosohan,nama_silos=['UJI-'+letter])
+            r=await self.langkah(key+':mulai',polishing.mulai_penyosohan,nama_silos=['UJI-'+letter],
+                lini_id=await self.alat_contoh(key,'penyosohan','g2'))
             await self.langkah(key+':hasil',polishing.catat_output,kode=r['proc']['kode_proses'],jenis='medium',berat_kg=3000,spek='(UJI) Medium')
             if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='penyosohan',kode=r['proc']['kode_proses'],sebab='Lainnya',sebab_lain='(UJI) Penggantian ayakan')
         await self.pk_luar('pk-tumpukan',tujuan='ditumpuk')

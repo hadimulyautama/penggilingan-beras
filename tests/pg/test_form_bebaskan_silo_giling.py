@@ -105,7 +105,7 @@ async def test_csrf_anonim_proses_hilang_token_wajib(pg,hasil):
  async with await _klien(pg,peran='admin') as c:
   assert (await c.post('/api/actions/tutup-silo-giling',json=dict(kode_proses=p.kode_proses,silo='A',sisa=0,dasar='token'))).status_code==403
   assert (await simpan(c,p,0,'')).status_code==409
-  assert (await c.get('/api/actions/ringkasan-bebaskan-silo-giling',params=dict(kode_proses='hilang'))).status_code==400
+  assert (await c.get('/api/actions/ringkasan-bebaskan-silo-giling',params=dict(kode_proses='hilang'))).status_code==403
   assert (await periksa(c,p,silo='Z')).status_code==409
  async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
   assert (await baca(c,p)).status_code==401

@@ -1,4 +1,3 @@
-from pathlib import Path
 from io import BytesIO
 from uuid import uuid4
 from datetime import timedelta
@@ -16,14 +15,13 @@ from app.web.security import hash_sandi
 from tests.pg.test_barang_keluar import gudang,_klien
 from tests.pg.test_portal_pelanggan import client
 pytestmark=pytest.mark.asyncio
-OUT=Path('/Users/wahidnurhani/Developer/Hadi Mulya Systems/output/perbaikan-rekap-otomatis-20261104')
 async def fingerprint(db):
  from app.services.koreksi_bahan_berjalan import raw
  d={m.__tablename__:[raw(x) for x in (await db.scalars(select(m).order_by(m.id))).all()] for m in (PolishingProcess,PolishingOutputLog,PolishingSiloUsage,Peristiwa,ActivityLog,FinishedGoodsStock,ByproductStock,Jasa,PkPurchaseBatch,PkGudang2Intake)}
  return hashlib.sha256(json.dumps(d,sort_keys=True,default=str).encode()).hexdigest()
 @pytest.mark.parametrize('kind',['broken','bekatul','menir','reject'])
-async def test_konsistensi(pg,gudang,kind):
- OUT=Path('/Users/wahidnurhani/Developer/Hadi Mulya Systems/output/perbaikan-rekap-otomatis-20261104')/kind
+async def test_konsistensi(pg,gudang,kind,tmp_path):
+ OUT=tmp_path/kind
  OUT.mkdir(exist_ok=True)
  size=40 if kind=='bekatul' else 50
  async with pg() as db:

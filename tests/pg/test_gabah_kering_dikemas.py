@@ -7,6 +7,7 @@ SKU, tanpa karung wajib. Ujinya karena itu TIDAK menyentuh `stok_produk()`
 maupun `finished_goods_stock` sama sekali — gabah tetap BAHAN.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 from tests.pg.kontak import pelanggan_kledo
 
@@ -360,6 +361,7 @@ async def test_giling_sisa_silo_sesudah_dikemas_memakai_bobot_yang_benar(pg, pab
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo="A")
 
     assert r.berat_masuk == 4_000, (

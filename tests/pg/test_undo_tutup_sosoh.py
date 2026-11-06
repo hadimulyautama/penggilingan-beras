@@ -18,6 +18,8 @@ daripada pembatalan yang menolak: tak ada satu pun layar yang menyebut separuh
 mana yang tertinggal.
 """
 from __future__ import annotations
+from tests.pg.fasilitas import lini_baru as _lini_uji
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 from datetime import date
 
@@ -67,6 +69,7 @@ async def _tutup(pg, uid, *, sisa=800.0, silo="B"):
                                                     selesai_penyosohan)
     async with pg() as db:
         u = await db.get(User, uid)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=[silo])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="medium",
                            berat_kg=6_000)
@@ -170,6 +173,7 @@ async def test_pembatalan_membuka_kembali_jeda_yang_ikut_ditutup(pg, sosoh):
     uid = sosoh["user_id"]
     async with pg() as db:
         u = await db.get(User, uid)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
         kode = r.proc.kode_proses
         await catat_output(db, user=u, kode=kode, jenis="medium", berat_kg=6_000)
@@ -238,7 +242,8 @@ async def test_menolak_bila_silonya_sudah_dipakai_penyosohan_lain(pg, sosoh):
     _, us = await _proc(pg, kode)
     async with pg() as db:
         u = await db.get(User, uid)
-        await mulai_penyosohan(db, user=u, nama_silos=["B"])   # silonya direbut
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
+        await mulai_penyosohan(db, user=u, nama_silos=["B"], lini_id=await _lini_uji(db,u,'penyosohan'))   # silonya direbut
 
     # Penangannya dipanggil LANGSUNG, dengan baris yang dimaksud. Lewat
     # `undo_last` yang terpilih adalah pembukaan proses kedua — ia tindakan yang

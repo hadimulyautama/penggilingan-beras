@@ -163,7 +163,7 @@ async def test_anonim_csrf_kode_kosong_token_wajib(pg,hasil):
  async with await _klien(pg,peran='admin') as c:
   assert (await c.post('/api/actions/selesai-giling',json={'kode_proses':p.kode_proses})).status_code==403
   assert (await simpan(c,p,None,'')).status_code==409
-  assert (await c.get('/api/actions/ringkasan-selesai-giling',params={'kode_proses':'tidak-ada'})).status_code==400
+  assert (await c.get('/api/actions/ringkasan-selesai-giling',params={'kode_proses':'tidak-ada'})).status_code==403
   assert (await c.get('/api/actions/pratinjau-selesai-proses',params={'jenis':'giling','kode_proses':''})).status_code==409
  async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
   assert (await konteks(c,p)).status_code==401
