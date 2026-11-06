@@ -69,6 +69,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Pasang Chromium untuk pengujian antarmuka
+        run: python -m playwright install --with-deps chromium
+
       - name: Migrasi dari database KOSONG
         run: alembic upgrade head
 
@@ -88,6 +91,7 @@ jobs:
       - name: Uji satu aplikasi tanpa mengurangi cakupan
         env:
           PROFIL_CI: ${{ matrix.profil }}
+          UJI_BROWSER_PILIHAN_SILO: "1"
         run: |
           python - <<'PYTHON'
           import os,subprocess,sys
