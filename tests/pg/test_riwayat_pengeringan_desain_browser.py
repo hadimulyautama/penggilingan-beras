@@ -85,4 +85,4 @@ async def test_hash_print_fallback_dan_pendinginan_aktif_tetap(pg,riwayat):
    r=await c.get(url+'?tab_detail='+id);html=BeautifulSoup(r.text,'html.parser');assert r.status_code==200 and 'hidden' not in html.select_one('#panel-'+id).attrs
   async with pg() as db:await dr.mulai_pendinginan_ulang(db,user=await db.get(User,riwayat['user']),kode_lot=riwayat['kode'])
   r=await c.get(url);assert r.status_code==200 and r.url.path.startswith('/proses-aktif/pendinginan/')
-  assert 'data-riwayat-pengeringan' not in r.text and '/static/detail_pendinginan.js?v=1' in r.text
+  assert 'data-riwayat-pengeringan' not in r.text and 'data-pendinginan-aktif' in r.text and '/static/riwayat-pengeringan-desain.js?' in r.text

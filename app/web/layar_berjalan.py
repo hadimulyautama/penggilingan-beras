@@ -110,7 +110,7 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
     def halaman(parameter, nomor):
         return str(dasar.include_query_params(**{parameter: nomor}))
     return await render_laci(
-        request, "detail_sosoh.html" if jenis == "sosoh" else "detail_giling.html" if jenis == "giling" else "detail_pendinginan.html" if jenis == "pendinginan" else "detail_pengeringan.html", d=detail, proses=kartu,
+        request, "detail_sosoh.html" if jenis == "sosoh" else "detail_giling.html" if jenis == "giling" else "detail_pendinginan_aktif.html" if jenis == "pendinginan" else "detail_pengeringan.html", d=detail, proses=kartu,
         boleh_catat_bobot_pengeringan=not is_customer_read(request) and jenis=='pendinginan',
         tab_pengeringan=(request.query_params.get("tab_detail") if request.query_params.get("tab_detail") in
                         {"ringkasan", "bahan", "pengukuran", "riwayat"} else

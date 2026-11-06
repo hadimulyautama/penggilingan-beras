@@ -3,7 +3,7 @@
 Riwayat pengeringan yang sudah selesai pendinginannya memakai template khusus
 `riwayat_pengeringan_detail.html`. Empat tab tetap Ringkasan, Bahan,
 Pengukuran dan Riwayat, menggunakan kelas visual riwayat bersama `.rhs`.
-Pendinginan yang masih aktif memakai template, skrip dan gaya semula.
+Pendinginan aktif memakai template `detail_pendinginan_aktif.html` dengan kontrol bersama dan alur transaksi semula.
 
 Route hanya mengganti nama template. Konteks asli, izin, cakupan lokasi,
 pengalihan fase aktif, API, perhitungan, PDF, dan mutasi tidak diubah.
