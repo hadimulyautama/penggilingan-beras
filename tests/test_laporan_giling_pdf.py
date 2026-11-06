@@ -6,7 +6,7 @@ from pypdf import PdfReader
 from app.web.layar_riwayat import _pdf_laporan_giling
 
 
-def test_pdf_giling_memuat_asal_qc_hasil_transfer_dan_durasi():
+def data_giling():
     mulai = datetime(2026, 10, 12, 1, 0, tzinfo=timezone.utc)
     selesai = datetime(2026, 10, 12, 5, 30, tzinfo=timezone.utc)
     pendinginan_selesai = datetime(2026, 10, 12, 6, 0, tzinfo=timezone.utc)
@@ -63,29 +63,82 @@ def test_pdf_giling_memuat_asal_qc_hasil_transfer_dan_durasi():
         "verified_weight": 6_500,
     }
 
+    return data
+
+
+def test_pdf_giling_memuat_ringkasan_dan_lampiran():
+    data = data_giling()
     pdf = _pdf_laporan_giling(data)
     assert len(data["raw_qc"]) == 10
     assert len(data["qc"]) == 3
     text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
 
-    for expected in ("LOT-20261012-01", "Silo A", "Widiyanto", "AB 1234 CD",
-                     "QC bahan sebelum digiling", "25,5% / 26%", "QC hasil PK",
+    for expected in ("LOT-20261012-01", "Widiyanto", "AB 1234 CD",
+                     "QC penerimaan gabah", "25,5% / 26%", "QC hasil PK",
                      "Gabah kering langsung + gabah hasil pengeringan",
                      "HASIL PK", "6.500 kg", "65,0%",
-                     "Gabah kering langsung", "PGR-20261011-01", "Riwayat pengeringan bahan",
+                     "Gabah kering langsung", "PGR-20261011-01", "Pengeringan sumber bahan",
                      "B 5678 EF", "14,50%", "Ya · 5 sak",
                      "14%", "Rata-rata QC", "KA 14,2% · Broken 2,5% · Susut 1,0%",
-                     "Catatan hasil PK", "TRF-20261012-01", "4 jam 30 menit"):
+                     "Pencatatan hasil PK", "TRF-20261012-01", "4 jam 30 menit"):
         assert expected in text
     assert text.index("KA 14,2%") < text.index("Broken 2,5%") < text.index("Susut 1,0%")
     assert text.count("GB-20261010-01") >= 2
     assert text.count("GB-20261010-02") >= 2
 
-    headings = (
-        '01  Waktu proses dan kesimpulan', '02  Hasil PK dan QC penggilingan',
-        '03  Riwayat pengeringan bahan', '04  Asal bahan dan QC penerimaan',
-        '05  Bahan masuk dan pemakaian silo', '06  Transfer dan sisa PK',
-    )
-    normalized = ' '.join(text.split())
-    positions = [normalized.index(' '.join(h.split())) for h in headings]
-    assert positions == sorted(positions)
+
+    pdf = PdfReader(BytesIO(pdf))
+    assert len(pdf.pages) == 3
+    first, details, source = [page.extract_text() for page in pdf.pages]
+    assert 'Rata-rata QC' in first and 'QC hasil PK' not in first
+    assert 'Pencatatan hasil PK' in details and 'QC hasil PK' in details
+    assert details.index('Pengeringan sumber bahan') < details.index('Transfer dan sisa PK')
+    assert 'Asal bahan dan QC penerimaan' in source
+    assert 'Bahan masuk dan pemakaian silo' not in text and 'Silo A' not in text
+    assert 'Kesimpulan:' not in text and 'MELEBIHI SATU HALAMAN' not in text
+
+
+import pytest
+
+@pytest.mark.parametrize('count', [0, 1, 2, 9])
+def test_hasil_kumulatif_diringkas_tanpa_menjumlahkan(count):
+    data = data_giling()
+    data['progress'] = [dict(time=data['start']+timedelta(minutes=i), weight=2500*(i+1),actor='Petugas '+str(i%2)) for i in range(count)]
+    pdf = PdfReader(BytesIO(_pdf_laporan_giling(data)))
+    text = pdf.pages[1].extract_text()
+    if count:
+        assert 'Catatan terakhir' in text
+        assert f'{count} pencatatan; angka kumulatif tidak dijumlahkan' in text
+        assert f'{2500*count:,}'.replace(',', '.')+' kg' in text
+    else:
+        assert 'Belum ada catatan' in text and 'Catatan terakhir' not in text
+    if count > 1:
+        assert 'Petugas 0, Petugas 1' in text
+        assert str(count-1)+' pencatatan' in text
+
+
+def test_mutu_ringkasan_mengikuti_layanan_dan_izin():
+    from types import SimpleNamespace
+    from app.services.mutu_pk import penilaian_dari_log
+    data = data_giling()
+    data['qc_rating'] = penilaian_dari_log([SimpleNamespace(kadar_air=14.8, broken_persen=28, susut_persen=14, butir_kuning='bersih', gabah='bersih', merang='bersih')])
+    data['qc'][0]['note'] = '<b>Catatan lengkap & asli</b>'
+    first = PdfReader(BytesIO(_pdf_laporan_giling(data))).pages[0].extract_text()
+    assert '90,00 / 100 (B1)' in first
+    data['show_quality'] = False
+    pdf = PdfReader(BytesIO(_pdf_laporan_giling(data)))
+    assert '90,00 / 100 (B1)' not in '\n'.join(p.extract_text() for p in pdf.pages)
+    assert '<b>Catatan lengkap & asli</b>' in pdf.pages[1].extract_text()
+    data['qc'] *= 14
+    text = '\n'.join(p.extract_text() for p in PdfReader(BytesIO(_pdf_laporan_giling(data))).pages)
+    assert text.count('<b>Catatan lengkap & asli</b>') == 14
+
+
+def test_qc_kategori_berbeda_tetap_tampil_per_putaran():
+    data = data_giling()
+    data['qc'][0].update(yellow='Parah', paddy='Sedikit', chaff='Banyak')
+    data['qc'][1].update(yellow='Bersih', paddy='Sedang', chaff='Bersih')
+    text = PdfReader(BytesIO(_pdf_laporan_giling(data))).pages[1].extract_text()
+    for value in ('Parah', 'Sedikit', 'Banyak', 'Sedang'):
+        assert value in text
+    assert 'Semua pemeriksaan:' not in text
