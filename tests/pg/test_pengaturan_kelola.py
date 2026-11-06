@@ -55,8 +55,8 @@ async def test_silo_dan_gudang_edit_filter_arsip_serta_perlindungan_dipakai(pg,m
         async with pg() as db:
             assert not (await db.get(Silo,sid)).aktif
         r=await kirim(c,'/pengaturan/sebab-jeda',{'jenis':'pengeringan','tambah':'Bahan bakar uji habis'})
-        assert r.headers['location']=='/pengaturan/alat?pesan=sebab-diubah'
-        assert 'Bahan bakar uji habis' in (await c.get('/pengaturan/alat')).text
+        assert r.headers['location']=='/pengaturan/sebab-berhenti?pesan=sebab-diubah'
+        assert 'Bahan bakar uji habis' in (await c.get('/pengaturan/sebab-berhenti')).text
         await kirim(c,'/pengaturan/gudang/tambah',{'nama':'Gudang tambahan kelola'})
         async with pg() as db:
             wh=await db.scalar(select(Warehouse).where(Warehouse.nama_gudang=='Gudang tambahan kelola'))

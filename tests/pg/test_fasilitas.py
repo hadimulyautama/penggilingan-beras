@@ -96,14 +96,11 @@ async def test_pengaturan_endpoint_dan_lihat_sebagai(pg,role,view,expected):
     async with await _klien(pg,peran=role,gudang='Gudang 2') as c:
         if view:c.cookies.set(NAMA_KUKI,view)
         r=await c.get('/pengaturan/fasilitas');assert r.status_code==expected,r.text
+        if expected==200:assert r.url.path=='/pengaturan/mesin'
         if expected==200:
-            assert 'Master jenis proses' in r.text and 'Line / alat' in r.text
+            assert 'Mesin &amp; line produksi' in r.text
+            assert (await c.get('/pengaturan/jenis-proses')).status_code==200
             assert 'name="_csrf"' in r.text
-            if view is None:
-                from pathlib import Path
-                import re
-                html=re.sub(r'<script\b[^>]*>[\s\S]*?</script>','',r.text,flags=re.I)
-                Path('../pengaturan-fasilitas.html').write_text(html)
         response=await c.post('/pengaturan/fasilitas',data={'_csrf':cap_formulir(c),'objek':'jenis','kode':'uji-web','nama':'Uji web','aktif':'on'})
         assert response.status_code==expected,response.text
 

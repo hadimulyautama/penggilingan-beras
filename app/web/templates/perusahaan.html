@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block judul %}Data perusahaan{% endblock %}
+{% block judul %}Identitas &amp; logo perusahaan{% endblock %}
 {% block isi %}
-<section class="kartu">
-<a href="/pengaturan">← Pengaturan</a><h1>Data perusahaan</h1>
+<section data-pengaturan-form class="kartu">
+<a href="/pengaturan">← Pengaturan</a><p class="bantu">Pengaturan / Perusahaan &amp; fasilitas</p><h1>Identitas &amp; logo perusahaan</h1>
 <p>Identitas pada laporan PadiFlow, dokumen portal pelanggan, serta bukti timbang TeraFlow.</p>
 {% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
 {% if tersimpan %}<div class="pesan pesan--ok" role="status">Data perusahaan tersimpan.</div>{% endif %}
-<form action="/pengaturan/perusahaan" method="post" enctype="multipart/form-data">
+<form action="/pengaturan/perusahaan" method="post" enctype="multipart/form-data" data-jaga-isian>
 <input type="hidden" name="_csrf" value="{{ CSRF }}">
 <label for="nama">Nama perusahaan</label><input class="fld" id="nama" name="nama" required maxlength="120" value="{{ perusahaan.nama }}">
 <label for="alamat">Alamat</label><textarea class="fld" id="alamat" name="alamat" required maxlength="500" rows="3">{{ perusahaan.alamat }}</textarea>
@@ -21,4 +21,5 @@
 <p>Perubahan dipakai saat dokumen dibuat kembali. PDF yang sudah diunduh tetap seperti semula.</p>
 <button class="btn btn--utama" type="submit">Simpan data perusahaan</button>
 </form></section>
+<script src="/static/pengaturan-isian.js?v={{ VERSI }}"></script>
 {% endblock %}

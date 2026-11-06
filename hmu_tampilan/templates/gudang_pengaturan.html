@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block judul %}Pengaturan gudang{% endblock %}
 {% block isi %}
+<section data-pengaturan-form>
+<p class="bantu">Pengaturan / Perusahaan &amp; fasilitas</p><h1>Gudang</h1>
 {% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
@@ -18,8 +20,8 @@
           {% elif not w.aktif %}<span class="lencana">Diarsipkan</span>{% endif %}
         </div>
         {% if w.aktif and not w.fungsi %}
-          <form method="post" action="/pengaturan/gudang/hapus" onsubmit="return confirm('Arsipkan gudang ini?')">
-            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+          <form method="post" data-jaga-isian action="/pengaturan/gudang/hapus" onsubmit="return confirm('Arsipkan gudang ini?')">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/gudang">
             <input type="hidden" name="gudang_id" value="{{ w.id }}">
             <button class="btn btn--kecil btn--bahaya" type="submit">Hapus</button>
           </form>
@@ -28,8 +30,8 @@
       {% if w.aktif %}
       <details style="margin-top:10px">
         <summary class="btn btn--kecil">✎ Edit gudang</summary>
-        <form method="post" action="/pengaturan/gudang/edit" class="grup" style="margin-top:10px">
-          <input type="hidden" name="_csrf" value="{{ CSRF }}">
+        <form method="post" data-jaga-isian action="/pengaturan/gudang/edit" class="grup" style="margin-top:10px">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/gudang">
           <input type="hidden" name="gudang_id" value="{{ w.id }}">
           <label class="lbl" for="wh_nama_{{ w.id }}">Nama gudang</label>
           <input class="fld" id="wh_nama_{{ w.id }}" name="nama" value="{{ w.nama }}" maxlength="100" required>
@@ -55,8 +57,8 @@
 <div class="kartu" style="margin-top:14px">
   <h2 style="margin-top:0">Tambah gudang</h2>
   <p class="bantu">Gudang baru tercatat sebagai lokasi. Agar menjadi bagian alur produksi, alur kerjanya perlu dihubungkan lebih dahulu.</p>
-  <form method="post" action="/pengaturan/gudang/tambah" class="grup">
-    <input type="hidden" name="_csrf" value="{{ CSRF }}">
+  <form method="post" data-jaga-isian action="/pengaturan/gudang/tambah" class="grup">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/gudang">
     <label class="lbl" for="wh_baru_nama">Nama gudang</label>
     <input class="fld" id="wh_baru_nama" name="nama" maxlength="100" required>
     <label class="lbl" for="wh_baru_alamat">Alamat</label>
@@ -69,4 +71,4 @@
   </form>
 </div>
 <a href="/pengaturan" class="btn">Kembali ke Pengaturan</a>
-{% endblock %}
+{% include "_pengaturan_isian.html" %}</section><script src="/static/pengaturan-isian.js?v={{ VERSI }}"></script>{% endblock %}

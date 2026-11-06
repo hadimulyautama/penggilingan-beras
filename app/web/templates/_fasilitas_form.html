@@ -1,0 +1,18 @@
+{% macro formulir(objek, row=none) %}
+{% set pilihan = isian if isian.get('objek')==objek and isian.get('id','') == (row.id|string if row else '') else {} %}
+<form method="post" action="/pengaturan/fasilitas" data-jaga-isian>
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+<input type="hidden" name="kembali_pengaturan" value="{{ '/pengaturan/jenis-proses' if objek=='jenis' else '/pengaturan/mesin/'~row.id if row else '/pengaturan/mesin' }}"><input type="hidden" name="objek" value="{{ objek }}">
+{% if row %}<input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="versi" value="{{ row.versi }}">{% endif %}
+<div class="fasilitas-isian">
+<label>Nama <input class="fld" name="nama" value="{{ pilihan.get('nama',row.nama if row else '') }}" required maxlength="100"></label>
+<label>Kode <input class="fld" name="kode" value="{{ pilihan.get('kode',row.kode if row else '') }}" required maxlength="40" {% if row and objek=='jenis' %}readonly{% endif %}></label>
+{% if objek=='lini' %}
+<label>Gudang <select class="fld" name="warehouse_id" required>{% for w in gudang %}<option value="{{ w.id }}" {% if pilihan.get('warehouse_id')==w.id|string or not pilihan and row and row.warehouse_id==w.id %}selected{% endif %}>{{ w.nama_gudang }}{% if not w.aktif %} · tidak aktif{% endif %}</option>{% endfor %}</select></label>
+<label>Jenis proses <select class="fld" name="jenis_proses_id" required>{% for j in jenis %}<option value="{{ j.id }}" {% if pilihan.get('jenis_proses_id')==j.id|string or not pilihan and row and row.jenis_proses_id==j.id %}selected{% endif %}>{{ j.nama }}{% if j.kode not in penjalan %} · belum ada layanan pelaksana{% endif %}</option>{% endfor %}</select></label>
+<label>Dryer terkait (pengeringan) <select class="fld" name="dryer_id"><option value="">Tidak menggunakan dryer</option>{% for d in dryer %}<option value="{{ d.id }}" {% if pilihan.get('dryer_id')==d.id|string or not pilihan and row and row.dryer_id==d.id %}selected{% endif %}>{{ d.nama }} · gudang #{{ d.warehouse_id }}</option>{% endfor %}</select></label>
+{% endif %}
+<label class="fasilitas-aktif"><input type="checkbox" name="aktif" {% if pilihan.get('aktif')=='on' or not pilihan and (not row or row.aktif) %}checked{% endif %}> Aktif</label>
+</div><button class="btn btn--utama" type="submit">{{ 'Simpan perubahan' if row else 'Tambahkan' }}</button>
+</form>
+{% endmacro %}

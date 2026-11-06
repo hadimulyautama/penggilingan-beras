@@ -66,8 +66,12 @@ async def test_non_super_ditolak_meski_tanpa_super_aktif(monkeypatch,metode,pera
 def test_menu_perusahaan_hanya_terlihat_super(boleh):
     from pathlib import Path
     from jinja2 import Environment,DictLoader
-    source=(Path(__file__).parents[1]/'app/web/templates/pengaturan_fasilitas.html').read_text()
-    env=Environment(loader=DictLoader({'pengaturan.html':'{% block isi %}{% endblock %}', 'uji':source}))
-    html=env.get_template('uji').render(BAGIAN='',blok_kelola=True,blok_perusahaan=boleh)
-    assert ('/pengaturan/perusahaan' in html)==boleh
-    assert '/pengaturan/fasilitas' in html
+    source=(Path(__file__).parents[1]/'hmu_tampilan/templates/pengaturan.html').read_text()
+    env=Environment(loader=DictLoader({'base.html':'{% block isi %}{% endblock %}',
+        '_versi.html':'{% macro peringatan(a,b) %}{% endmacro %}{% macro baris(a) %}{% endmacro %}',
+        '_pengaturan_ikon.html':'{% macro ikon(n) %}{% endmacro %}',
+        '_kata_pengaturan.html':'', '_pengaturan_terik.html':'', 'uji':source}))
+    html=env.get_template('uji').render(BAGIAN='',blok_kelola=True,blok_perusahaan=boleh,akun=N(nama='Uji'))
+    assert ('href="/pengaturan/perusahaan"' in html)==boleh
+    assert 'href="/pengaturan/mesin"' in html
+    assert '/pengaturan/fasilitas' not in html

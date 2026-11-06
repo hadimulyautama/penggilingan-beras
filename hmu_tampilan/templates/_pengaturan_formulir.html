@@ -136,9 +136,8 @@
   </details>
 {%- endmacro %}
 
-{# Target per mesin dan sebab berhenti pengeringan kini dikelola di Alat.
-   Jangan sisakan judul dan kartu kosong di sini setelah pemindahan itu. #}
-{% for jenis, judul in PROSES if jenis != 'pengeringan' %}
+{# Satu sumber sebab berhenti untuk semua mesin; detail dryer menaut ke sini. #}
+{% for jenis, judul in PROSES %}
 <div>
   <span class="lbl">{{ judul }}</span>
   <div class="kartu">
@@ -149,6 +148,8 @@
 
 
 {% elif BAGIAN == 'mutu' %}
+<section class="kartu"><h2>Target kadar air umum</h2><form method="post" action="/pengaturan/target-kadar-air" data-jaga-isian><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/mutu"><label class="lbl" for="target_umum">Target (%)</label><input class="fld" id="target_umum" name="nilai" inputmode="decimal" value="{{ target_umum }}" required><p class="bantu">Dipakai oleh dryer yang mengikuti target umum. Target khusus setiap dryer tetap terpisah.</p><button class="btn btn--utama">Simpan target umum</button></form></section>
+
 
 <div>
   <span class="lbl">Pencatatan mutu</span>

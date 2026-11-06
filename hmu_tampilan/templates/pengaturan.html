@@ -23,8 +23,15 @@
   <div class="pg-kelompok">
     <section class="pg-grup" aria-labelledby="pg-akun"><header><span>{{ ikon('user') }}</span><div><h2 id="pg-akun">Akun &amp; perangkat</h2><p>Pribadi · perangkat ini</p></div></header>
       {{ pintu('/pengaturan/akun', 'Nama & kata sandi', 'Nama pada catatan pekerjaan', 'user') }}
-      {{ pintu('/pengaturan/peran', 'Peran & gudang', 'Lihat sebagai atau pilih gudang kerja', 'eye', blok_kerja_gudang) }}
+      {{ pintu('/pengaturan/peran', 'Peran & gudang kerja', 'Lihat sebagai atau pilih gudang kerja', 'eye', blok_kerja_gudang) }}
       {{ pintu('/pengaturan/sesi', 'Sesi perangkat', 'Keluar atau ganti pengguna', 'device') }}
+    </section>
+    <section class="pg-grup" aria-labelledby="pg-fasilitas"><header><span>{{ ikon('factory') }}</span><div><h2 id="pg-fasilitas">Perusahaan &amp; fasilitas</h2><p>Identitas, lokasi, dan sarana produksi</p></div></header>
+      {{ pintu('/pengaturan/perusahaan', 'Identitas & logo perusahaan', 'Nama, alamat, kontak, dan logo dokumen', 'factory', blok_perusahaan) }}
+      {{ pintu('/pengaturan/gudang', 'Gudang', 'Nama, alamat, dan geotag', 'warehouse', blok_kelola) }}
+      {{ pintu('/pengaturan/mesin', 'Mesin & line produksi', 'Pengering, penggilingan, dan penyosohan', 'factory', blok_kelola) }}
+      {{ pintu('/pengaturan/silo', 'Silo', 'Silo gabah dan bahan penyosohan', 'warehouse', blok_kelola) }}
+      <details class="pg-lanjutan"><summary>Pengaturan lanjutan</summary>{{ pintu('/pengaturan/jenis-proses', 'Jenis proses', 'Master jenis proses produksi', 'sliders', blok_kelola) }}</details>
     </section>
     {% if blok_setelan or TAMPILAN_INDUK %}
     <section class="pg-grup" aria-labelledby="pg-operasional"><header><span>{{ ikon('sliders') }}</span><div><h2 id="pg-operasional">Operasional</h2><p>Berlaku untuk proses produksi</p></div></header>
@@ -32,23 +39,18 @@
       {{ pintu('/pengaturan/mutu', 'Pencatatan mutu / QC', 'Formulir dan pengingat mutu', 'clipboard', blok_setelan) }}
     </section>
     {% endif %}
-    {% if blok_kelola or TAMPILAN_INDUK %}
-    <section class="pg-grup" aria-labelledby="pg-pengelolaan"><header><span>{{ ikon('users') }}</span><div><h2 id="pg-pengelolaan">Pengelolaan</h2><p>Orang, alat, dan gudang</p></div></header>
+    <section class="pg-grup" aria-labelledby="pg-pengguna"><header><span>{{ ikon('users') }}</span><div><h2 id="pg-pengguna">Pengguna &amp; hak akses</h2><p>Akun pengguna dan izin tindakan</p></div></header>
       {% if kelola_darurat and blok_kelola %}<p class="pg-darurat">Belum ada akun Super Admin aktif, jadi pengelolaan sementara masih di tangan {{ kata.pemegang_sementara() }}.</p>{% endif %}
       {{ pintu('/pengguna', 'Kelola pengguna', 'Orang, akun, peran, dan sandi', 'users', blok_kelola) }}
-      {{ pintu('/pengaturan/alat', 'Alat: dryer & silo', 'Target dan sebab berhenti per dryer', 'factory', blok_kelola) }}
-      {{ pintu('/pengaturan/gudang', 'Gudang', 'Nama, alamat, dan geotag', 'warehouse', blok_kelola) }}
+      {{ pintu('/pengaturan/akses', 'Daftar akses', 'Hak tiap peran dan rincian setiap tindakan', 'users') }}
     </section>
-    {% endif %}
     <section class="pg-grup" aria-labelledby="pg-sistem"><header><span>{{ ikon('plug') }}</span><div><h2 id="pg-sistem">Sistem &amp; koneksi</h2><p>Informasi aplikasi{% if tuan %} dan koneksi{% endif %}</p></div></header>
       {{ pintu('/pengaturan/kledo', 'Kontak Kledo', 'Perbarui kontak pelanggan & vendor', 'refresh', blok_setelan) }}
-      {{ pintu('/audit', 'List audit', 'Catatan, pelaku, waktu, dan filter', 'history', tuan) }}
-      {{ pintu('/pengaturan/akses', 'Daftar akses', 'Hak tiap peran dan rincian setiap tindakan', 'users') }}
+      {{ pintu('/audit', 'Catatan audit', 'Catatan, pelaku, waktu, dan filter', 'history', tuan) }}
       {{ pintu('/pengaturan/sistem', 'Batas ubah & versi', 'Informasi dan aturan aplikasi', 'info') }}
       {% if blok_mode_uji or mode_uji_tersedia %}{{ pintu('/pengaturan/mode-uji', 'Mode uji', 'Hapus data uji — tiket timbang tetap tersimpan', 'flask', blok_mode_uji) }}{% endif %}
     </section>
   </div>
-  {% include "_daftar_akses.html" %}
 {% endif %}
 </section>
 {% endblock %}

@@ -1,50 +1,46 @@
 {% extends 'base.html' %}
-{% block judul %}Gudang, line & jenis proses{% endblock %}
+{% from '_fasilitas_form.html' import formulir with context %}
+{% block judul %}{{ 'Jenis proses' if mode=='jenis' else 'Mesin & line produksi' }}{% endblock %}
 {% block isi %}
-<section data-fasilitas>
-<h1>Gudang, line & jenis proses</h1>
-<p>Gudang adalah lokasi. Line/alat menjalankan jenis proses tertentu. Perubahan master tidak mencatat stok atau mengubah riwayat proses.</p>
-<p><a href="/pengaturan/gudang">Kelola gudang</a> · <a href="/pengaturan/alat">Kelola dryer dan silo</a></p>
-{% if err %}<p role="alert">{{ err }}</p>{% endif %}
-{% if request.query_params.get('tersimpan') %}<p role="status">Pengaturan tersimpan.</p>{% endif %}
-{% macro formulir(objek, row=none) %}
-{% set pilihan = isian if isian.get('objek')==objek and isian.get('id','') == (row.id|string if row else '') else {} %}
-<form method="post" action="/pengaturan/fasilitas" data-jaga-isian>
-<input type="hidden" name="_csrf" value="{{ CSRF }}">
-<input type="hidden" name="objek" value="{{ objek }}">
-{% if row %}<input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="versi" value="{{ row.versi }}">{% endif %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+<section data-pengaturan-form class="pg pg-fasilitas" data-fasilitas>
+<a class="pg-kembali" href="{{ '/pengaturan/mesin' if detail or pengering else '/pengaturan' }}">← {{ 'Mesin & line produksi' if detail or pengering else 'Pengaturan' }}</a>
+<p class="pg-lingkup">Pengaturan / Perusahaan &amp; fasilitas{% if mode=='jenis' %} / Pengaturan lanjutan{% endif %}</p>
+<h1>{{ 'Jenis proses' if mode=='jenis' else pengering.nama if pengering else detail.nama if detail else 'Mesin & line produksi' }}</h1>
+{% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
+{% if pesan or request.query_params.get('tersimpan') %}<div class="pesan pesan--ok" role="status">{{ pesan or 'Pengaturan tersimpan.' }}</div>{% endif %}
+{% if mode=='jenis' %}
+<p>Pendaftaran jenis proses tidak otomatis menyediakan alur produksi baru. Pelaksanaan tetap memerlukan dukungan bahan, hasil, stok, QC, dan validasinya.</p>
+{% for j in jenis %}<details class="kartu" {% if isian.get('id')==j.id|string %}open{% endif %}><summary>{{ j.nama }} · {{ j.kode }} · {{ 'Aktif' if j.aktif else 'Nonaktif' }}</summary>{{ formulir('jenis', j) }}</details>{% endfor %}
+<details class="kartu" {% if isian and not isian.get('id') %}open{% endif %}><summary>Tambah jenis proses</summary>{{ formulir('jenis') }}</details>
+{% elif detail or pengering %}
+<div class="kartu"><dl class="fasilitas-fakta"><dt>Gudang</dt><dd>{{ gudang_nama.get(detail.warehouse_id if detail else pengering.warehouse_id, 'Belum tercatat') }}</dd><dt>Jenis proses</dt><dd>{{ jenis_nama.get(detail.jenis_proses_id, 'Belum tercatat') if detail else 'Pengeringan · line belum ditautkan' }}</dd><dt>Status line</dt><dd>{{ ('Aktif' if detail.aktif else 'Nonaktif') if detail else 'Belum ditautkan' }}</dd>{% if pengering %}<dt>Status dryer</dt><dd>{{ pengering.status }}</dd>{% endif %}</dl></div>
+{% if pengering %}
+{% set d=pengering %}{% set f=isian if isian.get('dryer_id')==d.id|string else {} %}
+<section class="kartu"><h2>Pengaturan pengering</h2>
+<form method="post" action="/pengaturan/alat/dryer/edit" data-jaga-isian>
+<input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="dryer_id" value="{{ d.id }}"><input type="hidden" name="kembali_pengaturan" value="{{ '/pengaturan/mesin/'~detail.id if detail else '/pengaturan/dryer/'~d.id }}">
 <div class="fasilitas-isian">
-<label>Nama <input class="fld" name="nama" value="{{ pilihan.get('nama',row.nama if row else '') }}" required maxlength="100"></label>
-<label>Kode <input class="fld" name="kode" value="{{ pilihan.get('kode',row.kode if row else '') }}" required maxlength="40" {% if row and objek=='jenis' %}readonly{% endif %}></label>
-{% if objek=='lini' %}
-<label>Gudang <select class="fld" name="warehouse_id" required>{% for w in gudang %}<option value="{{ w.id }}" {% if pilihan.get('warehouse_id')==w.id|string or not pilihan and row and row.warehouse_id==w.id %}selected{% endif %}>{{ w.nama_gudang }}{% if not w.aktif %} · tidak aktif{% endif %}</option>{% endfor %}</select></label>
-<label>Jenis proses <select class="fld" name="jenis_proses_id" required>{% for j in jenis %}<option value="{{ j.id }}" {% if pilihan.get('jenis_proses_id')==j.id|string or not pilihan and row and row.jenis_proses_id==j.id %}selected{% endif %}>{{ j.nama }}{% if j.kode not in penjalan %} · belum ada layanan pelaksana{% endif %}</option>{% endfor %}</select></label>
-<label>Dryer terkait (pengeringan) <select class="fld" name="dryer_id"><option value="">Tidak menggunakan dryer</option>{% for d in dryer %}<option value="{{ d.id }}" {% if pilihan.get('dryer_id')==d.id|string or not pilihan and row and row.dryer_id==d.id %}selected{% endif %}>{{ d.nama }} · gudang #{{ d.warehouse_id }}</option>{% endfor %}</select></label>
-{% endif %}
-<label class="fasilitas-aktif"><input type="checkbox" name="aktif" {% if pilihan.get('aktif')=='on' or not pilihan and (not row or row.aktif) %}checked{% endif %}> Aktif</label>
-</div><button class="btn btn--utama" type="submit">{{ 'Simpan perubahan' if row else 'Tambahkan' }}</button>
-</form>
-{% endmacro %}
-<details><summary>Tambah dryer</summary><form method="post" action="/pengaturan/alat/dryer">
-<input type="hidden" name="_csrf" value="{{ CSRF }}"><div class="fasilitas-isian">
-<label>Nama dryer <input class="fld" name="nama" minlength="3" maxlength="50" required></label>
-<label>Gudang <select class="fld" name="warehouse_id" required>{% for w in gudang if w.aktif %}<option value="{{ w.id }}">{{ w.nama_gudang }}</option>{% endfor %}</select></label>
-<label>Kapasitas (kg) <input class="fld" name="kapasitas_kg" inputmode="decimal" required></label></div><button class="btn" type="submit">Tambahkan dryer</button></form></details>
-<details><summary>Tambah silo gabah</summary><form method="post" action="/pengaturan/alat/silo"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="jenis_isi" value="gabah"><div class="fasilitas-isian"><label>Nama silo <input class="fld" name="nama" required maxlength="50"></label><label>Gudang <select class="fld" name="warehouse_id">{% for w in gudang if w.aktif %}<option value="{{ w.id }}">{{ w.nama_gudang }}</option>{% endfor %}</select></label></div><button class="btn" type="submit">Tambahkan silo gabah</button></form></details>
-<h2>Dryer</h2>
-{% for d in dryer %}<details><summary>{{ d.nama }} · alat ID {{ d.id }}</summary>
-<form method="post" action="/pengaturan/alat/dryer/edit"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="dryer_id" value="{{ d.id }}"><div class="fasilitas-isian">
-<label>Nama <input class="fld" name="nama" value="{{ d.nama }}" minlength="3" maxlength="50" required></label>
-<label>Kapasitas (kg) <input class="fld" name="kapasitas_kg" value="{{ d.kapasitas_kg }}" inputmode="decimal" required></label>
-<label>Target kadar air (%) <input class="fld" name="target_kadar_air" value="{{ d.target_kadar_air if d.target_kadar_air is not none else '' }}" inputmode="decimal" required></label>
-</div><button class="btn" type="submit">Simpan dryer</button></form></details>{% endfor %}
-<h2>Line / alat</h2>
-{% for l in lini %}<details class="kartu"><summary>{{ l.nama }} · ID {{ l.id }} · {{ 'Aktif' if l.aktif else 'Nonaktif' }}</summary>{{ formulir('lini',l) }}</details>{% endfor %}
-<details><summary>Tambah line / alat</summary>{{ formulir('lini') }}</details>
-<h2>Master jenis proses</h2>
-<p>Jenis baru dapat didaftarkan. Pelaksanaan tetap memerlukan layanan domain yang mendukung bahan, hasil, stok, QC, dan validasinya.</p>
-{% for j in jenis %}<details><summary>{{ j.nama }} · ID {{ j.id }} · {{ j.kode }}</summary>{{ formulir('jenis',j) }}</details>{% endfor %}
-<details><summary>Tambah jenis proses</summary>{{ formulir('jenis') }}</details>
-<style>.fasilitas-isian{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:1rem}.fasilitas-isian label{display:grid;gap:.3rem}.fasilitas-isian input,.fasilitas-isian select{max-width:100%;min-height:44px}[data-fasilitas] details{margin:1rem 0;padding:1rem;border:1px solid var(--garis,#bbb);border-radius:12px}[data-fasilitas] summary{cursor:pointer;min-height:44px}[data-fasilitas] form{margin-top:1rem}[data-fasilitas] button{margin-top:1rem;min-height:44px}[data-fasilitas] .fasilitas-aktif{display:flex;align-items:center;gap:.5rem}[data-fasilitas] input[type=checkbox]{width:20px;min-height:20px;height:20px}</style>
-</section>
+<label>Nama pengering<input class="fld" name="nama" minlength="3" maxlength="50" value="{{ f.get('nama', d.nama) }}" required></label>
+<label>Kapasitas (kg)<input class="fld" name="kapasitas_kg" value="{{ f.get('kapasitas_kg',d.kapasitas_kg) }}" inputmode="decimal" required></label>
+<label>Target kadar air (%)<input class="fld" name="target_kadar_air" value="{{ f.get('target_kadar_air',d.target_kadar_air if d.target_kadar_air is not none else target_global) }}" inputmode="decimal" required></label>
+<label>Nama tungku<input class="fld" name="tungku" maxlength="50" value="{{ f.get('tungku',tungku.get(d.id,'')) }}"></label>
+</div><label class="fasilitas-aktif"><input type="checkbox" name="target_umum" value="1" {% if f.get('target_umum')=='1' or not f and d.target_kadar_air is none %}checked{% endif %}> Gunakan target umum ({{ target_global }}%)</label>
+<p class="bantu">Target umum mengikuti setelan operasional. Hilangkan centang untuk menetapkan target khusus. Nama tungku yang sama menunjukkan tungku bersama.</p>
+<button class="btn btn--utama">Simpan pengering</button></form>
+<form method="post" action="/pengaturan/alat/dryer/status"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="dryer_id" value="{{ d.id }}"><input type="hidden" name="kembali_pengaturan" value="{{ '/pengaturan/mesin/'~detail.id if detail else '/pengaturan/dryer/'~d.id }}"><button class="btn">{{ 'Nonaktifkan' if d.status=='aktif' else 'Aktifkan' }} dryer</button></form>
+<a href="/pengaturan/sebab-berhenti">Sebab berhenti umum</a> · <a href="/pengaturan/mutu">Setelan mutu &amp; target umum</a>
+</section>{% endif %}
+<details class="kartu" {% if isian.get('objek')=='lini' %}open{% endif %}><summary>Hubungan proses &amp; kode</summary><p class="bantu">Identitas line dan lokasi mengikuti relasi tersimpan. Mengubah bagian ini tidak menimpa kapasitas atau target kadar air dryer.</p>{{ formulir('lini',detail) }}</details>
+{% else %}
+<p>Pilih mesin untuk mengatur identitas, gudang, dan hubungan prosesnya.</p>
+{% for w in gudang %}{% set lines=lini|selectattr('warehouse_id','equalto',w.id)|list %}{% set orphans=[] %}
+<section class="pg-grup"><header><h2>{{ w.nama_gudang }}{% if not w.aktif %} · Nonaktif{% endif %}</h2></header>
+{% for l in lines %}<a class="pg-pintu" href="/pengaturan/mesin/{{ l.id }}"><span class="pg-pintu__isi"><strong>{{ dryer_nama.get(l.dryer_id,l.nama) }}</strong><small>{{ jenis_nama.get(l.jenis_proses_id,'Jenis belum tercatat') }} · {{ 'Aktif' if l.aktif else 'Nonaktif' }} · line #{{ l.id }}</small></span><span aria-hidden="true">›</span></a>{% endfor %}
+{% for d in dryer if d.warehouse_id==w.id %}{% if not lini|selectattr('dryer_id','equalto',d.id)|list %}<a class="pg-pintu" href="/pengaturan/dryer/{{ d.id }}"><strong>{{ d.nama }}</strong><small>Pengeringan · belum ditautkan ke line</small></a>{% endif %}{% endfor %}
+</section>{% endfor %}
+<details class="kartu" {% if isian.get('objek')=='lini' and not isian.get('id') %}open{% endif %}><summary>Tambah mesin / line</summary><p>Untuk penggilingan atau penyosohan, tambahkan line. Untuk pengeringan, tambahkan dryer beserta line-nya.</p>{{ formulir('lini') }}</details>
+<details class="kartu" {% if isian.get('kapasitas_kg') and not isian.get('dryer_id') %}open{% endif %}><summary>Tambah dryer</summary><form method="post" action="/pengaturan/alat/dryer" data-jaga-isian><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kembali_pengaturan" value="/pengaturan/mesin"><div class="fasilitas-isian"><label>Nama dryer<input class="fld" name="nama" minlength="3" maxlength="50" value="{{ isian.get('nama','') if not isian.get('objek') else '' }}" required></label><label>Gudang<select class="fld" name="warehouse_id" required>{% for w in gudang if w.aktif %}<option value="{{ w.id }}" {% if isian.get('warehouse_id')==w.id|string %}selected{% endif %}>{{ w.nama_gudang }}</option>{% endfor %}</select></label><label>Kapasitas (kg)<input class="fld" name="kapasitas_kg" inputmode="decimal" value="{{ isian.get('kapasitas_kg','') }}" required></label></div><button class="btn btn--utama">Tambahkan dryer</button></form></details>
+{% endif %}</section>
+<script src="/static/pengaturan-isian.js?v={{ VERSI }}"></script>
 {% endblock %}
