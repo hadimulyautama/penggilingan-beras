@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+{% extends "_daftar_riwayat_proses.html" %}
 {% from "_bahan_silo.html" import bahan_silo %}
 {% block judul %}Riwayat Penggilingan{% endblock %}
 {% import "_stok.html" as st with context %}
 {% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg_rinci %}
 
-{% block isi %}
+{% block daftar_isi %}
 {% set total = namespace(bahan=0, pk=0) %}
 {% for item in kartu %}
   {% set total.bahan = total.bahan + (item.bahan_kg or 0) %}

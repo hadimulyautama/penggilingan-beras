@@ -1,4 +1,5 @@
 {% macro header(label, title, description, stats) %}
+{% if PORTAL_READ_ONLY %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
 <section class="riwayat-intro" aria-label="{{ title }}">
   <div class="riwayat-guide"><p class="riwayat-description">{{ description }}</p></div>
@@ -11,4 +12,10 @@
     {% endfor %}
   </div>
 </section>
+{% else %}
+<section class="rpd-intro" aria-label="{{ title }}">
+ <h2>{{ title|replace('Riwayat ', '') }}</h2><p class="rpd-description">{{ description }}</p>
+ <div class="rpd-stats" aria-label="Ringkasan {{ title }}">{% for icon,value,caption in stats %}<div><span>{{ caption }}</span><strong>{{ value }}</strong></div>{% endfor %}</div>
+</section>
+{% endif %}
 {% endmacro %}

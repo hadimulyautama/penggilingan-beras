@@ -1,10 +1,10 @@
-{% extends "base.html" %}
+{% extends "_daftar_riwayat_proses.html" %}
 {% block judul %}Riwayat Transfer{% endblock %}
 {% import "_stok.html" as st with context %}
 {% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg %}
 
-{% block isi %}
+{% block daftar_isi %}
 {% set total = namespace(berat=0) %}
 {% for item in kartu %}{% set total.berat = total.berat + (item.berat_kg or 0) %}{% endfor %}
 {{ rh.header("RIWAYAT PERPINDAHAN", "Riwayat Transfer",

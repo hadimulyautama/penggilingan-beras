@@ -1,11 +1,11 @@
 {% from '_bobot_pengeringan.html' import dua_bobot %}
-{% extends "base.html" %}
+{% extends "_daftar_riwayat_proses.html" %}
 {% block judul %}Riwayat Pengeringan{% endblock %}
 {% import "_stok.html" as st with context %}
 {% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg_rinci %}
 
-{% block isi %}
+{% block daftar_isi %}
 {% set total_bahan = namespace(kg=0) %}
 {% for item in kartu %}{% set total_bahan.kg = total_bahan.kg + (item.bahan_kg or 0) %}{% endfor %}
 {{ rh.header("RIWAYAT GUDANG 1", "Riwayat Pengeringan",
