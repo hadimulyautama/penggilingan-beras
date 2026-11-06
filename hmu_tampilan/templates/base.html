@@ -480,6 +480,7 @@
 {% endif %}
 
 <div id="formulir-sesi" hidden data-token="{{ CSRF }}" data-nonce="{{ CSRF_NONCE }}" data-aktif="{{ '1' if akun else '0' }}"></div>
+<script src="/static/pembaruan-aplikasi.js?v={{ VERSI }}"></script>
 <script src="/static/sesi.js?v={{ VERSI }}"></script>
 <script src="/static/koreksi.js?v={{ VERSI }}"></script>
 <script>

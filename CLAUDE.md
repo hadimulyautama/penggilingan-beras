@@ -1486,3 +1486,21 @@ tersembunyi dan nama alat tampil sebagai informasi. Bila lebih dari satu,
 pilihan tetap eksplisit. Jangan menyamakan auto-pilih alat dengan otomatis
 memulai proses: target pengeringan, sumber bahan, pemeriksaan dan Simpan tetap
 mengikuti alur yang berlaku.
+
+## Cache dan penerapan pembaruan — 6 November 2026
+
+Dua cabang menerbitkan v533 dengan isi aksi.js berbeda. Cache immutable/SW
+boleh terus menyajikan isi pertama meskipun server sudah menjalankan hotfix.
+Nomor versi produk tidak cukup sebagai identitas berkas. CAP_ASET menggabung
+versi produk dengan identitas commit Railway (manifest paket sebagai fallback
+lokal). URL aset dan data-versi memakai cap ini; versi produk tetap tersedia
+sebagai VERSI/VERSI_APLIKASI. Penanda juga membawa cap rilis, agar dokumen lama
+mendapat isi baru walau belum ada transaksi. Denyut SSE mengulang metadata agar
+pembaruan tertahan dapat diterapkan sesudah formulir ditutup.
+
+pembaruan-aplikasi.js menerima pemberitahuan versi dan juga dapat masuk lewat
+bingkai dokumen lama. Kerangka dimuat ulang otomatis hanya pada layar aman:
+tidak ada formulir/dialog terbuka, isian POST berubah, editor khusus, fokus
+masukan atau jari aktif. Pekerjaan yang belum disimpan tidak dipaksa tutup.
+Halaman pasif beralih otomatis; draf menunggu pengguna selesai. Tidak ada
+POST transaksi, perubahan stok, atau migrasi untuk penerapan pembaruan.
