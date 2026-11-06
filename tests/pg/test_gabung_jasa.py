@@ -130,6 +130,35 @@ async def test_gabung_jasa_memindahkan_lintas_tabel_dan_menandai_survivor(pg, du
         assert ke.status == BERJALAN  # survivor tak berubah statusnya
 
 
+async def test_gabung_menyertakan_permintaan_dan_pemindahan_pk_tanpa_mengubah_kg(pg, dunia):
+    from sqlalchemy import select
+    from app.database import now_local
+    from app.models import User, MillingProcess, PkGudang2Intake, PkTumpukanToSilo, PermintaanPk
+    from app.services.jasa import gabung_jasa
+    from app.penggilingan.gudang2.service import hitung_stok_silo
+    async with pg() as db:
+        u = await db.get(User, dunia['user'])
+        p = MillingProcess(kode_proses='LOT-GABUNG-JEJAK', silo_id=dunia['silo']['A'],
+            jasa_id=dunia['jasa1'], waktu_mulai=now_local(), status='selesai', created_by=u.id)
+        db.add(p)
+        intake = PkGudang2Intake(jasa_id=dunia['jasa1'], sumber_tipe='beli_luar', tujuan='ditumpuk', berat_kg=1000,
+            tanggal_masuk=date.today(), waktu_masuk=now_local(), input_by=u.id)
+        db.add(intake);await db.flush()
+        move = PkTumpukanToSilo(kode_pindah='PTS-GABUNG-JEJAK', pk_gudang2_intake_id=intake.id,
+            jasa_id=dunia['jasa1'], silo_id=dunia['silo']['C'], berat_kg=600,
+            tanggal=date.today(), waktu=now_local(), input_by=u.id)
+        req = PermintaanPk(milling_process_id=p.id, jasa_id=dunia['jasa1'], diminta_oleh=u.id,
+            waktu_minta=now_local(), berat_minta_kg=100, status='diminta')
+        db.add_all([move,req]);await db.commit()
+        saldo = await hitung_stok_silo(db, dunia['silo']['C'])
+        await gabung_jasa(db, user=u, dari_id=dunia['jasa1'], ke_id=dunia['jasa2'])
+        await db.commit()
+        assert move.jasa_id == req.jasa_id == intake.jasa_id == dunia['jasa2']
+        assert float(move.berat_kg) == 600 and float(req.berat_minta_kg) == 100
+        assert await hitung_stok_silo(db, dunia['silo']['C']) == saldo == 600
+        assert not list(await db.scalars(select(PkTumpukanToSilo.id).where(PkTumpukanToSilo.jasa_id==dunia['jasa1'])))
+
+
 async def test_gabung_jasa_tolak_pelanggan_berbeda(pg, dunia):
     from app.models import User
     from app.services.jasa import JasaError, gabung_jasa

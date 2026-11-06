@@ -1,0 +1,41 @@
+/* Detail saja. Daftar, formulir tindakan, data snapshot dan layanan tetap. */
+.riwayat-detail.rsd{margin:0;max-width:none;width:100%}
+.rsd .rsp-kembali{font-size:13px;color:var(--pd-muted);text-decoration:none;margin-bottom:18px}
+.rsd .rhs-header>p{font-size:13px;margin:6px 0;color:var(--pd-muted)}
+.rsd .rhs-header>.rhs-code{margin-bottom:16px}
+.rsd .rhs-identity{margin-top:12px}
+.rsd .rsh-status{border:0;border-radius:5px;background:var(--pd-soft);color:var(--pd-green);font-size:12px;font-weight:400;padding:5px 8px;white-space:normal}
+.rsd .rsd-actions{justify-content:flex-start;margin:18px 0 24px}
+.rsd .rsd-actions:empty{display:none}
+.rsd .rsd-actions>.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;max-width:100%}
+.rsd .rsd-actions>button:disabled{opacity:.6}
+.rsd .rsh-tabs{display:flex;grid-template-columns:none;gap:0 24px;margin:0 0 22px}
+.rsd .rsd-content{display:block;min-width:0}
+.rsd .rsp-stack{gap:16px}
+.rsd .rsp-kartu{border:1px solid var(--pd-line);border-radius:12px;padding:20px;background:var(--pd-sheet);box-shadow:none}
+.rsd .rsp-kartu>h2{margin:0 0 10px;font-size:18px}
+.rsd .rsp-kartu p{font-size:13px;line-height:1.65}
+.rsd .rsp-fakta>div{padding:12px 0;border:0;border-bottom:1px solid var(--pd-line);gap:16px;min-width:0}
+.rsd .rsp-fakta dt{color:var(--pd-muted);font-size:13px}
+.rsd .rsp-fakta dd{color:var(--pd-ink);font-size:14px;overflow-wrap:anywhere}
+.rsd .rsp-item{border-color:var(--pd-line)}
+.rsd .rsp-item h3,.rsd .rsh-jejak strong{font-size:14px}
+.rsd .rsp-timbang span{font-size:13px;color:var(--pd-muted)}
+.rsd .rsp-timbang strong{font-size:23px}
+.rsd .rsd-explainer{border-top:1px solid var(--pd-line);padding-top:16px}
+.rsd details:not(.rhs-menu)>summary{font-size:13px;color:var(--pd-muted);min-height:44px}
+.rsd pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.rsd .rsp-peringatan{font-size:13px;line-height:1.65}
+.rsd #rsd-navigation .laporan-nav{margin:0;padding:0;border:0}
+@media(max-width:700px){
+ .rsd .rsp-kartu{padding:16px}
+ .rsd .rsh-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+ body.padiflow-ui .rsd .rsh-tabs>a{justify-content:center;min-height:58px;padding:8px 0;font-size:12px;line-height:1.5;white-space:normal;overflow-wrap:normal}
+ .rsd .rsp-fakta>div{flex-wrap:nowrap;gap:12px}
+ .rsd .rsp-fakta dt{min-width:0}
+ .rsd .rsp-fakta dd{max-width:62%;font-size:13px}
+ .rsd .rhs-menu-body{min-width:230px;max-width:calc(100vw - 44px)}
+ .rsd .rsp-timbang strong{font-size:20px}
+ .rsd .rsp-timbang span{font-size:12px}
+}
+@media print{.rsd .rhs-tools,.rsd .rsd-actions,.rsd .rsh-tabs{display:none!important}}

@@ -51,14 +51,35 @@ async def test_laporan_lengkap_lamur_tersimpan_dan_rata_sama_layanan(pg,pabrik):
    if suffix=='/laporan':
     bukti('giling-preview.html',response.text)
    else:
+    bukti('penggilingan-data-uji.pdf',response.content)
     pdf=PdfReader(BytesIO(response.content));content='\n'.join(p.extract_text() for p in pdf.pages)
     assert len(pdf.pages)==1
     for v in ['Laporan Penggilingan','Ya · 2 sak','Tidak · 0 sak','Tidak tercatat','Rata-rata','Catatan utuh 0','Catatan utuh 2','Nilai mutu:','10 pembacaan','Sisa PK tersedia']:
      assert v in content,v
     assert 'Tidak berlaku untuk gabah kering' not in content and 'tanda tangan' not in content.lower()
     assert pdf.metadata.title=='Laporan Penggilingan'
-    bukti('penggilingan-data-uji.pdf',response.content)
   async with pg() as db:assert await sidik(db)==before
+
+
+async def test_laporan_panjang_tetap_memuat_seluruh_putaran(pg, pabrik):
+ from app.web.pdf_giling import buat_pdf
+ kode=await _giling_selesai(pg,pabrik)
+ async with pg() as db:
+  pid=await db.scalar(select(MillingProcess.id).where(MillingProcess.kode_proses==kode))
+  for i in range(40):
+   db.add(MillingQcLog(milling_process_id=pid,kadar_air=14,broken_persen=20,
+    susut_persen=10,butir_kuning='bersih',gabah='bersih',merang='sedang',
+    catatan_lab=f'Catatan pemeriksaan panjang nomor {i+1:02d}',
+    waktu=now_local()+timedelta(minutes=i),input_by=pabrik['user']))
+  await db.commit();before=await sidik(db)
+ data=await _ambil_data_laporan_giling(pid)
+ hasil=buat_pdf(data);pdf=PdfReader(BytesIO(hasil))
+ assert len(pdf.pages)>1
+ text='\n'.join(p.extract_text() for p in pdf.pages)
+ for i in range(40):assert f'Catatan pemeriksaan panjang nomor {i+1:02d}' in text
+ assert 'Kesimpulan:' in text and 'Sisa PK tersedia' in text
+ bukti('penggilingan-panjang-data-uji.pdf',hasil)
+ async with pg() as db:assert await sidik(db)==before
 
 @pytest.mark.parametrize('role,warehouse,view,allowed',[
  ('superadmin',None,None,True),('admin',None,None,True),('operator','Gudang 1',None,True),

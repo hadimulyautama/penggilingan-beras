@@ -58,6 +58,24 @@ class LaporanGiling(Laporan):
     def __init__(self,d):
         super().__init__(d)
         self.judul='Laporan Penggilingan'
+        # Laporan ini memuat beberapa tabel QC dan ringkasan proses. Jarak
+        # laporan penerimaan terlalu longgar sehingga contoh 5 QC bahan +
+        # 3 QC hasil melimpahkan kesimpulan ke halaman kedua. Padatkan ruang,
+        # bukan ukuran huruf atau jumlah catatan; laporan panjang tetap pecah.
+        for gaya in (self.normal, self.bold, self.head, self.small):
+            gaya.leading = gaya.fontSize * 1.15
+
+    def bagian(self, nama):
+        tabel = super().bagian(nama)
+        tabel.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),2),
+                                   ('BOTTOMPADDING',(0,0),(-1,-1),2)]))
+        return tabel
+
+    def tabel(self, headers, rows, widths, **kw):
+        tabel = super().tabel(headers, rows, widths, **kw)
+        tabel.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),1),
+                                   ('BOTTOMPADDING',(0,0),(-1,-1),1)]))
+        return tabel
 
 
 def buat_pdf(data):
@@ -65,7 +83,7 @@ def buat_pdf(data):
     v=LaporanGiling(d);p=v.p;story=[]
     def kg(x):return angka_stok(x)+' kg' if x is not None else 'Belum dicatat'
     def note(s):story.append(p(s,v.small))
-    def section(s):story.extend([Spacer(1,5),v.bagian(s)])
+    def section(s):story.extend([Spacer(1,3),v.bagian(s)])
     def table(h,r,w,rata=False):
         story.append(v.tabel(h,r,w,rata=rata))
     def stamp(x,day=False):return waktu(x,day)
