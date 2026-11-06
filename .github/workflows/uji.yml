@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profil: [satuan, postgresql-0, postgresql-1]
+        profil: [satuan, postgresql-0, postgresql-1, postgresql-2, postgresql-3, postgresql-4, postgresql-5, postgresql-6, postgresql-7]
 
     services:
       postgres:
@@ -100,9 +100,9 @@ jobs:
           if profil=='satuan':
               paths=['tests','--ignore=tests/pg']
           else:
-              # Dua daftar berkas saling lepas; gabungannya seluruh tests/pg.
+              # Delapan daftar berkas saling lepas; gabungannya seluruh tests/pg.
               files=sorted(set(Path('tests/pg').rglob('test_*.py')) | set(Path('tests/pg').rglob('*_test.py')))
-              paths=[str(p) for p in files[int(profil[-1])::2]]
+              paths=[str(p) for p in files[int(profil[-1])::8]]
           Path('bukti').mkdir(exist_ok=True)
           Path('bukti/berkas-'+profil+'.txt').write_text('\n'.join(paths)+'\n')
           raise SystemExit(subprocess.call([sys.executable,'-m','pytest',*paths,'-q','-m','not dua_aplikasi','--junitxml=bukti/satu-aplikasi.xml']))

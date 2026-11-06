@@ -11,7 +11,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.skipif(
 
 
 @pytest.mark.parametrize('width', [390, 1440])
-async def test_operator_memilih_gudang_dan_menempatkan_dari_pekerjaan(pg, tempat, width):
+async def test_operator_memilih_gudang_dan_menempatkan_dari_pekerjaan(pg, tempat, width, tmp_path):
     from playwright.async_api import expect
     w = tempat
     aid, uid = await _orang(pg, nama='Operator ponsel', role='operator',
@@ -25,7 +25,7 @@ async def test_operator_memilih_gudang_dan_menempatkan_dari_pekerjaan(pg, tempat
             card = page.locator('.antrian-item').filter(has=page.locator(
                 'button[data-post="/api/actions/pindah-tumpukan"]')).first
             await card.locator(':scope > summary').click()
-            await page.screenshot(path=f'/private/tmp/operator-dryer-{width}.png', full_page=True)
+            await page.screenshot(path=str(tmp_path/f'operator-dryer-{width}.png'), full_page=True)
             async with page.expect_response(lambda r: r.url.endswith('/api/actions/pindah-tumpukan')
                                              and r.request.method == 'POST') as sent:
                 await card.get_by_role('button', name='Ke Pengering 1').click()
