@@ -9,6 +9,49 @@ PENJALAN = {'pengeringan': DryingLot, 'penggilingan': MillingProcess, 'penyosoha
 class FasilitasError(ValueError):
     pass
 
+
+class LiniSedangDipakai(FasilitasError):
+    """Kondisi operasional yang sah, bukan kegagalan membaca daftar bahan."""
+    def __init__(self, lini, proses):
+        kode = ', '.join(p['kode'] for p in proses)
+        pesan = f'{lini.nama} masih digunakan proses yang belum selesai'
+        if kode:
+            pesan += f': {kode}'
+        pesan += '. Selesaikan proses yang berjalan sebelum memulai proses baru pada alat ini.'
+        super().__init__(pesan)
+        self.detail = dict(kode='alat_sedang_dipakai', pesan=pesan,
+                          alat=dict(id=lini.id, nama=lini.nama), proses=proses)
+
+
+async def proses_pemakai_lini(db, lini, user):
+    """Identitas proses penghalang dengan cakupan baca aktor yang sama.
+
+    Tidak menulis atau mengira-ngira alokasi bahan. Proses lama tanpa ID line
+    tetap mengikuti penjaga konservatif di sedang_dipakai, pada gudang yang
+    sama; identitas tersebut membantu operator membuka proses yang dimaksud.
+    """
+    from app.services.cakupan_fasilitas import batas, lokasi
+    jenis = await db.get(JenisProsesProduksi, lini.jenis_proses_id)
+    hasil = []
+    for kode_jenis, model in PENJALAN.items():
+        cocok = model.lini_produksi_id == lini.id
+        if kode_jenis == jenis.kode:
+            if model is DryingLot:
+                cocok = or_(cocok, (model.dryer_id == lini.dryer_id) &
+                            model.waktu_selesai_pendinginan.is_(None) & (model.status != 'dibatalkan'))
+            else:
+                cocok = or_(cocok, model.lini_produksi_id.is_(None) &
+                            (lokasi(model) == lini.warehouse_id))
+        aktif = model.status == 'proses'
+        if model is DryingLot and kode_jenis == jenis.kode:
+            aktif = or_(aktif, (model.dryer_id == lini.dryer_id) &
+                        model.waktu_selesai_pendinginan.is_(None) & (model.status != 'dibatalkan'))
+        for p in await db.scalars(select(model).where(cocok, aktif, batas(user, model)).order_by(model.id)):
+            kode = p.kode_lot if model is DryingLot else p.kode_proses
+            fase = ('pendinginan' if p.status == 'selesai' else 'pengeringan') if model is DryingLot else 'giling' if model is MillingProcess else 'sosoh'
+            hasil.append(dict(kode=kode, href=f'/proses-aktif/{fase}/{kode}'))
+    return hasil
+
 async def boleh_kelola(db,user):
     from hmu_identitas import peran as P
     from hmu_identitas.masuk import ada_superadmin_aktif
@@ -59,7 +102,8 @@ async def pilih_lini(db, *, user, kode_jenis, lini_id=None, warehouse_id=None, d
     if not rows: raise FasilitasError('Line/alat tidak tersedia atau di luar gudang kerja Anda.')
     if len(rows) != 1: raise FasilitasError('Pilih line/alat yang akan digunakan.')
     row = rows[0]
-    if await sedang_dipakai(db,row): raise FasilitasError(f'{row.nama} masih digunakan proses yang belum selesai.')
+    if await sedang_dipakai(db,row):
+        raise LiniSedangDipakai(row, await proses_pemakai_lini(db, row, user))
     return row
 
 async def simpan_jenis(db, *, user, nama, kode, aktif=True, id=None, versi=None):

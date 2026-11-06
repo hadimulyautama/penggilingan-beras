@@ -1504,3 +1504,15 @@ tidak ada formulir/dialog terbuka, isian POST berubah, editor khusus, fokus
 masukan atau jari aktif. Pekerjaan yang belum disimpan tidak dipaksa tutup.
 Halaman pasif beralih otomatis; draf menunggu pengguna selesai. Tidak ada
 POST transaksi, perubahan stok, atau migrasi untuk penerapan pembaruan.
+
+## Status alat sedang dipakai — 6 November 2026
+
+GET sumber/ringkasan mulai giling dan sosoh membedakan kondisi operasional
+alat sibuk (409, detail.kode=alat_sedang_dipakai) dari galat pemuatan. Respons
+membawa nama alat, alasan, dan kode/tautan proses aktif dalam cakupan baca aktor.
+Penjaga simpan tetap berlaku, termasuk proses lama tanpa ID line. Formulir
+menampilkan panel status dan menonaktifkan Mulai, mempertahankan centang,
+serta memeriksa ulang lewat GET setiap 15 detik atau saat online/aktif kembali.
+Pilihan pulih otomatis saat alat bebas; jangan menyebut alat sibuk sebagai
+daftar silo gagal/dipulihkan. Tidak ada migrasi atau penulisan transaksi.
+Uji: tests/pg/test_status_alat.py.

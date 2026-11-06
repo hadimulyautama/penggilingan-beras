@@ -2476,9 +2476,12 @@ async def silo_siap_giling(lini_id: int | None = None, user: User = Depends(peng
     from app.web.form_mulai_giling import baca_silo
     out: list[dict] = []
     async with SessionLocal() as db:
-        from app.services.fasilitas import pilih_lini,FasilitasError
+        from app.services.fasilitas import pilih_lini,FasilitasError,LiniSedangDipakai
         if lini_id is not None:
             try:wid=(await pilih_lini(db,user=user,kode_jenis='penggilingan',lini_id=lini_id)).warehouse_id
+            except LiniSedangDipakai as exc:
+                from fastapi.responses import JSONResponse
+                return JSONResponse({'detail':exc.detail}, status_code=409, headers={'Cache-Control':'no-store'})
             except FasilitasError as exc:raise HTTPException(400,str(exc))
         else:
             wid=user.default_warehouse_id if not can_see_financials(user) else await _g1_warehouse_id(db)
@@ -2511,8 +2514,10 @@ async def ringkasan_mulai_giling(silo: Annotated[list[str], Query()] = [],
     from app.web.form_mulai_giling import ringkasan
     _require(await _is_jenis_operator(user,'penggilingan'))
     async with SessionLocal() as db:
-        from app.services.fasilitas import pilih_lini,FasilitasError
+        from app.services.fasilitas import pilih_lini,FasilitasError,LiniSedangDipakai
         try:lini=await pilih_lini(db,user=user,kode_jenis='penggilingan',lini_id=lini_id)
+        except LiniSedangDipakai as exc:
+            return JSONResponse({'detail':exc.detail}, status_code=409, headers={'Cache-Control':'no-store'})
         except FasilitasError as exc:raise HTTPException(400,str(exc))
         data = await ringkasan(db, silo,warehouse_id=lini.warehouse_id)
     return JSONResponse(data, headers={"Cache-Control": "no-store"})
@@ -5026,9 +5031,12 @@ async def silo_bahan_g2(induk: str = "", rincian: bool = False, lini_id: int | N
             .where(PolishingProcess.status == "proses",
                    PolishingSiloUsage.berat_akhir_kg.is_(None))
         )).scalars().all())
-        from app.services.fasilitas import pilih_lini,FasilitasError
+        from app.services.fasilitas import pilih_lini,FasilitasError,LiniSedangDipakai
         if lini_id is not None:
             try:wid=(await pilih_lini(db,user=user,kode_jenis='penyosohan',lini_id=lini_id)).warehouse_id
+            except LiniSedangDipakai as exc:
+                from fastapi.responses import JSONResponse
+                return JSONResponse({'detail':exc.detail}, status_code=409, headers={'Cache-Control':'no-store'})
             except FasilitasError as exc:raise HTTPException(400,str(exc))
         else:
             wid=user.default_warehouse_id if not can_see_financials(user) else await _g2_warehouse_id(db)
@@ -5066,8 +5074,10 @@ async def ringkasan_mulai_penyosohan(silo: Annotated[list[str] | None, Query()] 
     from fastapi.responses import JSONResponse
     from app.web.form_mulai_penyosohan import ringkasan
     async with SessionLocal() as db:
-        from app.services.fasilitas import pilih_lini,FasilitasError
+        from app.services.fasilitas import pilih_lini,FasilitasError,LiniSedangDipakai
         try:lini=await pilih_lini(db,user=user,kode_jenis='penyosohan',lini_id=lini_id)
+        except LiniSedangDipakai as exc:
+            return JSONResponse({'detail':exc.detail}, status_code=409, headers={'Cache-Control':'no-store'})
         except FasilitasError as exc:raise HTTPException(400,str(exc))
         return JSONResponse(await ringkasan(db, silo or [],warehouse_id=lini.warehouse_id), headers={"Cache-Control": "no-store"})
 

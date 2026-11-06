@@ -1477,12 +1477,43 @@
     // Ringkasan hanya membaca sumber yang sama dengan start_milling. Pilihan
     // tetap satu kelompok checkbox; tidak ada bobot/delta transaksi di browser.
     var urutanMulai = 0, periksaMulai = false;
+    function bersihkanStatusAlat(wadah) {
+      if (!wadah || !wadah.dataset.alatDipakai) return;
+      delete wadah.dataset.alatDipakai;
+      var status = wadah.querySelector("[data-status-alat]");if (status) status.remove();
+      var ringkasan = borangHasil.querySelector(".mg-preview");if (ringkasan) ringkasan.hidden = false;
+    }
+    function tampilkanStatusAlat(status, wadah) {
+      wadah = wadah || $("b_silo");
+      if (!mulaiBahan || !wadah) return;
+      ++urutanMulai; // ringkasan bahan lama tidak boleh membuka tombol Mulai
+      wadah.dataset.alatDipakai = "1";
+      var lama = wadah.querySelector("[data-status-alat]");if (lama) lama.remove();
+      var galat = wadah.querySelector("[data-muat-ulang]");if (galat) galat.remove();
+      if (!wadah.querySelector("input")) wadah.replaceChildren();
+      wadah.querySelectorAll("input").forEach(function (input) { input.disabled = true; });
+      var panel = document.createElement("section"), judul = document.createElement("strong"), alasan = document.createElement("p");
+      panel.className = "nota";panel.dataset.statusAlat = "1";panel.setAttribute("role", "status");
+      judul.textContent = status.alat.nama + " sedang dipakai";
+      alasan.textContent = status.pesan;
+      panel.append(judul, alasan);
+      (status.proses || []).forEach(function (proses) {
+        var baris = document.createElement("p"), tautan = document.createElement("a");
+        tautan.href = proses.href;tautan.textContent = "Buka proses " + proses.kode;
+        tautan.dataset.utuh = "";baris.appendChild(tautan);panel.appendChild(baris);
+      });
+      wadah.prepend(panel);
+      var ringkasan = borangHasil.querySelector(".mg-preview");if (ringkasan) ringkasan.hidden = true;
+      $("simpan").disabled = true;$("simpan").textContent = "Alat sedang dipakai";
+      if ($("mg-periksa")) $("mg-periksa").hidden = true;
+    }
     function pilihanMulai() {
       var el = borangHasil.querySelector('[data-name="silo"]');
       return String(el && el.value || "").split(",").filter(Boolean);
     }
     function perbaruiMulai() {
       if (!mulaiBahan || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return Promise.resolve(null);
+      if ($("b_silo") && $("b_silo").dataset.alatDipakai) { $("simpan").disabled = true;return Promise.resolve(null); }
       var pilihan = pilihanMulai(), kunci = pilihan.join(","), nomor = ++urutanMulai;
       $("mg-dipilih").textContent = pilihan.length ? pilihan.map(function (n) { return "Silo " + n; }).join(" + ") : "Belum dipilih";
       $("mg-bobot").textContent = pilihan.length ? "Memuat bobot…" : "Belum tersedia";
@@ -1492,7 +1523,7 @@
       $("mg-final").textContent = pilihan.length ? "Ringkasan baca saja. Kondisi terbaru diperiksa saat menyimpan." : "Centang minimal satu silo sumber.";
       if (!pilihan.length) { periksaMulai = false;$("simpan").disabled = !borangHasil.querySelector('#b_silo input');return Promise.resolve(null); }
       return fetch(mulaiBahan.source + "?" + pilihan.map(function (n) { return "silo=" + encodeURIComponent(n); }).join("&") + (nilaiMedan("lini_id") ? "&lini_id="+encodeURIComponent(nilaiMedan("lini_id")) : ""),
-        {credentials:"same-origin",cache:"no-store"}).then(function (r) { if (!r.ok) throw new Error("Ringkasan belum tersedia");return r.json(); }).then(function (d) {
+        {credentials:"same-origin",cache:"no-store"}).then(async function (r) { if (!r.ok) { var gagal = await r.json().catch(function(){return {};});throw (gagal.detail || new Error("Ringkasan belum tersedia")); }return r.json(); }).then(function (d) {
         if (nomor !== urutanMulai || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil || pilihanMulai().join(",") !== kunci) return null;
         if ((d.pilihan || []).join(",") !== kunci.toUpperCase()) throw new Error("Pilihan sudah berubah");
         $("mg-bobot").textContent = d.bobot;$("mg-pemilik").textContent = d.pemilik || "Pemilik belum tersedia";
@@ -1516,8 +1547,11 @@
         $("simpan").disabled = periksaMulai && !d.siap;periksaMulai = periksaMulai && !d.siap;
         $("mg-info").textContent = d.siap ? "" : "Pilihan diperiksa kembali oleh server saat menyimpan. Perbaiki centang yang tidak sesuai.";
         return d;
-      }).catch(function () {
+      }).catch(function (err) {
         if (nomor !== urutanMulai || !lembar.open || lembar.querySelector(".lembar__isi") !== borangHasil) return null;
+        if (err && err.kode === "alat_sedang_dipakai") {
+          tampilkanStatusAlat(err);muatPilihan(true, "silo");return null;
+        }
         $("mg-bobot").textContent = "Belum tersedia";
         $("mg-final").textContent = "Ringkasan belum dapat dimuat. Pilihan tetap utuh; layanan memeriksa bobot dan pemilik saat menyimpan.";
         $("simpan").disabled = periksaMulai;
@@ -2160,6 +2194,7 @@
         var wadah = $("b_" + f.name);
         var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
         if (!wadah || !simpanan) { return; }
+        if (mulaiBahan) bersihkanStatusAlat(wadah);
 
         function sinkron() {
           var nilai = [], teks = [];
@@ -2231,19 +2266,24 @@
       }).catch(function (err) {
         if (!(mulaiBahan || tambahSosoh) || lembar.querySelector(".lembar__isi") !== borangBanyak ||
             kotakMuat._nomorMuat !== nomorMuat || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];})) return;
-        // Kegagalan baca tidak boleh menghapus centang yang sudah diisi,
-        // atau memaksa operator membuang formulir untuk mencoba lagi.
-        var lama = kotakMuat.querySelector("[data-muat-ulang]");
-        if (lama) lama.remove();
-        if (!kotakMuat.querySelector("input")) kotakMuat.replaceChildren();
-        var pemulihan = document.createElement("div"), pesan = document.createElement("p");
-        pemulihan.dataset.muatUlang = "1";pesan.className = "bantu";pesan.setAttribute("role", "status");
-        pesan.textContent = (typeof err === "string" ? err + " " : "") + "Pilihan silo dipulihkan otomatis. Isian tetap tersedia.";
-        pemulihan.append(pesan);kotakMuat.append(pemulihan);
+        var kondisiAlat = mulaiBahan && err && err.kode === "alat_sedang_dipakai";
+        var tertahan = kondisiAlat || kotakMuat.dataset.alatDipakai;
+        if (kondisiAlat) tampilkanStatusAlat(err, kotakMuat);
+        if (!tertahan) {
+          // Gangguan jaringan mempertahankan isian. Alat sedang dipakai
+          // mempunyai panel operasional tersendiri, bukan pesan pemulihan.
+          var lama = kotakMuat.querySelector("[data-muat-ulang]");
+          if (lama) lama.remove();
+          if (!kotakMuat.querySelector("input")) kotakMuat.replaceChildren();
+          var pemulihan = document.createElement("div"), pesan = document.createElement("p");
+          pemulihan.dataset.muatUlang = "1";pesan.className = "bantu";pesan.setAttribute("role", "status");
+          pesan.textContent = (typeof err === "string" ? err + " " : "") + "Pilihan silo dipulihkan otomatis. Isian tetap tersedia.";
+          pemulihan.append(pesan);kotakMuat.append(pemulihan);
+        }
         // Hanya GET, dengan jeda bertahap agar gangguan tidak membanjiri
         // server. Berhenti saat borang ditutup/diganti; lanjut segera saat
         // koneksi atau layar aktif kembali, tanpa menyentuh tombol Simpan.
-        kotakMuat._gagalMuat = (kotakMuat._gagalMuat || 0) + 1;
+        kotakMuat._gagalMuat = tertahan ? 0 : (kotakMuat._gagalMuat || 0) + 1;
         kotakMuat.dataset.muatOtomatis = "1";
         kotakMuat._ulangiMuat = function () {
           if (!lembar.open || !kotakMuat.isConnected || document.hidden || navigator.onLine === false ||
@@ -2253,7 +2293,7 @@
         };
         kotakMuat._jadwalMuat = setTimeout(function () {
           if (kotakMuat._ulangiMuat) kotakMuat._ulangiMuat();
-        }, Math.min(1000 * Math.pow(2, kotakMuat._gagalMuat - 1), 15000));
+        }, tertahan ? 15000 : Math.min(1000 * Math.pow(2, kotakMuat._gagalMuat - 1), 15000));
       });
     }
 
@@ -2606,7 +2646,7 @@
               if (child.tagName === "SELECT") child.innerHTML = '<option value="">memuat…</option>';
             }
             var banyak = $("b_" + f.name);
-            if (banyak) { banyak.innerHTML = '<p class="bantu">memuat…</p>'; }
+            if (banyak) { if (mulaiBahan) bersihkanStatusAlat(banyak);banyak.innerHTML = '<p class="bantu">memuat…</p>';if (mulaiBahan) $("simpan").disabled = true; }
           }
           muatPilihan(!!e.pilihanOtomatis, f.name);
         });
