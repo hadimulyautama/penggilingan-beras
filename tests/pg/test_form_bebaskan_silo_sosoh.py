@@ -133,7 +133,7 @@ async def test_anonim_csrf_proses_selesai_dan_referensi_salah(pg,proses):
  from app.main import app
  async with await _klien(pg,peran='admin') as c:
   assert (await c.post('/api/actions/selesai-penyosohan',json=dict(kode_proses=proses['kode'],silo='B',sisa=0,dasar='x'))).status_code==403
-  before=await fakta(pg);assert (await baca(c,'tidak-ada')).status_code==403;assert (await preview(c,proses['kode'],s='silo-lain')).status_code==403;assert await fakta(pg)==before
+  before=await fakta(pg);assert (await baca(c,'tidak-ada')).status_code==409;assert (await preview(c,proses['kode'],s='silo-lain')).status_code==409;assert await fakta(pg)==before
  async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:assert (await baca(c,proses['kode'])).status_code==401
 async def test_sumber_karung_dinamis_berubah_setelah_pembebasan(pg,proses):
  from app.database import now_local

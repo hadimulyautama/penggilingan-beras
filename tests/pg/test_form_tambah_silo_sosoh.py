@@ -146,7 +146,7 @@ async def test_anonim_csrf_dan_proses_hilang(pg,proses):
  from app.main import app
  async with await _klien(pg,peran='admin') as c:
   assert (await c.post('/api/actions/tambah-silo-penyosohan',json={'kode':proses['kode'],'silo':['A']})).status_code==403
-  assert (await baca(c,dict(kode='tidak-ada'))).status_code==403
+  assert (await baca(c,dict(kode='tidak-ada'))).status_code==409
  async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:assert (await baca(c,proses)).status_code==401
 async def test_konflik_proses_lain_tidak_menambah_pilihan_lain(pg,proses):
  await isi(pg,proses)
