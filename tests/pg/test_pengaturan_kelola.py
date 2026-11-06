@@ -41,7 +41,7 @@ async def test_silo_dan_gudang_edit_filter_arsip_serta_perlindungan_dipakai(pg,m
     c,_,_=await klien(pg,P.SUPERADMIN)
     async with c:
         r=await kirim(c,'/pengaturan/alat/silo',{'nama':'UJI-KELOLA','gudang':'g1'})
-        assert 'pesan=alat-ditambah' in r.headers['location']
+        assert 'pesan=silo-ditambah' in r.headers['location']
         async with pg() as db:
             silo=await db.scalar(select(Silo).where(Silo.nama_silo=='Silo UJI-KELOLA'))
             sid=silo.id
