@@ -69,6 +69,11 @@ async def silos(pg, pemakai, pemasok):
             huruf_silo[huruf].status = "terisi"
             await db.flush()
             isi[huruf] = {"batch": b.id, "storage": st.id, "kg": kg}
+        # TRUNCATE menghapus master migrasi. Dunia uji tetap harus mempunyai
+        # line giling aktif dan operator yang sedang bekerja di Gudang 1.
+        u.default_warehouse_id = g1.id
+        from app.services.fasilitas import seed_fasilitas
+        await seed_fasilitas(db)
         await db.commit()
         return {"silo": {h: s.id for h, s in huruf_silo.items()}, "isi": isi,
                 "user": u.id}
@@ -82,6 +87,20 @@ async def _mulai(pg, silos, huruf, **kw):
         u = await db.get(User, silos["user"])
         r = await start_milling(db, user=u, nama_silo=huruf, **kw)
         return r
+
+
+async def _line_kedua(pg, silos):
+    """Dua mesin fisik untuk menguji klaim silo lintas proses yang sah."""
+    from sqlalchemy import select
+    from app.models import User, LiniProduksi, JenisProsesProduksi
+    async with pg() as db:
+        user = await db.get(User, silos['user'])
+        jenis = await db.scalar(select(JenisProsesProduksi).where(JenisProsesProduksi.kode=='penggilingan'))
+        line = LiniProduksi(kode='giling-kedua-uji', nama='Penggilingan kedua uji',
+            warehouse_id=user.default_warehouse_id, jenis_proses_id=jenis.id, aktif=True)
+        db.add(line)
+        await db.commit()
+        return line.id
 
 
 # ─────────────────── 1 · Mulai dari beberapa silo ───────────────────
@@ -192,9 +211,10 @@ async def test_silo_yang_jadi_sumber_proses_lain_ditolak(pg, silos):
     from app.penggilingan.gudang1.services.milling import MillingError
 
     await _mulai(pg, silos, ["A", "B"])
+    line = await _line_kedua(pg, silos)
     for huruf in (["B"], ["A"], ["B", "A"]):
         with pytest.raises(MillingError) as e:
-            await _mulai(pg, silos, huruf)
+            await _mulai(pg, silos, huruf, lini_id=line)
         assert "sedang digiling" in str(e.value)
 
 
@@ -202,7 +222,8 @@ async def test_silo_berbeda_tetap_boleh(pg, silos):
     """Pagar yang terlalu lebar sama merusaknya: dua mesin giling memang boleh
     berjalan bersamaan atas silo yang berbeda."""
     await _mulai(pg, silos, ["A"])
-    r = await _mulai(pg, silos, ["B"])
+    line = await _line_kedua(pg, silos)
+    r = await _mulai(pg, silos, ["B"], lini_id=line)
     assert float(r.berat_masuk) == 6_000
 
 
@@ -236,7 +257,7 @@ async def test_dua_permintaan_bersamaan_satu_menang(pg, silos):
     tolak = [x for x in hasil if x.startswith("tolak")]
     assert len(menang) == 1 and len(tolak) == 1, hasil
     # Kalimatnya harus bisa dibaca operator, bukan teks Postgres.
-    assert "Silo A" in tolak[0] or "silonya baru saja dipakai" in tolak[0]
+    assert any(s in tolak[0] for s in ("Silo A", "silonya baru saja dipakai", "Penggilingan 1 masih digunakan"))
     assert "IntegrityError" not in tolak[0] and "psycopg" not in tolak[0].lower()
 
 
