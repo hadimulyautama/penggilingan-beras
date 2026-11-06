@@ -4,6 +4,7 @@ Pemilik dan saldo tetap diperiksa untuk penjualan serta pengambilan jasa.
 Riwayat pengeluaran silo lama tetap harus dapat dibaca dan dibatalkan.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 from tests.pg.kontak import pelanggan_kledo
 from tests.pg.formulir import cap_formulir
@@ -388,6 +389,7 @@ async def test_riwayat_defisit_toleransi_silo_tidak_memotong_stok_pemilik_beriku
     await _pindah_ke_silo(pg, pabrik["user"], pabrik_intake, "C", 2_500)
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         proses = await mulai_penyosohan(db, user=u, nama_silos=["C"])
         assert proses.berat_awal_total == 2_500
 

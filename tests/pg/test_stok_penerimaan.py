@@ -162,7 +162,7 @@ async def test_tautan_masuk_dan_bookmark_lama(pg,lengkap):
                 tujuan=await c.get(href);assert tujuan.status_code==200,(page,href,tujuan.status_code)
                 hasil.append({'dari':page,'ke':href,'status':200})
         for lama,tab,owner in PASANGAN:
-            url=lama+'?'+urlencode({'buka':'catat_packing','nilai':'POL-UJIJ-01|medium','gudang':'g2'})
+            url=lama+('&' if '?' in lama else '?')+urlencode({'buka':'catat_packing','nilai':'POL-UJIJ-01|medium','gudang':'g2'})
             r=await c.get(url);assert r.status_code==200
             if lama!='/stok-karung-jasa':
                 assert 'data-buka="catat_packing"' in r.text and 'POL-UJIJ-01|medium' in unescape(r.text),lama
@@ -207,9 +207,10 @@ async def test_tautan_pindah_produk_detail_membawa_konteks(pg,lengkap):
     origin='/stok?tab=produk&pemilik=jasa&pelanggan_id='+str(lengkap['pelanggan_id'])+'&gudang=g2'
     async with await _klien(pg,peran='superadmin') as c:
         r=await c.get('/stok-produk-jasa/detail',params={'jenis':'medium','pelanggan_id':lengkap['pelanggan_id'],'kembali_stok':origin})
-        hrefs=[unescape(h) for h in re.findall(r'href="([^"]+)"',r.text) if 'buka=pindah_kepemilikan_produk' in h]
+        hrefs=[unescape(h) for h in re.findall(r'href="([^"]+)"',r.text) if h.startswith('/stok/sumber/')]
         assert hrefs
         for h in hrefs:
-            assert urlsplit(h).path=='/stok-produk-jasa/detail'
-            assert parse_qs(urlsplit(h).query)['kembali_stok']==[origin]
+            assert urlsplit(h).path.startswith('/stok/sumber/')
+            detail_url=parse_qs(urlsplit(h).query)['kembali_stok'][0]
+            assert parse_qs(urlsplit(detail_url).query)['kembali_stok']==[origin]
             assert (await c.get(h)).status_code==200

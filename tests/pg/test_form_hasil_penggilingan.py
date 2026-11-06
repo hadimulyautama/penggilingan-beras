@@ -1,3 +1,4 @@
+from tests.pg.fasilitas import lini_baru as _lini_uji
 """Form hasil giling: kontrak asli, kumulatif terbaru, stok dan izin pada PG lokal."""
 import json
 import os
@@ -100,8 +101,8 @@ async def test_validasi_server_tidak_menulis(pg,hasil,total):
     _,pr,_=hasil;before=await fakta(pg,pr)
     async with await _klien(pg,peran='admin') as c:
         assert (await kirim(c,pr.kode_proses,total)).status_code in (400,422)
-        assert (await kirim(c,'',6400)).status_code==400
-        assert (await kirim(c,'tidak-ada',6400)).status_code==400
+        assert (await kirim(c,'',6400)).status_code==403
+        assert (await kirim(c,'tidak-ada',6400)).status_code==403
     assert await fakta(pg,pr)==before
 
 
@@ -252,7 +253,7 @@ async def test_proses_jasa_sumber_asli_belum_ada_log_dan_kapasitas_pabrik_terpis
         g1['silo']['C']=silo.id
     await _isi_silo_g1(pg,g1,huruf='C',kode='GB-FORM-JASA-C',kg=1000,jasa_id=jasa_id)
     async with pg() as db:
-        other=(await m.start_milling(db,user=u,nama_silo=['C'])).proc
+        other=(await m.start_milling(db,user=u,nama_silo=['C'], lini_id=await _lini_uji(db,u,'penggilingan'))).proc
     async with await _klien(pg,peran='admin') as c:
         d=(await c.get('/api/actions/ringkasan-hasil-giling',params={'kode_proses':other.kode_proses})).json()
         assert d['tercatat'] is None and d['rendemen'] is None

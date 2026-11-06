@@ -101,7 +101,7 @@ async def test_hitungan_gudang_dan_menipis(pg, kms, pemakai):
 
     # Tak ada harga yang ikut, meski pembeliannya punya harga per lembar.
     for b in baris:
-        assert set(b) == {"gudang", "kode", "nama", "merk", "ukuran",
+        assert set(b) == {"pemilik_id", "pemilik_tunggal", "gudang", "kode", "nama", "merk", "ukuran",
                           "lembar", "menipis"}, b
 
 

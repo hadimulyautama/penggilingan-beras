@@ -75,7 +75,7 @@ def test_saklar_mutu_memadamkan_angka_kolom_dan_aksi(detail, aktif):
 def test_detail_menjaga_izin_dan_status_mesin(ubah, minta, berjalan):
     html = gambar(detail=True, boleh_ubah=ubah, boleh_minta=minta, berjalan=berjalan)
     assert ("buka=verify_output" in html) == (ubah and not berjalan)
-    assert ("buka=minta_pk_g1" in html) == (minta and not berjalan)
+    assert ("buka=minta_pk_g1" in html) == minta
     assert ("Mesin masih giling. Hasil dan rendemen belum final." in html) == berjalan
     # Bahan tetap terbaca meskipun aksi ditutup atau mesin sedang berjalan.
     for teks in ("Batch gabah <span>2</span>", "GB-UJI-01 · Bu Sri", "700 kg",

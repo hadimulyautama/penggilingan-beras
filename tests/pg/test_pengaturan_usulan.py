@@ -147,7 +147,7 @@ async def test_pilihan_gudang_dan_samaran_tidak_mengubah_profil(pg,master):
             r=await kirim(c,'/lihat-sebagai',{'peran':choice,'kembali_pengaturan':'/pengaturan/peran'})
             assert r.headers['location']=='/pengaturan/peran'
             page=await c.get('/pengaturan/peran')
-            assert f'value="{choice}" selected' in page.text
+            assert f'value="{choice or "operator:g2"}" selected' in page.text
             assert (await c.get('/retur')).status_code==403
         await kirim(c,'/lihat-sebagai',{'peran':P.SUPERADMIN,'kembali_pengaturan':'/pengaturan/peran'})
         assert (await c.get('/pengguna')).status_code==403

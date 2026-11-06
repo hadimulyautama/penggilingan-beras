@@ -31,7 +31,7 @@ async def test_katalog_reader_tidak_menulis_dan_kontrak_lama(pg,bahan):
  async with await _klien(pg,peran='admin') as c:
   before=await fakta(pg)
   a=next(x for x in (await c.get('/api/actions/menu')).json() if x['id']=='mulai_penyosohan')
-  assert [f['name'] for f in a['fields']]==['silo'];assert a['fields'][0]['type']=='remote_banyak';assert not a.get('konfirmasi')
+  assert [f['name'] for f in a['fields']]==['lini_id','silo'];assert a['kunci_kartu']=='silo';assert a['fields'][1]['type']=='remote_banyak';assert not a.get('konfirmasi')
   old=(await c.get('/api/actions/silo-bahan-g2')).json();new=(await c.get('/api/actions/silo-bahan-g2?rincian=true')).json()
   assert [{k:v for k,v in x.items() if k!='rincian'} for x in new]==old
   r=await baca(c);assert r.status_code==200,r.text;assert r.headers['cache-control']=='no-store'
@@ -57,7 +57,10 @@ async def test_pemilik_penggabungan_hanya_saat_simpan(pg,bahan,kind):
   j1=Jasa(kode='JAS-UJI-01',pelanggan_id=a.id);j2=Jasa(kode='JAS-UJI-02',pelanggan_id=a.id if kind=='sama' else b.id);db.add_all([j1,j2]);await db.flush()
   its=(await db.scalars(select(PkGudang2Intake).order_by(PkGudang2Intake.id))).all()
   for it,jid in [(its[0],None if kind=='pabrik_jasa' else j1.id),(its[1],j2.id)]:
-   it.jasa_id=jid;batch=await db.get(PkPurchaseBatch,it.pk_purchase_batch_id);batch.jasa_id=jid
+   it.jasa_id=jid
+   moves=(await db.scalars(select(PkTumpukanToSilo).where(PkTumpukanToSilo.pk_gudang2_intake_id==it.id))).all()
+   for move in moves:move.jasa_id=jid
+   batch=await db.get(PkPurchaseBatch,it.pk_purchase_batch_id);batch.jasa_id=jid
    if jid:batch.supplier_id=None
   await db.commit()
  async with await _klien(pg,peran='admin') as c:
@@ -70,6 +73,8 @@ async def test_komposisi_sisa_dan_seluruh_jenis_tidak_dihitung_ganda(pg,bahan):
  async with pg() as db:
   u=await db.get(User,bahan['user'].id);r=await p.mulai_penyosohan(db,user=u,nama_silos=['A'])
   await p.selesai_penyosohan(db,user=u,kode=r.proc.kode_proses,nama_silo='A',sisa_kg=500)
+  await p.catat_output(db,user=u,kode=r.proc.kode_proses,jenis='medium',berat_kumulatif=1000)
+  await p.akhiri_penyosohan(db,user=u,kode=r.proc.kode_proses)
   s=await g2.get_g2_silo(db,'A');now=now_local()
   db.add(BerasKeSilo(kode_pindah='BRS-UJI-01',polishing_process_id=r.proc.id,jenis='medium',silo_id=s.id,berat_kg=100,tanggal=now.date(),waktu=now,input_by=u.id))
   # Bentuk sumber nyata memakai model lama; validasi stok pergerakan ditutup
@@ -105,7 +110,7 @@ async def test_kosong_terpakai_konflik_dan_rollback(pg,bahan):
  assert sorted(await asyncio.gather(mulai(),mulai()))==['ditolak','ok']
  async with await _klien(pg,peran='admin') as c:
   assert 'A' not in [x['value'] for x in (await c.get('/api/actions/silo-bahan-g2')).json()]
-  assert (await simpan(c,['B'])).status_code==200 # Tidak ada larangan global.
+  assert (await simpan(c,['B'])).status_code==400 # Satu alat fisik masih dipakai proses pertama.
 @pytest.mark.parametrize('role,view,gudang,izin', [('operator',None,'Gudang 2',True),('admin',None,'Gudang 2',True),('superadmin',None,'Gudang 2',True),('admin','operator:g2','Gudang 2',True),('operator',None,'Gudang 1',False),('admin','operator:g1','Gudang 1',False),('staff',None,'Gudang 2',False)])
 async def test_akses_efektif_pilihan_reader_simpan(pg,bahan,role,view,gudang,izin):
  from app.web.lihat_sebagai import NAMA_KUKI
@@ -139,6 +144,6 @@ async def test_audit_dan_keadaan_dijeda_silo_tetap_terikat(pg,bahan):
   audit=await db.scalar(select(ActivityLog).where(ActivityLog.table_name=='polishing_process',ActivityLog.record_id==r.proc.id))
   assert audit and audit.changed_by==u.id and audit.waktu_perubahan
  async with await _klien(pg,peran='admin') as c:
-  before=await fakta(pg);d=(await baca(c,['B'])).json();assert not d['siap']
+  before=await fakta(pg);response=await baca(c,['B']);assert response.status_code==409;assert response.json()['detail']['kode']=='alat_sedang_dipakai'
   assert 'B' not in [x['value'] for x in (await c.get('/api/actions/silo-bahan-g2')).json()]
   assert (await simpan(c,['A','B'])).status_code==400;assert await fakta(pg)==before

@@ -30,6 +30,7 @@ from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import datetime, timezone
 
+from tests.pg.fasilitas import di_gudang
 import pytest
 from sqlalchemy import select, text
 
@@ -124,7 +125,7 @@ async def admin(pg, pabrik):
 
 
 @pytest.fixture
-async def pabrik(pg):
+async def pabrik(pg,pemakai):
     """Dua gudang, dua silo G1, dua silo G2, satu pengering.
 
     ⚠ Nama gudang BUKAN hiasan: `silo._g1_warehouse_id` mencarinya dengan
@@ -132,7 +133,7 @@ async def pabrik(pg):
     layanan silo menjawab "Data gudang 1 belum ada". Bentuknya disamakan dengan
     fixture `pabrik` di `test_cermin_bertanda.py`.
     """
-    from app.models import Dryer, Silo, Warehouse
+    from app.models import Dryer, Silo, Warehouse,User
 
     async with pg() as db:
         g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
@@ -147,6 +148,9 @@ async def pabrik(pg):
             Dryer(warehouse_id=g1.id, nama="Dryer 1", kapasitas_kg=30_000,
                   status="aktif"),
         ])
+        u=await db.get(User,pemakai.id);u.default_warehouse_id=g1.id
+        from app.services.fasilitas import seed_fasilitas
+        await seed_fasilitas(db)
         await db.commit()
         return {"g1": g1.id, "g2": g2.id}
 
@@ -1028,7 +1032,7 @@ async def test_penyosohan_membawa_pemilik(pg, pemakai, pabrik):
     jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai)
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        await mulai_penyosohan(db, user=u, nama_silos=["A"])
+        await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"), nama_silos=["A"])
     async with pg() as db:
         proc = (await db.execute(select(PolishingProcess))).scalars().one()
         assert proc.jasa_id == jid, "proses sosoh kehilangan pemiliknya"
@@ -1052,7 +1056,7 @@ async def test_penyosohan_menolak_dua_pemilik(pg, pemakai, pabrik):
     async with pg() as db:
         u = await db.get(User, pemakai.id)
         with pytest.raises(Gudang2Error) as e:
-            await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+            await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"), nama_silos=["A", "B"])
         assert _PESAN_CAMPUR in e.value.args[0], e.value.args[0]
 
 
@@ -1084,7 +1088,7 @@ async def test_bekatul_tetap_milik_pesanan_sampai_dipindah(pg, pemakai, pabrik):
         await db.commit()
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
+        r = await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"), nama_silos=["A"])
         kode_pol = r.proc.kode_proses
     # Hasil sosoh dicatat, lalu bekatulnya dibukukan curah.
     async with pg() as db:
@@ -1129,7 +1133,7 @@ async def test_beras_jasa_bukan_stok_pabrik(pg, pemakai, pabrik):
     jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai, kode="JAS-UJI-530")
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        kode_pol = (await mulai_penyosohan(db, user=u, nama_silos=["A"])).proc.kode_proses
+        kode_pol = (await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"), nama_silos=["A"])).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
         await catat_output(db, user=u, kode=kode_pol, jenis="medium",
@@ -1213,7 +1217,7 @@ async def _pesanan_sampai_beras(pg, pemakai, admin, kode_tiket="JTP0",
                                  pelanggan=pelanggan)
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        kode_pol = (await mulai_penyosohan(db, user=u, nama_silos=["A"])).proc.kode_proses
+        kode_pol = (await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"), nama_silos=["A"])).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
         await catat_output(db, user=u, kode=kode_pol, jenis="medium",
@@ -1620,7 +1624,7 @@ async def test_silo_g2_titipan_tak_hilang_dari_angka_dan_tak_jadi_milik_pabrik(
     # −1.000 kg: stok pabrik NEGATIF karena pekerjaan atas barang orang lain.
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        kode_pol = (await mulai_penyosohan(db, user=u,
+        kode_pol = (await mulai_penyosohan(db, user=await di_gudang(db,u,"g2"),
                                            nama_silos=["A"])).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
@@ -1746,7 +1750,7 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
                     self.href.append(unescape(href))
         tautan = Tautan()
         tautan.feed(teks)
-        assert len(set(tautan.href)) == 2, peran
+        assert len(set(tautan.href)) == (2 if peran == "admin" else 1), peran
         c = await klien(peran, gudang)
         try:
             detail = [await c.get(href) for href in set(tautan.href)]
@@ -1754,12 +1758,12 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
             await c.aclose()
         assert all(r.status_code == 200 for r in detail)
         teks = "\n".join(r.text for r in detail)
-        assert teks.count("Pak Budi") >= 2, peran
+        assert teks.count("Pak Budi") >= (2 if peran == "admin" else 1), peran
         assert "JAS-" in teks, f"{peran}: kode pesanannya tak tergambar"
         # Dan sebutannya menerangkan AKIBATNYA, bukan cuma namanya: "Pak Budi"
         # di pojok kartu tak memberi tahu siapa pun bahwa barangnya tak boleh
         # dijual — dan itu keputusan yang diambil dari layar ini.
-        assert teks.count("bukan dijual") >= 2, peran
+        assert teks.count("bukan dijual") >= (2 if peran == "admin" else 1), peran
 
 
 # ═══════ 8 · PELANGGAN BARU DIKETIK BEBAS — tetap jasa, bukan pemasok palsu ═══════

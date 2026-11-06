@@ -9,6 +9,7 @@ Titik tulisnya satu (`_add_intake`), jadi pemasukan dari PK luar MAUPUN dari
 transfer Gudang 1 sama-sama tercatat sebagai peristiwa `pk_masuk_g2`.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 import asyncio
 from datetime import date
@@ -220,6 +221,7 @@ async def test_pk10_batal_ditolak_bila_silonya_sudah_dipoles(pg, g2):
     await _transfer_g1_ke_silo(pg, uid, "PK10A", 8_000, "A")
     async with pg() as db:
         u = await db.get(User, uid)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="premium", berat_kumulatif=5_000)
         await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses, nama_silo="A", sisa_kg=1_000)
@@ -251,6 +253,7 @@ async def test_pk10_batal_ditolak_saat_penyosohan_masih_berjalan(pg, g2):
     await _transfer_g1_ke_silo(pg, uid, "PK10B1", 8_000, "A")
     async with pg() as db:
         u = await db.get(User, uid)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         await mulai_penyosohan(db, user=u, nama_silos=["A"])
     assert (await _transfer_g1_ke_silo(pg, uid, "PK10B2", 3_000, "A")).startswith("OK")
     h = await _undo(pg, uid)

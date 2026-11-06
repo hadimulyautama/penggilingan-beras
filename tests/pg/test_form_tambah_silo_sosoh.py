@@ -1,3 +1,4 @@
+from tests.pg.fasilitas import lini_baru as _lini_uji
 """Tambah G2: kontrak kode/array, pembaca murni, siklus ulang dan transaksi lama."""
 import asyncio
 import pytest
@@ -69,7 +70,10 @@ async def test_pemilik_dan_penggabungan_hanya_saat_simpan(pg,proses,kind):
   a=Pelanggan(nama_pelanggan='Nama Sama');b=Pelanggan(nama_pelanggan='Nama Sama');db.add_all([a,b]);await db.flush();j1=Jasa(kode='JAS-UJI-01',pelanggan_id=a.id);j2=Jasa(kode='JAS-UJI-02',pelanggan_id=a.id if kind=='sama' else b.id);db.add_all([j1,j2]);await db.flush()
   its=(await db.scalars(select(PkGudang2Intake).order_by(PkGudang2Intake.id))).all()
   for it,jid in [(its[0],None if kind=='pabrik_jasa' else j1.id),(its[1],j2.id)]:
-   it.jasa_id=jid;batch=await db.get(PkPurchaseBatch,it.pk_purchase_batch_id);batch.jasa_id=jid
+   it.jasa_id=jid
+   from app.models import PkTumpukanToSilo
+   for move in await db.scalars(select(PkTumpukanToSilo).where(PkTumpukanToSilo.pk_gudang2_intake_id==it.id)):move.jasa_id=jid
+   batch=await db.get(PkPurchaseBatch,it.pk_purchase_batch_id);batch.jasa_id=jid
    if jid:batch.supplier_id=None
   pr=await db.get(PolishingProcess,proses['pid']);pr.jasa_id=j2.id;await db.commit()
  async with await _klien(pg,peran='admin') as c:
@@ -142,12 +146,12 @@ async def test_anonim_csrf_dan_proses_hilang(pg,proses):
  from app.main import app
  async with await _klien(pg,peran='admin') as c:
   assert (await c.post('/api/actions/tambah-silo-penyosohan',json={'kode':proses['kode'],'silo':['A']})).status_code==403
-  assert (await baca(c,dict(kode='tidak-ada'))).status_code==409
+  assert (await baca(c,dict(kode='tidak-ada'))).status_code==403
  async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:assert (await baca(c,proses)).status_code==401
 async def test_konflik_proses_lain_tidak_menambah_pilihan_lain(pg,proses):
  await isi(pg,proses)
  async with pg() as db:
-  u=await db.get(User,proses['user'].id);await p.mulai_penyosohan(db,user=u,nama_silos=['A'])
+  u=await db.get(User,proses['user'].id);await p.mulai_penyosohan(db,user=u,nama_silos=['A'], lini_id=await _lini_uji(db,u,'penyosohan'))
  async with await _klien(pg,peran='admin') as c:
   before=await fakta(pg);assert (await simpan(c,proses,['Timur','A'])).status_code==400;assert await fakta(pg)==before
   assert 'A' not in [x['value'] for x in (await c.get('/api/actions/silo-bahan-g2',params={'induk':proses['kode']})).json()]

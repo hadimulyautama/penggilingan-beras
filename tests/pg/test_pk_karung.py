@@ -1,3 +1,4 @@
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 """Keputusan 22 Oktober: karung per partai, tanpa bobot hantu di susut."""
 from decimal import Decimal
 
@@ -48,6 +49,7 @@ async def pindah(db, u, it, k, silo='A', **lain):
 
 
 async def habiskan(db, u, silo='A', hasil=100):
+    await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
     mulai = await sosoh.mulai_penyosohan(db, user=u, nama_silos=[silo])
     await sosoh.catat_output(db, user=u, kode=mulai.proc.kode_proses, jenis='medium', berat_kumulatif=hasil)
     selesai = await sosoh.selesai_penyosohan(db, user=u, kode=mulai.proc.kode_proses, nama_silo=silo, sisa_kg=0)
@@ -114,6 +116,7 @@ async def test_koreksi_w_mengalir_ke_pindahan_dan_bahan_sosoh(pg,dunia):
     async with pg() as db:
         u,b,it = await batch_baru(db,dunia,w=10240)
         await pindah(db,u,it,126)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         mulai = await sosoh.mulai_penyosohan(db,user=u,nama_silos=['A'])
         b.berat_total_kg = 10140
         await db.commit()
@@ -224,6 +227,7 @@ async def test_koreksi_w_saat_dua_silo_dan_tambah_selama_proses(pg,dunia):
     async with pg() as db:
         u,b,it=await batch_baru(db,dunia,w=10240,sumber='perkiraan')
         await pindah(db,u,it,100)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         mulai=await sosoh.mulai_penyosohan(db,user=u,nama_silos=['A'])
         await pindah(db,u,it,26)
         await pindah(db,u,it,2,'B')

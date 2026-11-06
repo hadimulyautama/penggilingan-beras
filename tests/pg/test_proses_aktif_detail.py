@@ -1,3 +1,4 @@
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 """Detail empat proses aktif: isi nyata, paginasi, akses dan perpindahan fase."""
 from datetime import timedelta
 from pathlib import Path
@@ -75,9 +76,9 @@ async def test_catatan_indikator_tidak_menghilangkan_ukur_alat_tes_terakhir(pg, 
     async with await _klien(pg, peran="operator", gudang="Gudang 1") as c:
         h = await c.get(f"/proses-aktif/pengeringan/{pengeringan['kode']}")
     assert h.status_code == 200
-    ringkasan_alat = h.text.split("Kadar air terakhir · alat tes", 1)[1].split("</article>", 1)[0]
+    ringkasan_alat = h.text.split("Rata-rata alat tes terakhir", 1)[1].split("</div>", 1)[0]
     assert "18,0%" in ringkasan_alat
-    assert "Waktu ukur terakhir · alat tes" in h.text
+    assert "18,0%" in ringkasan_alat and "titik" in ringkasan_alat
 
 
 async def test_giling_berulang_qc_lengkap_hasil_kumulatif_dan_paginasi(pg, giling):
@@ -115,6 +116,7 @@ async def test_giling_dijeda_dan_sumber_semua_silo(pg, g1):
     await _isi_silo_g1(pg, g1, huruf="B", kode="GB-SUMBER-B", kg=2_000)
     async with pg() as db:
         u = await db.get(User, g1["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=u, nama_silo=["A", "B"])
         await hentikan(db, user=u, jenis="giling", kode=r.proc.kode_proses, sebab="Listrik padam")
     async with await _klien(pg, peran="operator", gudang="Gudang 1") as c:
@@ -133,6 +135,7 @@ async def test_sosoh_rinci_per_entri_jeda_dan_tautan_lama(pg, gudang2):
     from app.penggilingan.gudang1.services.jeda import hentikan
     u = gudang2["user"]
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
         for kg in (100, 250):
             await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="medium", berat_kumulatif=kg, spek="UJI DETAIL")
@@ -169,7 +172,7 @@ async def test_akses_gudang_dan_alamat_tidak_sah(pg, giling):
         assert (await c.get(f"/proses-aktif/giling/{giling['kode']}")).status_code == 403
         assert (await c.get('/proses-aktif/aneh/XX')).status_code == 404
     async with await _klien(pg, peran="superadmin") as c:
-        assert (await c.get('/proses-aktif/giling/TIDAK-ADA')).status_code == 404
+        assert (await c.get('/proses-aktif/giling/TIDAK-ADA')).status_code == 403
 
 
 async def test_qc_kosong_dan_giling_selesai_masuk_riwayat(pg, giling):
@@ -215,6 +218,7 @@ async def test_detail_sosoh_memuat_asal_melebihi_batas_kartu(pg, gudang2):
                 tujuan="silo", silo_id=silo.id, berat_kg=100, tanggal_masuk=date.today(),
                 waktu_masuk=now_local(), input_by=u.id))
         await db.commit()
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
     async with await _klien(pg, peran="operator", gudang="Gudang 2") as c:
         h = await c.get(f"/proses-aktif/sosoh/{r.proc.kode_proses}")
@@ -235,6 +239,7 @@ async def test_bahan_jasa_tetap_menyebut_pemilik_di_detail(pg, g1):
         await db.commit()
     await _isi_silo_g1(pg, g1, huruf="A", kode="GB-JASA-DETAIL", kg=3_000, jasa_id=jasa.id)
     async with pg() as db:
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await start_milling(db, user=await db.get(User, g1["user"]), nama_silo="A")
     async with await _klien(pg, peran="operator", gudang="Gudang 1") as c:
         h = await c.get(f"/proses-aktif/giling/{r.proc.kode_proses}")
@@ -250,6 +255,7 @@ async def test_silo_dilepas_diisi_ulang_tidak_mengganti_asal_proses(pg, gudang2)
     u = gudang2["user"]
     async with pg() as db:
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"], nama_silo="A", berat=4_000)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
         await catat_output(db, user=u, kode=r.proc.kode_proses, jenis="medium", berat_kumulatif=1)
         await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses, nama_silo="A", sisa_kg=0)

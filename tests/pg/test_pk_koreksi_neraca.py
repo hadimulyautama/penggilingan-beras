@@ -1,3 +1,4 @@
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 """Regresi koreksi bobot dan kepastian neraca, tanpa mengubah hasil ukur."""
 from decimal import Decimal
 import pytest
@@ -14,6 +15,7 @@ async def test_review_koreksi_w_harus_sampai_ke_neraca_proses_bersama(pg,dunia):
     async with pg() as db:
         u,b,it=await batch_baru(db,dunia,w=10240,sumber='perkiraan')
         await pindah(db,u,it,128)
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         mulai=await sosoh.mulai_penyosohan(db,user=u,nama_silos=['A'])
         b.berat_total_kg=10140;b.sumber_berat='timbangan'
         await db.commit()
@@ -137,6 +139,7 @@ async def test_koreksi_w_dua_silo_mempertahankan_seluruh_bahan_proses(pg, dunia)
         u, b, it = await batch_baru(db, dunia, w=10240, sumber='perkiraan')
         await pindah(db, u, it, 126, silo='A')
         await pindah(db, u, it, 2, silo='B')
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         mulai = await sosoh.mulai_penyosohan(db, user=u, nama_silos=['A', 'B'])
         b.berat_total_kg = 10140
         b.sumber_berat = 'timbangan'

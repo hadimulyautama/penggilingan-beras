@@ -110,7 +110,8 @@ async def test_pilih_gudang_resmi_berulang_tanpa_mengubah_profil_stok_atau_hak_a
             assert (await c.get('/api/actions/keluar-dimuat')).status_code == 403
         r = await c.post('/lihat-sebagai',data={'_csrf':await _csrf(c),'peran':''})
         assert r.status_code == 303
-        assert (await c.get('/api/kabar/jumlah')).json()['belum'] == 0
+        # Reset lama tidak menghapus gudang kerja yang terakhir dipilih.
+        assert (await c.get('/api/kabar/jumlah')).json()['belum'] == 3
         assert (await c.get('/barang-keluar')).status_code == 403
     async with pg() as db:
         u = await db.get(User, akses['tanpa'])
@@ -141,7 +142,7 @@ async def test_ganti_gudang_mempertahankan_status_baca_pribadi(pg, akses):
         assert (await c.post('/kabar/status',data={'_csrf':csrf,'id':nid,'status':'dibaca'})).status_code == 303
         assert (await c.get('/api/kabar/jumlah')).json()['belum'] == 2
         await c.post('/lihat-sebagai',data={'_csrf':await _csrf(c),'peran':''})
-        assert (await c.get('/api/kabar/jumlah')).json()['belum'] == 0
+        assert (await c.get('/api/kabar/jumlah')).json()['belum'] == 2
         await c.post('/lihat-sebagai',data={'_csrf':await _csrf(c),'peran':f'{P.OPERATOR}:{P.G2}'})
         assert (await c.get('/api/kabar/jumlah')).json()['belum'] == 2
         assert 'Sudah dibaca' in (await c.get('/kabar')).text

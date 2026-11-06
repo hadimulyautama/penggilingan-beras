@@ -190,12 +190,14 @@ async def test_detail_dan_kembali_mempertahankan_filter(pg, stok_lengkap):
         assert (await c.get(href)).status_code == 200
         k = await c.get('/stok?tab=karung&pemilik=pabrik&gudang=g2')
         href = next(unescape(h) for h in re.findall('href="([^"]+)"', k.text)
-                    if 'buka=pindah_kepemilikan_karung' in h)
+                    if h.startswith('/stok/karung/detail?'))
         q = parse_qs(urlsplit(href).query)
-        assert q['tab'] == ['karung'] and q['pemilik'] == ['pabrik']
-        assert q['gudang'] == ['g2']
-        assert q['nilai'] == ['laminasi|25|Penyunesia']
-        assert (await c.get(href)).status_code == 200
+        assert q['material'] == ['laminasi'] and q['pemilik'] == ['pabrik']
+        assert q['ukuran'] == ['25'] and q['merk'] == ['Penyunesia']
+        detail = await c.get(href)
+        assert detail.status_code == 200
+        assert 'Detail sumber stok' in detail.text
+
 
 
 async def test_parameter_tidak_sah_tidak_membuka_semua_pemilik(pg, stok_lengkap):

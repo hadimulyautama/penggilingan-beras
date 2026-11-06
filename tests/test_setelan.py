@@ -127,14 +127,14 @@ def test_tombol_list_audit_aktif_hanya_untuk_admin_ke_atas():
     tanpa = _render_pengaturan(tuan=False)
     # v476 mempertahankan pintu audit pada susunan induk, dengan keadaan
     # terkunci bagi operator. Tautan aktif tetap hanya milik Admin ke atas.
-    assert "List audit" in tanpa
+    assert "Catatan audit" in tanpa
     assert 'href="/audit"' not in tanpa
     from bs4 import BeautifulSoup
-    judul=BeautifulSoup(tanpa,'html.parser').find('strong',string='List audit')
+    judul=BeautifulSoup(tanpa,'html.parser').find('strong',string='Catatan audit')
     assert judul.find_parent('span',class_='pg-pintu')['aria-disabled']=='true'
 
     dengan = _render_pengaturan(tuan=True)
-    assert "List audit" in dengan
+    assert "Catatan audit" in dengan
     assert 'href="/audit"' in dengan
 
     # Tombolnya WAJIB tetap muncul meski `blok_kelola` sudah menyempit ke
@@ -270,7 +270,7 @@ def test_setelan_dikelompokkan_per_proses():
     # Sejak Tahap 2 templatnya BERLINGKAR atas daftar proses, dan daftarnya
     # milik app — markupnya tak pernah menyebut nama proses, dan judulnya tetap
     # digambar `<span class="lbl">` yang sama.
-    assert "{% for jenis, judul in PROSES if jenis != 'pengeringan' %}" in html
+    assert "{% for jenis, judul in PROSES %}" in html
     assert '<span class="lbl">{{ judul }}</span>' in html
     assert html.count("{{ sebab_blok(jenis) }}") == 1
     from app.web import pengaturan

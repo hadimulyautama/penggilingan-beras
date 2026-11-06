@@ -256,6 +256,11 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
         teks = berkas.read_text()
         for m in re.finditer(r'\brender(_laci)?\(\s*request,\s*"([^"]+)"', teks):
             nama = m.group(2)
+            if nama == "pengaturan_fasilitas.html":
+                assert 'extends "pengaturan.html"' in (TPL / nama).read_text()
+                terlihat.add("pengaturan.html")
+                assert m.group(1)
+                continue
             if nama == "stok_kepemilikan.html":
                 assert 'extends template_kepemilikan_asal' in (TPL / nama).read_text()
                 asal = re.search(r'template_kepemilikan_asal="(stok_(?:produk|karung)(?:_jasa)?\.html)"', _panggilan(teks, m.end()))

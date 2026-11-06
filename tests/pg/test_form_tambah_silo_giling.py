@@ -1,3 +1,4 @@
+from tests.pg.fasilitas import lini_baru as _lini_uji
 """Mix G1: pembaca tanpa mutasi dan kontrak simpan lama pada PG terisolasi."""
 import asyncio
 import pytest
@@ -33,7 +34,7 @@ async def test_kontrak_pilihan_reader_tanpa_mutasi(pg,mix):
   options=(await c.get('/api/actions/silo-g1-tambah',params=dict(induk=p.kode_proses))).json();assert [x['value'].upper() for x in options]==['TONG SELATAN']
   r=await baca(c,p);assert r.status_code==200,r.text;assert r.headers['cache-control']=='no-store'
   d=r.json();assert d['bahan']=='10.000 kg' and d['tambahan']=='2.500 kg' and d['setelah']=='12.500 kg';assert len(d['sumber'])==2 and d['cocok'] and d['final']
-  assert (await c.get('/api/actions/ringkasan-tambah-silo-giling',params=dict(kode_proses='hilang'))).status_code==400
+  assert (await c.get('/api/actions/ringkasan-tambah-silo-giling',params=dict(kode_proses='hilang'))).status_code==403
   assert await snapshot(pg)==before
 @pytest.mark.parametrize('keadaan',['pasti','perkiraan','belum','sebagian'])
 async def test_saldo_pengurangan_kepastian_dan_sinkron(pg,mix,keadaan):
@@ -120,7 +121,7 @@ async def test_tidak_sah_dan_service_list_legacy_atomik(pg,mix):
   pr=await db.get(MillingProcess,p.id);assert float(pr.berat_gabah_masuk_kg)==12500
 async def test_proses_selesai_dan_silo_diklaim_setelah_dibuka(pg,mix):
  u,p,_=mix
- async with pg() as db:other=(await m.start_milling(db,user=u,nama_silo='TONG SELATAN')).proc
+ async with pg() as db:other=(await m.start_milling(db,user=u,nama_silo='TONG SELATAN', lini_id=await _lini_uji(db,u,'penggilingan'))).proc
  async with await _klien(pg,peran='admin') as c:
   before=await snapshot(pg);assert (await simpan(c,p)).status_code==400;assert await snapshot(pg)==before
  async with pg() as db:pr=await db.get(MillingProcess,p.id);pr.status='selesai';await db.commit()
@@ -161,7 +162,7 @@ async def test_dua_proses_berebut_sumber_hanya_satu_yang_berhasil(pg,mix,g1):
  async with pg() as db:
   silo=Silo(nama_silo='Silo Utara',warehouse_id=g1['wh'],status='kosong');db.add(silo);await db.flush();g1['silo']['UTARA']=silo.id;await db.commit()
  await _isi_silo_g1(pg,g1,huruf='UTARA',kode='GB-MIX-UTARA',kg=800)
- async with pg() as db:q=(await m.start_milling(db,user=u,nama_silo='UTARA')).proc
+ async with pg() as db:q=(await m.start_milling(db,user=u,nama_silo='UTARA', lini_id=await _lini_uji(db,u,'penggilingan'))).proc
  async def tambah(kode):
   async with pg() as db:
    try:await m.tambah_silo_giling(db,user=u,kode_proses=kode,nama_silo='TONG SELATAN');return True

@@ -14,6 +14,37 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.skipif(
     os.getenv('UJI_BROWSER_PILIHAN_SILO') != '1', reason='Browser lokal opsional')]
 
 
+@pytest.mark.parametrize('peran', ['operator','admin','superadmin'])
+@pytest.mark.parametrize('width', [390,1440])
+async def test_tombol_kartu_silo_memulai_sosoh_dengan_alat_yang_benar(pg,gudang2,peran,width):
+    from playwright.async_api import expect
+    from sqlalchemy import select,func
+    from app.models import PolishingProcess,PolishingSiloUsage
+    await seed_master()
+    async with await _klien(pg,peran=peran,gudang='Gudang 2') as c:
+        async with browser(c,width) as page:
+            await page.route('**/api/aliran',lambda r:r.abort())
+            errors=[]
+            page.on('response',lambda r:errors.append(r.status) if '/api/actions/' in r.url and r.status>=400 else None)
+            await page.goto('https://uji/pekerjaan' if peran=='operator' else 'https://uji/')
+            link=page.locator('a[href*="buka=mulai_penyosohan"][href*="nilai=B"]').first
+            await link.wait_for(state='attached')
+            if not await link.is_visible():
+                await link.locator('xpath=ancestor::details[1]/summary').click()
+            await link.click()
+            await expect(page.locator('#alat_otomatis_lini_id')).to_contain_text('Penyosohan 1')
+            assert (await page.locator('#f_lini_id').input_value()).isdigit()
+            await expect(page.locator('#b_silo input[value=B]')).to_be_checked()
+            await expect(page.locator('#mg-bobot')).to_contain_text('9.800')
+            await page.locator('#simpan').click()
+            await expect(page.locator('#lembar')).not_to_be_visible()
+            assert not errors,errors
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(PolishingProcess))==1
+        usage=await db.scalar(select(PolishingSiloUsage))
+        assert float(usage.berat_awal_kg)==9800
+
+
 @pytest.mark.parametrize('width', [390, 1440])
 @pytest.mark.parametrize('gangguan', ['alat', 'silo', 'alat_lambat'])
 async def test_pilihan_g2_pulih_dan_alat_otomatis(pg, gudang2, width, gangguan):

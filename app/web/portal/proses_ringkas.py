@@ -63,7 +63,7 @@ def detail(content,r,ctx,env):
     """Ringkasan di depan, catatan sumber dan tab native tetap bisa dibuka."""
     from bs4 import BeautifulSoup
     s=BeautifulSoup(content,'html.parser');root=s.select_one('.pelanggan-detail')
-    hero=root.select_one('.riwayat-detail__hero') if root else None
+    hero=root.select_one('.riwayat-detail__hero, .rhs-header') if root else None
     if not hero:return content
     baru=BeautifulSoup(env.get_template('portal/_inti_proses_ringkas.html').render(r=r),'html.parser')
     for el in list(baru.contents):hero.insert_before(el.extract())

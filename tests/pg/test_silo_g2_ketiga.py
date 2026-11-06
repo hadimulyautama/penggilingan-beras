@@ -14,6 +14,7 @@ nama yang benar — dan kosakata LAMA tetap diterima, sebab halaman di ponsel
 operator berumur panjang dan baris lama tetap harus terbaca.
 """
 from __future__ import annotations
+from app.services.fasilitas import seed_fasilitas as _fasilitas_uji
 
 from datetime import date
 
@@ -207,6 +208,7 @@ async def test_silo_ketiga_bisa_disosoh(pg, pabrik):
     assert daftar == ["C"], daftar
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await _fasilitas_uji(db)  # master alat nyata untuk dunia uji ini
         r = await mulai_penyosohan(db, user=u, nama_silos=["C"])
     assert r.berat_awal_total == 4_000
 

@@ -673,7 +673,7 @@ def test_borang_mulai_giling_menerima_beberapa_silo():
 
     sumber = inspect.getsource(api)
     i = sumber.index('"id": "mulai_giling"')
-    blok = sumber[i:i + 900]
+    blok = sumber[i:sumber.index('"id":', i + 6)]
     assert '"type": "remote_banyak"' in blok, "borangnya masih satu silo saja"
     assert '"source": "/api/actions/silo-siap-giling"' in blok, "daftarnya bukan dari master"
 
@@ -762,7 +762,7 @@ def test_borang_penyosohan_juga_menerima_beberapa_silo():
 
     sumber = inspect.getsource(api)
     i = sumber.index('"id": "mulai_penyosohan"')
-    blok = sumber[i:i + 900]
+    blok = sumber[i:sumber.index('"id":', i + 6)]
     assert '"type": "remote_banyak"' in blok, "borangnya masih satu pilihan"
     assert '"source": "/api/actions/silo-bahan-g2"' in blok, "daftarnya bukan dari master"
     assert "SILO_BAHAN" not in sumber, "tupel huruf lamanya masih berdiri"
