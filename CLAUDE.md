@@ -1473,7 +1473,16 @@ dibentuk, sebelum GET pertama; auto-pilih line harus memberi tahu field anak.
 Bedakan perubahan otomatis dari pilihan manual: auto-pilih mempertahankan
 centang sambil memvalidasi ulang daftar, tidak menandai isian berubah. Respons
 sukses/gagal yang lebih lama tidak boleh menimpa permintaan terbaru atau borang
-pengganti. Saat GET gagal, tampilkan Muat ulang pilihan silo di dalam borang;
-retry hanya membaca, tidak membuang isian dan tidak menulis transaksi.
+pengganti. Saat GET gagal, pulihkan daftar otomatis dengan jeda bertahap
+1/2/4/8/15 detik. Hentikan permintaan saat formulir ditutup, offline atau
+tersembunyi; lanjutkan saat online/aktif kembali. Tidak perlu tombol retry.
+Retry hanya membaca, tidak membuang isian dan tidak menulis transaksi.
 Uji Chromium mengatur kedua urutan respons, layar 390/1440, kegagalan sementara,
 respons lama, dan simpan giling lewat UI pada PostgreSQL lokal.
+
+Pemilik menegaskan satu-satunya line/alat yang sah langsung ditetapkan.
+Field lini_id/dryer_id menyimpan ID untuk validasi/simpan, tetapi pilihan
+tersembunyi dan nama alat tampil sebagai informasi. Bila lebih dari satu,
+pilihan tetap eksplisit. Jangan menyamakan auto-pilih alat dengan otomatis
+memulai proses: target pengeringan, sumber bahan, pemeriksaan dan Simpan tetap
+mengikuti alur yang berlaku.

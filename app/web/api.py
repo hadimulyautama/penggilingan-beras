@@ -586,7 +586,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "pengeringan (PGR-…). Gabah di mesin lain tidak ikut. "
                      "Lot belum terbentuk di sini — lot lahir saat mulai giling.",
              "fields": [
-                 {"name": "dryer_id", "label": "Mesin yang ada gabahnya", "type": "remote",
+                 {"name": "dryer_id", "label": "Mesin yang ada gabahnya", "type": "remote", "auto_satu": True,
                   "source": "/api/actions/dryer-menunggu",
                   "kosong": "Tidak ada mesin pengering yang sedang berisi gabah. Mesinnya ada — isinya yang belum. Catat gabah masuk, lalu tempatkan ke mesin pengering."},
                  {"name": "target_kadar_air",
