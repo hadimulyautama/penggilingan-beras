@@ -1,0 +1,44 @@
+/* Header/filter/rekap saja; markup dan gaya tabel/kartu retur tetap asli. */
+.rpd .rrs{max-width:none;width:100%;margin:0}
+.rrs .rrs-kepala{margin:20px 0 18px}
+.rrs .rrs-kepala h2{font-size:17px;margin:0 0 8px}
+.rrs .rrs-kepala p{font-size:13px;color:var(--pd-muted);margin:0;line-height:1.7}
+.rrs .rrs-kontrol{margin:20px 0 14px}
+.rrs[data-rrs-ready] .rrs-kontrol{display:flex;align-items:end;gap:12px}
+.rrs .rsh-cari{flex:1;min-width:0;align-items:end;gap:10px}
+.rrs .rsh-cari .rsp-field{margin:0;min-width:0;color:var(--pd-muted);font-size:13px}
+.rrs .rsh-cari input{font-size:16px;min-height:46px}
+.rrs .rsh-cari button{margin:0;min-height:46px}
+.rrs .rrs-desktop-filter{min-height:46px;flex:none}
+.rrs .rrs-filter-aktif{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px;font-size:12px}
+.rrs-filter-aktif>span{padding:5px 8px;border:1px solid var(--pd-line);border-radius:6px;background:var(--pd-sheet);color:var(--pd-muted);overflow-wrap:anywhere}
+.rrs-filter-aktif>a{min-height:36px;align-content:center;margin-left:6px}
+.rrs .rrs-rekap{margin:18px 0 24px}
+.rrs .rrs-metrik{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:0 0 18px}
+.rrs-metrik>div+div{border-left:1px solid var(--pd-line);padding-left:18px}
+.rrs .rrs-metrik span{display:block;font-size:13px;line-height:1.5;color:var(--pd-muted);margin:0 0 9px}
+.rrs .rrs-metrik strong{display:block;font-size:24px;line-height:1.3;font-weight:600;font-variant-numeric:tabular-nums}
+.rrs #rrs-filter .rsh-filter{margin:0}
+.rrs #rrs-filter .rsh-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
+.rrs #rrs-filter .rsh-filter-grid>.rsp-field:last-child{grid-column:1/-1}
+.rrs #rrs-filter input,.rrs #rrs-filter select{font-size:16px}
+.rrs #rrs-filter .rsh-filter>.btn{min-height:44px;margin-right:8px}
+.rrs #rrs-filter .rsh-filter>a{display:inline-flex;align-items:center;min-height:44px}
+.rpd .rhs-tools>.rrs-mobile-filter{display:none}
+@media(max-width:700px){
+ .rpd .rhs-tools>.rrs-mobile-filter:not([hidden]){display:inline-flex;width:44px;min-height:44px;padding:8px;justify-content:center}
+ .rpd:has(.rrs) .rpd-header h1,.rpd:has(.rrs) .rpd-header .rhs-meta{padding-right:104px}
+ .rrs .rrs-desktop-filter{display:none!important}
+ .rrs .rsh-cari{display:flex;align-items:end}
+ .rrs .rsh-cari button{width:auto;flex:none}
+ .rrs .rrs-metrik{grid-template-columns:minmax(0,1fr);gap:12px}
+ .rrs .rrs-metrik>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:baseline}
+ .rrs .rrs-metrik>div+div{border-left:0;border-top:1px solid var(--pd-line);padding:12px 0 0}
+ .rrs .rrs-metrik span{margin:0;font-size:12px}
+ .rrs .rrs-metrik strong{font-size:23px}
+ .rrs #rrs-filter .rsh-filter-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media print{.rrs .rrs-kontrol,.rrs .rrs-filter-aktif{display:none!important}}
+/* Tombol umum dapat selebar induknya. Di baris pencarian, sisakan ruang
+   untuk field dan pertahankan semua kontrol di dalam lebar halaman. */
+body.padiflow-ui .rrs .rrs-desktop-filter,body.padiflow-ui .rrs .rsh-cari>.btn{width:auto;flex:0 0 auto}

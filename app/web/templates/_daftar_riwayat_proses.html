@@ -10,6 +10,7 @@
   <div class="rhs-tools">
    <button class="btn btn--kecil" type="button" data-rpd-guide>ⓘ Panduan</button>
    <button class="btn btn--kecil" type="button" data-rpd-print><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Print</button>
+   {% block daftar_alat_tambahan %}{% endblock %}
    <details class="rhs-menu"><summary class="btn" aria-label="Panduan, print dan navigasi riwayat">⋮</summary><div class="rhs-menu-body">
     <button class="btn" type="button" data-rpd-guide>ⓘ Panduan</button>
     <button class="btn" type="button" data-rpd-print>Print</button>
@@ -23,6 +24,7 @@
 {% if not PORTAL_READ_ONLY %}
 {% from '_panduan.html' import panel as panduan %}
 {% call panduan('rpd-panduan','Panduan daftar riwayat proses',penutup={'data-rpd-guide-close':'','data-lk-tutup':''}) %}
+{% block daftar_panduan %}
 {% if request.url.path == '/riwayat-pengeringan' %}
 <p><strong>Pengeringan.</strong> Daftar memuat lot setelah pendinginannya dinyatakan selesai. Bobot gabah basah, estimasi kering dan hasil flowing scale tetap dibedakan. Status silo, mode dryer, durasi dan batch asal tersedia pada penelusuran lot.</p>
 {% elif request.url.path == '/riwayat-giling' %}
@@ -34,9 +36,11 @@
 {% endif %}
 <p><strong>Penelusuran.</strong> Buka kode atau kartu untuk detail lengkap. Laporan PDF dibuka melalui fasilitas yang sudah tersedia pada setiap proses. Print mencetak bagian yang sedang dibuka.</p>
 <p><strong>Catatan lama.</strong> “30 sebelumnya” membuka catatan yang lebih lama. “Kembali ke yang terbaru” kembali ke awal. Ringkasan menunjukkan data di halaman yang sedang dibuka, bukan total seluruh riwayat.</p>
+{% endblock %}
 {% endcall %}
 {% if LAPORAN_NAV %}{% call panduan('rpd-navigation','Navigasi Laporan & Riwayat',penutup={'data-rpd-nav-close':'','data-lk-tutup':''}) %}<div data-rpd-parent-nav-slot></div>{% endcall %}{% endif %}
 </div>
 <script src="/static/riwayat-daftar-proses.js?v={{ VERSI }}"></script>
+{% block daftar_skrip %}{% endblock %}
 {% endif %}
 {% endblock %}
