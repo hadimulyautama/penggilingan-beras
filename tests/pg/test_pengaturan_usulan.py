@@ -217,7 +217,7 @@ async def test_csrf_pengelolaan_koordinat_dan_perlindungan_gudang(pg,master):
         r=await kirim(c,'/pengaturan/gudang/hapus',{'gudang_id':g1.id})
         assert 'err_teks' in r.headers['location']
         r=await kirim(c,'/pengaturan/alat/dryer',{'nama':'Pengering uji','kapasitas_kg':'30000'})
-        assert 'pesan=alat-ditambah' in r.headers['location']
+        assert 'pesan=dryer-ditambah' in r.headers['location']
         async with pg() as db:
             dryer=await db.scalar(select(Dryer).where(Dryer.nama=='Pengering uji'))
         r=await kirim(c,'/pengaturan/alat/dryer/edit',{'dryer_id':dryer.id,'nama':'Pengering uji baru','kapasitas_kg':'28000','target_kadar_air':'13,5'})

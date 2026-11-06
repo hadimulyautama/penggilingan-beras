@@ -390,6 +390,8 @@ _PESAN = {
     "sebab-diubah": "Daftar sebab berhenti sudah diperbarui.",
     "sandi-diganti": "Kata sandi berhasil diganti.",
     "alat-ditambah": "Alat baru ditambahkan.",
+    "dryer-ditambah": "Dryer baru ditambahkan.",
+    "silo-ditambah": "Silo baru ditambahkan.",
     "alat-diubah": "Alat diperbarui.",
     "silo-diubah": "Nama dan filter komoditas silo berhasil disimpan.",
     "silo-dihapus": "Silo dihapus dari daftar aktif. Catatan lama tetap tersimpan.",
@@ -629,7 +631,7 @@ async def tambah_dryer(
         from app.services.fasilitas import seed_fasilitas
         await seed_fasilitas(db)
         await db.commit()
-    return await _balik_alat(request, akun, "/pengaturan/fasilitas?tersimpan=1" if warehouse_id is not None else "/pengaturan/alat?pesan=alat-ditambah")
+    return await _balik_alat(request, akun, "/pengaturan/fasilitas?tersimpan=1&pesan=dryer-ditambah" if warehouse_id is not None else "/pengaturan/alat?pesan=dryer-ditambah")
 
 
 @router.post("/pengaturan/alat/dryer/edit")
@@ -730,7 +732,7 @@ async def tambah_silo(
                     jenis_isi=("gabah" if warehouse_id is not None else isi if g2 else "gabah"),
                     komoditas_diizinkan=list(KOMODITAS_G1 if warehouse_id is not None else KOMODITAS_G2 if g2 else KOMODITAS_G1)))
         await db.commit()
-    return await _balik_alat(request, akun, "/pengaturan/fasilitas?tersimpan=1" if warehouse_id is not None else "/pengaturan/alat?pesan=alat-ditambah")
+    return await _balik_alat(request, akun, "/pengaturan/fasilitas?tersimpan=1&pesan=silo-ditambah" if warehouse_id is not None else "/pengaturan/alat?pesan=silo-ditambah")
 
 
 @router.post("/pengaturan/alat/silo/edit")

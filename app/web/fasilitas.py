@@ -40,7 +40,15 @@ async def halaman(request, akun, *, err='', form=None, mode=None, identitas=None
 @router.get('/pengaturan/fasilitas')
 async def lama(request: Request, akun=Depends(butuh_super)):
     # Bookmark lama tetap sampai ke pengelolaan yang sama, bukan konfigurasi kedua.
-    return redirect('/pengaturan/mesin' + ('?tersimpan=1' if request.query_params.get('tersimpan') else ''))
+    from urllib.parse import urlencode
+    from app.web.pengaturan import _PESAN
+    query = {}
+    if request.query_params.get('tersimpan'):
+        query['tersimpan'] = '1'
+    pesan = request.query_params.get('pesan')
+    if pesan in _PESAN:
+        query['pesan'] = pesan
+    return redirect('/pengaturan/mesin' + ('?' + urlencode(query) if query else ''))
 
 @router.get('/pengaturan/mesin')
 @router.get('/pengaturan/jenis-proses')
