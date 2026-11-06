@@ -23,7 +23,7 @@ async def test_saldo_semua_baris_pratinjau_tanpa_tulisan_dan_satu_lot(pg,silos):
   db.add(SiloStorage(silo_id=a.silo_id,purchase_batch_id=extra.id,tipe_masuk='langsung_kering',tanggal_masuk=now_local(),input_by=silos['user'],status='terisi'));await db.commit()
  before=await fakta(pg)
  async with await _klien(pg,peran='operator',gudang='Gudang 1') as c:
-  menu=next(x for x in (await c.get('/api/actions/menu')).json() if x['id']=='mulai_giling');assert len(menu['fields'])==1 and menu['fields'][0]['name']=='silo'
+  menu=next(x for x in (await c.get('/api/actions/menu')).json() if x['id']=='mulai_giling');assert [f['name'] for f in menu['fields']]==['lini_id','silo']
   for _ in range(2):
    p=(await c.get('/api/actions/silo-siap-giling')).json();assert [x['value'] for x in p]==['A','B'];assert p[0]['rincian']['jumlah_sumber']==2
    d=await ringkas(c,['A','B']);assert d['bobot']=='17.300 kg' and d['jumlah_sumber']==3 and d['final'] and d['pemilik']=='Pabrik'
@@ -31,7 +31,8 @@ async def test_saldo_semua_baris_pratinjau_tanpa_tulisan_dan_satu_lot(pg,silos):
   r=await post(c,'mulai-giling',{'silo':[' B ','A','B']});assert r.status_code==200,r.text
   assert r.json()['bobot']=='17.300 kg' and r.json()['silos']=='B + A'
   assert not (await c.get('/api/actions/silo-siap-giling')).json()
-  latest=await ringkas(c,['A','B']);assert not latest['siap'] and all(x['proses']==r.json()['kode_proses'] for x in latest['silos'])
+  latest=await c.get('/api/actions/ringkasan-mulai-giling',params=[('silo','A'),('silo','B')])
+  assert latest.status_code==400 and 'masih digunakan' in latest.text
  async with pg() as db:
   proc=await db.scalar(select(MillingProcess));assert proc.silo_id==silos['silo']['B'] and float(proc.berat_gabah_masuk_kg)==17300
   assert await db.scalar(select(func.count()).select_from(MillingProcessSource))==3
@@ -112,7 +113,8 @@ async def test_silo_kedua_dijeda_tetap_terikat(pg,silos):
   await jeda.hentikan(db,user=u,jenis='giling',kode=r.proc.kode_proses,sebab='Listrik padam')
  async with await _klien(pg,peran='admin') as c:
   assert not (await c.get('/api/actions/silo-siap-giling')).json()
-  d=await ringkas(c,['B']);assert not d['siap'] and d['silos'][0]['proses']==r.proc.kode_proses
+  d=await c.get('/api/actions/ringkasan-mulai-giling',params={'silo':'B'})
+  assert d.status_code==400 and 'masih digunakan' in d.text
   before=await fakta(pg)
   assert (await post(c,'mulai-giling',{'silo':'B'})).status_code==400
   assert await fakta(pg)==before
@@ -124,6 +126,6 @@ async def test_sumber_berubah_setelah_pratinjau_diperiksa_lagi(pg,silos):
   assert (await ringkas(c,['A','B']))['siap']
   async with pg() as db:await start_milling(db,user=await db.get(User,silos['user']),nama_silo='B')
   before=await fakta(pg)
-  r=await post(c,'mulai-giling',{'silo':['A','B']});assert r.status_code==400 and 'sedang digiling' in r.text
+  r=await post(c,'mulai-giling',{'silo':['A','B']});assert r.status_code==400 and 'masih digunakan' in r.text
   assert await fakta(pg)==before
   async with pg() as db:assert await db.scalar(select(func.count()).select_from(MillingProcess))==1

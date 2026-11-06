@@ -2131,6 +2131,9 @@
        kotak yang masing-masing punya keadaan sendiri yang harus BERTAHAN
        melewati pemuatan ulang. */
     function muatBanyak(f, segar) {
+      var kotakMuat = $("b_" + f.name);
+      if (!kotakMuat) return;
+      var nomorMuat = kotakMuat._nomorMuat = (kotakMuat._nomorMuat || 0) + 1;
       var sumber = f.source;
       if((mulaiSosoh || tambahSosoh) && f.name==="silo") sumber += "?rincian=true";
       // Detail perintah sudah menentukan barangnya; jangan memuat pilihan
@@ -2149,7 +2152,7 @@
       var borangBanyak = lembar.querySelector(".lembar__isi");
       var indukTs=f.induk?nilaiMedan(f.induk):null,nomorDaftarTs=tambahSosoh?++nomorOpsiTs:0;
       ambil(sumber).then(function (daftar) {
-        if (!daftar || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];}) || (mulaiBahan && lembar.querySelector(".lembar__isi") !== borangBanyak)) { return; }
+        if (!daftar || kotakMuat._nomorMuat !== nomorMuat || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];}) || (mulaiBahan && lembar.querySelector(".lembar__isi") !== borangBanyak)) { return; }
         if(tambahSosoh && (nomorDaftarTs!==nomorOpsiTs||lembar.querySelector(".lembar__isi")!==borangBanyak||(f.induk && nilaiMedan(f.induk)!==indukTs)))return;
         var wadah = $("b_" + f.name);
         var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
@@ -2222,10 +2225,20 @@
         if (lamaNota) { lamaNota.remove(); }
         var tbl2 = $("simpan");
         if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = labelSimpan; }
-      }).catch(function () {
-        if (!(mulaiBahan || tambahSosoh) || lembar.querySelector(".lembar__isi") !== borangBanyak) return;
-        var kotak = $("b_" + f.name);
-        if (kotak && !kotak.querySelector("input")) kotak.textContent = "Pilihan silo belum dapat dimuat. Periksa koneksi dan buka kembali formulir.";
+      }).catch(function (err) {
+        if (!(mulaiBahan || tambahSosoh) || lembar.querySelector(".lembar__isi") !== borangBanyak ||
+            kotakMuat._nomorMuat !== nomorMuat || parameterBanyak.some(function(v){return nilaiMedan(v[0])!==v[1];})) return;
+        // Kegagalan baca tidak boleh menghapus centang yang sudah diisi,
+        // atau memaksa operator membuang formulir untuk mencoba lagi.
+        var lama = kotakMuat.querySelector("[data-muat-ulang]");
+        if (lama) lama.remove();
+        if (!kotakMuat.querySelector("input")) kotakMuat.replaceChildren();
+        var pemulihan = document.createElement("div"), pesan = document.createElement("p"), ulang = document.createElement("button");
+        pemulihan.dataset.muatUlang = "1";pesan.className = "bantu";pesan.setAttribute("role", "status");
+        pesan.textContent = typeof err === "string" ? err : "Pilihan silo belum dapat dimuat. Coba muat ulang daftar; isian tetap tersedia.";
+        ulang.type = "button";ulang.className = "btn";ulang.textContent = "Muat ulang pilihan silo";
+        ulang.onclick = function () { ulang.disabled = true;muatBanyak(f, true); };
+        pemulihan.append(pesan, ulang);kotakMuat.append(pemulihan);
       });
     }
 
@@ -2400,7 +2413,6 @@
             kotak.textContent = cocok.label;
             if (cocok.berat_kg != null) { kotak.dataset.beratKg = String(cocok.berat_kg); }
             perbaruiMaksimalKemas();
-    (a.fields || []).forEach(function(f){(f.parameter||[]).forEach(function(n){var parent=$('f_'+n);if(parent)parent.addEventListener('change',function(){var child=$('f_'+f.name);if(child){child.value='';child.innerHTML='<option value="">memuat…</option>'; }muatPilihan(false,f.name);});});});
 
             perbaruiPratinjau();
             perbaruiRingkasanHasil();
@@ -2490,6 +2502,10 @@
         else if ((f.induk || f.auto_satu) && daftar.length === 1) {
           s.value = daftar[0].value;
         }
+        if (s.value !== dipilih) {
+          var perubahanOtomatis = new Event("change");
+          perubahanOtomatis.pilihanOtomatis = true;s.dispatchEvent(perubahanOtomatis);
+        }
         // Kalau daftarnya kosong, aksi ini memang belum bisa dikerjakan.
         // Katakan sekarang — bukan setelah orang menekan Simpan dan ditolak.
         // Pilihan yang boleh dikosongkan tak boleh menghentikan aksi ketika
@@ -2544,6 +2560,31 @@
       }).catch(function () {});
       });
     }
+    // Pasang sekali saat formulir dibentuk, sebelum permintaan pertama.
+    // Dulu ini berada di cabang field terkunci: line biasa tidak punya
+    // listener, sehingga respons silo yang tersusul auto-pilih line dibuang
+    // dan tidak pernah diminta ulang (tergantung urutan jaringan ponsel).
+    (a.fields || []).forEach(function (f) {
+      (f.parameter || []).forEach(function (nama) {
+        var parent = $("f_" + nama);
+        if (!parent) return;
+        parent.addEventListener("change", function (e) {
+          // Auto-pilih satu line bukan perubahan pilihan oleh operator.
+          // Pertahankan centang yang sudah sempat diisi sambil mengecek
+          // ulang daftar. Pergantian line manual mengosongkan sumber lama.
+          if (!e.pilihanOtomatis) {
+            var child = $("f_" + f.name) || lembar.querySelector('[data-name="' + f.name + '"]');
+            if (child) {
+              child.value = "";
+              if (child.tagName === "SELECT") child.innerHTML = '<option value="">memuat…</option>';
+            }
+            var banyak = $("b_" + f.name);
+            if (banyak) { banyak.innerHTML = '<p class="bantu">memuat…</p>'; }
+          }
+          muatPilihan(!!e.pilihanOtomatis, f.name);
+        });
+      });
+    });
     muatPilihan(false);
     ["sumber", "kemasan"].forEach(function (nama) {
       var s = $("f_" + nama);

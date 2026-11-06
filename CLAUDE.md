@@ -1460,3 +1460,20 @@ lama. Uji browser mencakup ponsel/desktop dari Pekerjaan sampai penempatan
 serta penggantian gudang. Uji AST mencegah pola pemuatan profil sebagai aktor
 kembali ke tiga modul tersebut. Tidak ada migrasi, backfill, atau penempatan
 barang produksi otomatis sebagai bagian perbaikan/deploy ini.
+
+## Pemuatan pilihan silo dan line — 6 November 2026
+
+Formulir Mulai giling memuat line dan silo secara asinkron. Saat satu line
+terpilih otomatis lebih dulu, respons silo tanpa lini_id menjadi usang.
+Listener parameter dulu terselip pada cabang remote yang terkunci, sehingga
+field line biasa tidak pernah memuat ulang silonya. Daftar dapat menetap
+memuat/gagal walau endpoint silo sehat. Pasang listener sekali ketika borang
+dibentuk, sebelum GET pertama; auto-pilih line harus memberi tahu field anak.
+
+Bedakan perubahan otomatis dari pilihan manual: auto-pilih mempertahankan
+centang sambil memvalidasi ulang daftar, tidak menandai isian berubah. Respons
+sukses/gagal yang lebih lama tidak boleh menimpa permintaan terbaru atau borang
+pengganti. Saat GET gagal, tampilkan Muat ulang pilihan silo di dalam borang;
+retry hanya membaca, tidak membuang isian dan tidak menulis transaksi.
+Uji Chromium mengatur kedua urutan respons, layar 390/1440, kegagalan sementara,
+respons lama, dan simpan giling lewat UI pada PostgreSQL lokal.
