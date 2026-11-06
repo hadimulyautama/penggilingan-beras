@@ -65,7 +65,9 @@ from app.models import (
     OutgoingRecord,
     Pelanggan,
     PkGudang2Intake,
+    PkTumpukanToSilo,
     PkPurchaseBatch,
+    PermintaanPk,
     PolishingProcess,
     PurchaseBatch,
     Silo,
@@ -237,7 +239,8 @@ async def pastikan_satu_jasa_bernama(db: AsyncSession, pemilik) -> int | None:
 #: diserap.
 TABEL_BER_JASA_ID: tuple[type, ...] = (
     PurchaseBatch, DryingLot, SiloStorage, GabahKeringLot, MillingProcess,
-    PkPurchaseBatch, PkGudang2Intake, BrokenKeSilo, BrokenKarungDibongkar, BerasKeSilo, PolishingProcess,
+    PkPurchaseBatch, PkGudang2Intake, PkTumpukanToSilo, PermintaanPk,
+    BrokenKeSilo, BrokenKarungDibongkar, BerasKeSilo, PolishingProcess,
     InternalTransfer, FinishedGoodsStock, ByproductStock, OutgoingRecord,
     OutgoingItem, CustomerReturnItem, HasilSampingKeSilo,
 )
