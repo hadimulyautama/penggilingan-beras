@@ -60,8 +60,19 @@ async def _sumber(db, intake, *, jumlah_partai=None, pemilik_id=..., saldo_pemil
                 raise ValueError('Jumlah karung separtai harus bilangan bulat lebih dari nol.')
             # Layanan ini membuat acuan salinan. Tidak mengubah baris, pemilik,
             # atau ledger. Penulisan surat jalan tetap di layanan pindah lama.
+            berat_lama = batch.berat_total_kg
             batch = await acuan_karung_surat_jalan(db, batch, int(jumlah_partai))
-            saldo = None if batch.berat_total_kg is None else float(batch.berat_total_kg)
+            # Melengkapi N hanya mengganti acuan bobot sumber. Bagian yang
+            # dialihkan, dikeluarkan atau direservasi tetap terpotong dari
+            # saldo bebas; bobot seluruh partai bukan saldo setiap pemilik.
+            if owner == intake.jasa_id:
+                if batch.berat_total_kg is None:
+                    saldo = None
+                elif saldo is None:
+                    saldo = float(batch.berat_total_kg)
+                elif berat_lama is not None:
+                    saldo = max(0, float(Decimal(str(saldo))
+                        + Decimal(str(batch.berat_total_kg)) - Decimal(str(berat_lama))))
             umum.update(saldo_partai_kg=saldo, bobot_final=dari_batch(batch).pasti,
                          jumlah_partai=int(jumlah_partai))
     if batch and batch.jumlah_karung:

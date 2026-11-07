@@ -2065,7 +2065,7 @@ async def pindah_tumpukan_ke_silo(
         raise Gudang2Error("Jumlah karung separtai belum tercatat pada batch ini. Gunakan kg hasil timbang.")
     if hasil_timbang and berat is None:
         raise Gudang2Error("Isi kg hasil timbang atau karung yang dibongkar sebagian.")
-    sisa = await _sisa_tumpukan_intake(db, intake_id)
+    sisa = await _sisa_tumpukan_intake(db, intake_id, pemilik_id=pemilik_id)
 
     if sisa is None:
 
@@ -2145,7 +2145,7 @@ async def _sisa_broken_row(db: AsyncSession, byproduct_stock_id: int) -> float:
 
 async def pindah_broken_ke_silo(
     db: AsyncSession, *, user: User, byproduct_stock_id: int, nama_silo: str | None,
-    berat: float | None = None, tanggal=None, jam=None,
+    berat: float | None = None, tanggal=None, jam=None, commit: bool = True,
 ) -> PindahBrokenResult:
     """Pindah broken curah (`byproduct_stock`, lahir dari `catat_broken`) ke
     silo broken. Sebangun `pindah_tumpukan_ke_silo` — sumbernya stok curah
@@ -2160,6 +2160,8 @@ async def pindah_broken_ke_silo(
     """
     from app.penggilingan.inventory.models import ByproductStock
 
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     g2_wid = await _g2_warehouse_id(db)
     if not is_operator_gudang2(user, g2_wid):
         raise Gudang2Error(
@@ -2179,11 +2181,9 @@ async def pindah_broken_ke_silo(
     if row is None or row.jenis_produk != "broken":
         raise Gudang2Error("Baris broken ini tidak ditemukan.")
 
-    sudah = (await db.execute(
-        select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
-        .where(BrokenKeSilo.byproduct_stock_id == byproduct_stock_id)
-    )).scalar_one()
-    sisa = float(row.berat_kg) - float(sudah)
+    # Pembaca yang sama dengan rencana FIFO: retur yang SUDAH keluar
+    # mengurangi fisik; pengajuan aktif di bawah hanya menahan bagian bebas.
+    sisa = await _sisa_broken_row(db, row.id)
     from app.services.retur_supplier_reservasi import terikat
     sisa -= float(await terikat(db,sumber=f'broken:{row.id}'))
     if sisa <= 0:
@@ -2243,7 +2243,8 @@ async def pindah_broken_ke_silo(
                   + (f" | ditambah ke {ke_proses}" if ke_proses else ""),
     )
     await segarkan_status_silo(db, silo.id)
-    await db.commit()
+    if commit:
+        await db.commit()
     await db.refresh(move)
     return PindahBrokenResult(
         kode_pindah=move.kode_pindah, nama_silo=nama_silo, berat_kg=float(move.berat_kg),
@@ -2269,6 +2270,7 @@ class MasukkanBrokenResult:
 async def masukkan_broken_ke_silo(
     db: AsyncSession, *, user: User, kode_pol: str | None, nama_silo: str | None,
     berat_kg: float | None, jasa_id: int | None = None, tanggal=None, jam=None,
+    commit: bool = True,
 ) -> MasukkanBrokenResult:
     """SATU aksi: masukkan broken ke silo. Sumbernya otomatis — curah yang
     SUDAH tercatat dulu (FIFO), lalu hasil mesin yang BELUM tercatat
@@ -2312,6 +2314,8 @@ async def masukkan_broken_ke_silo(
     from app.services.jasa import pemilik_hasil_proses
     from app.services.stok import output_sosoh
 
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     g2_wid = await _g2_warehouse_id(db)
     if not is_operator_gudang2(user, g2_wid):
         raise Gudang2Error(
@@ -2509,7 +2513,8 @@ async def masukkan_broken_ke_silo(
                      if dibongkar_kg else "")).replace(",", "."),
     )
     await segarkan_status_silo(db, silo.id)
-    await db.commit()
+    if commit:
+        await db.commit()
     return MasukkanBrokenResult(
         nama_silo=nama_silo, moved_kg=berat_kg,
         dibongkar_dari_karung_kg=dibongkar_kg, kodes=kodes,
@@ -2621,29 +2626,37 @@ async def masukkan_stok_broken_pemilik_ke_silo(
     """
     if not berat_kg or float(berat_kg) <= 0:
         raise Gudang2Error("Sebutkan berat yang masuk silo (kg), lebih dari 0.")
-    direct_plan, plan, left = await rencana_broken_pemilik(db, jasa_id=jasa_id, berat_kg=berat_kg)
-    if left > 0.5:
-        raise Gudang2Error(
-            f"Stok broken milik pemilih tinggal {berat_kg-left:,.0f} kg; "
-            f"tidak cukup untuk memasukkan {berat_kg:,.0f} kg.".replace(",", "."))
+    # Satu klik boleh mengambil beberapa sumber, tetapi harus tersimpan
+    # sebagai satu transaksi. Kunci saldo diambil sebelum rencana dibaca,
+    # searah dengan pengiriman/packing; child tidak boleh commit sendiri.
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
+    async with db.begin_nested():
+        direct_plan, plan, left = await rencana_broken_pemilik(db, jasa_id=jasa_id, berat_kg=berat_kg)
+        if left > 0.5:
+            raise Gudang2Error(
+                f"Stok broken milik pemilih tinggal {berat_kg-left:,.0f} kg; "
+                f"tidak cukup untuk memasukkan {berat_kg:,.0f} kg.".replace(",", "."))
 
-    moved_codes: list[str] = []
-    opened_bags = 0.0
-    opened_ids = []
-    for row_id, take in direct_plan:
-        result = await pindah_broken_ke_silo(
-            db, user=user, byproduct_stock_id=row_id, nama_silo=nama_silo,
-            berat=take, tanggal=tanggal, jam=jam)
-        moved_codes.append(result.kode_pindah)
-    for proc, take in plan:
-        result = await masukkan_broken_ke_silo(
-            db, user=user, kode_pol=proc.kode_proses, nama_silo=nama_silo,
-            berat_kg=take, jasa_id=jasa_id, tanggal=tanggal, jam=jam)
-        opened_bags += result.dibongkar_dari_karung_kg
-        moved_codes.extend(result.kodes)
-        opened_ids.extend(result.bongkar_ids or [])
-    return MasukkanBrokenResult(nama_silo=nama_silo, moved_kg=float(berat_kg),
-                                dibongkar_dari_karung_kg=opened_bags, kodes=moved_codes,bongkar_ids=opened_ids)
+        moved_codes: list[str] = []
+        opened_bags = 0.0
+        opened_ids = []
+        for row_id, take in direct_plan:
+            result = await pindah_broken_ke_silo(
+                db, user=user, byproduct_stock_id=row_id, nama_silo=nama_silo,
+                berat=take, tanggal=tanggal, jam=jam, commit=False)
+            moved_codes.append(result.kode_pindah)
+        for proc, take in plan:
+            result = await masukkan_broken_ke_silo(
+                db, user=user, kode_pol=proc.kode_proses, nama_silo=nama_silo,
+                berat_kg=take, jasa_id=jasa_id, tanggal=tanggal, jam=jam, commit=False)
+            opened_bags += result.dibongkar_dari_karung_kg
+            moved_codes.extend(result.kodes)
+            opened_ids.extend(result.bongkar_ids or [])
+        result = MasukkanBrokenResult(nama_silo=nama_silo, moved_kg=float(berat_kg),
+                                    dibongkar_dari_karung_kg=opened_bags, kodes=moved_codes,bongkar_ids=opened_ids)
+    await db.commit()
+    return result
 
 
 async def masukkan_hasil_samping_ke_silo(
