@@ -14,6 +14,7 @@ from tests.pg.test_kiriman_pelanggan import _buat,_muat
 
 pytestmark=[pytest.mark.asyncio,pytest.mark.dua_aplikasi]
 ROOT=Path(__file__).resolve().parents[2];TF=Path(os.environ.get('UJI_TF_ROOT',str(ROOT.parent/'timbangan')))
+PY_TF=Path(os.environ.get('UJI_TF_PYTHON',str(TF/'.venv/bin/python')))
 OUT=Path(os.environ.get('UJI_KIRIMAN_OUT',str(ROOT.parent/'output/teraflow-kiriman-gabungan-20261026')))
 OUT.mkdir(parents=True,exist_ok=True)
 
@@ -25,7 +26,9 @@ def _profil_url():
     if not os.environ.get('UJI_TF_ROOT'):
         pytest.skip('Profil dua_aplikasi memerlukan UJI_TF_ROOT dan DB lokal khusus56627/uji_tf_kiriman_*.')
     url=os.environ.get('UJI_PG_URL','')
-    assert '@127.0.0.1:56627/uji_tf_kiriman_' in url, 'DB dua aplikasi wajib loopback56627 dengan awalan uji_tf_kiriman_.'
+    from sqlalchemy.engine import make_url
+    u=make_url(url)
+    assert u.drivername=='postgresql+asyncpg' and u.host in ('127.0.0.1','localhost') and not u.query and (u.database or '').startswith('uji_tf_kiriman_'), 'DB dua aplikasi wajib loopback dengan awalan uji_tf_kiriman_ tanpa parameter pengganti host.'
     return url
 
 
@@ -34,13 +37,13 @@ def _skema_head():
     # Kedua aplikasi berbagi fondasi 0026. Timbangan mengambil alih sesudah
     # fondasi itu, sebelum migrasi PadiFlow menambah kolom kompatibilitas.
     url=_profil_url()
-    assert (TF/'app/timbangan/main.py').is_file() and (TF/'.venv/bin/python').is_file(), 'Source/interpreter TeraFlow belum disiapkan.'
+    assert (TF/'app/timbangan/main.py').is_file() and PY_TF.is_file(), 'Source/interpreter TeraFlow belum disiapkan.'
     env={**os.environ,'DATABASE_URL':url}
     steps=[(ROOT,sys.executable,['upgrade','0063_sebab_selisih_timbang']),
-           (TF,str(TF/'.venv/bin/python'),['stamp','0026_timbangan_hapus_pengawas']),
-           (TF,str(TF/'.venv/bin/python'),['upgrade','0038_kunci_baris_64']),
+           (TF,str(PY_TF),['stamp','0026_timbangan_hapus_pengawas']),
+           (TF,str(PY_TF),['upgrade','0038_kunci_baris_64']),
            (ROOT,sys.executable,['upgrade','head']),
-           (TF,str(TF/'.venv/bin/python'),['upgrade','head'])]
+           (TF,str(PY_TF),['upgrade','head'])]
     import asyncio
     from sqlalchemy.ext.asyncio import create_async_engine
     async def versi():
@@ -50,8 +53,9 @@ def _skema_head():
             rev=await c.scalar(text('SELECT version_num FROM alembic_version_timbangan')) if ada else None
         await e.dispose();return rev
     rev=asyncio.run(versi())
-    if rev=='0047_pengiriman_snapshot':steps=steps[-2:]
-    elif rev is not None:raise AssertionError('Database uji harus baru atau sudah di head kedua aplikasi; jangan menstempel ulang skema yang sudah terisi.')
+    if rev is not None:
+        assert rev in {p.stem for p in (TF/'migrations/versions').glob('*.py')}, 'Revisi TeraFlow tidak dikenal; jangan menstempel ulang skema.'
+        steps=steps[-2:]
     for i,(cwd,python,args) in enumerate(steps):
         r=subprocess.run([python,'-m','alembic',*args],cwd=cwd,env=env,capture_output=True,text=True,timeout=180)
         (OUT/f'migrasi-dua-app-{i}.log').write_text(r.stdout+r.stderr)
@@ -65,22 +69,22 @@ def port():
 
 @contextmanager
 def servers(url):
-    assert '@127.0.0.1:56627/uji_tf_kiriman_' in url
+    assert url==_profil_url()
     import shlex
     alat=OUT/'bin';alat.mkdir(exist_ok=True)
-    shim=alat/'alembic';shim.write_text('#!/bin/sh\nexec '+shlex.quote(str(TF/'.venv/bin/python'))+' -m alembic "$@"\n');shim.chmod(0o755)
+    shim=alat/'alembic';shim.write_text('#!/bin/sh\nexec '+shlex.quote(str(PY_TF))+' -m alembic "$@"\n');shim.chmod(0o755)
     env={**os.environ,'DATABASE_URL':url,'INTERNAL_API_TOKEN':'uji-lintas-kiriman',
          'PATH':str(alat)+os.pathsep+os.environ.get('PATH',''),'TIMBANGAN_SECRET_KEY':'uji-lintas-timbangan-secret','PRODUKSI_API_TOKEN':'uji-lintas-kiriman'}
     # Skema produksi dibangun fixture pg melalui Alembic; skema Timbangan
     # menyusul dengan runner deployment yang sama, bukan create_all.
-    r=subprocess.run([str(TF/'.venv/bin/python'),'-m','scripts.siapkan_skema'],cwd=TF,env=env,capture_output=True,text=True,timeout=90)
+    r=subprocess.run([str(PY_TF),'-m','scripts.siapkan_skema'],cwd=TF,env=env,capture_output=True,text=True,timeout=90)
     (OUT/'migrasi-timbangan.log').write_text(r.stdout+r.stderr)
     assert r.returncode==0,r.stderr[-2000:]
     p,t=port(),port();env['PRODUKSI_API_URL']=f'http://127.0.0.1:{p}'
     env['PYTHONPATH']=str(ROOT/'tests/pg')
     handles=[];procs=[]
     try:
-        for cwd,python,module,n in [(ROOT,sys.executable,'_teraflow_api_uji:app',p),(TF,str(TF/'.venv/bin/python'),'app.timbangan.main:app',t)]:
+        for cwd,python,module,n in [(ROOT,sys.executable,'_teraflow_api_uji:app',p),(TF,str(PY_TF),'app.timbangan.main:app',t)]:
             log=(OUT/f'server-lintas-{n}.log').open('w');handles.append(log)
             procs.append(subprocess.Popen([python,'-m','uvicorn',module,'--host','127.0.0.1','--port',str(n),'--log-level','warning'],cwd=cwd,env=env,stdout=log,stderr=log))
             for _ in range(150):
@@ -107,13 +111,12 @@ async def akun(pg,g):
 
 async def benih(pg,g,jumlah_pelanggan):
     from app.penggilingan.gudang2.models import PolishingProcess,PolishingOutputLog
-    from app.penggilingan.inventory.finished_goods import catat_packing,catat_bekatul
+    from app.penggilingan.inventory.finished_goods import catat_packing
     from app.database import now_local
     async with pg() as db:
         proc=await db.scalar(select(PolishingProcess))
         db.add_all([PolishingOutputLog(polishing_process_id=proc.id,jenis='medium',berat_kg=2000,waktu_update=now_local(),input_by=g['op']),PolishingOutputLog(polishing_process_id=proc.id,jenis='bekatul',berat_kg=500,waktu_update=now_local(),input_by=g['op'])]);await db.commit()
         await catat_packing(db,user=await db.get(User,g['op']),kode_pol=proc.kode_proses,kategori='beras_putih',grade='medium',material_kode='biasa',ukuran=50,jumlah_karung=40)
-        await catat_bekatul(db,user=await db.get(User,g['op']),kode_pol=proc.kode_proses,berat_kg=500)
         from app.models import PackageSize
         sku50=await db.scalar(select(ProductSku).join(PackageSize,ProductSku.package_size_id==PackageSize.id).where(PackageSize.ukuran_kg==50))
         for sid,tara in [(g['sku'],'.1'),(sku50.id,'.25')]:

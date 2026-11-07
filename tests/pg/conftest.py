@@ -38,9 +38,15 @@ def _url() -> str | None:
     url = os.environ.get("UJI_PG_URL", "").strip()
     if not url:
         return None
-    if not ("127.0.0.1" in url or "localhost" in url):
-        pytest.fail(f"UJI_PG_URL bukan loopback: {url.rsplit('@', 1)[-1]}")
-    nama = url.rsplit("/", 1)[-1].split("?")[0]
+    from sqlalchemy.engine import make_url
+    try:
+        dibaca=make_url(url)
+    except Exception:
+        pytest.fail('UJI_PG_URL tidak sah.')
+    if (dibaca.drivername!='postgresql+asyncpg' or
+            dibaca.host not in ('127.0.0.1','localhost','::1') or dibaca.query):
+        pytest.fail('UJI_PG_URL wajib PostgreSQL loopback tanpa parameter pengganti host.')
+    nama=dibaca.database or ''
     if not nama.startswith("uji_"):
         pytest.fail(f"nama basis data uji wajib berawalan 'uji_', bukan '{nama}'")
     return url
