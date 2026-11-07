@@ -367,6 +367,8 @@ class PindahKepemilikanKarungReq(BaseModel):
     karung: str                       # "material_kode|ukuran|merk_or_kosong"
     pelanggan: str                    # pelanggan_id
     jumlah: int
+    review: str | None = None
+    confirm: bool = False
 
 
 @router.post("/actions/pindah-kepemilikan-karung")
@@ -388,11 +390,13 @@ async def act_pindah_kepemilikan_karung(req: PindahKepemilikanKarungReq,
     async with SessionLocal() as db:
         u = user
         try:
+            from app.services.kepemilikan_pratinjau import pastikan
+            await pastikan(db,aksi='pindah_kepemilikan_karung',req=req)
             jumlah = await kms.pindah_kepemilikan_karung(
                 db, user=u, material_kode=material_kode, ukuran=ukuran,
                 brand_nama=merk, pelanggan_id=int(req.pelanggan),
                 jumlah_lembar=int(req.jumlah))
-        except kms.InventoryError as e:
+        except (kms.InventoryError,bj.InventoryError) as e:
             raise galat(e, "Gagal memindahkan kepemilikan karung.")
     pesan = f"✓ {jumlah} lembar karung kini milik pelanggan."
     return {"ok": True, "pesan": pesan}
@@ -681,6 +685,8 @@ async def produk_jasa_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict
 class PindahKepemilikanProdukReq(BaseModel):
     item: str
     jumlah: float
+    review: str | None = None
+    confirm: bool = False
 
 
 @router.post("/actions/pindah-kepemilikan-produk")
@@ -698,6 +704,8 @@ async def act_pindah_kepemilikan_produk(req: PindahKepemilikanProdukReq,
     async with SessionLocal() as db:
         u = user
         try:
+            from app.services.kepemilikan_pratinjau import pastikan
+            await pastikan(db,aksi='pindah_kepemilikan_produk',req=req)
             if tipe == "bj" and len(bagian) == 3:
                 sku_id_s, std_id_s, jasa_id_s = bagian
                 berat = await bj.pindah_kepemilikan_barang_jadi(
@@ -733,6 +741,23 @@ async def act_pindah_kepemilikan_produk(req: PindahKepemilikanProdukReq,
         except bj.InventoryError as e:
             raise galat(e, "Gagal memindahkan kepemilikan.")
     return {"ok": True, "pesan": pesan}
+
+
+class PratinjauKepemilikanReq(BaseModel):
+    aksi: str
+    item: str = ''
+    karung: str = ''
+    pelanggan: str = ''
+    jumlah: float
+
+
+@router.post('/actions/pratinjau-kepemilikan')
+async def pratinjau_kepemilikan(req: PratinjauKepemilikanReq,user: User=Depends(pengguna_aksi)):
+    wajib(can_see_financials(user))
+    from app.services.kepemilikan_pratinjau import periksa
+    async with SessionLocal() as db:
+        try:return await periksa(db,aksi=req.aksi,req=req)
+        except bj.InventoryError as e:raise galat(e,'Dampak pengalihan belum dapat diperiksa.')
 
 
 # ─────────────────────────── Barang keluar ───────────────────────────
@@ -2060,7 +2085,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # `act_pindah_kepemilikan_produk`) — sejalan dengan "harga keluar
             # dari Pos Produksi": keputusan kepemilikan berdekatan dengan
             # uang, bukan pekerjaan operator.
-            {"akses": "admin", "id": "pindah_kepemilikan_produk",
+            {"akses": "admin", "id": "pindah_kepemilikan_produk", "pratinjau_kepemilikan": True,
              "label": "⇄ Pindah kepemilikan ke pabrik",
              "post": "/api/actions/pindah-kepemilikan-produk",
              "hint": "Boleh sebagian. Satuannya mengikuti pilihan — karung "
@@ -2094,7 +2119,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # pelanggan yang ada di database." `kombo` kotak teks yang
             # menyaring daftar `pelanggan-kledo` yang SAMA sambil diketik —
             # lihat catatan panjangnya di `aksi.js` (`f.type === "kombo"`).
-            {"akses": "admin", "id": "pindah_kepemilikan_karung",
+            {"akses": "admin", "id": "pindah_kepemilikan_karung", "pratinjau_kepemilikan": True,
              "label": "⇄ Pindah kepemilikan ke pelanggan",
              "post": "/api/actions/pindah-kepemilikan-karung",
              "hint": "Boleh sebagian — FIFO dari pembelian pabrik yang "

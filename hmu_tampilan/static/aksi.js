@@ -639,6 +639,7 @@
     var tambahGiling = a.konteks_tambah_giling;
     var tambahSosoh = a.konteks_tambah_sosoh;
     var unitTransferPk = a.unit_transfer_pk;
+    var pratinjauMilik = a.pratinjau_kepemilikan;
     var masukkanSilo = a.konteks_masukkan_silo;
     var masukkanBroken = a.konteks_broken_silo;
     var masukkanBeras = a.konteks_beras_silo;
@@ -646,7 +647,7 @@
     var kemasBeras = a.konteks_kemas_beras;
     var masukkanMenir = a.konteks_menir_silo || a.konteks_reject_silo;
     var jenisMn = a.konteks_reject_silo ? 'reject' : 'menir', labelMn = a.konteks_reject_silo ? 'Reject' : 'Menir';
-    var formKhusus = formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo || masukkanBroken || masukkanBeras || masukkanMenir || kemasBeras;
+    var formKhusus = pratinjauMilik || formHasil || formAir || selesaiKering || pindahSilo || mulaiBahan || selesaiGiling || selesaiSosoh || bebaskanGiling || bebaskanSosoh || tambahGiling || tambahSosoh || unitTransferPk || masukkanSilo || masukkanBroken || masukkanBeras || masukkanMenir || kemasBeras;
     var labelSimpan = (tambahGiling || tambahSosoh) ? "Tambahkan silo" : (bebaskanGiling || bebaskanSosoh) ? "Periksa sisa silo" : (selesaiGiling || selesaiSosoh) ? "Periksa penyelesaian" : mulaiSosoh ? "Mulai penyosohan" : mulaiGiling ? "Mulai giling · 1 lot" : pindahSilo ? "Pindahkan ke silo" : selesaiKering ? "Selesai & mulai pendinginan" : kadarAir ? "Simpan pengukuran" : formHasil ? "Simpan hasil" : (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan");
     if (unitTransferPk) labelSimpan = unitTransferPk === 'minta' ? 'Minta PK' : 'Catat pengiriman';
     if (masukkanSilo) labelSimpan = 'Masukkan ke silo';
@@ -678,15 +679,15 @@
       '<div class="lembar__isi">' +
         '<div class="lembar__kepala"><h2>' + esc(judul) + "</h2>" +
           (formKhusus ? '' : '<button class="btn btn--kecil" id="tutup" type="button">Batal</button>') + '</div>' +
-        (formKhusus ? '' : konteksKartu) +
-        (a.hint && !formKhusus ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
+        ((!formKhusus || pratinjauMilik) ? konteksKartu : '') +
+        (a.hint && (!formKhusus || pratinjauMilik) ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
         '<div class="grup">' + isi + "</div>" +
         (formKhusus ? '<div class="hasil-actions"><button class="btn" id="tutup" type="button">Batal</button>' : '') +
         '<button class="btn btn--utama" id="simpan" type="button"' + (formKhusus ? '' : ' style="margin-top:18px"') + '>' + labelSimpan + '</button>' +
         (formKhusus ? '</div>' : '') +
         tombolLain +
       "</div>";
-    if (asalKartu && !formKhusus) {
+    if (asalKartu && (!formKhusus || pratinjauMilik)) {
       var jenisKartu = asalKartu.querySelector(".proses-jenis");
       if (jenisKartu) {
         var jenisFormulir = jenisKartu.cloneNode(true);
@@ -2156,6 +2157,8 @@
 
       masukan.addEventListener("blur", function () {
         setTimeout(function () {
+          // Fokus bisa kembali sebelum jeda blur berakhir; jangan tutup hasil baru.
+          if (document.activeElement === masukan) return;
           tutupSaran();
           // Tulisan yang tak cocok satu pilihan pun BUKAN pilihan —
           // dikosongkan lagi supaya borangnya tak terlihat terisi padahal
@@ -3086,6 +3089,12 @@
       }
     }
 
+    function konfirmasiMilik(d) {
+      function jumlah(b) { return Object.keys(b).map(function(u){return Number(b[u]).toLocaleString('id-ID',{maximumFractionDigits:3})+' '+u;}).join(' · '); }
+      var rows=Object.keys(d.balances_before).map(function(id){return '<tr><th scope="row">'+esc(d.names[id])+'</th><td>'+esc(jumlah(d.balances_before[id]))+'</td><td>'+esc(jumlah(d.balances_after[id]))+'</td></tr>';}).join('');
+      return '<section class="milik-review"><h3>'+esc(d.label)+'</h3><dl><dt>Pemilik asal · otomatis dari stok</dt><dd>'+esc(d.owners.join(' / '))+'</dd><dt>Pemilik tujuan</dt><dd>'+esc(d.destination)+'</dd><dt>Gudang</dt><dd>'+esc(d.warehouses.join(' · ')||'Belum tercatat')+'</dd><dt>Jumlah yang dialihkan</dt><dd>'+esc(jumlah((function(){var v={};v[d.unit]=d.quantity;return v;})()))+(d.unit==='karung'?' · '+esc(Number(d.kg).toLocaleString('id-ID',{maximumFractionDigits:3}))+' kg':'')+'</dd></dl><table><caption>Saldo sebelum dan sesudah pengalihan</caption><thead><tr><th scope="col">Pemilik</th><th scope="col">Sekarang</th><th scope="col">Sesudah</th></tr></thead><tbody>'+rows+'</tbody></table><p>Lokasi dan total stok fisik tetap. Yang berubah hanya pemilik.</p>'+(d.capacity_note?'<p class="bantu">'+esc(d.capacity_note)+'</p>':'')+'</section>';
+    }
+
     function tanyaYakin(isi, v, khusus) {
       var k = khusus || a.konfirmasi;
       borangAsli = lembar.querySelector(".lembar__isi");
@@ -3108,14 +3117,19 @@
       if(bebaskanGiling && k.rincian){
         konfirmasi.innerHTML='<div class="lembar__kepala"><h2>'+esc(k.judul)+'</h2></div>'+konfirmasiBs(k.rincian)+'<div class="hasil-actions"><button class="btn" id="kembali" type="button">Kembali periksa isian</button><button class="btn btn--utama" id="ya" type="button">Simpan sisa; bebaskan dari proses</button></div>';
       }
+      if(pratinjauMilik && k.rincian){
+        konfirmasi.innerHTML='<div class="lembar__kepala"><h2>Dampak sebelum disimpan</h2></div>'+konfirmasiMilik(k.rincian)+'<label class="milik-confirm"><input type="checkbox" data-milik-confirm><span>Saya sudah memeriksa pemilik, jumlah, dan dampak stok.</span></label><div class="hasil-actions"><button class="btn" id="kembali" type="button">Ubah isian</button><button class="btn btn--utama" id="ya" type="button" disabled>Simpan pengalihan</button></div>';
+        konfirmasi.querySelector('[data-milik-confirm]').onchange=function(){konfirmasi.querySelector('#ya').disabled=!this.checked;};
+      }
       // Kembali menampilkan elemen formulir yang sama, berikut seluruh pilihannya.
       lembar.appendChild(konfirmasi);
       lembar.setAttribute("aria-label", k.judul || "Sudah benar?");
       $("kembali").onclick = kembaliKeBorang;
       $("kembali").focus();
-      $("ya").onclick = function () { simpan(isi, v, $("ya")); };
+      $("ya").onclick = function () { if(pratinjauMilik){if(!konfirmasi.querySelector("[data-milik-confirm]").checked)return;isi.confirm=true;} simpan(isi, v, $("ya")); };
     }
 
+    if(pratinjauMilik) $("simpan").textContent="Periksa dampak";
     $("simpan").onclick = async function () {
       var gagalPilihan = lembar.querySelector("[data-pilihan-gagal]");
       if (gagalPilihan) { salahFormulir(lembar, gagalPilihan.dataset.pilihanGagal);return; }
@@ -3354,6 +3368,19 @@
                 (a.pratinjau_muat === "semua" ? "Semua sudah dimuat, selesaikan" : "Selesaikan sesuai muatan aktual")});
         } catch (e) { salahFormulir(lembar, String(e)); }
         finally { tombol.disabled = false; }
+        return;
+      }
+      if(pratinjauMilik){
+        var borangMilik=lembar.querySelector('.lembar__isi');
+        var kontrolMilik=Array.prototype.map.call(borangMilik.querySelectorAll('input,select,textarea,button:not(#tutup)'),function(e){var state=[e,e.disabled];e.disabled=true;return state;});
+        try{
+          var dampakMilik=await kirim('/api/actions/pratinjau-kepemilikan',Object.assign({aksi:id},isi));
+          if(!lembar.open || lembar.querySelector('.lembar__isi')!==borangMilik)return;
+          if(!dampakMilik || !dampakMilik.plan || !Array.isArray(dampakMilik.plan.owners) || typeof dampakMilik.review!=='string')throw new TypeError('Hasil pemeriksaan belum lengkap. Periksa dampak lagi.');
+          isi.review=dampakMilik.review;isi.confirm=false;
+          tanyaYakin(isi,v,{judul:'Dampak sebelum disimpan',rincian:dampakMilik.plan,ya:'Simpan pengalihan'});
+        }catch(e){if(lembar.open && lembar.querySelector('.lembar__isi')===borangMilik)salahFormulir(lembar,String(e));}
+        finally{kontrolMilik.forEach(function(state){state[0].disabled=state[1];});}
         return;
       }
       if (a.konfirmasi) { tanyaYakin(isi, v); return; }

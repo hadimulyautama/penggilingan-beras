@@ -4125,3 +4125,14 @@ fieldset.akses-bidang { border:0; padding:0; margin:0; min-width:0; display:grid
 
 .akses-tabel th[scope="row"] { position:sticky; left:0; background:var(--panel); z-index:1; }
 .akses-tabel th[aria-current="true"] { color:var(--utama); }
+
+/* Pemeriksaan pengalihan produk dan karung memakai satu tampilan. */
+.milik-review{min-width:0;overflow-wrap:anywhere}
+.milik-review dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px;margin:16px 0}
+.milik-review dt{color:var(--redup)}
+.milik-review dd{margin:0;text-align:right}
+.milik-review table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px}
+.milik-review caption{text-align:left;font-weight:600;margin-bottom:12px}
+.milik-review th,.milik-review td{padding:10px 6px;text-align:left;border-bottom:1px solid var(--garis);overflow-wrap:anywhere}
+.milik-confirm{display:flex;gap:10px;align-items:start;margin:20px 0;line-height:1.6}
+.milik-confirm input{flex-shrink:0;min-width:22px;min-height:22px}
