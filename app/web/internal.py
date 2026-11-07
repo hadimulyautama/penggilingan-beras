@@ -54,7 +54,6 @@ async def _cocokkan_pengiriman_tiket(db, tid: int):
     """
     from sqlalchemy import text
     from app.penggilingan.inventory.models import OUT_DIMUAT, OUT_SELESAI
-    from app.services import barang_keluar as bk
 
     tiket = (await db.execute(text("""
         SELECT t.id, t.arah, t.status_transaksi, t.status_tiket,
@@ -95,11 +94,13 @@ async def _cocokkan_pengiriman_tiket(db, tid: int):
     if dipilih is not None:
         raise HTTPException(status_code=409, detail=f"Armada sudah dipilih {dipilih.kode}, tetapi muatan belum dinyatakan selesai di Produksi.")
 
-    candidates = await bk.daftar(db, status=(OUT_DIMUAT, OUT_SELESAI), batas=500)
+    # Batas daftar layar bukan batas kontrak integrasi. Tiket yang sudah
+    # tertaut dibaca langsung; calon tanpa tautan diperiksa seluruhnya agar
+    # pengiriman lama tidak hilang dan kecocokan ganda tidak menjadi tebakan.
     cocok = []
-    for rec, items in candidates:
+    def periksa(rec):
         if _kunci_nopol(rec.no_polisi) != nopol:
-            continue
+            return
         if tiket["pelanggan_id"] is not None and rec.pelanggan_id is not None:
             identitas_pelanggan_sama = rec.pelanggan_id == tiket["pelanggan_id"]
         else:
@@ -107,17 +108,32 @@ async def _cocokkan_pengiriman_tiket(db, tid: int):
         if (identitas_pelanggan_sama
                 and rec.timbangan_transaksi_id in (None, int(tid))
                 and (rec.status == OUT_DIMUAT
-                     or rec.timbangan_transaksi_id == int(tid))):
-            cocok.append((rec, items))
-    # Tiket yang sudah lebih dulu ditaut hanya boleh kembali ke transaksi itu.
-    sudah = [(rec, items) for rec, items in cocok
-             if rec.timbangan_transaksi_id == int(tid)]
-    if sudah:
-        cocok = sudah
+                     or (rec.status == OUT_SELESAI and rec.timbangan_transaksi_id == int(tid)))):
+            cocok.append(rec)
+
+    if tertaut:
+        for rec in tertaut:
+            periksa(rec)
+    else:
+        q = select(OutgoingRecord).where(OutgoingRecord.status == OUT_DIMUAT,
+            OutgoingRecord.timbangan_transaksi_id.is_(None)).order_by(OutgoingRecord.id)
+        # Streaming membatasi memori dan tidak memuat semua rincian barang.
+        stream = await db.stream_scalars(q.execution_options(yield_per=100))
+        try:
+            async for rec in stream:
+                periksa(rec)
+                if len(cocok) > 1:
+                    break
+        finally:
+            await stream.close()
+
     if len(cocok) != 1:
         alasan = "belum ada perintah Produksi yang dimuat" if not cocok else "cocok dengan lebih dari satu perintah"
         raise HTTPException(status_code=409, detail=f"Pencocokan ditahan: {alasan}; periksa pelanggan dan nomor polisi.")
-    return tiket, cocok[0][0], cocok[0][1]
+    rec = cocok[0]
+    items = list((await db.scalars(select(OutgoingItem).where(
+        OutgoingItem.outgoing_record_id == rec.id).order_by(OutgoingItem.id))).all())
+    return tiket, rec, items
 
 
 class TanyaIn(BaseModel):
@@ -180,11 +196,12 @@ async def pengiriman_muatan_tiket(
                 )).first()
                 if detail is None:
                     raise HTTPException(status_code=409, detail="SKU muatan tidak ditemukan di Produksi.")
-                tara = await db.scalar(select(KemasanTara.tara_per_karung_kg).where(
-                    KemasanTara.packaging_material_id == detail[6],
-                    KemasanTara.package_size_id == detail[7]))
-                if tara is None:
-                    raise HTTPException(409, 'Tara kemasan belum ditetapkan. Isi di Pengaturan Pos Timbang.')
+                if item.jumlah_karung:
+                    tara = await db.scalar(select(KemasanTara.tara_per_karung_kg).where(
+                        KemasanTara.packaging_material_id == detail[6],
+                        KemasanTara.package_size_id == detail[7]))
+                    if tara is None:
+                        raise HTTPException(409, 'Tara kemasan belum ditetapkan. Isi di Pengaturan Pos Timbang.')
                 produk = dict(kualitas_id=item.rice_quality_standard_id,
                     merek_produk_id=detail[5], packaging_material_id=detail[6], package_size_id=detail[7])
                 jenis = jenis_produk(detail[0], detail[1])
@@ -200,24 +217,26 @@ async def pengiriman_muatan_tiket(
                     label += f" · {kemasan}"
             elif item.item_type in ("pk_langsung", "pk_g2"):
                 kode, label = "BERAS_PK", "Beras pecah kulit (PK)"
-                tara = await db.scalar(select(KemasanTara.tara_per_karung_kg)
-                    .join(PackagingMaterial, PackagingMaterial.id == KemasanTara.packaging_material_id)
-                    .join(PackageSize, PackageSize.id == KemasanTara.package_size_id)
-                    .where(PackagingMaterial.kode == 'karung_pk', PackageSize.ukuran_kg == 50))
-                if tara is None:
-                    raise HTTPException(409, 'Tara karung PK 50 kg belum ditetapkan di Pengaturan Pos Timbang.')
+                if item.jumlah_karung:
+                    tara = await db.scalar(select(KemasanTara.tara_per_karung_kg)
+                        .join(PackagingMaterial, PackagingMaterial.id == KemasanTara.packaging_material_id)
+                        .join(PackageSize, PackageSize.id == KemasanTara.package_size_id)
+                        .where(PackagingMaterial.kode == 'karung_pk', PackageSize.ukuran_kg == 50))
+                    if tara is None:
+                        raise HTTPException(409, 'Tara karung PK 50 kg belum ditetapkan di Pengaturan Pos Timbang.')
             elif item.item_type == "gabah_langsung":
                 kode, label = "GABAH_KERING", "Gabah kering"
                 # Jalur gabah menyebut karung 50 kg tanpa jenis bahannya.
                 # Aman hanya selama seluruh tara 50 kg sepakat. Bila kelak
                 # dibedakan, jangan menebak jenis karung yang benar-benar dimuat.
-                taras = (await db.scalars(select(KemasanTara.tara_per_karung_kg)
-                    .join(PackageSize, PackageSize.id == KemasanTara.package_size_id)
-                    .join(PackagingMaterial, PackagingMaterial.id == KemasanTara.packaging_material_id)
-                    .where(PackageSize.ukuran_kg == 50, PackagingMaterial.aktif.is_(True)).distinct())).all()
-                if len(taras) != 1:
-                    raise HTTPException(409, 'Jenis karung gabah 50 kg perlu dirinci karena tara kemasannya berbeda.')
-                tara = taras[0]
+                if item.jumlah_karung:
+                    taras = (await db.scalars(select(KemasanTara.tara_per_karung_kg)
+                        .join(PackageSize, PackageSize.id == KemasanTara.package_size_id)
+                        .join(PackagingMaterial, PackagingMaterial.id == KemasanTara.packaging_material_id)
+                        .where(PackageSize.ukuran_kg == 50, PackagingMaterial.aktif.is_(True)).distinct())).all()
+                    if len(taras) != 1:
+                        raise HTTPException(409, 'Jenis karung gabah 50 kg perlu dirinci karena tara kemasannya berbeda.')
+                    tara = taras[0]
             else:
                 raise HTTPException(status_code=409, detail=f"Jenis muatan {item.item_type} belum didukung integrasi timbang.")
             muatan.append({

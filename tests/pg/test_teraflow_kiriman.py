@@ -281,3 +281,54 @@ async def kirim_pwa(c,tf,tid,kg):
         await page.screenshot(path=str(OUT/'pwa-kiriman-320-selesai.png'),full_page=True)
         assert not errors
         await browser.close()
+
+
+@pytest.mark.parametrize('luring',[False,True])
+async def test_http_pengiriman_curah_tanpa_karung_dan_tanpa_stok_ganda(pg,gudang,luring):
+    from app.penggilingan.gudang2.models import PolishingProcess,PolishingOutputLog
+    from app.database import now_local
+    async with pg() as db:
+        proc=await db.scalar(select(PolishingProcess))
+        db.add(PolishingOutputLog(polishing_process_id=proc.id,jenis='bekatul',berat_kg=500,waktu_update=now_local(),input_by=gudang['op']))
+        await db.commit()
+    pid=await _pelanggan(pg,'Penerima curah')
+    rs=await _buat(pg,gudang,{'kelompok':[{'pelanggan':str(pid),'barang':[{'pilih':'cr:bekatul','jumlah':'123.45'}]}]})
+    aid=await akun(pg,gudang)
+    with servers(os.environ['UJI_PG_URL']) as (tf,pf):
+        await profil(pg,aid)
+        async with httpx.AsyncClient(base_url=tf,follow_redirects=False,timeout=30) as c:
+            assert (await c.post('/timbangan/masuk',data={'username':'uji_lintas','sandi':'uji-lintas-aman','perangkat':'UT'})).status_code==303
+            r=await c.post('/timbangan/timbang/PENGIRIMAN',data={'kunci':str(uuid4()),'berat_kg':'5000','nomor_polisi':'B 1234 XY','nama_sopir':'Sopir Curah'})
+            tid=int(re.search(r'/transaksi/(\d+)',r.headers['location'])[1])
+            async with pg() as db:
+                await bk.pilih_tiket_armada(db,user=await db.get(User,gudang['adm']),rec_id=rs[0].rec.id,tiket_id=tid)
+                await bk.catat_muatan(db,user=await db.get(User,gudang['op']),item_id=rs[0].baris[0].id,berat_kg=123.45)
+                await bk.selesai_muat(db,user=await db.get(User,gudang['op']),rec_id=rs[0].rec.id)
+                stok_sebelum=await db.scalar(text('SELECT sum(berat_kg) FROM outgoing_items'))
+            preview=await c.post(f'/timbangan/tiket/{tid}/pratinjau',data={'berat_kg':'5123.45'})
+            assert preview.status_code==200 and preview.json()['tersedia'],preview.text
+            key=str(uuid4());data={'kunci':key,'berat_kg':'5123.45','aksi':'selesai'}
+            headers={}
+            if luring:
+                from datetime import datetime,timezone
+                headers={'X-Timbangan-Kiriman':key,'X-Timbangan-Akun':'1','X-Timbangan-Waktu':datetime.now(timezone.utc).isoformat(),'X-Timbangan-Luring':'1'}
+                async with httpx.AsyncClient(base_url=pf) as pc:await pc.post('/uji/gangguan',json={'verifikasi':True})
+            r=await c.post(f'/timbangan/tiket/{tid}',data=data,headers=headers)
+            if luring:
+                assert r.status_code==200 and r.json()['tersimpan'] and r.json()['peringatan'],r.text
+                async with httpx.AsyncClient(base_url=pf) as pc:await pc.post('/uji/gangguan',json={'verifikasi':False})
+                # Receipt lama tidak mengulang mutasi; pemulihan callback
+                # melalui pengiriman bacaan yang sudah tersimpan tanpa PWA.
+                again=await c.post(f'/timbangan/tiket/{tid}',data=data,headers=headers)
+                assert again.json()['tersimpan'] and again.json()['peringatan']
+                r=await c.post(f'/timbangan/tiket/{tid}',data=data)
+            assert r.status_code==303 and 'err=' not in r.headers['location'],r.headers
+            async with pg() as db:
+                row=(await db.execute(text('SELECT status_tiket,berat_barang_kg,jumlah_karung,total_tara_kg FROM timbangan_transaksi WHERE id=:id'),{'id':tid})).one()
+                assert row.status_tiket=='SELESAI' and float(row.berat_barang_kg)==123.45 and row.jumlah_karung==0 and float(row.total_tara_kg)==0
+                assert (await db.get(OutgoingRecord,rs[0].rec.id)).status=='selesai'
+                assert await db.scalar(text('SELECT sum(berat_kg) FROM outgoing_items'))==stok_sebelum
+                assert await db.scalar(text('SELECT count(*) FROM timbangan_transaksi'))==1
+            for fmt in ('80mm','ncr'):
+                pdf=await c.get(f'/timbangan/transaksi/{tid}/cetak/{fmt}')
+                assert pdf.status_code==200 and pdf.content.startswith(b'%PDF')
