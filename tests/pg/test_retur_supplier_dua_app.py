@@ -14,6 +14,7 @@ from tests.pg.test_retur_supplier import asal,user,jumlah
 pytestmark=[pytest.mark.asyncio,pytest.mark.dua_aplikasi]
 ROOT=Path(__file__).resolve().parents[2]
 TF=Path(os.environ.get('UJI_TF_ROOT',str(ROOT.parent/'timbangan')))
+PY_TF=Path(os.environ.get('UJI_TF_PYTHON',str(TF/'.venv/bin/python')))
 OUT=Path(os.environ.get('UJI_RSP_OUT',str(ROOT/'output/uji-retur-supplier-dua-app')))
 
 
@@ -22,7 +23,7 @@ def aman():
     url=os.environ.get('UJI_PG_URL','');u=urlsplit(url)
     if not url:pytest.skip('Profil UJI_PG_URL dan UJI_TF_ROOT diperlukan untuk uji lokal dua aplikasi.')
     assert u.hostname in ('127.0.0.1','localhost') and u.path.startswith('/uji_rsp_') and not u.query and not u.fragment,'Gunakan database loopback uji_rsp_* tanpa parameter pengganti host.'
-    assert (TF/'.venv/bin/python').is_file() and (TF/'app/timbangan/main.py').is_file()
+    assert PY_TF.is_file() and (TF/'app/timbangan/main.py').is_file()
     return url
 
 
@@ -40,12 +41,12 @@ def _skema_head():
     rev=asyncio.run(versi())
     if rev is None:
         steps=[(ROOT,sys.executable,['upgrade','0063_sebab_selisih_timbang']),
-            (TF,str(TF/'.venv/bin/python'),['stamp','0026_timbangan_hapus_pengawas']),
-            (TF,str(TF/'.venv/bin/python'),['upgrade','0038_kunci_baris_64']),
-            (ROOT,sys.executable,['upgrade','head']),(TF,str(TF/'.venv/bin/python'),['upgrade','head'])]
+            (TF,str(PY_TF),['stamp','0026_timbangan_hapus_pengawas']),
+            (TF,str(PY_TF),['upgrade','0038_kunci_baris_64']),
+            (ROOT,sys.executable,['upgrade','head']),(TF,str(PY_TF),['upgrade','head'])]
     else:
-        assert rev in ('0048_lintasan_transfer','0049_pekerjaan_cetak'),'Profil harus baru atau di head kompatibel; tidak menstempel ulang data.'
-        steps=[(ROOT,sys.executable,['upgrade','head']),(TF,str(TF/'.venv/bin/python'),['upgrade','head'])]
+        assert rev in {p.stem for p in (TF/'migrations/versions').glob('*.py')},'Revisi TeraFlow tidak dikenal; tidak menstempel ulang data.'
+        steps=[(ROOT,sys.executable,['upgrade','head']),(TF,str(PY_TF),['upgrade','head'])]
     for n,(cwd,python,args) in enumerate(steps):
         r=subprocess.run([python,'-m','alembic',*args],cwd=cwd,env={**os.environ,'DATABASE_URL':url},capture_output=True,text=True,timeout=180)
         (OUT/f'migrasi-{n}.log').write_text(r.stdout+r.stderr);assert r.returncode==0,r.stderr[-2000:]
@@ -64,7 +65,7 @@ def servers():
         'PYTHONPATH':str(ROOT/'tests/pg')}
     procs=[];logs=[]
     try:
-        for cwd,python,module,n in [(ROOT,sys.executable,'_rsp_api_uji:app',p),(TF,str(TF/'.venv/bin/python'),'app.timbangan.main:app',t)]:
+        for cwd,python,module,n in [(ROOT,sys.executable,'_rsp_api_uji:app',p),(TF,str(PY_TF),'app.timbangan.main:app',t)]:
             log=(OUT/f'http-{n}.log').open('w');logs.append(log)
             procs.append(subprocess.Popen([python,'-m','uvicorn',module,'--host','127.0.0.1','--port',str(n),'--log-level','warning'],cwd=cwd,env=env,stdout=log,stderr=log))
             for _ in range(150):
@@ -155,3 +156,46 @@ async def test_http_timbang_koreksi_referensi_dan_keluar_sekali(pg,asal):
                     riwayat_transaksi_read_only=True,rekap_keluar_kg=str(recap['total_keluar']),
                     audit_koreksi_tf_super_saja=True,field_koreksi_terbatas=True,
                     panel_selesai=True,gangguan_integrasi_tidak_palsu_sukses=True),indent=2))
+
+@pytest.mark.parametrize('jenis',['pk','gabah','broken','curah'])
+async def test_http_retur_curah_selesai_timbang_tanpa_karung_fiktif_dan_stok_sekali(pg,asal,jenis):
+    from uuid import uuid4
+    from tests.pg.test_retur_supplier import buat_sumber
+    async with pg() as db:
+        await db.execute(text('UPDATE suppliers SET kledo_contact_id=900001 WHERE id=:id'),dict(id=asal['sid']))
+        u=await db.get(User,asal['uid']);u.default_warehouse_id=asal['wh']
+        a=Akun(user_id=u.id,username='uji_rsp',password_hash=hash_sandi('uji-rsp-lokal'));db.add(a);await db.flush()
+        await db.execute(text("INSERT INTO timbangan_akun(username,nama,role,akun_id,status,perangkat_kode,token_version) VALUES ('uji_rsp','Admin Curah Uji','ADMIN',:aid,'aktif','US',1)"),dict(aid=a.id))
+        tid_asal,stock,key=await buat_sumber(db,asal,jenis)
+        payload=[dict(kunci=key,jumlah='125.25')]
+        checked=await s.periksa(db,tid_asal,user(asal),payload,'Mutu tidak sesuai','')
+        rec=await s.simpan(db,user=user(asal),tid=tid_asal,jumlah=payload,alasan='Mutu tidak sesuai',catatan='',kunci=uuid4().hex,dasar=checked['dasar']);await db.commit()
+    with servers() as (tf,pf):
+        async with httpx.AsyncClient(base_url=tf,timeout=30,follow_redirects=False) as c:
+            assert (await c.post('/timbangan/masuk',data={'username':'uji_rsp','sandi':'uji-rsp-lokal','perangkat':'US'})).status_code==303
+            form=await c.get('/timbangan/timbang/RETUR_SUPPLIER')
+            key=re.search(r'name="kunci" value="([^"]+)"',form.text).group(1)
+            r=await c.post('/timbangan/timbang/RETUR_SUPPLIER',data=dict(kunci=key,berat_kg='5000',supplier_id=asal['sid'],nomor_polisi='B 1234 US',nama_sopir='Sopir Curah Uji'))
+            assert r.status_code==303 and 'err=' not in r.headers['location'],r.headers.get('location')
+            async with pg() as db:
+                tid=await db.scalar(text("SELECT id FROM timbangan_transaksi WHERE jenis_kode='RETUR_SUPPLIER' AND arah='RETUR_KELUAR'"))
+                await s.hubungkan(db,user=user(asal),identitas=rec.id,tiket_id=tid);await db.commit()
+            form=await c.get(f'/timbangan/tiket/{tid}')
+            assert form.status_code==200 and 'name="jumlah_karung"' not in form.text
+            preview=await c.post(f'/timbangan/tiket/{tid}/pratinjau',data={'berat_kg':'5125.25'})
+            assert preview.status_code==200 and preview.json()['tersedia'],preview.text
+            for _ in range(2):
+                r=await c.post(f'/timbangan/tiket/{tid}',data={'berat_kg':'5125.25','aksi':'selesai'})
+                assert r.status_code==303 and 'err=' not in r.headers['location'],r.headers.get('location')
+        async with pg() as db:
+            t=(await db.execute(text('SELECT status_tiket,jumlah_karung,berat_barang_kg,total_tara_kg FROM timbangan_transaksi WHERE id=:id'),dict(id=tid))).one()
+            assert t.status_tiket=='SELESAI' and t.jumlah_karung==0 and t.berat_barang_kg==125.25 and t.total_tara_kg==0
+            item=await db.scalar(select(ReturSupplierItem).where(ReturSupplierItem.retur_supplier_id==rec.id))
+            review=await f.periksa(db,identitas=rec.id,user=user(asal),jumlah=[dict(item_id=item.id,jumlah='125.25')]);await db.commit()
+            assert review['status']=='terverifikasi_otomatis',review
+            for _ in range(2):
+                await f.catat_keluar(db,identitas=rec.id,user=user(asal),dasar=review['dasar'],konfirmasi=True);await db.commit()
+            assert await db.scalar(text('SELECT count(*) FROM retur_supplier_keluar'))==1
+            assert await db.scalar(text('SELECT count(*) FROM outgoing_items'))==0
+            stock=await db.get(type(stock),stock.id)
+            assert (stock.berat_kg if jenis=='broken' else stock.berat_total_kg)==998

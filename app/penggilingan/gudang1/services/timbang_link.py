@@ -183,7 +183,7 @@ SQL_MASUK_BELUM_DITAUT = ("""
            t.jasa,
            t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
            t.selisih_kg, t.selisih_persen,
-           t.timbang1_kg, t.berat_kosong_kg,
+           t.timbang1_kg, t.timbang2_kg, t.cara_timbang, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
@@ -228,7 +228,7 @@ _SQL_SATU = text("""
            t.jasa,
            t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
            t.selisih_kg, t.selisih_persen,
-           t.timbang1_kg, t.berat_kosong_kg,
+           t.timbang1_kg, t.timbang2_kg, t.cara_timbang, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
@@ -519,6 +519,14 @@ async def bobot_awal_dari_tiket(db: AsyncSession, tiket: dict) -> tuple[float | 
     b = tiket.get("berat_hpp_kg")
     if b is not None and float(b) > 0:
         return float(b), tiket["sumber_berat"], None
+    # Penerimaan dapat dibuat SETELAH petugas menyimpan timbang kedua
+    # sementara. Pakai netto sementara hari ini, sama dengan poller, sebelum
+    # mencari tara lama. Tetap perkiraan: karung/tara belum diselesaikan.
+    if (tiket.get('cara_timbang') == 'DUA_KALI'
+            and tiket.get('timbang1_kg') is not None and tiket.get('timbang2_kg') is not None):
+        netto = float(tiket['timbang1_kg']) - float(tiket['timbang2_kg'])
+        if netto > 0:
+            return netto, SUMBER_PERKIRAAN, None
     tara = await tara_terakhir(db, tiket.get("nomor_polisi"), kecuali=tiket.get("id"))
     p = perkiraan(tiket.get("timbang1_kg"), tara)
     if p is not None:
