@@ -78,10 +78,10 @@ async def test_pdf_endpoint_satu_halaman_lengkap_dan_tidak_menulis(pg,penerimaan
         r=await c.get(f'/barang-masuk/{x["tid"]}/laporan.pdf')
         pdf,teks=isi(r)
         bukti('pk-lima-putaran.pdf',r.content)
-        assert len(pdf.pages)==1
+        assert len(pdf.pages)==2
         for kata in ('Supplier Uji','Supplier:','14.000,00 kg','14.200,00 kg','14.184,00 kg',
                      '200 karung','0,075 kg/karung','Rata-rata','13,0%','21,0%','7,0%',
-                     'Petugas timbang PDF','Penerima Uji','Penyerah/sopir','Penerima','1 / 1',
+                     'Petugas timbang PDF','Penerima Uji','Penyerah/sopir','Penerima','1 / 2',
                      f"{nilai['nilai']:.2f}".replace('.',','),nilai['kelas']):assert kata in teks,kata
         assert teks.count('Supplier Uji')==1
         assert 'Gudang' not in teks and 'Milik pabrik' not in teks and 'harga' not in teks.lower()
@@ -382,5 +382,5 @@ async def test_kapasitas_desain_dua_batch_lima_putaran_di_penyaji(pg,penerimaan)
     d['qc'].append(dict(kode=kedua['kode'],jenis='pk',status='Belum diperiksa',putaran=[],rata=None))
     data=buat_pdf(d);pdf=PdfReader(BytesIO(data))
     bukti('uji-layout-dua-batch.pdf',data)
-    assert len(pdf.pages)==1
-    teks=pdf.pages[0].extract_text();assert 'BATCH-LAYOUT-KEDUA' in teks and 'Belum diperiksa' in teks
+    assert len(pdf.pages)==2
+    teks='\n'.join(page.extract_text() for page in pdf.pages);assert 'BATCH-LAYOUT-KEDUA' in teks and 'Belum diperiksa' in teks

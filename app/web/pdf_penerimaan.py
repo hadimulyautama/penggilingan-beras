@@ -9,7 +9,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Paragraph,
-    Table, TableStyle, Spacer, KeepTogether, CondPageBreak)
+    Table, TableStyle, Spacer, KeepTogether, CondPageBreak, PageBreak)
 
 from app.database import berzona
 from app.web.pdf_dokumen import PenyajiDokumen
@@ -109,9 +109,6 @@ class Laporan(PenyajiDokumen):
         self.d=d
         self.head=ParagraphStyle('TerimaKepalaTabel',parent=self.bold,textColor=colors.white)
         self.width=(210-2*self.tema.margin_mm)*mm
-        self.section.spaceBefore=0
-        self.section.spaceAfter=0
-        self.section.leading=12
         for gaya in (self.normal,self.bold,self.head,self.small):
             gaya.leading=gaya.fontSize*1.15
 
@@ -123,11 +120,7 @@ class Laporan(PenyajiDokumen):
         return Paragraph('<b>'+escape(label)+':</b> '+escape(str(value)).replace('\n','<br/>'),style or self.normal)
 
     def bagian(self,nama):
-        t=Table([[self.p(nama,self.section)]],colWidths=[self.width],hAlign='LEFT')
-        t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),self.pale),
-            ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2)]))
-        t.keepWithNext=True
-        return t
+        return self.heading(nama,3)
 
     def tabel(self,headers,rows,widths,*,rata=False,spans=()):
         data=[[self.p(h,self.head) for h in headers]]+[
@@ -155,28 +148,8 @@ class Laporan(PenyajiDokumen):
             status='PENGGILINGAN '+self.d.get('status','selesai').upper()
             status+=' | '+(self.d.get('verification_status') or 'Verifikasi belum tercatat').replace('_',' ').upper()
         story=list(story)+[Spacer(1,5),self.p('Dibuat '+waktu(self.d['dibuat'])+' | '+self.d['pembuat'],self.small)]
-        pembuka=[self.p(judul,self.title),self.p(referensi,self.bold),self.p(status,self.small),Spacer(1,8)]
-        hasil=super().pdf(pembuka+story,judul=judul,referensi=referensi)
-        # Laporan panjang tetap lengkap. Identitas dan penanda lanjutan harus
-        # terlihat pada setiap lembar, termasuk lembar yang hanya berisi catatan.
-        from io import BytesIO
-        from pypdf import PdfReader,PdfWriter
-        from reportlab.pdfgen.canvas import Canvas
-        from reportlab.lib.pagesizes import A4
-        reader=PdfReader(BytesIO(hasil))
-        if len(reader.pages)==1:return hasil
-        writer=PdfWriter()
-        for i,page in enumerate(reader.pages):
-            writer.add_page(page);page=writer.pages[-1]
-            overlay=BytesIO();canvas=Canvas(overlay,pagesize=A4)
-            canvas.setFillColor(self.muted);canvas.setFont(self.tema.font,7.5)
-            y=A4[1]-48*mm
-            if i:canvas.drawString(self.tema.margin_mm*mm,y,judul)
-            canvas.drawRightString(A4[0]-self.tema.margin_mm*mm,y,'MELEBIHI SATU HALAMAN')
-            canvas.save()
-            page.merge_page(PdfReader(overlay).pages[0])
-        if reader.metadata:writer.add_metadata(dict(reader.metadata))
-        output=BytesIO();writer.write(output);return output.getvalue()
+        pembuka=[self.heading(judul,1),self.p(referensi,self.small),self.p(status,self.small),Spacer(1,8)]
+        return super().pdf(pembuka+story,judul=judul,referensi=referensi)
 
 
 def buat_pdf(d):
@@ -217,7 +190,7 @@ def buat_pdf(d):
     statuses=[ticket.get('status_tiket'),t.get('status_transaksi')]
     if ticket.get('status_tiket')=='DITUTUP_PAKSA' or t.get('status_transaksi') not in (None,'AKTIF'):
         story.append(p('Status tiket/transaksi: '+' / '.join(x for x in statuses if x)+'. '+(t.get('tutup_paksa_alasan') or t.get('void_alasan') or t.get('keterangan') or t.get('catatan') or 'Alasan tidak tercatat.'),v.bold))
-    story.append(v.bagian('01  Rincian penerimaan'))
+    story.append(v.bagian('Rincian penerimaan'))
     tanggal_terima=tanggal_bersama(c['waktu'] for c in d['catatan'])
     zona=berzona(d['dibuat']).tzname() or ''
     cols=['Partai (batch)','Berat diterima','Waktu '+zona,'Pencatat'];widths=[.29,.22,.23,.26]
@@ -230,7 +203,7 @@ def buat_pdf(d):
     story.append(v.tabel(cols,rows or [['Belum ada catatan penerimaan','Belum diterima','-','-']+(['-'] if banyak_pihak else [])],widths))
     for c in d['catatan']:
         if c.get('alasan_penolakan'):story.append(p('Alasan penolakan '+c['kode']+': '+c['alasan_penolakan'],v.bold))
-    story += [Spacer(1,5),v.bagian('02  Hasil penimbangan')]
+    story += [Spacer(1,5),v.bagian('Hasil penimbangan')]
     if t.get('cara_timbang')=='PARTAI':
         tanggal_partai=tanggal_bersama(x['waktu'] for x in t['penimbangan'])
         waktu_kepala='Waktu '+zona+('\n'+tanggal_partai if tanggal_partai and tanggal_partai!=tanggal_terima else '')
@@ -260,13 +233,14 @@ def buat_pdf(d):
         if t.get(key):story.append(p(label+': '+t[key],v.small))
     for m in muatan:
         if m.get('catatan'):story.append(p('Catatan muatan '+str(m['urutan'])+': '+m['catatan'],v.small))
-    story += [Spacer(1,6),v.bagian('03  Pemeriksaan mutu (QC) | '+status_qc(d).upper())]
+    if d['qc']:story.append(PageBreak())
+    story += [v.heading('Pemeriksaan mutu (QC)',2 if d['qc'] else 3),p('Status QC: '+status_qc(d),v.small)]
     if not d['qc']:
         kosong=('Belum ada batch penerimaan untuk pemeriksaan QC.' if d['jenis'] in ('gabah_basah','gabah_kering','pk') else
                 'Pencatatan QC penerimaan jenis barang ini belum tersedia. Catatan produksi tidak dianggap QC.')
         story.append(p(kosong,v.small))
     for g in d['qc']:
-        story += [CondPageBreak((35 if g['putaran'] else 12)*mm),p('Partai '+g['kode']+' | '+g['status'],v.bold)]
+        story += [CondPageBreak((35 if g['putaran'] else 12)*mm),v.heading('Partai '+g['kode'],3),p(g['status'],v.small)]
         if not g['putaran']:
             story += [p('Belum diperiksa. Tidak digabung dengan QC batch lain.',v.small),Spacer(1,6)];continue
         qc_ke_tabel(story,v,g)
@@ -281,7 +255,7 @@ def buat_pdf(d):
         colWidths=[v.width*.47,v.width*.06,v.width*.47],rowHeights=[14,38,13])
     tanda.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0),
         ('LINEABOVE',(0,2),(0,2),.5,v.border),('LINEABOVE',(2,2),(2,2),.5,v.border)]))
-    story.append(KeepTogether([tanda]))
+    story.append(KeepTogether([v.heading('Pengesahan penerimaan',3),tanda]))
     return v.pdf(story)
 
 

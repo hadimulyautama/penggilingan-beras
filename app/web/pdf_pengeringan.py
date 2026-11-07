@@ -60,7 +60,7 @@ def buat_pdf(data):
         section('Catatan pendinginan')
         for line in d['cooling_notes']:note(line)
     if d.get('jeda'):
-        bagian_jeda(story,d['jeda'],lambda value,style=None:p(value),lambda rows,widths:view.tabel(rows[0],rows[1:],[w/sum(widths) for w in widths]),'')
+        bagian_jeda(story,d['jeda'],lambda value,style=None:view.heading(value,3) if style else p(value),lambda rows,widths:view.tabel(rows[0],rows[1:],[w/sum(widths) for w in widths]),'section')
     story.append(PageBreak())
     story.append(view.heading('Bahan baku dan asal',2))
     table(['Batch','Asal / pemilik','Nomor polisi','Berat'],[[b['kode'],b['asal'],b['plat'],kg(b['weight'])] for b in d['batches']] or [['Belum tercatat','-','-','-']],[.28,.28,.22,.22])

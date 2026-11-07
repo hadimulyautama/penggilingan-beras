@@ -13,19 +13,19 @@ def buat_pdf(data):
     view = PenyajiDokumen()
     p, grid = view.p, view.grid
     normal, small, bold = view.normal, view.small, view.bold
-    title, centered = view.title, view.centered
+    centered = view.centered
     small_centered, right = view.small_centered, view.right
-    total_style, section, border = view.total_style, view.section, view.border
+    total_style, border = view.total_style, view.border
     pale = view.pale
 
-    story = [p(data['judul'].upper(), title),
+    story = [view.heading(data['judul'].upper(),1),
              p('Nomor: ' + data['nomor'], centered), Spacer(1, 6 * mm)]
     fields = [('Nama pelanggan', data['pelanggan']),
               (data['label_tanggal'], data['tanggal'])] + list(data['identitas'])
     story.append(view.identitas(fields))
     if data['pesanan']:
         story += [Spacer(1, 3 * mm), p('Nomor pesanan terkait: ' + ' · '.join(data['pesanan']), small)]
-    story.append(p('Rincian barang yang diserahterimakan', section))
+    story.append(view.heading('Rincian barang yang diserahterimakan',3))
     goods = [[p(i, small_centered), p(row[0]), p(row[1]), p(row[2], right)]
              for i, row in enumerate(data['baris'], 1)]
     if data.get('total') is not None:
@@ -42,9 +42,9 @@ def buat_pdf(data):
         ]))
     story += [items, Spacer(1, 3 * mm), p('Keterangan: ' + data['catatan'], small)]
     if data['qc']:
-        story.append(p('QC penerimaan', section))
+        story.append(view.heading('QC penerimaan',3))
         for group in data['qc']:
-            story.append(p(group['kode'] + ' · ' + group['status']))
+            story.extend([view.heading(group['kode'],4),p(group['status'],small)])
             if group.get('catatan'):
                 story.append(p('Alasan penutupan: ' + group['catatan'], small))
         story.append(p('Rincian pemeriksaan tercantum pada lampiran QC dokumen ini.', small))
@@ -62,12 +62,12 @@ def buat_pdf(data):
         ('LINEBELOW', (0, 1), (0, 1), .4, border),
         ('LINEBELOW', (2, 1), (2, 1), .4, border),
     ]))
-    story.append(KeepTogether([p('Pengesahan serah terima', section), signatures]))
+    story.append(KeepTogether([view.heading('Pengesahan serah terima',3), signatures]))
 
     for group in data['qc']:
-        story += [PageBreak(), p('LAMPIRAN QC PENERIMAAN', title),
+        story += [PageBreak(), view.heading('LAMPIRAN QC PENERIMAAN',2),
                   p(data['nomor'] + ' · ' + data['pelanggan'], centered),
-                  Spacer(1, 6 * mm), p(group['kode'] + ' · ' + group['status'], bold)]
+                  Spacer(1, 6 * mm), view.heading(group['kode'],3),p(group['status'],small)]
         if group.get('catatan'):
             story.append(p('Alasan penutupan: ' + group['catatan'], small))
         story.append(Spacer(1, 4 * mm))

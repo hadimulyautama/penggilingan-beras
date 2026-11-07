@@ -26,7 +26,7 @@ async def test_penerimaan_angka_geometri_sama_dan_warna_rata(pg,penerimaan,monke
   monkeypatch.setattr(qc_warna,'warna',lambda *_:None)
   plain=await c.get(f'/barang-masuk/{penerimaan["tid"]}/laporan.pdf')
   assert signature(colored.content)==signature(plain.content)
-  assert b'.835294 .921569 .819608 rg' in PdfReader(BytesIO(colored.content)).pages[0].get_contents().get_data()
+  assert any(b'.835294 .921569 .819608 rg' in page.get_contents().get_data() for page in PdfReader(BytesIO(colored.content)).pages)
 
 async def test_sosoh_warna_tiga_parameter_dalam_sel_lama_tanpa_perubahan_data(pg,gudang2,monkeypatch):
  from app.penggilingan.gudang2.polishing import mulai_penyosohan,catat_output,selesai_penyosohan,akhiri_penyosohan

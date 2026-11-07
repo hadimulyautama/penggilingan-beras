@@ -30,7 +30,7 @@ def buat_pdf(data: dict) -> bytes:
         t, minimum = table(headers, rows, widths, **options)
         return view.bagian_tabel(heading, t, minimum)
 
-    story = [p(JUDUL_REKAP.upper(), view.title),
+    story = [view.heading(JUDUL_REKAP.upper(),1),
              p('Nomor pesanan utama: ' + data['kode'], view.centered),
              Spacer(1, 6 * mm),
              view.identitas([('Nama pelanggan', data['pelanggan']),

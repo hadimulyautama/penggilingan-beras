@@ -51,6 +51,10 @@ class PenyajiDokumen:
             fontSize=self.tema.ukuran_judul_subbagian, leading=13, textColor=self.muted,
             spaceBefore=10, spaceAfter=4, keepWithNext=True)
 
+        # Judul tabel mengikuti tingkat bagian, tetapi tabel panjang boleh pecah.
+        self.table_section = ParagraphStyle('JudulBagianTabel', parent=self.section_heading,
+                                            keepWithNext=False)
+
     def heading(self, value, level=3):
         """Judul semantik: 1 dokumen, 2 halaman, 3 bagian, 4 subbagian."""
         styles={1:self.document_heading, 2:self.page_heading,
@@ -176,6 +180,14 @@ class PenyajiDokumen:
         canvas.line(left, garis, left + width, garis)
         canvas.setLineWidth(.3)
         canvas.line(left, garis-mm, left + width, garis-mm)
+        if doc.page > 1:
+            # Identitas dokumen pada halaman lanjutan berada di ruang bawah kop.
+            from reportlab.pdfbase.pdfmetrics import stringWidth
+            caption=doc.title
+            size=min(self.tema.ukuran_kecil, width/max(1,stringWidth(caption,self.tema.font,1)))
+            canvas.setFont(self.tema.font,size)
+            canvas.setFillColor(self.muted)
+            canvas.drawString(left,garis-4.5*mm,caption)
         canvas.setStrokeColor(self.border)
         canvas.line(left, 15 * mm, left + width, 15 * mm)
         canvas.setFillColor(self.muted)

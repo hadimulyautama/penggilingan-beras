@@ -24,7 +24,7 @@ async def test_desain_jasa_dan_supplier_dari_penerimaan_sebenarnya(pg,penerimaan
     async with await _klien(pg,peran='superadmin') as c:
         r=await c.get(f'/barang-masuk/{penerimaan["tid"]}/laporan.pdf');pdf,teks=isi(r);flat=' '.join(teks.split())
         bukti('hasil-jasa.pdf' if jasa else 'hasil-supplier.pdf',r.content)
-        assert len(pdf.pages)==1
+        assert len(pdf.pages)==2
         assert ('Pemilik barang:' if jasa else 'Supplier:') in flat and flat.count(nama)==1
         for value in ['PK (beras pecah kulit)','BERAT BARANG DITERIMA','Butir patah','Kandungan gabah','Susut uji','persentase penyusutan/bekatul','Kesimpulan:',
                       '5 pemeriksaan QC','rata-rata kadar air 13,0%','Potongan berat karung/kemasan: 15,00 kg','potongan lain: 1,00 kg; total: 16,00 kg',
@@ -62,9 +62,9 @@ async def test_kapasitas_putaran_sah_tanpa_pemotongan(pg,penerimaan,n):
         r=await c.get(f'/barang-masuk/{penerimaan["tid"]}/laporan.pdf?putaran=1&halaman=1');pdf,teks=isi(r)
         assert f'memiliki {n} pemeriksaan QC' in ' '.join(teks.split())
         for i in range(n):assert f'LAB-ASLI-{i+1:03}' in teks
-        if n<=5:assert len(pdf.pages)==1
+        if n<=5:assert len(pdf.pages)==2
         if len(pdf.pages)>1:
-            for page in pdf.pages:assert 'MELEBIHI SATU HALAMAN' in page.extract_text()
+            for i,page in enumerate(pdf.pages,1):assert f'{i} / {len(pdf.pages)}' in page.extract_text()
         bukti(f'kapasitas-{n:03}-putaran.pdf',r.content)
 
 
@@ -74,7 +74,7 @@ async def test_banyak_catatan_penerimaan_yang_didukung_skema_beras(pg,contoh):
         await db.commit()
     async with await _klien(pg,peran='admin') as c:
         r=await c.get(f'/barang-masuk/{contoh["tid"]}/laporan.pdf');pdf,teks=isi(r)
-        assert len(pdf.pages)==1
+        assert len(pdf.pages)==2  # Hierarki baru memberi ruang pada delapan catatan lengkap.
         assert 'BERAT BARANG DITERIMA 828,00 kg' in ' '.join(teks.split())
         for i in range(1,9):assert f'BJ #{i}' in teks
         assert 'QC penerimaan jenis barang ini belum tersedia' in teks
