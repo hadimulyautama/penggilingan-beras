@@ -90,5 +90,5 @@ async def test_koreksi_positif_tautan_pengganti_asli(pg,langsung):
    await page.locator('[name=hasil_transfer]').fill('950');await page.locator('[name=alasan]').fill('Hasil timbang terbaru')
    await page.locator('.rht-correction').get_by_role('button',name='Periksa koreksi',exact=True).click();await page.locator('[data-rht-confirm]').click()
    await expect(page.locator('.rhs-identity')).to_contain_text('Dibatalkan');await expect(page.locator('#panel-riwayat')).to_contain_text('1.000 kg')
-   assert await page.locator('#koreksi-transfer a').is_visible();await page.locator('#koreksi-transfer a').click();await expect(page.locator('.rhs-identity')).to_contain_text('Terkirim')
+   assert await page.locator('#koreksi-transfer a').is_visible();await page.locator('#koreksi-transfer a').click();await expect(page.locator('.rhs-identity')).to_contain_text('Transfer tercatat')
    await expect(page.locator('#panel-ringkasan')).to_contain_text('950 kg')

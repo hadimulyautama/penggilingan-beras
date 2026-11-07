@@ -20,6 +20,34 @@ def bobot(n):
     return kg_rinci(n) if n is not None else 'Belum tercatat'
 
 
+def keadaan_transfer(catatan, permintaan, gudang_asal, gudang_tujuan):
+    """Bahasa halaman mengikuti tahap; status transaksi tersimpan tetap utuh."""
+    if catatan and catatan.status == 'dibatalkan':
+        return dict(judul='Riwayat transfer PK', status='Dibatalkan', aktif=False,
+                    keterangan='Bobot catatan ini tidak dihitung sebagai transfer aktif. Catatan dan alasan pembatalan tetap tersedia di Riwayat.')
+    status = permintaan.status if permintaan else None
+    if status == 'diminta':
+        return dict(judul='Permintaan transfer PK', status='Menunggu persetujuan Admin', aktif=True, etape=1,
+                    keterangan='Admin menetapkan tujuan dan bobot. Persetujuan belum memindahkan stok.')
+    if status == 'disetujui':
+        return dict(judul='Transfer PK aktif', status='Menunggu muat', aktif=True, etape=2,
+                    keterangan=f'{gudang_asal} mencatat berat yang benar-benar dimuat. Boleh kurang dari persetujuan, tidak boleh lebih. Stok berpindah saat pengiriman dicatat.')
+    if status == 'dikirim':
+        return dict(judul='Transfer PK aktif', status='Menunggu penutupan Admin', aktif=True, etape=3,
+                    keterangan=f'PK sudah berpindah ke {gudang_tujuan} dan dapat dipakai sesuai aturan yang berlaku. Admin memeriksa bobot akhir dan menutup permintaan. Bobot dimuat tetap tersimpan; perbedaan bobot akhir mengikuti koreksi transfer, bukan pengiriman kedua.')
+    if status in ('ditolak', 'gugur'):
+        return dict(judul='Riwayat permintaan transfer PK', status='Permintaan '+STATUS[status].lower(), aktif=False,
+                    keterangan='Tidak ada langkah lanjutan pada permintaan ini. '+(permintaan.sebab or 'Sebab belum tercatat.'))
+    if status == 'selesai':
+        return dict(judul='Riwayat transfer PK', status='Transfer selesai', aktif=False,
+                    keterangan='Admin sudah menutup permintaan. Bobot diminta, disetujui, dimuat, dan final tetap dapat ditelusuri. Koreksi mengikuti pemeriksaan pemakaian dan perpindahan lanjutan.')
+    if catatan:
+        return dict(judul='Riwayat transfer PK', status='Transfer tercatat', aktif=False,
+                    keterangan='Transfer langsung sudah tercatat tanpa rantai permintaan. Koreksi mengikuti pemeriksaan pemakaian dan perpindahan lanjutan.')
+    return dict(judul='Detail transfer PK', status=STATUS.get(status, 'Status belum diketahui'), aktif=False,
+                keterangan='Periksa rincian permintaan dan catatan transfer sebelum melanjutkan.')
+
+
 async def gudang_transfer(db, proc, catatan=None, permintaan=None):
     """Label dari identitas lokasi; kode fungsi hanya fallback alur lama G1→G2."""
     asal_id = proc.warehouse_id
@@ -110,7 +138,7 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
     if catatan and catatan.jumlah_karung is not None:
         from app.services.pk_50 import angka
         packing = f"{catatan.jumlah_karung} karung × 50 kg + {angka(catatan.berat_curah_kg)} kg curah"
-    return dict(gudang_asal=gudang_asal,gudang_tujuan=gudang_tujuan,packing=packing, kode=kode,catatan=catatan,permintaan=permintaan,proses=proc,pemilik=pemilik,jasa=jasa,
+    return dict(keadaan=keadaan_transfer(catatan,permintaan,gudang_asal,gudang_tujuan),gudang_asal=gudang_asal,gudang_tujuan=gudang_tujuan,packing=packing, kode=kode,catatan=catatan,permintaan=permintaan,proses=proc,pemilik=pemilik,jasa=jasa,
         status_catatan=status_catatan,status_permintaan=STATUS.get(permintaan.status,permintaan.status) if permintaan else 'Tanpa permintaan',
         tujuan=tujuan,jenis_pk=await pk_jenis(db,proc),berat=berat,selisih=selisih,tahap=tahap,
         statistik=[('Berat transfer ini',bobot(catatan.berat_kg) if catatan else 'Belum ada transfer'),

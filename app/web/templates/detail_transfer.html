@@ -3,7 +3,7 @@
 {% import '_proses_visual.html' as visual with context %}
 {% import '_stok.html' as st with context %}
 {% set kg=st.kg_rinci %}
-{% block judul %}Detail transfer PK{% endblock %}
+{% block judul %}{{ d.keadaan.judul }}{% endblock %}
 {% block isi %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_transfer.css?v={{ VERSI }}');@import url('/static/riwayat-sosoh-desain.css?v={{ VERSI }}');@import url('/static/riwayat-transfer-desain.css?v={{ VERSI }}');</style>
 {% macro link_tab(id,nama) %}<a class="btn btn--kecil" href="{{ detail_url.remove_query_params(['buka','nilai','buka_koreksi']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ nama }}</a>{% endmacro %}
@@ -16,13 +16,8 @@
 {% endmacro %}
 {% macro tindakan_sekarang(id_bagian="tindakan-proses") %}
 <section class="riwayat-detail__card" id="{{ id_bagian }}">
-  <h2>Tindakan saat ini</h2>
-  {% if d.catatan and d.catatan.status=='dibatalkan' %}<p class="riwayat-detail__warning">Transfer ini dibatalkan. Bobot catatan ini tidak dihitung sebagai transfer aktif.</p>
-  {% elif d.permintaan and d.permintaan.status=='diminta' %}<p>Admin menetapkan tujuan dan bobot. Persetujuan belum memindahkan stok.</p>
-  {% elif d.permintaan and d.permintaan.status=='disetujui' %}<p>{{ d.gudang_asal }} mencatat berat yang benar-benar dimuat. Boleh kurang dari persetujuan, tidak boleh lebih.</p>
-  {% elif d.permintaan and d.permintaan.status=='dikirim' %}<p>PK sudah berpindah ke {{ d.gudang_tujuan }} dan dapat dipakai sesuai aturan lama. Admin menutup permintaan; bobot dimuat tetap tersimpan.</p>
-  {% elif d.permintaan and d.permintaan.status in ['ditolak','gugur'] %}<p>Permintaan {{ d.status_permintaan|lower }}. {{ d.permintaan.sebab or 'Sebab belum tercatat.' }}</p>
-  {% else %}<p>Transfer tercatat. Koreksi mengikuti pemeriksaan pemakaian dan perpindahan lanjutan.</p>{% endif %}
+  <h2>{{ 'Langkah berikutnya' if d.keadaan.aktif else 'Status transaksi' }}</h2>
+  <p{{ ' class=riwayat-detail__warning' if d.catatan and d.catatan.status=='dibatalkan' }} data-rht-next>{{ d.keadaan.keterangan }}</p>
   {% if penghalang_koreksi %}<p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>{% if catatan_penghalang %}{{ link_tab('riwayat','Lihat catatan penghalang') }}{% endif %}{% endif %}
   {% if not tindakan and not boleh_koreksi %}<p class="bantu">Tidak ada tindakan yang tersedia untuk status dan akses ini.</p>{% endif %}
 </section>
@@ -31,8 +26,8 @@
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ 'Pekerjaan' if kembali.startswith('/pekerjaan') else 'Stok' if kembali.startswith('/stok') else 'Kabar' if kembali.startswith('/kabar') else 'Riwayat Transfer' }}</a>
 
   <header class="rhs-header">
-    <h1>Riwayat transfer PK</h1><p class="rhs-code">{{ d.kode }}</p>
-    <div class="rhs-identity"><span class="rhs-status">{{ d.status_catatan }}</span><span>{{ 'Titipan jasa' if d.jasa else 'Milik pabrik' }}</span>{% if d.jasa %}<span>{{ d.pemilik }}</span>{% endif %}</div>
+    <h1>{{ d.keadaan.judul }}</h1><p class="rhs-code">{{ d.kode }}</p>
+    <div class="rhs-identity"><span class="rhs-status" data-rht-state>{{ d.keadaan.status }}</span><span>{{ 'Titipan jasa' if d.jasa else 'Milik pabrik' }}</span>{% if d.jasa %}<span>{{ d.pemilik }}</span>{% endif %}</div>
     <p class="rhs-meta">{{ d.gudang_asal }} → {{ d.gudang_tujuan }} · Sumber {{ d.proses.kode_proses }}</p>
     <p class="rhs-meta">{% if d.permintaan %}Permintaan PK #{{ d.permintaan.id }} · Status permintaan: <strong>{{ d.status_permintaan }}</strong>{% else %}Tidak ada permintaan tertaut pada catatan ini{% endif %}</p>
     <div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rht-guide>ⓘ Panduan</button><details class="rhs-menu"><summary class="btn" aria-label="Tindakan transfer PK">⋮</summary><div class="rhs-menu-body"><button class="btn" type="button" data-rht-guide>ⓘ Panduan</button>{% if LAPORAN_NAV %}<button class="btn" type="button" data-rht-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}</div></details></div>
@@ -42,13 +37,13 @@
   {% for id,nama in [('ringkasan','Ringkasan'),('bahan','Bahan & tujuan'),('permintaan','Permintaan'),('riwayat','Riwayat')] %}<a id="tab-{{ id }}" role="tab" aria-controls="panel-{{ id }}" aria-selected="{{ 'true' if tab_transfer==id else 'false' }}" href="{{ detail_url.remove_query_params(['buka','nilai','buka_koreksi']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ nama }}</a>{% endfor %}
   </nav>
   <div class="transfer-panel" id="panel-ringkasan" role="tabpanel" aria-labelledby="tab-ringkasan" {% if tab_transfer!='ringkasan' %}hidden{% endif %}>
-    {% if d.permintaan %}<div class="transfer-tahap" aria-label="Tahap permintaan PK">{% for nama in ['Minta · ' ~ d.gudang_tujuan,'Setujui · Admin','Kirim · ' ~ d.gudang_asal,'Tutup · Admin'] %}<span {% if loop.index0==d.tahap and d.permintaan.status not in ['ditolak','gugur'] %}aria-current="step"{% endif %}>{{ nama }}</span>{% endfor %}</div>{% else %}<p class="bantu">Tanpa rantai permintaan tertaut.</p>{% endif %}
+    {% if d.permintaan %}<div class="transfer-tahap" aria-label="Tahap permintaan PK">{% for nama in ['Minta · ' ~ d.gudang_tujuan,'Setujui · Admin','Kirim · ' ~ d.gudang_asal,'Tutup · Admin'] %}<span {% if d.keadaan.aktif and loop.index0==d.keadaan.etape %}aria-current="step"{% endif %}>{{ nama }}</span>{% endfor %}</div>{% else %}<p class="bantu">Tanpa rantai permintaan tertaut.</p>{% endif %}
+    {{ tindakan_sekarang() }}
     <section class="riwayat-detail__card" id="ringkasan-proses"><h2>Ringkasan transfer PK</h2>
       <div class="rhs-mass"><div><span>Berat catatan yang dibuka</span><strong>{{ d.statistik[0][1] }}</strong><small>{{ 'Historis · tidak aktif' if d.catatan and d.catatan.status=='dibatalkan' else 'Transfer ini saja' if d.catatan else 'Transfer belum terbentuk' }}</small></div><div><span>Transfer aktif seluruh lot</span><strong>{{ d.aktif }}</strong><small>Seluruh catatan aktif dari {{ d.proses.kode_proses }}</small></div><div><span>PK tersisa di {{ d.gudang_asal }}</span><strong>{{ d.saldo }}</strong><small>Saldo lot saat ini</small></div></div>
       <p class="rhs-help rht-explainer">Berat catatan, total transfer aktif, dan saldo PK mempunyai cakupan berbeda. Ketiganya tidak dijumlahkan.</p>
       <p class="rhs-help">{{ 'Stok sudah berpindah; penutupan Admin tidak memindahkannya lagi.' if d.catatan and d.catatan.status=='terkirim' else 'Transfer ini dibatalkan. Bobot catatan ini tidak dihitung sebagai transfer aktif.' if d.catatan else 'Transfer belum tercatat; stok belum berpindah.' }}</p>
     </section>
-    {{ tindakan_sekarang() }}
     <section class="riwayat-detail__card"><h2>Gudang asal & tujuan</h2>{{ rute() }}</section>
     {% if d.permintaan %}<section class="riwayat-detail__card"><h2>Bobot dalam alur permintaan</h2>{{ bobot_alur() }}{{ link_tab('permintaan','Lihat rincian permintaan') }}</section>{% endif %}
     <section class="riwayat-detail__card rhs-shortcuts"><h2>Telusuri pemindahan ini</h2>
@@ -82,7 +77,7 @@
     <div id="koreksi-transfer">{% include '_transfer_koreksi.html' %}</div>
   </div>
 {% from '_panduan.html' import panel as panduan %}
-{% call panduan('rht-panduan','Panduan riwayat transfer PK',penutup={'data-rht-guide-close':'','data-lk-tutup':''}) %}
+{% call panduan('rht-panduan','Panduan transfer PK',penutup={'data-rht-guide-close':'','data-lk-tutup':''}) %}
 <p><strong>Catatan dan saldo.</strong> Berat catatan yang dibuka berbeda dari total transfer aktif seluruh lot dan saldo PK di {{ d.gudang_asal }}. Transfer dibatalkan tetap tersimpan sebagai riwayat dan tidak dihitung sebagai transfer aktif.</p>
 <p><strong>Permintaan.</strong> Bobot diminta, disetujui, dimuat dan final dibedakan. Persetujuan belum memindahkan stok. Stok berpindah ketika pengiriman dicatat; penutupan Admin tidak memindahkannya untuk kedua kalinya. Bobot dimuat tetap tersimpan meski final berbeda.</p>
 <p><strong>Koreksi.</strong> Koreksi membatalkan catatan lama dan, jika bobot lebih dari nol, membuat transfer pengganti dengan tujuan yang sama. Bobot 0 membatalkan tanpa pengganti. Catatan lama tidak ditulis ulang. Hak akses, nilai terbaru, saldo dan pemakaian terkait tetap diperiksa server. Perubahan data saat formulir terbuka harus diperiksa ulang.</p>
