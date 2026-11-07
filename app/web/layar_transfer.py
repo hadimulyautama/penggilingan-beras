@@ -43,7 +43,8 @@ async def tampilkan(request, akun, *, transfer_id=None, permintaan_id=None):
         penghalang=await transfer.alasan_koreksi_transfer(db,t.id) if akun.is_admin and t else None
         catatan_penghalang=await daftar(db,'transfer',t.id) if penghalang else []
     menu={a['id']:a for a in await actions_menu(akun.user)}
-    tindakan=[(id_,menu[id_]['label'],str(p.id)) for id_ in detail_transfer.AKSI.get(p.status,[]) if id_ in menu] if p else []
+    label_tindakan={'kirim_permintaan_pk':f'🚚 Kirim PK ke {d["gudang_tujuan"]}'}
+    tindakan=[(id_,label_tindakan.get(id_,menu[id_]['label']),str(p.id)) for id_ in detail_transfer.AKSI.get(p.status,[]) if id_ in menu] if p else []
     gagal=getattr(request.state,'koreksi_gagal',None) or request.query_params.get('koreksi_gagal')
     tab=request.query_params.get('tab_detail')
     if tab is None:tab='riwayat' if gagal or request.query_params.get('koreksi') or 'halaman_transfer' in request.query_params else 'ringkasan'

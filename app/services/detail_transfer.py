@@ -4,7 +4,7 @@ from math import ceil
 from sqlalchemy import select, func, or_
 
 from app.models import (ActivityLog, InternalTransfer, MillingProcess, PermintaanPk,
-                        User)
+                        User, Warehouse, Silo, PkGudang2Intake)
 from app.models.peristiwa import Peristiwa
 from app.services import transfer
 from app.services.bahan_silo import kg_rinci
@@ -20,6 +20,30 @@ def bobot(n):
     return kg_rinci(n) if n is not None else 'Belum tercatat'
 
 
+async def gudang_transfer(db, proc, catatan=None, permintaan=None):
+    """Label dari identitas lokasi; kode fungsi hanya fallback alur lama G1→G2."""
+    asal_id = proc.warehouse_id
+    if asal_id is None and proc.silo_id:
+        silo = await db.get(Silo, proc.silo_id)
+        asal_id = silo.warehouse_id if silo else None
+    tujuan_id = None
+    if catatan:
+        intake = await db.scalar(select(PkGudang2Intake).where(
+            PkGudang2Intake.internal_transfer_id == catatan.id)
+            .order_by(PkGudang2Intake.id))
+        tujuan_id = intake.warehouse_id if intake else None
+    silo_id = catatan.silo_id if catatan else permintaan.silo_id if permintaan else None
+    if tujuan_id is None and silo_id:
+        silo = await db.get(Silo, silo_id)
+        tujuan_id = silo.warehouse_id if silo else None
+    async def nama(ident, fungsi, kosong):
+        row = await db.get(Warehouse, ident) if ident is not None else await db.scalar(
+            select(Warehouse).where(Warehouse.kode_fungsi == fungsi))
+        return row.nama_gudang if row else kosong
+    return (await nama(asal_id, 'g1', 'Gudang asal belum tercatat'),
+            await nama(tujuan_id, 'g2', 'Gudang tujuan belum tercatat'))
+
+
 async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=None):
     from app.penggilingan.gudang1.services.milling import pk_jenis
     from app.penggilingan.gudang2.service import label_tujuan
@@ -30,6 +54,7 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
     if permintaan is None and catatan:
         permintaan = await db.scalar(select(PermintaanPk).where(
             PermintaanPk.internal_transfer_id == catatan.id).order_by(PermintaanPk.id.desc()))
+    gudang_asal, gudang_tujuan = await gudang_transfer(db, proc, catatan, permintaan)
     jasa = catatan.jasa_id if catatan else proc.jasa_id
     pemilik = (await nama_pemilik_banyak(db, [jasa])).get(jasa, f'Pesanan #{jasa}') if jasa else 'Milik pabrik'
     orang = {u.id:u.nama for u in (await db.scalars(select(User).where(User.id.in_({x for x in
@@ -42,13 +67,13 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
     kode = catatan.kode_transfer if catatan else f'Permintaan PK #{permintaan.id}'
     status_catatan = 'Dibatalkan' if catatan and catatan.status=='dibatalkan' else 'Terkirim' if catatan else 'Belum terbentuk'
     berat = [(label,bobot(getattr(permintaan,field)) if permintaan else 'Tidak ada permintaan') for label,field in
-             [('Diminta G2','berat_minta_kg'),('Disetujui Admin','berat_setuju_kg'),
-              ('Dimuat G1','berat_kirim_kg'),('Final Admin','berat_final_kg')]]
+             [(f'Diminta {gudang_tujuan}','berat_minta_kg'),('Disetujui Admin','berat_setuju_kg'),
+              (f'Dimuat {gudang_asal}','berat_kirim_kg'),('Final Admin','berat_final_kg')]]
     langkah = []
     if permintaan:
-        for label,waktu,oleh in [('Diminta Gudang 2','waktu_minta','diminta_oleh'),
+        for label,waktu,oleh in [(f'Diminta {gudang_tujuan}','waktu_minta','diminta_oleh'),
                                  ('Disetujui Admin','waktu_setuju','disetujui_oleh'),
-                                 ('Dikirim Gudang 1','waktu_kirim','dikirim_oleh'),
+                                 (f'Dikirim {gudang_asal}','waktu_kirim','dikirim_oleh'),
                                  ('Ditutup / keputusan akhir','waktu_tutup','ditutup_oleh')]:
             if getattr(permintaan,waktu):
                 langkah.append(dict(judul=label,waktu=_waktu(getattr(permintaan,waktu)),
@@ -85,15 +110,15 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
     if catatan and catatan.jumlah_karung is not None:
         from app.services.pk_50 import angka
         packing = f"{catatan.jumlah_karung} karung × 50 kg + {angka(catatan.berat_curah_kg)} kg curah"
-    return dict(packing=packing, kode=kode,catatan=catatan,permintaan=permintaan,proses=proc,pemilik=pemilik,jasa=jasa,
+    return dict(gudang_asal=gudang_asal,gudang_tujuan=gudang_tujuan,packing=packing, kode=kode,catatan=catatan,permintaan=permintaan,proses=proc,pemilik=pemilik,jasa=jasa,
         status_catatan=status_catatan,status_permintaan=STATUS.get(permintaan.status,permintaan.status) if permintaan else 'Tanpa permintaan',
         tujuan=tujuan,jenis_pk=await pk_jenis(db,proc),berat=berat,selisih=selisih,tahap=tahap,
         statistik=[('Berat transfer ini',bobot(catatan.berat_kg) if catatan else 'Belum ada transfer'),
-                   ('Sisa PK lot di G1',bobot(saldo)),('Status catatan',status_catatan)],
+                   (f'Sisa PK lot di {gudang_asal}',bobot(saldo)),('Status catatan',status_catatan)],
         saldo=bobot(saldo),aktif=bobot(aktif),komponen=[('Hasil PK lot',bobot(await transfer._produced_pk(db,proc.id))),
             ('Retur PK langsung',bobot(await berat_kembali(db,tipe='pk_langsung',proses_id=proc.id))),
             ('Transfer aktif seluruh lot',bobot(aktif)),('Barang keluar langsung',bobot(await transfer._sold_pk_langsung(db,proc.id))),
-            ('PK tersisa di Gudang 1',bobot(saldo))],
+            (f'PK tersisa di {gudang_asal}',bobot(saldo))],
         sumber_href=f'/riwayat-giling/{proc.id}' if proc.status=='selesai' else f'/proses-aktif/giling/{proc.kode_proses}',
         pencatat=orang.get(catatan.created_by,'Pencatat belum tercatat') if catatan else 'Belum tercatat',
         peminta=orang.get(permintaan.diminta_oleh,'Pencatat belum tercatat') if permintaan else None,

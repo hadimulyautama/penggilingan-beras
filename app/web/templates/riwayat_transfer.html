@@ -8,7 +8,7 @@
 {% set total = namespace(berat=0) %}
 {% for item in kartu %}{% set total.berat = total.berat + (item.berat_kg or 0) %}{% endfor %}
 {{ rh.header("RIWAYAT PERPINDAHAN", "Riwayat Transfer",
-  "Lihat perpindahan PK dari Gudang 1 ke Gudang 2, termasuk transfer yang dibatalkan. Setiap catatan tetap tersimpan untuk ditelusuri.",
+  "Lihat perpindahan PK antargudang, termasuk transfer yang dibatalkan. Setiap catatan tetap tersimpan untuk ditelusuri.",
   [("▤", kartu|length, "Transfer di halaman ini"), ("⚖", kg(total.berat), "Berat tercatat · kg"), ("×", kartu|selectattr("dibatalkan")|list|length, "Transfer dibatalkan")]) }}
 
 {# Sub-menu "Riwayat Proses" (`nav.py`, kunci `riwayat_sosoh`). Kartu TIAP
@@ -28,7 +28,7 @@
     <div>
       <h2>{{ "Tak ada lagi" if dari_awal else "Belum ada transfer" }}</h2>
       <p class="bantu">
-        Kartu muncul di sini begitu PK dipindah dari Gudang 1 ke Gudang 2.
+        Kartu muncul di sini begitu pemindahan PK antargudang dicatat.
       </p>
     </div>
   </div>
@@ -67,7 +67,7 @@
       {% if k.dibatalkan %}
         <div class="nota nota--buruk" style="margin-top:8px">
           <span aria-hidden="true">✕</span>
-          <span><b>Dibatalkan</b> — PK ini tidak sampai ke Gudang 2.</span>
+          <span><b>Dibatalkan</b> — Catatan ini tidak dihitung sebagai transfer aktif.</span>
         </div>
       {% endif %}
       <a class="btn btn--kecil" href="/riwayat-transfer/{{ k.id }}" style="margin-top:10px">Lihat detail lengkap →</a>
@@ -116,7 +116,7 @@
           <div><dt>Status transfer</dt><dd>{{ "Dibatalkan" if k.dibatalkan else "Terkirim" }}</dd></div>
         </dl>
         {% if k.dibatalkan %}
-          <div class="nota nota--buruk"><span aria-hidden="true">✕</span><span><b>Transfer dibatalkan.</b> PK ini tidak sampai ke Gudang 2.</span></div>
+          <div class="nota nota--buruk"><span aria-hidden="true">✕</span><span><b>Transfer dibatalkan.</b> Catatan ini tidak dihitung sebagai transfer aktif.</span></div>
         {% endif %}
       </div>
     </details>
