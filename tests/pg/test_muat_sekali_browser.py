@@ -64,15 +64,11 @@ async def test_satu_konfirmasi_hanya_perintah_terpilih_stok_audit(pg, gudang, wi
             await page.goto(BASE + f'/muatan?perintah={rs[0].rec.id}')
             await expect(page.locator('[data-muat-semua]').first).to_be_enabled()
             assert await page.locator('input[data-item]').count() == 0
-            await page.locator(f'[data-muat-semua="{rs[0].rec.id}"]').click()
-            await expect(page.get_by_role('button', name='Konfirmasi muat & selesai', exact=True)).to_be_visible()
-            await expect(page.locator('.mr-summary')).to_contain_text('550 kg')
             assert await _stok(pg, gudang) == 10000
-            assert await state(pg, rs) == ['perintah', 'perintah']
             OUT.mkdir(parents=True, exist_ok=True)
-            await page.screenshot(path=str(OUT/f'pemeriksaan-{width}.png'), full_page=True)
-            await page.get_by_role('button', name='Konfirmasi muat & selesai', exact=True).evaluate('e=>{e.click();e.click()}')
+            await page.locator(f'[data-muat-semua="{rs[0].rec.id}"]').evaluate('e=>{e.click();e.click()}')
             await expect(page.locator(f'#muat-pelanggan-{rs[0].rec.id} .mr-status')).to_have_text('Selesai muat')
+            assert await page.get_by_role('button', name='Konfirmasi muat & selesai', exact=True).count() == 0
             assert writes.count('/api/actions/muat-semua') == 1
             assert await state(pg, rs) == ['dimuat', 'perintah']
             assert await _stok(pg, gudang) == 9450
@@ -94,11 +90,11 @@ async def test_respons_hilang_setelah_commit_tidak_kirim_ulang(pg, gudang):
         async with browser_client(c, 390, lambda path, method: path == '/api/actions/muat-semua') as (page,writes,errors):
             await page.goto(BASE + f'/muatan?perintah={rs[0].rec.id}')
             await page.locator(f'[data-muat-semua="{rs[0].rec.id}"]').click()
-            await page.get_by_role('button', name='Konfirmasi muat & selesai', exact=True).click()
             await expect(page.locator('[data-galat]')).to_contain_text('belum dapat dipastikan')
             assert await _stok(pg, gudang) == 9450
             await page.get_by_role('button', name='Periksa muatan terbaru', exact=True).click()
             await expect(page.locator(f'#muat-pelanggan-{rs[0].rec.id} .mr-status')).to_have_text('Selesai muat')
+            assert await page.get_by_role('button', name='Konfirmasi muat & selesai', exact=True).count() == 0
             assert writes.count('/api/actions/muat-semua') == 1
             assert await state(pg, rs) == ['dimuat','perintah']
             assert not errors, errors

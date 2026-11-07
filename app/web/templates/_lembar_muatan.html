@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/static/muat-ringkas.css?v={{ VERSI }}&amp;mr=20261107.1">
+<link rel="stylesheet" href="/static/muat-ringkas.css?v={{ VERSI }}&amp;mr=20261107.2">
 <section class="mr" data-lembar-muatan data-editor-perintah data-catat-muatan
  data-tahap="{{ 'selesai' if tahap_selesai else 'catat' }}"
  data-perintah="{{ perintah or request.query_params.get('perintah','') }}"
@@ -7,7 +7,7 @@
  data-buka="{{ buka_awal|default('') }}" data-item="{{ item_awal|default('') }}" data-semua="{{ semua_awal|default('') }}">
  <h1>{{ 'Selesai muat' if tahap_selesai else 'Muat pengiriman' }}</h1>
  <p>{{ 'Periksa aktual dan alasan per pelanggan. Jumlah aktual tidak diubah pada tahap ini.' if tahap_selesai else 'Setelah selesai dimuat secara fisik, pilih Muat semua sesuai perintah.' }}</p>
- <p class="mr-help">{{ 'Penyelesaian tidak menambah muatan, tidak mengurangi stok lagi, dan belum merupakan verifikasi pengiriman.' if tahap_selesai else 'Satu konfirmasi mencatat seluruh muatan perintah sekaligus Selesai muat. Jika aktual berbeda, gunakan Muatan berbeda dari perintah.' }}</p>
+ <p class="mr-help">{{ 'Penyelesaian tidak menambah muatan, tidak mengurangi stok lagi, dan belum merupakan verifikasi pengiriman.' if tahap_selesai else 'Sekali klik mencatat seluruh muatan perintah sekaligus Selesai muat. Ringkasan tersedia setelah berhasil. Jika aktual berbeda, gunakan Muatan berbeda dari perintah.' }}</p>
  <p data-pesan role="status" aria-live="polite" hidden></p>
  <div data-galat role="alert" class="mr-error" hidden></div>
  <div data-pulih hidden><button class="btn" type="button" data-terbaru>Periksa muatan terbaru</button><p class="mr-help">Isian dipertahankan. Baca perbandingan terbaru sebelum pemeriksaan dan konfirmasi ulang.</p></div>
@@ -15,4 +15,4 @@
  <noscript>Aktifkan JavaScript untuk memeriksa muatan. Halaman ini tidak mengubah stok ketika dibuka.</noscript>
 </section>
 <script type="application/json" id="lembar-awal">{{ awal|tojson }}</script>
-<script src="/static/muat-ringkas.js?v={{ VERSI }}&amp;mr=20261107.1" defer></script>
+<script src="/static/muat-ringkas.js?v={{ VERSI }}&amp;mr=20261107.2" defer></script>
