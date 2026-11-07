@@ -17,7 +17,8 @@ async def bobot_awal_karung(db, tiket, jumlah, ukuran):
     if real is not None:
         return float(real), 'timbangan', None
     # Timbang kedua yang disimpan sementara lebih baru daripada nota.
-    if tiket.get('timbang2_kg') is not None and tiket.get('timbang1_kg') is not None:
+    if (tiket.get('cara_timbang') == 'DUA_KALI'
+            and tiket.get('timbang2_kg') is not None and tiket.get('timbang1_kg') is not None):
         netto = Decimal(str(tiket['timbang1_kg'])) - Decimal(str(tiket['timbang2_kg']))
         if netto > 0:
             return float(netto), 'perkiraan', None

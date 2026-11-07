@@ -1562,3 +1562,19 @@ satu halaman lengkap; laporan panjang boleh lebih dari satu halaman dan tidak
 boleh memotong catatan demi mengejar satu halaman. Kerangka/kop dan penyaji
 bersama tidak diubah. Uji tests/pg/test_pdf_giling_desain.py juga memeriksa 40
 putaran QC, kesimpulan, hak akses dan sidik seluruh tabel sebelum/sesudah GET.
+
+## Penerimaan setelah timbang kedua sementara (7 November 2026)
+
+Pembaca daftar/satu tiket membawa `timbang2_kg` dan `cara_timbang` sampai
+layanan penerimaan. Untuk PK berkarung, selisih timbang DUA_KALI sementara
+mengungguli estimasi nota sebagaimana aturan `bobot_awal_karung` yang sudah
+berlaku. Penerimaan tanpa nota juga memakai selisih timbang hari ini sebelum
+mencari tara lama, sama dengan poller. Keduanya tetap `perkiraan`, bukan
+bobot final; PARTAI/SEKALI tidak ditafsirkan sebagai truk kosong. Bobot aktual
+setelah timbang selesai tetap menang. Tidak ada migrasi, backfill atau
+sinkronisasi massal sebagai bagian deploy. Uji: `test_integrasi_bobot_sementara.py`.
+
+Profil lokal retur supplier dua aplikasi menerima interpreter TeraFlow lewat
+`UJI_TF_PYTHON` dan revisi yang benar-benar ada di source migrasinya. Revisi
+asing ditolak, bukan distamp ulang. Tetap memerlukan opt-in dan DB localhost
+berawalan `uji_rsp_`; tidak boleh diarahkan ke database transaksi produksi.
