@@ -16,7 +16,17 @@
     <label class="ko-field">Gudang<select name="warehouse_id" required></select></label>
     <label class="ko-field">Sumber PK dan pemilik asal<select name="sumber" required></select></label>
     <p class="ko-muted" data-pk-saldo></p>
-    <label class="ko-field">Pemilik tujuan<select name="ke" required></select></label>
+    <div class="ko-field ko-target" data-pk-target>
+      <label for="pk-pemilik-tujuan">Pemilik tujuan</label>
+      <select name="ke" hidden aria-hidden="true" tabindex="-1"></select>
+      <input id="pk-pemilik-tujuan" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="pk-pemilik-opsi" aria-describedby="pk-pemilik-bantu" placeholder="Ketik nama pelanggan atau nomor pesanan…" autocomplete="off" maxlength="100" required data-pk-target-input>
+      <div class="ko-target-panel" data-pk-target-panel hidden>
+        <div id="pk-pemilik-opsi" role="listbox" aria-label="Pilihan pemilik tujuan" data-pk-target-list></div>
+        <p class="ko-muted" role="status" data-pk-target-status></p>
+        <div class="ko-target-pages" data-pk-target-pages></div>
+      </div>
+      <small class="ko-muted" id="pk-pemilik-bantu">Pilih hasil pencarian untuk menetapkan pemilik tujuan.</small>
+    </div>
     <label class="ko-field">Bobot yang dialihkan (kg)<input name="quantity" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
     <label class="ko-field">Alasan pengalihan<textarea name="reason" maxlength="2000" required></textarea></label>
     <div class="ko-actions"><button class="btn btn--utama" type="submit">Periksa dampak</button><a class="btn" href="{{ kembali }}">Kembali ke riwayat</a></div>

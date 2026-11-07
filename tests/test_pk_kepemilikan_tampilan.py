@@ -33,6 +33,7 @@ def test_formulir_gudang_baru_dua_arah_review_draf_dan_hasil_tidak_pasti(width,o
                 calls.append((path,payload))
                 if payload:assert r.request.headers['x-csrf-token']=='csrf-uji'
                 if path.endswith('/pilihan'):r.fulfill(json=options)
+                elif path.endswith('/cari-tujuan'):r.fulfill(json=dict(items=options['pemilik'],total=1,page=1,pages=1))
                 elif path.endswith('/periksa'):
                     r.fulfill(json=dict(baseline='baseline',review='proof',plan=dict(gudang='Cabang baru',sumber='PK/0013',physical_before='1000',physical_after='1000',balances_before={'None':{'kg':'1000'},'7':{'kg':'0'}},balances_after={'None':{'kg':'750'},'7':{'kg':'250'}})))
                 elif path.endswith('/simpan'):r.abort('failed')
@@ -44,8 +45,10 @@ def test_formulir_gudang_baru_dua_arah_review_draf_dan_hasil_tidak_pasti(width,o
         page.route('**/*',route);page.goto('https://uji.local/kepemilikan/pk/baru')
         expect(page.locator('[data-pk-form]')).to_be_visible()
         page.get_by_role('combobox',name='Gudang',exact=True).select_option('9')
-        if owner is None:page.get_by_role('combobox',name='Pemilik tujuan',exact=True).select_option('7')
-        else:expect(page.get_by_role('combobox',name='Pemilik tujuan',exact=True)).to_have_value('')
+        if owner is None:
+            page.get_by_role('combobox',name='Pemilik tujuan',exact=True).click()
+            page.get_by_role('option',name='Pak Pras · JAS/007',exact=True).click()
+        else:expect(page.get_by_role('combobox',name='Pemilik tujuan',exact=True)).to_have_value('Pabrik')
         page.get_by_label('Bobot yang dialihkan (kg)').fill('250')
         page.get_by_label('Alasan pengalihan',exact=True).fill('Kesepakatan pemilik')
         page.reload();expect(page.get_by_label('Bobot yang dialihkan (kg)')).to_have_value('250')

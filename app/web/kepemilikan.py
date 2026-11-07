@@ -134,7 +134,7 @@ async def pk_detail_sumber(sumber:str='',kode:str='',pemilik_id:str='pabrik',use
         except (ValueError,s.InventoryError,PermissionError,PersediaanError) as e:raise fail(e)
 
 @router.get('/api/pk-kepemilikan/cari-tujuan')
-async def pk_cari_tujuan(q:str=Query('',max_length=100),page:int=Query(1,ge=1),dari:int|None=None,user=Depends(pengguna_aksi)):
+async def pk_cari_tujuan(q:str=Query('',max_length=100),page:int=Query(1,ge=1),dari:int|None=None,pilihan_id:int|None=Query(None,ge=1),user=Depends(pengguna_aksi)):
     from app.models import Jasa,Pelanggan
     from sqlalchemy import func,or_
     async with SessionLocal() as db:
@@ -145,6 +145,7 @@ async def pk_cari_tujuan(q:str=Query('',max_length=100),page:int=Query(1,ge=1),d
             origin=await db.get(Jasa,dari)
             if not origin:raise HTTPException(409,'Pemilik asal tidak tersedia.')
             query=query.where(Jasa.pelanggan_id!=origin.pelanggan_id)
+        if pilihan_id is not None:query=query.where(Jasa.id==pilihan_id)
         if q.strip():query=query.where(or_(Pelanggan.nama_pelanggan.ilike('%'+q.strip()+'%'),Jasa.kode.ilike('%'+q.strip()+'%')))
         total=await db.scalar(select(func.count()).select_from(query.subquery()))
         rows=(await db.execute(query.order_by(Pelanggan.nama_pelanggan,Jasa.id).offset((page-1)*20).limit(20))).all()

@@ -244,3 +244,21 @@ async def test_detail_sumber_terkunci_dan_pencarian_tujuan(pg,world):
         r=await c.get('/api/pk-kepemilikan/cari-tujuan',params={'q':'Pemilik jasa PK'})
         assert r.status_code==200 and r.json()['total']==1
         assert r.json()['items'][0]['value']==world['jasa']
+
+
+async def test_pemilik_draf_dicari_dengan_id_tetap_mengikuti_syarat_tujuan(pg,world):
+    from tests.pg.test_riwayat_giling import _klien
+    async with await _klien(pg,peran='admin') as c:
+        url='/api/pk-kepemilikan/cari-tujuan'
+        r=await c.get(url,params={'pilihan_id':world['jasa']})
+        assert r.status_code==200 and r.json()['items'][0]['value']==world['jasa']
+        r=await c.get(url,params={'pilihan_id':world['jasa'],'dari':world['jasa']})
+        assert r.status_code==200 and r.json()['items']==[]
+        r=await c.get(url,params={'pilihan_id':999999})
+        assert r.status_code==200 and r.json()['items']==[]
+        async with pg() as db:
+            j=await db.get(Jasa,world['jasa']);j.status='selesai';await db.commit()
+        r=await c.get(url,params={'pilihan_id':world['jasa']})
+        assert r.status_code==200 and r.json()['items']==[]
+    async with await _klien(pg,peran='operator') as c:
+        assert (await c.get(url,params={'pilihan_id':world['jasa']})).status_code==403

@@ -63,3 +63,13 @@ body.padiflow-ui [data-kepemilikan] .ko-actions .btn{width:auto;min-height:44px;
  [data-kepemilikan] .ko-box,[data-kepemilikan] .ko-sidebar{break-inside:avoid}
  body.padiflow-ui .isi{overflow:visible!important;height:auto!important}
 }
+
+/* Pemilik tujuan: satu field pencarian, hasil dan paginasi tetap di dalam formulir. */
+[data-pk-target] .ko-target-panel{border:1px solid var(--pd-line);border-radius:8px;background:var(--pd-sheet);padding:6px;box-shadow:0 6px 16px #0000000d}
+[data-pk-target-list]{max-height:280px;overflow-y:auto;overscroll-behavior:contain}
+[data-pk-target] .ko-target-option{display:block;width:100%;min-height:48px;text-align:left;padding:12px;border:0;border-radius:6px;background:transparent;color:var(--pd-ink);font:inherit;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
+[data-pk-target] .ko-target-option:is(:hover,:focus-visible,.ko-target-option--active){background:var(--pd-soft);color:var(--pd-green)}
+[data-pk-target] .ko-target-pages{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+body.padiflow-ui [data-pk-target] .ko-target-pages .btn{width:auto;min-height:44px}
+[data-pk-target-status]{padding:0 8px;margin:8px 0}
+[data-pk-target] small{margin:0}
