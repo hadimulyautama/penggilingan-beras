@@ -83,6 +83,8 @@ class LaporanGiling(Laporan):
             gaya.leading = 12
         self.small.fontSize = 8
         self.small.leading = 11
+        self.head.fontSize = 9
+        self.head.leading = 12
 
     def pdf(self, story):
         from app.web.pdf_dokumen import PenyajiDokumen

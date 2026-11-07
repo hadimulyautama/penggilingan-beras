@@ -55,6 +55,16 @@ class PenyajiDokumen:
         self.table_section = ParagraphStyle('JudulBagianTabel', parent=self.section_heading,
                                             keepWithNext=False)
 
+        self.detail_body = ParagraphStyle('IsiRinci', parent=self.normal,
+            fontSize=self.tema.ukuran_isi_rinci, leading=self.tema.jarak_baris_rinci)
+        self.detail_small = ParagraphStyle('CatatanRinci', parent=self.small,
+            fontSize=self.tema.ukuran_catatan_rinci, leading=self.tema.ukuran_catatan_rinci*1.4)
+        self.detail_bold = ParagraphStyle('IsiRinciTebal', parent=self.detail_body,
+            fontName=self.tema.font_tebal)
+        self.detail_header = ParagraphStyle('KepalaTabelRinci', parent=self.detail_bold,
+            fontSize=self.tema.ukuran_catatan_rinci, leading=self.tema.ukuran_catatan_rinci*1.4,
+            textColor=colors.white)
+
     def heading(self, value, level=3):
         """Judul semantik: 1 dokumen, 2 halaman, 3 bagian, 4 subbagian."""
         styles={1:self.document_heading, 2:self.page_heading,

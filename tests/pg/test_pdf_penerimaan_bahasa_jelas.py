@@ -27,7 +27,7 @@ async def test_desain_jasa_dan_supplier_dari_penerimaan_sebenarnya(pg,penerimaan
         assert len(pdf.pages)==2
         assert ('Pemilik barang:' if jasa else 'Supplier:') in flat and flat.count(nama)==1
         for value in ['PK (beras pecah kulit)','BERAT BARANG DITERIMA','Butir patah','Kandungan gabah','Susut uji','persentase penyusutan/bekatul','Kesimpulan:',
-                      '5 pemeriksaan QC','rata-rata kadar air 13,0%','Potongan berat karung/kemasan: 15,00 kg','potongan lain: 1,00 kg; total: 16,00 kg',
+                      '5 pemeriksaan QC','rata-rata kadar air 13,0%','Potongan berat karung/kemasan 15,00 kg','Potongan lain 1,00 kg','Total potongan 16,00 kg',
                       'Lebih berat 184,00 kg (1,31%) dari nota; masih dalam batas kontrol.']:
             assert value in flat,value
         for value in ['RANCANGAN','DATA CONTOH','Gudang','Milik pabrik','Broken','Nilai kualitas:']:

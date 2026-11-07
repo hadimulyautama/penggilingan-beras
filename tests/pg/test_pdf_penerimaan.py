@@ -81,11 +81,11 @@ async def test_pdf_endpoint_satu_halaman_lengkap_dan_tidak_menulis(pg,penerimaan
         assert len(pdf.pages)==2
         for kata in ('Supplier Uji','Supplier:','14.000,00 kg','14.200,00 kg','14.184,00 kg',
                      '200 karung','0,075 kg/karung','Rata-rata','13,0%','21,0%','7,0%',
-                     'Petugas timbang PDF','Penerima Uji','Penyerah/sopir','Penerima','1 / 2',
+                     'Petugas timbang PDF','Penerima Uji','1 / 2',
                      f"{nilai['nilai']:.2f}".replace('.',','),nilai['kelas']):assert kata in teks,kata
         assert teks.count('Supplier Uji')==1
         assert 'Gudang' not in teks and 'Milik pabrik' not in teks and 'harga' not in teks.lower()
-        for n in range(1,6):assert f'Catatan asli putaran {n}' in teks
+        for n in range(1,6):assert f'Catatan asli putaran {n}' in ' '.join(teks.split())
         async with pg() as db:assert await sidik(db)==awal
 
 

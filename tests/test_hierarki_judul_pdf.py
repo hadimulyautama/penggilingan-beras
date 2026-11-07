@@ -54,4 +54,9 @@ def test_semua_keluarga_pdf_memakai_judul_sentral(monkeypatch):
         seen.clear()
         reader=PdfReader(BytesIO(render(data)))
         assert reader.pages and sum(level==1 for level,_ in seen)==1
+        text=' '.join(p.extract_text() for p in reader.pages)
+        if render is pdf_serah_terima.buat_pdf:
+            assert 'Nama & tanda tangan' in text
+        else:
+            assert 'tanda tangan' not in text.lower() and 'Pengesahan penerimaan' not in text
         assert all(size==getattr(TemaPDF(),{1:'ukuran_judul_dokumen',2:'ukuran_judul_halaman',3:'ukuran_judul_bagian',4:'ukuran_judul_subbagian'}[level]) for level,size in seen)

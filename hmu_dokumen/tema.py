@@ -20,5 +20,9 @@ class TemaPDF:
     ukuran_judul_halaman: float = 18
     ukuran_judul_bagian: float = 11.5
     ukuran_judul_subbagian: float = 9.5
+    ukuran_isi_rinci: float = 10
+    ukuran_catatan_rinci: float = 9
+    jarak_baris_rinci: float = 14
+    padding_tabel_rinci: float = 6
 
 TEMA = TemaPDF()

@@ -107,10 +107,9 @@ class Laporan(PenyajiDokumen):
     def __init__(self,d):
         super().__init__()
         self.d=d
-        self.head=ParagraphStyle('TerimaKepalaTabel',parent=self.bold,textColor=colors.white)
+        self.normal,self.small,self.bold,self.head = (self.detail_body,self.detail_small,
+                                                     self.detail_bold,self.detail_header)
         self.width=(210-2*self.tema.margin_mm)*mm
-        for gaya in (self.normal,self.bold,self.head,self.small):
-            gaya.leading=gaya.fontSize*1.15
 
     def p(self,value,style=None):
         # Label/data tidak ditafsirkan sebagai markup, termasuk catatan lab.
@@ -130,7 +129,7 @@ class Laporan(PenyajiDokumen):
             splitByRow=1,splitInRow=1,hAlign='LEFT')
         style=[('BACKGROUND',(0,0),(-1,0),self.green),('VALIGN',(0,0),(-1,-1),'TOP'),
             ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),5),
-            ('TOPPADDING',(0,0),(-1,-1),1),('BOTTOMPADDING',(0,0),(-1,-1),1),
+            ('TOPPADDING',(0,0),(-1,-1),self.tema.padding_tabel_rinci),('BOTTOMPADDING',(0,0),(-1,-1),self.tema.padding_tabel_rinci),
             ('LINEBELOW',(0,1),(-1,-1),.35,self.border)]
         if rata:
             style += [('BACKGROUND',(0,-1),(-1,-1),self.pale),('LINEABOVE',(0,-1),(-1,-1),.6,self.green)]
@@ -225,14 +224,20 @@ def buat_pdf(d):
         story.append(v.tabel(['Penimbangan kendaraan','Berat',waktu_kepala,'Petugas'],rows,[.35,.19,.2,.26]))
         if any('Timbang ' in r[0] for r in rows):
             story.append(p('Kendaraan beserta muatan (bruto): '+kg(t.get('berat_bermuatan_kg'))+' | Kendaraan kosong (tara): '+kg(t.get('berat_kosong_kg')),v.small))
-    story += [Spacer(1,3),v.fakta('Berat sebelum potongan kemasan (netto)',kg(t.get('netto_timbangan_kg')),v.small),
-        v.fakta('Potongan berat karung/kemasan',kg(potongan_kemasan(t))+'; potongan lain: '+kg(t.get('tara_lain_kg'))+'; total: '+kg(t.get('total_tara_kg')),v.small),
-        v.fakta('Berat barang setelah potongan',kg(t.get('berat_barang_kg'))+'. Berat nota/acuan: '+(kg(t.get('berat_acuan_kg')) if t.get('berat_acuan_kg') else 'Belum tercatat')+'.',v.small),
-        v.fakta('Perbandingan dengan nota/acuan',kalimat_selisih(t,bool(nota)),v.small)]
+    story.append(v.heading('Perhitungan berat',4))
+    story.append(v.tabel(['Komponen','Berat','Komponen','Berat'],[
+        ['Berat sebelum potongan kemasan (netto)',kg(t.get('netto_timbangan_kg')),
+         'Potongan berat karung/kemasan',kg(potongan_kemasan(t))],
+        ['Potongan lain',kg(t.get('tara_lain_kg')),'Total potongan',kg(t.get('total_tara_kg'))],
+        ['Berat barang setelah potongan',kg(t.get('berat_barang_kg')),
+         'Berat nota/acuan',kg(t.get('berat_acuan_kg')) if t.get('berat_acuan_kg') else 'Belum tercatat'],
+    ],[.3,.2,.3,.2]))
+    story.append(v.heading('Perbandingan dengan nota/acuan',4))
+    story.append(p(kalimat_selisih(t,bool(nota))))
     for label,key in [('Keterangan tiket','keterangan'),('Catatan tiket','catatan')]:
-        if t.get(key):story.append(p(label+': '+t[key],v.small))
+        if t.get(key):story.extend([Spacer(1,5),v.fakta(label,t[key])])
     for m in muatan:
-        if m.get('catatan'):story.append(p('Catatan muatan '+str(m['urutan'])+': '+m['catatan'],v.small))
+        if m.get('catatan'):story.extend([Spacer(1,5),p('Catatan muatan '+str(m['urutan'])+': '+m['catatan'])])
     if d['qc']:story.append(PageBreak())
     story += [v.heading('Pemeriksaan mutu (QC)',2 if d['qc'] else 3),p('Status QC: '+status_qc(d),v.small)]
     if not d['qc']:
@@ -250,12 +255,6 @@ def buat_pdf(d):
     ringkas=Table([[v.fakta('Kesimpulan',kesimpulan(d),v.small)]],colWidths=[v.width],hAlign='LEFT')
     ringkas.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),v.pale),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
     story += [ringkas,Spacer(1,6)]
-    tanda=Table([[p('Penyerah/sopir',v.bold),'',p('Penerima',v.bold)],['','',''],
-        [p('Nama / tanda tangan',v.small),'',p('Nama / tanda tangan',v.small)]],
-        colWidths=[v.width*.47,v.width*.06,v.width*.47],rowHeights=[14,38,13])
-    tanda.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0),
-        ('LINEABOVE',(0,2),(0,2),.5,v.border),('LINEABOVE',(2,2),(2,2),.5,v.border)]))
-    story.append(KeepTogether([v.heading('Pengesahan penerimaan',3),tanda]))
     return v.pdf(story)
 
 
@@ -307,9 +306,9 @@ def qc_ke_tabel(story,v,g):
         for x in rounds:
             note=dict(x['hasil']).get('Catatan lab','Belum dicatat')
             notes.append(('lama' if x['nomor'] is None or x.get('asal_lama') else str(x['nomor']))+': '+note)
-        # Catatan pendek mengikuti susunan ringkas desain. Catatan panjang
-        # tetap utuh, dengan identitas batch/kepala berulang pada lanjutan.
-        isi=['; '.join(notes)] if len(notes)<=10 and all(len(n)<90 for n in notes) else notes
+        # Tiap putaran dibaca terpisah; catatan panjang tetap utuh dengan
+        # identitas batch/kepala berulang pada halaman lanjutan.
+        isi=notes  # Satu putaran per baris agar catatan lab mudah dibaca.
         lab=Table([[p('Catatan lab tiap putaran - '+g['kode'],v.small)]]+
                   [[p(n,v.small)] for n in isi],colWidths=[v.width],repeatRows=1,
                   splitByRow=1,splitInRow=1,hAlign='LEFT')
