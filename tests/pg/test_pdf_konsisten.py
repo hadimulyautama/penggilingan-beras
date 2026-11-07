@@ -43,7 +43,7 @@ async def test_sosoh_asal_ulang_tidak_mengambil_lagi_sumber_lama(pg,gudang2):
   detail=await c.get(f'/riwayat-sosoh/{pr.id}')
  text=baca(pdf,'sosoh-ulang')
  (OUT/'sosoh-ulang-detail.html').write_text(detail.text)
- for value in ['Tanpa tambahan','Kosong','100 kg','Dilepaskan','10.200 kg','1.000 kg']:
+ for value in ['PKB-20260912-02','PKB-20260912-01','9.800 kg','400 kg','10.200 kg','1.000 kg']:  # Laporan ringkas memuat bahan yang dipakai, bukan inventaris silo.
   assert value in text,value
  assert 'Total bahan baku' in detail.text
  assert 'Bahan PK' not in detail.text

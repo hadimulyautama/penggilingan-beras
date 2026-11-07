@@ -327,7 +327,8 @@ async def ambil_data(process_id: int) -> dict:
                     if _angka(m.berat_gabah_masuk_kg) else None})
             milling_qc = [{"code": row.milling_process_id, "time": row.waktu,
                 "moisture": row.kadar_air, "broken": row.broken_persen,
-                "loss": row.susut_persen, "condition": row.kondisi or "—"}
+                "loss": row.susut_persen, "condition": row.kondisi or "—",
+                "yellow": row.butir_kuning, "paddy": row.gabah, "chaff": row.merang}
                 for row in qclogs]
             code_by_id = {m.id: m.kode_proses for m in mill_processes}
             for row in milling_qc:
@@ -370,9 +371,12 @@ async def ambil_data(process_id: int) -> dict:
         from app.web.pdf_proses import jeda_laporan
         jeda = await jeda_laporan(db, jenis='penyosohan', id_=proc.id, mulai=proc.waktu_mulai, selesai=proc.waktu_selesai)
         operator = await db.get(User, proc.created_by)
+        from app.models import Jasa
+        jasa = await db.get(Jasa, proc.jasa_id) if proc.jasa_id else None
         return {
             "process": proc, "operator": operator.nama if operator else "Tidak tercatat",
             "owner": owners.get(proc.jasa_id) if proc.jasa_id else "Pabrik",
+            "jasa": jasa.kode if jasa else None,
             "silos": per_silo_sources, "source_rows": source_rows,
             "batch_sources": batch_source_details, "raw_qc": raw_qc,
             "drying_lots": drying_lots, "drying_moisture": drying_moisture,
@@ -383,246 +387,6 @@ async def ambil_data(process_id: int) -> dict:
 
 
 def buat_pdf(data: dict) -> bytes:
-    """Render PDF report; uses ordinary PDF so Android can download/share it."""
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import mm
-    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                    TableStyle, PageBreak, KeepTogether)
-    from app.penggilingan.gudang2.polishing import GRADES
-    from app.services.stok import nama_produk
-
-    from app.web.pdf_dokumen import PenyajiDokumen
-    view = PenyajiDokumen()
-    navy, teal = view.green, view.green
-    muted, pale, border = view.muted, view.pale, view.border
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="SosohTitle", parent=view.title,
-        fontName=view.tema.font_tebal, fontSize=view.tema.ukuran_judul, leading=20, textColor=navy,
-        alignment=TA_LEFT, spaceAfter=3))
-    styles.add(ParagraphStyle(name="SosohSub", parent=view.normal,
-         textColor=muted, spaceAfter=8))
-    styles.add(ParagraphStyle(name="SosohSection", parent=view.section,
-        fontName=view.tema.font_tebal, fontSize=10.5, leading=13, textColor=teal,
-        spaceBefore=7, spaceAfter=4))
-    styles.add(ParagraphStyle(name="SosohCell", parent=view.normal,
-         wordWrap=None))
-    styles.add(ParagraphStyle(name="SosohHead", parent=styles["SosohCell"],
-        fontName=view.tema.font_tebal, textColor=colors.white))
-    styles.add(ParagraphStyle(name="SosohNote", parent=view.normal,
-         textColor=muted))
-
-    def p(value, style="SosohCell"):
-        return paragraf(value if value not in (None, "") else "—", styles[style], teks_angka)
-
-    def grid(rows, widths, spans=()):
-        table = Table([[p(cell, "SosohHead" if r == 0 else "SosohCell")
-                        for cell in row] for r, row in enumerate(rows)],
-                      colWidths=widths, repeatRows=1, hAlign="LEFT")
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), navy),
-            ("GRID", (0, 0), (-1, -1), .4, border),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, pale]),
-        ]))
-        for col, first, last in spans:
-            table.setStyle(TableStyle([("SPAN", (col, first), (col, last)),
-                                       ("VALIGN", (col, first), (col, last), "TOP")]))
-        return warnai_tabel(table)
-
-    def stamp(value):
-        if value is None:
-            return "—"
-        if value.tzinfo is not None:
-            value = value.astimezone(ZoneInfo(settings.app_timezone))
-        return value.strftime("%d/%m/%Y %H:%M") + " WIB"
-
-    def kg(value):
-        return angka(value) + ' kg' if value is not None else 'Belum dicatat'
-
-    def pct(value, digits=1):
-        return persen(value, digits)
-
-    def duration(start, end):
-        return durasi_teks((end-start).total_seconds()) if start is not None and end is not None else 'Belum tercatat'
-
-    proc = data["process"]
-    balance = data["balance"]
-    output_labels = {"sayur": "Beras Sayur", "medium": "Beras Medium",
-                     "medsuper": "Beras Medium Super", "premium": "Beras Premium",
-                     "beras_b": "Beras B", "menir": "Menir", "broken": "Broken",
-                     "bekatul": "Bekatul", "reject": "Reject"}
-    complete = data.get('input_complete', True)
-    yield_rate = (balance.beras.kg / balance.bahan_kg * 100) if balance.bahan_kg and complete else None
-    story = [p("Laporan Penyosohan", "SosohTitle"),
-             p(f"{proc.kode_proses} · Dicetak {stamp(datetime.now(ZoneInfo(settings.app_timezone)))}", "SosohSub")]
-    tercatat = data.get("neraca_tercatat")
-    if tercatat:
-        story.append(p(f"Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan {kg(tercatat.bahan_kg)}, susut {kg(tercatat.susut.kg)}. Catatan penutupan tetap tersimpan.", "SosohNote"))
-    story.append(grid([
-        ["Ringkasan proses", "Nilai"],
-        ["Pemilik bahan", data["owner"]],
-        ["Operator", data["operator"]],
-        ["Mulai – selesai", f"{stamp(proc.waktu_mulai)} – {stamp(proc.waktu_selesai)}"],
-        ["Durasi proses", duration(proc.waktu_mulai, proc.waktu_selesai)],
-        ["Total bahan baku", kg(balance.bahan_kg) if data.get('input_complete', True) else 'Belum dapat dipastikan'],
-        ["Hasil beras putih · rendemen", f"{kg(balance.beras.kg)} · {pct(yield_rate)}"],
-        ["Neraca massa", f"Keluar {kg(balance.keluar_kg)} · susut {kg(balance.susut.kg)} ({pct(balance.susut.persen)})" if complete else "Belum dapat dipastikan"],
-    ], [54 * mm, 106 * mm]))
-
-    story += [Paragraph("Rekap hasil dan rendemen", styles["SosohSection"]), Spacer(1, 3)]
-    rows = [["Produk", "Total", "% dari bahan baku"]]
-    for kind in [*GRADES, "menir", "broken", "bekatul", "reject"]:
-        amount = _angka(data["outputs"].get(kind))
-        if amount > 0:
-            label = output_labels.get(kind) or nama_produk(kind).capitalize()
-            rows.append([label, kg(amount), pct(amount / balance.bahan_kg * 100 if balance.bahan_kg and complete else None)])
-    rows += [["Susut (selisih neraca)", kg(balance.susut.kg) if complete else 'Belum dapat dipastikan', pct(balance.susut.persen) if complete else '—'],
-             ["Total bahan baku", kg(balance.bahan_kg) if complete else 'Belum dapat dipastikan', '100%' if complete else '—']]
-    story.append(grid(rows, [66 * mm, 50 * mm, 44 * mm]))
-    if not data.get('input_complete', True):
-        story.append(p('Peringatan: bobot truk belum final atau sisa pemakaian silo belum dicatat. Neraca belum dapat dipastikan.', 'SosohNote'))
-
-    groups = []
-    for silo in data['silos']:
-        def bobot(n):
-            return kg(n) if n is not None else 'Belum dicatat'
-        groups.append(dict(nama=silo['silo'], total_kg=silo['start']+silo['added'], tambahan_kg=silo['added'],
-            status='Dilepaskan' if silo['remaining'] is not None else 'Pelepasan belum dicatat',
-            angka=[('Awal',bobot(silo['start'])),('Tambahan',bobot(silo['added'])),
-                   ('Sisa akhir',bobot(silo['remaining'])),('Terpakai',bobot(silo['used']))]))
-    bagian_silo(story, groups, p, grid, 'SosohSection')
-
-    story += [Paragraph("Bahan baku dan jejak asal", styles["SosohSection"]),
-              p("Daftar bahan yang benar-benar dipakai per silo. Pembagian sumber pada silo campuran mengikuti FIFO catatan masuk; barang tetap tercampur secara fisik.", "SosohNote"), Spacer(1, 3)]
-    rows = [["Silo", "Bahan masuk", "Asal lot / sumber", "Pemilik / supplier", "Berat"]]
-    for silo in data["silos"]:
-        for src in silo["sources"]:
-            rows.append([silo["silo"], src["material"], src["code"],
-                         f"{src['owner']} · {src['plate']}" if src["plate"] != "—" else src["owner"],
-                         kg(src["weight"])])
-    if len(rows) == 1:
-        rows.append(["Tidak tercatat", "—", "—", "—", "—"])
-    spans = []
-    i = 1
-    for silo in data["silos"]:
-        n = len(silo["sources"])
-        if n > 1:
-            spans.append((0, i, i + n - 1))
-        i += n
-    story.append(grid(rows, [30*mm, 27*mm, 39*mm, 43*mm, 21*mm], spans))
-
-    story += [PageBreak(), Paragraph("Rincian sumber bahan", styles["SosohTitle"]),
-              Paragraph("Rincian sumber LOT hasil giling", styles["SosohSection"]),
-              p("Setiap batch gabah asal memiliki satu baris; LOT yang sama digabung pada kolom pertama.", "SosohNote"), Spacer(1, 3)]
-    rows = [["LOT hasil giling", "Batch gabah asal · berat", "Supplier / pemilik · no. polisi", "Tahap sebelum giling", "Rujukan QC"]]
-    spans = []
-    grouped = {}
-    for item in data["batch_sources"]:
-        grouped.setdefault(item["milling"], []).append(item)
-    for lot_code, items in grouped.items():
-        start = len(rows)
-        for item in items:
-            rows.append([lot_code if len(rows) == start else "",
-                         f"{item['batch']} · {item['condition'].lower()} · {kg(item['weight'])}",
-                         f"{item['origin']} · {item['plate']}",
-                         f"{item['drying']} → giling" if item["drying"] != "Kering langsung" else "Kering langsung → giling",
-                         f"QC gabah {item['condition'].lower()}" if item["condition"] != "—" else "QC gabah"])
-        if len(items) > 1:
-            spans.append((0, start, len(rows) - 1))
-    if len(rows) == 1:
-        rows.append(["Tidak ada lot giling yang tercatat", "—", "—", "—", "—"])
-    story.append(grid(rows, [29*mm, 43*mm, 37*mm, 31*mm, 34*mm], spans))
-
-    if data["milling_yields"]:
-        story += [Paragraph("Rendemen PK dari proses giling sendiri", styles["SosohSection"]), Spacer(1, 3)]
-        rows = [["Lot giling", "Gabah masuk", "PK dihasilkan", "Rendemen PK"]]
-        rows += [[x["code"], kg(x["input"]), kg(x["output"]), pct(x["yield"])]
-                 for x in data["milling_yields"]]
-        story.append(grid(rows, [64*mm, 38*mm, 36*mm, 36*mm]))
-
-    external = [x for x in data["source_rows"] if x["kind"] == "pk_luar"]
-    if external:
-        story += [Paragraph("Rincian sumber PK dari luar", styles["SosohSection"]),
-                  p("Nomor polisi menunjukkan armada pembawa lot PK.", "SosohNote"), Spacer(1, 3)]
-        rows = [["LOT PK luar", "Pemasok / pemilik", "No. polisi armada", "Berat dipakai", "Rujukan QC"]]
-        rows += [[x["code"], x["owner"], x["plate"], kg(x["weight"]), "QC PK luar"]
-                 for x in external]
-        story.append(grid(rows, [35*mm, 39*mm, 34*mm, 28*mm, 38*mm]))
-
-    story += [PageBreak(), Paragraph("Rincian QC bahan dan proses asal", styles["SosohTitle"]),
-              p("Nilai tiap pencatatan QC gabah ditampilkan utuh. Kadar air dibaca dua kali per sampel.", "SosohSub")]
-    batch_names = {}
-    for item in data["batch_sources"]:
-        batch_names[item["batch"]] = item
-    for code, item in batch_names.items():
-        condition = item["condition"].lower()
-        rows = [["QC", "Waktu", "Kadar air 1 / 2", "Lamur", "Biji hijau", "Densiti"]]
-        samples = [x for x in data["raw_qc"] if x["batch"] == code]
-        for x in samples:
-            rows.append([f"QC {x['qc']}", stamp(x["time"]), x["moisture"],
-                         NilaiQC("Lamur",x["lamur"] if condition == "basah" else "—"), NilaiQC("Biji hijau",x["green"]), NilaiQC("Densiti",x["density"])])
-        if len(rows) == 1:
-            rows.append(["Belum ada pencatatan QC", "—", "—", "—", "—", "—"])
-        story += [Paragraph(f"QC gabah {condition} · {code} · {item['origin']} · {item['plate']}", styles["SosohSection"]),
-                  grid(rows, [15*mm, 31*mm, 34*mm, 29*mm, 31*mm, 26*mm])]
-
-    if data["external_qc"]:
-        story += [Paragraph("QC PK dari luar", styles["SosohSection"]),
-                  p("Sistem menyimpan satu catatan verifikasi per LOT PK luar; laporan menampilkan nilai yang tercatat.", "SosohNote"), Spacer(1, 3)]
-        rows = [["LOT / supplier · plat", "Waktu QC", "KA", "Broken", "Susut", "Butir kuning / gabah / merang", "Keputusan"]]
-        for x in data["external_qc"]:
-            rows.append([f"{x['code']} · {x['origin']} · {x['plate']}", stamp(x["time"]),
-                pct(x["moisture"]), pct(x["broken"]), pct(x["loss"]),
-                GabunganQC([NilaiQC(k,v or "—") for k,v in zip(("Butir kuning","Gabah","Merang"),(x["yellow"],x["paddy"],x["chaff"]))]),
-                x["decision"] or "Belum dicatat"])
-        story.append(grid(rows, [38*mm, 27*mm, 16*mm, 18*mm, 16*mm, 36*mm, 16*mm]))
-
-    story += [PageBreak(), Paragraph("Rincian QC proses giling dan pengeringan", styles["SosohTitle"]),
-              Paragraph("QC giling disajikan per LOT, QC 1 dan seterusnya satu baris per pencatatan.", styles["SosohSub"]),
-              Paragraph("QC proses giling", styles["SosohSection"])]
-    rows = [["Lot giling", "QC", "Waktu", "KA", "Broken", "Susut", "Kondisi"]]
-    spans = []
-    grouped_qc = {}
-    for x in data["milling_qc"]:
-        grouped_qc.setdefault(x["code"], []).append(x)
-    for code, logs in grouped_qc.items():
-        start = len(rows)
-        for index, x in enumerate(logs, 1):
-            rows.append([code if index == 1 else "", f"QC {index}", stamp(x["time"]),
-                         pct(x["moisture"]), pct(x["broken"]), pct(x["loss"]), x["condition"]])
-        if len(logs) > 1:
-            spans.append((0, start, len(rows)-1))
-    if len(rows) == 1:
-        rows.append(["Belum ada catatan QC giling", "—", "—", "—", "—", "—", "—"])
-    story.append(grid(rows, [37*mm, 15*mm, 27*mm, 19*mm, 23*mm, 19*mm, 29*mm], spans))
-
-    if data["drying_lots"]:
-        story += [Paragraph("Pengeringan dan pendinginan bahan asal", styles["SosohSection"]), Spacer(1, 3)]
-        rows = [["Lot pengeringan", "Mulai pengeringan", "Selesai", "Durasi pengeringan", "Mulai pendinginan", "Selesai", "Durasi pendinginan"]]
-        rows += [[lot.kode_lot, stamp(lot.waktu_mulai_pengeringan), stamp(lot.waktu_selesai_pengeringan),
-                  duration(lot.waktu_mulai_pengeringan, lot.waktu_selesai_pengeringan),
-                  stamp(lot.waktu_mulai_pendinginan), stamp(lot.waktu_selesai_pendinginan),
-                  duration(lot.waktu_mulai_pendinginan, lot.waktu_selesai_pendinginan)]
-                 for lot in data["drying_lots"]]
-        story.append(grid(rows, [22*mm, 24*mm, 24*mm, 24*mm, 24*mm, 24*mm, 27*mm]))
-        story += [Paragraph("Pemantauan kadar air saat pengeringan", styles["SosohSection"]), Spacer(1, 3)]
-        story.append(p('Perubahan memakai waktu antar-pengukuran (termasuk jeda). Laju per jam hanya setelah selang minimal 1 jam; satuannya poin persentase/jam.', 'SosohNote'))
-        rows = [["Lot", "Waktu", "Pembacaan alat tes", "Rata-rata tes", "Indikator mesin", "Perubahan sejak ukur pertama"]]
-        rows += [[x["lot"], stamp(x["time"]), x["samples"], x["average"], x["machine"], x["speed"]]
-                 for x in data["drying_moisture"]]
-        if len(rows) == 1:
-            rows.append(["Tidak ada catatan", "—", "—", "—", "—", "—"])
-        story.append(grid(rows, [22*mm, 29*mm, 41*mm, 25*mm, 25*mm, 27*mm]))
-    else:
-        story.append(p("Tidak ada batch bahan yang melalui pengeringan sebelum digiling.", "SosohNote"))
-    story.append(p("QC proses sosoh belum memiliki catatan terpisah di sistem.", "SosohNote"))
-
-    bagian_jeda(story, data.get("jeda"), p, grid, "SosohSection")
-    return view.pdf(story, judul="Laporan Penyosohan "+proc.kode_proses, referensi=proc.kode_proses)
+    """Penyajian ringkas; sumber angka dan otorisasi tetap pada layanan lama."""
+    from app.web.pdf_sosoh import buat_pdf as render
+    return render(data)

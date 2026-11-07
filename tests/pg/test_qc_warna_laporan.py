@@ -49,4 +49,4 @@ async def test_sosoh_warna_tiga_parameter_dalam_sel_lama_tanpa_perubahan_data(pg
  assert repr(d)==before
  async with pg() as db:assert await sidik(db)==database_before
  text=' '.join(' '.join(p.extract_text() for p in PdfReader(BytesIO(colored)).pages).split())
- assert 'sedikit / bersih / parah' in text
+ assert 'Sedikit / Bersih / Parah' in text  # Label mengikuti agregat QC sentral.
