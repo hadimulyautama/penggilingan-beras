@@ -40,7 +40,7 @@ _URUT = {OUT_PERINTAH: 0, OUT_DIMUAT: 1, OUT_SELESAI: 2, OUT_BATAL: 3}
 KEADAAN = {
     OUT_PERINTAH: ("Menunggu dimuat", "baru"),
     OUT_DIMUAT: ("Menunggu verifikasi", "dryer"),
-    OUT_SELESAI: ("Selesai", "giling"),
+    OUT_SELESAI: ("Terverifikasi", "giling"),
     OUT_BATAL: ("Dibatalkan", "bahaya"),
 }
 
@@ -132,10 +132,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         tiket_timbang = {}
         if ids:
             rows = (await db.execute(text("""
-                SELECT id,kode,nomor_polisi,nama_sopir,status_tiket,
+                SELECT id,kode,nomor_polisi,nama_sopir,status_tiket,to_jsonb(t)->>'status_transaksi' AS status_transaksi,
                        timbang1_kg,timbang2_kg,timbang1_waktu,timbang2_waktu,
                        netto_timbangan_kg,total_tara_kg,berat_barang_kg
-                FROM timbangan_transaksi WHERE id IN :ids
+                FROM timbangan_transaksi t WHERE id IN :ids
             """).bindparams(bindparam("ids", expanding=True)),
                 {"ids": ids})).mappings().all()
             tiket_timbang = {t["id"]: dict(t) for t in rows}
@@ -199,7 +199,9 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         kata, warna = KEADAAN.get(rec.status, (rec.status, "baru"))
         if rec.status == OUT_PERINTAH and (not rec.kiriman_id and svc.boleh_keluar_cepat(items)):
             kata = "Menunggu penyerahan · <200 kg"
+        from app.services.status_pengiriman import ringkasan as status_pengiriman
         kartu.append({
+            'tahap_pengiriman':status_pengiriman([p['rec'].status for p in bersama] if bersama else [rec.status],tiket_timbang.get(rec.timbangan_transaksi_id),tertaut=bool(rec.timbangan_transaksi_id),dibatasi=bool(is_customer_read(request) and rec.kiriman_id),cepat=(not rec.kiriman_id and svc.boleh_keluar_cepat(items))),
             "riwayat_nama": ' · '.join(p['rec'].nama_pembeli or 'Pelanggan belum tercatat' for p in bersama) if bersama else rec.nama_pembeli,
             "riwayat_total": total_armada,
             "riwayat_jumlah": len(bersama) if bersama else 1,

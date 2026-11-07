@@ -19,13 +19,17 @@
   function pesan(teks) { galat.textContent=teks;galat.hidden=false; }
   function identitas(d) {
     var box=el('div',null,'cm-konteks');box.append(el('strong',d.plat||'Armada belum dipilih'));
-    box.append(el('span',d.tiket?d.tiket.kode+' · '+d.tiket.status_tiket:'Tanpa tiket yang dipilih'));
+    box.append(el('span',d.tiket?d.tiket.kode:'Tanpa tiket yang dipilih'));
     box.append(el('span',d.jumlah_pelanggan+' pelanggan · '+d.jumlah_item+' barang · '+d.pelanggan_selesai+'/'+d.jumlah_pelanggan+' pelanggan selesai muat'));
     return box;
   }
   function status(d) {
     var box=el('section',null,'vv-status'+(!d.terverifikasi?' vv-status--hati':''));
-    box.setAttribute('role','status');box.append(el('strong',d.status));
+    box.setAttribute('role','status');
+    if(d.tahap_pengiriman){
+      box.classList.add('sp-status');box.append(el('h3','Status timbang dan pengiriman'));
+      var rows=el('dl');[['Penimbangan · TeraFlow',d.tahap_pengiriman.timbang],['Verifikasi pengiriman · PadiFlow',d.status]].forEach(function(x){var row=el('div');row.append(el('dt',x[0]),el('dd',x[1]));rows.append(row);});box.append(rows,el('p',d.tahap_pengiriman.berikut));
+    }else box.append(el('strong',d.status));
     if(d.halangan)box.append(el('span',d.halangan));
     if(d.catatan_otomatis)box.append(el('span','Pemeriksaan otomatis saat ini: '+d.catatan_otomatis));
     if(d.catatan_integrasi) {

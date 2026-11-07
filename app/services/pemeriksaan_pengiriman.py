@@ -117,7 +117,9 @@ async def baca(db,rec):
         audit=[[r.id,terbaru[r.id].id if r.id in terbaru else None] for r in anggota],aturan=angka,
         snapshot_tiket=raw.get('pengiriman_snapshot') if raw else None)
     dasar=hashlib.sha256(json.dumps(fingerprint,sort_keys=True,default=str,ensure_ascii=False).encode()).hexdigest()
-    return dict(perintah_id=rec.id,kiriman_id=rec.kiriman_id,perintah_ids=ids,tiket=tiket,kemasan=kemasan,
+    from app.services.status_pengiriman import ringkasan
+    tahap=ringkasan([r.status for r in anggota],tiket,tertaut=bool(rec.timbangan_transaksi_id))
+    return dict(tahap_pengiriman=tahap,perintah_id=rec.id,kiriman_id=rec.kiriman_id,perintah_ids=ids,tiket=tiket,kemasan=kemasan,
         **angka,dasar=dasar,sidik_sumber=sidik,terverifikasi=verified,boleh_manual=siap and not halangan,
         halangan=halangan,status=judul,catatan_otomatis=None if verified else auto_note,
         catatan_integrasi=None if verified else catatan_integrasi,jejak=jejak,

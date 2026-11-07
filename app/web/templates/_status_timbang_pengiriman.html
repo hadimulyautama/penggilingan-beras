@@ -1,0 +1,8 @@
+{% macro status_pengiriman(tahap) %}
+<link rel="stylesheet" href="/static/status-pengiriman.css?v={{ VERSI }}">
+<section class="sp-status" aria-label="Status timbang dan verifikasi pengiriman" data-status-timbang-pengiriman>
+<h2>Status timbang dan pengiriman</h2>
+<dl><div><dt>Penimbangan · TeraFlow</dt><dd>{{ tahap.timbang }}</dd></div><div><dt>Verifikasi pengiriman · PadiFlow</dt><dd>{{ tahap.verifikasi }}</dd></div></dl>
+<p>{{ tahap.berikut }}</p>
+</section>
+{% endmacro %}
