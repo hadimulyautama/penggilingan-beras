@@ -28,6 +28,7 @@ def buat_pdf(data: dict) -> bytes:
 
     def bagian(heading, headers, rows, widths, **options):
         t, minimum = table(headers, rows, widths, **options)
+        if len(rows)<=8:minimum=t.wrap(sum(widths)+(8*mm if options.get('numbered') else 0),100000)[1]
         return view.bagian_tabel(heading, t, minimum)
 
     story = [view.heading(JUDUL_REKAP.upper(),1),

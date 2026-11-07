@@ -20,9 +20,9 @@ class PenyajiDokumen:
             (self.tema.tinta, self.tema.redup, self.tema.garis, self.tema.latar)]
         self.green = colors.HexColor(self.tema.utama)
         self.normal = ParagraphStyle('DokumenBody', fontName=self.tema.font, fontSize=self.tema.ukuran_isi,
-                                      leading=self.tema.ukuran_isi * 1.3, textColor=self.ink)
+                                      leading=self.tema.jarak_baris_rinci, textColor=self.ink)
         self.small = ParagraphStyle('DokumenSmall', parent=self.normal, fontSize=self.tema.ukuran_kecil,
-                                     leading=self.tema.ukuran_kecil * 1.3, textColor=self.muted)
+                                     leading=self.tema.ukuran_kecil * 1.4, textColor=self.muted)
         self.bold = ParagraphStyle('DokumenBold', parent=self.normal, fontName=self.tema.font_tebal)
         self.title = ParagraphStyle('DokumenTitle', parent=self.bold, fontSize=self.tema.ukuran_judul,
                                      leading=20, alignment=1)
@@ -89,8 +89,8 @@ class PenyajiDokumen:
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 7),
             ('RIGHTPADDING', (0, 0), (-1, -1), 7),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), self.tema.padding_tabel_rinci),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), self.tema.padding_tabel_rinci),
         ]))
         return table
 
@@ -112,14 +112,19 @@ class PenyajiDokumen:
         ]))
         return table
 
-    def bagian_tabel(self, heading, table, first_row_height):
-        """Sisakan judul + header + satu baris; tabel panjang boleh membelah halaman."""
+    def bagian_tabel(self, heading, table, first_row_height, *, level=3, metadata=()):
+        """Jaga judul, metadata dan awal tabel; tabel panjang tetap boleh membelah."""
         from reportlab.lib.units import mm
         from reportlab.platypus import CondPageBreak
-        label = self.p(heading, self.table_section)
-        label_height = label.wrap(174 * mm, 100000)[1]
-        minimum = label_height + label.getSpaceBefore() + label.getSpaceAfter() + first_row_height
-        return [CondPageBreak(minimum), label, table]
+        from copy import copy
+        style=copy(self.heading(heading,level).style)
+        style.keepWithNext=False
+        label=self.p(heading,style)
+        flows=[label,*metadata]
+        minimum=first_row_height
+        for flow in flows:
+            minimum+=flow.wrap(174*mm,100000)[1]+flow.getSpaceBefore()+flow.getSpaceAfter()
+        return [CondPageBreak(minimum),*flows,table]
 
     def pdf(self, story, *, judul, referensi):
         from reportlab.lib.pagesizes import A4

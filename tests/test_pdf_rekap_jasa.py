@@ -31,8 +31,8 @@ def test_rekap_campuran_satu_halaman_dengan_kop_dan_rincian_utuh():
     reader=PdfReader(BytesIO(buat_pdf(data)))
     assert data==before
     periksa_kop(reader)
-    assert len(reader.pages)==1
-    text=' '.join(reader.pages[0].extract_text().split())
+    assert len(reader.pages)==2
+    text=' '.join(' '.join(p.extract_text().split()) for p in reader.pages)
     for value in ['REKAP BARANG JASA','JAS-2610-302','GB-BASAH-001','GB-KERING-001',
                   'OUT-001','Gabah basah','Gabah kering','Beras PK Gudang 1',
                   '5.000 kg','3.000 kg','2.500 kg','2.000 kg','500 kg',

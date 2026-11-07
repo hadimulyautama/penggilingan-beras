@@ -84,6 +84,8 @@ async def test_pdf_endpoint_satu_halaman_lengkap_dan_tidak_menulis(pg,penerimaan
                      'Petugas timbang PDF','Penerima Uji','1 / 2',
                      f"{nilai['nilai']:.2f}".replace('.',','),nilai['kelas']):assert kata in teks,kata
         assert teks.count('Supplier Uji')==1
+        main=pdf.pages[0].extract_text()
+        assert main.index('SELISIH TERHADAP ACUAN') < main.index('Rincian penerimaan') < main.index('Hasil penimbangan')
         assert 'Gudang' not in teks and 'Milik pabrik' not in teks and 'harga' not in teks.lower()
         for n in range(1,6):assert f'Catatan asli putaran {n}' in ' '.join(teks.split())
         async with pg() as db:assert await sidik(db)==awal

@@ -78,13 +78,6 @@ class LaporanGiling(Laporan):
     def __init__(self,d):
         super().__init__(d)
         self.judul='Laporan Penggilingan'
-        for gaya in (self.normal, self.bold, self.head):
-            gaya.fontSize = 9
-            gaya.leading = 12
-        self.small.fontSize = 8
-        self.small.leading = 11
-        self.head.fontSize = 9
-        self.head.leading = 12
 
     def pdf(self, story):
         from app.web.pdf_dokumen import PenyajiDokumen
@@ -95,11 +88,6 @@ class LaporanGiling(Laporan):
     def bagian(self, nama):
         return self.heading(nama,3)
 
-    def tabel(self, headers, rows, widths, **kw):
-        tabel = super().tabel(headers, rows, widths, **kw)
-        tabel.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),3),
-                                   ('BOTTOMPADDING',(0,0),(-1,-1),3)]))
-        return tabel
 
 
 def buat_pdf(data):

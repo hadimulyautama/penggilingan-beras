@@ -51,7 +51,7 @@ def test_identitas_dan_logo_di_setiap_halaman_isi_terjaga(penerimaan):
                   data['serah'], data['terima'], *data['baris'][0]]:
         assert value in main
     if penerimaan:
-        assert reader.pages[1].extract_text().count('Pemeriksaan ') == 5
+        assert ' '.join(reader.pages[1].extract_text().split()).count('Pemeriksaan ') == 5
 
 
 def test_banyak_baris_dan_teks_pelanggan_tetap_utuh_tanpa_menimpa_kop():

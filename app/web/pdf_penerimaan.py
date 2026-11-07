@@ -103,6 +103,29 @@ def kesimpulan(d):
     return awal+' '+' '.join(isi)
 
 
+def blok_selisih(v,t,ada_nota=False):
+    """Sorotan memakai nilai/status tersimpan; tidak menentukan ulang ambang."""
+    acuan=t.get('berat_acuan_kg');delta=t.get('selisih_kg')
+    available=acuan is not None and Decimal(str(acuan))>0 and delta is not None and t.get('status_kontrol')!='TANPA_KONTROL'
+    if available:
+        n=Decimal(str(delta))
+        label='LEBIH RINGAN' if n<0 else 'LEBIH BERAT' if n>0 else 'SESUAI ACUAN'
+        value=kg(abs(n))
+        pct=t.get('selisih_persen')
+        if pct is not None:value+=' ('+angka(abs(Decimal(str(pct))))+'%)'
+    else:label='SELISIH TERHADAP ACUAN';value='Belum dapat dibandingkan'
+    warning=t.get('status_kontrol') in ('PERLU_PEMERIKSAAN','INVESTIGASI','KURANG','KELEBIHAN')
+    shade=colors.HexColor('#FFF0CF') if warning else v.pale
+    size=ParagraphStyle('SelisihUtama',parent=v.bold,fontSize=18,leading=23,textColor=v.ink)
+    title=v.p('SELISIH TERHADAP ACUAN',v.bold)
+    basis=('Berat nota/acuan: '+kg(acuan)) if acuan is not None else 'Berat nota/acuan belum tercatat.'
+    tbox=Table([[title,v.p(label,v.bold)],
+                [[v.p(value,size),v.p(basis,v.small)],v.p(kalimat_selisih(t,ada_nota))]],
+               colWidths=[v.width*.5]*2)
+    tbox.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),shade),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),10),('RIGHTPADDING',(0,0),(-1,-1),10),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
+    return KeepTogether([tbox])
+
+
 class Laporan(PenyajiDokumen):
     def __init__(self,d):
         super().__init__()
@@ -185,7 +208,7 @@ def buat_pdf(d):
         ParagraphStyle('TerimaTotal',parent=v.bold,fontSize=16,leading=19,textColor=v.green))],p('\n'.join(packs) or 'Kemasan: tidak tercatat',v.small)]],colWidths=[v.width*.5]*2)
     total.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),v.pale),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
-    story += [total,Spacer(1,8)]
+    story += [total,Spacer(1,8),blok_selisih(v,t,bool(nota)),Spacer(1,8)]
     statuses=[ticket.get('status_tiket'),t.get('status_transaksi')]
     if ticket.get('status_tiket')=='DITUTUP_PAKSA' or t.get('status_transaksi') not in (None,'AKTIF'):
         story.append(p('Status tiket/transaksi: '+' / '.join(x for x in statuses if x)+'. '+(t.get('tutup_paksa_alasan') or t.get('void_alasan') or t.get('keterangan') or t.get('catatan') or 'Alasan tidak tercatat.'),v.bold))
@@ -232,8 +255,6 @@ def buat_pdf(d):
         ['Berat barang setelah potongan',kg(t.get('berat_barang_kg')),
          'Berat nota/acuan',kg(t.get('berat_acuan_kg')) if t.get('berat_acuan_kg') else 'Belum tercatat'],
     ],[.3,.2,.3,.2]))
-    story.append(v.heading('Perbandingan dengan nota/acuan',4))
-    story.append(p(kalimat_selisih(t,bool(nota))))
     for label,key in [('Keterangan tiket','keterangan'),('Catatan tiket','catatan')]:
         if t.get(key):story.extend([Spacer(1,5),v.fakta(label,t[key])])
     for m in muatan:

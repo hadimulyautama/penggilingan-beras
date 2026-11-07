@@ -76,7 +76,7 @@ def buat_pdf(data):
     story.append(PageBreak())
     story.append(v.heading('Bahan PK dan catatan proses' if not mixed else 'Bahan dan catatan proses',2))
     section('Asal bahan yang dipakai')
-    table(['Sumber','Jenis bahan','Berat dipakai'],[[x['code'],x['material'],kg(x['weight'])] for x in sources] or [['Belum tercatat','-','-']],[.4,.34,.26])
+    table(['Sumber','Jenis bahan','Pemilik / pemasok','Berat dipakai'],[[x['code'],x['material'],x['owner'],kg(x['weight'])] for x in sources] or [['Belum tercatat','-','-','-']],[.3,.23,.25,.22])
     note('Berat di atas adalah jumlah yang dipakai pada penyosohan ini, bukan seluruh netto lot asal.')
     qc=qc_bahan(data)
     section('Ringkasan QC bahan PK')
@@ -89,7 +89,5 @@ def buat_pdf(data):
     if jeda and jeda['items']:
         # Semua kejadian, termasuk koreksi dan pembatalan, tetap tersedia.
         bagian_jeda(story,jeda,lambda value,style=None:v.heading(value,3) if style else v.p(value),lambda rows,widths:v.tabel(rows[0],rows[1:],[x/sum(widths) for x in widths]),'section')
-    section('Rujukan sumber')
-    for x in sources:note(x['code']+' - '+x['material']+' | '+x['owner'])
     if not sources:note('Jejak asal bahan belum tercatat.')
     return v.pdf(story)

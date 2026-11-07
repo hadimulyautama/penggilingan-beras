@@ -69,8 +69,9 @@ def buat_pdf(data):
     for row in d['qc']:groups[row['batch'].split(' · QC')[0]].append(row)
     for code,entries in groups.items():
         day=bool(tanggal_bersama(x['time'] for x in entries))
-        story.append(view.heading(code,4))
-        if day:note(tanggal_bersama(x['time'] for x in entries))
+        metadata=[view.p(tanggal_bersama(x['time'] for x in entries),view.small)] if day else []
         table(['QC / waktu','Kadar air','Lamur / sak','Biji hijau','Densiti'],[[x['batch'].split(' · ')[-1]+' / '+waktu(x['time'],day),x['moisture'],NilaiQC('Lamur',x['lamur']),NilaiQC('Biji hijau',x['green']),NilaiQC('Densiti',x['density'])] for x in entries],[.28,.22,.18,.16,.16])
+        t=story.pop();t.wrap(view.width,100000)
+        story.extend(view.bagian_tabel(code,t,sum(t._rowHeights[:2]),level=4,metadata=metadata))
     if not groups:note('Belum ada catatan QC penerimaan.')
     return view.pdf(story)

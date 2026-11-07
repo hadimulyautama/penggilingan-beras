@@ -60,3 +60,43 @@ def test_semua_keluarga_pdf_memakai_judul_sentral(monkeypatch):
         else:
             assert 'tanda tangan' not in text.lower() and 'Pengesahan penerimaan' not in text
         assert all(size==getattr(TemaPDF(),{1:'ukuran_judul_dokumen',2:'ukuran_judul_halaman',3:'ukuran_judul_bagian',4:'ukuran_judul_subbagian'}[level]) for level,size in seen)
+
+
+def test_semua_penyaji_memakai_tipografi_lega_sentral():
+    from app.web.pdf_penerimaan import Laporan
+    views=[PenyajiDokumen(),Laporan(dict(kode='UJI')),LaporanGiling(dict(kode='UJI'))]
+    for v in views:
+        assert v.normal.fontSize==10 and v.normal.leading==14
+        assert v.small.fontSize==9 and v.small.leading>=12
+    for v in views[1:]:
+        t=v.tabel(['Kolom'],[['Isi satu baris']],[1])
+        t.wrap(400,10000)
+        assert min(t._rowHeights)>=v.tema.jarak_baris_rinci+2*v.tema.padding_tabel_rinci-2
+
+
+def test_selisih_penerimaan_disorot_sebelum_rincian_timbang():
+    from app.web.pdf_penerimaan import blok_selisih,Laporan
+    def plain(cell):
+        return ' '.join(plain(x) for x in cell) if isinstance(cell,list) else cell.getPlainText()
+    v=Laporan(dict(kode='UJI'))
+    box=blok_selisih(v,dict(berat_acuan_kg=11362,selisih_kg=-29.5,selisih_persen=-.26,status_kontrol='PERLU_PEMERIKSAAN'))
+    text=' '.join(plain(cell) for row in box._content[0]._cellvalues for cell in row)
+    assert 'LEBIH RINGAN' in text and '29,50 kg (0,26%)' in text and 'perlu pemeriksaan' in text
+    box=blok_selisih(v,dict(status_kontrol='TANPA_KONTROL'))
+    text=' '.join(plain(cell) for row in box._content[0]._cellvalues for cell in row)
+    assert 'Belum dapat dibandingkan' in text and '0,00 kg' not in text
+
+
+def test_judul_batch_dan_metadata_tidak_tertinggal_di_halaman_sebelumnya():
+    from reportlab.platypus import Spacer
+    from pypdf import PdfReader
+    from io import BytesIO
+    v=PenyajiDokumen()
+    table=v.grid(['Pemeriksaan'],[[v.p('QC-ROW-01')],[v.p('QC-ROW-02')]],[400])
+    table.wrap(400,100000)
+    block=v.bagian_tabel('BATCH-UJI',table,sum(table._rowHeights[:2]),level=4,metadata=[v.p('Tanggal pemeriksaan 07/11/2026',v.small)])
+    pdf=PdfReader(BytesIO(v.pdf([v.heading('Dokumen uji',1),Spacer(1,550),*block],judul='Dokumen uji',referensi='UJI')))
+    assert len(pdf.pages)==2
+    assert 'BATCH-UJI' not in pdf.pages[0].extract_text()
+    text=pdf.pages[1].extract_text()
+    assert all(x in text for x in ['BATCH-UJI','Tanggal pemeriksaan','QC-ROW-01','QC-ROW-02'])

@@ -10,8 +10,8 @@ class TemaPDF:
     latar: str = '#eff4ee'
     font: str = 'Helvetica'
     font_tebal: str = 'Helvetica-Bold'
-    ukuran_isi: float = 8.5
-    ukuran_kecil: float = 7.8
+    ukuran_isi: float = 10
+    ukuran_kecil: float = 9
     ukuran_judul: float = 15
     margin_mm: float = 18
     atas_mm: float = 50

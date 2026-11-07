@@ -53,7 +53,7 @@ def buat_pdf(data):
         [p(data['serah'], centered), '', p(data['terima'], centered)],
         ['', '', ''],
         [p('Nama & tanda tangan', small_centered), '', p('Nama & tanda tangan', small_centered)],
-    ], colWidths=[75 * mm, 24 * mm, 75 * mm], rowHeights=[18, 64, 18])
+    ], colWidths=[75 * mm, 24 * mm, 75 * mm], rowHeights=[24, 64, 24])
     signatures.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -78,7 +78,7 @@ def buat_pdf(data):
             rows.append([p(label), p(waktu(sample['waktu']) + ' · ' + sample['petugas']),
                          paragraf(details, normal)])
         story.append(warnai_tabel(grid(['Putaran', 'Waktu & petugas', 'Hasil pemeriksaan'],
-                          rows, [28 * mm, 48 * mm, 98 * mm])))
+                          rows, [30 * mm, 46 * mm, 98 * mm])))
 
     return view.pdf(story, judul=data['judul'] + ' · ' + data['nomor'],
                     referensi=data['nomor'])
