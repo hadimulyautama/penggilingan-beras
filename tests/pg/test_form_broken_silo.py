@@ -96,9 +96,8 @@ async def test_pemilik_penerima_bukan_pemilik_hasil_mentah(pg,sosoh):
         db.add(ByproductStock(jenis_produk='broken',source_type='polishing',source_id=sosoh['proc_id'],berat_kg=100,jasa_id=j.id,tanggal=now_local().date(),waktu=now_local(),input_by=sosoh['user']));await db.commit()
         d=await rincian(db,f'pemilik|{j.id}',75,'D');assert d['saldo']['total']==100 and d['saldo']['mesin']==0 and d['rencana']['mesin']==0
 
-async def test_batas_transaksi_multisumber_lama_tercatat(pg,sosoh,monkeypatch):
-    """Dokumentasikan keterbatasan lama: sumber pertama sudah commit ketika
-    sumber berikutnya gagal. Perapian tidak mengklaim rollback seluruh sumber."""
+async def test_gagal_sumber_kedua_rollback_seluruh_pemindahan(pg,sosoh,monkeypatch):
+    """Gangguan setelah sumber pertama harus membatalkan seluruh permintaan."""
     from app.database import now_local
     await hasil(pg,sosoh,100)
     async with pg() as db:
@@ -113,8 +112,9 @@ async def test_batas_transaksi_multisumber_lama_tercatat(pg,sosoh,monkeypatch):
     monkeypatch.setattr(g2,'masukkan_broken_ke_silo',gagal)
     async with pg() as db:
         with pytest.raises(g2.Gudang2Error):await g2.masukkan_stok_broken_pemilik_ke_silo(db,user=await db.get(User,sosoh['user']),jasa_id=None,nama_silo='C',berat_kg=150)
+        await db.commit()  # Pemanggil menangkap galat pun tidak menyimpan bagian pertama.
     async with pg() as db:
-        assert await g2.hitung_stok_silo(db,sosoh['silo']['C'])==100
+        assert await g2.hitung_stok_silo(db,sosoh['silo']['C'])==0
 
 @pytest.mark.parametrize('w,rencana,aktual',[(0.3,0,0),(500.49,500,500),(175.123,175.123,175.12)])
 async def test_toleransi_lama_dan_bobot_aktual(pg,sosoh,w,rencana,aktual):

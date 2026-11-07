@@ -216,6 +216,26 @@ asli, sehingga respons koneksi yang hilang dapat diperiksa/diulang dengan
 kunci yang sama tanpa menggandakan pemindahan. Proyeksi lama tetap membaca
 kg/K yang sama; kolom karung PK luar dan metadata50 PK sendiri tidak dicampur.
 
+## Saldo pemilik dan transaksi silo (7 November 2026)
+
+Jalur kg PK memakai `pemilik_id` yang sama sejak picker sampai writer dan
+respons saldo sisa. Melengkapi N surat jalan tidak mengembalikan bagian yang
+sudah dialihkan, dikeluarkan atau direservasi menjadi saldo bebas. Jika acuan
+bobot berubah, hanya selisih bobot sumber yang mengikuti pemilik asal;
+bagian pemilik penerima tetap sesuai hak yang telah dialihkan.
+
+Pemindahan broken dari beberapa sumber memakai satu transaksi/savepoint.
+`pindah_broken_ke_silo` dan `masukkan_broken_ke_silo` menerima `commit=False`
+untuk pemanggil multisumber; pemanggil mandiri tetap commit secara bawaan.
+Kunci saldo pengeluaran diambil sebelum rencana FIFO, lalu sumber/silo,
+sehingga operator bersamaan tidak memakai saldo yang sama. Retur supplier
+yang sudah keluar memakai `_sisa_broken_row`, sedangkan pengajuan aktif
+mengurangi bagian bebas secara terpisah. Gagal satu sumber membatalkan
+pemindahan, tambahan bahan proses, pembongkaran dan audit dalam permintaan
+itu. Tidak ada migrasi, backfill atau penulisan ulang transaksi lama.
+Uji: `test_rantai_bahan_silo.py`, `test_broken_silo_transaksi_utuh.py`, dan
+`test_form_broken_silo.py` pada profil PostgreSQL loopback terisolasi.
+
 ## Peristiwa — tulang punggung baru (Tahap 3, sejak 13 September 2026)
 
 `peristiwa` = apa yang terjadi, TAMBAH-SAJA (trigger Postgres menolak UPDATE
@@ -1294,13 +1314,14 @@ Rumus jumlah bongkar karung penuh dipakai bersama melalui
 rincian hasil API membaca jumlah baris `BrokenKeSilo` yang benar-benar
 tersimpan, bukan memakai pratinjau sebagai bukti simpan.
 
-Batas lama yang BELUM diperbaiki: pemindahan lintas sumber melakukan commit
-per sumber; kegagalan sumber berikutnya dapat menyisakan sumber sebelumnya
-sudah tercatat. Aksi broken ini juga belum memiliki undo pemindahan di
-layanan undo (label audit tersedia, bukan bukti dukungan pembatalan).
-Perapian tidak menambah idempotensi atau mengubah batas transaksi itu.
-UI menahan kirim ulang jika hasil jaringan belum pasti dan mengarahkan
-pemeriksaan Stok/riwayat; jangan menjanjikan retry aman atau rollback total.
+Pemindahan lintas sumber sekarang satu transaksi/savepoint (7 November
+2026): kegagalan sumber berikutnya membatalkan seluruh permintaan. Aksi
+broken ini masih belum memiliki undo pemindahan di layanan undo (label
+audit tersedia, bukan bukti dukungan pembatalan).
+Pemindahan broken belum memakai kunci idempotensi. UI menahan kirim ulang
+jika hasil jaringan belum pasti dan mengarahkan pemeriksaan Stok/riwayat;
+jangan menjanjikan retry aman setelah respons commit hilang. Rollback utuh
+berlaku ketika salah satu sumber gagal sebelum commit permintaan.
 
 Pemilik menyetujui PERBAIKAN bug Stok Karung pada tahap ini: 4 karung yang
 dibongkar sebelumnya membuat saldo kosong90→94 karena rumus membaca sisa
