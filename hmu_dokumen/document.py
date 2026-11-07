@@ -37,6 +37,28 @@ class PenyajiDokumen:
         self.table_section = ParagraphStyle('DokumenTableSection', parent=self.section,
                                             keepWithNext=False)
 
+        # Hierarki baru bersifat opt-in; gaya dokumen lama tetap kompatibel.
+        self.document_heading = ParagraphStyle('JudulDokumen', parent=self.bold,
+            fontSize=self.tema.ukuran_judul_dokumen, leading=28, textColor=self.green,
+            spaceAfter=10, keepWithNext=True)
+        self.page_heading = ParagraphStyle('JudulHalaman', parent=self.bold,
+            fontSize=self.tema.ukuran_judul_halaman, leading=23, textColor=self.green,
+            spaceAfter=12, keepWithNext=True)
+        self.section_heading = ParagraphStyle('JudulBagian', parent=self.bold,
+            fontSize=self.tema.ukuran_judul_bagian, leading=16, textColor=self.ink,
+            spaceBefore=14, spaceAfter=7, keepWithNext=True)
+        self.subsection_heading = ParagraphStyle('JudulSubbagian', parent=self.bold,
+            fontSize=self.tema.ukuran_judul_subbagian, leading=13, textColor=self.muted,
+            spaceBefore=10, spaceAfter=4, keepWithNext=True)
+
+    def heading(self, value, level=3):
+        """Judul semantik: 1 dokumen, 2 halaman, 3 bagian, 4 subbagian."""
+        styles={1:self.document_heading, 2:self.page_heading,
+                3:self.section_heading, 4:self.subsection_heading}
+        if level not in styles:
+            raise ValueError('Tingkat judul wajib 1 sampai 4')
+        return self.p(value,styles[level])
+
     def p(self, value, style=None):
         from reportlab.platypus import Paragraph
         return Paragraph(escape(str(value)), style or self.normal)

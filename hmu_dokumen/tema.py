@@ -16,5 +16,9 @@ class TemaPDF:
     margin_mm: float = 18
     atas_mm: float = 50
     bawah_mm: float = 18
+    ukuran_judul_dokumen: float = 22
+    ukuran_judul_halaman: float = 18
+    ukuran_judul_bagian: float = 11.5
+    ukuran_judul_subbagian: float = 9.5
 
 TEMA = TemaPDF()

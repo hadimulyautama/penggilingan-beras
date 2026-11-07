@@ -54,7 +54,7 @@ def buat_pdf(data):
     note('Silo tujuan: '+d['silo'])
     note('Rincian pembacaan kadar air dan QC penerimaan tersedia pada lampiran.')
     story.append(PageBreak())
-    section('Pemantauan kadar air selama proses')
+    story.append(view.heading('Pemantauan kadar air selama proses',2))
     table(['Waktu','Pembacaan alat tes','Rata-rata tes','Indikator mesin'],[[waktu(x['time']),x['samples'],x['average'],x['machine']] for x in d['moisture']] or [['Belum ada catatan','-','-','-']],[.22,.42,.18,.18])
     if d['cooling_notes']:
         section('Catatan pendinginan')
@@ -62,14 +62,15 @@ def buat_pdf(data):
     if d.get('jeda'):
         bagian_jeda(story,d['jeda'],lambda value,style=None:p(value),lambda rows,widths:view.tabel(rows[0],rows[1:],[w/sum(widths) for w in widths]),'')
     story.append(PageBreak())
-    section('Bahan baku dan asal')
+    story.append(view.heading('Bahan baku dan asal',2))
     table(['Batch','Asal / pemilik','Nomor polisi','Berat'],[[b['kode'],b['asal'],b['plat'],kg(b['weight'])] for b in d['batches']] or [['Belum tercatat','-','-','-']],[.28,.28,.22,.22])
     section('Riwayat QC bahan baku')
     groups=defaultdict(list)
     for row in d['qc']:groups[row['batch'].split(' · QC')[0]].append(row)
     for code,entries in groups.items():
         day=bool(tanggal_bersama(x['time'] for x in entries))
-        note(code+(' | '+tanggal_bersama(x['time'] for x in entries) if day else ''))
+        story.append(view.heading(code,4))
+        if day:note(tanggal_bersama(x['time'] for x in entries))
         table(['QC / waktu','Kadar air','Lamur / sak','Biji hijau','Densiti'],[[x['batch'].split(' · ')[-1]+' / '+waktu(x['time'],day),x['moisture'],NilaiQC('Lamur',x['lamur']),NilaiQC('Biji hijau',x['green']),NilaiQC('Densiti',x['density'])] for x in entries],[.28,.22,.18,.16,.16])
     if not groups:note('Belum ada catatan QC penerimaan.')
     return view.pdf(story)

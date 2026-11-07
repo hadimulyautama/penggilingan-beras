@@ -86,15 +86,12 @@ class LaporanGiling(Laporan):
 
     def pdf(self, story):
         from app.web.pdf_dokumen import PenyajiDokumen
-        opening = [self.p(self.judul,self.title), self.p(self.d['kode'],self.bold), Spacer(1,12)]
+        opening = [self.heading(self.judul,1), self.p(self.d['kode'],self.small), Spacer(1,12)]
         closing = [Spacer(1,8),self.p('Dibuat '+waktu(self.d['dibuat'])+' | '+self.d['pembuat'],self.small)]
         return PenyajiDokumen.pdf(self,opening+story+closing,judul=self.judul,referensi=self.d['kode'])
 
     def bagian(self, nama):
-        tabel = super().bagian(nama)
-        tabel.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),6),
-                                   ('BOTTOMPADDING',(0,0),(-1,-1),6)]))
-        return tabel
+        return self.heading(nama,3)
 
     def tabel(self, headers, rows, widths, **kw):
         tabel = super().tabel(headers, rows, widths, **kw)
@@ -154,7 +151,7 @@ def buat_pdf(data):
     if counts and len(counts)==len(d['batches']) and len(set(counts))==1:
         note('Setiap batch: '+str(counts[0])+' bacaan kadar air.')
     story.append(PageBreak())
-    section('Rincian penggilingan')
+    story.append(v.heading('Rincian penggilingan',2))
     section('Pencatatan hasil PK')
     logs=d['progress']
     values=[]
