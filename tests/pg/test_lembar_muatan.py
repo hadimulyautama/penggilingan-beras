@@ -168,7 +168,7 @@ async def test_izin_endpoint_dan_baca_saja(pg,gudang,role,allowed):
     b=await body(pg,rs,[(rs[0],0,20)])
     async with await _klien(pg,u.id,'lembar-http') as client:
         page=await client.get('/muatan?perintah='+str(rs[0].rec.id));assert page.status_code==200
-        html=page.text;assert 'Isi total yang sudah dimuat, bukan tambahannya.' in html
+        html=page.text;assert 'Muat semua sesuai perintah' in html
         assert ('data-boleh="1"' in html)==allowed
         headers={"X-CSRF-Token":cap_formulir(client)}
         r=await client.post('/api/actions/periksa-lembar-muatan',json=b,headers=headers)

@@ -44,7 +44,7 @@ async def test_operator_dan_super_admin_membuka_muat_dari_perintah(pg,gudang,rol
             await page.get_by_role('link',name='Catat muatan',exact=True).click()
             await expect(page).to_have_url(BASE+f'/muatan?perintah={r.rec.id}')
             await expect(page.locator('[data-catat-muatan]')).to_be_visible()
-            await expect(page.get_by_role('button',name='Isi sesuai perintah',exact=True)).to_be_enabled()
+            await expect(page.get_by_role('button',name='Muat semua sesuai perintah',exact=True)).to_be_enabled()
             assert not errors,errors
             assert not writes,writes
             await ctx.close();await browser.close()

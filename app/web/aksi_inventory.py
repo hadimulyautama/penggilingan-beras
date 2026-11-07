@@ -1724,8 +1724,9 @@ async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> d
         kode = r.rec.kode
         total = sum(float(i.berat_kg or 0) for i in r.baris)
     return {"ok": True,
-            "pesan": f"✓ {kode} dimuat {kg(total)} — Admin memverifikasinya "
-                     "sambil menempelkan kode timbang keluar."}
+            "pesan": f"✓ {kode}: muatan {kg(total)} dicatat dan Selesai muat. "
+                     "Pelanggan lain tidak berubah. Verifikasi pengiriman belum dilakukan; "
+                     "tindak lanjut mengikuti kesiapan tiket armada."}
 
 
 class MuatBarisReq(MuatReq):
