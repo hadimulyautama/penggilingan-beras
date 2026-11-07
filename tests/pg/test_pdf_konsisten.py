@@ -89,7 +89,7 @@ async def test_pdf_seluruh_jeda_identitas_terlambat_dan_batal(pg,pabrik,pabrik_d
  if jenis=='giling':
   assert '10.883,75 kg' in text and '10.883,75' in detail.text
  if jenis=='pengeringan':
-  assert 'Turun 1,00 poin persentase/jam' in ' '.join(text.split())
+  assert '26,00%' in text and '25,00%' in text  # Dua pembacaan asli tetap ada; kolom laju dihapus sesuai mockup ringkas.
 
 async def test_sisa_belum_dicatat_tidak_disebut_kosong_di_pdf(pg,pabrik):
  from app.models import PolishingProcess,PolishingSiloUsage

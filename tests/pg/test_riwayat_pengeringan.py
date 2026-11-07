@@ -196,7 +196,7 @@ async def test_export_laporan_pdf_per_lot(pg, pabrik):
     assert kode in text
     assert "Pemasok Uji" in text
     assert "AB 1234 CD" in text
-    assert "Waktu dan durasi proses" in text
+    assert "Waktu proses" in text
 
 
 async def test_operator_gudang_dua_ditolak_rutenya_bukan_cuma_pintunya(pg, pabrik):

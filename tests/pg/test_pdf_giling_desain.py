@@ -53,8 +53,8 @@ async def test_laporan_lengkap_lamur_tersimpan_dan_rata_sama_layanan(pg,pabrik):
    else:
     bukti('penggilingan-data-uji.pdf',response.content)
     pdf=PdfReader(BytesIO(response.content));content='\n'.join(p.extract_text() for p in pdf.pages)
-    assert len(pdf.pages)==3
-    for v in ['Laporan Penggilingan','Ya · 2 sak','Tidak · 0 sak','Tidak tercatat','Rata-rata','Catatan utuh 0','Catatan utuh 2','Nilai mutu','10 bacaan','Sisa PK tersedia']:
+    assert len(pdf.pages)==2
+    for v in ['Laporan Penggilingan','2 sak','KA rata-rata','Catatan utuh 0','Catatan utuh 2','Nilai mutu','10 bacaan','Sisa PK tersedia']:
      assert v in content,v
     assert 'Tidak berlaku untuk gabah kering' not in content and 'tanda tangan' not in content.lower()
     assert pdf.metadata.title=='Laporan Penggilingan'
@@ -114,5 +114,5 @@ async def test_sopir_dari_tiket_tertaut_dan_qc_header_lama(pg,pabrik,contoh):
  assert data['raw_qc'][0]['number'] is None
  assert data['raw_qc'][0]['lamur']=='Tidak · 0 sak'
  content=' '.join(' '.join(p.extract_text().split()) for p in PdfReader(BytesIO(buat_pdf(data))).pages)
- assert 'Sopir tiket uji' in content and 'Rincian bacaan tidak tersedia' in content
- assert 'QC historis' in content and '10 bacaan' not in content
+ assert 'Sopir tiket uji' not in content and 'B 17 UJI' not in content
+ assert 'Historis:' in content and '10 bacaan' not in content

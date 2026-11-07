@@ -73,28 +73,19 @@ def test_pdf_giling_memuat_ringkasan_dan_lampiran():
     assert len(data["qc"]) == 3
     text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
 
-    for expected in ("LOT-20261012-01", "Widiyanto", "AB 1234 CD",
-                     "QC penerimaan gabah", "25,5% / 26%", "QC hasil PK",
-                     "Gabah kering langsung + gabah hasil pengeringan",
-                     "HASIL PK", "6.500 kg", "65,0%",
-                     "Gabah kering langsung", "PGR-20261011-01", "Pengeringan sumber bahan",
-                     "B 5678 EF", "14,50%", "Ya · 5 sak",
-                     "14%", "Rata-rata QC", "KA 14,2% · Broken 2,5% · Susut 1,0%",
-                     "Pencatatan hasil PK", "TRF-20261012-01", "4 jam 30 menit"):
+    for expected in ('LOT-20261012-01','Widiyanto','QC hasil PK','HASIL PK','6.500 kg','65,0%',
+                     'PGR-20261011-01','14,50%','Rata-rata QC','KA 14,2% · Broken 2,5% · Susut 1,0%',
+                     'Pencatatan hasil PK','TRF-20261012-01','4 jam 30 menit'):
         assert expected in text
-    assert text.index("KA 14,2%") < text.index("Broken 2,5%") < text.index("Susut 1,0%")
-    assert text.count("GB-20261010-01") >= 2
-    assert text.count("GB-20261010-02") >= 2
-
-
     pdf = PdfReader(BytesIO(pdf))
-    assert len(pdf.pages) == 3
-    first, details, source = [page.extract_text() for page in pdf.pages]
+    assert len(pdf.pages) == 2
+    first, details = [page.extract_text() for page in pdf.pages]
+    assert 'Asal bahan dan QC penerimaan' in first
     assert 'Rata-rata QC' in first and 'QC hasil PK' not in first
     assert 'Pencatatan hasil PK' in details and 'QC hasil PK' in details
     assert details.index('Pengeringan sumber bahan') < details.index('Transfer dan sisa PK')
-    assert 'Asal bahan dan QC penerimaan' in source
-    assert 'Bahan masuk dan pemakaian silo' not in text and 'Silo A' not in text
+    for removed in ('Sopir','Nomor polisi','Densiti','AB 1234 CD','Bahan masuk dan pemakaian silo'):
+        assert removed not in text
     assert 'Kesimpulan:' not in text and 'MELEBIHI SATU HALAMAN' not in text
 
 
@@ -142,3 +133,17 @@ def test_qc_kategori_berbeda_tetap_tampil_per_putaran():
     for value in ('Parah', 'Sedikit', 'Banyak', 'Sedang'):
         assert value in text
     assert 'Semua pemeriksaan:' not in text
+
+
+def test_qc_penerimaan_memakai_agregat_asli_dan_distribusi():
+    from app.web.pdf_giling import ringkasan_penerimaan
+    data = data_giling()
+    code=data['batches'][0]['code']
+    data['raw_summary']={code:dict(air=27.33,n=10,sak=29,legacy=False)}
+    data['raw_qc'][0]['green']='sedikit'
+    rows=ringkasan_penerimaan(data)
+    assert rows[0][2:4] == ['27,33%', '29 sak']
+    assert 'Sedikit 1/5' in rows[0][4] and 'Sedang 4/5' in rows[0][4]
+    assert rows[1][2:4] == ['Belum tersedia', 'Belum dicatat']
+    data['raw_summary'][code]['legacy']=True
+    assert ringkasan_penerimaan(data)[0][4]=='Historis: sedikit'
