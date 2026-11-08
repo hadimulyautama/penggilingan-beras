@@ -28,7 +28,124 @@ function sourceRows(box,u,d){const g=d.kelompok_sumber?.find(g=>String(g.id)===S
  const entries=el('div',null,'sr-source-entries');entries.dataset.srEntryList='';detail.append(entries);
  detail.addEventListener('toggle',()=>{root.dataset['sumber'+u.id]=detail.open?'1':'0'});detail.open=root.dataset['sumber'+u.id]==='1';box.append(detail);
 }
-function decorate(){const d=root.pfSosohData;if(!d?.aktif){if(qc)qc.hidden=false;if(pack){pack.hidden=false;if(!pack.isConnected)root.append(pack)}root.classList.remove('sr-redesign');return;}
+// Lembar operator memakai node, editor, dan pemeriksaan yang sama. Tidak ada
+// endpoint penulisan atau aturan stok kedua, dan tidak ada kontrol untuk menaikkan peran.
+const operator=root.dataset.layout==='operator';
+let qcFold=null,packFold=null;
+
+function fold(node,label,key){
+ const box=el('details',null,'sr-card sr-full');box.dataset.srFold=key;
+ box.append(el('summary',label),node);
+ box.open=root.dataset[key]==='1';
+ box.addEventListener('toggle',()=>{root.dataset[key]=box.open?'1':'0';});
+ return box;
+}
+let previewTimer=null,previewSequence=0;
+function outputBalance(d,outputs,compact=false){
+ if(!outputs)return;
+ clearTimeout(previewTimer);const generation=++previewSequence;
+ const summary=el('section',null,'sr-note sr-work-result-balance');summary.setAttribute('aria-live','polite');
+ if(compact)summary.classList.add('sr-admin-result-balance');
+ const status=el('strong'),basis=el('p',null,'sr-help'),totals=el('p'),gap=el('p');summary.append(status,basis,totals,gap);(outputs.querySelector('.sr-metrics')||outputs.querySelector('.sr-help')).after(summary);
+ const percent=v=>v==null?'Belum dapat dihitung':Number(v).toLocaleString('id-ID',{maximumFractionDigits:2})+'%';
+ const marks=new Map();for(const row of outputs.querySelectorAll('[data-kb-output]')){const mark=el('small',null,'sr-work-percent');row.firstElementChild.append(mark);marks.set(row.dataset.kbOutput,mark);}
+ function paint(value,draft=false){
+  status.textContent=draft?'Pratinjau isian · belum disimpan':'Neraca hasil tercatat';
+  basis.textContent='Dasar: '+kg(value.bahan_kg)+(value.sementara?' · sementara':' · bahan terpakai');
+  for(const h of value.hasil)if(marks.has(h.jenis)){const old=d.neraca_lembar.hasil.find(x=>x.jenis===h.jenis);marks.get(h.jenis).textContent=h.kg==null?'Persentase belum tersedia':(draft&&old?.kg!==h.kg?(old?.kg==null?'Belum dicatat':percent(old.persen))+' → '+percent(h.persen)+' · pratinjau':percent(h.persen))+' dari bahan';}
+  totals.textContent='Total hasil '+(draft?'tercatat: '+kg(d.neraca_lembar.total_kg)+' · '+percent(d.neraca_lembar.total_persen)+' → pratinjau: ':'tercatat: ')+kg(value.total_kg)+' · '+percent(value.total_persen);
+  gap.textContent=(value.sementara?'Susut/selisih sementara: ':'Susut/selisih akhir: ')+(draft?kg(d.neraca_lembar.susut_kg)+' · '+percent(d.neraca_lembar.susut_persen)+' → pratinjau: ':'')+kg(value.susut_kg)+' · '+percent(value.susut_persen);
+ }
+ function pending(text){paint(d.neraca_lembar);status.textContent=text;totals.textContent+=' · pratinjau menunggu';gap.textContent+=' · pratinjau menunggu';}
+ function inputs(){return [...outputs.querySelectorAll('[data-kb-output] input')].map(input=>({jenis:input.closest('[data-kb-output]').dataset.kbOutput,total:input.value}));}
+ function changed(rows){return rows.filter(h=>h.total===''||Number(h.total)!==(d.hasil.find(x=>x.jenis===h.jenis)?.kg??0));}
+ async function preview(){
+  const rows=changed(inputs());if(!rows.length){paint(d.neraca_lembar);return;}
+  if(rows.some(h=>h.total===''||!Number.isFinite(Number(h.total))||Number(h.total)<0)){pending('Periksa isian hasil · pratinjau belum tersedia');return;}
+  const snapshot=JSON.stringify(inputs());pending('Memeriksa pratinjau neraca · belum disimpan');
+  try{
+   const response=await fetch('/api/actions/sosoh-ringkas/'+encodeURIComponent(d.kode_proses)+'/neraca/pratinjau',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':document.getElementById('formulir-sesi')?.dataset.token||''},body:JSON.stringify({dasar:d.dasar,hasil:rows.map(h=>({jenis:h.jenis,total:Number(h.total)}))})});
+   const value=await response.json();if(generation!==previewSequence||snapshot!==JSON.stringify(inputs()))return;
+   if(!response.ok)throw Error(typeof value.detail==='string'?value.detail:'Pratinjau belum tersedia.');
+   paint(value,true);
+  }catch(e){if(generation===previewSequence&&snapshot===JSON.stringify(inputs()))pending(e.message+' Isian belum disimpan.');}
+ }
+ paint(d.neraca_lembar);
+ for(const input of outputs.querySelectorAll('[data-kb-output] input'))input.addEventListener('input',()=>{clearTimeout(previewTimer);pending('Isian berubah · menunggu pratinjau');previewTimer=setTimeout(preview,450);});
+ if(changed(inputs()).length)previewTimer=setTimeout(preview,0);
+}
+function compactSources(sources,d){
+ const heading=sources.querySelector('h2');
+ const add=[...sources.children].find(n=>n.tagName==='BUTTON');
+ const header=el('div',null,'sr-work-source-heading');
+ const toggle=button('',()=>{const open=content.hidden;content.hidden=!open;root.dataset.siloTerbuka=open?'1':'0';toggle.setAttribute('aria-expanded',String(open));toggle.textContent=(open?'▾ ':'▸ ')+'Bahan & silo';});
+ toggle.classList.add('sr-work-source-toggle');toggle.setAttribute('aria-controls','sr-work-silos');
+ header.append(toggle);if(add)header.append(add);heading?.replaceWith(header);
+ const content=el('div');content.id='sr-work-silos';content.hidden=root.dataset.siloTerbuka==='0';toggle.setAttribute('aria-expanded',String(!content.hidden));toggle.textContent=(content.hidden?'▸ ':'▾ ')+'Bahan & silo';
+ for(const u of d.sumber){
+  const box=[...sources.querySelectorAll('[data-kb-cycle]')].find(n=>n.dataset.kbCycle===String(u.id));if(!box)continue;
+  const head=box.querySelector('.sr-context'),name=head.querySelector('strong'),status=head.querySelector('.sr-status');
+  const details=el('details',null,'sr-work-cycle-details');details.dataset.srCycleDetails=String(u.id);details.append(el('summary','Rincian · siklus #'+u.id));details.open=root.dataset['siklus'+u.id]==='1';details.addEventListener('toggle',()=>{root.dataset['siklus'+u.id]=details.open?'1':'0';});
+  const release=[...box.children].find(n=>n.tagName==='BUTTON');
+  for(const node of [...box.children])if(node!==head&&node!==release)details.append(node);
+  const identity=el('div',null,'sr-work-silo-identity');identity.append(name);
+  const weight=u.awal==null||u.tambahan==null?null:u.awal+u.tambahan;
+  identity.append(el('small','Bahan siklus '+kg(weight)));
+  head.replaceChildren(identity);if(release){release.textContent='Bebaskan';release.setAttribute('aria-label','Bebaskan '+u.silo+' · siklus #'+u.id);head.append(release);}else if(status)head.append(status);
+  box.append(details);content.append(box);
+ }
+ for(const node of [...sources.children])if(node!==header){if(node.classList.contains('sr-help'))node.remove();else content.append(node);}
+ sources.append(content);
+}
+function worksheet(d){
+ const ui=root.pfSosohPresentationState||{},locked=ui.busy||ui.uncertain||ui.action||ui.review;
+ root.classList.add('sr-redesign','sr-worksheet');
+ const head=body.querySelector('header');if(!head)return;
+ const h1=head.querySelector('h1');if(h1){const code=el('p',h1.textContent,'sr-design-code');h1.textContent=d.aktif?'Penyosohan aktif':'Penyosohan selesai';h1.after(code);}
+ const help=button('ⓘ Panduan',()=>guide?.showModal(),'btn btn--kecil');help.classList.add('sr-work-guide');head.append(help);
+ const metrics=body.querySelector('.sr-metrics');
+ const board=body.querySelector('.sr-board');
+ // Pemeriksaan akhir tetap satu layar fokus; hasil kerja tidak diulang.
+ if(!board){
+  if(qcFold)qcFold.hidden=true;if(packFold)packFold.hidden=true;if(qc)qc.hidden=true;
+  const n=d.neraca_lembar,summary=el('p',null,'sr-note');summary.dataset.srFinishBalance='';
+  summary.textContent='Susut/selisih sementara tercatat: '+kg(n.susut_kg)+' · '+(n.susut_persen==null?'Belum dapat dihitung':Number(n.susut_persen).toLocaleString('id-ID',{maximumFractionDigits:2})+'%');
+  body.querySelector('[data-action-panel]')?.prepend(summary);return;
+ }
+ const sources=board.querySelector('#sumber');
+ const outputs=board.querySelector('#hasil');
+ if(outputs){
+  outputs.querySelector('h2').textContent=d.aktif?'Catat hasil & neraca':'Hasil akhir & neraca';
+  metrics?.remove();
+  outputBalance(d,outputs);
+  for(const help of [...outputs.querySelectorAll(':scope>.sr-help')].slice(1))help.remove();
+ }
+ if(sources){for(const u of d.sumber){const box=[...sources.querySelectorAll('[data-kb-cycle]')].find(n=>n.dataset.kbCycle===String(u.id));if(box)sourceRows(box,u,d);}compactSources(sources,d);}
+ const actions=[...body.children].find(n=>n.classList.contains('sr-actions'));
+ const balance=board.querySelector('.sr-full'),history=board.querySelector('.sr-full:last-child');
+ if(actions){
+  const finish=actions.firstElementChild;
+  const completion=el('section',null,'sr-card sr-full sr-work-finish');completion.dataset.srWorkFinish='';
+  completion.append(el('h2','Kesiapan selesai'),el('p',d.penghalang||'Pemeriksaan awal terpenuhi. Periksa data terbaru sebelum menyelesaikan.','sr-help'));
+  finish.textContent='Periksa & selesaikan penyosohan';finish.classList.add('btn--utama');completion.append(finish);
+  board.insertBefore(completion,balance);
+  for(const b of [...actions.querySelectorAll('button'),finish])b.disabled=b.disabled||!!locked;
+  // Jeda tetap di dekat identitas; tidak mencatat hasil maupun melepas silo.
+  head.append(actions);
+ }
+ if(qc){
+  if(!qcFold)qcFold=fold(qc,'QC beras · sampel & hasil pemeriksaan','qcTerbuka');
+  qc.hidden=false;qcFold.hidden=false;
+  if(location.hash==='#qc-sosoh'||new URL(location.href).searchParams.get('tab_detail')==='qc')qcFold.open=true;
+  board.insertBefore(qcFold,balance);
+ }
+ if(pack){if(!packFold)packFold=pack;packFold.classList.add('sr-full');packFold.hidden=false;board.insertBefore(packFold,balance);}
+ // Rincian neraca tetap di bagian pencatatan yang sama, tanpa pindah tab.
+ if(balance&&outputs)outputs.append(balance);
+ // Semua putaran QC, jejak bahan/hasil dan audit tetap dapat dibuka.
+ if(history)history.dataset.srWorkHistory='';
+}
+function decorate(){const d=root.pfSosohData;if(operator&&d){worksheet(d);return;}if(!d?.aktif){if(qc)qc.hidden=false;if(pack){pack.hidden=false;if(!pack.isConnected)root.append(pack)}root.classList.remove('sr-redesign');return;}
  const ui=root.pfSosohPresentationState||{};const locked=ui.busy||ui.uncertain||ui.action||ui.review;root.classList.add('sr-redesign');const head=body.querySelector('header');if(!head)return;
  const h1=head.querySelector('h1');if(h1){const code=el('p',h1.textContent,'sr-design-code');h1.textContent='Penyosohan aktif';h1.after(code);}
  const back=el('a','← Kembali ke Pekerjaan','sr-design-back');back.href=root.dataset.kembali||'/pekerjaan?tab=berjalan';head.prepend(back);
@@ -46,14 +163,14 @@ function decorate(){const d=root.pfSosohData;if(!d?.aktif){if(qc)qc.hidden=false
  head.after(...(actions?[actions]:[]),nav);
  const overview=el('section',null,'sr-card sr-design-overview');const title=el('div',null,'sr-design-overview-title');title.append(el('h2','Neraca sementara'),el('span','Belum final','sr-status'));overview.append(title);
  const mass=el('div',null,'sr-design-mass');const basis=d.sisa_lengkap?d.bahan:(d.sementara?kg(d.sementara.bahan):d.bahan),gap=d.sisa_lengkap?d.selisih:d.sementara?.selisih;
- for(const [label,value,small]of [[d.sisa_lengkap?'Bahan terpakai':'Bahan proses · sementara',basis,d.sisa_lengkap?'Sisa seluruh siklus sudah dicatat':'Sisa seluruh siklus belum lengkap'],['Seluruh hasil tercatat',kg(d.total),'Total hasil produksi proses ini'],['Selisih sementara',kg(gap),'Belum berarti susut final']]){const cell=el('div');cell.append(el('span',label),el('strong',value),el('small',small));mass.append(cell);}overview.append(mass);
+ for(const [label,value,small]of [[d.sisa_lengkap?'Bahan terpakai':'Bahan proses · sementara',basis,d.sisa_lengkap?'Sisa seluruh siklus sudah dicatat':'Sisa seluruh siklus belum lengkap'],['Seluruh hasil tercatat',kg(d.total),'Total hasil produksi proses ini'],['Selisih sementara',kg(gap),'Belum berarti susut final']]){const cell=el('div');cell.append(el('span',label),el('strong',value));if(label==='Selisih sementara')cell.append(el('small',gap==null||d.neraca_lembar.susut_persen==null?'Persentase belum dapat dihitung':Number(d.neraca_lembar.susut_persen).toLocaleString('id-ID',{maximumFractionDigits:2})+'% dari bahan'));cell.append(el('small',small));mass.append(cell);}overview.append(mass);
  if(metrics){metrics.classList.add('sr-original-metrics');if(metrics.firstElementChild?.querySelector('strong')?.textContent===basis)metrics.firstElementChild.remove();overview.append(metrics);}
  overview.append(el('p','Selisih sementara dapat mencakup bahan di mesin dan hasil yang belum dicatat. Rendemen dan susut akhir mengikuti kepastian sumber serta pencatatan proses.','sr-help'));
  panels.ringkasan.append(overview);if(balance)panels.ringkasan.append(balance);
  const links=el('section',null,'sr-card sr-design-shortcuts');links.append(el('h2','Pemeriksaan berikutnya'));
  for(const [key,label,info]of [['bahan','Bahan & silo',d.sumber.filter(u=>u.sisa==null).length+' siklus masih terikat'],['hasil','Rincian hasil',d.hasil.filter(h=>h.tercatat).length+' jenis sudah tercatat'],['qc','QC beras','Sampel, hasil lab dan estimasi sesi'],['riwayat','Riwayat & waktu','Pencatatan, jeda, alasan dan koreksi']]){const b=button('',()=>show(key,true),'sr-shortcut');const text=el('span',label);text.append(el('small',info));b.append(text,el('span','›'));links.append(b);}panels.ringkasan.append(links);
  if(sources){panels.bahan.append(sources);for(const u of d.sumber){const box=[...sources.querySelectorAll('[data-kb-cycle]')].find(n=>n.dataset.kbCycle===String(u.id));if(box)sourceRows(box,u,d);}}
- if(outputs){panels.hasil.append(outputs);if(pack){pack.hidden=false;panels.hasil.append(pack);}}
+ if(outputs){outputBalance(d,outputs,true);panels.hasil.append(outputs);if(pack){pack.hidden=false;panels.hasil.append(pack);}}
  if(history&&history!==balance){history.open=true;panels.riwayat.append(history);}
  const facts=el('section',null,'sr-card');facts.append(el('h2','Identitas & waktu proses'));const dl=el('dl');for(const [name,value]of d.fakta||[]){const row=el('div',null,'sr-pair');row.append(el('dt',name),el('dd',value));dl.append(row);}facts.append(dl);panels.riwayat.prepend(facts);
  // Panel aksi yang sedang dibuka menentukan tab; tak pernah menyembunyikan pemeriksaan.
@@ -63,7 +180,7 @@ function decorate(){const d=root.pfSosohData;if(!d?.aktif){if(qc)qc.hidden=false
  show(forced||selected);
 }
 root.addEventListener('pf:detail-render',decorate);
-root.addEventListener('click',e=>{if(e.target.closest('[data-qc-baru]'))show('qc');},true);
-root.addEventListener('click',e=>{const link=e.target.closest('a[href^="#"]');if(!link)return;const hash=link.getAttribute('href');if(hash==='#hasil')show('hasil');if(hash==='#sumber')show('bahan');if(hash==='#qc-sosoh')show('qc');});
+root.addEventListener('click',e=>{if(e.target.closest('[data-qc-baru]')){if(operator&&qcFold)qcFold.open=true;else show('qc');}},true);
+root.addEventListener('click',e=>{const link=e.target.closest('a[href^="#"]');if(!link)return;const hash=link.getAttribute('href');if(operator){if(hash==='#qc-sosoh'&&qcFold)qcFold.open=true;return;}if(hash==='#hasil')show('hasil');if(hash==='#sumber')show('bahan');if(hash==='#qc-sosoh')show('qc');});
 if(guide){guide.querySelector('[data-sr-guide-close]').onclick=()=>guide.close();guide.addEventListener('click',e=>{if(e.target===guide){const r=guide.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)guide.close()}});}
 })();

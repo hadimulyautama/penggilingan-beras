@@ -53,11 +53,16 @@ async def baca(jenis:str,kode:str,user:User=Depends(pengguna_aksi)):
 
 @router.post('/api/actions/koreksi-bahan/{jenis}/{kode}/{tahap}')
 async def tulis(jenis:str,kode:str,tahap:str,req:Rancangan,user:User=Depends(pengguna_aksi)):
-    if tahap not in ('periksa','simpan'):raise HTTPException(404,'Tahap tidak ditemukan.')
+    if tahap not in ('periksa','simpan','pratinjau') or tahap=='pratinjau' and jenis!='sosoh':raise HTTPException(404,'Tahap tidak ditemukan.')
     async with SessionLocal() as db:
         try:
             body=req.model_dump(exclude_none=True)
-            d=await (s.periksa if tahap=='periksa' else s.simpan)(db,jenis=jenis,kode=kode,user=user,req=body)
+            if tahap=='pratinjau':
+                # Only a rolled-back simulation; this reason and its token may
+                # never be submitted as an operator's saved correction.
+                body['alasan']='Pratinjau otomatis · tidak disimpan'
+            d=await (s.simpan if tahap=='simpan' else s.periksa)(db,jenis=jenis,kode=kode,user=user,req=body)
+            if tahap=='pratinjau':d.pop('pemeriksaan',None)
             if tahap=='simpan':await db.commit()
             else:await db.rollback()
         except PermissionError as e:
