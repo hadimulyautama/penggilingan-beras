@@ -183,10 +183,19 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     konteks.setdefault("VIEW", getattr(request.state, "view", "tamu"))
     from app.web.akses import hak_view, PINTU_HAK
     konteks.setdefault("AKSES", hak_view(konteks["VIEW"]))
-    # Pintu tanpa batas VIEW juga harus mengikuti izin baca endpoint.
-    # Contohnya Pengiriman: operator G1 melihat tempatnya, tetapi terkunci.
+    # G1 boleh mencatat muatan, tetapi tidak membaca daftar Pengiriman penuh.
+    # Arahkan pintunya ke lembar muatan yang sudah diizinkan, tanpa membuka
+    # hak baca daftar, penerbitan perintah, retur, atau verifikasi.
+    muatan_saja = konteks["VIEW"] == _P.V_SELEPAN
+    konteks["PENGIRIMAN_URL"] = "/muatan" if muatan_saja else "/barang-keluar"
+    if muatan_saja:
+        konteks["TAB"] = tuple((k, "/muatan" if k == "barang_keluar" else url,
+                                 nama, ket, peran, ikon)
+                                for k, url, nama, ket, peran, ikon in TAB)
+    # Pintu lainnya tetap mengikuti izin baca endpoint.
     konteks["NAV_TERKUNCI"] = tuple(kunci for kunci, hak in PINTU_HAK.items()
-                                    if not konteks["AKSES"].get(hak, False))
+                                    if not konteks["AKSES"].get(hak, False)
+                                    and not (muatan_saja and kunci == "barang_keluar"))
     konteks.setdefault("TAMPILAN_INDUK", True)
     # Menu aktif yang pernah disembunyikan berdasarkan peran sekarang tetap
     # punya tempat di kerangka yang sama. Izin rutenya tidak diperluas.

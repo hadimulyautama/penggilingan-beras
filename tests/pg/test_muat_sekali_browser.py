@@ -120,3 +120,49 @@ async def test_admin_baca_dan_jalur_aktual_tetap_tersedia(pg, gudang):
             assert '/api/actions/muat-semua' not in writes
             assert not errors, errors
     assert await _stok(pg, gudang) == 10000
+
+
+@pytest.mark.parametrize('width', [390, 1440])
+@pytest.mark.parametrize('gudang_kode,lihat', [('g1', False), ('g2', False), ('g1', True), ('g2', True)])
+async def test_login_operator_dan_lihat_sebagai_pintu_muat(pg, gudang, width, gudang_kode, lihat):
+    from playwright.async_api import expect
+    from app.models import Warehouse
+    from app.web import security
+    rs = await _buat(pg, gudang, await _data(pg, gudang))
+    uid = gudang['adm'] if lihat else gudang['op']
+    async with pg() as db:
+        user = await db.get(User, uid)
+        user.role = P.SUPERADMIN if lihat else P.OPERATOR
+        user.default_warehouse_id = await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi == gudang_kode))
+        assert user.default_warehouse_id
+        await db.commit()
+    async with await _klien(pg, uid, 'uji-pintu-muat', mode='admin' if lihat else 'operator') as c:
+        # Jalankan autentikasi sebenarnya, bukan hanya token fixture.
+        c.cookies.clear()
+        from tests.pg.test_lembar_muatan import cap_formulir
+        await c.get('/masuk')
+        login = await c.post('/masuk', headers={'X-CSRF-Token':cap_formulir(c)}, data={'username':'uji-pintu-muat','sandi':'rahasia123','tujuan':'/muatan'})
+        assert login.status_code == 303, login.text
+        assert c.cookies.get(security.NAMA_COOKIE)
+        if lihat:
+            c.cookies.set('produksi_lihat', 'operator:' + gudang_kode)
+        async with browser_client(c, width) as (page, writes, errors):
+            await page.goto(BASE + f'/muatan?perintah={rs[0].rec.id}')
+            OUT.mkdir(parents=True, exist_ok=True)
+            await page.screenshot(path=str(OUT/f'pintu-{gudang_kode}-{lihat}-{width}.png'), full_page=True)
+            expected = '/muatan' if gudang_kode == 'g1' else '/barang-keluar'
+            links = page.locator('a').filter(has_text='Pengiriman')
+            assert await links.count() >= 1
+            for href in await links.evaluate_all('(xs)=>xs.map(x=>x.getAttribute("href"))'):
+                assert href == expected
+            await page.locator(f'[data-muat-semua="{rs[0].rec.id}"]').click()
+            await expect(page.locator(f'#muat-pelanggan-{rs[0].rec.id} .mr-status')).to_have_text('Selesai muat')
+            assert writes.count('/api/actions/muat-semua') == 1
+            assert await page.get_by_role('button', name='Konfirmasi muat & selesai', exact=True).count() == 0
+            assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            assert not errors, errors
+        # Pintu G1 tidak memperluas izin daftar penuh.
+        response = await c.get('/barang-keluar')
+        assert response.status_code == (403 if gudang_kode == 'g1' else 200)
+    assert await state(pg, rs) == ['dimuat', 'perintah']
+    assert await _stok(pg, gudang) == 9450
