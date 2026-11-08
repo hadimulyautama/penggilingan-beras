@@ -24,6 +24,7 @@ tersimpan di bundel `../arsip/` pada workspace induk.
 - `CLAUDE.md` — aturan kerja, batas modul, dan informasi operasional terkini.
 - `docs/ARSITEKTUR.md` — batas sistem, database bersama, dan kontrak lintas repo.
 - `docs/DEPLOY-RAILWAY.md` — langkah deploy Produksi.
+- `docs/HASIL-SAMPING-OTOMATIS.md` — aturan pengemasan otomatis dan kunci kiriman silo.
 - `docs/` — rancangan modul dan prosedur khusus.
 
 README lama yang menyebut “Fase 1” dan tiga bot sudah digantikan; gunakan

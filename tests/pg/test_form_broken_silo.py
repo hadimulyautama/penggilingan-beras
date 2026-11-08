@@ -30,11 +30,10 @@ async def test_rencana_sama_dengan_hasil_simpan(pg,sosoh,curah,packs,output,w):
         assert await g2.hitung_stok_silo(db,sosoh['silo']['C'])==w
 
 async def test_dua_ukuran_karung_fifo_dan_kelebihan(pg,sosoh):
-    from app.penggilingan.inventory.finished_goods import catat_packing
     await hasil(pg,sosoh,200)
     async with pg() as db:
-        u=await db.get(User,sosoh['user']);await catat_packing(db,user=u,kode_pol=sosoh['kode_pol'],kategori='broken',material_kode='polos',ukuran=25,jumlah_karung=2)
-        await catat_packing(db,user=u,kode_pol=sosoh['kode_pol'],kategori='broken',material_kode='putih',ukuran=50,jumlah_karung=3)
+        u=await db.get(User,sosoh['user']);await siapkan_packing_historis(db,user=u,kode_pol=sosoh['kode_pol'],kategori='broken',material_kode='polos',ukuran=25,jumlah_karung=2)
+        await siapkan_packing_historis(db,user=u,kode_pol=sosoh['kode_pol'],kategori='broken',material_kode='putih',ukuran=50,jumlah_karung=3)
         p=(await rincian(db,'pemilik|pabrik',175,'C'))['rencana'];assert p['karung']==5 and p['bongkar_kg']==200 and p['kelebihan']==25
         await g2.masukkan_stok_broken_pemilik_ke_silo(db,user=u,jasa_id=None,nama_silo='C',berat_kg=175)
     async with pg() as db:assert (await rincian(db,'pemilik|pabrik'))['saldo']==p['sisa']
@@ -71,12 +70,12 @@ async def test_izin_baca_dan_tulis(pg,sosoh,role,view,wh,izin):
     async with await _klien(pg,sosoh['user'],'broken-akses',mode='operator' if role=='operator' else 'admin') as c:
         if view:assert (await c.post('/lihat-sebagai',data={'peran':view,'_csrf':cap_formulir(c)})).status_code==303
         d=await c.get('/api/actions/rincian-broken-silo',params=dict(proses='pemilik|pabrik',berat_kg=10,silo='C'));assert d.status_code==200 if izin else d.status_code in [401,403]
-        d=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses='pemilik|pabrik',berat_kg=10,silo='C'),headers={'X-CSRF-Token':cap_formulir(c)});assert d.status_code==200 if izin else d.status_code in [401,403],d.text
+        d=await c.post('/api/actions/masukkan-broken-silo',json=dict(dict(proses='pemilik|pabrik',berat_kg=10,silo='C'), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)});assert d.status_code==200 if izin else d.status_code in [401,403],d.text
 
 @pytest.mark.parametrize('w',[0,-1,'Infinity','NaN','abc',None])
 async def test_isian_tidak_sah_tanpa_mutasi(pg,sosoh,w):
     async with await _klien(pg,sosoh['user'],'broken-invalid',mode='admin') as c:
-        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses='pemilik|pabrik',berat_kg=w,silo='C'),headers={'X-CSRF-Token':cap_formulir(c)});assert r.status_code in [400,422]
+        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(dict(proses='pemilik|pabrik',berat_kg=w,silo='C'), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)});assert r.status_code in [400,422]
     async with pg() as db:assert await db.scalar(select(func.count()).select_from(BrokenKeSilo))==0
 
 async def test_saldo_terbaru_dan_nama_silo_master(pg,sosoh):
@@ -85,7 +84,7 @@ async def test_saldo_terbaru_dan_nama_silo_master(pg,sosoh):
     async with await _klien(pg,sosoh['user'],'broken-berubah',mode='admin') as c:
         d=(await c.get('/api/actions/rincian-broken-silo',params=dict(proses='pemilik|pabrik',berat_kg=7000,silo='Campuran Timur'))).json();assert d['rencana']['kg']==7000
         await hasil(pg,sosoh,500)
-        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses='pemilik|pabrik',berat_kg=7000,silo='Campuran Timur'),headers={'X-CSRF-Token':cap_formulir(c)});assert r.status_code==400 and '500' in r.text,r.text
+        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(dict(proses='pemilik|pabrik',berat_kg=7000,silo='Campuran Timur'), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)});assert r.status_code==400 and '500' in r.text,r.text
     async with pg() as db:assert await db.scalar(select(func.count()).select_from(BrokenKeSilo))==0
 
 async def test_pemilik_penerima_bukan_pemilik_hasil_mentah(pg,sosoh):
@@ -122,7 +121,7 @@ async def test_toleransi_lama_dan_bobot_aktual(pg,sosoh,w,rencana,aktual):
     async with pg() as db:
         d=await rincian(db,'pemilik|pabrik',w,'C');assert d['rencana']['kg']==pytest.approx(rencana)
     async with await _klien(pg,sosoh['user'],'broken-presisi',mode='admin') as c:
-        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses='pemilik|pabrik',berat_kg=w,silo='C'),headers={'X-CSRF-Token':cap_formulir(c)})
+        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(dict(proses='pemilik|pabrik',berat_kg=w,silo='C'), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)})
         assert r.status_code==200,r.text
         assert r.json()['rincian_broken']['kg']==pytest.approx(aktual)
 
@@ -165,7 +164,11 @@ async def test_jejak_bongkar_ikut_rollback_sumber_gagal(pg,sosoh):
     from app.models import BrokenKarungDibongkar
     await hasil(pg,sosoh,500);await _kemas(pg,sosoh,jumlah_karung=10)
     async with await _klien(pg,sosoh['user'],'broken-rollback-karung',mode='admin') as c:
-        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses=sosoh['kode_pol']+'|',berat_kg=550,silo='C'),headers={'X-CSRF-Token':cap_formulir(c)});assert r.status_code==400
+        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(dict(proses=sosoh['kode_pol']+'|',berat_kg=550,silo='C'), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)});assert r.status_code==400
     async with pg() as db:
         assert await db.scalar(select(func.count()).select_from(BrokenKarungDibongkar))==0
         assert await db.scalar(select(func.sum(FinishedGoodsStock.jumlah_karung)))==10
+
+from tests.pg.packing_historis import siapkan_packing_historis
+
+from uuid import uuid4

@@ -521,7 +521,6 @@ async def test_bekatul_jasa_tetap_di_stok_pemilik_sampai_dipindah(pg, sosoh):
     from app.database import now_local
     from app.models import Jasa, Pelanggan, User
     from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
-    from app.penggilingan.inventory.finished_goods import catat_packing
     from app.services.stok import stok_produk
 
     async with pg() as db:
@@ -546,7 +545,7 @@ async def test_bekatul_jasa_tetap_di_stok_pemilik_sampai_dipindah(pg, sosoh):
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
-        await catat_packing(db, user=u, kode_pol=p.kode_proses,
+        await siapkan_packing_historis(db, user=u, kode_pol=p.kode_proses,
                             kategori="bekatul", material_kode="bekas",
                             ukuran=40, jumlah_karung=47)       # 1.880 kg
 
@@ -1717,7 +1716,7 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
     from app.database import now_local
     from app.models import ProduksiAkun, User
     from app.penggilingan.gudang2.models import PolishingOutputLog
-    from app.penggilingan.inventory.finished_goods import catat_broken, catat_packing
+    from app.penggilingan.inventory.finished_goods import catat_broken
     from app.web import csrf, security
     from hmu_identitas import sandi as S
     from hmu_identitas.model import mode_bawaan
@@ -1733,7 +1732,7 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
-        await catat_packing(db, user=u, kode_pol=sosoh["kode"], kategori="broken",
+        await siapkan_packing_historis(db, user=u, kode_pol=sosoh["kode"], kategori="broken",
                             material_kode="putih", ukuran=50, jumlah_karung=2)
         await catat_broken(db, user=u, kode_pol=sosoh["kode"], berat_kg=10)
 
@@ -1765,3 +1764,5 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
     assert "Dikemas otomatis" in h and "Curah · sisa kemasan" in h
     # "belum dicatat" nol — kartunya tak lagi menawarkan "Catat broken (curah)".
     assert "buka=catat_broken" not in h
+
+from tests.pg.packing_historis import siapkan_packing_historis

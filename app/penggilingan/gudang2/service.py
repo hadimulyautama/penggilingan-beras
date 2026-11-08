@@ -2617,7 +2617,7 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
 
 async def masukkan_stok_broken_pemilik_ke_silo(
     db: AsyncSession, *, user: User, jasa_id: int | None, nama_silo: str,
-    berat_kg: float, tanggal=None, jam=None,
+    berat_kg: float, tanggal=None, jam=None, commit: bool = True,
 ) -> MasukkanBrokenResult:
     """Ambil broken FIFO dari tumpukan stok milik satu pemilik.
 
@@ -2655,13 +2655,14 @@ async def masukkan_stok_broken_pemilik_ke_silo(
             opened_ids.extend(result.bongkar_ids or [])
         result = MasukkanBrokenResult(nama_silo=nama_silo, moved_kg=float(berat_kg),
                                     dibongkar_dari_karung_kg=opened_bags, kodes=moved_codes,bongkar_ids=opened_ids)
-    await db.commit()
+    if commit:
+        await db.commit()
     return result
 
 
 async def masukkan_hasil_samping_ke_silo(
     db: AsyncSession, *, user: User, jenis: str, jasa_id: int | None,
-    nama_silo: str, berat_kg: float,
+    nama_silo: str, berat_kg: float, commit: bool = True,
 ) -> dict:
     """Pindahkan stok Menir/Reject yang masih tersedia dari hasil sosoh ke silo."""
     jenis = (jenis or "").strip().lower()
@@ -2730,7 +2731,8 @@ async def masukkan_hasil_samping_ke_silo(
                            new_value=f"{code} | {jenis} {kg:.2f}kg → {silo.nama_silo}"
                                      + (f" | ditambah ke {ke_proses}" if ke_proses else ""))
         codes.append(code)
-    await db.commit()
+    if commit:
+        await db.commit()
     return {"nama_silo": silo.nama_silo, "moved_kg": float(berat_kg), "codes": codes,
             "jasa_id": jasa_id}
 

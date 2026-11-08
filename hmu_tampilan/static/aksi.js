@@ -642,6 +642,7 @@
     var pratinjauMilik = a.pratinjau_kepemilikan;
     var masukkanSilo = a.konteks_masukkan_silo;
     var masukkanBroken = a.konteks_broken_silo;
+    var idempotenSamping = a.kiriman_silo_idempoten === true;
     var masukkanBeras = a.konteks_beras_silo;
     // Menir dan Reject memakai kontrak tiga field serta alokasi domain yang sama.
     var kemasBeras = a.konteks_kemas_beras;
@@ -702,7 +703,7 @@
     document.body.style.overflow = "hidden";
 
     var dataMasukkan=null, nomorMasukkan=0, timerMasukkan;
-    var kunciMasukkan=masukkanSilo?'silo-web-'+Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(16)),function(n){return n.toString(16).padStart(2,'0');}).join(''):'';
+    var kunciMasukkan=(masukkanSilo || idempotenSamping)?'silo-web-'+Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(16)),function(n){return n.toString(16).padStart(2,'0');}).join(''):'';
     function medanMasukkan(nama,tampil,wajib){
       var e=$('f_'+nama);if(!e)return;
       e.disabled=!tampil;e.hidden=!tampil;e.dataset.pratinjauNonaktif=tampil?'':'1';e.toggleAttribute('data-wajib',!!wajib&&tampil);
@@ -802,14 +803,12 @@
 
     var urutKemas=0,timerKemas,risikoKemas=false;
     function gambarKemas(d){
-      var beras=!d||d.beras;labelSimpan=beras?'Catat pengemasan':'Simpan';
-      lembar.classList.toggle('lembar--kemas-beras',beras);lembar.classList.toggle('lembar--hasil',beras);
-      lembar.querySelector('.lembar__kepala h2').textContent=beras?'Pengemasan beras':belah(a.label).teks;
-      var labelMaks=lembar.querySelector('.maksimal-kemas span');if(labelMaks)labelMaks.textContent=beras?'Maksimal dari saldo beras':'Maksimal kemas';
-      var labelMerk=lembar.querySelector('label[for="f_merk"]');if(labelMerk)labelMerk.textContent=beras?'Merek (opsional)':a.fields.filter(function(f){return f.name==='merk';})[0].label;
-      var tanpaMerk=lembar.querySelector('#f_merk option[value=""]');if(tanpaMerk)tanpaMerk.textContent=beras?'Tanpa merek':'— pilih —';
-      $('pk-stock').hidden=!beras;$('pk-karung').hidden=!beras;$('pk-preview').hidden=!beras;$('pk-hint').hidden=!beras;
-      if(!beras){$('simpan').textContent='Simpan';return;}
+      // Sumber dan layanan manual hanya menerima beras. Hasil samping
+      // dihitung otomatis dan tidak mempunyai cabang formulir packing awal.
+      lembar.querySelector('.lembar__kepala h2').textContent='Pengemasan beras';
+      var labelMaks=lembar.querySelector('.maksimal-kemas span');if(labelMaks)labelMaks.textContent='Maksimal dari saldo beras';
+      var labelMerk=lembar.querySelector('label[for="f_merk"]');if(labelMerk)labelMerk.textContent='Merek (opsional)';
+      var tanpaMerk=lembar.querySelector('#f_merk option[value=""]');if(tanpaMerk)tanpaMerk.textContent='Tanpa merek';
       if(!risikoKemas&&!lembar._menyimpan)$('simpan').textContent='Catat pengemasan';
       if(!d){$('pk-stock').textContent='Pilih produk untuk melihat saldo yang dapat dikemas.';$('pk-karung').textContent='Pilih sumber dan ukuran untuk melihat stok karung.';$('pk-preview').innerHTML='<h3>Hasil pengemasan</h3><p class="mi-note">Pilih sumber hasil beras terlebih dahulu.</p>';return;}
       var open=!!lembar.querySelector('#pk-stock details[open]'),p=d.rencana,k=d.kemasan,s=d.saldo;
@@ -2883,7 +2882,7 @@
           return { pilih: b.pilih, jumlah: b.jumlah };
         });
       });
-      if(masukkanSilo) isi.kunci_kiriman=kunciMasukkan;
+      if(masukkanSilo || idempotenSamping) isi.kunci_kiriman=kunciMasukkan;
       return isi;
     }
 
@@ -3013,6 +3012,23 @@
         }
       } catch (e) {
         lembar._menyimpan = false;
+        if (idempotenSamping && e instanceof TypeError &&
+            (!window.SESIFORM || SESIFORM.periksa())) {
+          // Respons bisa hilang setelah server commit. Isian dan kuncinya
+          // dibekukan; operator hanya mengulang kiriman asli, bukan mutasi baru.
+          if (tbl) { tbl.disabled = true; tbl.textContent = 'Belum terkonfirmasi'; }
+          var ulangKiriman = document.createElement('button');
+          ulangKiriman.type = 'button'; ulangKiriman.className = 'btn btn--utama';
+          ulangKiriman.id = 'ulang-kiriman-silo';
+          ulangKiriman.textContent = 'Coba kiriman yang sama';
+          ulangKiriman.onclick = function () {
+            if (window.SESIFORM && !SESIFORM.periksa()) return;
+            ulangKiriman.remove(); simpan(isi, v, tbl);
+          };
+          if (tbl) tbl.after(ulangKiriman);
+          salahFormulir(lembar, 'Jawaban server belum diterima. Isian tetap utuh. Coba kiriman yang sama; stok tidak akan dipindahkan dua kali.');
+          return;
+        }
         if (grup) grup.inert = false;
         if (kembali) kembali.disabled = false;
         if (!((selesaiGiling || bebaskanGiling || selesaiSosoh || bebaskanSosoh) && e instanceof TypeError)) kembaliKeBorang();

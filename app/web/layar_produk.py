@@ -426,7 +426,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
                   if p and owner is not None and jumlah and boleh_pindah else None)
         rows.append(dict(bentuk=bentuk,kg=berat,karung=jumlah,ukuran=ukuran,merk=merk,
                          bahan=bahan,href=href,pindah=pindah,
-                         kemas_baru=(detail_href+"&"+urlencode({"buka":"catat_packing","nilai":f"curah@{jenis}@{token}"})) if not p and not jumlah and berat>0.5 and boleh_kemas else None,
+                         kemas_baru=(detail_href+"&"+urlencode({"buka":"catat_packing","nilai":f"curah@{jenis}@{token}"})) if jenis in svc.BERAS_JENIS and not p and not jumlah and berat>0.5 and boleh_kemas else None,
                          kemas=kemas_href(p["sku_id"],p["std_id"],owner) if p and (jumlah or curah_id) and boleh_kemas else None,
                          sumber=sumber if jenis in svc.BERAS_JENIS else None))
 
