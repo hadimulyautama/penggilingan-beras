@@ -371,7 +371,6 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
     from app.database import now_local
     from app.models import ByproductStock, User
     from app.penggilingan.gudang2.models import PolishingOutputLog
-    from app.penggilingan.inventory.finished_goods import catat_packing
     from app.services.stok import barang_jadi_g2
 
     async with pg() as db:
@@ -390,7 +389,7 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
                 waktu_update=kini, input_by=u.id))
         await db.commit()
         for jenis in ("broken", "menir", "reject"):
-            await catat_packing(
+            await siapkan_packing_historis(
                 db, user=u, kode_pol="POL-UJIT-01", kategori=jenis,
                 material_kode="bekas" if jenis == "reject" else "putih", ukuran=50, jumlah_karung=1)
         stok_jadi = await barang_jadi_g2(db)
@@ -441,7 +440,6 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
     """
     from app.database import now_local
     from app.penggilingan.gudang2.models import PolishingOutputLog
-    from app.penggilingan.inventory.finished_goods import catat_packing
     from app.models import User
 
     async with pg() as db:
@@ -451,7 +449,7 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
             input_by=titipan["user"]))
         await db.commit()
         u = await db.get(User, titipan["user"])
-        await catat_packing(db, user=u, kode_pol="POL-UJIT-01",
+        await siapkan_packing_historis(db, user=u, kode_pol="POL-UJIT-01",
                             kategori="bekatul", material_kode="bekas",
                             ukuran=40, jumlah_karung=20)      # 800 kg
 
@@ -465,14 +463,14 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
         href = next(h for h in tautan if h.startswith("/stok-produk-jasa/detail?")
                     and parse_qs(urlsplit(h).query).get("jenis") == ["bekatul"])
         r = await c.get(href)
-        # Disembunyikan hanya dari halaman stok karung, bukan dari packing.
+        # Master dan transaksi bekas tetap terbaca, tanpa tawaran packing awal manual.
         stok_karung = await c.get("/stok-karung")
         stok_jasa = await c.get("/stok-karung-jasa")
         assert "karung bekas" not in stok_karung.text.lower()
         assert "karung bekas" not in stok_jasa.text.lower()
         pilihan = await c.get("/api/actions/kemasan-untuk", params={"induk":"POL-UJIT-01|bekatul"})
         assert pilihan.status_code == 200
-        assert "bekas|40" in {o["value"] for o in pilihan.json()}
+        assert pilihan.json() == []
     assert r.status_code == 200
     teks, tautan = _isi_html(r.text)
     assert "Bekatul" in teks and "Bu Sri" in teks and "900 kg" in teks
@@ -665,3 +663,5 @@ async def test_pindah_barang_jadi_benar_benar_berpindah_di_kartu_stok_produk(pg,
         f"dikemas pabrik wajib jadi 125 (persis yang dipindah), bukan {pabrik.dikemas_kg}"
     assert pabrik.sisa_kg == pytest.approx(125), \
         f"sisa pabrik wajib BERTAMBAH persis 125 kg (0→125), bukan {pabrik.sisa_kg}"
+
+from tests.pg.packing_historis import siapkan_packing_historis

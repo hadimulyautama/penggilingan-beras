@@ -87,11 +87,10 @@ async def _kemas(pg, sosoh, *, jumlah_karung: int, ukuran: int = 50) -> None:
     """Satu-satunya kombinasi sah untuk broken selain polos/25kg —
     lihat `packaging.KEMASAN_VALID`."""
     from app.models import User
-    from app.penggilingan.inventory.finished_goods import catat_packing
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
-        await catat_packing(db, user=u, kode_pol=sosoh["kode_pol"], kategori="broken",
+        await siapkan_packing_historis(db, user=u, kode_pol=sosoh["kode_pol"], kategori="broken",
                             material_kode="putih", ukuran=ukuran,
                             jumlah_karung=jumlah_karung)
 
@@ -437,9 +436,7 @@ async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemas
                                                      tambah_silo_penyosohan)
     from app.penggilingan.gudang2.service import (hitung_stok_silo,
                                                    masukkan_broken_ke_silo)
-    from app.penggilingan.inventory.finished_goods import (catat_broken,
-                                                           catat_packing,
-                                                           hitung_stok_broken_curah)
+    from app.penggilingan.inventory.finished_goods import catat_broken, hitung_stok_broken_curah
     from app.services.seed import seed_master
     from app.web.api import broken_proses_tersedia
 
@@ -505,7 +502,7 @@ async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemas
 
     async with pg() as db:
         u = await db.get(User, uid)
-        await catat_packing(db, user=u, kode_pol=kode_sumber, kategori="broken",
+        await siapkan_packing_historis(db, user=u, kode_pol=kode_sumber, kategori="broken",
                             material_kode="putih", ukuran=50, jumlah_karung=3)
         await catat_broken(db, user=u, kode_pol=kode_sumber, berat_kg=17)
 
@@ -647,3 +644,5 @@ async def test_picker_menampilkan_hasil_mesin_belum_tercatat(pg, pemakai):
         daftar = await broken_proses_tersedia(user=u)
     assert len(daftar) == 1 and daftar[0]["value"] == "pemilik|pabrik", daftar
     assert "2.000" in daftar[0]["label"]
+
+from tests.pg.packing_historis import siapkan_packing_historis

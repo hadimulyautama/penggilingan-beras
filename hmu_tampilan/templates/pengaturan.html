@@ -23,7 +23,7 @@
   <div class="pg-kelompok">
     <section class="pg-grup" aria-labelledby="pg-akun"><header><span>{{ ikon('user') }}</span><div><h2 id="pg-akun">Akun &amp; perangkat</h2><p>Pribadi · perangkat ini</p></div></header>
       {{ pintu('/pengaturan/akun', 'Nama & kata sandi', 'Nama pada catatan pekerjaan', 'user') }}
-      {{ pintu('/pengaturan/peran', 'Peran & gudang kerja', 'Lihat sebagai atau pilih gudang kerja', 'eye', blok_kerja_gudang) }}
+      {{ pintu('/pengaturan/peran', 'Peran & gudang kerja', 'Lihat sebagai atau pilih gudang kerja', 'eye', blok_kerja_gudang or blok_lihat_sebagai) }}
       {{ pintu('/pengaturan/sesi', 'Sesi perangkat', 'Keluar atau ganti pengguna', 'device') }}
     </section>
     <section class="pg-grup" aria-labelledby="pg-fasilitas"><header><span>{{ ikon('factory') }}</span><div><h2 id="pg-fasilitas">Perusahaan &amp; fasilitas</h2><p>Identitas, lokasi, dan sarana produksi</p></div></header>
