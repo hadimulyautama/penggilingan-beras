@@ -116,11 +116,12 @@ async def test_konkurensi_dan_rollback(pg,packing,monkeypatch):
         async with pg() as db:await simpan(db,packing,10)
     async with pg() as db:assert (await rincian(db,packing['sumber']))['saldo']['tersedia']==2150
 
-async def test_picker_lingkup_dan_hasil_samping_tetap_lama(pg,packing):
+async def test_picker_lingkup_beras_dan_hasil_samping_otomatis(pg,packing):
     async with pg() as db:
         db.add(PolishingOutputLog(polishing_process_id=packing['proc_id'],jenis='broken',berat_kg=200,waktu_update=now_local(),input_by=packing['user']));await db.commit()
-        assert await rincian(db,packing['kode_pol']+'|broken')=={'beras':False}
+        with pytest.raises(bj.InventoryError,match='otomatis'):
+            await rincian(db,packing['kode_pol']+'|broken')
     async with await _klien(pg,packing['user'],'pack-side',mode='admin') as c:
         opts=(await c.get('/api/actions/beras-belum-dikemas?jenis=medium&pemilik=pabrik')).json();assert [x['value']for x in opts]==[packing['sumber']]
         r=await c.post('/api/actions/catat-packing',json=dict(sumber=packing['kode_pol']+'|broken',kemasan='putih|50',jumlah_karung=2),headers={'X-CSRF-Token':cap_formulir(c)})
-        assert r.status_code==200 and set(r.json())=={'ok','pesan'}
+        assert r.status_code==400 and 'otomatis' in r.text

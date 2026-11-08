@@ -138,18 +138,10 @@ async def karung_pabrik_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
 
 @router.get("/actions/produk-kemasan")
 async def produk_kemasan(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Kombinasi produk × karung yang sah — satu pilihan, bukan tiga.
+    """Pilihan kemasan untuk borang packing lama; pengemasan awal hanya beras.
 
-    ⚠ BUKAN KODE MATI, meski sejak 28 September 2026 tak ada satu pun
-    spesifikasi borang yang menyebutnya. Ia melayani LEMBAR YANG SUDAH TERBUKA
-    di layar orang saat versi baru terbit: borangnya memuat daftar lewat
-    alamat ini, dan yang memegang telepon tak punya cara tahu bahwa borangnya
-    sudah basi. Menghapusnya membuat daftar itu kosong tanpa satu pun galat,
-    dan yang terbaca orang bukan "layarnya basi" melainkan "stoknya habis".
-
-    Dihapus bersama `mutu-beras` dan cabang bentuk-lama di `PackingReq` /
-    `KirimBarangJadiReq` — bertiga, sesudah cukup lama untuk yakin tak ada
-    lagi lembar lama yang terbuka.
+    Master kombinasi lengkap tetap dipakai Retur dan Kemas ulang lewat
+    `kombinasi_kemasan`, tanpa menawarkan hasil samping di borang lama.
     """
     async with SessionLocal() as db:
         nama = await _nama_material(db)
@@ -157,13 +149,12 @@ async def produk_kemasan(user: User = Depends(pengguna_aksi)) -> list[dict]:
         {"value": _triple(kat, m, u),
          "label": f"{KATEGORI_LABEL.get(kat, kat)} · {nama.get(m, m).lower()} {u} kg"}
         for kat, m, u in kombinasi_kemasan()
-        if kat != "pk"        # PK tak dipacking di sini; ia dijual dari Gudang 1
+        if kat in bj._BERAS_KATEGORI
     ]
 
 
 @router.get("/actions/beras-belum-dikemas")
 async def beras_belum_dikemas(jenis: str | None = None, pemilik: str | None = None,
-                             hanya_beras: bool = False,
                              user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Beras yang sudah keluar mesin dan BELUM dikemas — per lot × jenis.
 
@@ -183,13 +174,11 @@ async def beras_belum_dikemas(jenis: str | None = None, pemilik: str | None = No
     Termasuk hasil proses berjalan: batasnya saldo hasil yang sudah tercatat,
     dikurangi packing dan pemakaian lain, diperiksa ulang saat simpan.
     """
-    from app.services.stok import beras_curah, hasil_samping_bisa_dikemas, nama_produk
+    from app.services.stok import beras_curah, nama_produk
 
     from app.services.jasa import nama_pemilik_banyak
     async with SessionLocal() as db:
         curah = await beras_curah(db, termasuk_berjalan=True)
-        if not hanya_beras:
-            curah += await hasil_samping_bisa_dikemas(db)
         nama_pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b in curah if b.jasa_id})
     return [{"value": f"{b.kode_proses}|{b.jenis}",
              "berat_kg": float(b.sisa_kg),
@@ -261,7 +250,9 @@ async def kemasan_untuk(induk: str = "",
     from app.services.stok import kategori_dan_mutu
 
     jenis = (induk or "").split("|")[-1].strip().lower()
-    if not jenis:
+    from app.services.stok import BERAS_JENIS
+
+    if jenis not in BERAS_JENIS:
         return []
     kategori, _ = kategori_dan_mutu(jenis)
     async with SessionLocal() as db:
@@ -407,7 +398,7 @@ async def act_pindah_kepemilikan_karung(req: PindahKepemilikanKarungReq,
 class PackingReq(BaseModel):
     """Bentuk BARU sejak 28 September 2026: `sumber` + `kemasan`.
 
-    Bentuk lama (`kode_pol` + `produk` + `grade`) tetap diterima dan tidak
+    Untuk beras, bentuk lama (`kode_pol` + `produk` + `grade`) tetap diterima dan tidak
     dibuang. Halaman di ponsel berumur panjang: lembar yang sudah terbuka di
     layar orang saat versi baru terbit akan mengirim bentuk lama, dan yang
     menekan Simpan tak punya cara mengetahui bahwa borangnya sudah basi. Yang
@@ -424,6 +415,13 @@ class PackingReq(BaseModel):
     grade: str | None = None
 
 
+def _pastikan_packing_manual(kategori: str) -> None:
+    try:
+        bj.pastikan_packing_manual(kategori)
+    except bj.InventoryError as e:
+        raise galat(e, "Pilih beras yang akan dikemas.")
+
+
 def _urai_packing(req: PackingReq) -> tuple[str, str, str | None, str, int]:
     """(kode_pol, kategori, mutu, material, ukuran) dari kedua bentuk kiriman."""
     from app.services.stok import kategori_dan_mutu
@@ -434,6 +432,7 @@ def _urai_packing(req: PackingReq) -> tuple[str, str, str | None, str, int]:
             raise HTTPException(400, "Pilih dulu beras yang dikemas.")
         kode_pol, jenis = bagian[0].strip(), bagian[1].strip().lower()
         kategori, mutu = kategori_dan_mutu(jenis)
+        _pastikan_packing_manual(kategori)
         pasang = (req.kemasan or "").split("|")
         if len(pasang) != 2 or not pasang[1].isdigit():
             raise HTTPException(400, "Pilih karung dan ukurannya.")
@@ -449,6 +448,7 @@ def _urai_packing(req: PackingReq) -> tuple[str, str, str | None, str, int]:
 
     if not req.kode_pol:
         raise HTTPException(400, "Pilih dulu beras yang dikemas.")
+    _pastikan_packing_manual((req.produk or "").split("|")[0].strip().lower())
     kategori, material, ukuran = _urai_triple(req.produk or "")
     mutu = (req.grade or None) if kategori == "beras_putih" else None
     return req.kode_pol, kategori, mutu, material, ukuran
@@ -2011,7 +2011,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "kemasan", "label": "Karung & ukurannya", "type": "remote",
                   "induk": "sumber", "source": "/api/actions/kemasan-untuk",
                   "kosong": "Tak ada kemasan yang sah untuk barang ini."},
-                 {"name": "merk", "label": "Merk (beras saja)", "type": "remote",
+                 {"name": "merk", "label": "Merek (opsional)", "type": "remote",
                   "optional": True, "source": "/api/actions/merk"},
                  {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
                   "maksimal_karung": True},
@@ -2023,19 +2023,13 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                      "Berasnya tetap tersedia di Stok Produk dan bisa dikemas kemudian.",
              "fields": [
                  {"name": "sumber", "label": "Hasil sosoh yang dijadikan curah", "type": "remote",
-                  "source": "/api/actions/beras-belum-dikemas?hanya_beras=true",
+                  "source": "/api/actions/beras-belum-dikemas",
                   "kosong": "Tidak ada sisa beras hasil sosoh yang menunggu packing."},
              ]},
             {"akses": "g2", "id": "catat_bekatul", "label": "🌾 Catat bekatul (curah)",
              "post": "/api/actions/catat-bekatul",
-             # ⚠ Kalimat lamanya berbunyi "ia tidak dipacking" dan sudah BASI
-             # sejak 28 September 2026: bekatul boleh dikarungi (karung bekas
-             # 40 kg & 20 kg). Keterangan yang basi lebih buruk daripada tak
-             # ada — orang mempercayainya lalu berhenti mencari jalan yang
-             # sebenarnya ada.
-             "hint": "Bekatul yang dijual CURAH, per kg. Yang dikarungi dicatat "
-                     "lewat packing — keduanya mengambil dari tumpukan yang "
-                     "sama dan saling mengurangi.",
+             "hint": "Catat stok bekatul curah yang belum dibukukan. Pengemasan hasil "
+                     "samping mengikuti aturan otomatis dari hasil produksi.",
              "fields": [
                  {"name": "kode_pol", "label": "Proses penyosohan", "type": "remote",
                   "source": "/api/actions/polishing-terkini"},

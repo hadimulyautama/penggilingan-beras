@@ -20,7 +20,7 @@ async def test_sumber_kedua_tidak_sah_membatalkan_seluruh_pemindahan_http(pg,sos
             db.add(ByproductStock(jenis_produk='broken',source_type='timbangan',source_id=123,berat_kg=100,tanggal=now_local().date(),waktu=now_local(),input_by=sosoh['user']))
         await db.commit()
     async with await _klien(pg,sosoh['user'],'broken-atomik',mode='admin') as c:
-        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses='pemilik|pabrik',berat_kg=150,silo='C'),headers={'X-CSRF-Token':cap_formulir(c)})
+        r=await c.post('/api/actions/masukkan-broken-silo',json=dict(dict(proses='pemilik|pabrik',berat_kg=150,silo='C'), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)})
         assert r.status_code==400 and 'SEDANG' in r.text,r.text
     async with pg() as db:
         assert await db.scalar(select(func.count()).select_from(BrokenKeSilo))==0
@@ -76,3 +76,5 @@ async def test_dua_operator_ke_silo_berbeda_tidak_memakai_saldo_yang_sama(pg,sos
         assert await db.scalar(select(func.sum(BrokenKeSilo.berat_kg)))==75
         direct,procs,_=await g2.rencana_broken_pemilik(db,jasa_id=None,berat_kg=None)
         assert sum(w for _,w in direct+procs)==25
+
+from uuid import uuid4

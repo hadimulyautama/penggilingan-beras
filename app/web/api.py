@@ -967,6 +967,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # kurang — lihat `gudang2.service.masukkan_broken_ke_silo`.
             {"akses": "fisik_g2", "id": "masukkan_broken_silo", "label": "📤 Masukkan broken ke silo",
              "post": "/api/actions/masukkan-broken-silo",
+             "kiriman_silo_idempoten": True,
              "konteks_broken_silo": {"source": "/api/actions/rincian-broken-silo", "proses": "proses"},
              "hint": "Isi berat broken yang benar-benar masuk silo. Sumber diambil otomatis menurut urutan stok.",
              "fields": [
@@ -982,6 +983,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "number", "wajib": True},
              ]},
             {"akses": "fisik_g2", "id": "masukkan_menir_silo", "label": "📤 Masukkan menir ke silo",
+             "kiriman_silo_idempoten": True,
              "konteks_menir_silo": {"source": "/api/actions/rincian-menir-silo"},
              "post": "/api/actions/masukkan-menir-silo",
              "hint": "Hanya stok menir yang tersedia; pemilik stok dibawa ke silo.",
@@ -995,6 +997,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)", "type": "number"},
              ]},
             {"akses": "fisik_g2", "id": "masukkan_reject_silo", "label": "📤 Masukkan reject ke silo",
+             "kiriman_silo_idempoten": True,
              "konteks_reject_silo": {"source": "/api/actions/rincian-reject-silo"},
              "post": "/api/actions/masukkan-reject-silo",
              "hint": "Hanya stok reject yang tersedia; pemilik stok dibawa ke silo.",
@@ -5363,7 +5366,8 @@ class PindahBrokenSiloReq(BaseModel):
     broken: str      # id baris byproduct_stock (dari /actions/broken-tersedia)
     silo: str        # nama silo broken, mis. "C"
     #: Kosong = SELURUH sisa baris broken itu — lihat PindahTumpukanSiloReq.
-    berat_kg: float | None = None
+    berat_kg: Positif | None = None
+    kunci_kiriman: str | None = None
 
 
 @router.post("/actions/pindah-broken-silo")
@@ -5389,13 +5393,17 @@ async def act_pindah_broken_silo(req: PindahBrokenSiloReq,
         raise HTTPException(
             400, "Isi berat yang dipindah lebih dari 0 — atau kosongkan "
                  "kotaknya untuk memindahkan seluruh sisanya.")
-    from app.penggilingan.gudang2.service import Gudang2Error, pindah_broken_ke_silo
+    from app.penggilingan.gudang2.service import Gudang2Error, PindahBrokenResult, pindah_broken_ke_silo
+    from app.services.kiriman_samping_silo import simpan
     async with SessionLocal() as db:
         u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
-            r = await pindah_broken_ke_silo(
-                db, user=u, byproduct_stock_id=int(req.broken), nama_silo=req.silo.strip(),
-                berat=(None if req.berat_kg is None else float(req.berat_kg)))
+            isian = dict(broken=int(req.broken), silo=req.silo.strip(), berat_kg=req.berat_kg)
+            r = PindahBrokenResult(**await simpan(
+                db, user=u, kunci=req.kunci_kiriman, aksi="pindah-broken", isian=isian,
+                kerjakan=lambda: pindah_broken_ke_silo(
+                    db, user=u, byproduct_stock_id=isian['broken'], nama_silo=isian['silo'],
+                    berat=isian['berat_kg'], commit=False)))
         except Gudang2Error as e:
             raise _err(e, "Gagal memindahkan broken ke silo.")
     sisa = (f"sisa broken curah {r.sisa_broken:g} kg"
@@ -5551,12 +5559,14 @@ class MasukkanBrokenSiloReq(BaseModel):
     proses: str      # "<kode_pol>|<jasa_id atau kosong>", dari picker di atas
     silo: str        # nama silo broken, mis. "C"
     berat_kg: Positif
+    kunci_kiriman: str | None = None
 
 
 class MasukkanHasilSampingSiloReq(BaseModel):
     pemilik: str
     silo: str
     berat_kg: Positif
+    kunci_kiriman: str | None = None
 
 
 @router.get("/actions/hasil-samping-pemilik-tersedia")
@@ -5632,10 +5642,13 @@ async def _act_masukkan_hasil_samping(req: MasukkanHasilSampingSiloReq,
     async with SessionLocal() as db:
         u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
-            result = await masukkan_hasil_samping_ke_silo(
-                db, user=u, jenis=jenis,
-                jasa_id=None if owner == "pabrik" else int(owner),
-                nama_silo=req.silo.strip(), berat_kg=float(req.berat_kg))
+            from app.services.kiriman_samping_silo import simpan
+            isian = dict(jasa_id=None if owner == "pabrik" else int(owner),
+                         nama_silo=req.silo.strip(), berat_kg=float(req.berat_kg))
+            result = await simpan(
+                db, user=u, kunci=req.kunci_kiriman, aksi=jenis, isian=isian,
+                kerjakan=lambda: masukkan_hasil_samping_ke_silo(
+                    db, user=u, jenis=jenis, **isian, commit=False))
         except Gudang2Error as e:
             raise _err(e, f"Gagal memasukkan {jenis} ke silo.")
     hasil = {"ok": True, "pesan": f"✓ {result['moved_kg']:,.2f} kg {jenis} masuk "
@@ -5739,7 +5752,8 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
     if not (req.silo or "").strip():
         raise HTTPException(400, "Pilih silo broken tujuan dulu.")
     from app.penggilingan.gudang2.service import (Gudang2Error,
-        masukkan_broken_ke_silo, masukkan_stok_broken_pemilik_ke_silo)
+        masukkan_broken_ke_silo, masukkan_stok_broken_pemilik_ke_silo, MasukkanBrokenResult)
+    from app.services.kiriman_samping_silo import simpan
     async with SessionLocal() as db:
         u = user  # Peran dan gudang aktif sesi, tanpa menimpa profil tersimpan.
         try:
@@ -5747,15 +5761,20 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
                 owner = pilihan.partition("|")[2]
                 if owner != "pabrik" and not owner.isdigit():
                     raise HTTPException(422, "Pilihan pemilik stok tidak valid.")
-                r = await masukkan_stok_broken_pemilik_ke_silo(
-                    db, user=u, jasa_id=None if owner == "pabrik" else int(owner),
-                    nama_silo=req.silo.strip(), berat_kg=float(req.berat_kg))
+                isian = dict(jasa_id=None if owner == "pabrik" else int(owner),
+                             nama_silo=req.silo.strip(), berat_kg=float(req.berat_kg))
+                aksi = "broken-pemilik"
+                kerjakan = lambda: masukkan_stok_broken_pemilik_ke_silo(
+                    db, user=u, **isian, commit=False)
             else:
                 kode_pol, _, jasa_txt = pilihan.partition("|")
                 jasa_id = int(jasa_txt) if jasa_txt.isdigit() else None
-                r = await masukkan_broken_ke_silo(
-                    db, user=u, kode_pol=kode_pol, nama_silo=req.silo.strip(),
-                    berat_kg=float(req.berat_kg), jasa_id=jasa_id)
+                isian = dict(kode_pol=kode_pol, nama_silo=req.silo.strip(),
+                             berat_kg=float(req.berat_kg), jasa_id=jasa_id)
+                aksi = "broken-proses"
+                kerjakan = lambda: masukkan_broken_ke_silo(db, user=u, **isian, commit=False)
+            r = MasukkanBrokenResult(**await simpan(
+                db, user=u, kunci=req.kunci_kiriman, aksi=aksi, isian=isian, kerjakan=kerjakan))
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan broken ke silo.")
     ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"

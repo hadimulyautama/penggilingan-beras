@@ -3,7 +3,7 @@ import math
 from sqlalchemy import select
 from app.models import PolishingProcess, Jasa
 from app.penggilingan.inventory import finished_goods as bj, packaging as kms
-from app.services.stok import BERAS_JENIS, kategori_dan_mutu, nama_produk
+from app.services.stok import kategori_dan_mutu, nama_produk
 from app.services.jasa import pemilik_hasil_proses, nama_pemilik
 from app.services.angka import angka_wajar
 
@@ -13,13 +13,11 @@ async def rincian(db, sumber, kemasan='', merk='', jumlah=''):
     if len(bagian) != 2 or not bagian[0].strip():
         raise ValueError('Pilih produk yang dikemas.')
     kode, jenis = bagian[0].strip(), bagian[1].strip().lower()
-    # Packing hasil samping tetap memakai tampilan dan kontrak lama.
-    if jenis not in BERAS_JENIS:
-        return dict(beras=False)
+    kategori, mutu = kategori_dan_mutu(jenis)
+    bj.pastikan_packing_manual(kategori)
     proc = await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses == kode))
     if proc is None:
         raise ValueError('Proses sumber tidak ditemukan.')
-    kategori, mutu = kategori_dan_mutu(jenis)
     std = await kms.get_standard(db, mutu) if mutu else None
     saldo = await bj.saldo_packing(db, proc, kategori, mutu, std.id if std else None)
     owner = await pemilik_hasil_proses(db, proc.jasa_id, jenis)

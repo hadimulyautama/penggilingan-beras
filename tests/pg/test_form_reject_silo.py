@@ -57,7 +57,7 @@ async def test_pratinjau_dalam_transaksi_read_only_dan_hasil_http(pg,reject):
         assert [r['kg'] for r in d['rencana']['fifo']]==[150,125]
         assert await db.scalar(select(func.count()).select_from(HasilSampingKeSilo))==0
     async with await _klien(pg,reject['user'],'reject-save',mode='admin') as c:
-        r=await c.post('/api/actions/masukkan-reject-silo',json=dict(pemilik='pabrik',silo='Campuran Timur',berat_kg=275),headers={'X-CSRF-Token':cap_formulir(c)})
+        r=await c.post('/api/actions/masukkan-reject-silo',json=dict(dict(pemilik='pabrik',silo='Campuran Timur',berat_kg=275), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)})
         assert r.status_code==200,r.text
         d=r.json()['rincian_reject'];assert d['kg']==275 and d['setelah']['saldo_kg']==375 and len(d['codes'])==2
 
@@ -66,7 +66,7 @@ async def test_berat_tidak_sah_tidak_menghasilkan_rencana_atau_simpan(pg,reject,
     async with pg() as db:
         d=await rincian(db,'pabrik',kg);assert d['rencana'] is None and d['saldo_kg']==950
     async with await _klien(pg,reject['user'],'reject-invalid',mode='admin') as c:
-        r=await c.post('/api/actions/masukkan-reject-silo',json=dict(pemilik='pabrik',silo='Campuran Timur',berat_kg=kg),headers={'X-CSRF-Token':cap_formulir(c)})
+        r=await c.post('/api/actions/masukkan-reject-silo',json=dict(dict(pemilik='pabrik',silo='Campuran Timur',berat_kg=kg), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)})
         assert r.status_code==422
 
 @pytest.mark.parametrize('kg',[275.25,950,950.004])
@@ -97,7 +97,7 @@ async def test_izin_baca_simpan_dan_view_efektif(pg,reject,role,view,wh,izin):
         if view:assert (await c.post('/lihat-sebagai',data={'peran':view,'_csrf':cap_formulir(c)})).status_code==303
         r=await c.get('/api/actions/rincian-reject-silo',params=dict(pemilik='pabrik',berat_kg='10'))
         assert r.status_code==200 if izin else r.status_code in [401,403]
-        r=await c.post('/api/actions/masukkan-reject-silo',json=dict(pemilik='pabrik',berat_kg=10,silo='Campuran Timur'),headers={'X-CSRF-Token':cap_formulir(c)})
+        r=await c.post('/api/actions/masukkan-reject-silo',json=dict(dict(pemilik='pabrik',berat_kg=10,silo='Campuran Timur'), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)})
         assert r.status_code==200 if izin else r.status_code in [401,403]
 
 @pytest.mark.parametrize('jasa',[False,True])
@@ -125,9 +125,8 @@ async def test_asal_kedua_juga_dilarang_ke_silonya_sendiri(pg,reject):
         await db.rollback();assert await db.scalar(select(func.count()).select_from(HasilSampingKeSilo))==0
 
 async def test_pindah_kepemilikan_hanya_bagian_haknya_dan_pengiriman_kemasan(pg,reject):
-    from app.penggilingan.inventory.finished_goods import catat_packing
     async with pg() as db:
-        await catat_packing(db,user=await db.get(User,reject['user']),kode_pol=reject['kode_pol'],kategori='reject',material_kode='bekas',ukuran=50,jumlah_karung=2)
+        await siapkan_packing_historis(db,user=await db.get(User,reject['user']),kode_pol=reject['kode_pol'],kategori='reject',material_kode='bekas',ukuran=50,jumlah_karung=2)
         row=await db.scalar(select(FinishedGoodsStock))
         pel=Pelanggan(nama_pelanggan='Pemilik bagian');db.add(pel);await db.flush();j=Jasa(kode='JAS-REJECT-PINDAH',pelanggan_id=pel.id);db.add(j);await db.flush();row.jasa_id=j.id;await db.commit()
         assert (await rincian(db,str(j.id)))['saldo_kg']==100
@@ -162,10 +161,9 @@ async def test_dua_kiriman_memeriksa_saldo_terbaru(pg,reject,jenis):
         assert sum(isinstance(r,g2.Gudang2Error)for r in results)==1
 
 async def test_pengiriman_kemasan_dan_curah_saldo_sama_dengan_stok(pg,reject):
-    from app.penggilingan.inventory.finished_goods import catat_packing
     from app.services.stok import stok_produk
     async with pg() as db:
-        await catat_packing(db,user=await db.get(User,reject['user']),kode_pol=reject['kode_pol'],kategori='reject',material_kode='bekas',ukuran=50,jumlah_karung=4)
+        await siapkan_packing_historis(db,user=await db.get(User,reject['user']),kode_pol=reject['kode_pol'],kategori='reject',material_kode='bekas',ukuran=50,jumlah_karung=4)
         row=await db.scalar(select(FinishedGoodsStock));await keluar(db,reject,100,sku=row.product_sku_id);await keluar(db,reject,200)
         for kg in [0,275]:
             if kg:await kirim(db,reject,kg)
@@ -207,7 +205,7 @@ async def test_picker_master_reject_dan_regresi_kontrak_menir(pg,reject):
         assert any(x['value']=='Campuran Timur' for x in opt)
         owners=(await c.get('/api/actions/hasil-samping-pemilik-tersedia?jenis=reject')).json()
         assert [x['value']for x in owners]==['pabrik']
-        r=await c.post('/api/actions/masukkan-menir-silo',json=dict(pemilik='pabrik',silo='Campuran Timur',berat_kg=125.5),headers={'X-CSRF-Token':cap_formulir(c)})
+        r=await c.post('/api/actions/masukkan-menir-silo',json=dict(dict(pemilik='pabrik',silo='Campuran Timur',berat_kg=125.5), kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)})
         assert r.status_code==200 and set(r.json())=={'ok','pesan','rincian_menir'}
         assert r.json()['rincian_menir']['kg']==125.5
     async with pg() as db:
@@ -222,3 +220,7 @@ async def test_undo_lama_belum_mendukung_hss_dinyatakan_jujur(pg,reject):
         with pytest.raises(UndoError,match='belum bisa dibatalkan otomatis'):
             await undo_last(db,actor=await db.get(User,reject['user']),cakupan=None,log_id=log.id)
         await db.rollback();assert await db.scalar(select(func.sum(HasilSampingKeSilo.berat_kg)))==100
+
+from tests.pg.packing_historis import siapkan_packing_historis
+
+from uuid import uuid4
