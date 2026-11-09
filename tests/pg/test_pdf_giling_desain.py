@@ -114,5 +114,5 @@ async def test_sopir_dari_tiket_tertaut_dan_qc_header_lama(pg,pabrik,contoh):
  assert data['raw_qc'][0]['number'] is None
  assert data['raw_qc'][0]['lamur']=='Tidak · 0 sak'
  content=' '.join(' '.join(p.extract_text().split()) for p in PdfReader(BytesIO(buat_pdf(data))).pages)
- assert 'Sopir tiket uji' not in content and 'B 17 UJI' not in content
+ assert 'Sopir tiket uji' not in content and 'B 17 UJI' in content
  assert 'Historis:' in content and '10 bacaan' not in content

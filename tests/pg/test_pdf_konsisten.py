@@ -102,6 +102,6 @@ async def test_sisa_belum_dicatat_tidak_disebut_kosong_di_pdf(pg,pabrik):
  async with await _klien(pg,peran='admin') as c:
   response=await c.get(f'/riwayat-sosoh/{pid}/laporan.pdf')
  text=baca(response,'sisa-belum-dicatat')
- assert 'Belum dicatat' in text
+ assert 'sisa pemakaian silo belum dicatat lengkap' in text
  assert 'Belum dapat dipastikan' in text
  assert 'Kosong' not in text
