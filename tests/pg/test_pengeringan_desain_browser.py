@@ -1,4 +1,5 @@
 """Desktop/ponsel dengan formulir, API dan PostgreSQL asli; tanpa handler tiruan."""
+from tests.profil_browser import mesin, konteks
 import os
 import asyncio
 from pathlib import Path
@@ -10,7 +11,7 @@ from urllib.parse import urlsplit
 async def browser(c, width):
     from playwright.async_api import async_playwright, Error as BrowserError
     async with async_playwright() as pw:
-        b = await pw.chromium.launch()
+        b = await mesin(pw).launch()
         page = await b.new_page(viewport=dict(width=width, height=1000))
         errors = []
         pending = set()

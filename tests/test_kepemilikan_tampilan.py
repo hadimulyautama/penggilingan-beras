@@ -1,4 +1,5 @@
 """UI asli dengan API terisolasi: data lengkap, kontrol, koreksi dan pembatalan."""
+from tests.profil_browser import mesin, konteks
 import copy,json
 from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
@@ -56,7 +57,7 @@ def no_overflow(page):
 @pytest.mark.parametrize('theme',['','terik'])
 def test_daftar_kontrol_isi_tema_dan_ukuran(width,theme):
  with sync_playwright() as p:
-  b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1000));requests=[];errors=[]
+  b=mesin(p).launch();page=b.new_page(**konteks(p,width,1000));requests=[];errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)));route_for(page,None,theme,requests)
   page.goto('https://uji.local/kepemilikan?kind=karung&kembali_stok=%2Fstok%3Ftab%3Dkarung')
   expect(page.get_by_role('heading',name='Riwayat kepemilikan',exact=True)).to_be_visible()
@@ -85,7 +86,7 @@ def test_daftar_kontrol_isi_tema_dan_ukuran(width,theme):
 @pytest.mark.parametrize('kind',['karung','barang','pk'])
 def test_detail_koreksi_pemeriksaan_konfirmasi_dan_batal(width,kind):
  with sync_playwright() as p:
-  b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1000));requests=[];errors=[]
+  b=mesin(p).launch();page=b.new_page(**konteks(p,width,1000));requests=[];errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)));data=detail(kind);route_for(page,data,'terik',requests)
   page.goto('https://uji.local/kepemilikan/128?kembali=%2Fkepemilikan%3Fkind%3Dkarung%26status%3Daktif')
   expect(page.get_by_role('heading',name='PKM/00128')).to_be_visible()
@@ -129,7 +130,7 @@ def test_pratinjau_pk_berantai_menampilkan_bobot_transfer_silo_dan_bahan_sosoh(w
    processes=[dict(id=1,kode='POL-UJI-01',bahan_before='22477.5',bahan_after='19977.5' if mode=='ubah' else '9977.5')],
    warnings=['Hasil tercatat perlu diperiksa setelah pembatalan.'] if mode=='batal' else []))
  with sync_playwright() as p:
-  b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1100));calls=[];errors=[]
+  b=mesin(p).launch();page=b.new_page(**konteks(p,width,1100));calls=[];errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)));route_for(page,data,'terik',calls)
   def review(route):
    calls.append(('periksa',route.request.post_data_json));route.fulfill(json=dict(plan=plan,review='review-rantai'))
@@ -164,7 +165,7 @@ def test_tombol_penyesuaian_bahan_tidak_mengubah_jumlah_dan_stok(width):
  plan=dict(before=data['state'],after={**data['state'],'version':2},balances_before={'7':{'kg':2500}},balances_after={'7':{'kg':2500}},
   pk_chain=dict(repair_of=[16],flows=[],transfers=[],intakes=[],moves=[],warnings=[],processes=[dict(id=1,kode='POL-20261105-01',bahan_before='26177.5',bahan_after='23677.5')]))
  with sync_playwright() as p:
-  b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1000));calls=[]
+  b=mesin(p).launch();page=b.new_page(**konteks(p,width,1000));calls=[]
   route_for(page,data,'terik',calls)
   def review(route):
    body=route.request.post_data_json;assert body['quantity']==10000
@@ -187,7 +188,7 @@ def test_tombol_penyesuaian_bahan_tidak_mengubah_jumlah_dan_stok(width):
 @pytest.mark.parametrize('kind',['karung','pk'])
 def test_acuan_pelanggan_lambat_tidak_mengganti_isian_dan_fokus(kind):
  with sync_playwright() as p:
-  b=p.chromium.launch();page=b.new_page();data=detail(kind);calls=[];pending=[]
+  b=mesin(p).launch();page=b.new_page(**konteks(p));data=detail(kind);calls=[];pending=[]
   if kind=='pk':data['state'].update(owners=[None],customer=7)
   route_for(page,data,'terik',calls)
   path='/api/pk-kepemilikan/pemilik' if kind=='pk' else '/api/actions/pelanggan-kledo'
