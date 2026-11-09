@@ -291,3 +291,65 @@ jobs:
         with:
           name: koreksi-bahan-hasil-aktif
           path: bukti/
+
+  safari:
+    name: Operator Safari/iPhone (${{ matrix.browser }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [webkit, chromium]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: uji
+          POSTGRES_DB: uji_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      UJI_PG_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_ci
+      DATABASE_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_ci
+      UJI_BROWSER: ${{ matrix.browser }}
+      UJI_IPHONE: "1"
+      UJI_BROWSER_PILIHAN_SILO: "1"
+      UJI_BROWSER_DRYER_GUDANG: "1"
+      UJI_BROWSER_GILING_DESAIN: "1"
+      UJI_BROWSER_SOSOH_DESAIN: "1"
+      UJI_BROWSER_PEMBARUAN: "1"
+      BUKTI_GILING_DESAIN: bukti/giling
+      BUKTI_SOSOH_DESAIN: bukti/sosoh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Pasang dependensi dan mesin browser yang diminta
+        run: |
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+          python -m playwright install --with-deps "${{ matrix.browser }}"
+      - name: Migrasi database sementara dari kosong
+        run: alembic upgrade head
+      - name: Gudang kerja, dryer, silo, giling, sosoh, stok dan portal di iPhone
+        run: |
+          python -m pytest -q tests/test_kepemilikan_tampilan.py \
+            tests/pg/test_dryer_gudang_kerja_browser.py \
+            tests/pg/test_pilihan_silo_giling_browser.py \
+            tests/pg/test_pilihan_sosoh_browser.py \
+            tests/pg/test_status_alat.py \
+            tests/pg/test_giling_desain_browser.py \
+            tests/pg/test_sosoh_desain_browser.py \
+            tests/pg/test_kiriman_samping_browser.py \
+            tests/pg/test_muat_navigasi_browser.py \
+            tests/pg/test_pembaruan_aset_browser.py \
+            tests/pg/test_safari_portal.py \
+            --junitxml=bukti/safari.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safari-padiflow-${{ matrix.browser }}
+          path: bukti/

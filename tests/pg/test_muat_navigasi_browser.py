@@ -1,4 +1,5 @@
 """Klik muat memakai HTML/API asli dan browser pada data Postgres sementara."""
+from tests.profil_browser import mesin, konteks
 from urllib.parse import urlsplit
 import pytest
 from sqlalchemy import select
@@ -20,8 +21,8 @@ async def test_operator_dan_super_admin_membuka_muat_dari_perintah(pg,gudang,rol
         audit_awal=(await db.scalars(select(ActivityLog.id).order_by(ActivityLog.id))).all()
     async with await _klien(pg,uid,'uji-browser-muat') as client:
         async with async_playwright() as pw:
-            browser=await pw.chromium.launch()
-            ctx=await browser.new_context(viewport={'width':390,'height':840},service_workers='block')
+            browser=await mesin(pw).launch()
+            ctx=await browser.new_context(**konteks(pw,390,840),service_workers='block')
             await ctx.add_cookies([{'name':k.name,'value':k.value,'url':BASE} for k in client.cookies.jar])
             writes=[]
             async def aplikasi(route):

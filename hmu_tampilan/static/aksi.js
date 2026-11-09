@@ -8,6 +8,9 @@
 (function () {
   "use strict";
 
+  // Respons skrip lama dapat tiba setelah navigasi ke halaman tanpa formulir.
+  if (!document.getElementById("lembar")) return;
+
   function perbaruiNamaBarang(sel) {
     var baris = sel.closest(".ulang__baris");
     if (!baris) return;

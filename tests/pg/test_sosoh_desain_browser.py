@@ -1,4 +1,5 @@
 """Semua aksi browser memakai API asli dan PostgreSQL uji; tak ada handler tiruan."""
+from tests.profil_browser import mesin, konteks
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -20,7 +21,7 @@ async def test_tab_draf_qc_sumber_dan_editor_asli(pg,running,width):
   async with pg() as db:
    before=await db.scalar(select(func.count()).select_from(ActivityLog))
   async with async_playwright() as pw:
-   browser=await pw.chromium.launch();page=await browser.new_page(viewport=dict(width=width,height=1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+   browser=await mesin(pw).launch();page=await browser.new_page(**konteks(pw,width,1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
    await page.context.add_cookies([dict(name=k.name,value=k.value,url='https://uji') for k in c.cookies.jar])
    async def route(r):
     req=r.request;u=urlsplit(req.url)

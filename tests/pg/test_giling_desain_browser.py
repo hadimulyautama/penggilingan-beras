@@ -1,4 +1,5 @@
 """Penyajian aktif di browser dengan API asli dan PostgreSQL lokal."""
+from tests.profil_browser import mesin, konteks
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -17,7 +18,7 @@ pytestmark=[pytest.mark.asyncio,pytest.mark.skipif(os.getenv('UJI_BROWSER_GILING
 async def browser(c,width):
  from playwright.async_api import async_playwright
  async with async_playwright() as pw:
-  b=await pw.chromium.launch();page=await b.new_page(viewport=dict(width=width,height=1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  b=await mesin(pw).launch();page=await b.new_page(**konteks(pw,width,1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.context.add_cookies([dict(name=k.name,value=k.value,url='https://uji') for k in c.cookies.jar])
   async def route(r):
    req=r.request;u=urlsplit(req.url)
