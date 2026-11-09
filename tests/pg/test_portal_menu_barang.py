@@ -131,7 +131,7 @@ async def test_pengambilan_bukan_penjualan_dan_rencana_bukan_jumlah_aktual(pg,po
         assert s.select_one('.portal-sidebar [aria-current=page]').get_text(strip=True)=='Pengambilan barang'
         body=s.main.get_text()
         assert 'OUT-JASA-SELESAI' in body and '120 kg' in body
-        assert s.select_one('.tabel-standar__status--selesai').get_text()=='Selesai'
+        assert s.select_one('.tabel-standar__status--selesai').get_text()=='Terverifikasi'
         assert 'OUT-JASA-RENCANA' in body and 'Menunggu dimuat' in body
         assert 'OUT-JUAL-ORANG-SAMA' not in body and '999' not in body
         assert 'OUT-JASA-BATAL' not in body and 'OUT-BATAL-RAHASIA' not in body

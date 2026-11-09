@@ -27,6 +27,8 @@ async def dunia(pg):
                                                    pindah_tumpukan_ke_silo)
 
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(g2)
         await db.flush()

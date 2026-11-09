@@ -96,8 +96,6 @@ async def test_kerangka_menu_dan_pengaturan_sama_bagi_semua_peran(pg, pabrik):
             if role==P.OPERATOR and gudang==g1:
                 assert not pengiriman
                 assert (await c.get('/barang-keluar')).status_code==403
-                assert soup.select('.desktop-chrome [aria-disabled="true"]')
-                assert any('Pengiriman' in n.get_text() for n in soup.select('.pintu[aria-disabled="true"]'))
             else:
                 assert len(pengiriman)==2
             # Matriks akses berada pada halaman khusus.

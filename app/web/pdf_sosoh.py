@@ -65,7 +65,12 @@ def buat_pdf(data):
     section('Neraca berat')
     table(['Bahan dipakai','Total hasil tercatat','Selisih neraca'],[[kg(balance.bahan_kg) if complete else 'Belum dapat dipastikan',kg(balance.keluar_kg),(kg(balance.susut.kg)+' ('+pct(balance.susut.persen)+')') if complete else 'Belum dapat dipastikan']],[.33,.34,.33])
     note('Total hasil = beras + hasil samping. Selisih neraca berbeda dari susut uji pada QC.')
-    if not complete:note('Belum dapat dipastikan: bobot bahan belum final atau sisa pemakaian silo Belum dicatat.')
+    if not complete:
+        bobot=data.get('bobot_bahan')
+        if bobot is not None and not bobot.pasti:
+            note('Belum dapat dipastikan: bobot truk belum final. Bobot bahan mengikuti sumber timbang sampai dinyatakan final.')
+        else:
+            note('Belum dapat dipastikan: sisa pemakaian silo belum dicatat lengkap.')
     previous=data.get('neraca_tercatat')
     if previous:note('Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan '+kg(previous.bahan_kg)+', susut '+kg(previous.susut.kg)+'. Catatan penutupan tetap tersimpan.')
     section('Waktu proses')

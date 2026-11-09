@@ -34,6 +34,8 @@ async def dunia(pg, pemakai):
     from sqlalchemy import select
 
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         # Layanan mengenali fungsi gudang, bukan menebak dari namanya.
         g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
         g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")

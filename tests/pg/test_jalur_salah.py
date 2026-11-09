@@ -30,6 +30,8 @@ async def pabrik(pg, pemakai, pemasok):
     from app.models import (PurchaseBatch, Silo, SiloStorage, User, Warehouse)
 
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         g1 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 1%")))).scalars().first()
         if g1 is None:
