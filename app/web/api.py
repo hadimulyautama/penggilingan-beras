@@ -480,11 +480,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
                ["kering", "Kering (→ PK KL)"]]
     METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
-    JENIS_HASIL = [["", "— belum ditentukan —"],
-                   ["premium", "Beras Premium"], ["medsuper", "Beras Medium Super"],
-                   ["medium", "Beras Medium"], ["sayur", "Beras Sayur"],
-                   ["beras_b", "Beras B (olah ulang)"], ["menir", "Menir"],
-                   ["broken", "Broken"], ["bekatul", "Bekatul"], ["reject", "Reject"]]
+    from app.services.spesifikasi_beras import jenis_hasil, daftar as daftar_spek, bawaan_penerimaan
+    from app.services.stok import nama_produk
+    async with SessionLocal() as db:
+        SPEK_BERAS = await daftar_spek(db)
+        BAWAAN_BERAS = await bawaan_penerimaan(db)
+        JENIS_HASIL = [["", "— belum ditentukan —"],
+                       *[[j, nama_produk(j)] for j in await jenis_hasil(db)]]
     actions: list[dict] = []
     # Setelan dibaca sekali per permintaan menu — daftar sebab dan target
     # bawaan sama-sama bisa diubah admin, dan spesifikasi aksi yang
@@ -1292,10 +1294,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"akses": "admin", "id": "catat_beras_timbang_masuk", "label": "📦 Terima beras sebagai stok",
              "post": "/api/actions/catat-produk-timbang-masuk",
-             "hint": "Masuk ke stok bertumpuk sebagai Beras Medium, karung putih polos tanpa merek 50 kg.",
+             "hint": "Spesifikasi mengikuti pilihan di bawah. Kemasan tetap karung putih polos tanpa merek 50 kg.",
              "fields": [{"name": "timbangan_transaksi_id", "label": "Tiket timbang beras",
                          "type": "remote", "source": "/api/actions/produk-timbang-masuk-aktif?jenis=BERAS_MASUK",
-                         "kosong": "Tidak ada tiket beras masuk yang menunggu."}]},
+                         "kosong": "Tidak ada tiket beras masuk yang menunggu."},
+                        {"name": "spesifikasi_beras", "label": "Spesifikasi beras", "type": "select",
+                         "options": [["", "— pilih spesifikasi —"], *[[r['kode'],r['nama']] for r in SPEK_BERAS]],
+                         "bawaan": BAWAAN_BERAS.kode if BAWAAN_BERAS else ""}]},
             {"akses": "admin", "id": "catat_broken_timbang_masuk", "label": "📦 Terima broken sebagai stok",
              "post": "/api/actions/catat-produk-timbang-masuk",
              "hint": "Masuk ke stok bertumpuk dan otomatis dikemas dalam karung putih polos tanpa merek 50 kg.",
@@ -3754,6 +3759,7 @@ class CatatPkLuarReq(BaseModel):
 
 
 class CatatProdukTimbangMasukReq(BaseModel):
+    spesifikasi_beras: str | None = Field(default=None, max_length=20)
     warehouse_id: int | None = None
     timbangan_transaksi_id: int
 
@@ -3819,21 +3825,25 @@ async def act_catat_produk_timbang_masuk(
             jasa_id = order.id
         now = input_time(None)
         if kind == "BERAS_MASUK":
-            medium = await get_standard(db, "medium")
-            if medium is None:
-                raise HTTPException(500, "Standar mutu Medium belum tersedia.")
+            from app.services.spesifikasi_beras import standar_penerimaan
+            try:
+                standard = await standar_penerimaan(db, req.spesifikasi_beras)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
             sku = await find_or_create_sku(
                 db, kategori="beras_putih", material_kode="putih", ukuran=50)
             row = FinishedGoodsStock(
-                product_sku_id=sku.id, rice_quality_standard_id=medium.id,
+                product_sku_id=sku.id, rice_quality_standard_id=standard.id,
                 source_type="timbangan", source_id=ticket["id"],
                 jumlah_karung=max(1, int((float(weight) + 49.999) // 50)),
                 berat_total_kg=float(weight), warehouse_id=wid,
                 waktu=now, input_by=user.id, jasa_id=jasa_id,
                 kemasan_mengurangi_stok=False)
             db.add(row)
-            table, target = "finished_goods_stock", "Beras Medium · karung putih polos tanpa merek 50 kg"
+            table, target = "finished_goods_stock", f"{standard.nama} · karung putih polos tanpa merek 50 kg"
         else:
+            from app.services.jenis_hasil_samping import pastikan_identitas_penerimaan
+            await pastikan_identitas_penerimaan(db, 'broken', user=user)
             row = ByproductStock(
                 warehouse_id=wid, jenis_produk="broken", source_type="timbangan", source_id=ticket["id"],
                 berat_kg=float(weight), tanggal=now.date(), waktu=now,
@@ -5841,11 +5851,14 @@ async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict
 async def beras_jenis_silo(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Pilihan internal jenis+lingkup stok; tautan kartu mengunci pilihannya."""
     _require(await _is_g2_operator(user))
-    from app.services.stok import BERAS_JENIS, nama_produk
+    from app.services.stok import nama_produk
+    from app.services.spesifikasi_beras import jenis_beras
+    async with SessionLocal() as db:
+        pilihan = await jenis_beras(db, termasuk_nonaktif=True)
     return [
         {"value": f"{jenis}|{scope}",
          "label": f"{nama_produk(jenis)} · {'stok pabrik' if scope == 'pabrik' else 'stok jasa'}"}
-        for jenis in BERAS_JENIS for scope in ("pabrik", "jasa")
+        for jenis in pilihan for scope in ("pabrik", "jasa")
     ]
 
 
@@ -5861,7 +5874,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
     from app.penggilingan.inventory.finished_goods import (
         _packed_kg, get_standard)
     from app.services.jasa import nama_pemilik
-    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc, output_sosoh
+    from app.services.stok import adalah_grade_beras, _dipindah_silo_proc, output_sosoh
     from hmu_core import Brand, PackageSize, PackagingMaterial
 
     try:
@@ -5869,7 +5882,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
     except ValueError:
         return []
     jenis, scope = jenis.strip().lower(), scope.strip().lower()
-    if jenis not in BERAS_JENIS or scope not in {"pabrik", "jasa"}:
+    if not adalah_grade_beras(jenis) or scope not in {"pabrik", "jasa"}:
         return []
 
     keluar: list[dict] = []

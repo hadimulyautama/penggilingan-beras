@@ -3,7 +3,7 @@ from sqlalchemy import select
 
 from app.models import PolishingSiloUsage, Silo
 from app.penggilingan.gudang2.polishing import (
-    Gudang2Error, _ALL_JENIS, _get_proc, _total_output,
+    Gudang2Error, jenis_hasil, _get_proc, _total_output,
 )
 from app.penggilingan.gudang1.services.jeda import jeda_terbuka
 from app.services.jasa import nama_pemilik
@@ -13,7 +13,7 @@ async def ringkasan(db, *, kode_proses: str, jenis: str = "") -> dict:
     if not kode_proses.strip():
         raise Gudang2Error("Pilih proses penyosohan dulu.")
     jenis = jenis.strip().lower()
-    if jenis and jenis not in _ALL_JENIS:
+    if jenis and jenis not in await jenis_hasil(db):
         raise Gudang2Error("Pilih jenis hasil yang dikenali.")
     proc = await _get_proc(db, kode_proses)
     jeda = await jeda_terbuka(db, "penyosohan", proc.id)

@@ -51,11 +51,11 @@ def buat_pdf(data):
     t=Table([[[v.p(k,v.small),v.p(val,ParagraphStyle('AngkaSosoh',parent=v.bold,fontSize=18,leading=23))] for k,val in cards]],colWidths=[v.width/3]*3)
     t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),v.pale),('TOPPADDING',(0,0),(-1,-1),10),('BOTTOMPADDING',(0,0),(-1,-1),10)]));story.append(t)
     section('Hasil penyosohan')
-    from app.penggilingan.gudang2.polishing import GRADES
-    from app.services.stok import nama_produk
-    labels={'sayur':'Beras Sayur','medium':'Beras Medium','medsuper':'Beras Medium Super','premium':'Beras Premium','beras_b':'Beras B','menir':'Menir','broken':'Broken','bekatul':'Bekatul','reject':'Reject'}
+    labels={'sayur':'Ekonomis','medium':'Beras Medium','medsuper':'Beras Medium Super','premium':'Beras Premium','beras_b':'Beras B','menir':'Menir','broken':'Broken','bekatul':'Bekatul','reject':'Reject'}
     rows=[]
-    kinds=list(dict.fromkeys([*GRADES,'menir','broken','bekatul','reject',*data['outputs']]))
+    kinds=list(dict.fromkeys([*data['outputs']]))
+    from app.services.stok import nama_produk
+    labels.update({j: nama_produk(j) for j in kinds})
     for kind in kinds:
         amount=Decimal(str(data['outputs'].get(kind) or 0))
         if amount>0:

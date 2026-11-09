@@ -135,18 +135,7 @@ async def seed_master() -> None:
                 )
                 created.append(f"admin '{settings.admin_name}'")
 
-        # ── Master inventory: standar mutu, merk, jenis karung, ukuran ──
-        _STANDARDS = [
-            ("sayur", "Sayur", 1), ("medium", "Medium", 2),
-            ("medsuper", "MedSuper", 3), ("premium", "Premium", 4),
-        ]
-        for kode, nama, urut in _STANDARDS:
-            ada = (
-                await db.execute(select(RiceQualityStandard).where(RiceQualityStandard.kode == kode))
-            ).scalars().first()
-            if not ada:
-                db.add(RiceQualityStandard(kode=kode, nama=nama, urutan=urut))
-                created.append(f"standar {nama}")
+        created.extend(await seed_jenis_hasil(db))
 
         #: Merk milik sendiri. "FJ" dan "Gunung Mas" masuk 28 September 2026
         #: atas keterangan pemilik — keduanya sudah dipakai di lapangan.
@@ -237,3 +226,45 @@ async def seed_master() -> None:
             log.info("Seed master: menambah %s", ", ".join(created))
         else:
             log.info("Seed master: semua data master sudah ada (no-op).")
+
+
+async def seed_jenis_hasil(db):
+    """Bootstrap master saja; tidak mengubah jenis yang sudah dikelola pengguna."""
+    created = []
+    # Daftar awal saja. Penambahan/penghapusan berikutnya milik Pengaturan.
+    from app.models import SetelanPabrik
+    import json
+    if not await db.get(SetelanPabrik, 'master_hasil_samping_disiapkan'):
+        for kode, nama, kg in [('broken','Broken',50), ('menir','Menir',50),
+                               ('bekatul','Bekatul',40), ('reject','Reject',50)]:
+            key = 'jenis_hasil_samping:' + kode
+            if not await db.get(SetelanPabrik, key):
+                db.add(SetelanPabrik(kunci=key, nilai=json.dumps(dict(
+                    kode=kode,nama=nama,aktif=True,bentuk='karung',kg_karung=kg))))
+        db.add(SetelanPabrik(kunci='master_hasil_samping_disiapkan', nilai='1'))
+        created.append('master hasil samping')
+
+    # ── Master inventory: standar mutu, merk, jenis karung, ukuran ──
+    _STANDARDS = [
+        ("sayur", "Ekonomis", 1), ("medium", "Medium", 2),
+        ("medsuper", "MedSuper", 3), ("premium", "Premium", 4),
+    ]
+    from app.models import SetelanPabrik
+    for kode, nama, urut in _STANDARDS:
+        if await db.get(SetelanPabrik, "spesifikasi_beras_dihapus:" + kode):
+            continue
+        ada = (
+            await db.execute(select(RiceQualityStandard).where(RiceQualityStandard.kode == kode))
+        ).scalars().first()
+        if not ada:
+            db.add(RiceQualityStandard(kode=kode, nama=nama, urutan=urut))
+            created.append(f"standar {nama}")
+
+    from app.services.spesifikasi_beras import K_BAWAAN_PENERIMAAN
+    if not await db.get(SetelanPabrik, K_BAWAAN_PENERIMAAN):
+        # Nilai awal kompatibel dengan penerimaan lama. Setelah ini pilihan
+        # bawaan adalah data yang dapat diubah, dikosongkan, atau dihapus.
+        medium = await db.scalar(select(RiceQualityStandard).where(RiceQualityStandard.kode == 'medium'))
+        db.add(SetelanPabrik(kunci=K_BAWAAN_PENERIMAAN, nilai=str(medium.id) if medium and medium.aktif else ''))
+        created.append('spesifikasi bawaan penerimaan')
+    return created

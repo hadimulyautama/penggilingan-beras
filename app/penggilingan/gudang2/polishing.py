@@ -10,6 +10,8 @@ Acuan: MASTER_RULES_AND_LOGIC.md §12.
   produk-jadi. Di sini fokus: run + konsumsi PK + output + rendemen.
 """
 from __future__ import annotations
+from app.services.jenis_hasil_samping import adalah_samping
+from app.services.spesifikasi_beras import jenis_hasil, jenis_beras, adalah_spek
 from app.services.cakupan_fasilitas import lokasi as lokasi_proses
 
 from dataclasses import dataclass, field
@@ -44,6 +46,7 @@ from app.penggilingan.gudang2.service import (
 )
 
 # Jenis output yang dikenal.
+# Kompatibilitas pengenal historis; pilihan baru dibaca dari master DB.
 GRADES = ["sayur", "medium", "medsuper", "premium", "beras_b"]
 BYPRODUCTS = ["menir", "broken", "bekatul", "reject"]
 _ALL_JENIS = set(GRADES) | set(BYPRODUCTS)
@@ -133,7 +136,7 @@ async def sinkron_bahan_karung(db, proses_id=None):
             metadata["berat_pk_terpakai_kg"] = bobot.kg
             hasil = await _output_map(db, pid)
             metadata["rendemen_beras_persen"] = rendemen(
-                sum(hasil.get(j, 0) for j in GRADES), bobot.angka()) if bobot.pasti else None
+                beras_dari_output(hasil), bobot.angka()) if bobot.pasti else None
         proyeksi.metadata_domain = metadata
     await db.flush()
 
@@ -558,8 +561,8 @@ class OutputResult:
 
 async def rencana_total_output(db, proc_id, jenis, total):
     """Pemeriksaan kumulatif yang sama untuk satu jenis maupun satu lembar."""
-    if not jenis or jenis.lower() not in _ALL_JENIS:
-        raise Gudang2Error("Jenis hasil harus salah satu: " + ", ".join(sorted(_ALL_JENIS)) + ".")
+    if not jenis or jenis.lower() not in await jenis_hasil(db):
+        raise Gudang2Error("Pilih jenis hasil yang aktif di Pengaturan.")
     if not math.isfinite(float(total)) or float(total) <= 0:
         raise Gudang2Error("Berat hasil harus lebih dari 0. Yang keliru dibatalkan lewat 'Batalkan input terakhir', bukan dicatat sebagai angka minus.")
     jenis = jenis.lower()
@@ -582,9 +585,11 @@ async def catat_output(
     membaca log tambahan. `berat_kg` menjaga kompatibilitas lembar lama yang
     masih mengirim tambahan; kedua bentuk tidak boleh dikirim bersamaan.
     """
-    if not jenis or jenis.lower() not in _ALL_JENIS:
+    from sqlalchemy import text
+    await db.execute(text('SELECT pg_advisory_xact_lock_shared(861274003)'))
+    if not jenis or jenis.lower() not in await jenis_hasil(db):
         raise Gudang2Error(
-            "Jenis hasil harus salah satu: " + ", ".join(sorted(_ALL_JENIS)) + "."
+            "Pilih jenis hasil yang aktif di Pengaturan."
         )
     jenis = jenis.lower()
     if berat_kg is not None and berat_kumulatif is not None:
@@ -683,13 +688,17 @@ async def koreksi_hasil_sosoh(
     )).scalar_one_or_none()
     if proc is None or proc.status != ("proses" if berjalan else "selesai"):
         raise Gudang2Error("Koreksi hanya tersedia untuk proses sosoh yang selesai.")
+    semua_jenis = set(await jenis_hasil(db, termasuk_nonaktif=True))
+    aktif = set(await jenis_hasil(db))
+    if any(float(perubahan.get(k, 0)) > 0 and not float(dasar.get(k, 0)) for k in semua_jenis - aktif):
+        raise Gudang2Error("Spesifikasi nonaktif tidak dapat dipakai untuk hasil baru.")
     alasan = (alasan or "").strip()
     if not alasan:
         raise Gudang2Error("Tuliskan alasan koreksi hasil.")
     nilai_berat = tuple(float(v) for v in perubahan.values())
     if any(not math.isfinite(v) or v < 0 for v in nilai_berat):
         raise Gudang2Error("Berat hasil harus berupa angka yang valid dan tidak negatif.")
-    if set(perubahan) != _ALL_JENIS or set(dasar) != _ALL_JENIS:
+    if set(perubahan) != semua_jenis or set(dasar) != semua_jenis:
         raise Gudang2Error("Ada jenis hasil yang tidak dikenal.")
 
     baris = (await db.execute(
@@ -702,7 +711,7 @@ async def koreksi_hasil_sosoh(
     canceled=await batal_ids(db,proc.id)
     baris=[r for r in baris if r.id not in canceled]
     berubah = False
-    per_jenis: dict[str, list[PolishingOutputLog]] = {jenis: [] for jenis in _ALL_JENIS}
+    per_jenis: dict[str, list[PolishingOutputLog]] = {jenis: [] for jenis in semua_jenis}
     for row in baris:
         if row.jenis in per_jenis:
             per_jenis[row.jenis].append(row)
@@ -711,20 +720,20 @@ async def koreksi_hasil_sosoh(
         raise Gudang2Error("Data hasil di halaman tidak valid. Muat ulang halaman.")
     if any(abs(round(sum(float(row.berat_kg) for row in per_jenis[jenis]), 2)
                    - round(float(dasar[jenis]), 2)) >= 0.005
-           for jenis in _ALL_JENIS):
+           for jenis in semua_jenis):
         raise Gudang2Error(
             "Catatan hasil berubah sejak halaman dibuka. Muat ulang lalu coba lagi.")
 
     from app.services.pengemasan_otomatis import pastikan_hasil, pastikan_saldo
     from app.services.stok import _UKURAN_KEMASAN_OTOMATIS
-    if not berjalan and any(float(perubahan[k])!=float(dasar[k]) for k in _ALL_JENIS if k not in _UKURAN_KEMASAN_OTOMATIS):
+    if not berjalan and any(float(perubahan[k])!=float(dasar[k]) for k in semua_jenis if k not in _UKURAN_KEMASAN_OTOMATIS):
         penghalang=await alasan_koreksi_hasil(db,proc.id)
         if penghalang:raise Gudang2Error(penghalang)
     try:await pastikan_hasil(db,proc,dasar,perubahan)
     except ValueError as e:raise Gudang2Error(str(e)) from e
     if catatan_id is not None:
         selected=next((r for r in baris if r.id==catatan_id),None)
-        if not selected or any(float(perubahan[k])!=float(dasar[k]) for k in _ALL_JENIS if k!=selected.jenis):
+        if not selected or any(float(perubahan[k])!=float(dasar[k]) for k in semua_jenis if k!=selected.jenis):
             raise Gudang2Error('Catatan terpilih tidak sesuai jenis/proses atau mengubah hasil lain.')
         target_note=float(selected.berat_kg)+float(perubahan[selected.jenis])-float(dasar[selected.jenis])
         if target_note<0:raise Gudang2Error('Koreksi catatan terpilih tidak boleh mengurangi hasil catatan lain.')
@@ -807,14 +816,24 @@ async def koreksi_hasil_sosoh(
         "broken": ("broken", {}), "menir": ("menir", {}),
         "bekatul": ("bekatul", {}), "reject": ("reject", {}),
     }
+    komoditas_hasil.update({j: ("beras_putih", {"kualitas": j})
+        for j in await jenis_beras(db, termasuk_nonaktif=True) if j != "beras_b"})
+    from hmu_core import Produk
+    from app.services.jenis_hasil_samping import daftar as daftar_samping
+    kode_samping = {r['kode'] for r in await daftar_samping(db, termasuk_nonaktif=True)}
+    def produk_hasil(jenis):
+        if jenis in komoditas_hasil:
+            return buat_produk(komoditas_hasil[jenis][0], **komoditas_hasil[jenis][1])
+        # Produk menerima identitas dari master operasional. Tidak menambah
+        # enum global lintas pabrik atau mengubah komoditas catatan lama.
+        return Produk(komoditas=jenis, atribut={})
     arus_hasil = tuple(
         ArusProses(
-            produk=buat_produk(komoditas_hasil[jenis][0],
-                               **komoditas_hasil[jenis][1]),
+            produk=produk_hasil(jenis),
             berat_kg=Decimal(str(berat)), referensi=proc.kode_proses,
         )
         for jenis, berat in outputs.items()
-        if berat > 0 and jenis in komoditas_hasil
+        if berat > 0 and (jenis in komoditas_hasil or jenis in kode_samping)
     )
     from app.services.proses_bersama import tutup_proses_bersama
     await tutup_proses_bersama(
@@ -841,16 +860,12 @@ async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
 
 
 def beras_dari_output(outputs: dict[str, float]) -> float:
-    """Berapa kg dari sebuah peta hasil yang terhitung BERAS.
+    """Jumlah seluruh spesifikasi beras dan beras olah ulang.
 
-    Pembandingnya `GRADES` — termasuk `beras_b` (beras olah ulang), sebab ia
-    memang keluar dari mesin sebagai beras. Jangan menggantinya dengan
-    `stok.GRADES_BERAS`, yang SENGAJA tak memuat `beras_b` untuk urusan lain
-    (pembagian blok di layar Stok Produk). Dua daftar itu berbeda bukan karena
-    salah satunya lupa — dan menukarnya di sini menggeser penyebut rendemen
-    seluruh pabrik tanpa satu pun galat.
+    Pembaca database memuat master sebelum memanggil rumus. Pengenal lama
+    tetap dikenali agar data historis tidak jatuh ke kelompok hasil samping.
     """
-    return sum(v for k, v in outputs.items() if k in GRADES)
+    return sum(v for k, v in outputs.items() if adalah_spek(k) or k == "beras_b")
 
 
 def rendemen(beras_kg: float, pk_terpakai_kg: float) -> float | None:
@@ -1026,7 +1041,7 @@ async def selesai_penyosohan(
     return SelesaiResult(proc=proc, selesai=False, silo=silo_letter,
         terpakai_silo=float(target.berat_terpakai_kg or 0),
         pk_terpakai_total=pk_terpakai,
-        beras_total=sum(outputs.get(j, 0) for j in GRADES),
+        beras_total=beras_dari_output(outputs),
         rendemen=None, outputs=outputs)
 
 
@@ -1084,15 +1099,25 @@ async def akhiri_penyosohan(db: AsyncSession, *, user, kode: str,
         "broken": ("broken", {}), "menir": ("menir", {}),
         "bekatul": ("bekatul", {}), "reject": ("reject", {}),
     }
+    komoditas_hasil.update({j: ("beras_putih", {"kualitas": j})
+        for j in await jenis_beras(db, termasuk_nonaktif=True) if j != "beras_b"})
+    from hmu_core import Produk
+    from app.services.jenis_hasil_samping import daftar as daftar_samping
+    kode_samping = {r['kode'] for r in await daftar_samping(db, termasuk_nonaktif=True)}
+    def produk_hasil(jenis):
+        if jenis in komoditas_hasil:
+            return buat_produk(komoditas_hasil[jenis][0], **komoditas_hasil[jenis][1])
+        # Produk menerima identitas dari master operasional. Tidak menambah
+        # enum global lintas pabrik atau mengubah komoditas catatan lama.
+        return Produk(komoditas=jenis, atribut={})
     arus_hasil = tuple(
         ArusProses(
-            produk=buat_produk(komoditas_hasil[jenis_hasil][0],
-                               **komoditas_hasil[jenis_hasil][1]),
+            produk=produk_hasil(jenis_hasil),
             berat_kg=Decimal(str(berat_hasil)),
             referensi=proc.kode_proses,
         )
         for jenis_hasil, berat_hasil in outputs.items()
-        if berat_hasil > 0 and jenis_hasil in komoditas_hasil
+        if berat_hasil > 0 and (jenis_hasil in komoditas_hasil or jenis_hasil in kode_samping)
     )
     await tutup_proses_bersama(
         db, tabel_sumber="polishing_process", id_sumber=proc.id,
@@ -1109,7 +1134,7 @@ async def akhiri_penyosohan(db: AsyncSession, *, user, kode: str,
     await db.commit()
     return SelesaiResult(proc=proc, selesai=True, silo="-", terpakai_silo=0,
         pk_terpakai_total=pk_terpakai,
-        beras_total=sum(outputs.get(j, 0) for j in GRADES),
+        beras_total=beras_dari_output(outputs),
         rendemen=rendemen, outputs=outputs)
 
 
@@ -1130,7 +1155,7 @@ async def laporan_penyosohan(db: AsyncSession, kode: str | None = None) -> str:
         ).scalars().all()
         terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
         outputs = await _output_map(db, proc.id)
-        beras = sum(v for k, v in outputs.items() if k in GRADES)
+        beras = sum(v for k, v in outputs.items() if adalah_spek(k) or k == "beras_b")
         lines = [f"⚙️ Penyosohan {proc.kode_proses} — {proc.status}"]
         for u in usages:
             silo = await db.get(Silo, u.silo_id)
@@ -1146,7 +1171,7 @@ async def laporan_penyosohan(db: AsyncSession, kode: str | None = None) -> str:
                 lines.append(f"• Silo {nm}: awal {_kg(float(u.berat_awal_kg))}{tambah} (belum selesai)")
         if outputs:
             lines.append("• Hasil:")
-            for jenis in GRADES + BYPRODUCTS:
+            for jenis in await jenis_hasil(db, termasuk_nonaktif=True):
                 if jenis in outputs:
                     lines.append(f"   - {jenis}: {_kg(outputs[jenis])}")
         from app.penggilingan.gudang2.karung import bobot_pemakaian
@@ -1260,7 +1285,7 @@ class NeracaSosoh:
 
 
 def neraca_sosoh(pk_terpakai_kg: float, outputs: dict[str, float]) -> NeracaSosoh:
-    """Neraca bobot satu penyosohan. MURNI — tanpa basis data, bisa diuji sendiri.
+    """Neraca bobot tanpa kueri DB; label mengikuti katalog yang sudah dibaca.
 
     `outputs` = peta jenis → kg seperti yang diberi `stok.output_sosoh`.
     """
@@ -1277,14 +1302,17 @@ def neraca_sosoh(pk_terpakai_kg: float, outputs: dict[str, float]) -> NeracaSoso
     # ada. `BYPRODUCTS` dipakai sebagai daftar sisanya supaya jenis samping
     # yang kelak ditambahkan ikut terjumlah tanpa menyunting berkas ini —
     # kalau tidak, ia akan mengalir ke "susut" diam-diam.
-    sisa_jenis = [j for j in BYPRODUCTS if j not in SAMPING_DISEBUT]
+    from app.services.jenis_hasil_samping import jenis_ringkasan
+    jenis_terbaca = jenis_ringkasan(outputs)
+    disebut = [j for j in SAMPING_DISEBUT if j in jenis_terbaca]
+    sisa_jenis = [j for j in jenis_terbaca if j not in disebut]
     samping = []
-    for jenis in (*SAMPING_DISEBUT, *sisa_jenis):
+    for jenis in (*disebut, *sisa_jenis):
         kg = float(outputs.get(jenis, 0) or 0)
         # Yang pemilik minta disebut TETAP tampil walau nol — "bekatul 0%"
         # adalah kabar (mesinnya tak mengeluarkan bekatul? belum dicatat?),
         # sedangkan baris yang hilang cuma membuat orang mengira tak ditanyakan.
-        if jenis in SAMPING_DISEBUT or kg:
+        if jenis in disebut or kg:
             samping.append(bagian(jenis, nama_produk(jenis), kg))
 
     keluar = beras_kg + sum(b.kg for b in samping)
@@ -1472,6 +1500,7 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
     ]
     isian_map = await _isian_silo_banyak(db, permintaan)
 
+    daftar_grade = await jenis_beras(db, termasuk_nonaktif=True)
     kartu = []
     for p in procs:
         pakai = per_proses.get(p.id, [])
@@ -1501,7 +1530,7 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
             jenis=j, nama=nama_produk(j), kg=float(keluar.get(j, 0) or 0),
             persen=((float(keluar[j]) / neraca.bahan_kg * 100)
                     if neraca.bahan_kg else None),
-        ) for j in reversed(GRADES) if float(keluar.get(j, 0) or 0))
+        ) for j in reversed(daftar_grade) if float(keluar.get(j, 0) or 0))
         from app.penggilingan.gudang2.karung import bobot_pemakaian
         bobot = bobot_pemakaian(pakai)
         kartu.append(KartuSosoh(

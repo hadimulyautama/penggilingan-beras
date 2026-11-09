@@ -1,3 +1,4 @@
+from app.services.jenis_hasil_samping import adalah_samping
 """Koreksi pascaverifikasi, tanpa undo atau batas umur.
 
 Audit tambah-saja menyimpan sebelum/sesudah. OutgoingItem adalah proyeksi
@@ -200,7 +201,7 @@ async def rencana(db,rid,user,req):
         jenis=b.jenis if b.tipe=='byproduct_curah' else None
         if b.tipe=='finished_goods':
             sku=await db.get(ProductSku,b.sku_id)
-            if sku and sku.kategori in {'broken','menir','reject','bekatul'}:jenis=sku.kategori
+            if sku and adalah_samping(sku.kategori):jenis=sku.kategori
         if jenis:
             pool=('hasil_samping',b.jasa_id,jenis)
             if pool not in pools:

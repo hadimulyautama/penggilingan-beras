@@ -200,7 +200,7 @@ async def rencana(db,kode,req,user,action):
         rows=[]
         for h in req.hasil:
             # Nol yang belum pernah diisi dan total sama tidak menjadi INSERT.
-            if h.jenis not in p._ALL_JENIS:raise HTTPException(400,'Jenis hasil tidak dikenali.')
+            if h.jenis not in await p.jenis_hasil(db):raise HTTPException(400,'Jenis hasil tidak dikenali.')
             old=await p._total_output(db,proc.id,h.jenis)
             if h.total==old:continue
             d=await p.rencana_total_output(db,proc.id,h.jenis,h.total)

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block judul %}Jenis / Spesifikasi Beras{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/spesifikasi-beras.css?v={{ VERSI }}">
+<section class="spek-beras" aria-labelledby="spek-judul">
+<a href="/pengaturan">← Pengaturan</a><p class="bantu">Pengaturan / Operasional</p>
+<h1 id="spek-judul">Jenis / Spesifikasi Beras</h1>
+<p>Atur pilihan jenis beras dan nilai acuannya. Nilai acuan tidak mengubah hasil pengukuran QC.</p>
+{% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
+{% if berhasil %}<div class="pesan pesan--ok" role="status">Perubahan spesifikasi tersimpan.</div>{% endif %}
+{% macro fields(row, prefix) %}
+<label for="{{ prefix }}-nama">Nama jenis / spesifikasi</label>
+<input class="fld" id="{{ prefix }}-nama" name="nama" required minlength="2" maxlength="50" value="{{ row.nama|default('') }}">
+<div class="spek-angka">
+<div><label for="{{ prefix }}-broken">Kadar broken acuan (%)</label><input class="fld" id="{{ prefix }}-broken" name="broken" inputmode="decimal" required value="{{ row.broken|default('') }}" placeholder="Contoh: 5"></div>
+<div><label for="{{ prefix }}-sosoh">Derajat sosoh acuan (%)</label><input class="fld" id="{{ prefix }}-sosoh" name="sosoh" inputmode="decimal" required value="{{ row.sosoh|default('') }}" placeholder="Contoh: 100"></div>
+</div>
+{% endmacro %}
+<details class="kartu" {% if isian.aksi == 'tambah' %}open{% endif %}><summary class="spek-ringkas">+ Tambah spesifikasi beras</summary>
+<form method="post" action="/pengaturan/spesifikasi-beras/tambah" data-jaga-isian>
+<input type="hidden" name="_csrf" value="{{ CSRF }}">{{ fields(isian if isian.aksi == 'tambah' else {}, 'baru') }}
+<button class="btn btn--utama" type="submit">Tambah spesifikasi</button></form></details>
+<h2>Daftar spesifikasi <span class="bantu">({{ daftar|length }})</span></h2>
+{% for row in daftar %}
+<article class="kartu spek-baris">
+<div class="spek-kepala"><h3>{{ row.nama }}</h3><span class="bantu">{{ 'Bawaan penerimaan' if row.bawaan_penerimaan else 'Aktif' if row.aktif else 'Nonaktif' }}</span></div>
+<dl class="spek-angka"><div><dt>Kadar broken acuan</dt><dd>{{ row.broken ~ '%' if row.broken != '' else 'Belum diatur' }}</dd></div><div><dt>Derajat sosoh acuan</dt><dd>{{ row.sosoh ~ '%' if row.sosoh != '' else 'Belum diatur' }}</dd></div></dl>
+{% if row.aktif and not row.bawaan_penerimaan %}
+<form method="post" action="/pengaturan/spesifikasi-beras/bawaan"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="versi" value="{{ row.versi }}"><button class="btn" type="submit">Jadikan bawaan penerimaan beras</button></form>
+{% endif %}
+<details {% if isian.id == row.id|string %}open{% endif %}><summary class="spek-ringkas">Ubah spesifikasi</summary>
+<form method="post" action="/pengaturan/spesifikasi-beras/ubah" data-jaga-isian>
+<input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="versi" value="{{ row.versi }}">
+{{ fields(isian if isian.id == row.id|string and isian.aksi == 'ubah' else row, 'spek-' ~ row.id) }}
+<button class="btn btn--utama" type="submit">Simpan perubahan</button></form></details>
+{% set aksi = 'hapus' if not row.dipakai else 'nonaktifkan' if row.aktif else 'aktifkan' %}
+<details class="spek-hapus"><summary>{{ 'Aktifkan kembali' if aksi == 'aktifkan' else 'Nonaktifkan' if aksi == 'nonaktifkan' else 'Hapus spesifikasi' }}</summary>
+<p>{% if aksi == 'hapus' %}Spesifikasi belum dipakai. Hapus “{{ row.nama }}” secara permanen?{% elif aksi == 'nonaktifkan' %}Spesifikasi sudah dipakai. Nonaktifkan dari pilihan baru? Stok, transaksi dan riwayat tetap tersimpan.{% else %}Aktifkan kembali “{{ row.nama }}” untuk pilihan baru?{% endif %}</p>
+<form method="post" action="/pengaturan/spesifikasi-beras/{{ aksi }}"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="id" value="{{ row.id }}"><input type="hidden" name="versi" value="{{ row.versi }}"><button class="btn" type="submit">{{ 'Ya, aktifkan kembali' if aksi == 'aktifkan' else 'Ya, nonaktifkan' if aksi == 'nonaktifkan' else 'Ya, hapus spesifikasi' }}</button></form></details>
+</article>
+{% else %}<p class="kartu">Belum ada spesifikasi. Tambahkan jenis beras yang digunakan di pabrik.</p>{% endfor %}
+<p class="bantu">Spesifikasi lama tanpa acuan tetap dapat dibaca. Isi acuannya saat mengubah spesifikasi.</p>
+</section><script src="/static/pengaturan-isian.js?v={{ VERSI }}"></script>
+{% endblock %}

@@ -14,6 +14,7 @@ Keamanan:
     keputusan hak akses tetap di sisi Kantor (RBAC-nya), sama seperti sebelum pisah.
 """
 from __future__ import annotations
+from app.services.jenis_hasil_samping import adalah_samping
 
 import hmac
 import logging
@@ -166,6 +167,9 @@ async def pengiriman_muatan_tiket(
         sidik = await bk.sidik_sumber_muatan(db, rec, tiket_id=tid)
         from app.services.barang_keluar import anggota_kiriman
         penerima = {r.id:r for r in await anggota_kiriman(db, rec)}
+        from app.services.spesifikasi_beras import daftar as master_beras
+        from app.services.stok import nama_produk
+        await master_beras(db, termasuk_nonaktif=True)
         muatan = []
         from app.models import KemasanTara, PackagingMaterial, PackageSize
         for item in items:
@@ -173,7 +177,7 @@ async def pengiriman_muatan_tiket(
             produk = {}
             if item.item_type == "byproduct_curah":
                 kode = (item.jenis_byproduct or "").upper()
-                label = (item.jenis_byproduct or "Hasil samping").title() + " (curah)"
+                label = nama_produk(item.jenis_byproduct or "Hasil samping") + " (curah)"
             elif item.item_type == "finished_goods":
                 from app.penggilingan.inventory.models import ProductSku
                 from app.services.stok import jenis_produk
@@ -205,8 +209,8 @@ async def pengiriman_muatan_tiket(
                 produk = dict(kualitas_id=item.rice_quality_standard_id,
                     merek_produk_id=detail[5], packaging_material_id=detail[6], package_size_id=detail[7])
                 jenis = jenis_produk(detail[0], detail[1])
-                if jenis in ("broken", "menir", "bekatul", "reject"):
-                    kode, label = jenis.upper(), jenis.title()
+                if adalah_samping(jenis):
+                    kode, label = jenis.upper(), nama_produk(jenis)
                 else:
                     kode = "BERAS"
                     label = "Beras putih" + (f" · {jenis}" if jenis != "beras_putih" else "")

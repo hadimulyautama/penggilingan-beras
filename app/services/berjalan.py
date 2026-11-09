@@ -2752,6 +2752,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
         # WAJIB menyebut "sementara", sama seperti `beras_curah()` menyebut
         # "belum final" untuk alasan yang sama.
         from app.penggilingan.gudang2.polishing import GRADES, neraca_sosoh
+        from app.services.stok import adalah_beras
         neraca = neraca_sosoh(bahan_kg, per_jenis) if bahan_kg > 0.5 else None
         # Satu baris kumulatif per jenis pada kartu; log tiap prosesan tetap
         # tersimpan sendiri untuk jejak audit dan pembatalan.
@@ -2765,10 +2766,10 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
         rinci_hasil = [
             (jenis + (f" · {', '.join(sorted(spek_per_jenis.get(jenis, set())))}"
                       if spek_per_jenis.get(jenis) else ""),
-             _kg(berat), "", "beras" if jenis in GRADES else "samping")
+             _kg(berat), "", "beras" if adalah_beras(jenis) else "samping")
             for jenis, berat in sorted(
                 per_jenis.items(),
-                key=lambda kv: (0 if kv[0] in GRADES else 1, kv[0]),
+                key=lambda kv: (0 if adalah_beras(kv[0]) else 1, kv[0]),
             )
         ]
 

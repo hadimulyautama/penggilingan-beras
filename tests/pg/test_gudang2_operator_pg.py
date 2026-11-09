@@ -45,6 +45,8 @@ async def gudang2(pg):
                 status_batch="diterima", flag_unverified=True, sumber_berat="manual"))
         from app.services.fasilitas import seed_fasilitas
         await seed_fasilitas(db)
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         await db.commit()
         await db.refresh(u)
         r1 = await masukkan_pk_luar(db, user=u, kode="PKB-20260912-01", tujuan="ditumpuk")

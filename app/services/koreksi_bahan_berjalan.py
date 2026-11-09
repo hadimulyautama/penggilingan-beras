@@ -194,7 +194,7 @@ async def konteks(db,*,jenis,kode,user):
         more,alternatives=await konteks_curah(db,pr,usages)
         entries.extend(more);sources.update(alternatives)
         outputs=await p._output_map(db,pr.id)
-        jenis_hasil=sorted(p._ALL_JENIS)
+        jenis_hasil=sorted(set(await p.jenis_hasil(db, termasuk_nonaktif=True)))
         consumed=sum(float(u.berat_terpakai_kg if u.berat_akhir_kg is not None else u.berat_awal_kg+u.berat_masuk_kg) for u in usages)
         basis=consumed if all(x['kg'] is not None for x in entries) else None;logs=list((await db.scalars(select(PolishingOutputLog).where(PolishingOutputLog.polishing_process_id==pr.id).order_by(PolishingOutputLog.id))).all())
         for model in (FinishedGoodsStock,ByproductStock):
@@ -235,11 +235,13 @@ async def konteks(db,*,jenis,kode,user):
         from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_total
         from app.services.jasa import pemilik_hasil_proses
         stock_values={'Hasil '+x.jenis+' belum dikemas/dipindah · proses ini':x.sisa_kg for x in await beras_curah(db,proses_id=pr.id)}
-        for k in p.BYPRODUCTS:
+        from app.services.jenis_hasil_samping import daftar as master_samping
+        for k in (r["kode"] for r in await master_samping(db, termasuk_nonaktif=True)):
             if k in outputs:
                 owner_id=await pemilik_hasil_proses(db,pr.jasa_id,k)
                 stock_values['Stok '+k+' tersedia · seluruh sumber pemilik terkait']=await hitung_stok_byproduct_total(db,k,jasa_id=owner_id)
-    values=dict(stok_hasil=stock_values,jenis=jenis,kode=kode,id=pr.id,status=pr.status,pemilik=owner,jasa_id=pr.jasa_id,entries=entries,sources=list(sources.values()),outputs=outputs,jenis_hasil=jenis_hasil,basis=basis,
+    from app.services.stok import nama_produk
+    values=dict(nama_hasil={k:nama_produk(k) for k in jenis_hasil},stok_hasil=stock_values,jenis=jenis,kode=kode,id=pr.id,status=pr.status,pemilik=owner,jasa_id=pr.jasa_id,entries=entries,sources=list(sources.values()),outputs=outputs,jenis_hasil=jenis_hasil,basis=basis,
         verification=raw(verification) if verification else None)
     if jenis=='sosoh':
         from app.services.koreksi_broken_terkait import konteks as terkait_broken
@@ -349,12 +351,12 @@ async def hasil_berjalan(db,jenis,pr,targets,user,alasan):
         await log_activity(db,table_name='milling_progress_logs',record_id=pr.id,action='UPDATE',changed_by=user.id,
             field_name='kumulatif_operator',old_value=str(old),new_value=str(target),alasan=alasan,aksi=JENIS)
     else:
-        if not set(targets)<=p._ALL_JENIS:raise ValueError('Jenis hasil penyosohan tidak dikenal.')
-        old=await p._output_map(db,pr.id);new={k:old.get(k,0) for k in p._ALL_JENIS}
+        if not set(targets)<=set(await p.jenis_hasil(db, termasuk_nonaktif=True)):raise ValueError('Jenis hasil penyosohan tidak dikenal.')
+        old=await p._output_map(db,pr.id);new={k:old.get(k,0) for k in set(await p.jenis_hasil(db, termasuk_nonaktif=True))}
         for kind,v in targets.items():
             new[kind]=float(angka(v,'Total '+kind,presisi=2))
         if all(new[k]==old.get(k,0) for k in new):raise ValueError('Tidak ada perubahan hasil.')
-        await p.koreksi_hasil_sosoh(db,user=user,process_id=pr.id,perubahan=new,dasar={k:old.get(k,0) for k in p._ALL_JENIS},alasan=alasan,berjalan=True,simpan=False)
+        await p.koreksi_hasil_sosoh(db,user=user,process_id=pr.id,perubahan=new,dasar={k:old.get(k,0) for k in set(await p.jenis_hasil(db, termasuk_nonaktif=True))},alasan=alasan,berjalan=True,simpan=False)
 
 
 async def bahan_g2(db,entry,change,pr,user,alasan,*,gabungan=False):

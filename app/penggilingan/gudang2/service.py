@@ -13,6 +13,7 @@ Acuan WAJIB: LOGIKA_SILO_GUDANG2.md.
 - HPP silo = weighted-average bahan yang SUDAH di silo (kecuali HPP belum tersedia).
 """
 from __future__ import annotations
+from app.services.stok import adalah_grade_beras
 
 import logging
 import json
@@ -2783,7 +2784,7 @@ async def masukkan_beras_ke_silo(
     legacy = not sumber_stok and bool(kode_pol)
     if legacy:
         sumber_stok = "legacy"
-    if jenis not in BERAS_JENIS:
+    if not adalah_grade_beras(jenis):
         raise Gudang2Error("Jenis beras (grade) dari kartu stok tidak valid.")
     if not nama_silo:
         raise Gudang2Error("Sebutkan silo tujuannya.")

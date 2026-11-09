@@ -1,3 +1,4 @@
+from app.services.jenis_hasil_samping import adalah_samping
 """Pembaca sumber yang benar-benar diterima; tidak memakai nota sebagai saldo.
 
 Saldo fisik didelegasikan ke pembaca FIFO/partai lama. Silo, hasil proses,
@@ -204,7 +205,7 @@ async def pilihan(db, tiket, sumber, *, kecuali=None):
             if item['satuan']=='karung':item['maksimum']=min(item['maksimum'],max(D(0),item['stok_jumlah']-await karung_terikat(db,key,kecuali=kecuali)))
             item['tersedia_kg']=bebas
             if fisik<=0 and not alasan:alasan='Stok sumber sudah habis atau sudah digunakan.'
-        if b and item.get('jenis_produk') in {'broken','menir','reject','bekatul'}:
+        if b and adalah_samping(item.get('jenis_produk')):
             jenis_produk=item['jenis_produk']
             gabungan=D(await barang_jadi.hitung_stok_byproduct_total(db,jenis_produk)) - D(await keluar._sudah_dipesan(db,jenis=jenis_produk))
             if kecuali:

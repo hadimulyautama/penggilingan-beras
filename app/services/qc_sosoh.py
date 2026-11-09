@@ -10,12 +10,17 @@ from fractions import Fraction
 
 from sqlalchemy import select
 
+from app.services.spesifikasi_beras import daftar, jenis_beras, adalah_spek, nama_spek
 from app.database import now_local
 from app.models import JedaProses, PolishingOutputLog, PolishingProcess, SampelQcSosoh, User
 from app.services.activity_log import log_activity
 
 JENIS = {"premium": "Premium", "medsuper": "Medium Super", "medium": "Medium",
-         "sayur": "Sayur", "beras_b": "Beras B"}
+         "sayur": "Ekonomis", "beras_b": "Beras B"}
+
+def label_jenis(jenis):
+    return nama_spek(jenis) or JENIS.get(jenis, jenis)
+
 ANGKA = {"kadar_air": "Kadar air", "broken_persen": "Broken", "md": "MD",
          "transparant": "Transparant", "whiteness": "Whiteness"}
 PERSEN = frozenset({'kadar_air', 'broken_persen'})
@@ -94,6 +99,7 @@ def petakan(sampel, hasil, *, sampai=None, mulai=None, jeda=()):
     sampel = sorted((q for q in sampel if not getattr(q, 'dibatalkan_pada', None)),
                     key=lambda r: (r.waktu_sampel, r.id))
     sampai = sampai or (sampel[-1].waktu_sampel if sampel else None)
+    jenis_labels = {**JENIS, **{r.jenis: label_jenis(r.jenis) for r in [*sampel, *hasil] if adalah_spek(r.jenis)}}
     sesi = []
     for q in sampel:
         pisah = None
@@ -122,11 +128,11 @@ def petakan(sampel, hasil, *, sampai=None, mulai=None, jeda=()):
     # turut di akhir. Rentangnya tidak boleh menjadi nol setelah baris pertama.
     kelompok = defaultdict(Decimal)
     for r in hasil:
-        if r.jenis in JENIS:
+        if r.jenis in jenis_labels:
             kg = Decimal(str(r.berat_kg or 0)).quantize(Decimal('0.01'))
             total[r.jenis] += kg
             kelompok[(r.jenis, r.waktu_update)] += kg
-    for jenis in JENIS:
+    for jenis in jenis_labels:
         sebelumnya = mulai or (sampel[0].waktu_sampel if sampel else None)
         for (_, waktu), kg in sorted(((k, v) for k, v in kelompok.items() if k[0] == jenis), key=lambda r: r[0][1]):
             if sebelumnya is None:
@@ -143,14 +149,14 @@ def petakan(sampel, hasil, *, sampai=None, mulai=None, jeda=()):
                         s['berat_estimasi_kg'] = (s['berat_estimasi_kg'] or Decimal(0)) + Decimal(sen if kg >= 0 else -sen)/100
             sebelumnya = max(sebelumnya, waktu)
     rekap, alokasi, catatan = [], {}, []
-    for jenis in JENIS:
+    for jenis in jenis_labels:
         ss = sesi_jenis[jenis]
         kg = total.get(jenis, Decimal(0)).quantize(Decimal('0.01'))
         if not ss and not kg:
             continue
         rekap.append(dict(jenis=jenis, berat_kg=kg if jenis in total else None, sesi=[s['nomor'] for s in ss], belum_dipetakan_kg=kg))
         if not ss:
-            catatan.append(f"{JENIS[jenis]}: hasil timbang ada, tetapi belum ada sampel untuk mengestimasi waktu garapannya.")
+            catatan.append(f"{jenis_labels[jenis]}: hasil timbang ada, tetapi belum ada sampel untuk mengestimasi waktu garapannya.")
             continue
         for s in ss:
             if s['berat_estimasi_kg'] is None:
@@ -167,7 +173,7 @@ def petakan(sampel, hasil, *, sampai=None, mulai=None, jeda=()):
                                     estimasi_mulai=batas[i], estimasi_sampai=batas[i+1])
         rekap[-1]['belum_dipetakan_kg'] = kg-sum(s['berat_estimasi_kg'] or 0 for s in ss)
         if rekap[-1]['belum_dipetakan_kg']:
-            catatan.append(f"{JENIS[jenis]}: {rekap[-1]['belum_dipetakan_kg']} kg belum dapat dipetakan; belum ada durasi QC yang sesuai dalam rentang pencatatannya.")
+            catatan.append(f"{jenis_labels[jenis]}: {rekap[-1]['belum_dipetakan_kg']} kg belum dapat dipetakan; belum ada durasi QC yang sesuai dalam rentang pencatatannya.")
     return dict(sesi=sesi, hasil=rekap, alokasi=alokasi,
                 belum_dipetakan=[q.id for q in sampel if q.id not in alokasi], catatan=catatan)
 
@@ -190,7 +196,9 @@ def rata_rata(sampel):
 
 
 async def ambil_sampel(db, *, user, kode_proses, jenis, waktu_sampel, kunci_kiriman=None):
-    if jenis not in JENIS:
+    from sqlalchemy import text
+    await db.execute(text("SELECT pg_advisory_xact_lock_shared(861274003)"))
+    if jenis not in await jenis_beras(db):
         raise QcSosohError("Pilih jenis beras yang diambil sampelnya.")
     if waktu_sampel.tzinfo is None:
         raise QcSosohError("Waktu pengambilan sampel harus menyertakan zona waktu.")
@@ -219,7 +227,7 @@ async def ambil_sampel(db, *, user, kode_proses, jenis, waktu_sampel, kunci_kiri
     db.add(q)
     await db.flush()
     await log_activity(db, table_name=q.__tablename__, record_id=q.id, action="INSERT", changed_by=user.id,
-                       gudang="g2", new_value=f"Sampel #{q.id} · {kode_proses} · {JENIS[jenis]} · {waktu_sampel.isoformat()}")
+                       gudang="g2", new_value=f"Sampel #{q.id} · {kode_proses} · {label_jenis(jenis)} · {waktu_sampel.isoformat()}")
     await db.commit()
     return q
 
@@ -256,6 +264,8 @@ async def isi_hasil(db, *, user, sampel_id, **nilai):
 
 
 async def data_proses(db, proc):
+    labels = {r["kode"]: r["nama"] for r in await daftar(db, termasuk_nonaktif=True)}
+    labels["beras_b"] = "Beras B"
     sampel = list((await db.scalars(select(SampelQcSosoh).where(SampelQcSosoh.polishing_process_id == proc.id)
                  .order_by(SampelQcSosoh.waktu_sampel, SampelQcSosoh.id))).all())
     hasil = list((await db.scalars(select(PolishingOutputLog).where(PolishingOutputLog.polishing_process_id == proc.id)
@@ -274,7 +284,7 @@ async def data_proses(db, proc):
                             sesi=sesi_sampel.get(q.id),
                             alokasi=data['alokasi'].get(q.id))
                         for i, q in enumerate(sampel)],
-                sementara=proc.status != "selesai", jenis_label=JENIS,
+                sementara=proc.status != "selesai", jenis_label=labels,
                 komponen=[dict(nama=k, label=label_komponen(k)) for k in ANGKA],
                 menunggu=sum(q.hasil_pada is None for q in aktif))
     return data

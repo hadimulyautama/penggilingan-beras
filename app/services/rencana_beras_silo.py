@@ -1,3 +1,4 @@
+from app.services.stok import adalah_grade_beras
 """Informasi baca saja untuk empat field Masukkan beras ke silo.
 
 Rencana memakai bagian alokasi layanan simpan, tanpa kunci atau mutasi.
@@ -17,7 +18,7 @@ def urai(jenis, sumber):
     from app.services.stok import BERAS_JENIS
     grade, _, scope = str(jenis or '').strip().lower().partition('|')
     asal, _, owner = str(sumber or '').strip().partition('|')
-    if grade not in BERAS_JENIS or scope not in {'pabrik', 'jasa'}:
+    if not adalah_grade_beras(grade) or scope not in {'pabrik', 'jasa'}:
         raise ValueError('Pilih jenis beras dan lingkup stok yang sah.')
     if not asal or not owner:
         raise ValueError('Pilih sumber stok beras.')

@@ -24,7 +24,7 @@ def spesifikasi():
          "hint": "Boleh sebelum hasil timbang. Pilih jenis beras saat sampel diambil; pergantian garapan tidak mengubah sampel ini. Waktu kosong berarti sekarang (WIB).",
          "fields": [
              {"name": "kode_proses", "label": "Proses sosoh", "type": "remote", "source": "/api/actions/proses-qc-sosoh", "kosong": "Belum ada proses sosoh."},
-             {"name": "jenis", "label": "Jenis beras saat sampel diambil", "type": "select", "options": [["", "— pilih jenis beras —"], *[[k, v] for k, v in svc.JENIS.items()]]},
+             {"name": "jenis", "label": "Jenis beras saat sampel diambil", "type": "remote", "source": "/api/actions/jenis-beras-qc"},
              {"name": "waktu_sampel", "label": "Waktu pengambilan WIB (kosong: sekarang)", "type": "datetime-local"}]},
         {"akses": "admin", "id": "qc_sosoh", "label": "Isi hasil QC beras",
          "post": "/api/actions/qc-sosoh",
@@ -97,7 +97,9 @@ async def sampel_menunggu(user: User = Depends(pengguna_aksi)):
             .where(SampelQcSosoh.hasil_pada.is_(None), SampelQcSosoh.dibatalkan_pada.is_(None))
             .order_by(SampelQcSosoh.waktu_sampel, SampelQcSosoh.id))).all()
     from app.database import berzona
-    return [dict(value=str(q.id), label=f"Sampel #{q.id} · {kode} · {svc.JENIS[q.jenis]} · {berzona(q.waktu_sampel):%d/%m %H:%M}") for q, kode in rows]
+    async with SessionLocal() as db:
+        await svc.daftar(db, termasuk_nonaktif=True)
+    return [dict(value=str(q.id), label=f"Sampel #{q.id} · {kode} · {svc.label_jenis(q.jenis)} · {berzona(q.waktu_sampel):%d/%m %H:%M}") for q, kode in rows]
 
 
 @router.get("/sampel-qc-sosoh-aktif")
@@ -109,7 +111,9 @@ async def sampel_aktif(user: User = Depends(pengguna_aksi)):
             .where(SampelQcSosoh.dibatalkan_pada.is_(None))
             .order_by(SampelQcSosoh.waktu_sampel.desc(), SampelQcSosoh.id.desc()))).all()
     from app.database import berzona
-    return [dict(value=str(q.id), label=f"Sampel #{q.id} · {kode} · {svc.JENIS[q.jenis]} · {berzona(q.waktu_sampel):%d/%m %H:%M}") for q, kode in rows]
+    async with SessionLocal() as db:
+        await svc.daftar(db, termasuk_nonaktif=True)
+    return [dict(value=str(q.id), label=f"Sampel #{q.id} · {kode} · {svc.label_jenis(q.jenis)} · {berzona(q.waktu_sampel):%d/%m %H:%M}") for q, kode in rows]
 
 
 @router.post("/sampel-qc-sosoh")
@@ -124,7 +128,7 @@ async def catat_sampel(req: SampelReq, user: User = Depends(pengguna_aksi)):
     except svc.QcSosohError as e:
         raise HTTPException(400, str(e)) from e
     return dict(ok=True, sampel_id=q.id, jenis=q.jenis, waktu_sampel=q.waktu_sampel.isoformat(),
-                pesan=f"Sampel #{q.id} · {svc.JENIS[q.jenis]} tercatat. Hasil QC dapat diisi setelah pemeriksaan selesai.")
+                pesan=f"Sampel #{q.id} · {svc.label_jenis(q.jenis)} tercatat. Hasil QC dapat diisi setelah pemeriksaan selesai.")
 
 
 @router.post("/qc-sosoh")
@@ -135,7 +139,7 @@ async def catat_hasil(req: HasilReq, user: User = Depends(pengguna_aksi)):
             q = await svc.isi_hasil(db, user=user, **req.model_dump())
     except svc.QcSosohError as e:
         raise HTTPException(400, str(e)) from e
-    return dict(ok=True, sampel_id=q.id, pesan=f"QC sampel #{q.id} tersimpan sebagai {svc.JENIS[q.jenis]} sesuai pengambilan awal.")
+    return dict(ok=True, sampel_id=q.id, pesan=f"QC sampel #{q.id} tersimpan sebagai {svc.label_jenis(q.jenis)} sesuai pengambilan awal.")
 
 
 @router.post("/batalkan-sampel-qc-sosoh")
@@ -147,3 +151,10 @@ async def batalkan(req: BatalReq, user: User = Depends(pengguna_aksi)):
     except svc.QcSosohError as e:
         raise HTTPException(400, str(e)) from e
     return dict(ok=True, pesan=f"Sampel #{q.id} dibatalkan. Riwayat tetap tersimpan; estimasi mengikuti sampel yang aktif.")
+
+
+@router.get("/jenis-beras-qc")
+async def jenis_beras_qc(user=Depends(pengguna_aksi)):
+    await _izin(user)
+    async with SessionLocal() as db:
+        return [dict(value=j, label=svc.label_jenis(j)) for j in await svc.jenis_beras(db)]
