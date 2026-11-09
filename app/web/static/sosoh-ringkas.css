@@ -3,3 +3,77 @@
 @media(max-width:600px){.sr-card,.sr-panel{padding:.8rem}.sr-metrics{gap:.4rem}.sr-metric{padding:.55rem}.sr-metric strong{font-size:.98rem}.sr-output-head{font-size:.7rem}.sr-output-head,.sr-output{grid-template-columns:minmax(0,1fr) 100px 68px;gap:.4rem}.sr-output strong{font-size:.9rem}.sr-actions .btn{flex:1 1 140px}.sr-pair{font-size:.9rem}.sr-table,.sr-table tbody,.sr-table tr,.sr-table td,.sr-table th{display:block}.sr-table thead{display:none}.sr-table tr{border-bottom:1px solid var(--garis);padding:.5rem 0}.sr-table td,.sr-table th{border:0;padding:.2rem 0}}
 
 .sr-finish-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:1.2rem;align-items:start}.sr-finish-grid h3{margin-top:1rem}.sr-finish-grid aside{margin-top:0}.sr-finish-grid aside>.btn{width:100%}.sr-finish-grid section>.btn{margin:.6rem .6rem 0 0}@media(max-width:900px){.sr-finish-grid{grid-template-columns:1fr}}
+
+/* Lembar kerja operator: hasil dan silo selalu terjangkau tanpa tab. */
+.sr.sr-worksheet{max-width:1200px}
+.sr-worksheet [data-proses-isi]>header{padding-right:0;min-height:0}
+.sr-worksheet header h1{padding-right:0}
+.sr-worksheet header>.btn{margin:.5rem 0}
+.sr-worksheet .sr-work-finish>.btn{margin-top:.8rem}
+.sr-worksheet .sr-output-head,.sr-worksheet .sr-output{grid-template-columns:minmax(0,1fr) minmax(100px,.6fr) minmax(65px,.4fr)}
+.sr-worksheet .sr-metrics{margin:.8rem 0}
+.sr-worksheet .sr-source-entries .kb-detail-entry{grid-template-columns:minmax(0,1fr) auto}
+.sr-worksheet .sr-source-entries .sr-entry-meta{grid-column:1/-1}
+@media(max-width:650px){
+ .sr-worksheet .sr-board{display:block}
+ .sr-worksheet .sr-metrics{grid-template-columns:1fr;gap:.3rem}
+ .sr-worksheet .sr-metric{display:flex;align-items:center;justify-content:space-between;gap:.8rem}
+ .sr-worksheet .sr-metric strong{margin:0;text-align:right}
+ .sr-worksheet .sr-output{grid-template-columns:minmax(0,1fr) minmax(110px,.65fr)}
+ .sr-worksheet .sr-output>span:last-child{grid-column:2;text-align:right;font-size:.85rem;color:var(--redup)}
+ .sr-worksheet .sr-output-head{grid-template-columns:minmax(0,1fr) minmax(110px,.65fr)}
+ .sr-worksheet .sr-output-head>span:last-child{display:none}
+ .sr-worksheet .sr-work-finish>.btn{width:100%}
+ .sr-worksheet .sr-pair{flex-wrap:wrap;gap:.25rem .7rem}
+ .sr-worksheet .sr-pair dd{margin-left:auto}
+}
+
+.sr-worksheet [data-proses-isi]>header{padding-right:115px}
+.sr-worksheet .sr-work-guide{position:absolute;right:0;top:0;margin:0}
+.sr-worksheet .sr-metric{border:0;background:transparent;padding:0}
+.sr-worksheet .sr-work-result-balance{margin:.6rem 0 1rem}
+.sr-worksheet .sr-work-result-balance p{margin:.25rem 0}
+.sr-worksheet .sr-work-result-balance p:last-child{font-weight:650}
+@media(max-width:650px){
+ .sr-worksheet [data-proses-isi]>header{padding-right:0}
+ .sr-worksheet header h1,.sr-worksheet .sr-design-code{padding-right:105px}
+ .sr-worksheet .sr-output>div:first-child>.btn{padding:.3rem .5rem}
+ .sr-worksheet .sr-metric{border-bottom:1px solid var(--garis);padding:.3rem 0}
+}
+
+.sr .sr-admin-result-balance{border:0;background:transparent;border-radius:0;padding:.5rem 0;font-size:.85rem}
+.sr .sr-admin-result-balance p{margin:.2rem 0}
+
+/* Operator: satu lembar ringkas; hanya penyajian, tanpa aturan stok baru. */
+.sr-worksheet .sr-output-head{display:none}
+.sr-worksheet .sr-output{grid-template-columns:minmax(0,1fr) minmax(110px,.65fr);gap:.25rem .8rem;padding:.6rem 0}
+.sr-worksheet .sr-output>div:first-child{grid-column:1;grid-row:1/3}
+.sr-worksheet .sr-output>input{grid-column:2;grid-row:1}
+.sr-worksheet .sr-output>span:last-child{grid-column:2;grid-row:2;color:var(--redup);font-size:.85rem;text-align:right}
+.sr-worksheet .sr-work-percent{display:block}
+.sr-worksheet .sr-work-result-correction{border:0;margin:.15rem 0 0;padding:0;font-size:.85rem}
+.sr-worksheet .sr-work-result-correction>summary{min-height:28px}
+.sr-worksheet [data-save-output]{margin-top:.8rem;width:100%}
+.sr-worksheet .sr-work-source-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.35rem}
+.sr-worksheet .sr-work-source-toggle{border:0;background:none;padding:.3rem 0;font-weight:650}
+.sr-worksheet #sumber>.sr-work-source-heading{margin-bottom:.3rem}
+.sr-worksheet .sr-work-silo-identity{display:grid;gap:.15rem}
+.sr-worksheet .sr-silo{padding:.5rem 0}
+.sr-worksheet .sr-work-cycle-details{border:0;margin:.2rem 0 0;padding:0}
+.sr-worksheet .sr-work-cycle-details>summary{font-size:.85rem;min-height:28px;color:var(--redup)}
+.sr .sr-silo-dialog{width:min(540px,calc(100% - 24px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--garis);border-radius:12px;background:var(--panel);color:var(--tinta);padding:1rem}
+.sr .sr-silo-dialog::backdrop{background:rgb(0 0 0 / .4)}
+.sr .sr-silo-dialog>.sr-panel{border:0;padding:0;margin:0}
+.sr .sr-modal-close{float:right;margin-left:.5rem}
+.sr .sr-silo-dialog .sr-actions{clear:both;margin-bottom:0}
+.sr .sr-silo-dialog [data-sr-silo-impact]{margin:.7rem 0}
+.sr-worksheet .sr-work-result-balance{padding:.6rem .7rem}
+.sr-worksheet .sr-work-result-balance>strong{font-size:.85rem;color:var(--redup)}
+@media(max-width:650px){.sr .sr-silo-dialog{padding:.8rem}.sr-worksheet .sr-work-source-heading>.btn{font-size:.85rem}.sr-worksheet .sr-work-source-toggle{font-size:1rem}}
+.sr-worksheet .sr-output>.sr-work-total-label{grid-column:2;grid-row:1;margin:0;font-size:.85rem;color:var(--redup)}
+.sr-worksheet .sr-work-total-label input{color:var(--tinta);font-size:1rem}
+.sr .sr-correction-dialog{width:min(640px,calc(100% - 24px));max-height:calc(100dvh - 32px);overflow:auto;padding:.8rem;border:1px solid var(--garis);border-radius:12px;background:var(--panel);color:var(--tinta)}
+.sr .sr-correction-dialog::backdrop{background:rgb(0 0 0 / .4)}
+.sr .sr-correction-dialog .kb-inline-editor{margin:0;border:0;padding:0}
+.sr .sr-correction-dialog .kb-box{margin:0}
+.sr-worksheet #sumber .sr-work-source-toggle{border:0;background:transparent;padding:.3rem 0;border-radius:0;text-align:left}

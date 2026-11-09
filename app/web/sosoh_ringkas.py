@@ -131,7 +131,34 @@ async def baca(db,kode):
         from app.services.penyelesaian_proses import ringkasan_selesai
         try:data['pemeriksaan_selesai']=await ringkasan_selesai(db,jenis='sosoh',kode=kode);data['siap']=True
         except ValueError as e:data['penghalang']=str(e)
+    b = bobot_pemakaian(usages) if data['sisa_lengkap'] else None
+    if b and b.diketahui and b.tak_diketahui == 0:
+        data['basis_neraca_kg'] = b.angka()
+    else:
+        data['basis_neraca_kg'] = data.get('sementara',{}).get('bahan') if not data['sisa_lengkap'] else None
+    data['neraca_lembar'] = neraca_lembar(data)
     return data
+
+
+def neraca_lembar(data, hasil=None):
+    """Penyajian persen memakai neraca domain; nilai kosong bukan nol."""
+    basis = data.get('basis_neraca_kg')
+    angka = {h['jenis']: h['kg'] for h in data['hasil'] if h['kg'] is not None}
+    if hasil is not None:
+        angka.update({h.jenis: h.total for h in hasil})
+    tersedia = basis is not None and basis > 0
+    n = p.neraca_sosoh(basis if tersedia else 0, angka)
+    rows = []
+    for h in data['hasil']:
+        nilai = angka.get(h['jenis'])
+        satu = p.neraca_sosoh(basis if tersedia else 0, {h['jenis']: nilai}) if nilai is not None else None
+        bagian = (satu.beras if h['beras'] else next((x for x in satu.samping if x.jenis == h['jenis']), None)) if satu else None
+        rows.append(dict(jenis=h['jenis'],kg=nilai,persen=bagian.persen if bagian and tersedia else None))
+    return dict(bahan_kg=basis,sementara=data['aktif'] or not data['sumber_final'],
+        dasar=data['dasar'],hasil=rows,total_kg=n.keluar_kg if angka else None,
+        total_persen=(n.beras.persen + sum(x.persen for x in n.samping)) if tersedia and angka else None,
+        susut_kg=n.susut.kg if tersedia and angka else None,
+        susut_persen=n.susut.persen if tersedia and angka else None)
 
 
 async def halaman(kode,request,akun):
@@ -142,11 +169,13 @@ async def halaman(kode,request,akun):
         qc_sosoh=await data_proses(db,await db.get(PolishingProcess,data['id']))
         from app.services.riwayat_jeda import riwayat_jeda
         jejak=await riwayat_jeda(db,jenis='penyosohan',id_=data['id'],params=request.query_params)
+    from hmu_identitas import peran as P
+    lembar_operator = P.operator_saja(akun.user.role)
     def halaman_riwayat(parameter,nomor):return str(request.url.include_query_params(**{parameter:nomor}))
     from app.web.layar_pekerjaan import konteks_aman
     return await render_laci(request,'sosoh_ringkas.html',awal=data,qc_sosoh=qc_sosoh,qc_kode=kode,
         kembali=konteks_aman(request.query_params.get('kembali_kerja')) or '/pekerjaan?tab=berjalan',breadcrumb_detail=kode,
-        jejak_jeda=jejak,boleh=True,halaman_proses=halaman_riwayat,layar='pekerjaan',
+        jejak_jeda=jejak,boleh=True,lembar_operator=lembar_operator,halaman_proses=halaman_riwayat,layar='pekerjaan',
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''))
 
 
@@ -227,6 +256,20 @@ async def rencana(db,kode,req,user,action):
         base['rincian']=await selesai.ringkasan(db,kode_proses=kode)
     else:raise HTTPException(404,'Tindakan tidak dikenali.')
     return base
+
+
+@router.post('/api/actions/sosoh-ringkas/{kode}/neraca/pratinjau')
+async def pratinjau_neraca(kode:str,req:Permintaan,user:User=Depends(pengguna_aksi)):
+    await izin(user,kode)
+    if req.silos or req.pemakaian_id is not None or req.sisa is not None:
+        raise HTTPException(400,'Konteks pratinjau neraca tidak sesuai.')
+    if len({h.jenis for h in req.hasil}) != len(req.hasil) or any(h.jenis not in p._ALL_JENIS or h.total < 0 for h in req.hasil):
+        raise HTTPException(400,'Jenis hasil atau total pratinjau tidak sah.')
+    async with SessionLocal() as db:
+        data = await baca(db,kode)
+        if data['dasar'] != req.dasar:
+            raise HTTPException(409,'Data proses berubah. Baca status terbaru sebelum memeriksa kembali.')
+        return JSONResponse(neraca_lembar(data,req.hasil),headers={'Cache-Control':'no-store'})
 
 
 @router.post('/api/actions/sosoh-ringkas/{kode}/{action}/{langkah}')
