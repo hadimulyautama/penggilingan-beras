@@ -437,7 +437,7 @@ def test_katalog_dikelompokkan_dan_undo_tetap_tersedia():
     assert api.GRUP_KARTU not in api.URUT_GRUP
 
     menu = inspect.getsource(api.actions_menu)
-    assert 'a["grup"] = _GRUP_AKSI.get' in menu
+    assert '_GRUP_AKSI.get(a["id"], GRUP_LAIN)' in menu
     assert 'a["kartu"] = a["grup"] == GRUP_KARTU' in menu
     # v476 memberi seluruh peran internal katalog induk, termasuk undo bagi
     # Admin/Super Admin. Izin aktual tetap ditandai pada setiap spesifikasi.

@@ -27,6 +27,8 @@ async def pabrik(pg, pemasok):
     from hmu_identitas import peran as P
 
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
         g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])

@@ -9,6 +9,8 @@ from app.penggilingan.gudang2 import polishing as p
 
 @pytest.fixture
 def catatan(monkeypatch):
+    from tests.master_catalog import catalog
+    catalog(monkeypatch)
     proses = SimpleNamespace(id=1, kode_proses="POL-UJI", status="proses")
     baris = []
 

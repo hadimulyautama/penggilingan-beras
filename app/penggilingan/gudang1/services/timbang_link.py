@@ -419,6 +419,12 @@ _SQL_KELUAR_AKTIF = text("""
 """)
 
 
+from app.services.jenis_hasil_samping import nama_timbang_sql
+SQL_MASUK_BELUM_DITAUT = SQL_MASUK_BELUM_DITAUT.replace('j.nama AS jenis_nama',nama_timbang_sql()+' AS jenis_nama')
+_SQL_AKTIF = text(str(_SQL_AKTIF).replace('j.nama AS jenis_nama',nama_timbang_sql()+' AS jenis_nama'))
+_SQL_SATU = text(str(_SQL_SATU).replace('j.nama AS jenis_nama',nama_timbang_sql()+' AS jenis_nama'))
+_SQL_KELUAR_AKTIF = text(str(_SQL_KELUAR_AKTIF).replace('j.nama AS jenis_nama',nama_timbang_sql()+' AS jenis_nama'))
+
 async def tiket_keluar_aktif(db: AsyncSession) -> list[dict]:
     """Tiket timbang KELUAR yang belum tertaut, untuk ditempel Admin saat
     verifikasi barang keluar.

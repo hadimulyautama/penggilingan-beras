@@ -676,3 +676,9 @@ app.include_router(kepemilikan_detail_router)
 from app.web.pengemasan_otomatis import router as pengemasan_otomatis_router
 app.include_router(pengemasan_otomatis_router)
 
+
+from app.web.spesifikasi_beras import router as spesifikasi_beras_router
+app.include_router(spesifikasi_beras_router)
+
+from app.web.jenis_hasil_samping import router as jenis_hasil_samping_router
+app.include_router(jenis_hasil_samping_router)

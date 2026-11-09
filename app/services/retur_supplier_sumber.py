@@ -1,3 +1,4 @@
+from app.services.jenis_hasil_samping import adalah_samping
 """Pembaca sumber yang benar-benar diterima; tidak memakai nota sebagai saldo.
 
 Saldo fisik didelegasikan ke pembaca FIFO/partai lama. Silo, hasil proses,
@@ -73,6 +74,10 @@ async def penerimaan(db, tid, *, kunci=False):
 
 async def _saldo_curah_sumber(db, row):
     """Alokasikan pemakaian total resmi ke sumber tertua, seperti FIFO karung."""
+    if row.jenis_produk.startswith('hs_'):
+        from app.penggilingan.gudang2.rencana_hasil_samping import saldo_sumber
+        data=await saldo_sumber(db,row.jenis_produk,row.jasa_id)
+        return D(next((r['saldo_fisik'] for r in data['sumber'] if r.get('stok_id')==row.id),0))
     q = select(ByproductStock).where(ByproductStock.jenis_produk == row.jenis_produk,
                                     ByproductStock.jasa_id.is_(None)).order_by(ByproductStock.waktu,ByproductStock.id)
     rows = (await db.scalars(q)).all()
@@ -106,6 +111,11 @@ async def pilihan(db, tiket, sumber, *, kecuali=None):
             stok_kg=None,stok_jumlah=None,terikat_kg=await terikat(db,sumber=key,kecuali=kecuali),
             sudah_retur_kg=None,tersedia_kg=None,maksimum=D(0),alasan_tidak_bisa=None,
             _row=row,_jenis=jenis,_pool=key,_batas_pool=None,_tambahan_pool=None)
+        if jenis == 'broken':
+            from app.services.jenis_hasil_samping import daftar
+            from app.services.stok import nama_produk
+            await daftar(db,termasuk_nonaktif=True)
+            item['nama']=nama_produk(row.jenis_produk)
         alasan = None; fisik = None; b = None
         if row.jasa_id is not None:
             alasan = 'Barang titipan tidak dapat diretur sebagai pembelian supplier.'
@@ -204,7 +214,7 @@ async def pilihan(db, tiket, sumber, *, kecuali=None):
             if item['satuan']=='karung':item['maksimum']=min(item['maksimum'],max(D(0),item['stok_jumlah']-await karung_terikat(db,key,kecuali=kecuali)))
             item['tersedia_kg']=bebas
             if fisik<=0 and not alasan:alasan='Stok sumber sudah habis atau sudah digunakan.'
-        if b and item.get('jenis_produk') in {'broken','menir','reject','bekatul'}:
+        if b and adalah_samping(item.get('jenis_produk')):
             jenis_produk=item['jenis_produk']
             gabungan=D(await barang_jadi.hitung_stok_byproduct_total(db,jenis_produk)) - D(await keluar._sudah_dipesan(db,jenis=jenis_produk))
             if kecuali:

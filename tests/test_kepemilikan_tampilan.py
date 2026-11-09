@@ -182,3 +182,26 @@ def test_tombol_penyesuaian_bahan_tidak_mengubah_jumlah_dan_stok(width):
   expect(page.get_by_role('button',name='Simpan penyesuaian bahan',exact=True)).to_be_disabled()
   assert not any(c[0].endswith('/simpan') for c in calls)
   no_overflow(page);b.close()
+
+
+@pytest.mark.parametrize('kind',['karung','pk'])
+def test_acuan_pelanggan_lambat_tidak_mengganti_isian_dan_fokus(kind):
+ with sync_playwright() as p:
+  b=p.chromium.launch();page=b.new_page();data=detail(kind);calls=[];pending=[]
+  if kind=='pk':data['state'].update(owners=[None],customer=7)
+  route_for(page,data,'terik',calls)
+  path='/api/pk-kepemilikan/pemilik' if kind=='pk' else '/api/actions/pelanggan-kledo'
+  page.route('**'+path,lambda route:pending.append(route))
+  page.goto('https://uji.local/kepemilikan/128')
+  page.get_by_role('button',name='Koreksi transaksi',exact=True).click()
+  reason=page.get_by_role('textbox',name='Alasan koreksi (wajib)')
+  reason.fill('Isian saat jaringan lambat tetap tersedia')
+  assert len(pending)==1
+  pending[0].fulfill(json=[dict(label='Pak Pras',value=7),dict(label='Genta PK',value=8)])
+  expect(page.get_by_role('combobox').locator('option')).to_have_count(2)
+  expect(reason).to_have_value('Isian saat jaringan lambat tetap tersedia')
+  assert reason.evaluate('e=>e===document.activeElement')
+  page.get_by_role('button',name='Periksa dampak',exact=True).click()
+  expect(page.get_by_role('heading',name='Dampak sebelum disimpan')).to_be_visible()
+  assert next(v for path_,method,_,v in calls if path_.endswith('/periksa'))['reason']=='Isian saat jaringan lambat tetap tersedia'
+  b.close()

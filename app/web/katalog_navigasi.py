@@ -1,3 +1,4 @@
+from app.services.stok import adalah_grade_beras
 """Alihkan pintasan lama hanya bila konteksnya dapat dibuktikan, tanpa menulis data."""
 from urllib.parse import urlencode
 from app.database import SessionLocal
@@ -21,11 +22,11 @@ async def tujuan_duplikat(buka, nilai, params):
         # Jenis/pemilik adalah format medan lama. Titipan tanpa nomor pesanan
         # tidak boleh dipetakan ke stok pelanggan tertentu berdasarkan tebakan.
         # Token sumber lama membawa nomor pesanan; verifikasi ke data aslinya.
-        if len(bagian) == 2 and bagian[0] in BERAS_JENIS and bagian[1] == 'pabrik':
+        if len(bagian) == 2 and adalah_grade_beras(bagian[0]) and bagian[1] == 'pabrik':
             q = dict(params)
             q.update(jenis=bagian[0], pemilik='pabrik', buka=buka, nilai=nilai)
             return '/stok-produk/detail?' + urlencode(q), '', '', ''
-        if len(bagian) == 2 and bagian[0] in BERAS_JENIS and bagian[1] == 'jasa':
+        if len(bagian) == 2 and adalah_grade_beras(bagian[0]) and bagian[1] == 'jasa':
             token = params.get('sumber_stok', '').rsplit('|', 1)[-1]
             if token.isascii() and token.isdecimal() and len(token) <= 10 and 0 < int(token) < 2**31:
                 async with SessionLocal() as db:

@@ -480,11 +480,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
                ["kering", "Kering (→ PK KL)"]]
     METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
-    JENIS_HASIL = [["", "— belum ditentukan —"],
-                   ["premium", "Beras Premium"], ["medsuper", "Beras Medium Super"],
-                   ["medium", "Beras Medium"], ["sayur", "Beras Sayur"],
-                   ["beras_b", "Beras B (olah ulang)"], ["menir", "Menir"],
-                   ["broken", "Broken"], ["bekatul", "Bekatul"], ["reject", "Reject"]]
+    from app.services.spesifikasi_beras import jenis_hasil, daftar as daftar_spek, bawaan_penerimaan
+    from app.services.stok import nama_produk
+    async with SessionLocal() as db:
+        SPEK_BERAS = await daftar_spek(db)
+        BAWAAN_BERAS = await bawaan_penerimaan(db)
+        JENIS_HASIL = [["", "— belum ditentukan —"],
+                       *[[j, nama_produk(j)] for j in await jenis_hasil(db)]]
     actions: list[dict] = []
     # Setelan dibaca sekali per permintaan menu — daftar sebab dan target
     # bawaan sama-sama bisa diubah admin, dan spesifikasi aksi yang
@@ -1292,10 +1294,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"akses": "admin", "id": "catat_beras_timbang_masuk", "label": "📦 Terima beras sebagai stok",
              "post": "/api/actions/catat-produk-timbang-masuk",
-             "hint": "Masuk ke stok bertumpuk sebagai Beras Medium, karung putih polos tanpa merek 50 kg.",
+             "hint": "Spesifikasi mengikuti pilihan di bawah. Kemasan tetap karung putih polos tanpa merek 50 kg.",
              "fields": [{"name": "timbangan_transaksi_id", "label": "Tiket timbang beras",
                          "type": "remote", "source": "/api/actions/produk-timbang-masuk-aktif?jenis=BERAS_MASUK",
-                         "kosong": "Tidak ada tiket beras masuk yang menunggu."}]},
+                         "kosong": "Tidak ada tiket beras masuk yang menunggu."},
+                        {"name": "spesifikasi_beras", "label": "Spesifikasi beras", "type": "select",
+                         "options": [["", "— pilih spesifikasi —"], *[[r['kode'],r['nama']] for r in SPEK_BERAS]],
+                         "bawaan": BAWAAN_BERAS.kode if BAWAAN_BERAS else ""}]},
             {"akses": "admin", "id": "catat_broken_timbang_masuk", "label": "📦 Terima broken sebagai stok",
              "post": "/api/actions/catat-produk-timbang-masuk",
              "hint": "Masuk ke stok bertumpuk dan otomatis dikemas dalam karung putih polos tanpa merek 50 kg.",
@@ -1410,6 +1415,32 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
         ]
 
+    from copy import deepcopy
+    from app.services.jenis_hasil_samping import daftar as master_samping
+    async with SessionLocal() as db:
+        jenis_samping = await master_samping(db, termasuk_nonaktif=True)
+    contoh = next(a for a in actions if a['id'] == 'masukkan_menir_silo')
+    for jenis in jenis_samping:
+        kode = jenis['kode']
+        terima = dict(akses='admin',id='terima_samping_'+kode,
+            label='Terima '+jenis['nama']+' sebagai stok',post='/api/actions/catat-produk-timbang-masuk',
+            fields=[dict(name='timbangan_transaksi_id',label='Tiket timbang',type='remote',
+                source='/api/actions/produk-timbang-masuk-aktif?jenis='+kode.upper()+'_MASUK')])
+        if kode != 'broken':
+            actions.append(terima)
+        if kode in {'broken', 'menir', 'reject'}:
+            continue  # Alias formulir lama tetap membaca layanan yang sama.
+        baru = deepcopy(contoh)
+        baru.update(id='masukkan_samping_'+kode, label='Masukkan '+jenis['nama']+' ke silo',
+                    post='/api/actions/masukkan-hasil-samping-silo/'+kode)
+        baru['konteks_menir_silo'] = dict(source='/api/actions/rincian-hasil-samping-silo?jenis='+kode,
+                                          jenis=kode, nama=jenis['nama'])
+        baru['fields'][0]['source'] = '/api/actions/hasil-samping-pemilik-tersedia?jenis='+kode
+        baru['fields'][0]['label'] = 'Pemilik stok '+jenis['nama']
+        baru['fields'][1]['source'] = '/api/actions/silo-hasil-samping-g2?jenis='+kode
+        actions.append(baru)
+
+
     # Aksi inventory tinggal di modulnya sendiri, tetapi menunya tetap SATU
     # daftar dari satu tempat: perangkat tidak perlu tahu bahwa ia dirakit
     # dari beberapa berkas.
@@ -1438,15 +1469,15 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         "wajib":True,"options":[["","— pilih gudang penerima —"]]+[[w.id,w.nama_gudang] for w in daftar_gudang]}
     if len(daftar_gudang)==1:gudang_field['bawaan']=daftar_gudang[0].id
     for aksi in actions:
-        if aksi['id'] in {'gabah_masuk','catat_pk_luar','catat_beras_timbang_masuk','catat_broken_timbang_masuk'}:
+        if aksi['id'].startswith('terima_samping_') or aksi['id'] in {'gabah_masuk','catat_pk_luar','catat_beras_timbang_masuk','catat_broken_timbang_masuk'}:
             aksi['fields'].insert(1,dict(gudang_field))
 
     _lengkapi_formulir_jeda(actions)
 
     # Tandai gudang tiap aksi → dipakai layar Catat memisah tab G1/G2 (admin/staff).
     for a in actions:
-        a["wh"] = _ACTION_WH.get(a["id"], "g1")
-        a["grup"] = _GRUP_AKSI.get(a["id"], GRUP_LAIN)
+        a["wh"] = "g2" if a["id"].startswith(("masukkan_samping_","terima_samping_")) else _ACTION_WH.get(a["id"], "g1")
+        a["grup"] = GRUP_KARTU if a["id"].startswith(("masukkan_samping_","terima_samping_")) else _GRUP_AKSI.get(a["id"], GRUP_LAIN)
         # Aksi yang sudah punya kartu TETAP dikirim — lembarnya dibuka dari
         # kartu di Antrian, Sedang berjalan, Keputusan, dan Stok lewat MENU
         # ini — tetapi TIDAK digambar di katalog Catat pekerjaan lain (21
@@ -3754,6 +3785,7 @@ class CatatPkLuarReq(BaseModel):
 
 
 class CatatProdukTimbangMasukReq(BaseModel):
+    spesifikasi_beras: str | None = Field(default=None, max_length=20)
     warehouse_id: int | None = None
     timbangan_transaksi_id: int
 
@@ -3761,7 +3793,10 @@ class CatatProdukTimbangMasukReq(BaseModel):
 @router.get("/actions/produk-timbang-masuk-aktif")
 async def produk_timbang_masuk_aktif(jenis: str, user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(can_see_financials(user))
-    if jenis not in ("BERAS_MASUK", "BROKEN_MASUK"):
+    from app.services.jenis_hasil_samping import jenis_penerimaan
+    async with SessionLocal() as master_db:
+        known = await jenis_penerimaan(master_db)
+    if jenis not in {"BERAS_MASUK", "BROKEN_MASUK", *known}:
         raise HTTPException(400, "Jenis barang masuk tidak dikenal.")
     from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
     async with SessionLocal() as db:
@@ -3807,7 +3842,9 @@ async def act_catat_produk_timbang_masuk(
         if ticket is None or ticket.get("arah") != "MASUK":
             raise HTTPException(404, "Tiket masuk tidak ditemukan atau sudah tidak aktif.")
         kind = ticket.get("jenis_kode")
-        if kind not in ("BERAS_MASUK", "BROKEN_MASUK"):
+        from app.services.jenis_hasil_samping import jenis_penerimaan
+        known = await jenis_penerimaan(db)
+        if kind not in {"BERAS_MASUK", "BROKEN_MASUK", *known}:
             raise HTTPException(400, "Tiket ini bukan beras atau broken masuk.")
         weight, _, _ = await bobot_awal_dari_tiket(db, ticket)
         if weight is None or weight <= 0:
@@ -3819,27 +3856,33 @@ async def act_catat_produk_timbang_masuk(
             jasa_id = order.id
         now = input_time(None)
         if kind == "BERAS_MASUK":
-            medium = await get_standard(db, "medium")
-            if medium is None:
-                raise HTTPException(500, "Standar mutu Medium belum tersedia.")
+            from app.services.spesifikasi_beras import standar_penerimaan
+            try:
+                standard = await standar_penerimaan(db, req.spesifikasi_beras)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
             sku = await find_or_create_sku(
                 db, kategori="beras_putih", material_kode="putih", ukuran=50)
             row = FinishedGoodsStock(
-                product_sku_id=sku.id, rice_quality_standard_id=medium.id,
+                product_sku_id=sku.id, rice_quality_standard_id=standard.id,
                 source_type="timbangan", source_id=ticket["id"],
                 jumlah_karung=max(1, int((float(weight) + 49.999) // 50)),
                 berat_total_kg=float(weight), warehouse_id=wid,
                 waktu=now, input_by=user.id, jasa_id=jasa_id,
                 kemasan_mengurangi_stok=False)
             db.add(row)
-            table, target = "finished_goods_stock", "Beras Medium · karung putih polos tanpa merek 50 kg"
+            table, target = "finished_goods_stock", f"{standard.nama} · karung putih polos tanpa merek 50 kg"
         else:
+            from app.services.jenis_hasil_samping import pastikan_identitas_penerimaan
+            if kind == 'BROKEN_MASUK':
+                await pastikan_identitas_penerimaan(db, 'broken', user=user)
+            jenis_diterima = 'broken' if kind == 'BROKEN_MASUK' else known[kind]['kode']
             row = ByproductStock(
-                warehouse_id=wid, jenis_produk="broken", source_type="timbangan", source_id=ticket["id"],
+                warehouse_id=wid, jenis_produk=jenis_diterima, source_type="timbangan", source_id=ticket["id"],
                 berat_kg=float(weight), tanggal=now.date(), waktu=now,
                 input_by=user.id, jasa_id=jasa_id)
             db.add(row)
-            table, target = "byproduct_stock", "Broken · karung putih polos tanpa merek 50 kg"
+            table, target = "byproduct_stock", "Broken · karung putih polos tanpa merek 50 kg" if kind == "BROKEN_MASUK" else known[kind]["nama"]
         await db.flush()
         await log_activity(db, table_name=table, record_id=row.id, action="INSERT",
                            changed_by=user.id,
@@ -5574,10 +5617,12 @@ async def hasil_samping_pemilik_tersedia(jenis: str = "menir",
                                          user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(await _is_g2_operator(user))
     jenis = jenis.strip().lower()
-    if jenis not in {"menir", "reject"}:
-        raise HTTPException(400, "Jenis stok harus Menir atau Reject.")
+    from app.services.jenis_hasil_samping import daftar
+    async with SessionLocal() as master_db:
+        if jenis not in {r["kode"] for r in await daftar(master_db, termasuk_nonaktif=True)} or jenis == "broken":
+            raise HTTPException(400, "Pilih jenis hasil samping yang dikenal.")
     from sqlalchemy import select
-    from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
+    from app.models import FinishedGoodsStock, PolishingProcess, ProductSku, ByproductStock
     from app.services.jasa import nama_pemilik
     from app.services.stok import stok_produk
 
@@ -5588,12 +5633,14 @@ async def hasil_samping_pemilik_tersedia(jenis: str = "menir",
                 ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
             .where(ProductSku.kategori == jenis)
         )).scalars().all())
+        owners.update((await db.scalars(select(ByproductStock.jasa_id).where(
+            ByproductStock.jenis_produk==jenis,batas_lokasi(user,ByproductStock)))).all())
         options = []
         for owner in owners:
-            cards = await stok_produk(db, jasa_id=owner)
+            cards = await stok_produk(db, jasa_id=owner,user=user)
             card = next((c for c in cards if c.jenis == jenis), None)
             available = float(card.sisa_kg) if card else 0.0
-            if available <= 0.5:
+            if available <= 0.005:
                 continue
             owner_name = await nama_pemilik(db, owner)
             label = "Pabrik" if owner is None else owner_name or f"Pemilik #{owner}"
@@ -5607,8 +5654,10 @@ async def silo_hasil_samping_g2(jenis: str = "menir",
                                 user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(await _is_g2_operator(user))
     jenis = jenis.strip().lower()
-    if jenis not in {"menir", "reject"}:
-        raise HTTPException(400, "Jenis silo tidak valid.")
+    from app.services.jenis_hasil_samping import daftar
+    async with SessionLocal() as master_db:
+        if jenis not in {r["kode"] for r in await daftar(master_db, termasuk_nonaktif=True)} or jenis == "broken":
+            raise HTTPException(400, "Pilih jenis hasil samping yang dikenal.")
     from sqlalchemy import select
     from app.models import Silo
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
@@ -5653,7 +5702,7 @@ async def _act_masukkan_hasil_samping(req: MasukkanHasilSampingSiloReq,
             raise _err(e, f"Gagal memasukkan {jenis} ke silo.")
     hasil = {"ok": True, "pesan": f"✓ {result['moved_kg']:,.2f} kg {jenis} masuk "
             f"ke {result['nama_silo']}.".replace(",", ".")}
-    if jenis in ('menir', 'reject'):
+    if jenis != 'broken':
         kunci_rincian = 'rincian_' + jenis
         # Jawaban tambahan membaca catatan yang sudah commit, bukan estimasi
         # browser. Kegagalan pembacaan tidak membatalkan keberhasilan transaksi.
@@ -5668,7 +5717,7 @@ async def _act_masukkan_hasil_samping(req: MasukkanHasilSampingSiloReq,
                     select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
                     .where(HasilSampingKeSilo.kode_pindah.in_(result['codes']))))
                 hasil[kunci_rincian]['setelah'] = await rincian(
-                    db, str(result['jasa_id']) if result['jasa_id'] is not None else 'pabrik', jenis=jenis)
+                    db, str(result['jasa_id']) if result['jasa_id'] is not None else 'pabrik', jenis=jenis,user=user)
         except Exception:
             log.exception('Saldo %s sesudah simpan belum terbaca', jenis)
     return hasil
@@ -5684,7 +5733,7 @@ async def rincian_menir_silo(pemilik: str = '', berat_kg: str = '', silo: str = 
     from app.services.rencana_menir_silo import rincian
     async with SessionLocal() as db:
         try:
-            return await rincian(db, pemilik, berat_kg, silo)
+            return await rincian(db, pemilik, berat_kg, silo,user=user)
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
 
@@ -5698,7 +5747,7 @@ async def rincian_reject_silo(pemilik: str = '', berat_kg: str = '', silo: str =
     from app.services.rencana_menir_silo import rincian
     async with SessionLocal() as db:
         try:
-            return await rincian(db, pemilik, berat_kg, silo, jenis="reject")
+            return await rincian(db, pemilik, berat_kg, silo, jenis="reject",user=user)
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
 
@@ -5841,11 +5890,14 @@ async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict
 async def beras_jenis_silo(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Pilihan internal jenis+lingkup stok; tautan kartu mengunci pilihannya."""
     _require(await _is_g2_operator(user))
-    from app.services.stok import BERAS_JENIS, nama_produk
+    from app.services.stok import nama_produk
+    from app.services.spesifikasi_beras import jenis_beras
+    async with SessionLocal() as db:
+        pilihan = await jenis_beras(db, termasuk_nonaktif=True)
     return [
         {"value": f"{jenis}|{scope}",
          "label": f"{nama_produk(jenis)} · {'stok pabrik' if scope == 'pabrik' else 'stok jasa'}"}
-        for jenis in BERAS_JENIS for scope in ("pabrik", "jasa")
+        for jenis in pilihan for scope in ("pabrik", "jasa")
     ]
 
 
@@ -5861,7 +5913,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
     from app.penggilingan.inventory.finished_goods import (
         _packed_kg, get_standard)
     from app.services.jasa import nama_pemilik
-    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc, output_sosoh
+    from app.services.stok import adalah_grade_beras, _dipindah_silo_proc, output_sosoh
     from hmu_core import Brand, PackageSize, PackagingMaterial
 
     try:
@@ -5869,7 +5921,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
     except ValueError:
         return []
     jenis, scope = jenis.strip().lower(), scope.strip().lower()
-    if jenis not in BERAS_JENIS or scope not in {"pabrik", "jasa"}:
+    if not adalah_grade_beras(jenis) or scope not in {"pabrik", "jasa"}:
         return []
 
     keluar: list[dict] = []
@@ -6155,3 +6207,21 @@ async def pilihan_lini_produksi(jenis: str, user: User = Depends(pengguna_aksi))
             LiniProduksi.aktif.is_(True),Warehouse.aktif.is_(True))
         rows=(await db.execute(q.order_by(LiniProduksi.id))).scalars()
         return [{'value':r.id,'label':r.nama} for r in rows if izin_gudang(user,r.warehouse_id)]
+
+
+@router.get('/actions/rincian-hasil-samping-silo')
+async def rincian_hasil_samping_silo(jenis: str, pemilik: str='', berat_kg: str='', silo: str='',
+                                     user: User=Depends(pengguna_aksi)):
+    await _izin_masukkan_silo(user)
+    from app.services.rencana_menir_silo import rincian
+    async with SessionLocal() as db:
+        try:
+            return await rincian(db, pemilik, berat_kg, silo, jenis=jenis,user=user)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+
+
+@router.post('/actions/masukkan-hasil-samping-silo/{jenis}')
+async def masukkan_samping_dinamis(jenis: str, req: MasukkanHasilSampingSiloReq,
+                                   user: User=Depends(pengguna_aksi)):
+    return await _act_masukkan_hasil_samping(req, jenis, user)

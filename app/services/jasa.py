@@ -1037,10 +1037,12 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
     # angka yang benar — nol kalau sudah dipindah, positif kalau belum.
     from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_curah
 
+    from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_total
     samping = 0.0
-    for jenis_lain in ("menir", "reject", "bekatul"):
+    from app.services.jenis_hasil_samping import daftar as master_samping
+    for jenis_lain in (r["kode"] for r in await master_samping(db, termasuk_nonaktif=True) if r["kode"] != "broken"):
         samping += max(
-            await hitung_stok_byproduct_curah(db, jenis_lain, jasa_id=jasa_id), 0.0)
+            (await hitung_stok_byproduct_total(db, jenis_lain, jasa_id=jasa_id) if jenis_lain.startswith("hs_") else await hitung_stok_byproduct_curah(db, jenis_lain, jasa_id=jasa_id)), 0.0)
 
     # Barang jadi = yang dibukukan atas pesanan ini − yang sudah diambil.
     jadi = float((await db.execute(

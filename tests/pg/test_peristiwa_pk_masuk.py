@@ -30,6 +30,8 @@ async def g2(pg):
     from hmu_identitas import peran as P
 
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         w = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(w)
         await db.flush()

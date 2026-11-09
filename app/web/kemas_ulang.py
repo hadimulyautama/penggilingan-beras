@@ -45,7 +45,8 @@ async def halaman(request:Request,sku_id:int,std_id:int|None=None,jasa_id:int|No
             FinishedGoodsStock.rice_quality_standard_id.is_(None) if std_id is None else FinishedGoodsStock.rice_quality_standard_id==std_id,
             KemasUlang.jasa_id.is_(None) if jasa_id is None else KemasUlang.jasa_id==jasa_id)
             .order_by(KemasUlang.id.desc()).limit(20))).all()
-    nama=f'{std.nama if std else sku.kategori.replace("_"," ").title()} · {brand.nama if brand else "Tanpa merek"} · {mat.nama} {size.ukuran_kg} kg'
+    from app.services.stok import nama_produk
+    nama=f'{std.nama if std else nama_produk(sku.kategori)} · {brand.nama if brand else "Tanpa merek"} · {mat.nama} {size.ukuran_kg} kg'
     return await render_laci(request,'kemas_ulang.html',layar='stok_produk_jasa' if jasa_id else 'stok_produk',nama_produk=nama,pemilik=pemilik,
         opsi=opsi,kemasan=kemasan,riwayat=hist,
         kembali=kembali_aman(request.query_params.get('kembali_stok', '')) or ('/stok-produk-jasa' if jasa_id else '/stok-produk'),

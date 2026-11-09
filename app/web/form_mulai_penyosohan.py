@@ -11,7 +11,13 @@ from app.web.form_tambah_silo_giling import pemilik
 LABEL = dict(pk="PK", beras_putih="Beras olah ulang", broken="Broken",
              menir="Menir", reject="Reject", belum_dikenal="Jenis belum teridentifikasi")
 
+def label(jenis):
+    from app.services.jenis_hasil_samping import nama_samping
+    return nama_samping(jenis) or LABEL.get(jenis, LABEL["belum_dikenal"])
+
 async def baca_silo(db, silo):
+    from app.services.jenis_hasil_samping import daftar
+    await daftar(db,termasuk_nonaktif=True)
     kg = await hitung_stok_silo(db, silo.id)
     komposisi = await komposisi_bahan_silo(db, silo.id, target_kg=kg)
     komposisi = {j:v for j,v in komposisi.items() if v > 0.01}
@@ -32,7 +38,7 @@ async def baca_silo(db, silo):
         if dinamis:
             belum += berat is None
             sementara = sementara or not status.pasti
-        sumber.append(dict(kode=kode, jenis=LABEL.get(jenis, LABEL['belum_dikenal']),
+        sumber.append(dict(kode=kode, jenis=label(jenis),
             bobot=Bobot(float(berat) if berat is not None else None, status.keadaan, 1 if berat is None else 0).teks(),
             pemilik=await pemilik(db, jid), waktu=r.waktu_masuk.isoformat() if hasattr(r, 'waktu_masuk') else r.waktu.isoformat()))
     for r in (await db.scalars(select(PkGudang2Intake).where(PkGudang2Intake.silo_id == silo.id).order_by(PkGudang2Intake.id))).all():
@@ -50,8 +56,8 @@ async def baca_silo(db, silo):
     keadaan = TAK_DIKETAHUI if belum else PERKIRAAN if sementara else PASTI
     bobot = Bobot(kg if kg or not belum else None, keadaan, belum)
     data = dict(nama=silo.nama_silo, bobot=bobot.teks(), pemilik=" · ".join(nama) or "Pemilik belum tercatat",
-        pesanan=orders, jumlah_sumber=len(sumber), asal=[LABEL.get(j, LABEL['belum_dikenal']) for j in komposisi],
-        komposisi=[dict(jenis=LABEL.get(j, LABEL['belum_dikenal']), bobot=Bobot(v, keadaan, belum).teks()) for j,v in komposisi.items()],
+        pesanan=orders, jumlah_sumber=len(sumber), asal=[label(j) for j in komposisi],
+        komposisi=[dict(jenis=label(j), bobot=Bobot(v, keadaan, belum).teks()) for j,v in komposisi.items()],
         sumber=sumber, siap=kg > 0 and jalan is None,
         proses=jalan.kode_proses if jalan else None,
         detail=f"/proses-aktif/sosoh/{jalan.kode_proses}" if jalan else None,

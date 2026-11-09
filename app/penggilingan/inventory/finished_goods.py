@@ -134,9 +134,9 @@ async def saldo_packing(db, proc, kategori, grade, std_id):
     # Beras yang menjadi bahan silo sudah keluar dari saldo curah. Kunci
     # proses (_proc_by_kode) juga dipakai pemindahan FIFO dan catat hasil,
     # sehingga dua operator tidak dapat memakai saldo yang sama.
-    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc
+    from app.services.stok import adalah_grade_beras, BERAS_JENIS, _dipindah_silo_proc
     dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
-        (proc.id, jenis_out), 0.0) if jenis_out in BERAS_JENIS else 0.0
+        (proc.id, jenis_out), 0.0) if adalah_grade_beras(jenis_out) else 0.0
     tersedia = float(keluar) - sudah - dipindah
     return dict(jenis=jenis_out, hasil=float(keluar), dialokasikan=sudah,
                 dipindah_silo=dipindah, tersedia=tersedia)
@@ -163,7 +163,7 @@ async def catat_packing(
     if kategori == "beras_putih":
         if not grade:
             raise InventoryError(
-                "Pilih mutu beras: Premium, Super, Medium, atau Sayur. "
+                "Pilih spesifikasi beras dari master di Pengaturan. "
                 "Beras putih harus dipacking sesuai mutu hasil penyosohan."
             )
         std = await get_standard(db, grade)
@@ -274,9 +274,9 @@ async def catat_curah(
     """
     from app.services.barang_keluar import _kunci_saldo_keluar
     from app.services.jasa import pemilik_hasil_proses
-    from app.services.stok import BERAS_JENIS, beras_curah, kategori_dan_mutu
+    from app.services.stok import adalah_grade_beras, BERAS_JENIS, beras_curah, kategori_dan_mutu
 
-    if not kode_pol or jenis not in BERAS_JENIS:
+    if not kode_pol or not adalah_grade_beras(jenis):
         raise InventoryError("Pilih lot dan mutu beras hasil sosoh yang dijadikan curah.")
     await _kunci_saldo_keluar(db)
     proc = await _proc_by_kode(db, kode_pol)

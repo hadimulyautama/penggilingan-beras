@@ -257,7 +257,9 @@ async def test_pilihan_retur_dari_master_meski_sku_belum_pernah_dibuat(pg,kontek
     async with pg() as db:
         sebelum=await db.scalar(select(func.count()).select_from(ProductSku))
         pilihan=await katalog(db)
-        assert list(pilihan['jenis'])==['beras_putih','broken','menir','reject']
+        from app.services.jenis_hasil_samping import daftar
+        assert set(pilihan['jenis'])=={'beras_putih',*(j['kode'] for j in await daftar(db))}
+        assert pilihan['kemasan']['bekatul']
         assert {k['nilai'] for k in pilihan['kemasan']['broken']}=={'putih:50','polos:25'}
         assert {k['nilai'] for k in pilihan['kemasan']['menir']}=={'putih:50'}
         assert {k['nilai'] for k in pilihan['kemasan']['reject']}=={'bekas:50'}

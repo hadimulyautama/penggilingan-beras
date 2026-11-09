@@ -19,6 +19,8 @@ disosoh — dan menempelkannya di halaman yang sama akan membuat satu layar
 menjawab dua pertanyaan sekaligus.
 """
 from __future__ import annotations
+from app.services.jenis_hasil_samping import nama_samping, ukuran_otomatis, adalah_samping
+from app.services.spesifikasi_beras import adalah_spek, nama_spek, daftar as daftar_spek
 from hmu_identitas import peran as P
 from app.services.cakupan_fasilitas import batas as batas_lokasi
 from app.performa import dalam
@@ -949,7 +951,7 @@ def adalah_beras(jenis: str | None) -> bool:
     broken, bekatul, reject dijual curah, harganya lain, dan pembelinya lain.
     Satu daftar berurutan membuat keduanya dibaca dengan ukuran yang sama.
 
-    BUKAN `jenis in BERAS_JENIS` langsung, dan itu bukan kerapian: `beras_putih`
+    BUKAN `adalah_beras(jenis)` langsung, dan itu bukan kerapian: `beras_putih`
     — beras yang mutunya BELUM ditetapkan — tak ada di daftar itu, sebab daftar
     itu dipakai mencari standar mutu dan beras tanpa mutu tak punya standar.
     Memakainya untuk memilah blok akan menjatuhkan beras tanpa mutu ke blok
@@ -957,7 +959,12 @@ def adalah_beras(jenis: str | None) -> bool:
     lahir justru karena ada beras yang tak punya rumah.
     """
     j = (jenis or "").strip().lower()
-    return j in BERAS_JENIS or j == "beras_putih"
+    return adalah_spek(j) or j in {"beras_b", "beras_putih"}
+
+
+def adalah_grade_beras(jenis):
+    """Hasil beras dengan spek atau olah ulang; bukan beras tanpa mutu."""
+    return adalah_spek(jenis) or jenis == "beras_b"
 
 
 @dataclass
@@ -1021,6 +1028,7 @@ async def output_sosoh_banyak(db: AsyncSession, proc_ids=None
     `proc_ids=None` berarti SELURUH proses; itu yang dipakai layar Stok Produk,
     yang memang menjumlah seluruh riwayat untuk kepala kartunya.
     """
+    await daftar_spek(db, termasuk_nonaktif=True)
     from app.penggilingan.gudang2.models import PolishingOutputLog
 
     from sqlalchemy import func
@@ -1133,7 +1141,7 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True,
             # rumah" — pola yang sama dengan dikemas di atas (keputusan pemilik
             # 8 Oktober 2026). Lihat docstring `_dipindah_silo_proc`.
             dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
-                (proc.id, jenis), 0.0) if jenis in BERAS_JENIS else 0.0
+                (proc.id, jenis), 0.0) if adalah_grade_beras(jenis) else 0.0
             sisa = float(kg) - dikemas - dipindah
             # Nol berarti sudah habis dikemas — bukan kabar, jadi tak berkartu.
             # Yang MINUS justru kabar: lebih banyak dikemas daripada yang keluar
@@ -1196,7 +1204,7 @@ def kategori_dan_mutu(jenis: str) -> tuple[str, str | None]:
     kalimat yang menyebut namanya, daripada diam-diam berubah jadi beras putih.
     """
     jenis = (jenis or "").strip().lower()
-    if jenis in GRADES_BERAS:
+    if adalah_spek(jenis):
         return "beras_putih", jenis
     return jenis, None
 
@@ -1216,11 +1224,11 @@ def _tanpa_karung(bahan: str | None) -> str:
 
 def nama_produk(jenis: str) -> str:
     """Nama yang dibaca orang untuk `jenis_produk`."""
-    return _NAMA_GRADE.get(jenis) or NAMA_KATEGORI.get(jenis) or jenis.title()
+    return nama_spek(jenis) or nama_samping(jenis) or _NAMA_GRADE.get(jenis) or NAMA_KATEGORI.get(jenis) or jenis.title()
 
 
 _NAMA_GRADE = {"premium": "Beras Premium", "medsuper": "Beras Medium Super",
-               "medium": "Beras Medium", "sayur": "Beras Sayur",
+               "medium": "Beras Medium", "sayur": "Ekonomis",
                "beras_putih": "Beras putih · mutu di catatan lama kosong"}
 
 
@@ -1329,12 +1337,24 @@ class KartuProduk:
         return -toleransi_nominal(self.hasil_kg) <= self.curah_kg < -0.5
 
 
-_UKURAN_KEMASAN_OTOMATIS = {
-    "bekatul": 40,
-    "reject": 50,
-    "menir": 50,
-    "broken": 50,
-}
+from collections.abc import Mapping
+
+class _KemasanOtomatis(Mapping):
+    """Antarmuka lama, sumber nilainya master DB dalam konteks permintaan."""
+    def __contains__(self, jenis):
+        return adalah_samping(jenis)
+    def __getitem__(self, jenis):
+        if not adalah_samping(jenis):
+            raise KeyError(jenis)
+        return ukuran_otomatis(jenis)
+    def __iter__(self):
+        from app.services.jenis_hasil_samping import _katalog, _LAMA
+        rows = _katalog.get()
+        return iter([r['kode'] for r in rows] if rows is not None else _LAMA)
+    def __len__(self):
+        return sum(1 for _ in self)
+
+_UKURAN_KEMASAN_OTOMATIS = _KemasanOtomatis()
 
 
 def _packing_otomatis(jenis: str, berat_kg: float) -> tuple[int, int, float, float]:
@@ -1582,6 +1602,16 @@ async def stok_produk(db: AsyncSession, *,
                 berjalan["bekatul"] = berjalan.get("bekatul", 0.0) + float(kg)
             proc_ids_bekatul_extra.add(proc.id)
 
+    # Jenis baru dari penerimaan langsung mengikuti pool yang sama, dengan
+    # asal tetap tersimpan. Hasil polishing tidak dihitung dua kali.
+    for row in (await db.scalars(select(ByproductStock).where(milik_proc(ByproductStock)))).all():
+        if row.jenis_produk in {'broken','bekatul'} or not adalah_samping(row.jenis_produk):
+            continue
+        if row.source_type=='polishing' and catatan.get(row.source_id,{}).get(row.jenis_produk,0)>0:
+            continue
+        hasil.setdefault(row.jenis_produk,[]).append(RincianProduk(
+            kode=f'Stok #{row.id}',kg=float(row.berat_kg),waktu=row.waktu,ket='Penerimaan hasil samping'))
+
     # ── Yang sudah dikemas (seluruh riwayat, bukan sisanya) ──
     dikemas: dict[str, float] = {}
     for kategori, mutu, kg in (await db.execute(
@@ -1690,7 +1720,7 @@ async def stok_produk(db: AsyncSession, *,
     for jenis_silo, kg in (await db.execute(
         select(HasilSampingKeSilo.jenis,
                func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
-        .where(HasilSampingKeSilo.jenis.in_(("menir", "reject")),
+        .where(HasilSampingKeSilo.jenis.is_not(None),
                milik_proc(HasilSampingKeSilo))
         .group_by(HasilSampingKeSilo.jenis)
     )).all():
@@ -2106,7 +2136,7 @@ async def barang_jadi_g2(db: AsyncSession, *, user=None) -> BarangJadiG2:
         k["asal"].extend(
             (pol, f"{berat:,.0f} kg".replace(",", "."), f"{n} karung")
             for pol, (n, berat) in k.pop("_pol").items())
-        (produk if k["jenis"] in GRADES_BERAS or k["jenis"] == "beras_putih"
+        (produk if adalah_spek(k["jenis"]) or k["jenis"] == "beras_putih"
          else samping).append(k)
 
     # Bekatul curah — masuk − keluar, rincian per proses.

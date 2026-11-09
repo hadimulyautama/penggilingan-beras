@@ -136,6 +136,8 @@ def buat_pdf(data):
     note('Rincian pencatatan hasil, QC dan riwayat bahan tersedia pada lampiran.')
     section('Asal bahan dan QC penerimaan')
     table(['Batch','Netto asal','KA rata-rata','Lamur','Biji hijau'],ringkasan_penerimaan(d) or [['Belum tercatat','-','-','-','-']],[.24,.2,.15,.13,.28])
+    kendaraan=list(dict.fromkeys(b.get('plate') for b in d['batches'] if b.get('plate') and b.get('plate')!='Tidak tercatat'))
+    if kendaraan:note('Kendaraan asal: '+', '.join(kendaraan))
     note('QC penerimaan sebelum pengeringan bila bahan melalui pengeringan. Biji hijau menunjukkan jumlah pemeriksaan pada tiap kategori; data historis ditandai terpisah.')
     counts=[r['n'] for r in d.get('raw_summary',{}).values() if not r['legacy']]
     if counts and len(counts)==len(d['batches']) and len(set(counts))==1:

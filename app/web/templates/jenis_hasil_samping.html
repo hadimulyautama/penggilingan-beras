@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block judul %}Jenis Hasil Samping{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/spesifikasi-beras.css?v={{ VERSI }}">
+<section class="spek-beras" aria-labelledby="spek-judul">
+<a href="/pengaturan">← Pengaturan</a><p class="bantu">Pengaturan / Operasional</p>
+<h1 id="spek-judul">Jenis Hasil Samping</h1>
+<p>Atur jenis hasil samping dan pengemasan otomatisnya. Karung penuh serta sisa curah dihitung otomatis.</p>
+{% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
+{% if berhasil %}<div class="pesan pesan--ok" role="status">Perubahan jenis hasil samping tersimpan.</div>{% endif %}
+{% macro fields(row, prefix) %}
+<label for="{{ prefix }}-nama">Nama hasil samping</label>
+<input class="fld" id="{{ prefix }}-nama" name="nama" required minlength="2" maxlength="50" value="{{ row.nama|default('') }}">
+<label for="{{ prefix }}-bentuk">Bentuk stok</label><select class="fld" name="bentuk" id="{{ prefix }}-bentuk" required {% if row.dipakai %}disabled{% endif %}><option value="">Pilih bentuk stok</option><option value="curah" {% if row.bentuk == 'curah' %}selected{% endif %}>Curah</option><option value="karung" {% if row.bentuk == 'karung' %}selected{% endif %}>Berkarung otomatis</option></select>
+{% if row.dipakai %}<input type="hidden" name="bentuk" value="{{ row.bentuk }}">{% endif %}
+<label for="{{ prefix }}-kg">Kapasitas karung (kg)</label><input class="fld" id="{{ prefix }}-kg" name="kg_karung" inputmode="numeric" type="number" min="1" max="1000" step="1" value="{{ row.kg_karung or '' }}" {% if row.dipakai %}readonly{% endif %}>
+<p class="bantu">Wajib untuk stok berkarung. Kosongkan untuk curah.{% if row.dipakai %} Bentuk dan kapasitas sudah dipakai sehingga dikunci untuk menjaga stok lama.{% endif %}</p>
+{% endmacro %}
+<details class="kartu" {% if isian.aksi == 'tambah' %}open{% endif %}><summary class="spek-ringkas">+ Tambah jenis hasil samping</summary>
+<form method="post" action="/pengaturan/hasil-samping/tambah" data-jaga-isian>
+<input type="hidden" name="_csrf" value="{{ CSRF }}">{{ fields(isian if isian.aksi == 'tambah' else {}, 'baru') }}
+<button class="btn btn--utama" type="submit">Tambah jenis hasil samping</button></form></details>
+<h2>Daftar jenis hasil samping <span class="bantu">({{ daftar|length }})</span></h2>
+{% for row in daftar %}
+<article class="kartu">
+<div class="spek-kepala"><h3>{{ row.nama }}</h3><span class="bantu">{{ 'Aktif' if row.aktif else 'Nonaktif' }}</span></div>
+<dl class="spek-angka"><div><dt>Bentuk stok</dt><dd>{{ 'Berkarung otomatis' if row.bentuk == 'karung' else 'Curah' }}</dd></div><div><dt>Kapasitas karung</dt><dd>{{ (row.kg_karung ~ ' kg') if row.kg_karung else 'Tidak memakai karung' }}</dd></div></dl>
+<details {% if isian.kode == row.kode %}open{% endif %}><summary class="spek-ringkas">Ubah jenis hasil samping</summary>
+<form method="post" action="/pengaturan/hasil-samping/ubah" data-jaga-isian>
+<input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kode" value="{{ row.kode }}"><input type="hidden" name="versi" value="{{ row.versi }}">
+{{ fields(isian if isian.kode == row.kode and isian.aksi == 'ubah' else row, 'spek-' ~ row.kode) }}
+<button class="btn btn--utama" type="submit">Simpan perubahan</button></form></details>
+{% set aksi = 'hapus' if not row.dipakai else 'nonaktifkan' if row.aktif else 'aktifkan' %}
+<details class="spek-hapus"><summary>{{ 'Aktifkan kembali' if aksi == 'aktifkan' else 'Nonaktifkan' if aksi == 'nonaktifkan' else 'Hapus jenis hasil samping' }}</summary>
+<p>{% if aksi == 'hapus' %}Jenis hasil samping belum dipakai. Hapus “{{ row.nama }}” secara permanen?{% elif aksi == 'nonaktifkan' %}Jenis hasil samping sudah dipakai. Nonaktifkan dari pilihan baru? Stok, transaksi dan riwayat tetap tersimpan.{% else %}Aktifkan kembali “{{ row.nama }}” untuk pilihan baru?{% endif %}</p>
+<form method="post" action="/pengaturan/hasil-samping/{{ aksi }}"><input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="kode" value="{{ row.kode }}"><input type="hidden" name="versi" value="{{ row.versi }}"><button class="btn" type="submit">{{ 'Ya, aktifkan kembali' if aksi == 'aktifkan' else 'Ya, nonaktifkan' if aksi == 'nonaktifkan' else 'Ya, hapus jenis hasil samping' }}</button></form></details>
+</article>
+{% else %}<p class="kartu">Belum ada jenis hasil samping. Tambahkan hasil samping yang digunakan di pabrik.</p>{% endfor %}
+<p class="bantu">Perubahan nama tidak mengubah jumlah stok dan catatan lama.</p>
+</section><script src="/static/pengaturan-isian.js?v={{ VERSI }}"></script>
+{% endblock %}

@@ -43,7 +43,7 @@ async def test_tabel_kemasan_curah_dan_tombol_per_sumber_tanpa_rincian_barang_ke
             await bk.muat_semua(db,user=user,rec_id=rec.rec.id)
             await bk.verifikasi(db,user=user,rec_id=rec.rec.id)
             kode_keluar.append(rec.rec.kode)
-        # Keempat hasil samping mempunyai tabel; bekatul tidak punya alur silo.
+        # Semua hasil samping mempunyai alur silo, termasuk bekatul dari master.
         from app.models import PolishingProcess
         pid=await db.scalar(select(PolishingProcess.id).where(
             PolishingProcess.kode_proses==sosoh_jasa['kode_pabrik']))
@@ -84,12 +84,12 @@ async def test_tabel_kemasan_curah_dan_tombol_per_sumber_tanpa_rincian_barang_ke
         for jenis in ['broken','menir','reject','bekatul']:
             r=await c.get('/stok-produk/detail?jenis='+jenis)
             assert r.status_code==200 and 'data-bentuk-stok=' in r.text
-            assert r.text.count('data-masuk-silo=')==(0 if jenis=='bekatul' else 2)
+            assert r.text.count('data-masuk-silo=')==2
             if jenis=='broken':assert 'nilai=pemilik%7Cpabrik' in r.text
             Path('/tmp/hmu-kemasan-'+jenis+'.html').write_text(r.text)
             j=await c.get(f'/stok-produk-jasa/detail?jenis={jenis}&pelanggan_id={sosoh_jasa["pelanggan_id"]}')
             assert j.status_code==200
-            assert j.text.count('data-masuk-silo=')==(0 if jenis=='bekatul' else 2)
+            assert j.text.count('data-masuk-silo=')==2
             if jenis=='broken':assert f'nilai=pemilik%7C{sosoh_jasa["jasa_id"]}' in j.text
             Path('/tmp/hmu-kemasan-jasa-'+jenis+'.html').write_text(j.text)
     async with await _klien(pg,peran=ADMIN) as c:

@@ -226,10 +226,12 @@ async def rencana(db,kode,req,user,action):
     if action=='hasil':
         if req.silos or req.pemakaian_id is not None:raise HTTPException(400,'Konteks hasil tidak sesuai.')
         if len({x.jenis for x in req.hasil})!=len(req.hasil):raise HTTPException(400,'Jenis hasil tidak boleh berulang.')
+        from app.services.spesifikasi_beras import jenis_untuk_proses
+        boleh = await jenis_untuk_proses(db,proc.id)
         rows=[]
         for h in req.hasil:
             # Nol yang belum pernah diisi dan total sama tidak menjadi INSERT.
-            if h.jenis not in p._ALL_JENIS:raise HTTPException(400,'Jenis hasil tidak dikenali.')
+            if h.jenis not in boleh:raise HTTPException(400,'Jenis hasil tidak dikenali.')
             old=await p._total_output(db,proc.id,h.jenis)
             if h.total==old:continue
             d=await p.rencana_total_output(db,proc.id,h.jenis,h.total)

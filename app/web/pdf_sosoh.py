@@ -51,11 +51,11 @@ def buat_pdf(data):
     t=Table([[[v.p(k,v.small),v.p(val,ParagraphStyle('AngkaSosoh',parent=v.bold,fontSize=18,leading=23))] for k,val in cards]],colWidths=[v.width/3]*3)
     t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),v.pale),('TOPPADDING',(0,0),(-1,-1),10),('BOTTOMPADDING',(0,0),(-1,-1),10)]));story.append(t)
     section('Hasil penyosohan')
-    from app.penggilingan.gudang2.polishing import GRADES
-    from app.services.stok import nama_produk
-    labels={'sayur':'Beras Sayur','medium':'Beras Medium','medsuper':'Beras Medium Super','premium':'Beras Premium','beras_b':'Beras B','menir':'Menir','broken':'Broken','bekatul':'Bekatul','reject':'Reject'}
+    labels={'sayur':'Ekonomis','medium':'Beras Medium','medsuper':'Beras Medium Super','premium':'Beras Premium','beras_b':'Beras B','menir':'Menir','broken':'Broken','bekatul':'Bekatul','reject':'Reject'}
     rows=[]
-    kinds=list(dict.fromkeys([*GRADES,'menir','broken','bekatul','reject',*data['outputs']]))
+    kinds=list(dict.fromkeys([*data['outputs']]))
+    from app.services.stok import nama_produk
+    labels.update({j: nama_produk(j) for j in kinds})
     for kind in kinds:
         amount=Decimal(str(data['outputs'].get(kind) or 0))
         if amount>0:
@@ -65,7 +65,12 @@ def buat_pdf(data):
     section('Neraca berat')
     table(['Bahan dipakai','Total hasil tercatat','Selisih neraca'],[[kg(balance.bahan_kg) if complete else 'Belum dapat dipastikan',kg(balance.keluar_kg),(kg(balance.susut.kg)+' ('+pct(balance.susut.persen)+')') if complete else 'Belum dapat dipastikan']],[.33,.34,.33])
     note('Total hasil = beras + hasil samping. Selisih neraca berbeda dari susut uji pada QC.')
-    if not complete:note('Belum dapat dipastikan: bobot bahan belum final atau sisa pemakaian silo Belum dicatat.')
+    if not complete:
+        bobot=data.get('bobot_bahan')
+        if bobot is not None and not bobot.pasti:
+            note('Belum dapat dipastikan: bobot truk belum final. Bobot bahan mengikuti sumber timbang sampai dinyatakan final.')
+        else:
+            note('Belum dapat dipastikan: sisa pemakaian silo belum dicatat lengkap.')
     previous=data.get('neraca_tercatat')
     if previous:note('Hitungan ulang mengikuti koreksi bobot truk. Saat ditutup: bahan '+kg(previous.bahan_kg)+', susut '+kg(previous.susut.kg)+'. Catatan penutupan tetap tersimpan.')
     section('Waktu proses')

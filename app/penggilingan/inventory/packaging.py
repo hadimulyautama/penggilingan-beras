@@ -101,6 +101,15 @@ _BERAS_SIZES = {5, 10, 20, 25, 40, 48, 50}
 
 
 def _validate_kemasan(kategori: str, material_kode: str, ukuran: int) -> None:
+    if kategori.startswith('hs_'):
+        from app.services.jenis_hasil_samping import _katalog
+        if kategori not in {r['kode'] for r in (_katalog.get() or [])}:
+            raise InventoryError('Jenis hasil samping tidak terdaftar di master.')
+        # Kemas ulang/retur jenis baru memakai master bahan dan ukuran kemasan.
+        # Validitas serta status master diperiksa oleh pemanggil DB.
+        if isinstance(ukuran,int) and 0 < ukuran <= 1000:
+            return
+        raise InventoryError('Ukuran kemasan hasil samping tidak valid.')
     rules = KEMASAN_VALID.get(kategori)
     if rules is None:
         raise InventoryError(f"Kategori produk tidak dikenal: {kategori}.")
@@ -119,6 +128,9 @@ async def find_or_create_sku(
     brand_nama: str | None = None,
 ) -> ProductSku:
     """Ambil SKU (kategori×merk×karung×ukuran) atau buat bila belum ada."""
+    if kategori.startswith("hs_"):
+        from app.services.jenis_hasil_samping import daftar
+        await daftar(db,termasuk_nonaktif=True)
     _validate_kemasan(kategori, material_kode, ukuran)
     material = await get_material(db, material_kode)
     if material is None:

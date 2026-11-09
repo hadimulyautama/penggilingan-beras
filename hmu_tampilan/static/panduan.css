@@ -32,7 +32,7 @@ body.padiflow-ui .pd-panduan__tambahan {padding-top:12px;border-top:1px solid va
 body.padiflow-ui .pd-panduan__tambahan>summary {min-height:44px;align-content:center;}
 body.padiflow-ui .pd-panduan__tambahan>p {margin-top:8px;}
 @media(max-width:650px) {
-  body.padiflow-ui dialog.pd-panduan {inset:64px 8px auto auto;margin:0;width:calc(100% - 16px);max-width:440px;max-height:calc(100dvh - 80px);padding:18px;}
+  body.padiflow-ui dialog.pd-panduan {inset:64px 8px auto auto;margin:0;width:calc(100% - 16px);max-width:440px;max-height:calc(100dvh - 112px);padding:18px;}
   body.padiflow-ui .pd-panduan__kepala h2 {font-size:18px;}
   body.padiflow-ui .pd-panduan__tahap {gap:6px;}
 }

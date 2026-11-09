@@ -32,6 +32,7 @@ sudah dipakai layar lain — dua hitungan untuk satu pertanyaan akan berselisih
 pada perubahan berikutnya.
 """
 from __future__ import annotations
+from app.services.jenis_hasil_samping import adalah_samping
 
 from app.web.portal.scope import is_customer_read
 from app.peran import can_see_financials
@@ -130,7 +131,7 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis:
         sisa_samping=sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
         curah_beras=sum(k.curah_kg for k in beras if k.curah_kg > 0),
         curah_samping=sum(
-            (k.curah_otomatis_kg if k.jenis in {"bekatul", "reject", "menir", "broken"}
+            (k.curah_otomatis_kg if adalah_samping(k.jenis)
              else k.curah_kg)
             for k in samping if k.sisa_kg > 0),
     )
@@ -332,7 +333,7 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
                 "sisa_samping": sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
                 "curah_beras": sum(k.curah_kg for k in beras if k.curah_kg > 0),
                 "curah_samping": sum(
-                    (k.curah_otomatis_kg if k.jenis in {"bekatul", "reject", "menir", "broken"}
+                    (k.curah_otomatis_kg if adalah_samping(k.jenis)
                      else k.curah_kg)
                     for k in samping if k.sisa_kg > 0),
                 "bekatul_kg": bekatul_kg,
@@ -411,24 +412,24 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
     def baris(*, owner, bentuk, berat, jumlah=0, ukuran=0, merk="", bahan="", p=None,
               curah_id=None):
         token = "pabrik" if owner is None else str(owner)
-        aksi = ("masukkan_beras_silo" if jenis in svc.BERAS_JENIS else
+        aksi = ("masukkan_beras_silo" if svc.adalah_grade_beras(jenis) else
                 {"broken":"masukkan_broken_silo","menir":"masukkan_menir_silo",
-                 "reject":"masukkan_reject_silo"}.get(jenis))
+                 "reject":"masukkan_reject_silo"}.get(jenis, "masukkan_samping_"+jenis if svc.adalah_samping(jenis) else None))
         sumber = (f"curah:{curah_id}|{token}" if curah_id is not None else
                   f"sku:{p['sku_id']}|{token}" if p and ukuran else f"curah|{token}")
-        nilai = (f"{jenis}|{'pabrik' if owner is None else 'jasa'}" if jenis in svc.BERAS_JENIS else
+        nilai = (f"{jenis}|{'pabrik' if owner is None else 'jasa'}" if svc.adalah_grade_beras(jenis) else
                  f"pemilik|{token}" if jenis == "broken" else token)
         params = {"buka":aksi,"nilai":nilai}
-        if jenis in svc.BERAS_JENIS:
+        if svc.adalah_grade_beras(jenis):
             params["sumber_stok"] = sumber
         href = detail_href + "&" + urlencode(params) if aksi and berat > 0.5 and boleh_silo else None
         pindah = (f"bj:{p['sku_id']}|{p['std_id'] or ''}|{owner}"
                   if p and owner is not None and jumlah and boleh_pindah else None)
         rows.append(dict(bentuk=bentuk,kg=berat,karung=jumlah,ukuran=ukuran,merk=merk,
                          bahan=bahan,href=href,pindah=pindah,
-                         kemas_baru=(detail_href+"&"+urlencode({"buka":"catat_packing","nilai":f"curah@{jenis}@{token}"})) if jenis in svc.BERAS_JENIS and not p and not jumlah and berat>0.5 and boleh_kemas else None,
+                         kemas_baru=(detail_href+"&"+urlencode({"buka":"catat_packing","nilai":f"curah@{jenis}@{token}"})) if svc.adalah_grade_beras(jenis) and not p and not jumlah and berat>0.5 and boleh_kemas else None,
                          kemas=kemas_href(p["sku_id"],p["std_id"],owner) if p and (jumlah or curah_id) and boleh_kemas else None,
-                         sumber=sumber if jenis in svc.BERAS_JENIS else None))
+                         sumber=sumber if svc.adalah_grade_beras(jenis) else None))
 
     if otomatis:
         # Hasil samping mempertahankan pembagian kemasan otomatis yang sudah
@@ -457,7 +458,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
                 if abs(curah_belum)>0.5:
                     baris(owner=owner,bentuk="Curah · belum dikemas",berat=curah_belum)
     for fg,_,_ in sisa_rows:
-        if jenis in svc.BERAS_JENIS:
+        if svc.adalah_grade_beras(jenis):
             baris(owner=fg.jasa_id, bentuk="Curah tercatat", berat=float(fg.berat_total_kg),
                   curah_id=fg.id, p={"sku_id":fg.product_sku_id,"std_id":fg.rice_quality_standard_id})
             continue

@@ -13,10 +13,24 @@ LABEL_KOMODITAS = {
 }
 
 
+def komoditas_g2():
+    from app.services.jenis_hasil_samping import _katalog
+    return tuple(dict.fromkeys([*KOMODITAS_G2, *[r['kode'] for r in (_katalog.get() or [])]]))
+
+
+def label_komoditas(kode):
+    from app.services.jenis_hasil_samping import nama_samping
+    return nama_samping(kode) or LABEL_KOMODITAS.get(kode, kode)
+
+
 def daftar_diizinkan(silo, gudang: str) -> tuple[str, ...]:
-    bawaan = KOMODITAS_G1 if gudang == "g1" or silo.jenis_isi == "gabah" else KOMODITAS_G2
+    bawaan = KOMODITAS_G1 if gudang == "g1" or silo.jenis_isi == "gabah" else komoditas_g2()
     tersimpan = silo.komoditas_diizinkan
     if not isinstance(tersimpan, list):
+        return bawaan
+    # Daftar penuh bawaan lama berarti seluruh komoditas G2. Master baru
+    # ikut tersedia tanpa menulis ulang konfigurasi maupun transaksi silo.
+    if gudang == "g2" and silo.jenis_isi != "gabah" and set(tersimpan) == set(KOMODITAS_G2):
         return bawaan
     hasil = tuple(k for k in bawaan if k in tersimpan)
     return hasil

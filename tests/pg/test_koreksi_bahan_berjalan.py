@@ -12,6 +12,8 @@ pytestmark=pytest.mark.asyncio
 @pytest.fixture
 async def running(pg,dunia):
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db);await db.commit()
         u,b,it=await batch_baru(db,dunia,n=100,w=5000)
         move=await pindah(db,u,it,60)
         pr=(await p.mulai_penyosohan(db,user=u,nama_silos=['A'])).proc

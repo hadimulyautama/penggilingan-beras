@@ -38,6 +38,7 @@ PELAJARAN RANTAI PK YANG DIPAKAI UTUH DI SINI:
     sehari-hari, bukan kasus tepi.
 """
 from __future__ import annotations
+from app.services.jenis_hasil_samping import adalah_samping
 
 from dataclasses import dataclass, field, replace
 from math import ceil, isfinite
@@ -472,7 +473,7 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
     if b.tipe == 'finished_goods':
         from app.models import ProductSku
         sku = await db.get(ProductSku, b.sku_id)
-        if sku and sku.kategori in {'broken','menir','reject','bekatul'}:
+        if sku and adalah_samping(sku.kategori):
             total = float(await hitung_stok_byproduct_total(db, sku.kategori, jasa_id=b.jasa_id))
             terikat = (float(await alokasi_supplier(db,jenis=sku.kategori)) if b.jasa_id is None else 0) if abaikan_pesanan else await _sudah_dipesan(db, jenis=sku.kategori, jasa_id=b.jasa_id)
             return min(ada-dipesan, total-terikat), nama
@@ -907,7 +908,7 @@ async def buat_perintah(
         if b.tipe == 'finished_goods':
             from app.models import ProductSku
             sku = await db.get(ProductSku, b.sku_id)
-            if sku and sku.kategori in {'broken','menir','reject','bekatul'}:
+            if sku and adalah_samping(sku.kategori):
                 jenis_bersama = sku.kategori
         if jenis_bersama:
             # Saldo kemasan/curah tidak boleh lolos dua kali bahkan sebelum
@@ -1439,7 +1440,7 @@ async def dampak_total_muatan(db, it, *, jumlah_karung=None, berat_kg=None,
     if b.tipe == 'finished_goods':
         from app.models import ProductSku
         sku = await db.get(ProductSku,b.sku_id)
-        if sku and sku.kategori in {'broken','menir','reject','bekatul'}: jenis=sku.kategori
+        if sku and adalah_samping(sku.kategori): jenis=sku.kategori
     if jenis and b.tipe in ('finished_goods','byproduct_curah'):
         gabungan = ('hasil_samping',b.jasa_id,jenis)
         stok_total,_ = await tersedia(db,BarisPerintah(tipe='byproduct_curah',jenis=jenis,jasa_id=b.jasa_id),abaikan_pesanan=True)

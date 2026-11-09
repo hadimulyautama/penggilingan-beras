@@ -27,6 +27,10 @@ async def ringkasan(db, *, kode_proses):
     lengkap = bool(rows) and all(r.berat_akhir_kg is not None for r in usages)
     bobot = bobot_pemakaian(usages) if lengkap and all(r.berat_terpakai_kg is not None for r in usages) else None
     hasil = await output_sosoh(db, proc.id)
+    pilihan_aktif = await p.jenis_hasil(db)
+    from app.services.spesifikasi_beras import jenis_untuk_proses
+    boleh = await jenis_untuk_proses(db, proc.id)
+    pilihan = [*pilihan_aktif, *(j for j in hasil if j not in pilihan_aktif)]
     # Neraca dan kelompok beras berasal dari helper yang sama dengan laporan;
     # jangan memakai kelompok stok yang sengaja tidak memasukkan beras_b.
     neraca = p.neraca_sosoh(bobot.angka() if bobot else 0, hasil)
@@ -46,8 +50,8 @@ async def ringkasan(db, *, kode_proses):
             dinamis=r.bobot_karung_dinamis) for r, nama in rows],
         sisa_lengkap=lengkap, bahan=bobot.teks() if bobot else 'Belum dapat dipastikan · periksa sisa silo',
         bobot_final=bobot.pasti if bobot else False,
-        hasil=[dict(jenis=j, nama=nama_produk(j), kg=hasil.get(j), beras=j in p.GRADES)
-               for j in [*(j for j in reversed(p.GRADES) if j != 'beras_b'), 'beras_b', *p.BYPRODUCTS]],
+        hasil=[dict(jenis=j, nama=nama_produk(j), kg=hasil.get(j), beras=p.adalah_spek(j) or j == "beras_b", aktif=j in pilihan_aktif, boleh_catat=j in boleh)
+               for j in pilihan],
         ada_hasil=bool(hasil), beras=neraca.beras.kg if hasil else None,
         samping=sum(x.kg for x in neraca.samping) if hasil else None,
         total=neraca.keluar_kg if hasil else None,

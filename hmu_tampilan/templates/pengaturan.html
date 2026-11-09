@@ -36,6 +36,8 @@
     {% if blok_setelan or TAMPILAN_INDUK %}
     <section class="pg-grup" aria-labelledby="pg-operasional"><header><span>{{ ikon('sliders') }}</span><div><h2 id="pg-operasional">Operasional</h2><p>Berlaku untuk proses produksi</p></div></header>
       {{ pintu('/pengaturan/sebab-berhenti', 'Sebab berhenti proses', 'Pilihan sebab sesuai proses yang tersedia', 'pause', blok_setelan) }}
+      {{ pintu('/pengaturan/spesifikasi-beras', 'Jenis / Spesifikasi Beras', 'Nama, kadar broken dan derajat sosoh acuan', 'sliders', blok_setelan) }}
+      {{ pintu('/pengaturan/hasil-samping', 'Jenis Hasil Samping', 'Jenis dan pengemasan otomatis hasil samping', 'sliders', blok_setelan) }}
       {{ pintu('/pengaturan/mutu', 'Pencatatan mutu / QC', 'Formulir dan pengingat mutu', 'clipboard', blok_setelan) }}
     </section>
     {% endif %}

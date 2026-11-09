@@ -26,6 +26,9 @@ async def izin(db,user,proc,aksi='ubah'):
         raise PermissionError('Koreksi hasil selesai dan pembatalan catatan memerlukan Admin/Super Admin pada peran efektifnya.')
 
 async def ambil(db,pid,kind,user,aksi='ubah',lock=False):
+    from app.services.jenis_hasil_samping import daftar
+    if kind not in {r['kode'] for r in await daftar(db,termasuk_nonaktif=True)}:
+        raise ValueError('Jenis hasil samping tidak ditemukan dalam master.')
     if kind not in auto.stok._UKURAN_KEMASAN_OTOMATIS:raise ValueError('Jenis ini tidak memiliki ringkasan pengemasan otomatis yang didukung.')
     if lock:
         from app.services.barang_keluar import _kunci_saldo_keluar
@@ -67,7 +70,7 @@ async def rencana(db,pid,kind,user,req):
     before=await auto.ringkasan(db,proc,kind)
     # Sidik operasional mencakup saldo/relasi, bukan data timbang.
     source=buku.bersih(aktif.raw(src))
-    changed={k:totals.get(k,0) for k in p._ALL_JENIS}
+    changed={k:totals.get(k,0) for k in set(await p.jenis_hasil(db, termasuk_nonaktif=True))}
     changed[kind]=float(D(str(changed[kind]))-old+new)
     last_event=await db.scalar(select(Peristiwa.id).where(Peristiwa.jenis==JENIS,Peristiwa.muatan['catatan_id'].as_integer()==src.id).order_by(Peristiwa.id.desc()).limit(1))
     version=await db.scalar(select(ActivityLog.id).where(ActivityLog.table_name=='polishing_output_logs',ActivityLog.record_id==src.id).order_by(ActivityLog.id.desc()).limit(1))
@@ -76,7 +79,7 @@ async def rencana(db,pid,kind,user,req):
     try:
         if old!=new:
             await p.koreksi_hasil_sosoh(db,user=user,process_id=pid,perubahan=changed,
-                dasar={k:totals.get(k,0) for k in p._ALL_JENIS},alasan=req['alasan'],
+                dasar={k:totals.get(k,0) for k in set(await p.jenis_hasil(db, termasuk_nonaktif=True))},alasan=req['alasan'],
                 berjalan=proc.status=='proses',simpan=False,catatan_id=src.id)
         after=await auto.ringkasan(db,proc,kind)
     finally:await sp.rollback()
@@ -102,7 +105,7 @@ async def simpan(db,pid,kind,user,req,*,dasar,kunci):
     async with db.begin_nested():
         if float(plan['sebelum']['catatan']['berat_kg'])!=float(plan['sesudah']['kg']):
             await p.koreksi_hasil_sosoh(db,user=user,process_id=pid,perubahan=plan['sesudah']['hasil'],
-                dasar={k:plan['sebelum']['hasil'].get(k,0) for k in p._ALL_JENIS},alasan=req['alasan'],
+                dasar={k:plan['sebelum']['hasil'].get(k,0) for k in set(await p.jenis_hasil(db, termasuk_nonaktif=True))},alasan=req['alasan'],
                 berjalan=proc.status=='proses',simpan=False,catatan_id=req['catatan_id'])
         event=await buku.catat(db,jenis=JENIS,pelaku_id=user.id,kunci_kiriman=key,muatan={**plan,'isian':clean},terapkan=False)
         from app.services.activity_log import log_activity

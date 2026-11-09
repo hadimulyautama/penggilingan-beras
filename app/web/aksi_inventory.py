@@ -19,6 +19,8 @@ Operator Gudang 2 boleh mencatat packing dan bekatul (barang berpindah wujud
 di depan matanya); harga, pembelian, dan pengiriman keluar milik staff/admin.
 """
 from __future__ import annotations
+from app.services.jenis_hasil_samping import adalah_samping
+from app.services.stok import adalah_grade_beras
 
 from dataclasses import replace
 
@@ -252,7 +254,7 @@ async def kemasan_untuk(induk: str = "",
     jenis = (induk or "").split("|")[-1].strip().lower()
     from app.services.stok import BERAS_JENIS
 
-    if jenis not in BERAS_JENIS:
+    if not adalah_grade_beras(jenis):
         return []
     kategori, _ = kategori_dan_mutu(jenis)
     async with SessionLocal() as db:
@@ -1006,7 +1008,7 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # Kartu stok membagi saldo yang sama menjadi karung otomatis dan
             # curah; menawarkan SKU karung sekaligus saldo gabungan akan
             # memungkinkan dua baris perintah memesan kg yang sama dua kali.
-            if k.get("jenis") in {"broken", "menir", "reject", "bekatul"}:
+            if adalah_samping(k.get("jenis")):
                 continue
             # Yang membedakan curah dari berkarung `sku_id`, BUKAN jumlah
             # karungnya. Kartu berkarung yang kebetulan tinggal nol karung
@@ -1015,7 +1017,7 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             if k.get("sku_id") is None:
                 kg_tersedia = float(k.get("kg") or 0)
                 label = f"{k['nama']} curah · {kg(kg_tersedia)} tersedia"
-                if k.get("jenis") in ("bekatul", "broken", "menir", "reject"):
+                if adalah_samping(k.get("jenis")):
                     # Satu saldo hasil samping bisa tampil sebagai karung
                     # otomatis dan curah di kartu stok; pengeluaran memakai
                     # jalur kg yang mengambil dari total saldo yang sama.
@@ -1041,19 +1043,22 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             out.append({
                 "value": f"bj:{k['sku_id']}|{k['std_id'] or ''}",
                 "label": f"{nama} · {k['kemasan']} · {k['karung']} karung"})
-        for jenis in ("broken", "menir", "reject", "bekatul"):
+        for jenis in (j for j in kartu_produk if adalah_samping(j)):
             kartu = kartu_produk.get(jenis)
             total = float(kartu.sisa_kg) if kartu else 0.0
             if total <= 0.5:
                 continue
             if kartu:
-                ukuran = kartu.ukuran_kemasan_otomatis or 50
+                ukuran = kartu.ukuran_kemasan_otomatis or 0
                 karung = kartu.jumlah_karung_otomatis
                 curah = kartu.curah_otomatis_kg
             else:
                 ukuran = 40 if jenis == "bekatul" else 50
                 karung = int(total // ukuran)
                 curah = total - karung * ukuran
+            if not ukuran:
+                out.append({"value": f"cr:{jenis}", "label": f"{kartu.nama} · {kg(total)} curah tersedia (isi dalam kg)"})
+                continue
             out.append({
                 "value": f"cr:{jenis}",
                 "label": (f"{kartu.nama if kartu else jenis.title()} · "
@@ -2477,7 +2482,7 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
         # Hasil samping tersedia sebagai satu baris kg gabungan di bawahnya.
         # Menampilkan SKU-nya juga akan menggandakan stok yang sama karena
         # borang pengambilan jasa menerima beberapa baris sekaligus.
-        if kategori in {"broken", "menir", "reject", "bekatul"}:
+        if adalah_samping(kategori):
             continue
         stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jid)
         if float(stok["kg"]) <= 0.5:
@@ -2516,15 +2521,18 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     from app.services.stok import nama_produk
     kartu_byproduct = {k.jenis: k for k in await stok_produk(db, jasa_id=jid)}
 
-    for jenis_curah in ("broken", "menir", "reject", "bekatul"):
+    for jenis_curah in (j for j in kartu_byproduct if adalah_samping(j)):
         kartu = kartu_byproduct.get(jenis_curah)
         sisa_total = float(kartu.sisa_kg) if kartu else 0.0
         if sisa_total > 0.5:
-            ukuran = {"bekatul": 40, "broken": 50, "menir": 50, "reject": 50}[jenis_curah]
+            ukuran = kartu.ukuran_kemasan_otomatis or 0
             karung = (kartu.jumlah_karung_otomatis if kartu
                       else int(sisa_total // ukuran))
             curah = (kartu.curah_otomatis_kg if kartu
                      else sisa_total - karung * ukuran)
+            if not ukuran:
+                out.append({"value": f"cr:{jenis_curah}", "label": f"{nama_produk(jenis_curah)} · {kg(sisa_total)} curah tersedia (isi dalam kg)"})
+                continue
             out.append({"value": f"cr:{jenis_curah}",
                         "label": f"{nama_produk(jenis_curah)} · "
                                  f"{kg(sisa_total)} tersedia; {karung} karung × "

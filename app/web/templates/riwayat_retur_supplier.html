@@ -31,7 +31,7 @@
  <nav class="rsp-actions" aria-label="Halaman riwayat">{% if data.halaman>1 %}<a class="btn" href="{{ href(halaman=data.halaman-1) }}">Sebelumnya</a>{% endif %}<span>Halaman {{ data.halaman }} dari {{ data.pages }}</span>{% if data.halaman<data.pages %}<a class="btn" href="{{ href(halaman=data.halaman+1) }}">Berikutnya</a>{% endif %}</nav>
  {% else %}<section class="rsp-kartu"><h2>Belum ada riwayat yang sesuai</h2><p>Belum ada retur pada cakupan ini atau pencarian dan filter tidak cocok. Hanya data dalam izin akun yang ditampilkan.</p></section>{% endif %}{% endif %}
 {% from '_panduan.html' import panel as panduan %}
-{% call panduan('rrs-filter','Filter riwayat retur ke supplier',penutup={'data-rrs-filter-close':'','data-lk-tutup':''}) %}<div class="rrs-filter-slot" data-rrs-filter-slot></div>{% endcall %}
+{% call panduan('rrs-filter','Filter riwayat retur ke supplier',penutup={'data-rrs-filter-close':'','data-lk-tutup':''}) %}<div data-rrs-filter-slot></div>{% endcall %}
 </div>
 {% endblock %}
 

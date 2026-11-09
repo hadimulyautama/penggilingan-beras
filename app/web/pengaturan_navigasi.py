@@ -5,6 +5,8 @@ HALAMAN = {
     'peran': ('Akun & perangkat', 'Gudang kerja dan tampilan peran'),
     'sesi': ('Akun & perangkat', 'Sesi perangkat'),
     'sebab-berhenti': ('Operasional', 'Sebab berhenti proses'),
+    'spesifikasi-beras': ('Operasional', 'Jenis / Spesifikasi Beras'),
+    'hasil-samping': ('Operasional', 'Jenis Hasil Samping'),
     'mutu': ('Operasional', 'Pencatatan mutu / QC'),
     'kledo': ('Sistem & koneksi', 'Kontak Kledo'),
     'sistem': ('Sistem & koneksi', 'Batas ubah & versi'),

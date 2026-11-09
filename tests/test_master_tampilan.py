@@ -12,6 +12,8 @@ from app.web.akses import hak_view, PERAN_KOLOM
 
 @pytest.fixture
 def katalog(monkeypatch):
+    from tests.master_catalog import catalog
+    catalog(monkeypatch)
     from app.services import setelan,cakupan_fasilitas
     monkeypatch.setattr(cakupan_fasilitas,"pilihan_gudang",AsyncMock(return_value=[]))
     for name in ("_is_milling_operator","_is_drying_operator","_is_polishing_operator"):

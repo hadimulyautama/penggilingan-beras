@@ -13,7 +13,6 @@ class SampelQcSosoh(Base):
     __table_args__ = (
         Index("ix_sampel_qc_sosoh_proses_waktu", "polishing_process_id", "waktu_sampel", "id"),
         UniqueConstraint("polishing_process_id", "kunci_kiriman", name="uq_sampel_sosoh_kiriman"),
-        CheckConstraint("jenis IN ('medium', 'premium', 'medsuper', 'sayur', 'beras_b')", name="ck_sampel_sosoh_jenis"),
         CheckConstraint("hasil_pada IS NULL OR hasil_pada >= waktu_sampel", name="ck_sampel_sosoh_waktu"),
         *(CheckConstraint(f"{kolom} BETWEEN 0 AND 100", name=f"ck_sampel_sosoh_{kolom}")
           for kolom in ("kadar_air", "broken_persen")),

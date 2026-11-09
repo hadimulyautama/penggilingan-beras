@@ -142,7 +142,7 @@ async def laporan_pembelian_gabah(
 
 # ─────────────────── Histori produksi (READ-ONLY, tanpa uang) ───────────────
 # Jenis output penyosohan yang BUKAN beras (hasil samping) — sisanya = beras.
-_PENYOSOHAN_SAMPING = {"menir", "broken", "bekatul", "reject"}
+from app.services.jenis_hasil_samping import adalah_samping
 
 
 async def laporan_produksi_histori(
@@ -265,7 +265,7 @@ async def laporan_produksi_histori(
     samping_kg = 0.0
     for pid in proc_pol:
         for jenis, kg in (await output_sosoh(db, pid)).items():
-            if jenis in _PENYOSOHAN_SAMPING:
+            if adalah_samping(jenis):
                 samping_kg += float(kg)
             else:
                 beras_kg += float(kg)

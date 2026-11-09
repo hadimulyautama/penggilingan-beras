@@ -18,6 +18,8 @@ pytestmark = pytest.mark.asyncio
 @pytest.fixture
 async def dunia(pg):
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         gudang = Warehouse(nama_gudang='Gudang karung', kode_fungsi='g2')
         pemasok = Supplier(nama_supplier='Pemasok karung')
         db.add_all([gudang, pemasok])

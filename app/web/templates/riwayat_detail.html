@@ -25,7 +25,7 @@
 </style>
 {% set judul = {"pengeringan":"Pengeringan", "giling":"Penggilingan", "sosoh":"Penyosohan", "transfer":"Transfer"}.get(jenis, "Proses") %}
 <main class="riwayat-detail">
-{% if jenis=='sosoh' and boleh_koreksi %}<details class="riwayat-detail__card"><summary>Catatan asal pengemasan otomatis</summary><p>Koreksi atau batalkan satu catatan asal. Perhitungan karung dan curah mengikuti hasil efektif.</p>{% for j in ['broken','bekatul','menir','reject'] %}<a class="btn btn--kecil" data-utuh href="/pengemasan-otomatis/sosoh/{{ k.id }}/{{ j }}">{{ j|title }} · catatan asal</a> {% endfor %}</details>{% endif %}
+{% if jenis=='sosoh' and boleh_koreksi %}<details class="riwayat-detail__card"><summary>Catatan asal pengemasan otomatis</summary><p>Koreksi atau batalkan satu catatan asal. Perhitungan karung dan curah mengikuti hasil efektif.</p>{% for b in k.neraca.samping %}{% set j=b.jenis %}<a class="btn btn--kecil" data-utuh href="/pengemasan-otomatis/sosoh/{{ k.id }}/{{ j }}">{{ b.nama }} · catatan asal</a> {% endfor %}</details>{% endif %}
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke Riwayat {{ judul }}</a>
 
   <section class="riwayat-detail__hero">

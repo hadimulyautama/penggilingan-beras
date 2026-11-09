@@ -236,6 +236,8 @@ async def g2(pg, pemakai, pemasok):
     from app.penggilingan.gudang2.models import PkGudang2Intake, PkPurchaseBatch
 
     async with pg() as db:
+        from app.services.seed import seed_jenis_hasil
+        await seed_jenis_hasil(db)
         wh = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if wh is None:

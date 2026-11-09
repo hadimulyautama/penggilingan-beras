@@ -84,7 +84,8 @@ def test_pdf_giling_memuat_ringkasan_dan_lampiran():
     assert 'Rata-rata QC' in first and 'QC hasil PK' not in first
     assert 'Pencatatan hasil PK' in details and 'QC hasil PK' in details
     assert details.index('Pengeringan sumber bahan') < details.index('Transfer dan sisa PK')
-    for removed in ('Sopir','Nomor polisi','Densiti','AB 1234 CD','Bahan masuk dan pemakaian silo'):
+    assert 'AB 1234 CD' in text  # pelacakan asal tetap tersedia pada baris sumber
+    for removed in ('Sopir','Nomor polisi','Densiti','Bahan masuk dan pemakaian silo'):
         assert removed not in text
     assert 'Kesimpulan:' not in text and 'MELEBIHI SATU HALAMAN' not in text
 

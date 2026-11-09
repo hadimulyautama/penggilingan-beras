@@ -26,7 +26,7 @@ def kandidat(db,pid, *, portal=False, scope=None):
     t=table('timbangan_transaksi',*(column(c,Integer) if c in ('id','jasa_id') else column(c) for c in ('id','kode','jenis_kode','status_tiket','jasa_id','arah','nomor_polisi')))
     jt=table('timbangan_jenis',column('kode'),column('nama'))
     jenis=case((t.c.jenis_kode=='GABAH_BASAH','gabah_basah'),(t.c.jenis_kode=='GABAH_KERING','gabah_kering'),
-        (t.c.jenis_kode=='BERAS_PK','pk'),(t.c.jenis_kode=='BERAS_MASUK','beras'),(t.c.jenis_kode=='BROKEN_MASUK','broken'),else_='lain')
+        (t.c.jenis_kode=='BERAS_PK','pk'),(t.c.jenis_kode=='BERAS_MASUK','beras'),(t.c.jenis_kode=='BROKEN_MASUK','broken'),(or_(t.c.jenis_kode.like('HS_%_MASUK'),t.c.jenis_kode.in_(('MENIR_MASUK','REJECT_MASUK','BEKATUL_MASUK'))),'broken'),else_='lain')
     q=select(literal('tiket').label('sumber'),t.c.id.label('id'),t.c.kode.label('kode'),
         jenis.label('jenis'),t.c.status_tiket.label('status'),linked.c.waktu.label('waktu'),
         t.c.nomor_polisi.label('plat'),Jasa.kode.label('pesanan'),literal(0).label('urut'),(-t.c.id).label('pos'),func.coalesce(jt.c.nama,t.c.jenis_kode).label('jenis_cari'))\

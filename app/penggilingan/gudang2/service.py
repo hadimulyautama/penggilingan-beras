@@ -13,6 +13,7 @@ Acuan WAJIB: LOGIKA_SILO_GUDANG2.md.
 - HPP silo = weighted-average bahan yang SUDAH di silo (kecuali HPP belum tersedia).
 """
 from __future__ import annotations
+from app.services.stok import adalah_grade_beras
 
 import logging
 import json
@@ -428,7 +429,7 @@ async def komposisi_bahan_silo(
         HasilSampingKeSilo.silo_id == silo_id,
     ))).scalars().all():
         jenis = str(r.jenis or "").strip().lower()
-        tambah(r.waktu, jenis if jenis in {"menir", "reject"} else "belum_dikenal",
+        tambah(r.waktu, jenis,
                r.berat_kg)
 
     # Pengambilan PK dari silo.
@@ -486,7 +487,7 @@ async def komposisi_bahan_silo(
             # belum diketahui, lalu kurangi saldo lama FIFO agar total yang
             # ditampilkan tetap sama dengan berat silo yang benar-benar dipakai.
             lebih = -selisih
-            for jenis in ("belum_dikenal", "pk", "beras_putih", "broken", "menir", "reject"):
+            for jenis in dict.fromkeys(["belum_dikenal", *hasil]):
                 ambil = min(hasil[jenis], lebih)
                 hasil[jenis] -= ambil
                 lebih -= ambil
@@ -2666,8 +2667,9 @@ async def masukkan_hasil_samping_ke_silo(
 ) -> dict:
     """Pindahkan stok Menir/Reject yang masih tersedia dari hasil sosoh ke silo."""
     jenis = (jenis or "").strip().lower()
-    if jenis not in {"menir", "reject"}:
-        raise Gudang2Error("Jenis stok harus Menir atau Reject.")
+    from app.services.jenis_hasil_samping import daftar
+    if jenis not in {x["kode"] for x in await daftar(db, termasuk_nonaktif=True)} or jenis == "broken":
+        raise Gudang2Error("Pilih jenis hasil samping dari master; Broken memakai jalur bongkar karung.")
     if float(berat_kg or 0) <= 0:
         raise Gudang2Error("Berat yang masuk silo harus lebih dari 0 kg.")
     wid = await _g2_warehouse_id(db)
@@ -2685,7 +2687,7 @@ async def masukkan_hasil_samping_ke_silo(
     from app.services.barang_keluar import _kunci_saldo_keluar
     await _kunci_saldo_keluar(db)
     from .rencana_hasil_samping import saldo_sumber, alokasikan
-    data = await saldo_sumber(db, jenis, jasa_id)
+    data = await saldo_sumber(db, jenis, jasa_id,user=user)
     rencana = alokasikan(data, jenis, berat_kg)
 
     await kunci_silo(db, silo.id)
@@ -2721,7 +2723,8 @@ async def masukkan_hasil_samping_ke_silo(
     for index, (proc, kg) in enumerate(rencana, start=1):
         code = f"{prefix}-{int(existing)+index:02d}"
         move = HasilSampingKeSilo(
-            kode_pindah=code, polishing_process_id=proc.id, jenis=jenis,
+            kode_pindah=code, polishing_process_id=None if getattr(proc,"byproduct_stock_id",None) else proc.id,
+            byproduct_stock_id=getattr(proc,"byproduct_stock_id",None), jenis=jenis,
             silo_id=silo.id, berat_kg=kg, tanggal=now.date(), waktu=now,
             input_by=user.id, jasa_id=jasa_id)
         db.add(move)
@@ -2783,7 +2786,7 @@ async def masukkan_beras_ke_silo(
     legacy = not sumber_stok and bool(kode_pol)
     if legacy:
         sumber_stok = "legacy"
-    if jenis not in BERAS_JENIS:
+    if not adalah_grade_beras(jenis):
         raise Gudang2Error("Jenis beras (grade) dari kartu stok tidak valid.")
     if not nama_silo:
         raise Gudang2Error("Sebutkan silo tujuannya.")

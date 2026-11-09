@@ -74,6 +74,8 @@ async def _menu_g2(monkeypatch):
     menyimpang diam-diam adalah yang tak menguji apa pun lagi.
     """
     from types import SimpleNamespace
+    from tests.master_catalog import catalog
+    catalog(monkeypatch)
 
     async def ya(_u):
         return True

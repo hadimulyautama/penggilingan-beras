@@ -227,7 +227,7 @@ async def test_mockup_operator_modal_dua_aktif_dua_bebas(pg,empat_silo,width,vie
    await expect(root).to_have_attribute('data-layout','operator')
    await expect(root.locator('[data-kb-output="medium"] input')).to_be_visible()
    assert await root.locator('[data-kb-output]').count()==9
-   for label in ['Premium','Super','Medium','Ekonomis']:
+   for label in ['Premium','MedSuper','Medium','Ekonomis']:
     await expect(root.get_by_label('Total kumulatif '+label,exact=True)).to_be_visible()
    assert await root.locator('[data-sr-output-samping] [data-kb-output]').count()==4
    assert await root.locator('[data-sr-output-samping] [data-kb-output="sayur"]').count()==0
@@ -286,7 +286,7 @@ async def test_simpan_sekali_banyak_jenis_dan_klik_ganda(pg,running,width):
   async with browser_client(c,width) as (page,writes,errors):
    await page.goto(BASE+'/proses-aktif/sosoh/'+kode);root=page.locator('[data-sosoh-ringkas]')
    await root.get_by_label('Total kumulatif Medium',exact=True).fill('2100')
-   await root.get_by_label('Total kumulatif Super',exact=True).fill('50')
+   await root.get_by_label('Total kumulatif MedSuper',exact=True).fill('50')
    await expect(root.locator('.sr-work-result-balance')).to_contain_text('pratinjau: 2.350 kg')
    await root.locator('[data-save-output]').evaluate('(b)=>{b.click();b.click()}')
    await expect(root.locator('[data-pesan]')).to_contain_text('tercatat')

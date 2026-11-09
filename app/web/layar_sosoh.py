@@ -120,7 +120,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         await _pastikan_akses_sosoh(akun.user)
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.gudang2.polishing import (
-        _ALL_JENIS, alasan_koreksi_hasil, riwayat_sosoh,
+        jenis_hasil, alasan_koreksi_hasil, riwayat_sosoh,
     )
     from app.services.stok import nama_produk
     async with SessionLocal() as db:
@@ -134,7 +134,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
             .where(PolishingOutputLog.polishing_process_id == process_id)
             .order_by(PolishingOutputLog.id)
         )).scalars().all() if kartu and akun.is_admin else []
-        hasil_awal = {jenis: 0.0 for jenis in _ALL_JENIS}
+        hasil_awal = {jenis: 0.0 for jenis in await jenis_hasil(db, termasuk_nonaktif=True)}
         for row in output_logs:
             if row.jenis in hasil_awal:
                 hasil_awal[row.jenis] += float(row.berat_kg or 0)
@@ -154,7 +154,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
         layar="riwayat_sosoh",
         hasil_awal=hasil_awal,
-        jenis_hasil=sorted(_ALL_JENIS),
+        jenis_hasil=list(hasil_awal),
         nama_hasil=nama_produk,
         boleh_koreksi=akun.is_admin,
         penghalang_koreksi=penghalang,
@@ -175,7 +175,7 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
     if not akun.is_admin:
         raise HTTPException(403, "Koreksi hasil sosoh hanya untuk Admin ke atas.")
     from app.penggilingan.gudang2.polishing import (
-        Gudang2Error, _ALL_JENIS, koreksi_hasil_sosoh,
+        Gudang2Error, jenis_hasil, koreksi_hasil_sosoh,
     )
     form = await request.form()
     from app.web.layar_riwayat import _gagal_koreksi
@@ -188,11 +188,11 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
             raw = str(value or "").strip().replace(",", ".")
             if key.startswith("hasil_"):
                 jenis = key.removeprefix("hasil_")
-                if jenis in _ALL_JENIS:
+                if jenis:
                     perubahan[jenis] = float(raw)
             elif key.startswith("dasar_"):
                 jenis = key.removeprefix("dasar_")
-                if jenis in _ALL_JENIS:
+                if jenis:
                     dasar[jenis] = float(raw)
     except (ValueError, TypeError):
         pesan_gagal = "Periksa berat hasil yang dimasukkan."
