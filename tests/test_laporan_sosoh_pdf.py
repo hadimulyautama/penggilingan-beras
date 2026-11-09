@@ -47,7 +47,7 @@ def test_bahan_tidak_final_dan_campuran_broken_tidak_diberi_rendemen_pasti():
     text=' '.join(p.extract_text() for p in PdfReader(BytesIO(buat_pdf(d))).pages)
     assert 'BAHAN DIPAKAI' in text and 'PK DIPAKAI' not in text
     assert 'Belum dapat dipastikan' in text and '72,0%' not in text
-    assert 'Belum dicatat' in text
+    assert 'sisa pemakaian silo belum dicatat lengkap' in text
 
 
 def test_koreksi_bobot_penutupan_dan_angka_nol_tetap_jelas():
