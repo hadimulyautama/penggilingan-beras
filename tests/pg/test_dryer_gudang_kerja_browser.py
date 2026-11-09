@@ -1,5 +1,6 @@
 """Ponsel/desktop memakai JS dan endpoint asli pada basis data uji lokal."""
 import os
+from pathlib import Path
 import pytest
 from app.models import PurchaseBatch
 from tests.pg.test_dryer_gudang_kerja import tempat, batch
@@ -42,3 +43,7 @@ async def test_operator_memilih_gudang_dan_menempatkan_dari_pekerjaan(pg, tempat
             assert set(await page.locator('select[name=peran] option').evaluate_all(
                 'options => options.map(o => o.value)')) == {'operator:g1', 'operator:g2'}
             assert not await page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            # Simulasikan aksi.js dari halaman sebelumnya yang baru selesai dimuat.
+            script=Path(__file__).resolve().parents[2]/'hmu_tampilan/static/aksi.js'
+            await page.add_script_tag(content=script.read_text())
+            await expect(page.locator('select[name=peran]')).to_be_visible()
