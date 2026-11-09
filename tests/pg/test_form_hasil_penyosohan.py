@@ -77,7 +77,7 @@ async def test_kontrak_konteks_seluruh_log_dan_tanpa_mutasi(pg, hasil):
         menu = (await c.get('/api/actions/menu')).json()
         a = next(x for x in menu if x['id']=='hasil_penyosohan')
         assert [f['name'] for f in a['fields']]==['kode_proses','jenis','berat_kumulatif']
-        assert dict(a['fields'][1]['options'])=={'':'— belum ditentukan —','premium':'Beras Premium','medsuper':'Beras Medium Super','medium':'Beras Medium','sayur':'Beras Sayur','beras_b':'Beras B (olah ulang)','menir':'Menir','broken':'Broken','bekatul':'Bekatul','reject':'Reject'}
+        assert dict(a['fields'][1]['options'])=={'':'— belum ditentukan —','premium':'Premium','medsuper':'MedSuper','medium':'Medium','sayur':'Ekonomis','beras_b':'Beras B (olah ulang)','menir':'Menir','broken':'Broken','bekatul':'Bekatul','reject':'Reject'}
         assert not a.get('konfirmasi') and all('bawaan' not in f for f in a['fields'])
         for jenis,total in [('medium',4400),('menir',150),('premium',0),('',None)]:
             r = await c.get('/api/actions/ringkasan-hasil-penyosohan',params={'kode_proses':pr.kode_proses,'jenis':jenis})

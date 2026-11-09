@@ -4,6 +4,7 @@ Satu tiket dapat memiliki beberapa baris sumber. Daftar memakai satu entri
 per tiket, rincian mempertahankan setiap catatan. Cermin batal disaring oleh
 ORM; SQL tiket hanya membaca metadata Timbangan dan tidak menulis ke sana.
 """
+from app.services.jenis_hasil_samping import nama_timbang_sql
 from collections import defaultdict
 from decimal import Decimal
 from sqlalchemy import select, text, bindparam
@@ -16,7 +17,7 @@ def jenis_tiket(kode):
     p = intake_dari_jenis(kode or '')
     if p:
         return 'gabah_' + p.kondisi if p.model == 'gabah' else 'pk'
-    return {'BERAS_MASUK': 'beras', 'BROKEN_MASUK': 'broken'}.get(kode, 'lain')
+    return 'broken' if (kode.startswith('HS_') or kode in ('MENIR_MASUK','REJECT_MASUK','BEKATUL_MASUK')) and kode.endswith('_MASUK') else {'BERAS_MASUK': 'beras', 'BROKEN_MASUK': 'broken'}.get(kode, 'lain')
 
 
 def bobot_diterima(catatan):
@@ -176,7 +177,7 @@ async def tiket_riwayat(db, tid):
     Riwayat penolakan PK tetap perlu terbaca; pembaca ini tidak memasok opsi
     penerimaan dan tidak menghitung ulang bobot tiket yang telah ditutup.
     """
-    q = text('''SELECT t.id,t.kode,t.arah,t.jenis_kode,j.nama AS jenis_nama,
+    q = text('''SELECT t.id,t.kode,t.arah,t.jenis_kode,'''+nama_timbang_sql()+''' AS jenis_nama,
                        t.nomor_polisi,t.nama_sopir,t.status_tiket,t.jasa,
                        t.pihak_nama,s.nama_supplier,p.nama_pelanggan,t.timbang1_waktu
                   FROM timbangan_transaksi t
@@ -237,7 +238,7 @@ async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None, batas_
     if not hasil:
         return []
     # Sekali untuk seluruh metadata daftar, bukan satu panggilan per tiket.
-    q = text('''SELECT t.id,t.kode,t.jenis_kode,j.nama AS jenis_nama,
+    q = text('''SELECT t.id,t.kode,t.jenis_kode,'''+nama_timbang_sql()+''' AS jenis_nama,
                        t.nomor_polisi,t.nama_sopir,t.status_tiket,t.jasa,
                        t.pihak_nama,s.nama_supplier,p.nama_pelanggan,t.jasa_id,ja.kode AS jasa_kode
                   FROM timbangan_transaksi t

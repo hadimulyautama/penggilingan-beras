@@ -561,7 +561,8 @@ class OutputResult:
 
 async def rencana_total_output(db, proc_id, jenis, total):
     """Pemeriksaan kumulatif yang sama untuk satu jenis maupun satu lembar."""
-    if not jenis or jenis.lower() not in await jenis_hasil(db):
+    from app.services.spesifikasi_beras import jenis_untuk_proses
+    if not jenis or jenis.lower() not in await jenis_untuk_proses(db, proc_id):
         raise Gudang2Error("Pilih jenis hasil yang aktif di Pengaturan.")
     if not math.isfinite(float(total)) or float(total) <= 0:
         raise Gudang2Error("Berat hasil harus lebih dari 0. Yang keliru dibatalkan lewat 'Batalkan input terakhir', bukan dicatat sebagai angka minus.")
@@ -587,10 +588,10 @@ async def catat_output(
     """
     from sqlalchemy import text
     await db.execute(text('SELECT pg_advisory_xact_lock_shared(861274003)'))
-    if not jenis or jenis.lower() not in await jenis_hasil(db):
-        raise Gudang2Error(
-            "Pilih jenis hasil yang aktif di Pengaturan."
-        )
+    proc = await _get_proc(db, kode)
+    from app.services.spesifikasi_beras import jenis_untuk_proses
+    if not jenis or jenis.lower() not in await jenis_untuk_proses(db, proc.id):
+        raise Gudang2Error("Pilih jenis aktif atau jenis yang sudah dipakai pada proses ini.")
     jenis = jenis.lower()
     if berat_kg is not None and berat_kumulatif is not None:
         raise Gudang2Error("Kirim total hasil atau tambahan, jangan keduanya.")

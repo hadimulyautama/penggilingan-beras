@@ -139,7 +139,9 @@ async def test_beberapa_catatan_pemilik_tidak_diganti_bobot_tiket(pg,lengkap):
 async def test_partai_semua_titik_tanpa_pasangan_truk_palsu(pg,lengkap):
     tid=lengkap['tiket']['GABAH_KERING']
     async with pg() as db:
-        assert await db.scalar(text("SELECT to_regclass('timbangan_penimbangan')")) is None
+        ada_tabel_tf=bool(await db.scalar(text("SELECT to_regclass('timbangan_penimbangan')")))
+        if ada_tabel_tf:
+            await db.execute(text('ALTER TABLE timbangan_penimbangan RENAME TO uji_timbangan_penimbangan_asli'))
         await db.execute(text('CREATE TABLE timbangan_penimbangan (id SERIAL PRIMARY KEY,transaksi_id INTEGER,urutan INTEGER,berat_kg NUMERIC(12,2),waktu TIMESTAMPTZ,catatan TEXT,petugas_id INTEGER)'))
         await db.execute(text("UPDATE timbangan_transaksi SET cara_timbang='PARTAI',timbang2_kg=NULL,netto_timbangan_kg=600,berat_barang_kg=600 WHERE id=:t"),{'t':tid})
         for n in (1,2,3):
@@ -152,7 +154,10 @@ async def test_partai_semua_titik_tanpa_pasangan_truk_palsu(pg,lengkap):
             assert 'Timbang pertama' not in r.text and 'Timbang kedua' not in r.text
             bukti('partai-belum-tiket',r.text)
     finally:
-        async with pg() as db:await db.execute(text('DROP TABLE timbangan_penimbangan'));await db.commit()
+        async with pg() as db:
+            await db.execute(text('DROP TABLE timbangan_penimbangan'))
+            if ada_tabel_tf:await db.execute(text('ALTER TABLE uji_timbangan_penimbangan_asli RENAME TO timbangan_penimbangan'))
+            await db.commit()
 
 
 async def test_jenis_belum_dikenal_tetap_terbaca_tanpa_tindakan_baru(pg,lengkap):

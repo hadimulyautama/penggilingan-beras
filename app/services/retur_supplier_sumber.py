@@ -74,6 +74,10 @@ async def penerimaan(db, tid, *, kunci=False):
 
 async def _saldo_curah_sumber(db, row):
     """Alokasikan pemakaian total resmi ke sumber tertua, seperti FIFO karung."""
+    if row.jenis_produk.startswith('hs_'):
+        from app.penggilingan.gudang2.rencana_hasil_samping import saldo_sumber
+        data=await saldo_sumber(db,row.jenis_produk,row.jasa_id)
+        return D(next((r['saldo_fisik'] for r in data['sumber'] if r.get('stok_id')==row.id),0))
     q = select(ByproductStock).where(ByproductStock.jenis_produk == row.jenis_produk,
                                     ByproductStock.jasa_id.is_(None)).order_by(ByproductStock.waktu,ByproductStock.id)
     rows = (await db.scalars(q)).all()
@@ -107,6 +111,11 @@ async def pilihan(db, tiket, sumber, *, kecuali=None):
             stok_kg=None,stok_jumlah=None,terikat_kg=await terikat(db,sumber=key,kecuali=kecuali),
             sudah_retur_kg=None,tersedia_kg=None,maksimum=D(0),alasan_tidak_bisa=None,
             _row=row,_jenis=jenis,_pool=key,_batas_pool=None,_tambahan_pool=None)
+        if jenis == 'broken':
+            from app.services.jenis_hasil_samping import daftar
+            from app.services.stok import nama_produk
+            await daftar(db,termasuk_nonaktif=True)
+            item['nama']=nama_produk(row.jenis_produk)
         alasan = None; fisik = None; b = None
         if row.jasa_id is not None:
             alasan = 'Barang titipan tidak dapat diretur sebagai pembelian supplier.'

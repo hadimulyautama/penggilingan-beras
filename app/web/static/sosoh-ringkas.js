@@ -3,7 +3,7 @@
 const root=document.querySelector('[data-sosoh-ringkas]');if(!root||root.dataset.ready)return;root.dataset.ready='1';
 let data=JSON.parse(document.getElementById('sosoh-awal').textContent),drafts={},forms={},action=null,review=null,busy=false,stale=false,uncertain=false,leaving=false,last=null,options=[],reasons=[];
 const operator=root.dataset.layout==='operator';
-const outputName=h=>operator?({premium:'Premium',medsuper:'Super',medium:'Medium',sayur:'Ekonomis'}[h.jenis]||h.nama.replace(/^Beras\s+/i,'')):h.nama;
+const outputName=h=>h.nama;
 const can=root.dataset.boleh==='1',body=root.querySelector('[data-proses-isi]'),message=root.querySelector('[data-pesan]'),error=root.querySelector('[data-galat]'),recovery=root.querySelector('[data-pemulihan]');
 const base='/api/actions/sosoh-ringkas/'+encodeURIComponent(root.dataset.kode),storage='sosoh-ringkas:'+root.dataset.actor+':'+root.dataset.kode+':'+(document.getElementById('formulir-sesi')?.dataset.token||'');
 const n=x=>x==null?'Belum tersedia':Number(x).toLocaleString('id-ID',{maximumFractionDigits:2}),kg=x=>x==null?'Belum tersedia':(x!==0&&Math.abs(x)<.001?(x<0?'−':'')+'<0,001':Number(x).toLocaleString('id-ID',{maximumFractionDigits:3}))+' kg',date=x=>x?new Date(x).toLocaleString('id-ID'):'Tidak tercatat';

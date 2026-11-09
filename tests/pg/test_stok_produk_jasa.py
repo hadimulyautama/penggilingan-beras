@@ -539,7 +539,7 @@ async def test_picker_pengambilan_jasa_menampilkan_mutu_beras(pg, sosoh_jasa):
     opsi = await barang_jasa(induk=str(sosoh_jasa["pelanggan_id"]), user=u)
     beras = [o["label"] for o in opsi if o["value"].startswith("bj:")]
     assert any("Premium" in label for label in beras), beras
-    assert any("Medium Super" in label for label in beras), beras
+    assert any("MedSuper" in label for label in beras), beras
     assert all("biasa 25 kg" in label for label in beras), beras
     assert all("Polos" in label or "Tanpa merek" in label for label in beras), beras
     assert not any("mutu di catatan lama kosong" in label for label in beras), beras

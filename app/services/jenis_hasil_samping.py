@@ -63,8 +63,8 @@ async def _pemakaian(db, codes):
              f'WHERE {quote(col)}=ANY(CAST(:codes AS varchar[])) OR {quote(col)}=ANY(CAST(:upper_codes AS varchar[]))' for schema, table, col in cols]
     if not parts:
         return set()
-    return {value.lower() for value in (await db.scalars(text(' UNION '.join(parts)),
-        {'codes': list(codes), 'upper_codes': [c.upper() for c in codes]})).all()}
+    return {value.lower().removesuffix('_masuk') for value in (await db.scalars(text(' UNION '.join(parts)),
+        {'codes': list(codes), 'upper_codes': [v for c in codes for v in (c.upper(),c.upper()+'_MASUK')]})).all()}
 
 
 async def dipakai(db, kode):
@@ -159,3 +159,18 @@ async def pastikan_identitas_penerimaan(db, jenis, *, user):
         changed_by=user.id, field_name=AWALAN + jenis, new_value=json.dumps(data),
         aksi='identitas_jenis_penerimaan')
     await db.flush()
+
+
+async def jenis_penerimaan(db):
+    return {r['kode'].upper()+'_MASUK': r for r in await daftar(db, termasuk_nonaktif=True)
+            if r['kode'] != 'broken'}
+
+
+def nama_timbang_sql(kolom='t.jenis_kode', nama_lama='j.nama'):
+    """Ekspresi internal untuk label tiket virtual, tanpa master timbang duplikat.
+
+    Argumen hanya alias kolom tetap milik pembaca SQL, bukan input perangkat.
+    """
+    return ("coalesce((SELECT cfg.nilai::jsonb->>'nama' FROM setelan_pabrik cfg "
+            "WHERE cfg.kunci='jenis_hasil_samping:'||lower(regexp_replace("
+            + kolom + ", '_MASUK$', ''))), " + nama_lama + ", " + kolom + ")")

@@ -213,7 +213,7 @@ async def pengiriman_muatan_tiket(
                     kode, label = jenis.upper(), nama_produk(jenis)
                 else:
                     kode = "BERAS"
-                    label = "Beras putih" + (f" · {jenis}" if jenis != "beras_putih" else "")
+                    label = nama_produk(jenis)
                 kemasan = " · ".join(str(x) for x in detail[2:4] if x)
                 if detail[4]:
                     kemasan += (" · " if kemasan else "") + f"{detail[4]} kg"

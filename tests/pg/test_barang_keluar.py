@@ -22,7 +22,7 @@ pytestmark = pytest.mark.asyncio
 
 @pytest_asyncio.fixture
 async def gudang(pg):
-    """Stok 400 karung Beras Medium 25 kg (10.000 kg), satu Admin, satu operator G2."""
+    """Stok 400 karung Medium 25 kg (10.000 kg), satu Admin, satu operator G2."""
     from sqlalchemy import select
 
     from app.database import now_local
@@ -930,7 +930,7 @@ async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
     assert "Menunggu dimuat" in h and "Selesai" in h
     # Satu kartu memuat KEDUA macam barangnya — itu seluruh sebab halaman ini.
     assert "2 macam" in h, "isi muatan tak disebut per transaksi"
-    assert "Beras Medium" in h
+    assert "Medium" in h
     # Pembeli & truknya ikut: yang mencari truk tertentu mencarinya lewat plat.
     assert "Toko Baru" in h and "B 1234 XY" in h
     # Dan jejak tiga langkahnya terbaca pada yang sudah tutup — SIAPA, bukan
@@ -1281,7 +1281,7 @@ async def test_item_yang_sudah_ada_dijumlah_bukan_jadi_baris_kedua(pg, gudang):
     """Keputusan pemilik 29 September 2026: "jika item sudah ada berarti jumlah
     yang keluar ditambahkan, jika belum ada berarti itemnya ditambahkan."
 
-    Dua baris untuk barang yang sama membuat kartunya menyebut "Beras Medium"
+    Dua baris untuk barang yang sama membuat kartunya menyebut "Medium"
     dua kali dengan angka berbeda, dan yang membacanya menjumlah sendiri — lalu
     salah sekali dari sepuluh.
     """
@@ -2555,7 +2555,7 @@ async def test_merek_muatan_sama_di_daftar_dan_detail(pg, gudang, merek, aktif):
     async with c:
         daftar = await c.get('/barang-keluar')
         detail = await c.get(f'/barang-keluar/{r.rec.id}')
-    harapan = f"Beras Medium · {merek or 'Tanpa merek'} · Karung biasa 25\u00a0kg"
+    harapan = f"Medium · {merek or 'Tanpa merek'} · Karung biasa 25\u00a0kg"
     assert harapan in daftar.text
     assert harapan in detail.text
     assert detail.text.count(harapan) == 1

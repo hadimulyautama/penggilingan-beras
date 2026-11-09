@@ -134,6 +134,9 @@ async def hubungan(db,r,kind,*,lock=False):
     elif kind=='broken':
         for move in await rows(db,BrokenKeSilo,BrokenKeSilo.byproduct_stock_id==r.id,BrokenKeSilo.dibatalkan_pada.is_(None),lock=lock):
             silo_ids.add(move.silo_id);await silo_ref(move.silo_id,move.kode_pindah,move,f'/koreksi-catatan/broken-silo/{move.id}')
+        from app.models import HasilSampingKeSilo
+        for move in await rows(db,HasilSampingKeSilo,HasilSampingKeSilo.byproduct_stock_id==r.id,HasilSampingKeSilo.dibatalkan_pada.is_(None),lock=lock):
+            silo_ids.add(move.silo_id);await silo_ref(move.silo_id,move.kode_pindah,move,f'/koreksi-catatan/samping-silo/{move.id}')
     elif kind=='beras':
         for move in await rows(db,BerasKeSilo,or_(and_(BerasKeSilo.source_type=='finished_goods',BerasKeSilo.source_id==r.id),and_(BerasKeSilo.source_type==r.source_type,BerasKeSilo.source_id==r.source_id,BerasKeSilo.product_sku_id==r.product_sku_id,BerasKeSilo.jasa_id==r.jasa_id)),BerasKeSilo.dibatalkan_pada.is_(None),lock=lock):
             silo_ids.add(move.silo_id);await silo_ref(move.silo_id,move.kode_pindah,move,f'/koreksi-catatan/beras-silo/{move.id}')

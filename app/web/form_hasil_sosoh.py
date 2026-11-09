@@ -13,7 +13,9 @@ async def ringkasan(db, *, kode_proses: str, jenis: str = "") -> dict:
     if not kode_proses.strip():
         raise Gudang2Error("Pilih proses penyosohan dulu.")
     jenis = jenis.strip().lower()
-    if jenis and jenis not in await jenis_hasil(db):
+    from app.services.spesifikasi_beras import jenis_untuk_proses
+    existing = await _get_proc(db, kode_proses)
+    if jenis and jenis not in await jenis_untuk_proses(db, existing.id):
         raise Gudang2Error("Pilih jenis hasil yang dikenali.")
     proc = await _get_proc(db, kode_proses)
     jeda = await jeda_terbuka(db, "penyosohan", proc.id)

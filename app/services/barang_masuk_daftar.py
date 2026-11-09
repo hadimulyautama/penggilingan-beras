@@ -17,7 +17,7 @@ def _jenis_sql():
     pairs = {k: ('gabah_' + v.kondisi if v.model == 'gabah' else 'pk')
              for k, v in PETA_MASUK.items()}
     return "CASE upper(t.jenis_kode) " + ' '.join(
-        "WHEN '" + k.replace("'", "''") + "' THEN '" + v + "'" for k, v in pairs.items()) + " ELSE CASE t.jenis_kode WHEN 'BERAS_MASUK' THEN 'beras' WHEN 'BROKEN_MASUK' THEN 'broken' ELSE 'lain' END END"
+        "WHEN '" + k.replace("'", "''") + "' THEN '" + v + "'" for k, v in pairs.items()) + " ELSE CASE t.jenis_kode WHEN 'BERAS_MASUK' THEN 'beras' WHEN 'BROKEN_MASUK' THEN 'broken' ELSE CASE WHEN (t.jenis_kode LIKE 'HS_%_MASUK' OR t.jenis_kode IN ('MENIR_MASUK','REJECT_MASUK','BEKATUL_MASUK')) THEN 'broken' ELSE 'lain' END END END"
 
 
 
@@ -111,7 +111,9 @@ async def daftar(db, *, g1, g2, admin, status, jenis='', pemilik='', gudang='', 
     from hmu_identitas import peran as P
     terbatas=user is not None and not P.admin_keatas(user.role)
     p['lokasi_id']=user.default_warehouse_id if terbatas else None
+    from app.services.jenis_hasil_samping import nama_timbang_sql
     bases = {'belum':dasar_belum(g1,g2,admin),'diterima':dasar_diterima(g1,g2,terbatas)}
+    bases = {k:v.replace('j.nama',nama_timbang_sql()) for k,v in bases.items()}
     totals = {}
     for key,base in bases.items():
         totals[key] = await db.scalar(text(base + ' SELECT count(*) FROM dasar WHERE '+_filter()),p)

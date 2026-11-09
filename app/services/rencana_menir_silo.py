@@ -12,15 +12,16 @@ def pemilik_sah(pemilik, jenis="menir"):
     return None if pilihan == 'pabrik' else int(pilihan)
 
 
-async def rincian(db, pemilik, berat=None, silo='', *, jenis='menir'):
+async def rincian(db, pemilik, berat=None, silo='', *, jenis='menir',user=None):
     from app.services.jasa import nama_pemilik
     from app.services.angka import angka_wajar
-    if jenis not in ('menir', 'reject'):
+    from app.services.jenis_hasil_samping import daftar
+    if jenis not in {r['kode'] for r in await daftar(db, termasuk_nonaktif=True)} or jenis == 'broken':
         raise ValueError('Jenis hasil samping tidak didukung.')
     owner = pemilik_sah(pemilik, jenis)
     if owner is not None and await db.get(Jasa, owner) is None:
         raise ValueError('Pemilik stok jasa tidak ditemukan.')
-    data = await saldo_sumber(db, jenis, owner)
+    data = await saldo_sumber(db, jenis, owner,user=user)
     out = dict(pemilik=await nama_pemilik(db, owner) if owner else 'Milik pabrik',
                jasa_id=owner, saldo_kg=data['saldo_kg'], sumber=data['sumber'],
                keluar_curah=data['keluar_curah'], keluar_kemasan=data['keluar_kemasan'],
@@ -39,9 +40,9 @@ async def rincian(db, pemilik, berat=None, silo='', *, jenis='menir'):
     except (ValueError, g2.Gudang2Error) as e:
         out['pesan'] = str(e)
         return out
-    saldo = {s['proses_id']:s['tersedia'] for s in data['sumber']}
-    rows = [dict(proses_id=p.id, kode=p.kode_proses, kg=w,
-                 sisa_kg=max(0.0, saldo[p.id]-w)) for p,w in rencana]
+    saldo = {(('stok',s['stok_id']) if s.get('stok_id') else ('proses',s['proses_id'])):s['tersedia'] for s in data['sumber']}
+    rows = [dict(proses_id=p.id,stok_id=getattr(p,'byproduct_stock_id',None),kode=p.kode_proses,kg=w,
+                 sisa_kg=max(0.0,saldo[('stok',p.byproduct_stock_id) if getattr(p,'byproduct_stock_id',None) else ('proses',p.id)]-w)) for p,w in rencana]
     out['rencana'] = dict(kg=sum(w for _,w in rencana), diminta_kg=kg,
                          sisa_kg=max(0.0,data['saldo_kg']-sum(w for _,w in rencana)), fifo=rows)
     if dest and any(p.id in {i for i,_ in aktif} for p,_ in rencana):

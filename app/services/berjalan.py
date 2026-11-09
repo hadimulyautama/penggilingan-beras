@@ -1714,6 +1714,10 @@ async def _tiket_jenis_tak_dikenal(
         adalah_jasa, nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
+    from app.services.jenis_hasil_samping import jenis_penerimaan
+    known = await jenis_penerimaan(db)
+    if jenis_diizinkan is not None and "BERAS_MASUK" in jenis_diizinkan:
+        jenis_diizinkan = {*jenis_diizinkan, *known}
     baris = []
     for t in (await tiket_masuk_aktif(db) if tiket is None else tiket):
         kode_jenis = t.get("jenis_kode") or "?"
@@ -1726,7 +1730,9 @@ async def _tiket_jenis_tak_dikenal(
             "BERAS_MASUK": ("catat_beras_timbang_masuk", "Terima beras sebagai stok bertumpuk"),
             "BROKEN_MASUK": ("catat_broken_timbang_masuk", "Terima broken sebagai stok bertumpuk"),
         }.get(kode_jenis) if jenis_diizinkan and kode_jenis in jenis_diizinkan else None
-        if kode_jenis in {"BERAS_MASUK", "BROKEN_MASUK"} and produk_masuk is None:
+        if kode_jenis in known and jenis_diizinkan:
+            produk_masuk = ('terima_samping_'+known[kode_jenis]['kode'], 'Terima '+known[kode_jenis]['nama']+' sebagai stok')
+        if kode_jenis in {"BERAS_MASUK", "BROKEN_MASUK", *known} and produk_masuk is None:
             continue  # Jalur produk ini hanya ditampilkan di antrean Gudang 2.
         if intake_dari_jenis(kode_jenis) is not None:
             continue                       # dipetakan → sudah ada jalurnya
@@ -2602,6 +2608,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
                                                  PolishingProcess,
                                                  PolishingSiloUsage)
 
+    from app.services.jenis_hasil_samping import daftar as daftar_samping
+    master_samping = await daftar_samping(db,termasuk_nonaktif=True)
+    nama_samping = {r["kode"]:r["nama"] for r in master_samping}
     keluar: list[Baris] = []
     from app.services.cakupan_fasilitas import batas
     q = select(PolishingProcess).where(PolishingProcess.status == "proses",batas(user,PolishingProcess))
@@ -2667,6 +2676,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
                 }
                 rinci_bahan.append((s.nama_silo, _kg(total_u), status_u,
                                     "dibebaskan" if dibebaskan else "silo"))
+                label_bahan.update(nama_samping)
                 for jenis, judul in label_bahan.items():
                     kg = komposisi.get(jenis, 0.0)
                     if kg > 0.001:
@@ -2702,6 +2712,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
             ("reject", "Total bahan reject"),
         ):
             fakta.append((judul, _kg(komposisi_total.get(jenis, 0.0))))
+        for jenis, judul in nama_samping.items():
+            if jenis not in {"broken","menir","reject"} and komposisi_total.get(jenis,0)>0.001:
+                fakta.append(("Total bahan "+judul,_kg(komposisi_total[jenis])))
         if komposisi_total.get("belum_dikenal", 0.0) > 0.01:
             fakta.append(("Bahan belum teridentifikasi",
                           _kg(komposisi_total["belum_dikenal"])))

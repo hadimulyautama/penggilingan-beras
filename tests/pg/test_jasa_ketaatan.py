@@ -1080,6 +1080,8 @@ async def test_bekatul_tetap_milik_pesanan_sampai_dipindah(pg, pemakai, pabrik):
     from app.penggilingan.inventory.finished_goods import (catat_bekatul,
                                                            hitung_stok_bekatul)
 
+    from app.services.seed import seed_master
+    await seed_master()
     jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai, kode="JAS-UJI-520")
     async with pg() as db:
         # Nilai kesepakatan lama tetap tidak memindahkan kepemilikan otomatis.

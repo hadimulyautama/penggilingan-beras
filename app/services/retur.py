@@ -26,6 +26,7 @@ def angka(nilai, nama, maksimum, digit):
 
 
 async def siapkan_muatan(db, rows):
+    jenis_sah = await jenis_retur(db)
     hasil = []
     for sku_id, quality_id, count, weight, note, tara in rows:
         if count < 1 or count > 100_000:
@@ -43,8 +44,8 @@ async def siapkan_muatan(db, rows):
         weight = Decimal(str(size)) * count
         if weight <= 0:
             raise ValueError('Ukuran kemasan harus lebih dari nol.')
-        if sku.kategori not in JENIS_RETUR:
-            raise ValueError('Jenis retur harus Beras Putih, Broken, Menir, atau Reject.')
+        if sku.kategori not in jenis_sah:
+            raise ValueError('Jenis retur tidak terdaftar di master.')
         if material_kode == 'laminasi' and size > 25:
             raise ValueError('Karung laminasi hanya tersedia hingga ukuran 25 kg.')
         if sku.kategori == 'beras_putih' and not quality_id:
@@ -60,7 +61,7 @@ async def siapkan_muatan(db, rows):
                           package_size_id=sku.package_size_id, jumlah_karung=count,
                           berat_kg=str(weight), tara_per_karung_kg='0',
                           catatan_item=note or '',
-                          nama=f"{sku.kategori.replace('_', ' ').title()} · {brand or 'Tanpa merk'} · {material} · {size} kg"))
+                          nama=f"{jenis_sah[sku.kategori]} · {brand or 'Tanpa merk'} · {material} · {size} kg"))
     if sum(m['jumlah_karung'] for m in hasil) > 100_000:
         raise ValueError('Total jumlah karung melampaui batas satu tiket timbang.')
     return hasil
@@ -86,6 +87,11 @@ JENIS_RETUR = {'beras_putih': 'Beras Putih', 'broken': 'Broken',
                'menir': 'Menir', 'reject': 'Reject'}
 
 
+async def jenis_retur(db):
+    from app.services.jenis_hasil_samping import daftar
+    return {**JENIS_RETUR, **{r["kode"]:r["nama"] for r in await daftar(db,termasuk_nonaktif=True)}}
+
+
 async def katalog(db):
     """Pilihan berasal dari master, bukan hanya SKU yang pernah dipakai."""
     from app.web.aksi_inventory import kombinasi_kemasan
@@ -95,7 +101,12 @@ async def katalog(db):
         PackageSize.aktif.is_(True)))).all()}
     brands = (await db.scalars(select(Brand).where(
         Brand.aktif.is_(True), Brand.deleted_at.is_(None)).order_by(Brand.nama))).all()
-    kemasan = {k: [] for k in JENIS_RETUR}
+    jenis_sah = await jenis_retur(db)
+    kemasan = {k: [] for k in jenis_sah}
+    for jenis in jenis_sah:
+        if jenis.startswith("hs_"):
+            kemasan[jenis] = [{"nilai":f"{m.kode}:{n}","nama":f"{m.nama} · {n} kg","ukuran_kg":n}
+                for m in materials.values() for n in sizes if m.kode != "laminasi" or n <= 25]
     for jenis, material, ukuran in kombinasi_kemasan():
         if jenis in kemasan and material in materials and ukuran in sizes:
             kemasan[jenis].append({'nilai': f'{material}:{ukuran}',
@@ -105,8 +116,8 @@ async def katalog(db):
         .select_from(ProductSku)
         .join(PackagingMaterial, PackagingMaterial.id == ProductSku.packaging_material_id)
         .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
-        .where(ProductSku.kategori.in_(JENIS_RETUR), ProductSku.aktif.is_(True)))).all()
-    return {'jenis': JENIS_RETUR, 'kemasan': kemasan,
+        .where(ProductSku.kategori.in_(jenis_sah), ProductSku.aktif.is_(True)))).all()
+    return {'jenis': jenis_sah, 'kemasan': kemasan,
             'merek': [{'id': b.id, 'nama': b.nama} for b in brands],
             'sku': {str(sid): {'jenis_barang': jenis, 'kemasan': f'{mat}:{size}',
                               'brand_id': brand} for sid,jenis,brand,mat,size in existing}}
@@ -115,8 +126,8 @@ async def katalog(db):
 async def pilih_sku(db, jenis, kemasan, brand_raw):
     """Validasi pilihan bertahap; SKU internal dibuat hanya ketika disimpan."""
     from app.penggilingan.inventory import packaging
-    if jenis not in JENIS_RETUR:
-        raise ValueError('Pilih jenis barang: Beras Putih, Broken, Menir, atau Reject.')
+    if jenis not in await jenis_retur(db):
+        raise ValueError('Pilih jenis barang dari master.')
     try:
         material_kode, ukuran_raw = kemasan.split(':')
         ukuran = int(ukuran_raw)

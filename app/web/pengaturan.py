@@ -502,7 +502,10 @@ async def _halaman_alat(request, akun, *, isian_alat=None, kesalahan=""):
     from sqlalchemy import select
 
     from app.models import Silo
-    from app.penggilingan.silo_policy import daftar_diizinkan, LABEL_KOMODITAS
+    from app.services.jenis_hasil_samping import daftar as master_samping
+    async with SessionLocal() as master_db:
+        await master_samping(master_db, termasuk_nonaktif=True)
+    from app.penggilingan.silo_policy import daftar_diizinkan, label_komoditas
     from app.penggilingan.gudang1.services.drying import dryers_g1,dryers_untuk
     from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
@@ -520,7 +523,7 @@ async def _halaman_alat(request, akun, *, isian_alat=None, kesalahan=""):
         from app.services.alur_beranda import peta_tungku
         tungku = await peta_tungku(db)
         from app.models import Warehouse
-        from app.penggilingan.silo_policy import KOMODITAS_G1,KOMODITAS_G2
+        from app.penggilingan.silo_policy import KOMODITAS_G1,komoditas_g2
         warehouses={w.id:w.nama_gudang for w in (await db.scalars(select(Warehouse))).all()}
         mesin = [{"id":d.id,"nama":d.nama,"gudang_nama":warehouses.get(d.warehouse_id,'Lokasi belum tercatat'),
                   "kapasitas":float(d.kapasitas_kg or 0),"target":float(d.target_kadar_air) if d.target_kadar_air is not None else target_global,
@@ -529,12 +532,12 @@ async def _halaman_alat(request, akun, *, isian_alat=None, kesalahan=""):
         g1_id=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g1'))
         for item in (await db.scalars(select(Silo).where(Silo.aktif.is_(True)).order_by(Silo.warehouse_id,Silo.id))).all():
             gabah=item.jenis_isi=='gabah' or item.warehouse_id==g1_id
-            kind='g1' if gabah else 'g2';valid=KOMODITAS_G1 if gabah else KOMODITAS_G2
+            kind='g1' if gabah else 'g2';valid=KOMODITAS_G1 if gabah else komoditas_g2()
             allowed=daftar_diizinkan(item,kind)
             row=dict(id=item.id,nama_silo=item.nama_silo,nama_tampil=item.nama_silo,
                 gudang_nama=warehouses.get(item.warehouse_id,'Lokasi belum tercatat'),jenis_isi=item.jenis_isi,
-                komoditas=allowed,komoditas_label=', '.join(LABEL_KOMODITAS[k] for k in allowed),
-                opsi_komoditas=[dict(kode=k,label=LABEL_KOMODITAS[k],aktif=k in allowed) for k in valid],gudang=kind,
+                komoditas=allowed,komoditas_label=', '.join(label_komoditas(k) for k in allowed),
+                opsi_komoditas=[dict(kode=k,label=label_komoditas(k),aktif=k in allowed) for k in valid],gudang=kind,
                 kg=float(await _silo_content_kg(db,item.id) if gabah else await hitung_stok_silo(db,item.id)))
             (silo if gabah else silo_g2).append(row)
 
@@ -717,7 +720,10 @@ async def tambah_silo(
     from sqlalchemy import select
 
     from app.models import Silo
-    from app.penggilingan.silo_policy import KOMODITAS_G1, KOMODITAS_G2
+    from app.services.jenis_hasil_samping import daftar as master_samping
+    async with SessionLocal() as master_db:
+        await master_samping(master_db, termasuk_nonaktif=True)
+    from app.penggilingan.silo_policy import KOMODITAS_G1, komoditas_g2
     from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, silos_g1
     from app.penggilingan.gudang2.service import _g2_warehouse_id
 
@@ -754,7 +760,7 @@ async def tambah_silo(
             return await _balik_alat(request, akun, "/pengaturan/alat?err=kembar")
         silo_baru = Silo(warehouse_id=wid, nama_silo=penuh, kapasitas_ton=0,
                     jenis_isi=("gabah" if warehouse_id is not None else isi if g2 else "gabah"),
-                    komoditas_diizinkan=list(KOMODITAS_G1 if warehouse_id is not None else KOMODITAS_G2 if g2 else KOMODITAS_G1))
+                    komoditas_diizinkan=list(KOMODITAS_G1 if warehouse_id is not None else komoditas_g2() if g2 else KOMODITAS_G1))
         db.add(silo_baru)
         await db.flush()
         await catat_sukses(db, request, akun, silo_baru.id, "/pengaturan/fasilitas?tersimpan=1&pesan=silo-ditambah" if warehouse_id is not None else "/pengaturan/alat?pesan=silo-ditambah")
@@ -775,7 +781,10 @@ async def edit_silo(
     from app.models import Silo
     from app.penggilingan.gudang1.services.silo import _g1_warehouse_id
     from app.penggilingan.gudang2.service import _g2_warehouse_id
-    from app.penggilingan.silo_policy import KOMODITAS_G1, KOMODITAS_G2
+    from app.services.jenis_hasil_samping import daftar as master_samping
+    async with SessionLocal() as master_db:
+        await master_samping(master_db, termasuk_nonaktif=True)
+    from app.penggilingan.silo_policy import KOMODITAS_G1, komoditas_g2
 
     nama = " ".join(nama.split())
     if not nama or len(nama) > 50:
@@ -790,7 +799,7 @@ async def edit_silo(
         if silo is None or not silo.aktif:
             return await _balik_alat(request, akun, "/pengaturan/alat?err_teks=" + quote("Silo tidak ditemukan."))
         g1_id, g2_id = await _g1_warehouse_id(db), await _g2_warehouse_id(db)
-        valid = KOMODITAS_G1 if silo.jenis_isi=='gabah' or silo.warehouse_id==g1_id else KOMODITAS_G2
+        valid = KOMODITAS_G1 if silo.jenis_isi=='gabah' or silo.warehouse_id==g1_id else komoditas_g2()
         if not pilihan or any(k not in valid for k in pilihan):
             return await _balik_alat(request, akun, "/pengaturan/alat?err_teks=" + quote("Pilih komoditas yang valid."))
         pilihan = [k for k in valid if k in pilihan]

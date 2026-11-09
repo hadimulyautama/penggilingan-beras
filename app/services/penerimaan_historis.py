@@ -3,6 +3,7 @@
 Hanya bukti INSERT penerimaan dengan hubungan tiket eksplisit/kode utuh.
 Tidak merekonstruksi pemilik, saldo, kemasan atau izin tindakan dari nama.
 """
+from app.services.jenis_hasil_samping import nama_timbang_sql
 import re
 from decimal import Decimal
 from sqlalchemy import text,bindparam
@@ -13,14 +14,14 @@ SQL = '''SELECT t.id AS tid,a.id AS audit_id,a.record_id,a.waktu_perubahan,
  ((a.aksi='produk_timbang_masuk' AND a.field_name='timbangan_transaksi_id' AND a.old_value=CAST(t.id AS text))
  OR (a.action='INSERT' AND split_part(a.new_value,' · ',1)=t.kode))
  WHERE a.action='INSERT' AND a.table_name IN ('finished_goods_stock','byproduct_stock')
- AND t.arah='MASUK' AND t.jenis_kode IN ('BERAS_MASUK','BROKEN_MASUK')
+ AND t.arah='MASUK' AND (t.jenis_kode IN ('BERAS_MASUK','BROKEN_MASUK') OR (t.jenis_kode LIKE 'HS_%_MASUK' OR t.jenis_kode IN ('MENIR_MASUK','REJECT_MASUK','BEKATUL_MASUK')))
  AND NOT EXISTS(SELECT 1 FROM finished_goods_stock f WHERE f.source_type='timbangan' AND f.source_id=t.id)
  AND NOT EXISTS(SELECT 1 FROM byproduct_stock f WHERE f.source_type='timbangan' AND f.source_id=t.id)'''
 
 
 async def baca(db, ids):
     if not ids:return []
-    q=text('WITH arsip AS ('+SQL+''') SELECT a.*,t.kode,t.jenis_kode,j.nama AS jenis_nama,
+    q=text('WITH arsip AS ('+SQL+''') SELECT a.*,t.kode,t.jenis_kode,'''+nama_timbang_sql()+''' AS jenis_nama,
  t.nomor_polisi,t.status_tiket,coalesce(p.nama_pelanggan,s.nama_supplier,t.pihak_nama,'?') AS nama
  FROM arsip a JOIN timbangan_transaksi t ON t.id=a.tid
  LEFT JOIN timbangan_jenis j ON j.kode=t.jenis_kode LEFT JOIN pelanggan p ON p.id=t.pelanggan_id

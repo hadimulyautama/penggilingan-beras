@@ -60,7 +60,7 @@ _KECUALI = {
     # Penulisan identitas tiket satu pelanggan setelah tiket bebas/valid.
     # Kiriman gabungan tidak diwakili salah satu pelanggan (parameter None).
     ("services/barang_keluar.py", "_armada_dari_tiket", 'if pelanggan_id is not None:'),
-    ("web/internal.py", "_cocokkan_pengiriman_tiket",
+    ("web/internal.py", "periksa",
      'if tiket["pelanggan_id"] is not None and rec.pelanggan_id is not None:'),
     # Detail menerima saringan pelanggan yang sudah disahkan rutenya;
     # bukan menetapkan kepemilikan dari sebuah tiket yang belum lengkap.

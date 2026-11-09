@@ -1602,6 +1602,16 @@ async def stok_produk(db: AsyncSession, *,
                 berjalan["bekatul"] = berjalan.get("bekatul", 0.0) + float(kg)
             proc_ids_bekatul_extra.add(proc.id)
 
+    # Jenis baru dari penerimaan langsung mengikuti pool yang sama, dengan
+    # asal tetap tersimpan. Hasil polishing tidak dihitung dua kali.
+    for row in (await db.scalars(select(ByproductStock).where(milik_proc(ByproductStock)))).all():
+        if row.jenis_produk in {'broken','bekatul'} or not adalah_samping(row.jenis_produk):
+            continue
+        if row.source_type=='polishing' and catatan.get(row.source_id,{}).get(row.jenis_produk,0)>0:
+            continue
+        hasil.setdefault(row.jenis_produk,[]).append(RincianProduk(
+            kode=f'Stok #{row.id}',kg=float(row.berat_kg),waktu=row.waktu,ket='Penerimaan hasil samping'))
+
     # ── Yang sudah dikemas (seluruh riwayat, bukan sisanya) ──
     dikemas: dict[str, float] = {}
     for kategori, mutu, kg in (await db.execute(
@@ -1710,7 +1720,7 @@ async def stok_produk(db: AsyncSession, *,
     for jenis_silo, kg in (await db.execute(
         select(HasilSampingKeSilo.jenis,
                func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
-        .where(HasilSampingKeSilo.jenis.in_(("menir", "reject")),
+        .where(HasilSampingKeSilo.jenis.is_not(None),
                milik_proc(HasilSampingKeSilo))
         .group_by(HasilSampingKeSilo.jenis)
     )).all():

@@ -191,7 +191,7 @@ async def test_beras_putih_wajib_dipacking_dengan_mutunya(pg, sosoh):
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
-        with pytest.raises(InventoryError, match="Pilih mutu beras"):
+        with pytest.raises(InventoryError, match="Pilih spesifikasi beras"):
             await catat_packing(db, user=u, kode_pol=sosoh["kode"],
                                 kategori="beras_putih", material_kode="biasa",
                                 ukuran=25, jumlah_karung=10)
@@ -668,7 +668,7 @@ async def test_halaman_menggambar_kartunya_beserta_empat_sukunya(pg, sosoh):
         r = await _buka_detail_produk(c, "medium")
     assert r.status_code == 200, r.text[:400]
     h = r.text
-    assert "Beras Medium" in h, "kartu kategorinya tak tergambar"
+    assert "Medium" in h, "kartu kategorinya tak tergambar"
     # Kepala kartu = SISA, bukan hasil penyosohan.
     assert "9.000" in h and "6.500" in h and "2.500" in h, h[-3000:]
     for kata in ("Hasil sosoh", "Dikemas", "Curah", "Curah · belum dikemas"):
@@ -726,7 +726,7 @@ async def test_penunjuk_packing_membawa_lot_dan_jenisnya(pg, sosoh):
     assert kartu[0].pilihan[0][3] == kartu[0].nilai
     assert [d["value"] for d in daftar] == ["POL-UJI-01|medium"]
     # Dan labelnya menyebut jenisnya dengan kata yang dibaca orang.
-    assert "Beras Medium" in daftar[0]["label"], daftar[0]["label"]
+    assert "Medium" in daftar[0]["label"], daftar[0]["label"]
     assert "9.000" in daftar[0]["label"]
 
 
@@ -1286,7 +1286,7 @@ async def test_beras_dan_hasil_samping_berdiri_di_dua_blok(pg, sosoh):
     ekor = h[h.index("Hasil samping · sisa"):]
     assert "Bekatul" in ekor, "kartu bekatul tak berada di blok hasil samping"
     assert "Hasil sosoh" in ekor, "isi kartu blok kedua lenyap (lingkup makro)"
-    assert "Beras Medium" in h[:h.index("Hasil samping · sisa")], \
+    assert "Medium" in h[:h.index("Hasil samping · sisa")], \
         "kartu beras bocor ke blok hasil samping"
 
 
@@ -1482,8 +1482,8 @@ async def test_rincian_kemasan_tak_mengulang_kategorinya(pg, sosoh):
     assert "25 kg" in laci, "ukuran kemasan ikut hilang"
     assert "Karung" not in laci, "kata 'Karung' masih di rincian kemasan"
     # Kategori disebut SEKALI, di kepala kartunya — bukan di tiap baris.
-    assert '<h1>Beras Medium</h1>' in h
-    assert "Beras Medium" not in laci, "kategori diulang pada rincian kemasan"
+    assert '<h1>Medium</h1>' in h
+    assert "Medium" not in laci, "kategori diulang pada rincian kemasan"
     # Tanggal penyosohan sebaris dengan kodenya, bukan di baris sendiri.
     import re
     assert re.search(r"POL-[\w-]+\s*·\s*\d\d/\d\d", h), \

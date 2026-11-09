@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import (BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer,
+from sqlalchemy import (CheckConstraint, BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer,
                         Numeric, String, text, select, func, case)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -396,12 +396,17 @@ class HasilSampingKeSilo(Base, TimestampMixin):
     """Pemindahan stok menir/reject hasil sosoh ke silo Gudang 2."""
 
     __tablename__ = "hasil_samping_ke_silo"
+    __table_args__ = (
+        CheckConstraint("(polishing_process_id IS NULL) <> (byproduct_stock_id IS NULL)", name="ck_hss_satu_sumber"),
+        Index("ix_hss_stok_sumber", "byproduct_stock_id"),
+    )
 
     dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    polishing_process_id: Mapped[int] = mapped_column(
-        ForeignKey("polishing_process.id"), nullable=False)
+    polishing_process_id: Mapped[int | None] = mapped_column(
+        ForeignKey("polishing_process.id"), nullable=True)
+    byproduct_stock_id: Mapped[int | None] = mapped_column(ForeignKey("byproduct_stock.id"))
     jenis: Mapped[str] = mapped_column(String(20), nullable=False)
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)

@@ -414,7 +414,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
         token = "pabrik" if owner is None else str(owner)
         aksi = ("masukkan_beras_silo" if svc.adalah_grade_beras(jenis) else
                 {"broken":"masukkan_broken_silo","menir":"masukkan_menir_silo",
-                 "reject":"masukkan_reject_silo"}.get(jenis))
+                 "reject":"masukkan_reject_silo"}.get(jenis, "masukkan_samping_"+jenis if svc.adalah_samping(jenis) else None))
         sumber = (f"curah:{curah_id}|{token}" if curah_id is not None else
                   f"sku:{p['sku_id']}|{token}" if p and ukuran else f"curah|{token}")
         nilai = (f"{jenis}|{'pabrik' if owner is None else 'jasa'}" if svc.adalah_grade_beras(jenis) else

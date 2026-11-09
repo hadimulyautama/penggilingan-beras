@@ -26,6 +26,9 @@ async def izin(db,user,proc,aksi='ubah'):
         raise PermissionError('Koreksi hasil selesai dan pembatalan catatan memerlukan Admin/Super Admin pada peran efektifnya.')
 
 async def ambil(db,pid,kind,user,aksi='ubah',lock=False):
+    from app.services.jenis_hasil_samping import daftar
+    if kind not in {r['kode'] for r in await daftar(db,termasuk_nonaktif=True)}:
+        raise ValueError('Jenis hasil samping tidak ditemukan dalam master.')
     if kind not in auto.stok._UKURAN_KEMASAN_OTOMATIS:raise ValueError('Jenis ini tidak memiliki ringkasan pengemasan otomatis yang didukung.')
     if lock:
         from app.services.barang_keluar import _kunci_saldo_keluar

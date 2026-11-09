@@ -22,7 +22,7 @@
 <button class="btn btn--utama" type="submit">Tambah spesifikasi</button></form></details>
 <h2>Daftar spesifikasi <span class="bantu">({{ daftar|length }})</span></h2>
 {% for row in daftar %}
-<article class="kartu spek-baris">
+<article class="kartu">
 <div class="spek-kepala"><h3>{{ row.nama }}</h3><span class="bantu">{{ 'Bawaan penerimaan' if row.bawaan_penerimaan else 'Aktif' if row.aktif else 'Nonaktif' }}</span></div>
 <dl class="spek-angka"><div><dt>Kadar broken acuan</dt><dd>{{ row.broken ~ '%' if row.broken != '' else 'Belum diatur' }}</dd></div><div><dt>Derajat sosoh acuan</dt><dd>{{ row.sosoh ~ '%' if row.sosoh != '' else 'Belum diatur' }}</dd></div></dl>
 {% if row.aktif and not row.bawaan_penerimaan %}

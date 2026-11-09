@@ -104,6 +104,8 @@ async def saldo_kemasan(db, sumber_id, material, ukuran, merk):
     if row is None:
         raise InventoryError('Batch asal tidak ditemukan.')
     sku = await db.get(ProductSku, row.product_sku_id)
+    from app.services.jenis_hasil_samping import daftar
+    await daftar(db,termasuk_nonaktif=True)
     _validate_kemasan(sku.kategori, material, ukuran)
     mat, size = await get_material(db, material), await get_size(db, ukuran)
     if mat is None or size is None:
@@ -132,6 +134,8 @@ async def kemasan_tersedia(db, kategori, jasa_id):
         if jasa is None:
             raise InventoryError('Pemilik produk tidak ditemukan.')
         pelanggan_id = jasa.pelanggan_id
+    from app.services.jenis_hasil_samping import daftar
+    await daftar(db,termasuk_nonaktif=True)
     aktif = set((await db.execute(select(Brand.nama).where(Brand.aktif.is_(True), Brand.deleted_at.is_(None)))).scalars())
     pilihan = {}
     for b in await stok_kemasan_rinci(db, pelanggan_id=pelanggan_id):

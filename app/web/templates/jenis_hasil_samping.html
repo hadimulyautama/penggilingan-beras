@@ -22,7 +22,7 @@
 <button class="btn btn--utama" type="submit">Tambah jenis hasil samping</button></form></details>
 <h2>Daftar jenis hasil samping <span class="bantu">({{ daftar|length }})</span></h2>
 {% for row in daftar %}
-<article class="kartu spek-baris">
+<article class="kartu">
 <div class="spek-kepala"><h3>{{ row.nama }}</h3><span class="bantu">{{ 'Aktif' if row.aktif else 'Nonaktif' }}</span></div>
 <dl class="spek-angka"><div><dt>Bentuk stok</dt><dd>{{ 'Berkarung otomatis' if row.bentuk == 'karung' else 'Curah' }}</dd></div><div><dt>Kapasitas karung</dt><dd>{{ (row.kg_karung ~ ' kg') if row.kg_karung else 'Tidak memakai karung' }}</dd></div></dl>
 <details {% if isian.kode == row.kode %}open{% endif %}><summary class="spek-ringkas">Ubah jenis hasil samping</summary>

@@ -213,3 +213,19 @@ async def simpan(db, *, user, nama='', broken='', sosoh='', id_=None, versi='', 
         new_value=json.dumps(sesudah, ensure_ascii=False), aksi=f'spesifikasi_beras_{aksi}')
     await db.flush()
     return row
+
+
+async def jenis_untuk_proses(db, proses_id, *, beras_saja=False):
+    from app.models import PolishingProcess, PolishingOutputLog, SampelQcSosoh
+    aktif = await jenis_beras(db) if beras_saja else await jenis_hasil(db)
+    proc = await db.get(PolishingProcess, proses_id)
+    if proc is None or proc.status != 'proses':
+        return aktif
+    dikenal = set(await jenis_beras(db, termasuk_nonaktif=True) if beras_saja
+                  else await jenis_hasil(db, termasuk_nonaktif=True))
+    lama = set((await db.scalars(select(PolishingOutputLog.jenis).where(
+        PolishingOutputLog.polishing_process_id == proses_id))).all())
+    lama.update((await db.scalars(select(SampelQcSosoh.jenis).where(
+        SampelQcSosoh.polishing_process_id == proses_id,
+        SampelQcSosoh.dibatalkan_pada.is_(None)))).all())
+    return list(dict.fromkeys([*aktif, *sorted(lama & dikenal)]))

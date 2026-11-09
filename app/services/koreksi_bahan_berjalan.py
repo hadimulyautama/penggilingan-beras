@@ -850,7 +850,16 @@ async def sumber_curah(db,key):
         from app.services.retur_supplier_reservasi import terikat
         free=D(str(await g2._sisa_broken_row(db,row.id)))-await terikat(db,sumber=f'broken:{row.id}')
         return dict(key=key,kode=f'Broken #{row.id}',pemilik=row.jasa_id,kg=float(row.berat_kg),bebas=float(free),satuan='kg',karung=None,rasio=None,final=True,raw=raw(row),jenis='broken',proses_id=row.source_id if row.source_type=='polishing' else None)
-    grade=parts[1];proc=await db.get(PolishingProcess,ident,populate_existing=True)
+    grade=parts[1]
+    if tipe=='samping' and len(parts)==4 and parts[2]=='stok':
+        row=await db.get(ByproductStock,ident,populate_existing=True)
+        if not row or row.jenis_produk!=grade:raise ValueError('Sumber hasil samping tidak ditemukan atau jenis berbeda.')
+        from app.penggilingan.gudang2.rencana_hasil_samping import saldo_sumber
+        data=await saldo_sumber(db,grade,row.jasa_id)
+        free=next((kg for source,kg in data['candidates'] if getattr(source,'byproduct_stock_id',None)==ident),0)
+        from app.services.stok import nama_produk
+        return dict(key=key,kode=nama_produk(grade)+f' #{ident}',pemilik=row.jasa_id,kg=float(row.berat_kg),bebas=free,satuan='kg',karung=None,rasio=None,final=True,raw=raw(row),jenis=grade,proses_id=row.source_id if row.source_type=='polishing' else None)
+    proc=await db.get(PolishingProcess,ident,populate_existing=True)
     if not proc:raise ValueError('Proses sumber bahan tidak ditemukan.')
     if tipe=='samping':
         from app.penggilingan.gudang2.rencana_hasil_samping import saldo_sumber
@@ -870,6 +879,7 @@ async def sumber_curah(db,key):
 
 def key_curah(move,tipe):
     if tipe=='broken':return f'broken:{move.byproduct_stock_id}'
+    if tipe=='samping' and move.byproduct_stock_id:return f'samping:{move.jenis}:stok:{move.byproduct_stock_id}'
     return f'{tipe}:{move.jenis}:{move.polishing_process_id}'
 
 
@@ -904,6 +914,8 @@ async def konteks_curah(db,pr,usages,*,catatan=None):
                 keys=[f'broken:{x.id}' for x in (await db.scalars(select(ByproductStock).where(ByproductStock.jenis_produk=='broken',ByproductStock.jasa_id==pr.jasa_id))).all()]
             else:
                 keys=[f'{tipe}:{move.jenis}:{x.id}' for x in (await db.scalars(select(PolishingProcess).where(PolishingProcess.jasa_id==pr.jasa_id,PolishingProcess.id!=pr.id))).all()]
+            if tipe=='samping':
+                keys += [f'samping:{move.jenis}:stok:{x.id}' for x in (await db.scalars(select(ByproductStock).where(ByproductStock.jasa_id==pr.jasa_id,ByproductStock.jenis_produk==move.jenis))).all()]
             for candidate in keys:
                 source=await sumber_curah(db,candidate)
                 if source['bebas'] is not None and source['bebas']>0:sources[candidate]=source
@@ -955,8 +967,11 @@ async def bahan_curah(db,entry,change,pr,user,alasan,*,stok_plan=None):
             move.source_type=stock['source_type'];move.source_id=stock['source_id'];move.product_sku_id=stock['product_sku_id']
             move.polishing_process_id=stock['source_id'] if stock['source_type']=='polishing' else None
         elif tipe=='broken':move.byproduct_stock_id=ident
+        elif tipe=='samping' and source['key'].split(':')[-2]=='stok':
+            move.byproduct_stock_id=ident;move.polishing_process_id=None
         else:
             move.polishing_process_id=ident
+            if tipe=='samping':move.byproduct_stock_id=None
             if tipe=='beras':move.source_id=ident
         move.berat_kg=qty
     if before==raw(move) and (usage is None or ubefore==raw(usage)) and 'sisa' not in change:raise ValueError('Catatan bahan tidak berubah.')

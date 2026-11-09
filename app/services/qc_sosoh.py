@@ -198,7 +198,9 @@ def rata_rata(sampel):
 async def ambil_sampel(db, *, user, kode_proses, jenis, waktu_sampel, kunci_kiriman=None):
     from sqlalchemy import text
     await db.execute(text("SELECT pg_advisory_xact_lock_shared(861274003)"))
-    if jenis not in await jenis_beras(db):
+    from app.services.spesifikasi_beras import jenis_untuk_proses
+    proc_awal = await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses == kode_proses))
+    if proc_awal is None or jenis not in await jenis_untuk_proses(db, proc_awal.id, beras_saja=True):
         raise QcSosohError("Pilih jenis beras yang diambil sampelnya.")
     if waktu_sampel.tzinfo is None:
         raise QcSosohError("Waktu pengambilan sampel harus menyertakan zona waktu.")

@@ -83,10 +83,16 @@ async def test_hasil_baru_stok_neraca_qc_nonaktif(pg,dunia):
         assert not old_grade['aktif'] and old_grade['kg'] == 600
         assert kode in await beras.jenis_hasil(db,termasuk_nonaktif=True)
         assert (await db.get(PolishingOutputLog,1)).berat_kg==old
+        assert old_grade['boleh_catat']
+        await p.catat_output(db,user=user,kode=pkode,jenis=kode,berat_kumulatif=700)
+        assert (await stok.output_sosoh(db,pid))[kode]==700
+        q=await qc_sosoh.ambil_sampel(db,user=user,kode_proses=pkode,jenis=kode,waktu_sampel=now_local())
+        assert q.jenis==kode
+        baru=PolishingProcess(kode_proses='POL-BARU',status='proses',waktu_mulai=now_local(),created_by=user.id)
+        db.add(baru);await db.commit()
         with pytest.raises(p.Gudang2Error,match='aktif'):
-            await p.catat_output(db,user=user,kode=pkode,jenis=kode,berat_kumulatif=700)
+            await p.catat_output(db,user=user,kode=baru.kode_proses,jenis=kode,berat_kumulatif=100)
         await db.rollback()
-        assert (await stok.output_sosoh(db,pid))[kode]==600
 
 @pytest.mark.parametrize('peran,gd',[(P.OPERATOR,'Gudang 1'),(P.OPERATOR,'Gudang 2')])
 async def test_izin_server(pg,dunia,peran,gd):
