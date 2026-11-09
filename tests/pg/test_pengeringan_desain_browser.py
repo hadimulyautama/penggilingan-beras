@@ -12,7 +12,9 @@ async def browser(c, width):
     from playwright.async_api import async_playwright, Error as BrowserError
     async with async_playwright() as pw:
         b = await mesin(pw).launch()
-        page = await b.new_page(viewport=dict(width=width, height=1000))
+        page = await b.new_page(**konteks(pw,width,1000))
+        if os.getenv('UJI_IPHONE')=='1' and width<=430:
+            assert await page.evaluate("/iPhone/.test(navigator.userAgent)")
         errors = []
         pending = set()
         closing = False
