@@ -89,3 +89,14 @@ async def test_nota_dan_timbangan_terpisah(pg,pemakai,pemasok,nota,barang,netto,
         assert (r['sumber_nota']=='Mengikuti timbangan')==mengikuti
         if mengikuti:
             assert r['selisih']=='0 kg'
+
+async def test_katalog_hanya_laporan_periode_dan_kode_lama_dihapus(pg):
+    import re
+    from app.services.laporan_periode import TAHAP
+    async with await _klien(pg,peran='superadmin') as c:
+        r=await c.get('/laporan')
+        assert r.status_code==200
+        assert set(re.findall(r'data-laporan="([^"]+)"',r.text))=={'tahap_'+k for k in TAHAP}
+        assert 'href="/serah-terima"' not in r.text
+        for kode in ['pending_verifikasi','produksi','jam_kedatangan','pembelian_gabah','supplier','rekap_bulanan','musiman']:
+            assert (await c.get('/api/laporan/'+kode)).status_code==404

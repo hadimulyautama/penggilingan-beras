@@ -39,8 +39,7 @@ def test_admin_ke_atas_melihat_seluruhnya():
 def test_laporan_uang_yang_diminta_langsung_tetap_ditolak():
     """Alamatnya bisa diketik. Menyaring daftar itu kenyamanan; yang menahan
     adalah pemeriksaan saat laporannya diminta."""
-    uang = [l for l in lap._daftar() if l.uang]
-    assert uang, "seharusnya ada laporan uang"
+    uang = [lap.Laporan("uji_uang", "Laporan uang", "Untuk uji penjaga.", True, None)]
     for l in uang:
         assert not lap.boleh_lihat(_orang("operator"), l)
 
@@ -57,7 +56,8 @@ def test_tiap_laporan_punya_cara_membuatnya():
     di rute, dan itu satu-satunya alasan `buat` boleh kosong."""
     berperiode = {l.kode for l in lap._daftar() if l.berperiode}
     from app.services.laporan_periode import TAHAP
-    assert berperiode == {"produksi", "pembelian_gabah"} | {"tahap_" + k for k in TAHAP}
+    assert berperiode == {"tahap_" + k for k in TAHAP}
+    assert {l.kode for l in lap._daftar()} == berperiode
     for l in lap._daftar():
         assert (l.buat is not None) or l.berperiode, f"{l.kode} tanpa pembuat"
 

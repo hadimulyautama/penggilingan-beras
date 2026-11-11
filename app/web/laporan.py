@@ -1,16 +1,7 @@
-"""Layar laporan: satu daftar, satu isi, dipilih server.
+"""Katalog laporan per periode untuk setiap tahap operasional Padiflow.
 
-Laporan di aplikasi ini sudah lama menghasilkan **teks siap baca** — ditulis
-untuk chat, tetapi isinya bukan milik chat. Yang belum ada hanya layarnya.
-Karena itu tidak ada laporan yang ditulis ulang di sini; berkas ini hanya
-mendaftar mana yang ada, siapa yang boleh melihatnya, dan bagaimana teksnya
-sampai ke layar tanpa membawa bintang-bintang Markdown.
-
-**Siapa melihat apa ditentukan di sini, bukan di layar.** Laporan yang memuat
-harga, HPP, dan nilai persediaan hanya untuk staff/admin. Operator melihat
-laporan kerja: status gudang, apa yang sedang berjalan, stok fisik. Bukan
-karena angkanya rahasia dari orangnya, melainkan karena perangkat gudang
-dipakai bergantian dan berdiri di tempat terbuka.
+Katalog dan API memakai daftar tahap yang sama. Laporan lama yang sudah
+keluar dari katalog tidak dapat dibuka lagi melalui kode API web-nya.
 """
 from __future__ import annotations
 
@@ -47,38 +38,14 @@ def _daftar() -> tuple[Laporan, ...]:
     """Dibangun di dalam fungsi supaya impor layanan tidak terjadi saat modul
     dimuat — sebagiannya menarik model yang berat, dan halaman masuk tidak
     perlu membayarnya."""
-    from app.services import analytics, report
-
     from app.services.laporan_periode import TAHAP
 
+    # Katalog hanya berisi laporan per tahap yang disepakati. Layanan analisa
+    # lama tetap milik konsumennya sendiri, tetapi tidak lagi menjadi pilihan
+    # laporan web maupun kode API yang dapat diminta langsung.
     return tuple(Laporan("tahap_" + kode, nama, "Aktivitas tahap ini pada periode pilihan.",
                          False, None, berperiode=True)
-                 for kode, (nama, *_) in TAHAP.items()) + (
-        # ── Laporan kerja: boleh dilihat siapa pun yang bekerja ──
-        Laporan("pending_verifikasi", "Menunggu verifikasi",
-                "Yang tertahan menunggu tindakan orang lain.",
-                False, report.pending_verifikasi),
-        Laporan("produksi", "Riwayat produksi", "Giling & pengeringan pada rentang waktu.",
-                False, None, berperiode=True),
-        Laporan("jam_kedatangan", "Jam kedatangan gabah",
-                "Kapan truk datang — dasar mengatur giliran jaga.",
-                False, report.insight_jam_kedatangan),
-
-        # ── Laporan uang: staff & admin ──
-        Laporan("pembelian_gabah", "Pembelian gabah", "Gabah masuk beserta harganya.",
-                True, None, berperiode=True),
-        # Tiga laporan HPP/biaya DIBUANG 28 September 2026: harga keluar dari
-        # Pos Produksi (keputusan pemilik), jadi ketiganya tak punya bahan baku
-        # lagi. Membiarkannya berarti laporan yang selamanya berbunyi
-        # "menunggu data lengkap".
-        Laporan("supplier", "Rapor supplier",
-                "Siapa yang gabahnya paling banyak jadi beras.",
-                True, analytics.supplier_scorecard),
-        Laporan("rekap_bulanan", "Rekap bulanan", "Ringkasan produksi sebulan.",
-                True, analytics.rekap_produksi_bulanan),
-        Laporan("musiman", "Analisa musiman", "Pola panen sepanjang tahun.",
-                True, analytics.analisa_musiman),
-    )
+                 for kode, (nama, *_) in TAHAP.items())
 
 
 #: Pilihan periode untuk laporan berentang waktu.
@@ -186,25 +153,11 @@ async def isi_laporan(kode: str, periode: str = "bulan_ini",
     if not boleh_lihat(user, lap):
         raise HTTPException(403, "Laporan ini tidak tersedia untuk peran Anda.")
 
-    from app.services import report
+    from app.services.laporan_periode import ambil
+    awal, akhir = _rentang(periode, dari, sampai)
     async with SessionLocal() as db:
-        if lap.kode.startswith("tahap_"):
-            from app.services.laporan_periode import ambil
-            awal, akhir = _rentang(periode, dari, sampai)
-            data = await ambil(db, lap.kode.removeprefix("tahap_"), awal, akhir)
-            return {"nama": lap.nama, "data": data}
-        elif lap.kode == "produksi":
-            dari, sampai = _rentang(periode, dari, sampai)
-            teks = await report.laporan_produksi_histori(db, dari, sampai)
-        elif lap.kode == "pembelian_gabah":
-            if periode == "khusus":
-                awal, akhir = _rentang(periode, dari, sampai)
-                teks = await report.laporan_pembelian_gabah(db, periode, awal, sampai=akhir)
-            else:
-                teks = await report.laporan_pembelian_gabah(db, periode)
-        else:
-            teks = await lap.buat(db)
-    return {"nama": lap.nama, "isi": ke_html(teks)}
+        data = await ambil(db, lap.kode.removeprefix("tahap_"), awal, akhir)
+    return {"nama": lap.nama, "data": data}
 
 
 @router.get("/laporan-periode/{kode}.pdf")

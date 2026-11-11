@@ -41,7 +41,7 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
             r=await c.get('/riwayat-'+kind+'?sebelum=1')
             assert r.status_code==(200 if allowed else 403)
         r=await c.get('/api/laporan/pembelian_gabah?periode=semua')
-        assert r.status_code==(403 if role=='operator' else 200)
+        assert r.status_code==404
 
 
 async def test_gateway_tidak_membuang_query_kursor_atau_audit(pg,qc):
@@ -71,7 +71,7 @@ async def test_lihat_sebagai_operator_menurunkan_tab_dan_api(pg,qc):
         assert 'href="/audit"' not in nav
         assert (await c.get('/audit')).status_code==403
         assert (await c.get('/riwayat-giling')).status_code==403
-        assert (await c.get('/api/laporan/pembelian_gabah')).status_code==403
+        assert (await c.get('/api/laporan/pembelian_gabah')).status_code==404
 
 
 async def test_detail_qc_lama_dan_seluruh_putaran_tetap_terjangkau(pg,qc):

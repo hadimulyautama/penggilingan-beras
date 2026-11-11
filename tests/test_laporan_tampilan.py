@@ -20,14 +20,9 @@ def test_laporan_tidak_lagi_ditumpahkan_ke_pre():
     assert "function gambar(" in teks, "tak ada penggambar"
 
 
-def test_teks_laporan_tidak_diubah_di_server():
-    """Empat belas laporan menulis teksnya dengan tangan masing-masing.
-    Menulis ulang semuanya demi tampilan berarti empat belas kesempatan
-    mengubah ISInya tanpa sengaja — jadi yang berubah hanya penggambarnya."""
-    lap = (AKAR / "app/web/laporan.py").read_text()
-    assert "_TEBAL" in lap and "_MIRING" in lap, "penerjemah penanda hilang"
-    # Rutenya tetap mengirim teks apa adanya.
-    assert '"isi"' in lap
+# Kontrak API laporan lama berupa teks sudah dihapus dari katalog.
+# Respons terstruktur dan PDF laporan periode diuji lewat HTTP di
+# tests/pg/test_laporan_periode.py.
 
 
 def test_penggambar_mengenali_pola_yang_memang_dipatuhi():
