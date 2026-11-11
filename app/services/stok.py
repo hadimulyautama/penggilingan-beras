@@ -477,14 +477,14 @@ async def _mutu_banyak(db: AsyncSession, proc_ids) -> dict[int, list]:
 from app.models.permintaan import DISETUJUI
 
 
-def _keadaan_minta(status: str) -> str:
+def _keadaan_minta(status: str, bertahap: bool = False) -> str:
     """Permintaan itu sedang di tangan siapa — dikalimatkan untuk PEMINTANYA.
 
     Bukan nama keadaannya ("disetujui"), melainkan apa artinya bagi yang
     membaca: siapa yang sedang memegangnya, dan apa yang ia tunggu.
     """
     from app.models.permintaan import DIKIRIM, DIMINTA, DISETUJUI
-
+    if bertahap and status==DIKIRIM:return "pengiriman bertahap — pantau perjalanan dan sisa persetujuan"
     return {
         DIMINTA: "menunggu keputusan Admin",
         DISETUJUI: "disetujui — menunggu dikirim Gudang 1",
@@ -568,7 +568,7 @@ async def pk_gudang1(db: AsyncSession, *, user=None) -> list[LotPk]:
             lama=_hari(proc.waktu_selesai or proc.waktu_mulai),
             berjalan=proc.status == "proses",
             diminta_oleh=(peta_minta[proc.id].oleh if proc.id in peta_minta else None),
-            diminta_keadaan=(_keadaan_minta(peta_minta[proc.id].status)
+            diminta_keadaan=(_keadaan_minta(peta_minta[proc.id].status,peta_minta[proc.id].bertahap)
                              if proc.id in peta_minta else ""),
             diminta_id=(peta_minta[proc.id].id if proc.id in peta_minta else None),
             diminta_siap=(proc.id in peta_minta

@@ -73,6 +73,7 @@ class Baris:
     keadaan: str
     #: Aksi yang menutup baris ini. None = tidak ada yang bisa dikerjakan
     #: sekarang; barisnya tampil tanpa panah dan tidak bisa ditekan.
+    tautan: str | None = field(default=None,kw_only=True)
     aksi: str | None = None
     #: Yang menandai baris ini di dalam formulirnya — nomor tiket, kode lot,
     #: kode batch. Dibawa serta supaya lembar aksinya sudah terisi.
@@ -2394,11 +2395,17 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False, user=None) 
     for baris, kode_lot in (await db.execute(
         select(PermintaanPk, MillingProcess.kode_proses).where(batas_lokasi(user,MillingProcess))
         .join(MillingProcess, MillingProcess.id == PermintaanPk.milling_process_id)
-        .where(PermintaanPk.status == _pmt.DISETUJUI)
+        .where((PermintaanPk.status == _pmt.DISETUJUI)|((PermintaanPk.status == _pmt.DIKIRIM)&PermintaanPk.bertahap.is_(True)))
         .order_by(PermintaanPk.waktu_setuju)
     )).all():
         from app.penggilingan.gudang2.service import label_tujuan
 
+        if baris.bertahap:
+            from app.services.pengiriman_pk import sisa
+            remaining=await sisa(db,baris)
+            if remaining>0:
+                b.menunggu.append(Baris(kode=kode_lot,isi="Persetujuan lot dapat dikirim sebagian per perjalanan",keadaan="siap dimuat",aksi="kirim_permintaan_pk",nilai=str(baris.id),tautan="/transfer-bertahap",fase="pindah_pk",sejak=baris.waktu_setuju,judul="Kirim PK per perjalanan",utama=(_kg(float(remaining)).removesuffix(" kg"),"kg"),sub=kode_lot,kelompok="permintaan",nota="Sisa sudah dikurangi seluruh perjalanan, termasuk yang sedang ditimbang."))
+            continue
         lok = await label_tujuan(db, baris.tujuan, baris.silo_id)
         kg = float(baris.berat_setuju_kg or 0)
         b.menunggu.append(Baris(
@@ -3271,9 +3278,9 @@ async def untuk_operator_gudang2(db: AsyncSession, *, user=None) -> Berjalan:
 
 
         b.transit.append(Baris(
-            kode=kode_lot,
-            isi=f"PK dari Gudang 1 · {_keadaan_minta(baris.status)}",
-            keadaan=_keadaan_minta(baris.status),
+            kode=kode_lot,tautan="/transfer-bertahap" if baris.bertahap else None,
+            isi=f"PK dari Gudang 1 · {_keadaan_minta(baris.status,baris.bertahap)}",
+            keadaan=_keadaan_minta(baris.status,baris.bertahap),
             # `aksi` sengaja TIDAK disebut sama sekali, bukan disebut None:
             # baris yang membawa `aksi` wajib membawa `pilihan` juga (kartu
             # yang ditekan harus membentang, bukan melempar lembar), dan
@@ -3283,12 +3290,12 @@ async def untuk_operator_gudang2(db: AsyncSession, *, user=None) -> Berjalan:
             judul="Permintaan PK Anda",
             utama=((_kg(kg).removesuffix(" kg"), "kg") if kg else None),
             sub=(f"{kode_lot}" + (f" · tujuan {lok}" if lok else "")),
-            ringkas=_keadaan_minta(baris.status),
+            ringkas=_keadaan_minta(baris.status,baris.bertahap),
             # Yang sudah dikirim sudah BISA DIPAKAI — itu kabar, bukan sekadar
             # keadaan, dan ia yang menentukan apakah orangnya bisa mulai
             # menyosoh hari ini atau menunggu besok.
             nota=("Sudah ada di gudang ini — boleh langsung disosoh."
-                  if baris.status == _pmt.DIKIRIM else None)))
+                  if baris.status == _pmt.DIKIRIM and not baris.bertahap else ("Stok tujuan dicatat per perjalanan setelah selesai timbang. Tidak perlu konfirmasi penerimaan." if baris.bertahap else None))))
 
     # ── Yang BERAKHIR TANPA BARANG: ditolak, atau gugur ──
     #
@@ -3545,6 +3552,14 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         .where(PermintaanPk.status.in_((_pmt.DIMINTA, _pmt.DIKIRIM)))
         .order_by(PermintaanPk.waktu_minta)
     )).all():
+        if baris.bertahap:
+            if baris.status==_pmt.DIMINTA:
+                b.meja.append(Baris(kode=kode_lot,isi=f"{nama_minta or 'Operator'} meminta PK per lot",keadaan="menunggu persetujuan Admin",aksi="acc_permintaan_pk",nilai=str(baris.id),tautan="/transfer-bertahap",fase="pindah_pk",sejak=baris.waktu_minta,judul="Permintaan transfer PK",utama=(_kg(float(baris.berat_minta_kg or 0)).removesuffix(" kg"),"kg"),sub=kode_lot,kelompok="permintaan",gudang="g1",nota="Periksa jumlah dan tujuan pada daftar, lalu langsung setujui baris yang dipilih."))
+            else:
+                from app.models import PengirimanPk,PengirimanPkItem
+                needs=await db.scalar(select(PengirimanPk.id).join(PengirimanPkItem,PengirimanPkItem.pengiriman_id==PengirimanPk.id).where(PengirimanPkItem.permintaan_id==baris.id,PengirimanPk.status=='menunggu_admin').limit(1))
+                if needs:b.meja.append(Baris(kode=kode_lot,isi="Selisih perjalanan mencapai 0,5% atau lebih",keadaan="perlu pemeriksaan Admin",aksi="tutup_permintaan_pk",nilai=str(baris.id),tautan="/transfer-bertahap?pengiriman="+str(needs),fase="pindah_pk",sejak=baris.waktu_kirim,judul="Periksa selisih transfer PK",sub=kode_lot,kelompok="permintaan",gudang="g1"))
+            continue
         bd = await _pk_breakdown(db, baris.milling_process_id)
         dikirim = baris.status == _pmt.DIKIRIM
         if dikirim:

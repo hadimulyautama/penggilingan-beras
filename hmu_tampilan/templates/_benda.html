@@ -269,8 +269,8 @@
    setiap kali ia menyelesaikan satu baris. #}
 {% macro aksi_terlihat(b, alamat='/aksi') -%}
   {% set dasar = dasar_borang(alamat) %}
-  {% if b.tombol or b.pilihan or b.aksi %}
-            {% if b.tombol %}
+  {% if b.tautan or b.tombol or b.pilihan or b.aksi %}
+            {% if b.tautan %}<a class="btn btn--utama" href="{{ b.tautan }}">Buka transfer per perjalanan</a>{% elif b.tombol %}
               {% set aktif = b.tombol|rejectattr('mati')|list %}
               {% set utama = (aktif|selectattr('utama')|first)|default(aktif|first)|default(none) %}
               {% if utama %}<button type="button" class="btn btn--utama beranda-kartu-aksi__utama" data-post="{{ utama.post }}" data-kirim='{{ utama.data|tojson }}'>{{ utama.nama }}</button>{% endif %}
@@ -353,7 +353,7 @@
               {% endfor %}
             </div>
           {{ tautan_penerimaan(b) }}</details>
-        {% elif b.pilihan %}
+        {% elif b.tautan %}<article class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>{{ padat(b,progres) if rapat or listview else penuh(b) }}{% if listview %}{{ rincian_antrean(b,tabel == 'packing') }}{% endif %}<p><a class="btn btn--kecil" href="{{ b.tautan }}">Buka transfer per perjalanan</a></p></article>{% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% elif rapat or listview %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {% if listview %}{{ rincian_antrean(b, tabel == "packing") }}

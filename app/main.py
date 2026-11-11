@@ -682,3 +682,6 @@ app.include_router(spesifikasi_beras_router)
 
 from app.web.jenis_hasil_samping import router as jenis_hasil_samping_router
 app.include_router(jenis_hasil_samping_router)
+
+from app.web.pengiriman_pk import router as pengiriman_pk_router
+app.include_router(pengiriman_pk_router)

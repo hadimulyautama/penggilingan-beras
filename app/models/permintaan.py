@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
@@ -78,6 +78,8 @@ class PermintaanPk(Base, TimestampMixin):
     berat_minta_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: Lihat daftar keadaan di atas berkas ini.
     status: Mapped[str] = mapped_column(String(12), nullable=False, default=DIMINTA)
+
+    bertahap: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     # ── 2 · ACC admin ──
     #: Jenis tempatnya di Gudang 2: `silo` atau `ditumpuk`; silo MANA di

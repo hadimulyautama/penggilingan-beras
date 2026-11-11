@@ -111,18 +111,22 @@ async def pending_transfer_kg(db: AsyncSession, proc_id: int, *, pemilik_id=...,
     `saldo_pk`, yang tak memotong apa pun.
     """
     from app.services import pk_persediaan
-    if await pk_persediaan.ada_pengalihan(db,sumber='giling:'+str(proc_id)):
+    from app.services.pengiriman_pk import reservasi
+    alokasi=await reservasi(db)
+    if bebas or await pk_persediaan.ada_pengalihan(db,sumber='giling:'+str(proc_id)):
         source=(await pk_persediaan.baca(db)).get('giling:'+str(proc_id))
         if source is None:raise TransferError('Sumber PK tidak dapat dibuktikan.')
         owner=source.pemilik_awal if pemilik_id is ... else pemilik_id
         try:
             if source.masalah:raise ValueError(source.masalah)
-            return float(source.bebas(owner) if bebas else source.stok.saldo(source.pemilik(owner)))
+            return float(source.bebas(owner) if bebas else max(0,source.stok.saldo(source.pemilik(owner))-sum(value for (pid,held_owner),value in alokasi.items() if pid==proc_id and source.pemilik(held_owner)==source.pemilik(owner))))
         except ValueError as e:raise TransferError(str(e)) from None
     if pemilik_id is not ...:
         proc=await db.get(MillingProcess,proc_id)
         if proc is None or proc.jasa_id!=pemilik_id:return 0.0
-    return max(await saldo_pk(db, proc_id), 0.0)
+    proc=await db.get(MillingProcess,proc_id)
+    owner=proc.jasa_id if pemilik_id is ... and proc else pemilik_id
+    return max(await saldo_pk(db, proc_id)-float(alokasi.get((proc_id,owner),0)), 0.0)
 
 
 async def _transfer_dari_kunci(db: AsyncSession, kunci_kiriman: str) -> InternalTransfer | None:
@@ -337,6 +341,9 @@ async def create_internal_transfer(
 
 async def alasan_koreksi_transfer(db: AsyncSession, transfer_id: int) -> str | None:
     """Periksa apakah transfer masih aman dibatalkan untuk koreksi."""
+    from app.models import PengirimanPkItem
+    if await db.scalar(select(PengirimanPkItem.id).where(PengirimanPkItem.internal_transfer_id==transfer_id).limit(1)):
+        return 'Transfer merupakan bagian perjalanan timbang bertahap; koreksi terpisah akan memutus jejak muatan.'
     from app.services.pk_koreksi_rantai import alasan_perubahan_terpisah
     reason=await alasan_perubahan_terpisah(db,'transfers',transfer_id)
     if reason:return reason

@@ -25,6 +25,9 @@ def keadaan_transfer(catatan, permintaan, gudang_asal, gudang_tujuan):
     if catatan and catatan.status == 'dibatalkan':
         return dict(judul='Riwayat transfer PK', status='Dibatalkan', aktif=False,
                     keterangan='Bobot catatan ini tidak dihitung sebagai transfer aktif. Catatan dan alasan pembatalan tetap tersedia di Riwayat.')
+    if permintaan and getattr(permintaan,'bertahap',False):
+        if catatan:return dict(judul='Riwayat transfer PK',status='Perjalanan selesai',aktif=False,keterangan='Muatan perjalanan ini sudah selesai timbang dan stoknya tercatat. Permintaan lot dapat mempunyai perjalanan lain; lihat sisa persetujuan pada halaman Transfer PK.')
+        return dict(judul='Transfer PK per perjalanan',status={'diminta':'Menunggu persetujuan Admin','disetujui':'Siap dimuat','dikirim':'Pengiriman bertahap','selesai':'Seluruh perjalanan selesai','ditolak':'Ditolak','gugur':'Tidak dilanjutkan'}.get(permintaan.status,permintaan.status),aktif=permintaan.status in ('diminta','disetujui','dikirim'),etape=1 if permintaan.status=='diminta' else 2 if permintaan.status=='disetujui' else 3,keterangan='Satu persetujuan dapat dipenuhi beberapa perjalanan. Muatan asal dianggap genap bila selisih timbang kurang dari 0,5%; mulai 0,5% perlu pemeriksaan Admin. Stok dicatat setelah selesai timbang tanpa konfirmasi operator tujuan.')
     status = permintaan.status if permintaan else None
     if status == 'diminta':
         return dict(judul='Permintaan transfer PK', status='Menunggu persetujuan Admin', aktif=True, etape=1,
@@ -82,6 +85,13 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
     if permintaan is None and catatan:
         permintaan = await db.scalar(select(PermintaanPk).where(
             PermintaanPk.internal_transfer_id == catatan.id).order_by(PermintaanPk.id.desc()))
+    perjalanan=None
+    if catatan:
+        from app.models import PengirimanPkItem,PengirimanPk
+        pair=(await db.execute(select(PengirimanPkItem,PengirimanPk).join(PengirimanPk,PengirimanPk.id==PengirimanPkItem.pengiriman_id).where(PengirimanPkItem.internal_transfer_id==catatan.id))).first()
+        if pair:
+            perjalanan=pair[1]
+            if permintaan is None:permintaan=await db.get(PermintaanPk,pair[0].permintaan_id)
     gudang_asal, gudang_tujuan = await gudang_transfer(db, proc, catatan, permintaan)
     jasa = catatan.jasa_id if catatan else proc.jasa_id
     pemilik = (await nama_pemilik_banyak(db, [jasa])).get(jasa, f'Pesanan #{jasa}') if jasa else 'Milik pabrik'
@@ -91,21 +101,21 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
     tujuan = await label_tujuan(db, catatan.lokasi_tujuan if catatan else permintaan.tujuan,
                               catatan.silo_id if catatan else permintaan.silo_id) if catatan or permintaan.tujuan else 'Belum ditetapkan'
     aktif = await transfer._transferred_pk(db, proc.id)
-    saldo = await transfer.pending_transfer_kg(db, proc.id)
+    saldo = await transfer.saldo_pk(db, proc.id)
     kode = catatan.kode_transfer if catatan else f'Permintaan PK #{permintaan.id}'
     status_catatan = 'Dibatalkan' if catatan and catatan.status=='dibatalkan' else 'Terkirim' if catatan else 'Belum terbentuk'
     berat = [(label,bobot(getattr(permintaan,field)) if permintaan else 'Tidak ada permintaan') for label,field in
              [(f'Diminta {gudang_tujuan}','berat_minta_kg'),('Disetujui Admin','berat_setuju_kg'),
-              (f'Dimuat {gudang_asal}','berat_kirim_kg'),('Final Admin','berat_final_kg')]]
+              (f'Dimuat {gudang_asal}','berat_kirim_kg'),('Total selesai per perjalanan' if permintaan and permintaan.bertahap else 'Final Admin','berat_final_kg')]]
     langkah = []
     if permintaan:
         for label,waktu,oleh in [(f'Diminta {gudang_tujuan}','waktu_minta','diminta_oleh'),
                                  ('Disetujui Admin','waktu_setuju','disetujui_oleh'),
                                  (f'Dikirim {gudang_asal}','waktu_kirim','dikirim_oleh'),
-                                 ('Ditutup / keputusan akhir','waktu_tutup','ditutup_oleh')]:
+                                 ('Selesai otomatis' if permintaan.bertahap else 'Ditutup / keputusan akhir','waktu_tutup','ditutup_oleh')]:
             if getattr(permintaan,waktu):
                 langkah.append(dict(judul=label,waktu=_waktu(getattr(permintaan,waktu)),
-                                    oleh=orang.get(getattr(permintaan,oleh),'Pencatat belum tercatat')))
+                                    oleh=orang.get(getattr(permintaan,oleh),'Sistem otomatis' if permintaan.bertahap and waktu=='waktu_tutup' else 'Pencatat belum tercatat')))
     related_owner = InternalTransfer.id.in_(read_scope.ids(InternalTransfer)) if read_scope else True
     count = await db.scalar(select(func.count()).select_from(InternalTransfer).where(InternalTransfer.milling_process_id==proc.id, related_owner))
     pages=max(1,ceil(count/20))
@@ -139,7 +149,7 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
         from app.services.pk_50 import angka
         packing = f"{catatan.jumlah_karung} karung × 50 kg + {angka(catatan.berat_curah_kg)} kg curah"
     return dict(keadaan=keadaan_transfer(catatan,permintaan,gudang_asal,gudang_tujuan),gudang_asal=gudang_asal,gudang_tujuan=gudang_tujuan,packing=packing, kode=kode,catatan=catatan,permintaan=permintaan,proses=proc,pemilik=pemilik,jasa=jasa,
-        status_catatan=status_catatan,status_permintaan=STATUS.get(permintaan.status,permintaan.status) if permintaan else 'Tanpa permintaan',
+        perjalanan=perjalanan,status_catatan=status_catatan,status_permintaan=STATUS.get(permintaan.status,permintaan.status) if permintaan else 'Tanpa permintaan',
         tujuan=tujuan,jenis_pk=await pk_jenis(db,proc),berat=berat,selisih=selisih,tahap=tahap,
         statistik=[('Berat transfer ini',bobot(catatan.berat_kg) if catatan else 'Belum ada transfer'),
                    (f'Sisa PK lot di {gudang_asal}',bobot(saldo)),('Status catatan',status_catatan)],
