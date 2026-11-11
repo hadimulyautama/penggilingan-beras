@@ -21,8 +21,8 @@ async def test_giling_bahan_dan_hasil_verifikasi_mengalahkan_progres(pg,pabrik):
         d=await ambil(db,'penggilingan',now_local().date(),now_local().date())
         assert not {'nota','timbangan'} & keys(d)
         r=d['rincian'][0]
-        assert r['bahan'].startswith('10.000 kg')
-        assert r['hasil']=='6.400 kg'
+        assert r['bahan'].startswith('10.000')
+        assert r['hasil']=='6.400'
         assert 'rendemen' in keys(d) and 'asal' in keys(d)
 
 async def test_sosoh_semua_catatan_hasil_spek_samping_dan_neraca(pg,pemakai):
@@ -31,15 +31,15 @@ async def test_sosoh_semua_catatan_hasil_spek_samping_dan_neraca(pg,pemakai):
         d=await ambil(db,'penyosohan',now_local().date(),now_local().date())
         assert not {'nota','timbangan'} & keys(d)
         r=d['rincian'][0]
-        assert '6.000 kg' in r['hasil_beras'] and '500 kg' in r['hasil_beras']
-        assert all(v in r['hasil_samping'] for v in ['1.200 kg','700 kg','1.500 kg','50 kg'])
-        assert r['hasil']=='9.950 kg'
+        assert '6.000' in r['hasil_beras'] and '500' in r['hasil_beras']
+        assert all(v in r['hasil_samping'] for v in ['1.200','700','1.500','50'])
+        assert r['hasil']=='9.950'
         assert 'asal' not in keys(d)
         assert any(c['kelompok']=='Bahan' for c in d['kolom'])
         assert any(c['kelompok']=='Hasil' and c['nama']=='Broken' for c in d['kolom'])
         assert not any('silo' in c['nama'].lower() for c in d['kolom'])
-        assert '10.000 kg' in r['bahan_jenis']
-        assert r['susut']=='50 kg'
+        assert '10.000' in r['bahan_jenis']
+        assert r['susut']=='50'
         assert r['rendemen']=='65,00%'
         assert any(x['nama']=='Rendemen beras' and x['nilai']=='65,00%' for x in d['ringkasan'])
 
@@ -69,15 +69,15 @@ async def test_hasil_samping_tambahan_dari_master_ikut_laporan(pg,pemakai):
         db.add(PolishingOutputLog(polishing_process_id=pid,jenis='hs_serbuk',berat_kg=25,waktu_update=now_local(),input_by=pemakai.id))
         await db.commit()
         d=await ambil(db,'penyosohan',now_local().date(),now_local().date())
-        assert 'Serbuk khusus: 25 kg' in d['rincian'][0]['hasil_samping']
-        assert any(x['nama']=='Serbuk khusus' and x['nilai']=='25 kg' for x in d['ringkasan'])
+        assert 'Serbuk khusus: 25' in d['rincian'][0]['hasil_samping']
+        assert any(x['nama']=='Serbuk khusus' and x['nilai']=='25' for x in d['ringkasan'])
         hasil=next(g for g in d['ringkasan_kelompok'] if g['nama']=='Hasil')
         assert any(x['nama']=='Serbuk khusus' and x['bagian']=='Hasil samping' for x in hasil['rincian'])
         from app.web.pdf_periode import buat_pdf
         from pypdf import PdfReader
         from io import BytesIO
         text=' '.join(p.extract_text() for p in PdfReader(BytesIO(buat_pdf(d))).pages)
-        assert 'Serbuk khusus' in text and '25 kg' in text
+        assert 'Serbuk khusus' in text and '25' in text
 
 from tests.pg.test_gabung_jasa import dunia
 from tests.pg.test_stok_produk_jasa import sosoh_jasa
@@ -88,7 +88,7 @@ async def test_pengeringan_memisahkan_estimasi_dari_hasil_terukur(pg,dunia):
     async with pg() as db:
         d=await ambil(db,'pengeringan',now_local().date()-timedelta(days=2),now_local().date())
         r=d['rincian'][0]
-        assert r['estimasi'].endswith(' kg')
+        assert float(r['estimasi'].replace('.','').replace(',','.'))>0
         assert r['hasil']=='Belum ditimbang'
         assert r['alat']!='Belum tercatat'
         assert not {'nota','timbangan'} & keys(d)
@@ -102,6 +102,6 @@ async def test_kemas_ulang_bobot_dibuka_hasil_baru_dan_sisa(pg,sosoh_jasa):
         await kemas_ulang.simpan(db,user=await db.get(User,sosoh_jasa['user']),**req)
         d=await ambil(db,'kemas_ulang',now_local().date(),now_local().date())
         r=d['rincian'][0]
-        assert r['bahan']=='100 kg' and r['hasil']=='80 kg' and r['sisa']=='20 kg'
+        assert r['bahan']=='100' and r['hasil']=='80' and r['sisa']=='20'
         assert r['karung_asal']=='4' and r['karung']=='2'
         assert not {'nota','timbangan'} & keys(d)

@@ -23,6 +23,20 @@ def jumlah(values):
     return sum((Decimal(str(v)) for v in values),Decimal(0)) if values and all(v is not None for v in values) else None
 
 
+def satuan_di_keterangan(data):
+    """Bobot tetap kilogram; satuannya cukup dijelaskan sekali pada laporan."""
+    import re
+    def bersihkan(value):
+        if isinstance(value,str):return re.sub(r'(?<=\d)\s*kg\b','',value)
+        if isinstance(value,list):return [bersihkan(v) for v in value]
+        if isinstance(value,dict):return {k:bersihkan(v) for k,v in value.items()}
+        return value
+    for key in ('rincian','ringkasan','ringkasan_kelompok'):
+        data[key]=bersihkan(data[key])
+    data['catatan'].insert(0,'Seluruh bobot dinyatakan dalam kilogram. Persentase hasil menggunakan total bahan terpakai sebagai dasar.' if data['kode']=='penyosohan' else 'Seluruh bobot dinyatakan dalam kilogram.')
+    return data
+
+
 def kelompokkan_ringkasan(data,kode,baris):
     """Kelompok operasional yang sama untuk layar dan PDF.
 
@@ -80,9 +94,21 @@ def kelompokkan_ringkasan(data,kode,baris):
             ordered.append(dict(nama='Total '+bagian.lower(),nilai=kg(total),bagian=bagian))
             ordered.extend(items)
         if hasil:groups['Hasil']=ordered
+        bahan=jumlah(r.get('_bahan') for r in baris)
+        final=bool(bahan) and all(r.get('_rendemen_final') for r in baris)
+        numerators={}
+        for r in baris:
+            for j,v in r.get('_output',{}).items():
+                nama=nama_produk(j);numerators[nama]=numerators.get(nama,Decimal(0))+Decimal(str(v))
+        numerators.update({'Total hasil tercatat':jumlah(r.get('_hasil') for r in baris),
+                           'Total beras':jumlah(r.get('_beras') for r in baris),
+                           'Total hasil samping':sum((Decimal(str(v)) for r in baris for j,v in r.get('_output',{}).items() if adalah_samping(j)),Decimal(0))})
+        for item in groups.get('Hasil',[]):
+            nilai=numerators.get(item['nama'])
+            item['persen_bahan']=persen(nilai/bahan*100 if final and nilai is not None else None)
     order=('Aktivitas','Penerimaan','Pemeriksaan bobot','Bahan','Hasil','Hasil kemasan','Estimasi','Pemindahan','Muatan','Barang kembali','Evaluasi proses')
     data['ringkasan_kelompok']=[dict(nama=g,rincian=groups[g]) for g in order if g in groups]
-    return data
+    return satuan_di_keterangan(data)
 
 
 async def nama_sku(db, skus, standar):
@@ -389,6 +415,6 @@ def atur(data,kode,baris):
     data['catatan']=[c for c in data['catatan'] if not c.startswith('Bobot nota mengikuti')]
     if kode=='pengeringan':data['catatan'].append('Estimasi gabah kering dihitung dari kadar air mesin. Hasil terukur hanya berasal dari catatan flowing scale; estimasi tidak menggantikan hasil timbang.')
     if kode=='penggilingan':data['catatan'].append('Hasil PK mengikuti verifikasi final bila tersedia, selain itu progres kumulatif terakhir. Selisih gabah dengan PK mencakup sekam dan kehilangan lain yang tidak ditimbang terpisah; bukan ukuran sekam terukur. Rendemen hanya ditampilkan bila bahan pasti dan proses selesai.')
-    if kode=='penyosohan':data['catatan'].append('Total hasil = total beras + total hasil samping; rincian di bawahnya adalah bagian dari total tersebut. Rendemen beras = total beras / bahan terpakai × 100%. Susut = bahan terpakai - total hasil. Hasil mencakup setiap catatan keluaran per jenis dan spek, termasuk jenis tambahan pada master. Susut dan rendemen hanya dihitung ketika bahan terpakai sudah final dan pasti. Susut negatif tetap ditampilkan untuk pemeriksaan.')
+    if kode=='penyosohan':data['catatan'].append('Total hasil = total beras + total hasil samping; rincian di bawahnya adalah bagian dari total tersebut. % bahan baku = bobot hasil / total bahan terpakai × 100%, untuk setiap jenis dan total hasil. Rendemen beras = total beras / bahan terpakai × 100%. Susut = bahan terpakai - total hasil. Hasil mencakup setiap catatan keluaran per jenis dan spek, termasuk jenis tambahan pada master. Persentase, susut, dan rendemen hanya dihitung ketika bahan terpakai sudah final dan pasti. Susut negatif tetap ditampilkan untuk pemeriksaan.')
     if kode=='barang_keluar':data['catatan'].append('Muatan aktual dirinci per produk. Bobot nota/timbangan adalah bobot tiket armada; satu tiket dapat dipakai beberapa perintah. Nota kosong mengikuti timbangan.')
     return kelompokkan_ringkasan(data,kode,baris)

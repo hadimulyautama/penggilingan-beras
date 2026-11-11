@@ -24,6 +24,7 @@ def buat_pdf(data, *, contoh=False):
         ('KepalaPeriode', 7.5, 10, True, colors.white)]:
         styles.add(ParagraphStyle(name, fontName='Helvetica-Bold' if bold else 'Helvetica',
                                  fontSize=size, leading=leading, textColor=color, spaceAfter=5, keepWithNext=False))
+    styles['KepalaPeriode'].alignment=1
     def p(value, style='IsiPeriode'):
         return Paragraph(escape(str(value)).replace("\n", "<br/>"), styles[style])
     def tabel(rows, widths, *, headers=1, spans=(), belum_selesai=()):
@@ -59,7 +60,7 @@ def buat_pdf(data, *, contoh=False):
         if berdampingan and grup['nama']=='Bahan':
             # Baris biasa (bukan tabel bersarang) tetap dapat dipaginasi bila
             # master memiliki banyak jenis hasil. Celah putih memisahkan
-            # tabel bahan/evaluasi di kiri dari tabel hasil di kanan.
+            # setiap tabel ringkasan, tanpa mengubah rincian transaksi.
             def bagian_ringkas(items):
                 result=[];bagian=None
                 for r in items:
@@ -68,26 +69,59 @@ def buat_pdf(data, *, contoh=False):
                     result.append(r)
                 return result
             kiri=bagian_ringkas(grup['rincian'])
+            hasil=by_name['Hasil']['rincian']
+            tiga_tabel=data.get('kode')=='penyosohan'
+            if tiga_tabel:
+                kiri += [r for r in hasil if not r.get('bagian')]
             if 'Evaluasi proses' in by_name:
                 kiri += [dict(judul='Evaluasi proses',utama=True)]+by_name['Evaluasi proses']['rincian']
-            kanan=bagian_ringkas(by_name['Hasil']['rincian'])
-            rows=[['Bahan','','','Hasil','']]
-            spans=[('SPAN',(0,0),(1,0)),('SPAN',(3,0),(4,0))]
-            for i in range(max(len(kiri),len(kanan))):
-                row=['']*5
-                for col,items in [(0,kiri),(3,kanan)]:
+            kolom_ringkas=[('Bahan',kiri)]
+            if tiga_tabel:
+                for nama in ('Beras','Hasil samping'):
+                    items=[r for r in hasil if r.get('bagian')==nama]
+                    if not items:items=[dict(nama='Belum tercatat' if data['rincian'] else 'Tidak ada transaksi',nilai='')]
+                    kolom_ringkas.append((nama,items))
+            else:kolom_ringkas.append(('Hasil',bagian_ringkas(hasil)))
+            n=len(kolom_ringkas)
+            counts=[3 if tiga_tabel and j>0 else 2 for j in range(n)]
+            starts=[];pos=0
+            for count in counts:starts.append(pos);pos+=count+1
+            ncols=pos-1
+            rows=[['']*ncols];spans=[]
+            for j,(nama,_) in enumerate(kolom_ringkas):
+                col=starts[j]
+                if tiga_tabel:
+                    rows[0][col:col+counts[j]]=[nama,'Bobot']+(['% bahan baku'] if counts[j]==3 else [])
+                else:
+                    rows[0][col]=nama;spans.append(('SPAN',(col,0),(col+1,0)))
+            for i in range(max(len(items) for _,items in kolom_ringkas)):
+                row=['']*ncols
+                for j,(_,items) in enumerate(kolom_ringkas):
+                    col=starts[j];last=col+counts[j]-1
                     if i>=len(items):
-                        spans.append(('BACKGROUND',(col,i+1),(col+1,i+1),colors.white))
+                        spans.append(('BACKGROUND',(col,i+1),(last,i+1),colors.white))
                         continue
                     item=items[i]
                     if 'judul' in item:
                         row[col]=p(item['judul'],'KepalaPeriode' if item.get('utama') else 'BagianPeriode')
-                        spans.extend([('SPAN',(col,i+1),(col+1,i+1)),('BACKGROUND',(col,i+1),(col+1,i+1),green if item.get('utama') else colors.HexColor('#e1ece5'))])
+                        spans.extend([('SPAN',(col,i+1),(last,i+1)),('BACKGROUND',(col,i+1),(last,i+1),green if item.get('utama') else colors.HexColor('#e1ece5'))])
+                    elif item['nama']=='Total hasil tercatat' and tiga_tabel:
+                        pct=escape(item.get('persen_bahan','Belum dapat dihitung'))
+                        suffix=' bahan baku' if pct.endswith('%') else ''
+                        nilai=Paragraph(escape(item['nilai'])+'<br/><font size="7">'+pct+suffix+'</font>',styles['BagianPeriode'])
+                        row[col:col+2]=[p(item['nama'],'BagianPeriode'),nilai]
                     else:row[col:col+2]=[item['nama'],item['nilai']]
+                    if counts[j]==3:row[col+2]=item.get('persen_bahan','')
                 rows.append(row)
-            spans.append(('BACKGROUND',(2,0),(2,-1),colors.white))
-            spans.append(('LINEBELOW',(2,0),(2,0),.5,colors.white))
-            story.extend([tabel(rows,[lebar*.31,lebar*.17,lebar*.04,lebar*.31,lebar*.17],spans=spans),Spacer(1,2*mm)])
+            gap=.03 if tiga_tabel else .04
+            part=(1-gap*(n-1))/n; widths=[]
+            for j in range(n):
+                ratios=[.46,.29,.25] if counts[j]==3 else [.60,.40]
+                widths += [lebar*part*r for r in ratios]
+                if j<n-1:
+                    col=starts[j]+counts[j];widths.append(lebar*gap)
+                    spans.extend([('BACKGROUND',(col,0),(col,-1),colors.white),('LINEBELOW',(col,0),(col,0),.5,colors.white)])
+            story.extend([tabel(rows,widths,spans=spans),Spacer(1,2*mm)])
             continue
         rows=[[grup['nama'],'','','']];spans=[('SPAN',(0,0),(3,0))]
         for bagian,items in groupby(grup['rincian'],key=lambda r:r.get('bagian')):

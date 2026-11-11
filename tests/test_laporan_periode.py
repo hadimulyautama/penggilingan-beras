@@ -55,7 +55,7 @@ def test_pdf_banyak_halaman_mengulang_kepala_dan_mengamankan_teks():
     assert len(reader.pages)>1
     text='\n'.join(p.extract_text() for p in reader.pages)
     assert '<b>GB-0</b>' in text and '<b>GB-89</b>' in text
-    assert '922,5 kg' in text
+    assert '922,5' in text
     for page in reader.pages[1:]:
         assert 'Halaman' in page.extract_text()
 
@@ -87,23 +87,50 @@ def test_penyosohan_bahan_dan_hasil_memiliki_subkolom_dan_pdf_landscape():
     bahan=[c for c in d['kolom'] if c.get('kelompok')=='Bahan']
     hasil=[c for c in d['kolom'] if c.get('kelompok')=='Hasil']
     assert len(bahan)==3 and len(hasil)==7
-    assert d['rincian'][0][bahan[0]['kunci']]=='9.000 kg'
-    assert d['rincian'][0][bahan[1]['kunci']]=='1.000 kg'
+    assert d['rincian'][0][bahan[0]['kunci']]=='9.000'
+    assert d['rincian'][0][bahan[1]['kunci']]=='1.000'
     groups={g['nama']:g['rincian'] for g in d['ringkasan_kelompok']}
     assert list(groups)==['Aktivitas','Bahan','Hasil','Evaluasi proses']
-    assert {i['nama']:i['nilai'] for i in groups['Bahan']}=={'Total bahan terpakai':'10.000 kg','Pk':'9.000 kg','Broken':'1.000 kg'}
+    assert {i['nama']:i['nilai'] for i in groups['Bahan']}=={'Total bahan terpakai':'10.000','Pk':'9.000','Broken':'1.000'}
     hasil_ringkas={i['nama']:i for i in groups['Hasil']}
-    assert hasil_ringkas['Total hasil tercatat']['nilai']=='9.500 kg'
-    assert hasil_ringkas['Total beras']['nilai']=='6.500 kg'
-    assert hasil_ringkas['Total hasil samping']['nilai']=='3.000 kg'
+    assert hasil_ringkas['Total hasil tercatat']['nilai']=='9.500'
+    assert hasil_ringkas['Total beras']['nilai']=='6.500'
+    assert hasil_ringkas['Total hasil samping']['nilai']=='3.000'
+    assert hasil_ringkas['Total hasil tercatat']['persen_bahan']=='95,00%'
+    assert hasil_ringkas['Total beras']['persen_bahan']=='65,00%'
+    assert hasil_ringkas['Total hasil samping']['persen_bahan']=='30,00%'
     from app.services.stok import nama_produk
     assert hasil_ringkas[nama_produk('premium')]['bagian']=='Beras'
     assert hasil_ringkas['Bekatul']['bagian']=='Hasil samping'
+    assert hasil_ringkas['Bekatul']['persen_bahan']=='9,00%'
     assert all('silo' not in c['nama'].lower() for c in d['kolom'])
     reader=PdfReader(BytesIO(buat_pdf(d)))
     assert all(p.mediabox.width>p.mediabox.height for p in reader.pages)
     text=' '.join(p.extract_text() for p in reader.pages)
-    assert 'Bahan' in text and 'Hasil' in text and '9.000 kg' in text and '6.000 kg' in text
+    assert 'Bahan' in text and 'Hasil' in text and '9.000' in text and '6.000' in text
+    assert 'Seluruh bobot dinyatakan dalam kilogram.' in text
+    assert ' kg' not in text and '9,00%' in text
+    # Tiga kepala tabel ringkasan sejajar, sebelum rincian transaksi.
+    posisi={}
+    def visit(t,cm,tm,font,size):
+        name=t.strip()
+        if name in ('Bahan','Beras','Hasil samping') and name not in posisi:
+            posisi[name]=(cm[4]+tm[4],cm[5]+tm[5])
+    reader.pages[0].extract_text(visitor_text=visit)
+    assert posisi['Bahan'][0]<posisi['Beras'][0]<posisi['Hasil samping'][0]
+    assert len({round(v[1],2) for v in posisi.values()})==1
+
+
+@pytest.mark.parametrize('final,expected',[(True,'54,55%'),(False,'Belum dapat dihitung')])
+def test_persentase_hasil_periode_memakai_total_bahan_bukan_rata_rata_lot(final,expected):
+    from app.services.laporan_periode import data_laporan
+    rows=[dict(id=i,kode=f'POL-{i}',tanggal=D,status='selesai',jasa_id=None,
+               _bahan=bahan,_hasil=hasil,_beras=hasil,_rendemen_final=final,
+               _bahan_per_jenis={'pk':bahan},_output={'medium':hasil})
+          for i,bahan,hasil in [(1,10000,5000),(2,1000,1000)]]
+    d=data_laporan('penyosohan',D,D,rows)
+    hasil=next(g for g in d['ringkasan_kelompok'] if g['nama']=='Hasil')
+    assert all(item['persen_bahan']==expected for item in hasil['rincian'])
 
 
 def test_bahan_tidak_dipakai_berbeda_dari_pemakaian_belum_final():
@@ -119,7 +146,7 @@ def test_bahan_tidak_dipakai_berbeda_dari_pemakaian_belum_final():
                                  (4,'selesai',{'campuran':0})]]
     d=data_laporan('penyosohan',D,D,rows)
     key=next(c['kunci'] for c in d['kolom'] if c['nama']=='Campuran')
-    assert [r[key] for r in d['rincian']]==['-','50 kg','Belum final','0 kg']
+    assert [r[key] for r in d['rincian']]==['-','50','Belum final','0']
     text=' '.join(p.extract_text() for p in PdfReader(BytesIO(buat_pdf(d))).pages)
     assert text.count('Belum final')==1
 

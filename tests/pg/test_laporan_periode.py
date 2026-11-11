@@ -33,7 +33,7 @@ async def test_cermin_batal_dan_batas_tanggal(pg,pemakai,pemasok):
         await db.commit()
         data=await ambil(db,'gabah_masuk',D,D)
         assert [r['kode'] for r in data['rincian']]==['GB-PER-2']
-        assert data['ringkasan'][1]['nilai']=='2.000 kg'
+        assert data['ringkasan'][1]['nilai']=='2.000'
 
 @pytest.mark.parametrize('peran,gudang',[('superadmin',None),('admin',None),('operator','Gudang 1'),('operator','Gudang 2')])
 async def test_laporan_pdf_dan_rentang_per_peran(pg,peran,gudang):
@@ -62,10 +62,10 @@ async def test_pdf_tanpa_sesi_ditolak(pg):
         assert r.status_code in (303,401)
 
 @pytest.mark.parametrize('nota,barang,netto,timbang2,expected_nota,expected_timbang,mengikuti',[
-    (10000,9950,10000,5000,'10.000 kg','9.950 kg',False),
-    (None,9950,10000,5000,'9.950 kg','9.950 kg',True),
-    (0,0,10000,5000,'10.000 kg','10.000 kg',True),
-    (10000,0,0,None,'10.000 kg','Belum tercatat',False),
+    (10000,9950,10000,5000,'10.000','9.950',False),
+    (None,9950,10000,5000,'9.950','9.950',True),
+    (0,0,10000,5000,'10.000','10.000',True),
+    (10000,0,0,None,'10.000','Belum tercatat',False),
     (None,None,None,None,'Belum tercatat','Belum tercatat',False),
 ])
 async def test_nota_dan_timbangan_terpisah(pg,pemakai,pemasok,nota,barang,netto,timbang2,expected_nota,expected_timbang,mengikuti):
@@ -88,7 +88,7 @@ async def test_nota_dan_timbangan_terpisah(pg,pemakai,pemasok,nota,barang,netto,
         assert r['nota']==expected_nota and r['timbangan']==expected_timbang
         assert (r['sumber_nota']=='Mengikuti timbangan')==mengikuti
         if mengikuti:
-            assert r['selisih']=='0 kg'
+            assert r['selisih']=='0'
 
 async def test_katalog_hanya_laporan_periode_dan_kode_lama_dihapus(pg):
     import re

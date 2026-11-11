@@ -22,7 +22,8 @@
 #lembar .lp-tanggal {font-size:11px;line-height:1.5;color:var(--pd-muted,var(--redup));}
 #lembar .lp-belum-selesai .lp-tanggal {color:#52635a;}
 #lembar td {white-space:pre-line;}
-#lembar th[scope="colgroup"] {text-align:center;}
+#lembar th {text-align:center;}
+#lembar .lp-persen {display:block;font-size:11px;line-height:1.5;font-weight:400;color:var(--redup);margin-top:3px;}
 @media screen and (max-width:650px) {
 #lembar .lp-tabel {overflow:visible;}
 #lembar table,#lembar tbody,#lembar tr,#lembar td {display:block;width:100%;box-sizing:border-box;}
@@ -213,7 +214,7 @@
           bagian = r.bagian || null;
           if (bagian) h += '<div class="lp-subkelompok"><h4>' + aman(bagian) + '</h4><dl>';
         }
-        var metrik = '<dt>' + aman(r.nama) + '</dt><dd>' + aman(r.nilai) + '</dd>';
+        var metrik = '<dt>' + aman(r.nama) + '</dt><dd>' + aman(r.nilai) + (r.persen_bahan ? '<small class="lp-persen">' + aman(r.persen_bahan) + (r.persen_bahan.endsWith('%') ? ' bahan baku' : '') + '</small>' : '') + '</dd>';
         var kelas = 'lp-metrik' + (r.nama.indexOf('Total ') === 0 ? ' lp-total' : '');
         h += bagian ? '<div class="' + kelas + '">' + metrik + '</div>' : '<dl class="' + kelas + '">' + metrik + '</dl>';
       });
