@@ -13,8 +13,8 @@ def test_isi_daftar_dan_kartu_tetap_sama():
  sebelum,sesudah=sekarang.split("{% include '_pekerjaan_kontrol.html' %}",1)
  assert hashlib.sha256(sebelum.encode()).hexdigest()=='f328c94b5c7d839f916350e1539fa27d5eac47682d35f3eb41658efc355d186b'
  # Jumlah tindakan cukup di tab; petunjuk penerimaan dipusatkan di Panduan.
- assert hashlib.sha256(sesudah.encode()).hexdigest()=='a4f2a2c08bc347ccbc94884ca28ec6dcdc001c669aa03afda75eb65d976d607d'
- for f,sidik in {'app/web/templates/_pekerjaan_berjalan_ringkas.html': '7acb30322e9f7d815684602772681707798a2b0185f2b862cb8619139feeeb6d', 'hmu_tampilan/templates/_benda.html': '6e022aa226a373c434c88f45d5c3c2c8acb11fa30e0308ea60b2a830716aa553'}.items():
+ assert hashlib.sha256(sesudah.encode()).hexdigest()=='2923e709ebcfa43d645aabe6865249b87992fcea635cf45a9a62d1f273cc13cc'
+ for f,sidik in {'app/web/templates/_pekerjaan_berjalan_ringkas.html': 'b187e6dac3dcb75668bd74ce00d140c7d77acf091cf3e527f24d30b1cb487d98', 'hmu_tampilan/templates/_benda.html': '6e022aa226a373c434c88f45d5c3c2c8acb11fa30e0308ea60b2a830716aa553'}.items():
   isi=(R/f).read_text()
   if f.endswith('/_benda.html'):
    # Kartu mendapat tautan langsung untuk transfer bertahap.

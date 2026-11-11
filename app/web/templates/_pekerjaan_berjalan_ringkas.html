@@ -4,7 +4,6 @@
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
 {% if proses %}
 <section data-blok aria-label="Proses aktif">
-  <span class="lbl">Proses aktif · <span>{{ ringkasan_jalan.jumlah }}</span></span>
   <div class="proses-aktif-list proses-aktif-list--aksi tabel-standar daftar-standar">
     <div class="proses-aktif-list__head" aria-hidden="true"><span>Kode &amp; proses</span><span>Kepemilikan</span><span>Status / mulai</span><span>Ringkasan</span><span></span></div>
   {% for b in proses %}
