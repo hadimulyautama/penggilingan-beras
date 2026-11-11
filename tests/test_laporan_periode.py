@@ -94,3 +94,21 @@ def test_penyosohan_bahan_dan_hasil_memiliki_subkolom_dan_pdf_landscape():
     assert all(p.mediabox.width>p.mediabox.height for p in reader.pages)
     text=' '.join(p.extract_text() for p in reader.pages)
     assert 'Bahan' in text and 'Hasil' in text and '9.000 kg' in text and '6.000 kg' in text
+
+
+def test_bahan_tidak_dipakai_berbeda_dari_pemakaian_belum_final():
+    from app.services.laporan_periode import data_laporan
+    from app.web.pdf_periode import buat_pdf
+    from pypdf import PdfReader
+    from io import BytesIO
+    rows=[dict(id=i,tanggal=D,kode=f'POL-{i}',status=status,jasa_id=None,
+               _bahan_per_jenis=bahan,_output={})
+          for i,status,bahan in [(1,'selesai',{'pk':100}),
+                                 (2,'selesai',{'pk':100,'campuran':50}),
+                                 (3,'berjalan',{'campuran':None}),
+                                 (4,'selesai',{'campuran':0})]]
+    d=data_laporan('penyosohan',D,D,rows)
+    key=next(c['kunci'] for c in d['kolom'] if c['nama']=='Campuran')
+    assert [r[key] for r in d['rincian']]==['-','50 kg','Belum final','0 kg']
+    text=' '.join(p.extract_text() for p in PdfReader(BytesIO(buat_pdf(d))).pages)
+    assert text.count('Belum final')==1

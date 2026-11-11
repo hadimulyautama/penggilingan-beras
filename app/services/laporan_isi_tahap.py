@@ -284,7 +284,10 @@ def atur(data,kode,baris):
             else:r.setdefault(k,'Belum tercatat')
         if asli.get('pemilik_teks'):r['pemilik']=asli['pemilik_teks']
         for k,_,j in bahan_cols:
-            r[k]=kg(asli.get('_bahan_per_jenis',{}).get(j)) if asli.get('_bahan_per_jenis',{}).get(j) is not None else 'Belum final'
+            bahan=asli.get('_bahan_per_jenis',{})
+            # Kolom mencakup semua jenis dalam periode; jenis yang tidak
+            # dipakai proses ini berbeda dari pemakaian yang belum final.
+            r[k]=('-' if j not in bahan else kg(bahan[j]) if bahan[j] is not None else 'Belum final')
         for k,_,j in hasil_cols:
             outputs=asli.get('_output',{})
             r[k]=kg(outputs[j]) if j in outputs else ('-' if outputs else 'Belum tercatat')
