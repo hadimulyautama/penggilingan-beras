@@ -26,6 +26,12 @@
 .rqd-list .rhs-mass{margin:0}
 .rqd-list .tabel-standar__hasil{overflow-wrap:anywhere}
 @media(max-width:700px){
+ .rqd-list>.riwayat-detail__card{padding:12px}
+ .rqd-list .rhs-mass{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+ .rqd-list .rhs-mass>div{min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:1fr auto;align-items:start;gap:8px}
+ .rqd-list .rhs-mass>div+div{border:0;border-left:1px solid var(--pd-line);padding:0 0 0 8px}
+ .rqd-list .rhs-mass span{font-size:11px;line-height:1.4}
+ .rqd-list .rhs-mass strong{font-size:clamp(15px,4.4vw,18px);white-space:nowrap}
  .rqd .rhs-header h1{font-size:24px}
  .rqd .qc-tabs{gap:0 16px}
  .rqd .qc-components{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}

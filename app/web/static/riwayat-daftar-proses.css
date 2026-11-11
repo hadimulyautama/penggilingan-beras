@@ -21,11 +21,12 @@ body.padiflow-ui .rpd [data-rpd-category-slot] .laporan-nav__jenis>a[aria-curren
 @media(max-width:700px){
  .rpd .rpd-header{padding-right:0}
  .rpd .rpd-header .rhs-meta{padding-right:52px}
- .rpd .rpd-stats{grid-template-columns:minmax(0,1fr);gap:12px;padding:16px}
- .rpd .rpd-stats>div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:12px}
- .rpd .rpd-stats>div+div{border-left:0;border-top:1px solid var(--pd-line);padding:12px 0 0}
- .rpd .rpd-stats span{margin:0;font-size:12px}
- .rpd .rpd-stats strong{font-size:23px}
+ .rpd .rpd-intro{margin-bottom:16px}
+ .rpd .rpd-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px}
+ .rpd .rpd-stats>div{display:grid;grid-template-rows:1fr auto;align-items:start;gap:8px}
+ .rpd .rpd-stats>div+div{border-left:1px solid var(--pd-line);padding-left:8px}
+ .rpd .rpd-stats span{margin:0;font-size:11px;line-height:1.4}
+ .rpd .rpd-stats strong{font-size:clamp(15px,4.4vw,18px);white-space:nowrap}
  .rpd [data-rpd-category-slot] .laporan-nav__jenis{gap:0 18px}
  body.padiflow-ui .rpd [data-rpd-category-slot] .laporan-nav__jenis>a,.rpd [data-rpd-category-slot] .laporan-nav__jenis>span{font-size:13px}
 }
