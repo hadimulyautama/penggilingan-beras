@@ -34,54 +34,132 @@
 }
 #lembar [hidden] {display:none!important;}
 @media print { #lembar :is(#periode-grup,#rentang-khusus,#lap-pdf,#lap-unduh){display:none!important;}#lembar .lp-tabel{overflow:visible;}#lembar thead{display:table-header-group;}#lembar tr{break-inside:avoid;}}
+
+.lp-pengantar {display:flex;justify-content:space-between;align-items:center;gap:24px;margin:12px 0 30px;}
+.lp-pengantar h2 {font-size:23px;line-height:1.3;letter-spacing:-.4px;margin:6px 0 8px;}
+.lp-pengantar p {font-size:14px;color:var(--redup);margin:0;max-width:620px;}
+.lp-info {font-size:12px;white-space:nowrap;color:var(--redup);padding:8px 12px;border:1px solid var(--garis);border-radius:30px;}
+.lp-bagian-pilihan {margin:0 0 26px;}
+.lp-bagian-pilihan>h3 {font-size:14px;font-weight:600;margin:0 0 10px;color:var(--redup);}
+.lp-pilihan .laporan-catalogue {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.lp-pilihan .lp-pintu {display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:104px;padding:20px;margin:0;border:1px solid var(--garis);border-radius:12px;background:var(--panel);text-align:left;transition:border-color .15s,background .15s;}
+.lp-pilihan .lp-pintu:hover {border-color:var(--aman);background:var(--panel-2);}
+.lp-pilihan .tindakan__nama {font-size:16px;font-weight:600;}
+.lp-pilihan .tindakan__ket {font-size:13px;line-height:1.5;margin-top:6px;white-space:normal;display:block;color:var(--redup);}
+.lp-pintu>svg {flex-shrink:0;color:var(--redup);}
+#lembar.lembar--laporan[open] {align-items:center;padding:24px;box-sizing:border-box;}
+#lembar.lembar--laporan .lembar__isi {width:100%;max-width:1360px;max-height:calc(100dvh - 48px);padding:0;box-sizing:border-box;border:1px solid var(--garis);border-radius:18px;background:var(--dasar);scrollbar-gutter:stable;}
+#lembar .lp-panel-kepala {position:sticky;top:0;z-index:3;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 28px;background:var(--dasar);border-bottom:1px solid var(--garis);}
+#lembar .lp-eyebrow {display:block;font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--redup);margin-bottom:4px;}
+#lembar #lap-judul {font-size:24px;line-height:1.25;letter-spacing:-.4px;margin:0;}
+#lembar .lp-tutup {border:0;background:transparent;color:var(--redup);flex-shrink:0;gap:10px;}
+#lembar .lp-tutup span {font-size:24px;font-weight:400;}
+#lembar .lp-panel-kontrol {display:flex;align-items:end;justify-content:space-between;gap:24px;padding:20px 28px;background:var(--panel);border-bottom:1px solid var(--garis);}
+#lembar #periode-grup {margin:0;min-width:220px;max-width:320px;flex:1;}
+#lembar #periode-grup .lbl {font-size:12px;letter-spacing:0;text-transform:none;margin:0 0 7px;}
+#lembar #periode {margin:0;min-height:44px;font-size:15px;width:100%;box-sizing:border-box;}
+#lembar .lp-panel-aksi {display:flex;align-items:center;gap:8px;}
+#lembar .lp-panel-aksi .btn {min-height:44px;font-size:13px;white-space:nowrap;gap:8px;}
+#lembar .lp-panel-aksi .lp-pdf-utama {background:var(--aman);border-color:var(--aman);color:#fff;}
+#lembar .lp-panel-aksi .lp-cetak {border-color:transparent;background:transparent;color:var(--redup);}
+#lembar #lap-isi {padding:18px 28px 28px;}
+#lembar #rentang-khusus {display:grid;grid-template-columns:1fr 1fr auto;gap:12px;padding:16px 28px;margin:0;border-bottom:1px solid var(--garis);align-items:end;}
+#lembar #rentang-khusus .grup {margin:0;}
+#lembar .lp-ringkasan {display:flex;flex-direction:column;gap:16px;margin:20px 0 28px;}
+#lembar .lp-kelompok {padding:20px;border-radius:12px;background:var(--panel);}
+#lembar .lp-kelompok h3 {font-size:15px;margin:0 0 16px;}
+#lembar .lp-bagian-metrik {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px 24px;}
+#lembar .lp-bagian-metrik>dl.lp-metrik {display:flex;flex-direction:column;align-items:start;gap:5px;padding:0;}
+#lembar .lp-bagian-metrik>dl.lp-metrik dd {font-size:21px;letter-spacing:-.3px;text-align:left;}
+#lembar .lp-bagian-metrik>dl.lp-total {border:0;margin:0;}
+#lembar .lp-kelompok--aktivitas {display:flex;align-items:center;gap:24px;padding:14px 20px;background:transparent;}
+#lembar .lp-kelompok--aktivitas h3 {margin:0;color:var(--redup);font-size:13px;}
+#lembar .lp-kelompok--aktivitas .lp-bagian-metrik {flex:1;display:flex;flex-wrap:wrap;gap:12px 24px;}
+#lembar .lp-kelompok--aktivitas .lp-bagian-metrik>dl.lp-metrik {flex-direction:row;align-items:baseline;gap:10px;}
+#lembar .lp-kelompok--aktivitas .lp-bagian-metrik>dl.lp-metrik dd {font-size:18px;}
+#lembar .lp-kelompok--hasil .lp-bagian-metrik {grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 32px;}
+#lembar .lp-kelompok--hasil .lp-bagian-metrik>dl {grid-column:1/-1;padding-bottom:16px;border-bottom:1px solid var(--garis);}
+#lembar .lp-kelompok h4 {margin:0 0 10px;padding:0;border:0;font-size:13px;color:var(--redup);}
+#lembar .lp-subkelompok {min-width:0;}
+#lembar .lp-subkelompok .lp-metrik {padding:8px 0;}
+#lembar .lp-tabel {border:1px solid var(--garis);border-radius:12px;margin:12px 0 24px;}
+#lembar table {font-size:13px;}
+#lembar table caption {text-align:left;padding:16px;font-size:15px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--tinta);}
+#lembar thead {background:var(--panel-2);}
+#lembar th {font-size:12px;white-space:nowrap;}
+#lembar td {min-width:75px;}
+#lembar th:first-child,#lembar td:first-child {padding-left:16px;}
+#lembar :focus-visible,.lp-pilihan :focus-visible {outline:3px solid var(--aman);outline-offset:3px;}
+@media(max-width:1000px){.lp-pilihan .laporan-catalogue{grid-template-columns:repeat(2,minmax(0,1fr));}.lp-pengantar{align-items:start;}.lp-info{display:none;}}
+@media(max-width:650px){
+.lp-pengantar{margin:8px 0 24px;}.lp-pengantar h2{font-size:21px;}.lp-pilihan .laporan-catalogue{grid-template-columns:1fr;gap:8px;}.lp-pilihan .lp-pintu{min-height:88px;padding:16px;}.lp-bagian-pilihan{margin-bottom:24px;}
+#lembar.lembar--laporan[open]{padding:0;align-items:stretch;}
+#lembar.lembar--laporan .lembar__isi{max-height:100dvh;height:100dvh;border:0;border-radius:0;scrollbar-gutter:auto;}
+#lembar .lp-panel-kepala{padding:18px 16px;}#lembar #lap-judul{font-size:22px;}#lembar .lp-eyebrow{font-size:10px;}
+#lembar .lp-panel-kontrol{padding:16px;gap:14px;flex-direction:column;align-items:stretch;}
+#lembar #periode-grup{max-width:none;min-width:0;}#lembar .lp-panel-aksi{display:grid;grid-template-columns:1fr 1fr auto;}#lembar .lp-panel-aksi .btn{padding:10px;min-width:0;justify-content:center;}#lembar .lp-panel-aksi .lp-cetak{font-size:12px;}
+#lembar #lap-isi{padding:14px 16px 28px;}#lembar #rentang-khusus{padding:16px;grid-template-columns:1fr 1fr;}#lembar #rentang-khusus>.btn{grid-column:1/-1;}
+#lembar .lp-kelompok{padding:16px;}#lembar .lp-kelompok--aktivitas{gap:12px;align-items:baseline;}.lp-kelompok--aktivitas h3{flex-shrink:0;}
+#lembar .lp-bagian-metrik{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px;}#lembar .lp-bagian-metrik>dl.lp-metrik dd{font-size:19px;}#lembar .lp-metrik dd{font-size:15px;}
+#lembar .lp-kelompok--hasil .lp-bagian-metrik{grid-template-columns:1fr;}#lembar .lp-kelompok h4{margin:4px 0 8px;}#lembar .lp-subkelompok+.lp-subkelompok{padding-top:12px;border-top:1px solid var(--garis);}
+#lembar .lp-tabel{border:0;border-radius:0;overflow:visible;}#lembar table caption{padding:0 0 12px;}#lembar tbody{display:grid;gap:12px;}#lembar tbody tr{padding:12px;border:1px solid var(--garis);border-radius:10px;background:var(--panel);}#lembar td{min-width:0;}#lembar td:first-child{padding-left:0;}
+}
+@media print { #lembar .lp-panel-kepala{position:static;}#lembar .lp-panel-kontrol,#lembar .lp-tutup{display:none!important;}#lembar.lembar--laporan .lembar__isi{max-height:none;overflow:visible;border:0;}#lembar .lp-kelompok{break-inside:avoid;}}
 </style>
 
-<div>
-  {% if not LAPORAN_NAV %}<span class="lbl">Laporan</span>{% endif %}
-  <p class="bantu" style="margin:0 0 12px">
-    Dibuat saat dibuka — angkanya keadaan sekarang, bukan salinan semalam.
-  </p>
-
-  <div class="grup laporan-catalogue" style="gap:8px">
-    {% for l in daftar %}
-      <button class="tindakan" type="button"
-              data-laporan="{{ l.kode }}"{% if l.boleh is defined and not l.boleh %} disabled aria-disabled="true" title="Memerlukan akses Admin"{% endif %}{% if l.berperiode %} data-berperiode="1"{% endif %}>
-        <div class="tindakan__ikon">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 20V10"/><path d="M12 20V4"/><path d="M19 20v-7"/>
-          </svg>
-        </div>
-        <div class="tindakan__isi">
-          <div class="tindakan__nama">{{ l.nama }}</div>
-          <div class="tindakan__ket">{{ l.arti }}</div>
-        </div>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-             stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+<div class="lp-pilihan">
+  <div class="lp-pengantar"><div><span class="lbl">Laporan periode</span><h2>Pilih laporan yang ingin dilihat</h2><p>Pilih proses, tentukan periode, lalu lihat ringkasan dan rincian transaksinya.</p></div><span class="lp-info">Data terbaru saat dibuka</span></div>
+  {% set kelompok = [
+    ('Penerimaan', ['tahap_gabah_masuk','tahap_pk_masuk']),
+    ('Proses produksi', ['tahap_pengeringan','tahap_penggilingan','tahap_penyosohan','tahap_pengemasan','tahap_kemas_ulang']),
+    ('Perpindahan PK', ['tahap_transfer_pk','tahap_pemasukan_pk','tahap_pindah_pk']),
+    ('Pengiriman dan retur', ['tahap_barang_keluar','tahap_retur_pelanggan','tahap_retur_pk'])] %}
+  {% set keterangan = {
+    'tahap_gabah_masuk':'Pemasok, kondisi gabah, dan bobot penerimaan',
+    'tahap_pk_masuk':'Jenis PK, karung, dan bobot penerimaan',
+    'tahap_pengeringan':'Bahan masuk, kadar air, dan hasil pengeringan',
+    'tahap_penggilingan':'Bahan gabah, hasil PK, dan rendemen',
+    'tahap_penyosohan':'Bahan terpakai, hasil beras, dan hasil samping',
+    'tahap_pengemasan':'Produk, jumlah karung, dan bobot kemasan',
+    'tahap_kemas_ulang':'Kemasan asal, kemasan baru, dan sisa',
+    'tahap_transfer_pk':'Asal, tujuan, dan jumlah PK yang dipindahkan',
+    'tahap_pemasukan_pk':'Sumber PK dan penerimaan di Gudang 2',
+    'tahap_pindah_pk':'Bahan PK yang dipindahkan ke silo',
+    'tahap_barang_keluar':'Penerima, produk, dan muatan aktual',
+    'tahap_retur_pelanggan':'Produk dan bobot yang dikembalikan pelanggan',
+    'tahap_retur_pk':'Asal PK dan bobot yang dikembalikan'} %}
+  {% for nama, kode in kelompok %}
+  <section class="lp-bagian-pilihan" aria-label="{{ nama }}">
+    <h3>{{ nama }}</h3><div class="laporan-catalogue">
+    {% for l in daftar if l.kode in kode %}
+      <button class="tindakan lp-pintu" type="button" data-laporan="{{ l.kode }}"{% if l.boleh is defined and not l.boleh %} disabled aria-disabled="true" title="Memerlukan akses Admin"{% endif %}{% if l.berperiode %} data-berperiode="1"{% endif %}>
+        <span class="tindakan__isi"><span class="tindakan__nama">{{ l.nama }}</span><span class="tindakan__ket">{{ keterangan.get(l.kode,l.arti) }}</span></span>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </button>
     {% endfor %}
-  </div>
+    </div>
+  </section>
+  {% endfor %}
 </div>
 
 {# Satu lembar untuk semua laporan — isinya diganti, bukan halamannya. Laporan
    dibaca sambil membandingkan dengan yang lain, dan berpindah halaman bolak-balik
    membuat orang kehilangan tempatnya. #}
-<dialog class="lembar{{ ' lembar--laporan' if LAPORAN_NAV }}" id="lembar" aria-labelledby="lap-judul">
+<dialog class="lembar lembar--laporan" id="lembar" aria-labelledby="lap-judul">
   <div class="lembar__isi">
-    <div class="lembar__kepala">
-      <h2 id="lap-judul">Laporan</h2>
-      <a class="btn btn--kecil" id="lap-pdf" target="_blank" rel="noopener" hidden>Lihat PDF</a>
-      <a class="btn btn--kecil" id="lap-unduh" hidden>Unduh PDF</a>
-      <button class="btn btn--kecil" type="button" data-lk-cetak>Print</button>
-      <button class="btn btn--kecil" type="button" id="tutup" data-boleh-offline>Tutup</button>
-    </div>
-    <div class="grup" id="periode-grup" style="display:none;margin-bottom:12px">
-      <label class="lbl" for="periode">Periode</label>
-      <select class="fld" id="periode">
-        {% for kode, nama in periode %}
-          <option value="{{ kode }}"{% if kode == 'bulan_ini' %} selected{% endif %}>{{ nama }}</option>
-        {% endfor %}
-      </select>
+    <div class="lp-panel-kepala"><div><span class="lp-eyebrow">Laporan periode</span><h2 id="lap-judul">Laporan</h2></div><button class="btn btn--kecil lp-tutup" type="button" id="tutup" data-boleh-offline aria-label="Tutup laporan">Tutup <span aria-hidden="true">×</span></button></div>
+    <div class="lp-panel-kontrol">
+      <div class="grup" id="periode-grup" style="display:none">
+        <label class="lbl" for="periode">Periode laporan</label>
+        <select class="fld" id="periode">
+        {% for kode, nama in periode %}<option value="{{ kode }}"{% if kode == 'bulan_ini' %} selected{% endif %}>{{ nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="lp-panel-aksi" aria-label="Aksi laporan">
+        <a class="btn lp-pdf-utama" id="lap-pdf" target="_blank" rel="noopener" hidden>Lihat PDF <span aria-hidden="true">↗</span></a>
+        <a class="btn" id="lap-unduh" hidden>Unduh PDF</a>
+        <button class="btn lp-cetak" type="button" data-lk-cetak>Cetak</button>
+      </div>
     </div>
     <form id="rentang-khusus" hidden>
       <div class="grup"><label class="lbl" for="lap-dari">Dari tanggal</label>
@@ -126,15 +204,21 @@
     var h = '<p class="lp-catatan">Periode: ' + aman(d.periode) + ' · WIB</p>' +
       '<p class="lp-catatan">Dasar: ' + aman(d.dasar) + '</p><div class="lp-ringkasan">';
     (d.ringkasan_kelompok || [{nama:'Ringkasan',rincian:d.ringkasan}]).forEach(function (g) {
-      h += '<section class="lp-kelompok"><h3>' + aman(g.nama) + '</h3><dl>';
+      var jenis = g.nama === 'Aktivitas' ? ' lp-kelompok--aktivitas' : g.nama === 'Hasil' ? ' lp-kelompok--hasil' : '';
+      h += '<section class="lp-kelompok' + jenis + '"><h3>' + aman(g.nama) + '</h3><div class="lp-bagian-metrik">';
       var bagian = null;
       g.rincian.forEach(function (r) {
-        if (r.bagian && r.bagian !== bagian) {
-          h += '</dl><h4>' + aman(r.bagian) + '</h4><dl>'; bagian = r.bagian;
+        if ((r.bagian || null) !== bagian) {
+          if (bagian) h += '</dl></div>';
+          bagian = r.bagian || null;
+          if (bagian) h += '<div class="lp-subkelompok"><h4>' + aman(bagian) + '</h4><dl>';
         }
-        h += '<div class="lp-metrik' + (r.nama.indexOf('Total ') === 0 ? ' lp-total' : '') + '"><dt>' + aman(r.nama) + '</dt><dd>' + aman(r.nilai) + '</dd></div>';
+        var metrik = '<dt>' + aman(r.nama) + '</dt><dd>' + aman(r.nilai) + '</dd>';
+        var kelas = 'lp-metrik' + (r.nama.indexOf('Total ') === 0 ? ' lp-total' : '');
+        h += bagian ? '<div class="' + kelas + '">' + metrik + '</div>' : '<dl class="' + kelas + '">' + metrik + '</dl>';
       });
-      h += '</dl></section>';
+      if (bagian) h += '</dl></div>';
+      h += '</div></section>';
     });
     h += '</div>';
     if (d.rincian.length) {

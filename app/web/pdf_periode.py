@@ -47,7 +47,48 @@ def buat_pdf(data, *, contoh=False):
               p('Periode: '+data['periode'],'SubPeriode'),
               p('Dasar periode: '+data['dasar']+' (WIB)','SubPeriode'), Spacer(1,4*mm)]
     from itertools import groupby
-    for grup in data.get('ringkasan_kelompok',[dict(nama='Ringkasan',rincian=data['ringkasan'])]):
+    groups=data.get('ringkasan_kelompok',[dict(nama='Ringkasan',rincian=data['ringkasan'])])
+    by_name={g['nama']:g for g in groups}
+    berdampingan='Bahan' in by_name and 'Hasil' in by_name
+    for grup in groups:
+        if grup['nama']=='Aktivitas':
+            story.extend([p(' · '.join(r['nama']+': '+r['nilai'] for r in grup['rincian']),'SubPeriode'),Spacer(1,2*mm)])
+            continue
+        if berdampingan and grup['nama'] in ('Hasil','Evaluasi proses'):
+            continue
+        if berdampingan and grup['nama']=='Bahan':
+            # Baris biasa (bukan tabel bersarang) tetap dapat dipaginasi bila
+            # master memiliki banyak jenis hasil. Celah putih memisahkan
+            # tabel bahan/evaluasi di kiri dari tabel hasil di kanan.
+            def bagian_ringkas(items):
+                result=[];bagian=None
+                for r in items:
+                    if r.get('bagian') and r['bagian']!=bagian:
+                        bagian=r['bagian'];result.append(dict(judul=bagian))
+                    result.append(r)
+                return result
+            kiri=bagian_ringkas(grup['rincian'])
+            if 'Evaluasi proses' in by_name:
+                kiri += [dict(judul='Evaluasi proses',utama=True)]+by_name['Evaluasi proses']['rincian']
+            kanan=bagian_ringkas(by_name['Hasil']['rincian'])
+            rows=[['Bahan','','','Hasil','']]
+            spans=[('SPAN',(0,0),(1,0)),('SPAN',(3,0),(4,0))]
+            for i in range(max(len(kiri),len(kanan))):
+                row=['']*5
+                for col,items in [(0,kiri),(3,kanan)]:
+                    if i>=len(items):
+                        spans.append(('BACKGROUND',(col,i+1),(col+1,i+1),colors.white))
+                        continue
+                    item=items[i]
+                    if 'judul' in item:
+                        row[col]=p(item['judul'],'KepalaPeriode' if item.get('utama') else 'BagianPeriode')
+                        spans.extend([('SPAN',(col,i+1),(col+1,i+1)),('BACKGROUND',(col,i+1),(col+1,i+1),green if item.get('utama') else colors.HexColor('#e1ece5'))])
+                    else:row[col:col+2]=[item['nama'],item['nilai']]
+                rows.append(row)
+            spans.append(('BACKGROUND',(2,0),(2,-1),colors.white))
+            spans.append(('LINEBELOW',(2,0),(2,0),.5,colors.white))
+            story.extend([tabel(rows,[lebar*.31,lebar*.17,lebar*.04,lebar*.31,lebar*.17],spans=spans),Spacer(1,2*mm)])
+            continue
         rows=[[grup['nama'],'','','']];spans=[('SPAN',(0,0),(3,0))]
         for bagian,items in groupby(grup['rincian'],key=lambda r:r.get('bagian')):
             if bagian:
