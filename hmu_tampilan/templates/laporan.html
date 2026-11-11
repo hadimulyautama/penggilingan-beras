@@ -45,7 +45,7 @@
 .lp-pilihan .lp-pintu {display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:104px;padding:20px;margin:0;border:1px solid var(--garis);border-radius:12px;background:var(--panel);text-align:left;transition:border-color .15s,background .15s;}
 .lp-pilihan .lp-pintu:hover {border-color:var(--aman);background:var(--panel-2);}
 .lp-pilihan .tindakan__nama {font-size:16px;font-weight:600;}
-.lp-pilihan .tindakan__ket {font-size:13px;line-height:1.5;margin-top:6px;white-space:normal;display:block;color:var(--redup);}
+.lp-pilihan .tindakan__ket {font-family:inherit;letter-spacing:0;font-weight:400;font-size:13px;line-height:1.5;margin-top:6px;white-space:normal;display:block;color:var(--redup);}
 .lp-pintu>svg {flex-shrink:0;color:var(--redup);}
 #lembar.lembar--laporan[open] {align-items:center;padding:24px;box-sizing:border-box;}
 #lembar.lembar--laporan .lembar__isi {width:100%;max-width:1360px;max-height:calc(100dvh - 48px);padding:0;box-sizing:border-box;border:1px solid var(--garis);border-radius:18px;background:var(--dasar);scrollbar-gutter:stable;}
@@ -65,7 +65,7 @@
 #lembar #lap-isi {padding:18px 28px 28px;}
 #lembar #rentang-khusus {display:grid;grid-template-columns:1fr 1fr auto;gap:12px;padding:16px 28px;margin:0;border-bottom:1px solid var(--garis);align-items:end;}
 #lembar #rentang-khusus .grup {margin:0;}
-#lembar .lp-ringkasan {display:flex;flex-direction:column;gap:16px;margin:20px 0 28px;}
+#lembar .lp-ringkasan {display:flex;flex-direction:column;align-items:stretch;gap:16px;margin:20px 0 28px;}
 #lembar .lp-kelompok {padding:20px;border-radius:12px;background:var(--panel);}
 #lembar .lp-kelompok h3 {font-size:15px;margin:0 0 16px;}
 #lembar .lp-bagian-metrik {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px 24px;}
@@ -156,7 +156,7 @@
         </select>
       </div>
       <div class="lp-panel-aksi" aria-label="Aksi laporan">
-        <a class="btn lp-pdf-utama" id="lap-pdf" target="_blank" rel="noopener" hidden>Lihat PDF <span aria-hidden="true">↗</span></a>
+        <a class="btn btn--utama lp-pdf-utama" id="lap-pdf" target="_blank" rel="noopener" hidden>Lihat PDF <span aria-hidden="true">↗</span></a>
         <a class="btn" id="lap-unduh" hidden>Unduh PDF</a>
         <button class="btn lp-cetak" type="button" data-lk-cetak>Cetak</button>
       </div>
