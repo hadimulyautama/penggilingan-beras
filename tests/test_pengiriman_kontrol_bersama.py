@@ -47,14 +47,12 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
      assert text in page.locator('main').inner_text(),text
     for href in ['/retur/pengajuan/8','/retur/22','/retur?sebelum_pengajuan=7','/retur?sebelum=21']:
      assert page.locator('a[href="'+href+'"]').count()==1,href
-   if width==1440:page.locator('.bk-desktop[data-bk-buka="bk-panduan"]').click()
-   else:page.locator('[data-bk-buka="bk-tindakan"]').click();page.locator('#bk-tindakan [data-bk-buka="bk-panduan"]').click()
+   page.locator('.bk-desktop[data-bk-buka="bk-panduan"]').click()
    guide=page.locator('#bk-panduan');expect(guide).to_be_visible();assert guide.get_attribute('class')=='pd-panduan'
    if path=='/retur':assert 'Buka pengiriman yang sudah keluar → ajukan retur → timbang dan periksa barang → terima ke stok.' in guide.inner_text()
    bounds=guide.bounding_box();assert bounds['width']<=width and bounds['x']>=0
    page.keyboard.press('Escape');expect(guide).not_to_be_visible()
-   if width==1440:page.locator('.bk-desktop[data-bk-cetak]').click()
-   else:page.locator('[data-bk-buka="bk-tindakan"]').click();page.locator('#bk-tindakan [data-bk-cetak]').click()
+   page.locator('.bk-desktop[data-bk-cetak]').click()
    assert page.evaluate('window.cetak')==1
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
    page.screenshot(path=str(tmp_path/(path[1:]+'.png')),full_page=True)

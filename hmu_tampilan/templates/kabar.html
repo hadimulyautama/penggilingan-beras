@@ -2,9 +2,9 @@
 {% block judul %}Kabar{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/kabar-feed.css?v={{ VERSI }}">
-<section class="kb" data-sampai="{{ sampai }}" aria-labelledby="kb-judul">
-  <a href="/" class="kb-back">← Kembali ke Beranda</a>
-  <h1 id="kb-judul">Kabar</h1><p class="bantu">Pemberitahuan dan catatan terkait.</p>
+<section class="kb" data-sampai="{{ sampai }}" aria-label="Kabar">
+
+
   <div class="kb-controls">
     <nav class="kb-tabs" aria-label="Status baca">
       <a href="{{ href_kabar(tab='', batas=30, sebelum=None) }}" {% if not tab %}aria-current="page"{% endif %}>Semua</a>

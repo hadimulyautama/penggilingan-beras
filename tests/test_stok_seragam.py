@@ -40,17 +40,14 @@ def test_informasi_saldo_detail_dan_kontrol(width,tab,owner):
    page.get_by_role('searchbox').fill('Pras');page.get_by_role('button',name='Cari',exact=True).click();assert '0 baris' not in page.locator('[data-stok-hasil]').inner_text();page.get_by_role('searchbox').press('Escape')
   if width==1440:
    boxes=[page.locator(s).bounding_box() for s in ['.sk-filter-desktop','.sk-cari','.sk-pencarian>button']];assert max(x['y'] for x in boxes)-min(x['y'] for x in boxes)<2
-  trigger=page.locator('.sk-filter-desktop' if width==1440 else '.sk-tindakan-ponsel [data-sk-buka="sk-filter"]');trigger.click();expect(page.locator('#sk-filter')).to_be_visible()
+  trigger=page.locator('.sk-filter-desktop');trigger.click();expect(page.locator('#sk-filter')).to_be_visible()
   if owner=='pabrik':
    page.locator('#sk-filter [name=pemilik]').select_option('jasa');expect(page.locator('#sk-filter [name=pelanggan_id]')).to_be_enabled();expect(page.locator('#sk-filter [name=pelanggan_id] option')).to_have_count(2)
   page.keyboard.press('Escape');expect(trigger).to_be_focused()
-  if width==390:page.get_by_role('button',name='Panduan dan print',exact=True).click();page.locator('#sk-tindakan [data-sk-buka]').click()
-  else:page.locator('.sk-tindakan-desktop [data-sk-buka]').click()
+  page.locator('.sk-tindakan-desktop [data-sk-buka]').click()
   expect(page.locator('#sk-panduan')).to_be_visible();page.get_by_role('button',name='Tutup panduan').click()
   page.evaluate('() => { window.totalPrint=0;window.print=()=>{window.totalPrint++}; }')
-  if width==390:
-   page.get_by_role('button',name='Panduan dan print',exact=True).click();page.locator('#sk-tindakan [data-sk-cetak]').click()
-  else:page.locator('.sk-tindakan-desktop [data-sk-cetak]').click()
+  page.locator('.sk-tindakan-desktop [data-sk-cetak]').click()
   assert page.evaluate('window.totalPrint')==1
   if tab=='karung' and owner=='pabrik':
    action=page.locator('.karung-aksi').first;action.locator('summary').click();expect(action.get_by_role('link',name='Alihkan ke pelanggan')).to_be_visible();action.locator('summary').click()

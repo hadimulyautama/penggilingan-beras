@@ -119,3 +119,10 @@ body.padiflow-ui .stok-seragam .stok-grup__kepala h2{font-size:15px;font-weight:
 .stok-seragam .karung-tabel tbody tr{background:var(--pd-sheet)}
 .stok-seragam .karung-tabel tbody tr:last-child{border-radius:0 0 12px 12px}
 .stok-seragam .karung-bagian .karung-scroll{border-radius:0 0 12px 12px}
+
+/* Tab menjadi kepala halaman; kontrol tetap terlihat pada ponsel. */
+body.padiflow-ui .sk-kepala{gap:8px;}
+body.padiflow-ui .sk-tab{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;}
+body.padiflow-ui .sk-tab>a,body.padiflow-ui .sk-tab>span{justify-content:center;min-height:53px;box-sizing:border-box;text-align:center;padding:10px 6px;white-space:normal;}
+body.padiflow-ui .sk-judul{justify-content:flex-end;}
+@media(max-width:650px){body.padiflow-ui .sk-tindakan-ponsel{display:none;}body.padiflow-ui .sk-tindakan-desktop{display:grid;grid-template-columns:96px 64px;gap:6px;}body.padiflow-ui .sk-tindakan-desktop>a{display:none;}body.padiflow-ui .sk-tindakan-desktop>.btn{width:100%;min-height:44px;padding:8px;}body.padiflow-ui .sk-filter-desktop{display:inline-flex;flex:none;width:auto;}body.padiflow-ui .sk-alat{display:flex;gap:8px;align-items:center;}body.padiflow-ui .sk-pencarian{flex:1;min-width:0;}body.padiflow-ui .sk-tab>a,body.padiflow-ui .sk-tab>span{font-size:12px;}}

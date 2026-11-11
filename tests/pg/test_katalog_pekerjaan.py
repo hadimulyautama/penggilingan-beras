@@ -19,6 +19,7 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         from html import unescape
         from bs4 import BeautifulSoup
         masuk=BeautifulSoup(r.text,'html.parser').select_one('nav[aria-label="Tab pekerjaan"] a[href^="/pekerjaan/catat-lain?"]')
+        assert BeautifulSoup(r.text,'html.parser').select_one('.pk-judul h1') is None
         assert masuk and masuk.get_text(strip=True)=='Pekerjaan lain'
         assert not re.search(r'<a[^>]*href="/aksi-lain"',r.text)
         tabs=re.search(r'aria-label="Tab pekerjaan">(.*?)</nav>',r.text,re.S)[1]

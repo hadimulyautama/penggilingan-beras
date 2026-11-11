@@ -50,3 +50,6 @@ body.padiflow-ui .pk-tab { gap:20px; }
   body:has(.pk-kepala) :is(.bingkai,.isi) { display:block!important; height:auto!important; max-height:none!important; overflow:visible!important; }
   .pk-tab a:not([aria-current=page]) { display:none; }
 }
+
+.laporan-riwayat .pk-kepala{margin-top:0;}
+@media(max-width:700px){body.padiflow-ui .laporan-riwayat .pk-filter-desktop{display:inline-flex;flex:none;width:auto;min-height:44px;}body.padiflow-ui .laporan-riwayat .pk-alat{display:flex;gap:8px;align-items:center;}body.padiflow-ui .laporan-riwayat .pk-pencarian{min-width:0;flex:1;}}

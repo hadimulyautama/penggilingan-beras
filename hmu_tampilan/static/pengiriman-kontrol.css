@@ -44,3 +44,9 @@ body.padiflow-ui .pengiriman-kontrol .bk-buat>summary.btn {background:var(--pd-g
  body:has(.pengiriman-kontrol) :is(.bingkai,.isi) {height:auto!important;max-height:none!important;overflow:visible!important;}
  .pengiriman-kontrol__tab a:not([aria-current=page]) {display:none;}
 }
+
+body.padiflow-ui .pengiriman-kontrol{gap:8px;}
+body.padiflow-ui .pengiriman-kontrol__tab{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;}
+body.padiflow-ui .pengiriman-kontrol__tab>a{display:flex;justify-content:center;align-items:center;box-sizing:border-box;min-height:53px;text-align:center;padding:10px 6px;white-space:normal;}
+body.padiflow-ui .bk-judul{justify-content:flex-end;}
+@media(max-width:650px){body.padiflow-ui .bk-tindakan{width:100%;justify-content:flex-end;gap:6px;}body.padiflow-ui .bk-tindakan>.bk-ponsel{display:none;}body.padiflow-ui .pengiriman-kontrol .bk-tindakan>.bk-desktop{display:inline-flex;justify-content:center;width:96px;min-height:44px;padding:8px;}body.padiflow-ui .pengiriman-kontrol .bk-tindakan>[data-bk-cetak]{width:64px;}body.padiflow-ui .bk-tindakan>.bk-buat{margin-right:auto;}body.padiflow-ui .bk-filter-desktop{display:inline-flex;flex:none;width:auto;}body.padiflow-ui .bk-alat{display:flex;gap:8px;align-items:center;}body.padiflow-ui .bk-pencarian{flex:1;min-width:0;}body.padiflow-ui .pengiriman-kontrol__tab>a{font-size:12px;}}
