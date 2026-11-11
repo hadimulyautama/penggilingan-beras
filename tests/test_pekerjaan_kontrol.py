@@ -12,7 +12,8 @@ def test_isi_daftar_dan_kartu_tetap_sama():
  sekarang=(R/'app/web/templates/pekerjaan.html').read_text()
  sebelum,sesudah=sekarang.split("{% include '_pekerjaan_kontrol.html' %}",1)
  assert hashlib.sha256(sebelum.encode()).hexdigest()=='f328c94b5c7d839f916350e1539fa27d5eac47682d35f3eb41658efc355d186b'
- assert hashlib.sha256(sesudah.encode()).hexdigest()=='53cc2f9a444afad6bc1e5efc99b1b6a646d575deabebcf00824970da279e2013'
+ # Jumlah tindakan cukup di tab; petunjuk penerimaan dipusatkan di Panduan.
+ assert hashlib.sha256(sesudah.encode()).hexdigest()=='a4f2a2c08bc347ccbc94884ca28ec6dcdc001c669aa03afda75eb65d976d607d'
  for f,sidik in {'app/web/templates/_pekerjaan_berjalan_ringkas.html': '7acb30322e9f7d815684602772681707798a2b0185f2b862cb8619139feeeb6d', 'hmu_tampilan/templates/_benda.html': '6e022aa226a373c434c88f45d5c3c2c8acb11fa30e0308ea60b2a830716aa553'}.items():
   isi=(R/f).read_text()
   if f.endswith('/_benda.html'):
