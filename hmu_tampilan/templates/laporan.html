@@ -13,6 +13,7 @@
 #lembar .lp-status {display:flex;flex-wrap:wrap;gap:12px;margin:12px 0;}
 #lembar .lp-catatan {color:var(--pd-muted,var(--redup));font-size:13px;margin:8px 0;}
 #lembar td small {display:block;}
+#lembar td {white-space:pre-line;}
 @media screen and (max-width:650px) {
 #lembar .lp-tabel {overflow:visible;}
 #lembar table,#lembar tbody,#lembar tr,#lembar td {display:block;width:100%;box-sizing:border-box;}
@@ -120,14 +121,14 @@
     d.status.forEach(function (r) { h += '<span>' + aman(r.nama) + ': <b>' + aman(r.nilai) + '</b></span>'; });
     h += '</div>';
     if (d.rincian.length) {
-      var kolommen = [["kode","Kode / tiket"],["tanggal","Tanggal"],["status","Status"],["pemilik","Kepemilikan"],["nota","Bobot nota"],["timbangan","Bobot timbangan"],["selisih","Selisih nota - timbang"],["bobot","Bobot proses"]];
+      var kolommen = d.kolom.map(function (c) { return [c.kunci,c.nama]; });
       h += '<div class="lp-tabel"><table><caption class="lbl">Rincian transaksi</caption><thead><tr>';
       kolommen.forEach(function (c) { h += '<th scope="col">' + c[1] + '</th>'; });
       h += '</tr></thead><tbody>';
       d.rincian.forEach(function (r) {
         h += '<tr>';
         kolommen.forEach(function (c) {
-          var nilai = r[c[0]];
+          var nilai = r[c[0]] == null ? 'Belum tercatat' : r[c[0]];
           if (c[0] === "kode" && r.tiket !== "-") nilai += " / " + r.tiket;
           h += '<td data-label="' + c[1] + '">' + aman(nilai) +
             (c[0] === "nota" && r.sumber_nota === "Mengikuti timbangan" ? '<small class="lp-catatan">Mengikuti timbangan</small>' : '') + '</td>';

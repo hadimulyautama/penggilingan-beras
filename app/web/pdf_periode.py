@@ -23,7 +23,7 @@ def buat_pdf(data, *, contoh=False):
         styles.add(ParagraphStyle(name, fontName='Helvetica-Bold' if bold else 'Helvetica',
                                  fontSize=size, leading=leading, textColor=color, spaceAfter=5, keepWithNext=False))
     def p(value, style='IsiPeriode'):
-        return Paragraph(escape(str(value)), styles[style])
+        return Paragraph(escape(str(value)).replace("\n", "<br/>"), styles[style])
     def tabel(rows, widths):
         table = Table([[p(c, 'KepalaPeriode' if i == 0 else 'IsiPeriode') for c in r] for i,r in enumerate(rows)],
                       colWidths=widths, repeatRows=1, hAlign='LEFT')
@@ -49,11 +49,20 @@ def buat_pdf(data, *, contoh=False):
     if data['status']:
         story += [Spacer(1,4*mm),p('Status transaksi','BagianPeriode'),
                   tabel([['Status','Jumlah']]+[[r['nama'],r['nilai']] for r in data['status']],[132*mm,131*mm])]
-    story += [Spacer(1,5*mm), CondPageBreak(35*mm), p('Rincian transaksi','BagianPeriode')]
+    story += [Spacer(1,5*mm), CondPageBreak(50*mm), p('Rincian transaksi','BagianPeriode')]
     if data['rincian']:
-        story.append(tabel([['Kode / tiket','Tanggal','Status','Kepemilikan','Bobot nota','Bobot timbangan','Selisih nota - timbang','Bobot proses']]+[
-            [r['kode'] + (' / '+r['tiket'] if r['tiket'] != '-' else ''),r['tanggal'],r['status'],r['pemilik'],r['nota'] + (' ('+r['sumber_nota']+')' if r['sumber_nota']=='Mengikuti timbangan' else ''),r['timbangan'],r['selisih'],r['bobot']] for r in data['rincian']],
-            [32*mm,22*mm,24*mm,34*mm,38*mm,38*mm,38*mm,37*mm]))
+        cols=data['kolom']
+        rows=[[c['nama'] for c in cols]]
+        for r in data['rincian']:
+            cells=[]
+            for c in cols:
+                key=c['kunci'];value=r.get(key,'Belum tercatat')
+                if key=='kode' and r.get('tiket','-')!='-':value += ' / '+r['tiket']
+                if key=='nota' and r.get('sumber_nota')=='Mengikuti timbangan':value += ' (Mengikuti timbangan)'
+                cells.append(value)
+            rows.append(cells)
+        weights=[2.2 if c['kunci'] in ('asal','produk','produk_asal','hasil_beras','hasil_samping','rincian_muatan','alasan','mitra') else 1.5 if c['kunci']=='kode' else 1.4 if c['kunci']=='tanggal' else 1.2 if c['kunci']=='rendemen' else 1 for c in cols]
+        story.append(tabel(rows,[263*mm*w/sum(weights) for w in weights]))
     else:
         story.append(p('Tidak ada transaksi pada periode ini.'))
     story += [Spacer(1,5*mm),CondPageBreak(20*mm),p('Keterangan','BagianPeriode')]+[p(c) for c in data['catatan']]

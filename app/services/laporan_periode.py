@@ -152,18 +152,22 @@ def data_laporan(kode, dari, sampai, baris):
         catatan.append('Bobot batch hasil sosoh berkarung yang masih tercatat. Kemas ulang dapat mengubah batch lama; angka ini bukan rekonstruksi pengemasan historis.')
     if kode == 'barang_keluar':
         catatan.append('Perintah belum membuktikan pengeluaran aktual. Perintah, dimuat, dan selesai ditampilkan terpisah melalui status.')
-    return dict(kode=kode, nama=judul, dari=dari.isoformat(), sampai=sampai.isoformat(),
+    from app.services.laporan_isi_tahap import atur
+    return atur(dict(kode=kode, nama=judul, dari=dari.isoformat(), sampai=sampai.isoformat(),
                 periode=f'{dari:%d/%m/%Y} - {sampai:%d/%m/%Y}',
                 dasar=tanggal.replace('_', ' '),
                 ringkasan=ringkasan, status=[dict(nama=k, nilai=str(v)) for k,v in sorted(status.items())],
-                rincian=rincian, catatan=catatan)
+                rincian=rincian, catatan=catatan), kode, baris)
 
 
 async def ambil(db, kode, dari, sampai):
     q, nama = kueri(kode, dari, sampai)
     rows = (await db.execute(q)).all()
     baris = [dict(zip(nama, r)) for r in rows]
-    await lengkapi_bobot_tiket(db, baris)
+    if kode in ('gabah_masuk','pk_masuk','barang_keluar'):
+        await lengkapi_bobot_tiket(db, baris)
+    from app.services.laporan_isi_tahap import lengkapi
+    await lengkapi(db,kode,baris)
     return data_laporan(kode, dari, sampai, baris)
 
 
