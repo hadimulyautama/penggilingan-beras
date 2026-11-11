@@ -2,6 +2,7 @@
 (function () {
  'use strict';
  const root=document.querySelector('[data-pengiriman-controls]');if(!root||root.dataset.bkSiap)return;root.dataset.bkSiap='1';
+ const aksi=root.querySelector('.bk-aksi-konteks'),alat=root.querySelector('.bk-alat');if(aksi&&alat){alat.prepend(...aksi.childNodes);aksi.remove();}
  let asal;
  const buat=root.querySelector('[data-bk-buat]');
  root.querySelectorAll('[data-bk-buka]').forEach(b=>b.addEventListener('click',()=>{

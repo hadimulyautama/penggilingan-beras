@@ -3,15 +3,16 @@
 <section class="pengiriman-kontrol bk-kontrol" data-pengiriman-controls data-bk-controls aria-label="Kontrol {{ judul }}">
 {% include '_pengiriman_tabs.html' %}
 <div class="bk-judul"><div class="bk-tindakan">
-{{ caller('tindakan') }}
-<button class="btn btn--kecil bk-desktop" type="button" data-bk-buka="bk-panduan">ⓘ Panduan</button><button class="btn btn--kecil bk-desktop" type="button" data-bk-cetak>Cetak</button>
+
+<button class="btn btn--kecil bk-desktop" type="button" data-bk-buka="bk-panduan" aria-label="Panduan" title="Panduan"><span class="kontrol-tab-label">ⓘ Panduan</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button><button class="btn btn--kecil bk-desktop" type="button" data-bk-cetak aria-label="Cetak" title="Cetak"><span class="kontrol-tab-label">Cetak</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg></button>
 {% if filter %}<button class="btn bk-ikon bk-ponsel" type="button" data-bk-buka="bk-filter" aria-label="Buka filter {{ judul|lower }}{{ ' · ' ~ filter_jumlah ~ ' aktif' if filter_jumlah }}" aria-haspopup="dialog"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v8l-4-2v-6z"/></svg>{% if filter_jumlah %}<span class="bk-titik"></span>{% endif %}</button>{% endif %}
 <button class="btn bk-ikon bk-ponsel" type="button" data-bk-buka="bk-tindakan" aria-label="Panduan dan print" aria-haspopup="dialog">⋮</button>
 </div></div>
+{% set aksi_konteks=caller('tindakan')|trim %}{% if aksi_konteks %}<div class="bk-aksi-konteks">{{ aksi_konteks }}</div>{% endif %}
 {{ caller('alat') }}
 {{ caller('cakupan') }}
 {{ caller('panel') }}
-<dialog class="bk-panel bk-menu" id="bk-tindakan" aria-labelledby="bk-tindakan-judul"><div class="bk-panel-kepala"><h2 id="bk-tindakan-judul">Tindakan</h2><button class="btn bk-ikon" type="button" data-bk-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-bk-buka="bk-panduan">ⓘ Panduan</button><button class="btn" type="button" data-bk-cetak>Print daftar {{ judul|lower }}</button></dialog>
+<dialog class="bk-panel bk-menu" id="bk-tindakan" aria-labelledby="bk-tindakan-judul"><div class="bk-panel-kepala"><h2 id="bk-tindakan-judul">Tindakan</h2><button class="btn bk-ikon" type="button" data-bk-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-bk-buka="bk-panduan" aria-label="Panduan" title="Panduan"><span class="kontrol-tab-label">ⓘ Panduan</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button><button class="btn" type="button" data-bk-cetak>Print daftar {{ judul|lower }}</button></dialog>
 </section>
 <script src="/static/pengiriman-kontrol.js?v={{ VERSI }}" defer></script>
 {%- endmacro %}

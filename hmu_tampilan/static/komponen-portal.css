@@ -333,3 +333,6 @@ body.padiflow-ui:not(.pd-timbang) :is(button,a,input,select,textarea):focus-visi
 body.padiflow-ui:not(.pd-timbang) .kb, #portal-hmu[data-theme] .canonical-body .kb {
   --kb-tautan:var(--pd-green); --kb-aktif:var(--pd-soft); --kb-ikon:var(--pd-green-bg);
 }
+
+.kontrol-tab-ikon{display:none;}
+@media(max-width:650px){.kontrol-tab-label{display:none;}.kontrol-tab-ikon{display:block;flex:none;}}

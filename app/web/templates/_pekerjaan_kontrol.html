@@ -24,6 +24,5 @@
 <button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" href="{{ href(jenis='',kepemilikan='',gudang='',pemasok='') }}">Hapus filter</a></form></dialog>
 {% include '_pekerjaan_panduan.html' %}
 {% if not LAPORAN_NAV %}<dialog class="pk-panel pk-menu" id="pk-tindakan" aria-labelledby="pk-tindakan-judul"><div class="pk-panel-kepala"><h2 id="pk-tindakan-judul">Tindakan</h2><button class="btn pk-ikon" type="button" data-pk-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-pk-buka="pk-panduan">Panduan pekerjaan</button><button class="btn" type="button" data-pk-cetak>Print daftar halaman ini</button></dialog>{% endif %}
-{% if VIEW in V_MEJA or VIEW in (V_SELEPAN,V_POLESAN) %}<p><a class="btn btn--kecil" href="/transfer-bertahap">Transfer PK · pengiriman per perjalanan</a></p>{% endif %}
 </header>
 <script src="/static/pekerjaan-kontrol.js?v={{ VERSI }}" defer></script>
