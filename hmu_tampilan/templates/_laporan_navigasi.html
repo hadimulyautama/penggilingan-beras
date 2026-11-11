@@ -1,10 +1,10 @@
 {# Satu bilah di tempat yang sama untuk daftar, detail, QC dan laporan. #}
 <link rel="stylesheet" href="/static/laporan-kontrol.css?v={{ VERSI }}">
 {% from '_laporan_kontrol.html' import panel with context %}
-<section class="laporan-nav" aria-label="{{ 'Laporan periode' if LAPORAN_NAV.aktif == 'laporan' else 'Riwayat' }}" data-laporan-kontrol data-aktif="{{ LAPORAN_NAV.aktif }}" data-tujuan-tab='{{ LAPORAN_NAV.tab|tojson }}'>
+<section class="laporan-nav" aria-label="{{ LAPORAN_NAV.kelompok_nama|default('Laporan periode' if LAPORAN_NAV.aktif == 'laporan' else 'Riwayat') }}" data-laporan-kontrol data-aktif="{{ LAPORAN_NAV.aktif }}" data-tujuan-tab='{{ LAPORAN_NAV.tab|tojson }}'>
   <div class="laporan-nav__bar">
-    {% if LAPORAN_NAV.aktif != 'laporan' %}<nav class="laporan-nav__tabs" aria-label="Jenis halaman">
-    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}>{{ t.nama }}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
+    {% if LAPORAN_NAV.aktif != 'laporan' %}<nav class="laporan-nav__tabs" aria-label="{{ LAPORAN_NAV.tab_label|default('Jenis halaman') }}">
+    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}>{{ t.nama }}{% if t.jumlah is defined %} <span class="pil__jml">{{ t.jumlah }}</span>{% endif %}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
     </nav>{% else %}<h1 class="laporan-nav__judul">Laporan periode</h1>{% endif %}
     {% if LAPORAN_NAV.pilihan %}
     <select class="laporan-nav__pilihan" data-jenis-riwayat aria-label="{{ 'Pilih proses' if LAPORAN_NAV.aktif == 'proses' else 'Pilih pemeriksaan QC' }}">

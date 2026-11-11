@@ -10,8 +10,8 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.mark.parametrize('role,gudang,proses,qcs,audit',[
-    ('superadmin',None,5,5,True),('admin',None,5,5,True),
-    ('operator','Gudang 1',4,3,False),('operator','Gudang 2',2,2,False),
+    ('superadmin',None,4,5,True),('admin',None,4,5,True),
+    ('operator','Gudang 1',3,3,False),('operator','Gudang 2',1,2,False),
 ])
 async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
     async with await _klien(pg,peran=role,gudang=gudang) as c:
@@ -92,6 +92,8 @@ async def test_gateway_tidak_membuang_query_kursor_atau_audit(pg,qc):
         r=await c.get('/laporan-riwayat?tab=audit&rentang=semua&kelompok=giling&cari=LOT',follow_redirects=False)
         assert parse_qs(urlsplit(r.headers['location']).query)=={'rentang':['semua'],'kelompok':['giling'],'cari':['LOT']}
         assert (await c.get('/laporan-riwayat?tab=tidak-ada')).status_code==404
+        lama=await c.get('/laporan-riwayat?tab=proses&jenis=retur-supplier&supplier=2',follow_redirects=False)
+        assert lama.status_code==303 and lama.headers['location']=='/riwayat-retur-supplier?supplier=2'
 
 
 @pytest.mark.parametrize('tab,jenis', [('proses','sosoh'),('qc','pk-luar'),('audit','')])

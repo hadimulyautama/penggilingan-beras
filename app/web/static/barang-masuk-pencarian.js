@@ -15,6 +15,8 @@
     if(!root.isConnected)return;const requested=new URL(url,location.href);
     if((requested.searchParams.get('cari')||'')!==input.value.trim())next.querySelector('[name=cari][type=search]').value=input.value;
     if((requested.searchParams.get('pemasok')||'')!==name.value){const dest=next.querySelector('[data-bm-search] [name=pemasok]');if(!Array.from(dest.options).some(o=>o.value===name.value))dest.add(new Option(name.value,name.value));dest.value=name.value;}
+    const tabSekarang=document.querySelector('nav[aria-label="Bagian Barang Masuk"]'),tabBaru=doc.querySelector('nav[aria-label="Bagian Barang Masuk"]');
+    if(tabSekarang&&tabBaru)tabSekarang.replaceChildren(...Array.from(tabBaru.childNodes,n=>n.cloneNode(true)));
     root.replaceWith(next);history.pushState({pindah:1},'',url);if(window.PINDAH){PINDAH.lupakan();PINDAH.lupakanSentuhan();}pasang(next);
     next.querySelector('.bm-jumlah').setAttribute('tabindex','-1');next.querySelector('.bm-jumlah').focus({preventScroll:true});
    }catch(_){if(root.isConnected){root.querySelector('[data-bm-error]').hidden=false;changed();}}

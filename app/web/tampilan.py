@@ -174,6 +174,8 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
         from app.web.layar_kabar import kembali_aman
         konteks["kembali"] = kembali_aman(request.query_params.get("kembali_kabar"))
     konteks.setdefault("akun", getattr(request.state, "akun", None))
+    from app.web.barang_masuk_navigasi import siapkan as siapkan_penerimaan
+    siapkan_penerimaan(request, konteks)
     konteks.setdefault("LIHAT_SEBAGAI", getattr(request.state, "lihat_sebagai", None))
     konteks.setdefault("PERAN_ASLI", getattr(request.state, "peran_asli", None))
     konteks.setdefault("PITA_SAMAR", getattr(request.state, "pita_samar", None))

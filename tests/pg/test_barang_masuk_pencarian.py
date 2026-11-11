@@ -45,6 +45,9 @@ async def test_lintas_tahun_halaman_bobot_tersimpan_dan_literal(pg,lengkap):
   assert 'Nama 100%_Uji' in r['nama_saring']
  async with await _klien(pg,role='superadmin') as c:
   s=soup(await c.get('/barang-masuk?status=diterima&cari=TB-CARI&gudang=g1&jenis=gabah_kering&halaman=2'))
+  tabs=s.select('nav[aria-label="Bagian Barang Masuk"] a')
+  assert len(tabs)==3 and tabs[1].get('aria-current')=='page'
+  assert tabs[2]['href']=='/riwayat-retur-supplier'
   assert len(rows(s))==25 and '80 hasil' in s.get_text() and 'Halaman 2 dari 4' in s.get_text()
   assert not s.select('[data-saring-kerja]') and not s.select('script[src*="saring-kerja"]')
   href=s.select_one('.bm-halaman a')['href'];q=parse_qs(urlsplit(href).query)

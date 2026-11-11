@@ -9,15 +9,16 @@
 {% set filter_jumlah = (1 if jenis else 0) + (1 if gudang else 0) + (1 if request.query_params.get('kepemilikan') else 0) + (1 if request.query_params.get('pemasok') else 0) %}
 <link rel="stylesheet" href="/static/barang-masuk.css?v={{ VERSI }}">
 <header class="kerja-kepala bm-kepala" data-saring-kerja>
-<div class="bm-judul"><h1>Barang Masuk</h1>
+{% if not LAPORAN_NAV %}<div class="bm-judul"><h1>Barang Masuk</h1>
 <div class="bm-tindakan-desktop"><button class="btn btn--kecil" type="button" data-bm-buka="bm-panduan">ⓘ Panduan</button><button class="btn btn--kecil" type="button" data-bm-cetak>Print</button></div>
 <div class="bm-tindakan-ponsel"><button class="btn bm-ikon" type="button" data-bm-buka="bm-filter" aria-label="Buka filter{{ ' · ' ~ filter_jumlah ~ ' aktif' if filter_jumlah }}" aria-haspopup="dialog"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v8l-4-2v-6z"/></svg>{% if filter_jumlah %}<span class="bm-titik"></span>{% endif %}</button><button class="btn bm-ikon" type="button" data-bm-buka="bm-tindakan" aria-label="Panduan dan print" aria-haspopup="dialog">⋮</button></div></div>
+{% endif %}
 <div class="bm-alat"><button class="btn btn--kecil bm-filter-desktop" type="button" data-bm-buka="bm-filter" aria-haspopup="dialog">Filter{% if filter_jumlah %} · {{ filter_jumlah }}{% endif %}</button>
 <label class="bm-cari"><span class="sr-only">Cari nama, kode atau plat</span><input class="cari" type="search" name="cari" aria-label="Cari nama, kode atau plat" placeholder="Cari nama, kode atau plat…" value="{{ request.query_params.get('cari','') }}"></label></div>
-<nav class="bm-tab" aria-label="Status penerimaan">
+{% if not LAPORAN_NAV %}<nav class="bm-tab" aria-label="Status penerimaan">
 <a href="{{ href(status='belum',halaman='') }}"{% if status=='belum' %} aria-current="page"{% endif %}>Belum diterima <span class="pil__jml">{{ total_belum }}</span></a>
 <a href="{{ href(status='diterima',halaman='') }}"{% if status=='diterima' %} aria-current="page"{% endif %}>Diterima <span class="pil__jml">{{ total_diterima }}</span></a>
-</nav>
+</nav>{% endif %}
 {% if pelanggan_saring %}<p class="bantu">Pelanggan: <strong>{{ pelanggan_saring }}</strong> · <a href="{{ href(pelanggan_id='') }}">Semua pelanggan</a></p>{% endif %}
 <span class="bantu" data-hasil-cari role="status"></span>
 {# Pencarian memakai nama yang sudah diterapkan; pilihan di dialog masih draf. #}
@@ -33,8 +34,8 @@
 <button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" href="{{ href(jenis='',kepemilikan='',gudang='',pemasok='',halaman='') }}">Hapus filter</a>
 </form></dialog>
 {% from '_panduan.html' import panel as panel_panduan %}
-{% call panel_panduan('bm-panduan', 'Panduan penerimaan', penutup={'data-bm-tutup': ''}) %}<ol><li>Cari tiket berdasarkan nama, kode atau plat.</li><li>Buka tiket lalu periksa hasil timbang.</li><li>Catat penerimaan barang.</li></ol><p class="bantu">Penerimaan tercatat ada di tab Diterima. Penempatan bahan dilanjutkan di <a href="/pekerjaan?jenis=penempatan">Pekerjaan</a>.</p>{% endcall %}
-<dialog class="bm-panel bm-menu" id="bm-tindakan" aria-labelledby="bm-tindakan-judul"><div class="bm-panel-kepala"><h2 id="bm-tindakan-judul">Tindakan</h2><button class="btn bm-ikon" type="button" data-bm-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-bm-buka="bm-panduan">Panduan penerimaan</button><button class="btn" type="button" data-bm-cetak>Print daftar halaman ini</button></dialog>
+{% call panel_panduan('bm-panduan', 'Panduan penerimaan', penutup={'data-bm-tutup': '', 'data-lk-tutup': ''}) %}<ol><li>Cari tiket berdasarkan nama, kode atau plat.</li><li>Buka tiket lalu periksa hasil timbang.</li><li>Catat penerimaan barang.</li></ol><p class="bantu">Penerimaan tercatat ada di tab Diterima. Penempatan bahan dilanjutkan di <a href="/pekerjaan?jenis=penempatan">Pekerjaan</a>.</p>{% endcall %}
+{% if not LAPORAN_NAV %}<dialog class="bm-panel bm-menu" id="bm-tindakan" aria-labelledby="bm-tindakan-judul"><div class="bm-panel-kepala"><h2 id="bm-tindakan-judul">Tindakan</h2><button class="btn bm-ikon" type="button" data-bm-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-bm-buka="bm-panduan">Panduan penerimaan</button><button class="btn" type="button" data-bm-cetak>Print daftar halaman ini</button></dialog>{% endif %}
 </header>
 <script src="/static/saring-kerja.js?v={{ VERSI }}" defer></script>
 <script src="/static/barang-masuk.js?v={{ VERSI }}" defer></script>

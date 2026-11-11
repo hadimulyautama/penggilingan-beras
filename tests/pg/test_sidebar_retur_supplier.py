@@ -96,6 +96,13 @@ async def test_sidebar_sama_di_seluruh_halaman_retur_dan_hak_tetap(pg, asal, mon
             assert response.status_code == code, (mode, url, response.status_code)
             if code == 200:
                 assert sidebar(response.text) == expected, (mode, url)
+                if url.startswith('/riwayat-retur-supplier'):
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    tabs = soup.select('nav[aria-label="Bagian Barang Masuk"] a')
+                    assert [a.get_text(strip=True) for a in tabs] == ['Belum diterima','Diterima','Retur ke Supplier']
+                    assert tabs[-1].get('aria-current') == 'page'
+                    assert soup.select_one('a.pintu--kini')['href'] == '/barang-masuk'
+                    assert not soup.select('nav[aria-label="Jenis halaman"]')
                 assert response.headers['cache-control'] == 'private, no-store'
                 if mode != 'super':
                     assert 'action="/lihat-sebagai/selesai"' in response.text

@@ -70,3 +70,5 @@ body.padiflow-ui .laporan-nav .laporan-nav__pilihan {display:none;}
  body.padiflow-ui .laporan-nav .lk-cetak-slot {width:64px;}
  body.padiflow-ui .laporan-nav .laporan-nav__jenis {display:none;}
 }
+
+body.padiflow-ui .laporan-nav .laporan-nav__tabs .pil__jml{margin-left:4px;font-size:11px;}

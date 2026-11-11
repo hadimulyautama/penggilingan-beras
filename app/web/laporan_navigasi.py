@@ -14,7 +14,6 @@ PROSES = (
     ("giling", "Penggilingan", "/riwayat-giling", "g1"),
     ("sosoh", "Penyosohan", "/riwayat-sosoh", "g2"),
     ("transfer", "Transfer", "/riwayat-transfer", "g1"),
-    ("retur-supplier", "Retur ke Supplier", "/riwayat-retur-supplier", "semua"),
 )
 QC = (
     ("gabah-basah", "Gabah basah", "/riwayat-qc/gabah-basah", "g1"),
@@ -82,6 +81,9 @@ async def masuk(request: Request, tab: str | None = None, jenis: str = "",
                 akun=Depends(butuh_akun)):
     """Pintu baru; URL lama tetap menjadi halaman sumber dan penjaga izin."""
     opsi = await pilihan(akun)
+    if tab == 'proses' and jenis == 'retur-supplier':
+        params = [(k,v) for k,v in request.query_params.multi_items() if k not in ('tab','jenis')]
+        return RedirectResponse('/riwayat-retur-supplier' + ('?' + urlencode(params) if params else ''), status_code=303)
     if tab is None:
         tab = next(k for k, _ in TAB if opsi[k])
     if tab not in opsi: raise HTTPException(404, "Bagian tidak ditemukan.")

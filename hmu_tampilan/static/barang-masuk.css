@@ -47,3 +47,7 @@ body.padiflow-ui .bm-form-filter .fld { width:100%; min-width:0; min-height:48px
 @media print { .bm-pencarian { display:none!important; } }
 body.padiflow-ui .bm-pencarian .bm-cari { margin:0; }
 body.padiflow-ui .bm-pencarian > .btn { width:auto; flex:0 0 auto; min-width:64px; }
+
+/* Penerimaan dan retur supplier berbagi tab serta bilah Panduan/Cetak. */
+.laporan-riwayat .bm-kepala{margin-top:0;}
+@media(max-width:700px){body.padiflow-ui .laporan-riwayat .bm-filter-desktop{display:inline-flex;flex:none;width:auto;min-height:44px;}body.padiflow-ui .laporan-riwayat .bm-alat{display:flex;gap:8px;align-items:center;}body.padiflow-ui .laporan-riwayat .bm-cari{min-width:0;flex:1;}}
