@@ -23,7 +23,8 @@ body.padiflow-ui .lk-form-filter .fld {box-sizing:border-box;width:100%;min-widt
 #lembar .lembar__kepala {flex-wrap:wrap;gap:8px;}#lembar .lembar__kepala h2 {margin-right:auto;}
 @media(max-width:650px){
  body.padiflow-ui .lk-desktop,body.padiflow-ui .lk-filter-desktop {display:none;}
- body.padiflow-ui .lk-ponsel {display:flex;gap:0;}
+ body.padiflow-ui .lk-ponsel {display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-start;width:100%;}
+ body.padiflow-ui .laporan-nav .lk-kepala {flex-wrap:wrap;}
  body.padiflow-ui .laporan-nav .lk-kepala h1 {font-size:24px;}.lk-kepala {gap:4px;margin-bottom:16px;}
  body.padiflow-ui .laporan-nav .laporan-nav__tabs {justify-content:space-between;gap:12px;}
  body.padiflow-ui .laporan-nav .laporan-nav__tabs>a,body.padiflow-ui .laporan-nav .laporan-nav__tabs>span {font-size:13px;}
