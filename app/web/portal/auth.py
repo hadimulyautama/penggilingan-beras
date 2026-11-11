@@ -9,7 +9,7 @@ from app.web.security import HASH_TIRUAN, cek_sandi_async
 from app.web.tampilan import templates
 from .security import COOKIE, SESSION_SECONDS, issue, key, require_customer, secure_cookie
 from hmu_identitas.token import baca_token
-from hmu_tampilan import VERSI
+from hmu_tampilan import CAP_ASET as VERSI
 
 router=APIRouter(prefix='/pelanggan')
 
