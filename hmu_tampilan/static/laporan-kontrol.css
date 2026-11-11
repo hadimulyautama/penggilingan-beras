@@ -1,7 +1,7 @@
 /* Hanya kontrol. Tata letak kartu, tabel, isi laporan, dan detail tidak ditimpa. */
 .lk-kepala,.lk-aksi,.lk-alat,.lk-panel-kepala {display:flex;align-items:center;justify-content:space-between;gap:12px;}
 body.padiflow-ui .laporan-nav .lk-kepala h1 {margin:0;font-size:28px;line-height:1.3;}
-.lk-kepala {margin-bottom:20px;}.lk-aksi {justify-content:flex-end;gap:8px;}
+.lk-kepala {margin-bottom:20px;flex-wrap:wrap;}.lk-aksi {justify-content:flex-end;gap:8px;}
 body.padiflow-ui .lk-aksi>.btn {width:auto;min-height:44px;flex:0 0 auto;padding:8px 12px;white-space:nowrap;}
 body.padiflow-ui .lk-ponsel {display:none;}
 body.padiflow-ui .lk-ikon {width:44px;min-width:44px;min-height:44px;padding:8px;display:inline-flex;align-items:center;justify-content:center;}
