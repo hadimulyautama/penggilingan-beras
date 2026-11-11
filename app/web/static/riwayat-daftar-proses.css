@@ -3,6 +3,7 @@
 .rpd [hidden]{display:none!important}
 .rpd .rpd-header{padding-right:280px;margin-bottom:20px}
 .rpd .rpd-header h1{margin-top:0}
+.rpd .rpd-header:not(:has(button)){display:none}
 .rpd .rpd-intro{margin:20px 0 24px}
 .rpd .rpd-intro h2{font-size:17px;margin:0 0 8px}
 .rpd .rpd-description{font-size:13px;line-height:1.7;color:var(--pd-muted);margin:0}

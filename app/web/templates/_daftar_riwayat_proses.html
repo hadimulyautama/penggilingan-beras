@@ -6,7 +6,6 @@
 <link rel="stylesheet" href="/static/riwayat-daftar-proses.css?v={{ VERSI }}">
 <div class="riwayat-detail rhs rpd" data-daftar-riwayat-proses>
  <header class="rhs-header rpd-header">
-  <h1>Riwayat proses</h1><p class="rhs-meta">Catatan proses yang sudah selesai dan perpindahan PK.</p>
   <div class="rhs-tools">
    {% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rpd-guide>ⓘ Panduan</button>{% endif %}
    {% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rpd-print><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Cetak</button>{% endif %}
