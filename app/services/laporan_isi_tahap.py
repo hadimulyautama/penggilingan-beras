@@ -228,7 +228,7 @@ async def _giling(db,baris,objek):
         pasti=o.bobot_masuk_final and bahan is not None
         final=o.status=='selesai'
         r.update(bahan=kg(bahan)+(' · sementara' if bahan is not None and not pasti else ''),
-                 asal='\n'.join(g['nama']+' · '+', '.join(x['nama'] for x in g['sumber']) for g in sumber.get(o.id,[])) or 'Sumber lama',
+                 asal='\n'.join(dict.fromkeys(x['nama'] for g in sumber.get(o.id,[]) for x in g['sumber'])) or 'Sumber lama',
                  hasil=kg(hasil),jenis_pk=jenis.get(o.id) or 'Belum tercatat',
                  rendemen=persen(hitung_rendemen(hasil,bahan) if pasti and final else None),
                  selisih_bahan=kg(Decimal(str(bahan))-Decimal(str(hasil))) if pasti and final and hasil is not None else 'Belum dapat dihitung',

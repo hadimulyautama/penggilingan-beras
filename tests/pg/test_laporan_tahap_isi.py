@@ -23,6 +23,7 @@ async def test_giling_bahan_dan_hasil_verifikasi_mengalahkan_progres(pg,pabrik):
         r=d['rincian'][0]
         assert r['bahan'].startswith('10.000')
         assert r['hasil']=='6.400'
+        assert r['asal'].startswith('GB-RGL-') and 'Silo' not in r['asal']
         assert 'rendemen' in keys(d) and 'asal' in keys(d)
 
 async def test_sosoh_semua_catatan_hasil_spek_samping_dan_neraca(pg,pemakai):
