@@ -32,7 +32,7 @@
     <div class="rhs-identity"><span class="rhs-status" data-rht-state>{{ d.keadaan.status }}</span><span>{{ 'Titipan jasa' if d.jasa else 'Milik pabrik' }}</span>{% if d.jasa %}<span>{{ d.pemilik }}</span>{% endif %}</div>
     <p class="rhs-meta">{{ d.gudang_asal }} → {{ d.gudang_tujuan }} · Sumber {{ d.proses.kode_proses }}</p>
     <p class="rhs-meta">{% if d.permintaan %}Permintaan PK #{{ d.permintaan.id }} · Status permintaan: <strong>{{ d.status_permintaan }}</strong>{% else %}Tidak ada permintaan tertaut pada catatan ini{% endif %}</p>
-    <div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rht-guide>ⓘ Panduan</button><details class="rhs-menu"><summary class="btn" aria-label="Tindakan transfer PK">⋮</summary><div class="rhs-menu-body"><button class="btn" type="button" data-rht-guide>ⓘ Panduan</button>{% if LAPORAN_NAV %}<button class="btn" type="button" data-rht-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}</div></details></div>
+    <div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rht-guide>ⓘ Panduan</button><a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a><details class="rhs-menu"><summary class="btn" aria-label="Tindakan transfer PK">⋮</summary><div class="rhs-menu-body"><button class="btn" type="button" data-rht-guide>ⓘ Panduan</button>{% if LAPORAN_NAV %}<button class="btn" type="button" data-rht-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}</div></details></div>
   </header>
   <div class="rhs-actions rht-actions">{{ kontrol_tindakan() }}</div>
   <nav class="transfer-tabs rhs-tabs" role="tablist" aria-label="Bagian detail transfer PK">

@@ -16,7 +16,7 @@
   <p class="rhs-meta">{{ rec.sumber.supplier }} · {{ rec.waktu|jam('%d/%m/%Y · %H:%M') }}</p>
   <div class="rhs-identity">{{ r.status(status,statuses) }}</div>
   <p class="rhs-meta">Penerimaan {{ rec.sumber.kode_tiket }}</p>
-  <div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rsd-guide>ⓘ Panduan</button><details class="rhs-menu"><summary class="btn" aria-label="Tindakan dan dokumen retur">⋮</summary><div class="rhs-menu-body">
+  <div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rsd-guide>ⓘ Panduan</button><a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a><details class="rhs-menu"><summary class="btn" aria-label="Tindakan dan dokumen retur">⋮</summary><div class="rhs-menu-body">
    <button class="btn" type="button" data-rsd-guide>ⓘ Panduan</button>
    {% if ledger %}<a class="btn" href="{{ tab_href('stok') }}#catatan-keluar">Lihat mutasi stok {{ ledger.kode }}</a>{% endif %}
    {% if tera_url and rec.timbangan_transaksi_id %}<a class="btn" href="{{ tera_url }}/timbangan/transaksi/{{ rec.timbangan_transaksi_id }}" rel="noopener">Buka tiket TeraFlow</a>{% endif %}

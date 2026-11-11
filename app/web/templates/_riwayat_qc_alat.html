@@ -1,5 +1,5 @@
 {# Kontrol presentasi saja; data, izin, perhitungan dan formulir tetap milik QC. #}
-{% macro alat() %}<div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rqd-guide>ⓘ Panduan</button><details class="rhs-menu"><summary class="btn" aria-label="Panduan dan penelusuran QC">⋮</summary><div class="rhs-menu-body"><button class="btn" type="button" data-rqd-guide>ⓘ Panduan</button>{% if LAPORAN_NAV %}<button class="btn" type="button" data-rqd-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}</div></details></div>{% endmacro %}
+{% macro alat() %}<div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rqd-guide>ⓘ Panduan</button><a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a><details class="rhs-menu"><summary class="btn" aria-label="Panduan dan penelusuran QC">⋮</summary><div class="rhs-menu-body"><button class="btn" type="button" data-rqd-guide>ⓘ Panduan</button>{% if LAPORAN_NAV %}<button class="btn" type="button" data-rqd-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}</div></details></div>{% endmacro %}
 {% macro panduan_qc() %}
 {% from '_panduan.html' import panel as panduan %}
 {% call panduan('rqd-panduan','Panduan riwayat QC',penutup={'data-rqd-guide-close':'','data-lk-tutup':''}) %}

@@ -63,3 +63,9 @@ body.padiflow-ui .rhs .rhs-tabs>a[aria-selected=true]{color:var(--pd-green)!impo
 
 .rhs #rhs-navigation .laporan-nav{padding:0;border:0;margin:0}
 .rhs #rhs-navigation .lk-kepala{margin-bottom:16px}
+
+/* Akses laporan periode harus tetap terlihat bersama Panduan, termasuk
+   ketika kepala riwayat memindahkan kontrol ke menu pada layar ponsel. */
+.rhs-header:has(.rhs-period){padding-right:0!important}
+.rhs-tools:has(>.rhs-period){position:static;margin-top:12px;flex-wrap:wrap}
+.rhs-tools:has(>.rhs-period)>.btn:first-child,.rhs-tools>.rhs-period{display:inline-flex;align-items:center;width:auto}
