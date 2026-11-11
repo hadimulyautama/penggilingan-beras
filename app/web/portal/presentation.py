@@ -208,7 +208,8 @@ def _env_pelanggan(base,loader):
 
 
 def render_customer(request, name, *, status_code=200, **ctx):
-    from app.web.tampilan import templates, VERSI
+    from app.web.tampilan import templates
+    from hmu_tampilan import CAP_ASET as VERSI
     scope=request.state.portal_scope
     account=request.state.akun
     ctx.update(request=request,akun=account,AKUN=account,VIEW='pelanggan',CSRF=csrf_context(request),
@@ -279,7 +280,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
 
 
 def shell(request,content,*,title='Portal pelanggan',status_code=200):
-    from app.web.tampilan import templates,VERSI
+    from app.web.tampilan import templates
+    from hmu_tampilan import CAP_ASET as VERSI
     scope=request.state.portal_scope
     html=templates.env.get_template('portal/shell.html').render(request=request,
         title=title,content=Markup(content),reader=scope.reader,MENU=MENU,

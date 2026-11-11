@@ -91,3 +91,23 @@ def test_tautan_baris_pengambilan_tetap_di_portal_dan_menolak_tujuan_luar():
     rows=s.select('tr')
     assert rows[0]['data-detail-keluar']=='/pelanggan/barang-keluar/7?status=selesai'
     assert rows[0]['tabindex']=='0' and not rows[1].has_attr('data-detail-keluar')
+
+
+def test_aset_portal_memakai_identitas_rilis_pada_login_dan_halaman_pelanggan():
+    from types import SimpleNamespace as NS
+    from urllib.parse import parse_qs, urlsplit
+    from starlette.requests import Request
+    from hmu_tampilan import CAP_ASET
+    from app.web.portal.auth import login_page
+    from app.web.portal.presentation import shell
+    request=Request({'type':'http','scheme':'https','server':('portal.example',443),
+        'path':'/pelanggan/jasa-saya','query_string':b'', 'headers':[]})
+    request.state.portal_scope=NS(reader=NS(account_id=1,nama='Pelanggan uji'))
+    for response in (login_page(request),shell(request,'<h1>Proses berjalan</h1>')):
+        soup=BeautifulSoup(response.body,'html.parser')
+        urls=[el['href'] for el in soup.select('link[rel=stylesheet]')]
+        assert any('/portal-pelanggan.css?' in u for u in urls)
+        for url in urls:
+            if urlsplit(url).path != '/static/portal-pwa.css':
+                assert parse_qs(urlsplit(url).query)['v'][0].startswith(CAP_ASET)
+        assert response.headers['cache-control'].startswith('no-store')
