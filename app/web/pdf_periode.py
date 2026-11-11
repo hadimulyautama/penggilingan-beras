@@ -1,17 +1,19 @@
-"""PDF A4 laporan periode; isi sama dengan cuplikan yang disajikan layar."""
+"""PDF landscape laporan periode; isi sama dengan cuplikan yang disajikan layar."""
 from html import escape
 from io import BytesIO
 
 
 def buat_pdf(data, *, contoh=False):
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4, A3, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, CondPageBreak
 
     stream = BytesIO()
-    doc = SimpleDocTemplate(stream, pagesize=landscape(A4), rightMargin=17*mm, leftMargin=17*mm,
+    page=landscape(A3 if len(data.get('kolom',[]))>12 else A4)
+    lebar=page[0]-34*mm
+    doc = SimpleDocTemplate(stream, pagesize=page, rightMargin=17*mm, leftMargin=17*mm,
                             topMargin=14*mm, bottomMargin=18*mm,
                             title=f"Laporan {data['nama']} - {data['periode']}", author='PT Hadi Mulya Utama')
     green = colors.HexColor('#226442')
@@ -24,16 +26,17 @@ def buat_pdf(data, *, contoh=False):
                                  fontSize=size, leading=leading, textColor=color, spaceAfter=5, keepWithNext=False))
     def p(value, style='IsiPeriode'):
         return Paragraph(escape(str(value)).replace("\n", "<br/>"), styles[style])
-    def tabel(rows, widths):
-        table = Table([[p(c, 'KepalaPeriode' if i == 0 else 'IsiPeriode') for c in r] for i,r in enumerate(rows)],
-                      colWidths=widths, repeatRows=1, hAlign='LEFT')
+    def tabel(rows, widths, *, headers=1, spans=()):
+        table = Table([[p(c, 'KepalaPeriode' if i < headers else 'IsiPeriode') for c in r] for i,r in enumerate(rows)],
+                      colWidths=widths, repeatRows=headers, hAlign='LEFT')
         table.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),green), ('VALIGN',(0,0),(-1,-1),'TOP'),
-            ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f1f5f2')]),
+            ('BACKGROUND',(0,0),(-1,headers-1),green), ('VALIGN',(0,0),(-1,-1),'TOP'),
+            ('ROWBACKGROUNDS',(0,headers),(-1,-1),[colors.white,colors.HexColor('#f1f5f2')]),
             ('LEFTPADDING',(0,0),(-1,-1),7), ('RIGHTPADDING',(0,0),(-1,-1),7),
             ('TOPPADDING',(0,0),(-1,-1),5), ('BOTTOMPADDING',(0,0),(-1,-1),5),
             ('LINEBELOW',(0,0),(-1,0),.5,green),
         ]))
+        if spans: table.setStyle(TableStyle(list(spans)))
         return table
     ringkas = [['Ringkasan', 'Nilai', 'Ringkasan', 'Nilai']]
     for i in range(0, len(data['ringkasan']), 2):
@@ -45,14 +48,28 @@ def buat_pdf(data, *, contoh=False):
     story += [p(data['nama'],'JudulPeriode'),
               p('Periode: '+data['periode'],'SubPeriode'),
               p('Dasar periode: '+data['dasar']+' (WIB)','SubPeriode'), Spacer(1,4*mm),
-              tabel(ringkas,[68*mm,63*mm,68*mm,64*mm])]
+              tabel(ringkas,[lebar*.26,lebar*.24,lebar*.26,lebar*.24])]
     if data['status']:
         story += [Spacer(1,4*mm),p('Status transaksi','BagianPeriode'),
-                  tabel([['Status','Jumlah']]+[[r['nama'],r['nilai']] for r in data['status']],[132*mm,131*mm])]
+                  tabel([['Status','Jumlah']]+[[r['nama'],r['nilai']] for r in data['status']],[lebar*.5,lebar*.5])]
     story += [Spacer(1,5*mm), CondPageBreak(50*mm), p('Rincian transaksi','BagianPeriode')]
     if data['rincian']:
         cols=data['kolom']
-        rows=[[c['nama'] for c in cols]]
+        spans=[];headers=1
+        if any(c.get('kelompok') for c in cols):
+            headers=2;top=['']*len(cols);sub=['']*len(cols);i=0
+            while i<len(cols):
+                c=cols[i];kelompok=c.get('kelompok')
+                if not kelompok:
+                    top[i]=c['nama'];spans.append(('SPAN',(i,0),(i,1)));i+=1;continue
+                j=i+1
+                while j<len(cols) and cols[j].get('kelompok')==kelompok:j+=1
+                top[i]=kelompok;spans.append(('SPAN',(i,0),(j-1,0)))
+                spans.append(('ALIGN',(i,0),(j-1,0),'CENTER'))
+                for k in range(i,j):sub[k]=cols[k]['nama']
+                i=j
+            rows=[top,sub]
+        else:rows=[[c['nama'] for c in cols]]
         for r in data['rincian']:
             cells=[]
             for c in cols:
@@ -61,8 +78,8 @@ def buat_pdf(data, *, contoh=False):
                 if key=='nota' and r.get('sumber_nota')=='Mengikuti timbangan':value += ' (Mengikuti timbangan)'
                 cells.append(value)
             rows.append(cells)
-        weights=[2.2 if c['kunci'] in ('asal','produk','produk_asal','hasil_beras','hasil_samping','rincian_muatan','alasan','mitra') else 1.5 if c['kunci']=='kode' else 1.4 if c['kunci']=='tanggal' else 1.2 if c['kunci']=='rendemen' else 1 for c in cols]
-        story.append(tabel(rows,[263*mm*w/sum(weights) for w in weights]))
+        weights=[2.2 if c['kunci'] in ('asal','bahan_jenis','produk','produk_asal','hasil_beras','hasil_samping','rincian_muatan','alasan','mitra') else 1.5 if c['kunci']=='kode' else 1.4 if c['kunci']=='tanggal' else 1.2 if c['kunci']=='rendemen' else 1 for c in cols]
+        story.append(tabel(rows,[lebar*w/sum(weights) for w in weights],headers=headers,spans=spans))
     else:
         story.append(p('Tidak ada transaksi pada periode ini.'))
     story += [Spacer(1,5*mm),CondPageBreak(20*mm),p('Keterangan','BagianPeriode')]+[p(c) for c in data['catatan']]

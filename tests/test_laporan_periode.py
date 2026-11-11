@@ -71,3 +71,26 @@ def test_periode_tiga_bulan_dan_tahun(monkeypatch,saat,tiga,ini,lalu):
         monkeypatch.setattr(mod,'now_local',lambda:SimpleNamespace(date=lambda:saat))
     for kode,expected in [('3_bulan',(tiga,saat)),('tahun_ini',(ini,saat)),('tahun_lalu',lalu)]:
         assert laporan._rentang(kode)==report._range(kode)==expected
+
+
+def test_penyosohan_bahan_dan_hasil_memiliki_subkolom_dan_pdf_landscape():
+    from app.services.laporan_periode import data_laporan
+    from app.web.pdf_periode import buat_pdf
+    from pypdf import PdfReader
+    from io import BytesIO
+    raw=dict(id=1,tanggal=D,kode='POL-UJI',status='selesai',jasa_id=None,
+             bahan='10.000 kg',hasil='9.500 kg',susut='500 kg',rendemen='65,00%',
+             _bahan=10000,_hasil=9500,_beras=6500,_susut=500,_rendemen_final=True,
+             _bahan_per_jenis={'pk':9000,'broken':1000},
+             _output={'medium':6000,'premium':500,'broken':1500,'menir':500,'bekatul':900,'reject':100})
+    d=data_laporan('penyosohan',D,D,[raw])
+    bahan=[c for c in d['kolom'] if c.get('kelompok')=='Bahan']
+    hasil=[c for c in d['kolom'] if c.get('kelompok')=='Hasil']
+    assert len(bahan)==3 and len(hasil)==7
+    assert d['rincian'][0][bahan[0]['kunci']]=='9.000 kg'
+    assert d['rincian'][0][bahan[1]['kunci']]=='1.000 kg'
+    assert all('silo' not in c['nama'].lower() for c in d['kolom'])
+    reader=PdfReader(BytesIO(buat_pdf(d)))
+    assert all(p.mediabox.width>p.mediabox.height for p in reader.pages)
+    text=' '.join(p.extract_text() for p in reader.pages)
+    assert 'Bahan' in text and 'Hasil' in text and '9.000 kg' in text and '6.000 kg' in text

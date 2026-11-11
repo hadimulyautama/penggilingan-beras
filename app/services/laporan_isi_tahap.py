@@ -150,7 +150,9 @@ async def _sosoh(db,baris,objek):
     from app.penggilingan.gudang2.karung import bobot_pemakaian
     await daftar(db,termasuk_nonaktif=True)
     outputs=await output_sosoh_banyak(db,objek)
-    usages=(await db.scalars(select(m.PolishingSiloUsage).where(m.PolishingSiloUsage.polishing_process_id.in_(objek)))).all()
+    from app.services.spesifikasi_beras import jenis_hasil
+    urutan_hasil=await jenis_hasil(db,termasuk_nonaktif=True)
+    usages=(await db.scalars(select(m.PolishingSiloUsage).where(m.PolishingSiloUsage.polishing_process_id.in_(objek)).order_by(m.PolishingSiloUsage.id))).all()
     silos={s.id:s for s in (await db.scalars(select(m.Silo).where(m.Silo.id.in_({u.silo_id for u in usages} or {0})))).all()}
     for r in baris:
         o=objek[r['id']];used=[u for u in usages if u.polishing_process_id==o.id];out=outputs.get(o.id,{})
@@ -160,14 +162,20 @@ async def _sosoh(db,baris,objek):
         n=neraca_sosoh(bobot.kg if pasti else 0,out)
         def rincian(samping):
             return '\n'.join(f'{nama_produk(j)}: {kg(v)}' for j,v in out.items() if adalah_samping(j)==samping) or 'Belum tercatat'
+        per_jenis=defaultdict(list)
+        for u in used:
+            jenis=(silos[u.silo_id].jenis_isi or 'pk') if u.silo_id in silos else 'jenis_bahan_belum_tercatat'
+            b=bobot_pemakaian([u])
+            per_jenis[jenis].append(b.kg if u.berat_akhir_kg is not None and b.pasti else None)
+        bahan_jenis='\n'.join(('Jenis bahan belum tercatat' if j=='jenis_bahan_belum_tercatat' else nama_produk(j))+': '+(kg(jumlah(v)) if jumlah(v) is not None else 'Belum final') for j,v in per_jenis.items()) or 'Belum tercatat'
         r.update(bahan=bobot.teks() if pasti else 'Belum final',
-                 asal='\n'.join((silos[u.silo_id].nama_silo+' · '+str(silos[u.silo_id].jenis_isi or 'PK')+' · '+(kg(u.berat_terpakai_kg) if u.berat_akhir_kg is not None else 'pemakaian belum final')) for u in used if u.silo_id in silos) or 'Belum tercatat',
+                 bahan_jenis=bahan_jenis,_bahan_per_jenis={j:jumlah(v) for j,v in per_jenis.items()},
                  hasil_beras=rincian(False),hasil_samping=rincian(True),hasil=kg(n.keluar_kg) if out else 'Belum tercatat',
                  rendemen=persen(rendemen(n.beras.kg,bobot.kg) if pasti and out else None),
                  susut=kg(n.susut.kg) if pasti and out else 'Belum dapat dihitung',
                  _bahan=bobot.kg if pasti else None,_hasil=n.keluar_kg if out else None,
                  _beras=n.beras.kg if out else None,_susut=n.susut.kg if pasti and out else None,
-                 _output=out,_rendemen_final=pasti and bool(out))
+                 _output=out,_urutan_hasil=urutan_hasil,_rendemen_final=pasti and bool(out))
 
 
 async def _perpindahan(db,kode,baris,objek):
@@ -225,7 +233,7 @@ ISI = {
  'pk_masuk':[('mitra','Pemasok / pemilik'),('jenis','Jenis PK'),('karung','Karung'),('nota','Bobot nota'),('timbangan','Bobot timbangan'),('selisih','Selisih nota - timbang'),('bobot','PK diterima')],
  'pengeringan':[('alat','Pengering'),('bahan','Gabah basah masuk'),('kadar_awal','KA awal'),('kadar_akhir','KA akhir'),('estimasi','Estimasi gabah kering'),('hasil','Gabah kering terukur')],
  'penggilingan':[('asal','Sumber gabah'),('bahan','Gabah terpakai'),('jenis_pk','Jenis PK'),('hasil','Hasil PK'),('rendemen','Rendemen PK'),('selisih_bahan','Selisih bahan - PK')],
- 'penyosohan':[('asal','Silo / jenis bahan'),('bahan','Bahan terpakai'),('hasil_beras','Beras per spek / grade'),('hasil_samping','Hasil samping per jenis'),('hasil','Total hasil'),('susut','Susut debu & bobot'),('rendemen','Rendemen beras')],
+ 'penyosohan':[('bahan_jenis','Bahan per jenis'),('bahan','Bahan terpakai'),('hasil_beras','Beras per spek / grade'),('hasil_samping','Hasil samping per jenis'),('hasil','Total hasil'),('susut','Susut debu & bobot'),('rendemen','Rendemen beras')],
  'transfer_pk':[('asal','Lot giling asal'),('tujuan','Tujuan'),('karung','Karung'),('bobot','PK dipindahkan')],
  'pemasukan_pk':[('asal','Sumber PK'),('tujuan','Penempatan'),('bobot','PK masuk Gudang 2')],
  'pindah_pk':[('asal','Asal tumpukan'),('tujuan','Silo tujuan'),('karung','Karung'),('bobot','PK dipindahkan'),('selama_proses','Waktu pemasukan')],
@@ -237,18 +245,49 @@ ISI = {
 }
 
 
+KELOMPOK = {
+ 'gabah_masuk': {'jenis':'Bahan','kadar_air':'Bahan',**{k:'Bobot penerimaan' for k in ('nota','timbangan','selisih','bobot')}},
+ 'pk_masuk': {'jenis':'Bahan',**{k:'Penerimaan' for k in ('karung','nota','timbangan','selisih','bobot')}},
+ 'pengeringan': {'bahan':'Bahan','kadar_awal':'Bahan',**{k:'Hasil' for k in ('kadar_akhir','estimasi','hasil')}},
+ 'penggilingan': {'asal':'Bahan','bahan':'Bahan','jenis_pk':'Hasil','hasil':'Hasil'},
+ 'transfer_pk': {'asal':'Pemindahan','tujuan':'Pemindahan','karung':'Jumlah dipindahkan','bobot':'Jumlah dipindahkan'},
+ 'pemasukan_pk': {'asal':'Penerimaan','tujuan':'Penerimaan','bobot':'Penerimaan'},
+ 'pindah_pk': {'asal':'Pemindahan','tujuan':'Pemindahan','karung':'Jumlah dipindahkan','bobot':'Jumlah dipindahkan'},
+ 'pengemasan': {'produk':'Hasil kemasan','karung':'Hasil kemasan','hasil':'Hasil kemasan'},
+ 'kemas_ulang': {**{k:'Bahan' for k in ('produk_asal','karung_asal','bahan')},**{k:'Hasil' for k in ('produk','karung','hasil')},'sisa':'Sisa'},
+ 'barang_keluar': {'rincian_muatan':'Barang','perintah':'Muatan','dimuat':'Muatan','nota':'Tiket armada','timbangan':'Tiket armada'},
+ 'retur_pelanggan': {**{k:'Barang kembali' for k in ('hasil','karung','diterima')},'tiket_retur':'Pemeriksaan bobot','selisih_retur':'Pemeriksaan bobot'},
+ 'retur_pk': {'asal':'Barang kembali','bobot':'Barang kembali'},
+}
+
+
 def atur(data,kode,baris):
     """Kontrak kolom yang sama dipakai layar, kartu ponsel, dan PDF."""
     cols=[('kode','Kode'),('tanggal','Tanggal')]+ISI[kode]+[('status','Status')]
     if kode not in ('gabah_masuk','pk_masuk','retur_pelanggan'):
         cols.append(('pemilik','Pemilik'))
-    data['kolom']=[dict(kunci=k,nama=n) for k,n in cols]
+    bahan_cols=[];hasil_cols=[]
+    if kode=='penyosohan':
+        from app.services.stok import nama_produk
+        jenis_bahan=list(dict.fromkeys(j for r in baris for j in r.get('_bahan_per_jenis',{})))
+        jenis_hasil=list(dict.fromkeys(j for r in baris for j in r.get('_output',{})))
+        urutan=list(dict.fromkeys(j for r in baris for j in r.get('_urutan_hasil',[])))
+        jenis_hasil.sort(key=lambda j:(urutan.index(j) if j in urutan else len(urutan),nama_produk(j)))
+        bahan_cols=[(f'bahan_{i}',nama_produk(j),j) for i,j in enumerate(jenis_bahan)]
+        hasil_cols=[(f'hasil_{i}',nama_produk(j),j) for i,j in enumerate(jenis_hasil)]
+        cols=[('kode','Kode'),('tanggal','Tanggal'),('pemilik','Pemilik')]+[(k,n) for k,n,_ in bahan_cols]+[('bahan','Total bahan')]+[(k,n) for k,n,_ in hasil_cols]+[('hasil','Total hasil'),('susut','Susut debu & bobot'),('rendemen','Rendemen beras'),('status','Status')]
+    data['kolom']=[dict(kunci=k,nama=n,kelompok=('Bahan' if k=='bahan' or any(k==x[0] for x in bahan_cols) else 'Hasil' if k=='hasil' or any(k==x[0] for x in hasil_cols) else None) if kode=='penyosohan' else KELOMPOK.get(kode,{}).get(k)) for k,n in cols]
     for r,asli in zip(data['rincian'],baris):
         for k,_ in ISI[kode]:
             if k in ('bobot','nota','timbangan','selisih'):continue
             if k in asli:r[k]=str(asli[k]) if asli[k] is not None else 'Belum tercatat'
             else:r.setdefault(k,'Belum tercatat')
         if asli.get('pemilik_teks'):r['pemilik']=asli['pemilik_teks']
+        for k,_,j in bahan_cols:
+            r[k]=kg(asli.get('_bahan_per_jenis',{}).get(j)) if asli.get('_bahan_per_jenis',{}).get(j) is not None else 'Belum final'
+        for k,_,j in hasil_cols:
+            outputs=asli.get('_output',{})
+            r[k]=kg(outputs[j]) if j in outputs else ('-' if outputs else 'Belum tercatat')
     # Ringkasan memuat besaran yang memang dinilai pada tahap ini. Tidak ada
     # penjumlahan rendemen per lot atau pemakaian bobot nota sebagai bahan mesin.
     if kode in ('gabah_masuk','pk_masuk'):

@@ -34,6 +34,11 @@ async def test_sosoh_semua_catatan_hasil_spek_samping_dan_neraca(pg,pemakai):
         assert '6.000 kg' in r['hasil_beras'] and '500 kg' in r['hasil_beras']
         assert all(v in r['hasil_samping'] for v in ['1.200 kg','700 kg','1.500 kg','50 kg'])
         assert r['hasil']=='9.950 kg'
+        assert 'asal' not in keys(d)
+        assert any(c['kelompok']=='Bahan' for c in d['kolom'])
+        assert any(c['kelompok']=='Hasil' and c['nama']=='Broken' for c in d['kolom'])
+        assert not any('silo' in c['nama'].lower() for c in d['kolom'])
+        assert '10.000 kg' in r['bahan_jenis']
         assert r['susut']=='50 kg'
         assert r['rendemen']=='65,00%'
         assert any(x['nama']=='Rendemen beras' and x['nilai']=='65,00%' for x in d['ringkasan'])

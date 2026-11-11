@@ -14,6 +14,7 @@
 #lembar .lp-catatan {color:var(--pd-muted,var(--redup));font-size:13px;margin:8px 0;}
 #lembar td small {display:block;}
 #lembar td {white-space:pre-line;}
+#lembar th[scope="colgroup"] {text-align:center;}
 @media screen and (max-width:650px) {
 #lembar .lp-tabel {overflow:visible;}
 #lembar table,#lembar tbody,#lembar tr,#lembar td {display:block;width:100%;box-sizing:border-box;}
@@ -121,16 +122,26 @@
     d.status.forEach(function (r) { h += '<span>' + aman(r.nama) + ': <b>' + aman(r.nilai) + '</b></span>'; });
     h += '</div>';
     if (d.rincian.length) {
-      var kolommen = d.kolom.map(function (c) { return [c.kunci,c.nama]; });
+      var kolommen = d.kolom.map(function (c) { return [c.kunci,c.nama,c.kelompok]; });
       h += '<div class="lp-tabel"><table><caption class="lbl">Rincian transaksi</caption><thead><tr>';
-      kolommen.forEach(function (c) { h += '<th scope="col">' + c[1] + '</th>'; });
+      var bertingkat = d.kolom.some(function (c) { return !!c.kelompok; });
+      if (bertingkat) {
+        for (var i = 0; i < d.kolom.length;) {
+          var c = d.kolom[i];
+          if (!c.kelompok) { h += '<th scope="col" rowspan="2">' + aman(c.nama) + '</th>'; i++; continue; }
+          var j = i + 1; while (j < d.kolom.length && d.kolom[j].kelompok === c.kelompok) j++;
+          h += '<th scope="colgroup" colspan="' + (j-i) + '">' + aman(c.kelompok) + '</th>'; i = j;
+        }
+        h += '</tr><tr>';
+        d.kolom.forEach(function (c) { if (c.kelompok) h += '<th scope="col">' + aman(c.nama) + '</th>'; });
+      } else { kolommen.forEach(function (c) { h += '<th scope="col">' + aman(c[1]) + '</th>'; }); }
       h += '</tr></thead><tbody>';
       d.rincian.forEach(function (r) {
         h += '<tr>';
         kolommen.forEach(function (c) {
           var nilai = r[c[0]] == null ? 'Belum tercatat' : r[c[0]];
           if (c[0] === "kode" && r.tiket !== "-") nilai += " / " + r.tiket;
-          h += '<td data-label="' + c[1] + '">' + aman(nilai) +
+          h += '<td data-label="' + aman((c[2] ? c[2] + ' · ' : '') + c[1]).replace(/"/g, '&quot;') + '">' + aman(nilai) +
             (c[0] === "nota" && r.sumber_nota === "Mengikuti timbangan" ? '<small class="lp-catatan">Mengikuti timbangan</small>' : '') + '</td>';
         });
         h += '</tr>';
