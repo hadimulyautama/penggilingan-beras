@@ -68,7 +68,7 @@ async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(p
             assert not soup.select('[data-rpd-nav-open],[data-rqd-nav-open],[data-rhs-nav-open],#lk-menu')
             assert 'Laporan &amp; Riwayat' not in r.text
             if path=='/riwayat-giling':
-                assert soup.select_one('.rpd-header h1,.rpd-header .rhs-meta,.rpd-description') is None
+                assert soup.select_one('.rpd-header h1,.rpd-header .rhs-meta,.rpd-description,.rpd-intro h2') is None
                 assert 'Giling yang sudah ditutup' in soup.select_one('#rpd-panduan').get_text()
             if path=='/riwayat-qc/gabah-basah':
                 assert soup.select_one('.rqd-list>.rhs-header') is None

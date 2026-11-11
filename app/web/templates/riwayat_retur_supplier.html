@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="/static/riwayat_retur_supplier.css?v={{ VERSI }}&rsh=4">
 <link rel="stylesheet" href="/static/daftar-retur-supplier-desain.css?v={{ VERSI }}">
 <div class="rsp rsh rrs" data-daftar-retur-supplier>
- <header class="rrs-kepala"><h2>Retur ke Supplier</h2></header>
  {% if filter.penerimaan %}<section class="rsp-peringatan" aria-label="Cakupan penerimaan">Riwayat dibatasi pada penerimaan {% if data and data.asal %}<a href="/barang-masuk/{{ data.asal.id }}">{{ data.asal.kode }}</a>{% else %}yang dipilih{% endif %}. <a href="{{ href(penerimaan='',halaman=1) }}">Lihat semua penerimaan yang diizinkan</a></section>{% endif %}
  <form id="rrs-form" method="get" class="rrs-kontrol" aria-label="Pencarian dan filter riwayat">
   <button class="btn rrs-desktop-filter" type="button" data-rrs-filter-open aria-haspopup="dialog" aria-controls="rrs-filter" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg> Filter{% if rrs_filter_n %} · {{ rrs_filter_n }}{% endif %}</button>

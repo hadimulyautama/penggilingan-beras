@@ -14,7 +14,6 @@
 </section>
 {% else %}
 <section class="rpd-intro" aria-label="{{ title }}">
- <h2>{{ title|replace('Riwayat ', '') }}</h2>
  <div class="rpd-stats" aria-label="Ringkasan {{ title }}">{% for icon,value,caption in stats %}<div><span>{{ caption }}</span><strong>{{ value }}</strong></div>{% endfor %}</div>
 </section>
 {% endif %}
