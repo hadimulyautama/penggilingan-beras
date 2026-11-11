@@ -339,3 +339,7 @@ body.padiflow-ui:not(.pd-timbang) .kb, #portal-hmu[data-theme] .canonical-body .
 
 /* Pemilihan tab hanya mengubah penanda aktif, bukan ukuran huruf/label. */
 body.padiflow-ui :is(.laporan-nav__tabs,.sk-tab,.pengiriman-kontrol__tab,.kb-tabs,.jasa-detail-tab,.rhs-tabs,.sr-design-tabs,.giling-tabs,.pengeringan-tabs,.transfer-tabs,.qc-tabs)>:is(a,button,span){font-weight:500!important;}
+
+/* Batas menu, bukan batas kartu atau tabel di belakangnya. */
+body.padiflow-ui :is(.bk-buat-opsi,.rhs-menu-body,.dr-menu-body,.sr-design-menu-body){box-sizing:border-box;min-width:min(220px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;overflow-wrap:anywhere;}
+body.padiflow-ui :is(.bk-buat-opsi,.rhs-menu-body,.dr-menu-body,.sr-design-menu-body) :is(a,button,.btn){box-sizing:border-box;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;}

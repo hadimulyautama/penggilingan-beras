@@ -23,7 +23,7 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
   else:
    html=env.get_template('_barang_keluar_kontrol.html').render(request=req,VERSI='515',BOLEH_PERINTAH=True,pencarian='',status_filter='',sejak_filter='',n_perintah=2,n_dimuat=1)
   css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css'])
-  return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui '+('terik' if light else '')+'"><style>body{padding-left:0!important}</style><main class="isi">'+html+'</main><script>window.print=()=>window.cetak=(window.cetak||0)+1</script></body>'
+  return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui '+('terik' if light else '')+'"><style>body{padding-left:0!important}</style><main class="isi">'+html+'</main><script>window.print=()=>window.cetak=(window.cetak||0)+1</script><script src="/static/menu-layar.js"></script></body>'
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   def route(r):
@@ -39,6 +39,14 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
    assert page.locator('.pengiriman-kontrol .pengiriman-tab a').count()==2
    assert page.locator('.pengiriman-kontrol .pengiriman-tab a[aria-current]').get_attribute('href')==path
    tab=page.locator('.pengiriman-tab a[aria-current]');styles.append(tab.evaluate('(e)=>{const s=getComputedStyle(e);return [s.fontSize,s.padding,s.borderBottomWidth,s.borderBottomColor,s.backgroundColor]}'))
+   if path=='/barang-keluar':
+    # Tombol sekarang di kiri; posisi menu lama pernah memotong seluruh awal label.
+    page.locator('[data-bk-buat]>summary').click()
+    menu=page.locator('.bk-buat-opsi');expect(menu).to_be_visible()
+    bounds=menu.bounding_box()
+    assert bounds['x']>=8 and bounds['x']+bounds['width']<=width-8
+    assert menu.locator('a').count()==2
+    page.keyboard.press('Escape');expect(menu).not_to_be_visible()
    if path=='/retur':
     assert page.get_by_role('searchbox').count()==0
     assert page.get_by_role('link',name='Buka riwayat pengiriman').count()==0

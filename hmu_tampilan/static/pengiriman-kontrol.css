@@ -57,3 +57,5 @@ body.padiflow-ui .bk-judul{justify-content:flex-end;}
 
 body.padiflow-ui .pengiriman-kontrol__tab>span{display:flex;align-items:center;justify-content:center;min-height:53px;box-sizing:border-box;padding:10px 6px;text-align:center;font-size:14px;line-height:1.55;border-bottom:2px solid transparent;}
 @media(max-width:650px){body.padiflow-ui .pengiriman-kontrol__tab>span{font-size:11px;padding:6px 3px;}}
+
+body.padiflow-ui .bk-alat>.bk-buat>.bk-buat-opsi{left:0;right:auto;box-sizing:border-box;width:min(280px,calc(100vw - 32px));}
