@@ -8,7 +8,6 @@
 {% include '_pekerjaan_kontrol.html' %}
 {% if request.query_params.get('grup') or request.query_params.get('asal') or request.query_params.get('kategori') %}<p class="bantu">Saringan dari tautan lama aktif. <a href="{{ href(grup='',asal='',kategori='',jenis='') }}">Lihat semua pekerjaan</a>.</p>{% endif %}
 {% if tab=='tindakan' %}
-<p class="bantu">{{ jumlah_daftar }} pekerjaan perlu tindakan. Penerimaan tiket ada di <a href="/barang-masuk">Barang Masuk</a>.</p>
 {% for key,nama,baris in kelompok %}
 {{ benda.blok(nama,baris,alamat=request.url.path,listview=true,tabel='packing' if key=='packing' else false) }}
 {% endfor %}
