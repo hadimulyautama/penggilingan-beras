@@ -14,12 +14,14 @@ pytestmark = pytest.mark.asyncio
     ('operator','Gudang 1',3,3,False),('operator','Gudang 2',1,2,False),
 ])
 async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
+    from bs4 import BeautifulSoup
     async with await _klien(pg,peran=role,gudang=gudang) as c:
         r=await c.get('/laporan-riwayat')
         assert r.status_code==200
         assert r.url.path==('/riwayat-sosoh' if gudang=='Gudang 2' else '/riwayat-pengeringan')
         tabs=r.text.split('aria-label="Jenis halaman"')[1].split('</nav>')[0]
-        assert 'aria-current="page">Riwayat proses</a>' in tabs.split('</a>')[0] + '</a>'
+        aktif=BeautifulSoup(r.text,'html.parser').select_one('nav[aria-label="Jenis halaman"] a[aria-current]')
+        assert aktif.get_text(strip=True)=='Riwayat proses'
         sidebar=r.text.split('aria-label="Navigasi utama"')[1]
         assert sidebar.count('>Riwayat<')==1
         assert sidebar.count('>Laporan periode<')==1
@@ -77,7 +79,8 @@ async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(p
                 assert not any('Panduan' in b.get_text() or 'Cetak' in b.get_text() for b in menu.select('button'))
         r=await c.get('/laporan')
         soup=BeautifulSoup(r.text,'html.parser')
-        assert soup.h1.get_text(strip=True)=='Laporan periode'
+        assert soup.select_one('.laporan-nav h1') is None
+        assert 'Laporan periode' in soup.title.get_text()
         assert soup.select_one('[data-jenis-riwayat]') is None
         assert not soup.select('.laporan-nav a[href="/laporan"]:not([data-tab-riwayat])')
         r=await c.get('/riwayat',follow_redirects=False)

@@ -15,7 +15,7 @@ def siapkan(request, konteks):
         tabs.append(dict(kunci='lain', nama='Pekerjaan lain', href=tujuan, boleh=True, alamat=[]))
         konteks['MENU_AKTIF'] = 'pekerjaan'
         konteks['LAPORAN_NAV'] = dict(aktif='lain' if katalog else konteks.get('tab','tindakan'), kelompok_nama='Pekerjaan',
-            tab_label='Tab pekerjaan', tab=tabs, pilihan=[], boleh_alamat=[], detail=False, panduan='pk-panduan')
+            tab_label='Tab pekerjaan', pakai_jumlah=True, tab=tabs, pilihan=[], boleh_alamat=[], detail=False, panduan='pk-panduan')
         return
     retur = path == '/riwayat-retur-supplier' or path.startswith('/riwayat-retur-supplier/')
     if path != '/barang-masuk' and not retur:
@@ -27,8 +27,6 @@ def siapkan(request, konteks):
     for kunci, nama in [('belum', 'Belum diterima'), ('diterima', 'Diterima')]:
         url = tautan(status=kunci, halaman='') if tautan else '/barang-masuk?status=' + kunci
         t = dict(kunci=kunci, nama=nama, href=url, boleh=True, alamat=[])
-        if not retur:
-            t['jumlah'] = konteks.get('total_' + kunci, 0)
         tabs.append(t)
     tabs.append(dict(kunci='retur-supplier', nama='Retur ke Supplier', href='/riwayat-retur-supplier', boleh=True, alamat=[]))
     konteks['MENU_AKTIF'] = 'barang_masuk'

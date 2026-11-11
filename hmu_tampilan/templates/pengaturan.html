@@ -8,7 +8,7 @@
 {% block judul %}Pengaturan{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
-<section class="pg" aria-labelledby="pg-judul">
+<section class="pg"{% if BAGIAN|default('') %} aria-labelledby="pg-judul"{% else %} aria-label="Pengaturan"{% endif %}>
 {% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 {{ peringatan(versi, tuan) }}
@@ -17,7 +17,6 @@
   <p class="pg-lingkup">Pengaturan / {{ kelompok_pengaturan }}</p><h1 id="pg-judul">{{ judul_pengaturan }}</h1>
   <div class="pg-rincian">{% if BAGIAN == 'akses' %}{% include "_daftar_akses.html" %}{% else %}{% include "_pengaturan_formulir.html" %}{% endif %}</div>
 {% else %}
-  <header class="pg-intro"><h1 id="pg-judul">Pengaturan</h1><p>Akun, perangkat, dan pengaturan kerja.</p></header>
   <div class="pg-akun"><span class="pg-akun__ikon">{{ ikon('user') }}</span><div><strong>{{ akun.nama }}</strong><p>{{ akun_peran_label|default('') }}</p></div></div>
   <div class="pg-terik">{% include "_pengaturan_terik.html" %}</div>
   <div class="pg-kelompok">

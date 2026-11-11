@@ -2,7 +2,7 @@
 {% from '_panduan.html' import panel as panel_panduan %}
 {% call(slot) kontrol_pengiriman('Barang Retur', 'retur') %}
 {% if slot=='cakupan' %}
-<p class="bk-cakupan">Barang keluar dan retur pelanggan.</p>
+
 {% elif slot=='panel' %}
 {% call panel_panduan('bk-panduan', 'Panduan barang retur', penutup={'data-bk-tutup':''}) %}
 <h3>Bantuan alur retur</h3><p>Buka pengiriman yang sudah keluar → ajukan retur → timbang dan periksa barang → terima ke stok.</p>

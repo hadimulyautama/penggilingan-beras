@@ -4,8 +4,7 @@
 <link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=3">
 {% from '_jasa_kontrol.html' import kontrol with context %}
 {{ kontrol() }}
-<p class="bantu">Satu pelanggan, seluruh pesanan dan barang titipannya.</p>
-<p class="bantu">{{ jumlah }} pelanggan · saldo dibaca dari seluruh pesanan pelanggan, sesuai jenis barang dan lokasinya.</p>
+<p class="bantu">{{ jumlah }} pelanggan</p>
 <div class="jasa-daftar">
 {% for d in kartu %}
 <a class="kartu jasa-pelanggan" href="/jasa/pelanggan/{{ d.id }}?{{ {'status':tapis,'cari':cari,'halaman':halaman}|urlencode }}">

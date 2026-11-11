@@ -40,7 +40,6 @@
 {% endblock %}
 
 {% block kaki %}
-<div class="kaki">{%- if VIEW == V_POLESAN %}PK di tumpukan tersedia; PK di silo menjadi bahan proses{%- elif boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya{%- else %}Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini{% endif -%}</div>
 {% if boleh_ubah or boleh_minta or boleh_pindah_tumpukan %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
 {% endif %}

@@ -1,5 +1,5 @@
 <link rel="stylesheet" href="/static/pengiriman-kontrol.css?v={{ VERSI }}">
 <nav class="pengiriman-tab pengiriman-kontrol__tab" aria-label="Jenis pengiriman">
   <a href="/barang-keluar" {% if tab_pengiriman != 'retur' %}aria-current="page"{% endif %}>Barang Keluar</a>
-  {% if BOLEH_PERINTAH|default(false) or tab_pengiriman == 'retur' %}<a href="/retur" {% if tab_pengiriman == 'retur' %}aria-current="page"{% endif %}>Barang Retur</a>{% endif %}
+  {% if BOLEH_PERINTAH|default(false) or tab_pengiriman == 'retur' %}<a href="/retur" {% if tab_pengiriman == 'retur' %}aria-current="page"{% endif %}>Barang Retur</a>{% else %}<span aria-disabled="true" class="akses-terkunci">Barang Retur</span>{% endif %}
 </nav>

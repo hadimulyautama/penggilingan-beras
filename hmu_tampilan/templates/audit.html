@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block judul %}Audit aktivitas{% endblock %}
 {% block isi %}
-<h1>Audit aktivitas</h1>
 
 {# ── Siapa mencatat apa, jam berapa ──
    Laporan menjawab "berapa"; layar ini menjawab pertanyaan yang muncul
@@ -14,7 +13,7 @@
 
 <div class="hitungan">
   {{ catatan|length }} dari {{ semua }} catatan{% if rentang == '48j' %} ·
-  {{ JAM_BATAS }} jam terakhir; kelayakan pembatalan diperiksa terpisah{% endif %}
+  {{ JAM_BATAS }} jam terakhir{% endif %}
 </div>
 
 {# ── Membatalkan ──

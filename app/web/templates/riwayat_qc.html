@@ -10,7 +10,7 @@
 <main class="riwayat-detail rhs rqd rqd-list" data-riwayat-qc>
 {% if not LAPORAN_NAV %}{{ alat() }}{% endif %}
 <div data-rqd-category-slot></div>
-<section class="riwayat-detail__card"><div class="rhs-mass"><div><span>Lot atau proses</span><strong>{{ rows|length }}</strong></div><div><span>Pencatatan QC</span><strong>{{ jumlah_putaran.n }}</strong></div><div><span>Urut berdasarkan waktu</span><strong>Terbaru</strong></div></div></section>
+<section class="riwayat-detail__card"><div class="rhs-mass"><div><span>Lot atau proses</span><strong>{{ rows|length }}</strong></div><div><span>Pencatatan QC</span><strong>{{ jumlah_putaran.n }}</strong></div></div></section>
 <section>
 
   {% if catatan_kosong %}
@@ -46,7 +46,6 @@
       {% endfor %}
       </div>
     </div>
-    {% if rows|length >= 200 %}<p class="bantu">Menampilkan 200 batch atau proses terbaru; seluruh putaran masing-masing tetap dihitung.</p>{% endif %}
   {% endif %}
 </section>
 {{ panduan_qc() }}

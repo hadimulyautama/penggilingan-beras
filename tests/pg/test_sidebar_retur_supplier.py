@@ -101,6 +101,7 @@ async def test_sidebar_sama_di_seluruh_halaman_retur_dan_hak_tetap(pg, asal, mon
                     tabs = soup.select('nav[aria-label="Bagian Barang Masuk"] a')
                     assert [a.get_text(strip=True) for a in tabs] == ['Belum diterima','Diterima','Retur ke Supplier']
                     assert tabs[-1].get('aria-current') == 'page'
+                    assert not any(a.select('.pil__jml') for a in tabs)
                     assert soup.select_one('a.pintu--kini')['href'] == '/barang-masuk'
                     assert not soup.select('nav[aria-label="Jenis halaman"]')
                 assert response.headers['cache-control'] == 'private, no-store'

@@ -336,3 +336,6 @@ body.padiflow-ui:not(.pd-timbang) .kb, #portal-hmu[data-theme] .canonical-body .
 
 .kontrol-tab-ikon{display:none;}
 @media(max-width:650px){.kontrol-tab-label{display:none;}.kontrol-tab-ikon{display:block;flex:none;}}
+
+/* Pemilihan tab hanya mengubah penanda aktif, bukan ukuran huruf/label. */
+body.padiflow-ui :is(.laporan-nav__tabs,.sk-tab,.pengiriman-kontrol__tab,.kb-tabs,.jasa-detail-tab,.rhs-tabs,.sr-design-tabs,.giling-tabs,.pengeringan-tabs,.transfer-tabs,.qc-tabs)>:is(a,button,span){font-weight:500!important;}

@@ -3,6 +3,7 @@
 {% macro panduan_qc() %}
 {% from '_panduan.html' import panel as panduan %}
 {% call panduan('rqd-panduan','Panduan riwayat QC',penutup={'data-rqd-guide-close':'','data-lk-tutup':''}) %}
+<p><strong>Urutan daftar.</strong> Menampilkan paling banyak 200 batch atau proses terbaru; seluruh putaran masing-masing tetap dihitung.</p>
 <p><strong>Penelusuran.</strong> Pilih batch atau proses untuk melihat asal bahan, nomor polisi, dan seluruh hasil pemeriksaan QC di halaman detail.</p>
 <p><strong>Gabah.</strong> Dua pembacaan kadar air tiap pemeriksaan tetap terpisah pada Putaran. Ringkasan memakai seluruh pembacaan yang sah. {% if jenis|default('') == 'gabah-basah' %}Lamur gabah basah berupa total sak.{% endif %} Penutupan lebih awal menyimpan waktu, petugas dan alasan. Gabah tidak memakai skor atau kelas PK.</p>
 <p><strong>PK.</strong> Enam komponen dinilai dari rata-rata tiap komponen seluruh putaran, lalu dikonversi menjadi skor dengan bobot sama. Komponen kosong tidak dianggap nol atau Bersih dan tidak ikut pembagi. Rumus, aturan dan batas kelas tersedia pada Perhitungan.</p>

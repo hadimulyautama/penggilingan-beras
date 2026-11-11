@@ -23,7 +23,7 @@ async def test_katalog_dan_konteks(pg, pabrik, role):
         assert BeautifulSoup(r.text,'html.parser').select_one('.pk-kepala a[href="/transfer-bertahap"]') is None
         assert masuk and masuk.get_text(strip=True)=='Pekerjaan lain'
         assert not re.search(r'<a[^>]*href="/aksi-lain"',r.text)
-        tabs=re.search(r'aria-label="Tab pekerjaan">(.*?)</nav>',r.text,re.S)[1]
+        tabs=str(BeautifulSoup(r.text,'html.parser').select_one('nav[aria-label="Tab pekerjaan"]'))
         assert tabs.count('<a ')==3
         katalog=await c.get(masuk['href'])
         assert katalog.status_code==200

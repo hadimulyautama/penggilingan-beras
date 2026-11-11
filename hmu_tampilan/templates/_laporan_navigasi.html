@@ -3,9 +3,9 @@
 {% from '_laporan_kontrol.html' import panel with context %}
 <section class="laporan-nav" aria-label="{{ LAPORAN_NAV.kelompok_nama|default('Laporan periode' if LAPORAN_NAV.aktif == 'laporan' else 'Riwayat') }}" data-laporan-kontrol data-aktif="{{ LAPORAN_NAV.aktif }}" data-tujuan-tab='{{ LAPORAN_NAV.tab|tojson }}'>
   <div class="laporan-nav__bar">
-    {% if LAPORAN_NAV.aktif != 'laporan' %}<nav class="laporan-nav__tabs" aria-label="{{ LAPORAN_NAV.tab_label|default('Jenis halaman') }}">
-    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}>{{ t.nama }}{% if t.jumlah is defined %} <span class="pil__jml">{{ t.jumlah }}</span>{% endif %}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
-    </nav>{% else %}<h1 class="laporan-nav__judul">Laporan periode</h1>{% endif %}
+    {% if LAPORAN_NAV.aktif != 'laporan' %}<nav class="laporan-nav__tabs" aria-label="{{ LAPORAN_NAV.tab_label|default('Jenis halaman') }}"{% if LAPORAN_NAV.pakai_jumlah %} data-tab-berjumlah{% endif %}>
+    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}><span class="tab-label">{{ t.nama }}</span>{% if LAPORAN_NAV.pakai_jumlah %} <span class="pil__jml"{% if t.jumlah is not defined %} aria-hidden="true"{% endif %}>{{ t.jumlah|default('') }}</span>{% endif %}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
+    </nav>{% else %}<span class="laporan-nav__judul" aria-hidden="true"></span>{% endif %}
     {% if LAPORAN_NAV.pilihan %}
     <select class="laporan-nav__pilihan" data-jenis-riwayat aria-label="{{ 'Pilih proses' if LAPORAN_NAV.aktif == 'proses' else 'Pilih pemeriksaan QC' }}">
       {% for kunci, nama, alamat, gudang in LAPORAN_NAV.pilihan %}{% if not TAMPILAN_INDUK or alamat in LAPORAN_NAV.boleh_alamat %}<option value="{{ alamat }}"{% if kunci == LAPORAN_NAV.jenis %} selected{% endif %}>{{ nama }}</option>{% else %}<option disabled>{{ nama }} — tidak memiliki akses</option>{% endif %}{% endfor %}

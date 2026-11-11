@@ -42,12 +42,10 @@ def test_kontrol_kartu_bahan_dan_tautan_tetap(width,tmp_path):
     yy=[v.bounding_box()['y'] for v in page.locator(selector).all()];assert max(yy)-min(yy)<1,(selector,yy)
   assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   page.get_by_role('searchbox').fill('Suroto');page.get_by_role('button',name='Cari',exact=True).click();page.wait_for_url('**cari=Suroto**');assert 'halaman' not in calls[-1]
-  page.locator('.js-filter-desktop' if width==1440 else '.js-tindakan-ponsel [data-js-buka="js-filter"]').click();page.locator('#js-filter [name=status]').select_option('berjalan');page.get_by_role('button',name='Terapkan filter').click();page.wait_for_url('**status=berjalan**');assert calls[-1]['cari']=='Suroto'
+  page.locator('.js-filter-desktop').click();page.locator('#js-filter [name=status]').select_option('berjalan');page.get_by_role('button',name='Terapkan filter').click();page.wait_for_url('**status=berjalan**');assert calls[-1]['cari']=='Suroto'
   assert 'status=berjalan' in page.locator('a.jasa-pelanggan').first.get_attribute('href')
-  if width==1440:page.locator('.js-tindakan-desktop [data-js-buka="js-panduan"]').click()
-  else:page.locator('[data-js-buka="js-tindakan"]').click();page.locator('#js-tindakan [data-js-buka="js-panduan"]').click()
+  page.locator('.js-tindakan-desktop [data-js-buka="js-panduan"]').click()
   expect(page.locator('#js-panduan')).to_be_visible();assert 'Pos Timbang' in page.locator('#js-panduan').inner_text();page.keyboard.press('Escape')
-  if width==1440:page.locator('.js-tindakan-desktop [data-js-cetak]').click()
-  else:page.locator('[data-js-buka="js-tindakan"]').click();page.locator('#js-tindakan [data-js-cetak]').click()
+  page.locator('.js-tindakan-desktop [data-js-cetak]').click()
   assert page.evaluate('window.cetak')==1;assert not errors,errors
   out=Path(os.environ.get('BUKTI_JASA_KONTROL',str(tmp_path)));out.mkdir(parents=True,exist_ok=True);page.screenshot(path=str(out/f'daftar-{width}.png'),full_page=True);b.close()

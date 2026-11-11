@@ -26,7 +26,6 @@
         if (kb) {
           kb.querySelector('[data-kabar-semua]').disabled = !n;
           kb.querySelector('[data-kabar-belum]').textContent = 'Belum dibaca (' + n + ')';
-          kb.querySelector('[data-kabar-total]').textContent = n + ' kabar belum dibaca dalam cakupan Anda';
         }
         if (kb && (awal !== n || data.terakhir > Number(kb.dataset.sampai)) && !kb.querySelector('[data-kabar-segar]')) {
           var segar = document.createElement('a'); segar.href = '/kabar' + location.search.replace(/([?&])(sampai|batas)=[^&]*/g, '$1').replace(/[?&]+$/, '');
