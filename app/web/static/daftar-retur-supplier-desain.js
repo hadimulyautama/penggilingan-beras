@@ -11,7 +11,7 @@
  for(const control of fields.querySelectorAll('input,select,textarea,button'))control.setAttribute('form',form.id);
  slot.append(fields);fields.open=true;fields.querySelector('summary').hidden=true;
  for(const button of scope.querySelectorAll('[data-rrs-filter-open]')){
-  button.hidden=false;button.onclick=()=>{scope.querySelector('.rhs-menu').open=false;dialog.showModal();};
+  button.hidden=false;button.onclick=()=>{const menu=scope.querySelector('.rhs-menu');if(menu)menu.open=false;dialog.showModal();};
  }
  root.querySelector('[data-rrs-filter-close]').onclick=()=>dialog.close();
  root.dataset.rrsReady='1';

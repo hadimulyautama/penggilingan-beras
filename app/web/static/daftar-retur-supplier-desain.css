@@ -46,3 +46,5 @@ body.padiflow-ui .rrs .rrs-desktop-filter,body.padiflow-ui .rrs .rsh-cari>.btn{w
 /* Ringkasan ponsel berdampingan agar isi utama lebih cepat terlihat. */
 @media(max-width:700px){.rrs .rrs-metrik{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rrs .rrs-metrik>div{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:1fr auto;gap:8px;min-width:0}.rrs .rrs-metrik>div+div{border:0;border-left:1px solid var(--pd-line);padding:0 0 0 8px}.rrs .rrs-metrik span{font-size:11px;line-height:1.4}.rrs .rrs-metrik strong{font-size:clamp(13px,4.2vw,17px);overflow-wrap:anywhere}}
 @media(max-width:700px){.rrs .rrs-metrik{grid-template-rows:auto auto}.rrs .rrs-metrik>div{grid-template-rows:subgrid;grid-row:span 2}}
+
+@media(max-width:700px){body.padiflow-ui .rrs[data-rrs-ready] .rrs-desktop-filter:not([hidden]){display:inline-flex!important;min-height:46px;}body.padiflow-ui .rrs[data-rrs-ready] .rrs-kontrol{gap:8px;}body.padiflow-ui .rrs .rsh-cari{gap:8px;}}
