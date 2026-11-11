@@ -63,6 +63,7 @@ class Diminta:
     oleh: str
     sejak: object | None = None
     status: str = DIMINTA
+    bertahap: bool = False
 
 
 #: Satu `tipe` untuk seluruh rantai permintaan PK, supaya yang membacanya nanti
@@ -186,7 +187,7 @@ async def _proses(db: AsyncSession, kode: str | None, *, user) -> MillingProcess
 
 
 async def minta(db: AsyncSession, *, user, kode_proses: str | None,
-                berat: float | None = None) -> PermintaanPk:
+                berat: float | None = None, bertahap: bool = False) -> PermintaanPk:
     """Operator Gudang 2 meminta satu lot, BERIKUT berapa yang ia perlukan.
 
     Bobotnya lahir 28 September 2026 (temuan QA): sampai hari itu langkah
@@ -241,7 +242,7 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None,
     kode, proses_id = p.kode_proses, p.id
 
     baris = PermintaanPk(milling_process_id=proses_id, jasa_id=p._pk_owner, diminta_oleh=user.id,
-                         waktu_minta=now_local(), status=DIMINTA,
+                         waktu_minta=now_local(), status=DIMINTA, bertahap=bertahap,
                          berat_minta_kg=kg)
     db.add(baris)
     try:
@@ -295,7 +296,7 @@ async def diminta_peta(db: AsyncSession, proses_ids) -> dict[int, Diminta]:
     )).all()
     return {r[0].milling_process_id: Diminta(id=r[0].id, oleh=r[1] or "?",
                                              sejak=r[0].waktu_minta,
-                                             status=r[0].status)
+                                             status=r[0].status,bertahap=r[0].bertahap)
             for r in baris}
 
 
@@ -371,6 +372,7 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
     from app.penggilingan.gudang2.service import Gudang2Error, _tujuan_and_silo
 
     baris = await _kunci(db, permintaan_id, keadaan=DIMINTA)
+    if baris.bertahap:raise PermintaanError('Periksa jumlah dan tujuan pada halaman Transfer PK, lalu setujui baris yang dipilih.')
     try:
         jenis, silo_id = await _tujuan_and_silo(db, tujuan)
     except Gudang2Error as e:
@@ -458,6 +460,7 @@ async def kirim(db: AsyncSession, *, user, permintaan_id: int,
     # kedua menerima nol baris. Pola yang sama dengan klaim silo giling
     # (migrasi 0056).
     baris = await _kunci(db, permintaan_id, keadaan=DISETUJUI)
+    if baris.bertahap:raise PermintaanError('Gunakan Buat pengiriman pada halaman Transfer bertahap; persetujuan ini dikirim per perjalanan.')
     kg = float(berat if berat is not None else (baris.berat_setuju_kg or 0))
     if kg <= 0:
         raise PermintaanError("Sebutkan berapa kg yang dimuat.")
@@ -559,6 +562,7 @@ async def tutup_admin(db: AsyncSession, *, user, permintaan_id: int,
     from app.services.undo import UndoError, _undo_transfer
 
     baris = await _kunci(db, permintaan_id, keadaan=DIKIRIM)
+    if baris.bertahap:raise PermintaanError('Permintaan bertahap selesai otomatis dari perjalanan timbang; tidak ditutup melalui transfer lama.')
     dikirim = float(baris.berat_kirim_kg or 0)
     final = float(berat_final if berat_final is not None else dikirim)
     if final <= 0:
@@ -656,11 +660,13 @@ async def gugurkan_yang_habis(db: AsyncSession) -> int:
     """
     from app.penggilingan.gudang1.services.milling import pk_breakdown_banyak
 
+    # Permintaan bertahap ditutup dari akumulasi perjalanan, tidak gugur
+    # hanya karena bagian bebasnya sudah dialokasikan.
     # Yang SUDAH DIKIRIM tak ikut digugurkan: barangnya sudah berpindah, dan
     # lot yang "habis" memang habis karena kiriman itu sendiri. Yang menggugur
     # sesudah barangnya jalan akan menghapus kartu penutupan milik Admin.
     terbuka = (await db.execute(select(PermintaanPk).where(
-        PermintaanPk.status.in_((DIMINTA, DISETUJUI))))).scalars().all()
+        PermintaanPk.status.in_((DIMINTA, DISETUJUI)), (PermintaanPk.bertahap.is_(False)|(PermintaanPk.status==DIMINTA))))).scalars().all()
     if not terbuka:
         return 0
     # Satu kueri untuk semuanya: fungsi ini dipanggil tiap kali kartu Admin

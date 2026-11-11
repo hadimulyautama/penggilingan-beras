@@ -2053,7 +2053,7 @@ async def _daftar_permintaan(keadaan, *, dengan_tujuan: bool = False) -> list[di
             select(PermintaanPk, MillingProcess.kode_proses)
             .join(MillingProcess,
                   MillingProcess.id == PermintaanPk.milling_process_id)
-            .where(PermintaanPk.status.in_(keadaan))
+            .where(PermintaanPk.status.in_(keadaan),PermintaanPk.bertahap.is_(False))
             .order_by(PermintaanPk.waktu_minta)
         )).all()
         out = []
@@ -4219,7 +4219,7 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
     async with SessionLocal() as db:
         try:
             b = await minta(db, user=user, kode_proses=req.kode_proses,
-                            berat=berat)
+                            berat=berat, bertahap=True)
         except PermintaanError as e:
             raise _err(e, "Gagal meminta lot PK.")
     # Kalimat ini dua kali menyebut hal yang salah, dan keduanya ketahuan

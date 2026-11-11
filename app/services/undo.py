@@ -668,6 +668,10 @@ async def _undo_transfer(db: AsyncSession, transfer_id: int, *,
                          user_id: int | None = None,
                          alasan: str | None = None) -> str:
     """Batalkan transfer PK ke Gudang 2 — stok siap kirim kembali bertambah."""
+    from app.models import PengirimanPkItem
+    if await db.scalar(select(PengirimanPkItem.id).where(PengirimanPkItem.internal_transfer_id==transfer_id).limit(1)):
+        raise UndoError('Transfer ini bagian perjalanan timbang bertahap; pembatalan terpisah akan memutus jejak muatan.')
+
     from app.services.pk_koreksi_rantai import alasan_perubahan_terpisah
     reason=await alasan_perubahan_terpisah(db,'transfers',transfer_id)
     if reason:raise UndoError(reason)

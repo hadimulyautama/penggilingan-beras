@@ -145,7 +145,7 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
         a = alamat_detail(x)
         return a+'?'+urlencode({'kembali_kerja':konteks}) if a else ''
     # Hanya kartu tindakan permintaan yang memang disediakan bagi pembaca ini.
-    detail_transfer_pk = [dict(id=x.nilai,kode=x.kode,href='/permintaan-pk/'+x.nilai+'?'+urlencode({'kembali_kerja':konteks}))
+    detail_transfer_pk = [dict(id=x.nilai,kode=x.kode,href=x.tautan or '/permintaan-pk/'+x.nilai+'?'+urlencode({'kembali_kerja':konteks}))
                           for x in daftar if x.fase=='pindah_pk' and (x.nilai or '').isdigit()
                           and x.aksi in ('acc_permintaan_pk','kirim_permintaan_pk','tutup_permintaan_pk')]
     from app.main import _pintasan_aksi

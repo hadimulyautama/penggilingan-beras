@@ -24,5 +24,6 @@
 {% from '_panduan.html' import panel as panel_panduan %}
 {% call panel_panduan('pk-panduan', 'Panduan pekerjaan', penutup={'data-pk-tutup': ''}) %}<p><strong>Perlu tindakan</strong><br>Pilih pekerjaan yang siap dikerjakan, lalu gunakan tindakan pada kartu atau daftar.</p><p><strong>Berjalan</strong><br>Pantau proses aktif dan buka detail untuk memperbaruinya.</p><p><strong>Pekerjaan lain</strong><br>Buka katalog pencatatan di luar antrean utama, sesuai akses Anda.</p><p class="bantu">Penerimaan tiket ada di <a href="/barang-masuk">Barang Masuk</a>. Pencarian mengikuti filter aktif dan mencakup seluruh halaman pekerjaan.</p>{% endcall %}
 <dialog class="pk-panel pk-menu" id="pk-tindakan" aria-labelledby="pk-tindakan-judul"><div class="pk-panel-kepala"><h2 id="pk-tindakan-judul">Tindakan</h2><button class="btn pk-ikon" type="button" data-pk-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-pk-buka="pk-panduan">Panduan pekerjaan</button><button class="btn" type="button" data-pk-cetak>Print daftar halaman ini</button></dialog>
+{% if VIEW in V_MEJA or VIEW in (V_SELEPAN,V_POLESAN) %}<p><a class="btn btn--kecil" href="/transfer-bertahap">Transfer PK · pengiriman per perjalanan</a></p>{% endif %}
 </header>
 <script src="/static/pekerjaan-kontrol.js?v={{ VERSI }}" defer></script>

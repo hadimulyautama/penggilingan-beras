@@ -311,6 +311,10 @@ async def baca(db, *, warehouse_id=None, hasil_giling=None):
                     if key.startswith('tumpukan:') and source.stok.gudang.id==lokasi_keluar[record.id]['warehouse_id']),key=lambda v:v.waktu):
                 value=source.tahan(owner,value)
                 if value<=0:break
+    from app.services.pengiriman_pk import reservasi
+    for (pid,owner),value in (await reservasi(db)).items():
+        source=result.get('giling:'+str(pid))
+        if source is not None:source.tahan(canon(owner),value)
     return result
 
 

@@ -56,6 +56,10 @@ async def test_empat_bobot_koreksi_tutup_dan_akses(pg,pabrik,peran):
         # Kewenangan meminta tetap milik operator G2.
         assert (await g2.post('/api/actions/minta-pk-g1',json={'kode_proses':pabrik['lot'],'berat':4400})).status_code==200
         async with pg() as db:pid=await db.scalar(select(PermintaanPk.id))
+        # Fixture historis: rantai empat langkah tetap berlaku pada permintaan
+        # lama. Permintaan baru dari HTTP diuji terpisah melalui perjalanan.
+        async with pg() as db:
+            r=await db.get(PermintaanPk,pid);r.bertahap=False;await db.commit()
         url=f'/permintaan-pk/{pid}?kembali_kerja=%2Fpekerjaan%3Ftab%3Dtindakan%26jenis%3Dtransfer'
         await _potret(c,url,'diminta')
         assert (await g2.get(url)).status_code==403
