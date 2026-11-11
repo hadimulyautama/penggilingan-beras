@@ -1,6 +1,30 @@
 {% extends "base.html" %}
 {% block judul %}Laporan{% endblock %}
 {% block isi %}
+<style>
+#lembar .lp-ringkasan {display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin:16px 0;}
+#lembar .lp-ringkasan div {padding:12px;background:var(--pd-paper,var(--latar));border-radius:8px;}
+#lembar .lp-ringkasan span {display:block;color:var(--pd-muted,var(--redup));font-size:13px;}
+#lembar .lp-ringkasan strong {display:block;margin-top:5px;font-size:18px;}
+#lembar .lp-tabel {overflow-x:auto;margin:16px 0;}
+#lembar table {width:100%;border-collapse:collapse;font-size:14px;}
+#lembar th,#lembar td {padding:10px 8px;border-bottom:1px solid var(--pd-line,var(--garis));text-align:left;vertical-align:top;}
+#lembar .lp-bobot {text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+#lembar .lp-status {display:flex;flex-wrap:wrap;gap:12px;margin:12px 0;}
+#lembar .lp-catatan {color:var(--pd-muted,var(--redup));font-size:13px;margin:8px 0;}
+#lembar td small {display:block;}
+@media screen and (max-width:650px) {
+#lembar .lp-tabel {overflow:visible;}
+#lembar table,#lembar tbody,#lembar tr,#lembar td {display:block;width:100%;box-sizing:border-box;}
+#lembar thead {display:none;}
+#lembar tr {padding:12px 0;border-bottom:1px solid var(--pd-line,var(--garis));}
+#lembar td {display:grid;grid-template-columns:minmax(100px,42%) minmax(0,1fr);gap:8px;border:0;padding:6px 0;overflow-wrap:anywhere;}
+#lembar td::before {content:attr(data-label);font-size:13px;color:var(--pd-muted,var(--redup));}
+#lembar td small {grid-column:2;}
+}
+#lembar [hidden] {display:none!important;}
+@media print { #lembar :is(#periode-grup,#rentang-khusus,#lap-pdf,#lap-unduh){display:none!important;}#lembar .lp-tabel{overflow:visible;}#lembar thead{display:table-header-group;}#lembar tr{break-inside:avoid;}}
+</style>
 
 <div>
   {% if not LAPORAN_NAV %}<span class="lbl">Laporan</span>{% endif %}
@@ -37,6 +61,8 @@
   <div class="lembar__isi">
     <div class="lembar__kepala">
       <h2 id="lap-judul">Laporan</h2>
+      <a class="btn btn--kecil" id="lap-pdf" target="_blank" rel="noopener" hidden>Lihat PDF</a>
+      <a class="btn btn--kecil" id="lap-unduh" hidden>Unduh PDF</a>
       <button class="btn btn--kecil" type="button" data-lk-cetak>Print</button>
       <button class="btn btn--kecil" type="button" id="tutup" data-boleh-offline>Tutup</button>
     </div>
@@ -48,6 +74,13 @@
         {% endfor %}
       </select>
     </div>
+    <form id="rentang-khusus" hidden>
+      <div class="grup"><label class="lbl" for="lap-dari">Dari tanggal</label>
+        <input class="fld" type="date" id="lap-dari" required></div>
+      <div class="grup"><label class="lbl" for="lap-sampai">Sampai tanggal</label>
+        <input class="fld" type="date" id="lap-sampai" required></div>
+      <button class="btn" type="submit">Tampilkan</button>
+    </form>
     <div class="lap" id="lap-isi" role="status" aria-live="polite">Memuat…</div>
   </div>
 </dialog>
@@ -77,6 +110,40 @@
   var grupPeriode = document.getElementById("periode-grup");
   var periode = document.getElementById("periode");
   var kodeAktif = null;
+  var pdf = document.getElementById("lap-pdf");
+  var unduh = document.getElementById("lap-unduh");
+  function aman(s) { var el = document.createElement("span"); el.textContent = String(s); return el.innerHTML; }
+  function tabel(d) {
+    var h = '<p class="lp-catatan">Periode: ' + aman(d.periode) + ' · WIB</p>' +
+      '<p class="lp-catatan">Dasar: ' + aman(d.dasar) + '</p><div class="lp-ringkasan">';
+    d.ringkasan.forEach(function (r) { h += '<div><span>' + aman(r.nama) + '</span><strong>' + aman(r.nilai) + '</strong></div>'; });
+    h += '</div><div class="lp-status">';
+    d.status.forEach(function (r) { h += '<span>' + aman(r.nama) + ': <b>' + aman(r.nilai) + '</b></span>'; });
+    h += '</div>';
+    if (d.rincian.length) {
+      var kolommen = [["kode","Kode / tiket"],["tanggal","Tanggal"],["status","Status"],["pemilik","Kepemilikan"],["nota","Bobot nota"],["timbangan","Bobot timbangan"],["selisih","Selisih nota - timbang"],["bobot","Bobot proses"]];
+      h += '<div class="lp-tabel"><table><caption class="lbl">Rincian transaksi</caption><thead><tr>';
+      kolommen.forEach(function (c) { h += '<th scope="col">' + c[1] + '</th>'; });
+      h += '</tr></thead><tbody>';
+      d.rincian.forEach(function (r) {
+        h += '<tr>';
+        kolommen.forEach(function (c) {
+          var nilai = r[c[0]];
+          if (c[0] === "kode" && r.tiket !== "-") nilai += " / " + r.tiket;
+          h += '<td data-label="' + c[1] + '">' + aman(nilai) +
+            (c[0] === "nota" && r.sumber_nota === "Mengikuti timbangan" ? '<small class="lp-catatan">Mengikuti timbangan</small>' : '') + '</td>';
+        });
+        h += '</tr>';
+      });
+      h += '</tbody></table></div>';
+    } else { h += '<p>Tidak ada transaksi pada periode ini.</p>'; }
+    d.catatan.forEach(function (c) { h += '<p class="lp-catatan">' + aman(c) + '</p>'; });
+    return h;
+  }
+  var urutan = 0;
+  var rentang = document.getElementById("rentang-khusus");
+  var dari = document.getElementById("lap-dari");
+  var sampai = document.getElementById("lap-sampai");
 
   /* Emoji di awal baris adalah penanda bagian, bukan isi. Dipisah supaya ia
      bisa digambar sebagai keping kecil, bukan sebagai huruf pertama judul. */
@@ -161,16 +228,36 @@
 
   function muat() {
     if (!kodeAktif) { return; }
+    var giliran = ++urutan;
+    pdf.hidden = unduh.hidden = true;
+    pdf.removeAttribute("href"); unduh.removeAttribute("href");
+    rentang.hidden = periode.value !== "khusus" || grupPeriode.style.display === "none";
+    if (!rentang.hidden && (!dari.value || !sampai.value || dari.value > sampai.value)) {
+      isi.textContent = "Isi tanggal awal dan akhir dengan urutan yang benar.";
+      return;
+    }
     isi.textContent = "Memuat…";
-    fetch("/api/laporan/" + encodeURIComponent(kodeAktif) +
-          "?periode=" + encodeURIComponent(periode.value), { credentials: "same-origin" })
+    var parameter = "?periode=" + encodeURIComponent(periode.value) +
+      (periode.value === "khusus" ? "&dari=" + dari.value + "&sampai=" + sampai.value : "");
+    var tahap = kodeAktif.indexOf("tahap_") === 0 ? kodeAktif.slice(6) : null;
+    fetch("/api/laporan/" + encodeURIComponent(kodeAktif) + parameter, { credentials: "same-origin" })
       .then(function (r) {
         if (r.status === 403) { throw new Error("Laporan ini tidak untuk peran Anda."); }
         if (!r.ok) { throw new Error("Gagal memuat (" + r.status + ")."); }
         return r.json();
       })
-      .then(function (d) { judul.textContent = d.nama; isi.innerHTML = gambar(d.isi, d.nama); })
+      .then(function (d) {
+        if (giliran !== urutan) return;
+        judul.textContent = d.nama;
+        isi.innerHTML = d.data ? tabel(d.data) : gambar(d.isi, d.nama);
+        if (tahap && d.data) {
+          pdf.href = "/laporan-periode/" + encodeURIComponent(tahap) + ".pdf" + parameter;
+          unduh.href = pdf.href + "&unduh=true";
+          pdf.hidden = unduh.hidden = false;
+        }
+      })
       .catch(function (e) {
+        if (giliran !== urutan) return;
         var pesan = String(e.message || e);
         isi.textContent = "Laporan belum berhasil dimuat. " +
           (/^(Laporan ini|Gagal memuat)/.test(pesan) ? pesan :
@@ -193,11 +280,14 @@
   });
 
   periode.addEventListener("change", muat);
+  [dari, sampai].forEach(function (el) { el.addEventListener("change", function () { ++urutan; pdf.hidden = unduh.hidden = true; isi.textContent = "Pilih Tampilkan untuk memuat rentang tanggal ini."; }); });
+  rentang.addEventListener("submit", function (e) { e.preventDefault(); muat(); });
 
   function tutup() {
     if (typeof lembar.close === "function") { if (lembar.open) lembar.close(); }
     else { lembar.removeAttribute("open"); lembar.style.display = "none"; }
     kodeAktif = null;
+    ++urutan;
   }
   document.getElementById("tutup").onclick = tutup;
   lembar.addEventListener("click", function (e) { if (e.target === lembar) tutup(); });

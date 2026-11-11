@@ -54,6 +54,10 @@ _LABELS = {
     "minggu_ini": "minggu ini",
     "bulan_ini": "bulan ini",
     "semua": "keseluruhan",
+    "30_hari": "30 hari terakhir",
+    "3_bulan": "3 bulan terakhir",
+    "tahun_ini": "tahun ini",
+    "tahun_lalu": "tahun lalu",
 }
 
 
@@ -69,6 +73,15 @@ def _range(periode: str) -> tuple[date | None, date | None]:
         return today - timedelta(days=today.weekday()), today  # Senin s.d. hari ini
     if periode == "bulan_ini":
         return today.replace(day=1), today
+    if periode == "3_bulan":
+        bulan = today.year * 12 + today.month - 3
+        return date(bulan // 12, bulan % 12 + 1, 1), today
+    if periode == "tahun_ini":
+        return date(today.year, 1, 1), today
+    if periode == "tahun_lalu":
+        return date(today.year - 1, 1, 1), date(today.year - 1, 12, 31)
+    if periode == "30_hari":
+        return today - timedelta(days=29), today
     return None, None  # semua
 
 
@@ -77,12 +90,13 @@ def _fmt_kg(kg: float) -> str:
 
 
 async def laporan_pembelian_gabah(
-    db: AsyncSession, periode: str | None, tanggal: date | None = None
+    db: AsyncSession, periode: str | None, tanggal: date | None = None,
+    sampai: date | None = None
 ) -> str:
     """Teks laporan pembelian gabah untuk periode/tanggal (default hari_ini)."""
     if tanggal is not None:
-        start = end = tanggal
-        label = _fmt_tgl(tanggal)
+        start, end = tanggal, sampai or tanggal
+        label = _fmt_tgl(tanggal) if start == end else f"{_fmt_tgl(start)} s/d {_fmt_tgl(end)}"
     else:
         periode = periode if periode in _LABELS else "hari_ini"
         start, end = _range(periode)

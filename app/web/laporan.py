@@ -49,7 +49,11 @@ def _daftar() -> tuple[Laporan, ...]:
     perlu membayarnya."""
     from app.services import analytics, report
 
-    return (
+    from app.services.laporan_periode import TAHAP
+
+    return tuple(Laporan("tahap_" + kode, nama, "Aktivitas tahap ini pada periode pilihan.",
+                         False, None, berperiode=True)
+                 for kode, (nama, *_) in TAHAP.items()) + (
         # ── Laporan kerja: boleh dilihat siapa pun yang bekerja ──
         Laporan("pending_verifikasi", "Menunggu verifikasi",
                 "Yang tertahan menunggu tindakan orang lain.",
@@ -84,16 +88,24 @@ PERIODE = (
     ("minggu_ini", "Minggu ini"),
     ("bulan_ini", "Bulan ini"),
     ("30_hari", "30 hari terakhir"),
+    ("3_bulan", "3 bulan terakhir"),
+    ("tahun_ini", "Tahun ini"),
+    ("tahun_lalu", "Tahun lalu"),
     ("semua", "Semua"),
+    ("khusus", "Rentang tanggal"),
 )
 
 
-def _rentang(periode: str) -> tuple[date, date]:
+def _rentang(periode: str, dari: date | None = None, sampai: date | None = None) -> tuple[date, date]:
     """Rentang tanggal untuk laporan yang menuntut dua tanggal.
 
     Terpisah dari `report._range` dengan sengaja: yang di sana boleh menjawab
     (None, None) untuk "semua", dan laporan produksi tidak menerima None.
     """
+    if periode == "khusus":
+        if dari is None or sampai is None or dari > sampai or sampai == date.max:
+            raise HTTPException(422, "Isi tanggal awal dan akhir dengan urutan yang benar.")
+        return dari, sampai
     hari = now_local().date()
     if periode == "hari_ini":
         return hari, hari
@@ -103,8 +115,15 @@ def _rentang(periode: str) -> tuple[date, date]:
         return hari - timedelta(days=hari.weekday()), hari
     if periode == "bulan_ini":
         return hari.replace(day=1), hari
+    if periode == "3_bulan":
+        bulan = hari.year * 12 + hari.month - 3
+        return date(bulan // 12, bulan % 12 + 1, 1), hari
+    if periode == "tahun_ini":
+        return date(hari.year, 1, 1), hari
+    if periode == "tahun_lalu":
+        return date(hari.year - 1, 1, 1), date(hari.year - 1, 12, 31)
     if periode == "30_hari":
-        return hari - timedelta(days=30), hari
+        return hari - timedelta(days=29), hari
     return date(2020, 1, 1), hari      # "semua" — sebelum pabrik ini punya data
 
 
@@ -156,6 +175,7 @@ async def halaman_laporan(request: Request, akun=Depends(butuh_akun)):
 
 @router.get("/api/laporan/{kode}")
 async def isi_laporan(kode: str, periode: str = "bulan_ini",
+                      dari: date | None = None, sampai: date | None = None,
                       akun=Depends(butuh_akun)) -> dict:
     user = akun.user
     lap = next((l for l in _daftar() if l.kode == kode), None)
@@ -168,11 +188,42 @@ async def isi_laporan(kode: str, periode: str = "bulan_ini",
 
     from app.services import report
     async with SessionLocal() as db:
-        if lap.kode == "produksi":
-            dari, sampai = _rentang(periode)
+        if lap.kode.startswith("tahap_"):
+            from app.services.laporan_periode import ambil
+            awal, akhir = _rentang(periode, dari, sampai)
+            data = await ambil(db, lap.kode.removeprefix("tahap_"), awal, akhir)
+            return {"nama": lap.nama, "data": data}
+        elif lap.kode == "produksi":
+            dari, sampai = _rentang(periode, dari, sampai)
             teks = await report.laporan_produksi_histori(db, dari, sampai)
         elif lap.kode == "pembelian_gabah":
-            teks = await report.laporan_pembelian_gabah(db, periode)
+            if periode == "khusus":
+                awal, akhir = _rentang(periode, dari, sampai)
+                teks = await report.laporan_pembelian_gabah(db, periode, awal, sampai=akhir)
+            else:
+                teks = await report.laporan_pembelian_gabah(db, periode)
         else:
             teks = await lap.buat(db)
     return {"nama": lap.nama, "isi": ke_html(teks)}
+
+
+@router.get("/laporan-periode/{kode}.pdf")
+async def pdf_laporan_periode(kode: str, periode: str = "bulan_ini",
+                              dari: date | None = None, sampai: date | None = None,
+                              unduh: bool = False, akun=Depends(butuh_akun)):
+    from fastapi.responses import Response
+    from app.services.laporan_periode import ambil
+    from app.web.pdf_periode import buat_pdf
+
+    lap = next((l for l in _daftar() if l.kode == "tahap_" + kode), None)
+    if lap is None:
+        raise HTTPException(404, "Laporan tidak dikenal.")
+    if not boleh_lihat(akun.user, lap):
+        raise HTTPException(403, "Laporan ini tidak tersedia untuk peran Anda.")
+    awal, akhir = _rentang(periode, dari, sampai)
+    async with SessionLocal() as db:
+        data = await ambil(db, kode, awal, akhir)
+    return Response(buat_pdf(data), media_type="application/pdf", headers={
+        "Content-Disposition": f'{"attachment" if unduh else "inline"}; filename="laporan-{kode}-{awal}-{akhir}.pdf"',
+        "Cache-Control": "private, no-store",
+    })

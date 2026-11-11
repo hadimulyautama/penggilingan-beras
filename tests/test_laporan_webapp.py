@@ -56,7 +56,8 @@ def test_tiap_laporan_punya_cara_membuatnya():
     """Kecuali dua yang menerima rentang tanggal — keduanya ditangani khusus
     di rute, dan itu satu-satunya alasan `buat` boleh kosong."""
     berperiode = {l.kode for l in lap._daftar() if l.berperiode}
-    assert berperiode == {"produksi", "pembelian_gabah"}
+    from app.services.laporan_periode import TAHAP
+    assert berperiode == {"produksi", "pembelian_gabah"} | {"tahap_" + k for k in TAHAP}
     for l in lap._daftar():
         assert (l.buat is not None) or l.berperiode, f"{l.kode} tanpa pembuat"
 
@@ -69,7 +70,7 @@ def test_tiap_laporan_menjelaskan_dirinya():
 
 # ─────────────────────── Rentang tanggal ───────────────────────
 
-@pytest.mark.parametrize("periode", [k for k, _ in lap.PERIODE])
+@pytest.mark.parametrize("periode", [k for k, _ in lap.PERIODE if k != "khusus"])
 def test_tiap_periode_menghasilkan_rentang_yang_masuk_akal(periode):
     dari, sampai = lap._rentang(periode)
     assert dari <= sampai
