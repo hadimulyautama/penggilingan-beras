@@ -112,3 +112,28 @@ def test_bahan_tidak_dipakai_berbeda_dari_pemakaian_belum_final():
     assert [r[key] for r in d['rincian']]==['-','50 kg','Belum final','0 kg']
     text=' '.join(p.extract_text() for p in PdfReader(BytesIO(buat_pdf(d))).pages)
     assert text.count('Belum final')==1
+
+
+@pytest.mark.parametrize('kode,status,belum',[
+    ('pengeringan','proses',True),('pengeringan','selesai',False),
+    ('penggilingan','berjalan',True),('penyosohan','jeda',True),
+    ('penyosohan','selesai',False),('barang_keluar','perintah',True),
+    ('barang_keluar','dimuat',True),('barang_keluar','selesai',False),
+    ('gabah_masuk','di_silo',False),('pk_masuk','habis',False),
+    ('transfer_pk','terkirim',False),('pengemasan',None,False),
+])
+def test_status_diganti_warna_dan_tanggal_di_bawah_kode(kode,status,belum):
+    from app.services.laporan_periode import data_laporan
+    from app.web.pdf_periode import buat_pdf
+    from pypdf import PdfReader
+    from io import BytesIO
+    d=data_laporan(kode,D,D,[dict(id=1,tanggal=D,kode='KODE-UJI',status=status,bobot=100,jasa_id=None)])
+    assert not {'status','tanggal'} & {c['kunci'] for c in d['kolom']}
+    assert d['status']==[] and d['rincian'][0]['belum_selesai']==belum
+    assert any('KODE-UJI' in c for c in d['catatan'])==belum
+    reader=PdfReader(BytesIO(buat_pdf(d)))
+    text=' '.join(p.extract_text() for p in reader.pages)
+    assert 'Status transaksi' not in text and 'Tanggal' not in text
+    assert 'KODE-UJI\n11/11/2026' in text
+    stream=b''.join(p.get_contents().get_data() for p in reader.pages)
+    assert (b'1 .952941 .803922 rg' in stream)==belum

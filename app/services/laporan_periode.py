@@ -105,7 +105,6 @@ async def buat(db, kode, dari, sampai):
 
 def data_laporan(kode, dari, sampai, baris):
     """Satu cuplikan untuk layar dan pembuat PDF, tanpa angka uang."""
-    from collections import Counter
     from app.web.pdf_proses import angka
 
     judul, _, tanggal, _, _, bobot, label = TAHAP[kode]
@@ -117,6 +116,9 @@ def data_laporan(kode, dari, sampai, baris):
         rincian.append(dict(
             kode=str(r.get('kode') or f"#{r['id']}"), tanggal=t.strftime('%d/%m/%Y'),
             status=(r.get('status') or '-').replace('_', ' '),
+            # Status batch penerimaan adalah keadaan stok, bukan apakah
+            # penerimaannya selesai. Penanda hanya untuk alur proses/pengiriman.
+            belum_selesai=kode in ('pengeringan','penggilingan','penyosohan','barang_keluar') and r.get('status') not in (None,'selesai'),
             pemilik=(f"Jasa #{r['jasa_id']}" if r['jasa_id'] is not None else 'Pabrik') if 'jasa_id' in r else 'Lihat transaksi asal',
             bobot=angka(r['bobot']) + ' kg' if bobot and r['bobot'] is not None else 'Belum tercatat' if bobot else '-',
             nota=angka(r.get('nota')) + ' kg' if r.get('nota') is not None else 'Belum tercatat',
@@ -143,20 +145,24 @@ def data_laporan(kode, dari, sampai, baris):
         for key, label_tiket in [('nota', 'Bobot menurut nota'), ('timbangan', 'Bobot menurut timbangan')]:
             values = [r[key] for r in tiket_unik.values() if r.get(key) is not None]
             ringkasan.append(dict(nama=label_tiket, nilai=angka(sum(values, Decimal(0))) + ' kg' if values else 'Belum tercatat'))
-    status = Counter(r['status'] for r in rincian if r['status'] != '-')
-    catatan = ['Transaksi batal dan penerimaan ditolak tidak disertakan. Status mengikuti keadaan saat laporan dibuka.']
+    catatan = ['Transaksi batal dan penerimaan ditolak tidak disertakan.']
+    if kode in ('pengeringan','penggilingan','penyosohan','barang_keluar'):
+        catatan.append('Baris kuning menandai proses atau pengiriman yang belum selesai saat laporan dibuka. Angka pada baris tersebut masih dapat berubah.')
+        belum=[f"{r['kode']} ({r['status']})" for r in rincian if r['belum_selesai']]
+        if belum:
+            catatan.append('Belum selesai: '+', '.join(belum)+'.')
     catatan.append('Bobot nota mengikuti timbangan bila nota tidak tersedia. Bobot timbangan adalah bobot barang setelah tara; netto dipakai sebagai cadangan tiket lama. Selisih = nota dikurangi timbangan. Bobot tiket bersama hanya dijumlah sekali dalam ringkasan.')
     if kode in ('pengeringan', 'penggilingan', 'penyosohan'):
         catatan.append('Periode mengikuti waktu mulai proses; proses yang mulai sebelumnya tidak disertakan. Laporan ini adalah aktivitas proses, bukan rekap output mesin per tanggal.')
     if kode == 'pengemasan':
         catatan.append('Bobot batch hasil sosoh berkarung yang masih tercatat. Kemas ulang dapat mengubah batch lama; angka ini bukan rekonstruksi pengemasan historis.')
     if kode == 'barang_keluar':
-        catatan.append('Perintah belum membuktikan pengeluaran aktual. Perintah, dimuat, dan selesai ditampilkan terpisah melalui status.')
+        catatan.append('Perintah belum membuktikan pengeluaran aktual. Bobot dimuat mengikuti catatan muatan; pengiriman yang belum selesai dijelaskan di keterangan.')
     from app.services.laporan_isi_tahap import atur
     return atur(dict(kode=kode, nama=judul, dari=dari.isoformat(), sampai=sampai.isoformat(),
                 periode=f'{dari:%d/%m/%Y} - {sampai:%d/%m/%Y}',
                 dasar=tanggal.replace('_', ' '),
-                ringkasan=ringkasan, status=[dict(nama=k, nilai=str(v)) for k,v in sorted(status.items())],
+                ringkasan=ringkasan, status=[],
                 rincian=rincian, catatan=catatan), kode, baris)
 
 

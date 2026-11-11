@@ -10,9 +10,12 @@
 #lembar table {width:100%;border-collapse:collapse;font-size:14px;}
 #lembar th,#lembar td {padding:10px 8px;border-bottom:1px solid var(--pd-line,var(--garis));text-align:left;vertical-align:top;}
 #lembar .lp-bobot {text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
-#lembar .lp-status {display:flex;flex-wrap:wrap;gap:12px;margin:12px 0;}
+#lembar tr.lp-belum-selesai, #lembar tr.lp-belum-selesai td {background:#fff3cd;color:#243b30;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+#lembar tr.lp-belum-selesai td::before {color:#52635a;}
 #lembar .lp-catatan {color:var(--pd-muted,var(--redup));font-size:13px;margin:8px 0;}
 #lembar td small {display:block;}
+#lembar .lp-tanggal {font-size:11px;line-height:1.5;color:var(--pd-muted,var(--redup));}
+#lembar .lp-belum-selesai .lp-tanggal {color:#52635a;}
 #lembar td {white-space:pre-line;}
 #lembar th[scope="colgroup"] {text-align:center;}
 @media screen and (max-width:650px) {
@@ -118,8 +121,6 @@
     var h = '<p class="lp-catatan">Periode: ' + aman(d.periode) + ' · WIB</p>' +
       '<p class="lp-catatan">Dasar: ' + aman(d.dasar) + '</p><div class="lp-ringkasan">';
     d.ringkasan.forEach(function (r) { h += '<div><span>' + aman(r.nama) + '</span><strong>' + aman(r.nilai) + '</strong></div>'; });
-    h += '</div><div class="lp-status">';
-    d.status.forEach(function (r) { h += '<span>' + aman(r.nama) + ': <b>' + aman(r.nilai) + '</b></span>'; });
     h += '</div>';
     if (d.rincian.length) {
       var kolommen = d.kolom.map(function (c) { return [c.kunci,c.nama,c.kelompok]; });
@@ -137,17 +138,19 @@
       } else { kolommen.forEach(function (c) { h += '<th scope="col">' + aman(c[1]) + '</th>'; }); }
       h += '</tr></thead><tbody>';
       d.rincian.forEach(function (r) {
-        h += '<tr>';
+        h += r.belum_selesai ? '<tr class="lp-belum-selesai" aria-label="' + aman(r.kode).replace(/"/g, '&quot;') + ', belum selesai">' : '<tr>';
         kolommen.forEach(function (c) {
           var nilai = r[c[0]] == null ? 'Belum tercatat' : r[c[0]];
           if (c[0] === "kode" && r.tiket !== "-") nilai += " / " + r.tiket;
           h += '<td data-label="' + aman((c[2] ? c[2] + ' · ' : '') + c[1]).replace(/"/g, '&quot;') + '">' + aman(nilai) +
+            (c[0] === "kode" ? '<small class="lp-tanggal">' + aman(r.tanggal) + '</small>' : '') +
             (c[0] === "nota" && r.sumber_nota === "Mengikuti timbangan" ? '<small class="lp-catatan">Mengikuti timbangan</small>' : '') + '</td>';
         });
         h += '</tr>';
       });
       h += '</tbody></table></div>';
     } else { h += '<p>Tidak ada transaksi pada periode ini.</p>'; }
+    h += '<h3 class="lbl">Keterangan</h3>';
     d.catatan.forEach(function (c) { h += '<p class="lp-catatan">' + aman(c) + '</p>'; });
     return h;
   }

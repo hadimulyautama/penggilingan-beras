@@ -26,8 +26,8 @@ def buat_pdf(data, *, contoh=False):
                                  fontSize=size, leading=leading, textColor=color, spaceAfter=5, keepWithNext=False))
     def p(value, style='IsiPeriode'):
         return Paragraph(escape(str(value)).replace("\n", "<br/>"), styles[style])
-    def tabel(rows, widths, *, headers=1, spans=()):
-        table = Table([[p(c, 'KepalaPeriode' if i < headers else 'IsiPeriode') for c in r] for i,r in enumerate(rows)],
+    def tabel(rows, widths, *, headers=1, spans=(), belum_selesai=()):
+        table = Table([[c if isinstance(c,Paragraph) else p(c, 'KepalaPeriode' if i < headers else 'IsiPeriode') for c in r] for i,r in enumerate(rows)],
                       colWidths=widths, repeatRows=headers, hAlign='LEFT')
         table.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,headers-1),green), ('VALIGN',(0,0),(-1,-1),'TOP'),
@@ -37,6 +37,8 @@ def buat_pdf(data, *, contoh=False):
             ('LINEBELOW',(0,0),(-1,0),.5,green),
         ]))
         if spans: table.setStyle(TableStyle(list(spans)))
+        for i in belum_selesai:
+            table.setStyle(TableStyle([('BACKGROUND',(0,i),(-1,i),colors.HexColor('#fff3cd'))]))
         return table
     ringkas = [['Ringkasan', 'Nilai', 'Ringkasan', 'Nilai']]
     for i in range(0, len(data['ringkasan']), 2):
@@ -49,9 +51,6 @@ def buat_pdf(data, *, contoh=False):
               p('Periode: '+data['periode'],'SubPeriode'),
               p('Dasar periode: '+data['dasar']+' (WIB)','SubPeriode'), Spacer(1,4*mm),
               tabel(ringkas,[lebar*.26,lebar*.24,lebar*.26,lebar*.24])]
-    if data['status']:
-        story += [Spacer(1,4*mm),p('Status transaksi','BagianPeriode'),
-                  tabel([['Status','Jumlah']]+[[r['nama'],r['nilai']] for r in data['status']],[lebar*.5,lebar*.5])]
     story += [Spacer(1,5*mm), CondPageBreak(50*mm), p('Rincian transaksi','BagianPeriode')]
     if data['rincian']:
         cols=data['kolom']
@@ -76,10 +75,13 @@ def buat_pdf(data, *, contoh=False):
                 key=c['kunci'];value=r.get(key,'Belum tercatat')
                 if key=='kode' and r.get('tiket','-')!='-':value += ' / '+r['tiket']
                 if key=='nota' and r.get('sumber_nota')=='Mengikuti timbangan':value += ' (Mengikuti timbangan)'
+                if key=='kode':
+                    value=Paragraph(escape(str(value))+'<br/><font size="6" color="#52635a">'+escape(r['tanggal'])+'</font>',styles['IsiPeriode'])
                 cells.append(value)
             rows.append(cells)
         weights=[2.2 if c['kunci'] in ('asal','bahan_jenis','produk','produk_asal','hasil_beras','hasil_samping','rincian_muatan','alasan','mitra') else 1.5 if c['kunci']=='kode' else 1.4 if c['kunci']=='tanggal' else 1.2 if c['kunci']=='rendemen' else 1 for c in cols]
-        story.append(tabel(rows,[lebar*w/sum(weights) for w in weights],headers=headers,spans=spans))
+        story.append(tabel(rows,[lebar*w/sum(weights) for w in weights],headers=headers,spans=spans,
+                           belum_selesai=[headers+i for i,r in enumerate(data['rincian']) if r.get('belum_selesai')]))
     else:
         story.append(p('Tidak ada transaksi pada periode ini.'))
     story += [Spacer(1,5*mm),CondPageBreak(20*mm),p('Keterangan','BagianPeriode')]+[p(c) for c in data['catatan']]

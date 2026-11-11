@@ -263,7 +263,7 @@ KELOMPOK = {
 
 def atur(data,kode,baris):
     """Kontrak kolom yang sama dipakai layar, kartu ponsel, dan PDF."""
-    cols=[('kode','Kode'),('tanggal','Tanggal')]+ISI[kode]+[('status','Status')]
+    cols=[('kode','Kode')]+ISI[kode]
     if kode not in ('gabah_masuk','pk_masuk','retur_pelanggan'):
         cols.append(('pemilik','Pemilik'))
     bahan_cols=[];hasil_cols=[]
@@ -275,7 +275,7 @@ def atur(data,kode,baris):
         jenis_hasil.sort(key=lambda j:(urutan.index(j) if j in urutan else len(urutan),nama_produk(j)))
         bahan_cols=[(f'bahan_{i}',nama_produk(j),j) for i,j in enumerate(jenis_bahan)]
         hasil_cols=[(f'hasil_{i}',nama_produk(j),j) for i,j in enumerate(jenis_hasil)]
-        cols=[('kode','Kode'),('tanggal','Tanggal'),('pemilik','Pemilik')]+[(k,n) for k,n,_ in bahan_cols]+[('bahan','Total bahan')]+[(k,n) for k,n,_ in hasil_cols]+[('hasil','Total hasil'),('susut','Susut debu & bobot'),('rendemen','Rendemen beras'),('status','Status')]
+        cols=[('kode','Kode'),('pemilik','Pemilik')]+[(k,n) for k,n,_ in bahan_cols]+[('bahan','Total bahan')]+[(k,n) for k,n,_ in hasil_cols]+[('hasil','Total hasil'),('susut','Susut debu & bobot'),('rendemen','Rendemen beras')]
     data['kolom']=[dict(kunci=k,nama=n,kelompok=('Bahan' if k=='bahan' or any(k==x[0] for x in bahan_cols) else 'Hasil' if k=='hasil' or any(k==x[0] for x in hasil_cols) else None) if kode=='penyosohan' else KELOMPOK.get(kode,{}).get(k)) for k,n in cols]
     for r,asli in zip(data['rincian'],baris):
         for k,_ in ISI[kode]:
