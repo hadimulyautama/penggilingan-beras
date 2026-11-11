@@ -111,6 +111,9 @@ def buat_pdf(data, *, contoh=False):
                         nilai=Paragraph(escape(item['nilai'])+'<br/><font size="7">'+pct+suffix+'</font>',styles['BagianPeriode'])
                         row[col:col+2]=[p(item['nama'],'BagianPeriode'),nilai]
                     else:row[col:col+2]=[item['nama'],item['nilai']]
+                    if counts[j]==2 and item.get('persen_bahan') and item['nama']!='Total hasil tercatat':
+                        pct=escape(item['persen_bahan']);suffix=' bahan baku' if pct.endswith('%') else ''
+                        row[col+1]=Paragraph(escape(item['nilai'])+'<br/><font size="7">'+pct+suffix+'</font>',styles['IsiPeriode'])
                     if counts[j]==3:row[col+2]=item.get('persen_bahan','')
                 rows.append(row)
             gap=.03 if tiga_tabel else .04

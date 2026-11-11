@@ -103,6 +103,8 @@ def test_penyosohan_bahan_dan_hasil_memiliki_subkolom_dan_pdf_landscape():
     assert hasil_ringkas[nama_produk('premium')]['bagian']=='Beras'
     assert hasil_ringkas['Bekatul']['bagian']=='Hasil samping'
     assert hasil_ringkas['Bekatul']['persen_bahan']=='9,00%'
+    susut=next(i for i in groups['Evaluasi proses'] if i['nama']=='Susut debu & bobot')
+    assert susut['nilai']=='500' and susut['persen_bahan']=='5,00%'
     assert all('silo' not in c['nama'].lower() for c in d['kolom'])
     reader=PdfReader(BytesIO(buat_pdf(d)))
     assert all(p.mediabox.width>p.mediabox.height for p in reader.pages)

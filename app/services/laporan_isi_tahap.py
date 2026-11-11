@@ -33,7 +33,7 @@ def satuan_di_keterangan(data):
         return value
     for key in ('rincian','ringkasan','ringkasan_kelompok'):
         data[key]=bersihkan(data[key])
-    data['catatan'].insert(0,'Seluruh bobot dinyatakan dalam kilogram. Persentase hasil menggunakan total bahan terpakai sebagai dasar.' if data['kode']=='penyosohan' else 'Seluruh bobot dinyatakan dalam kilogram.')
+    data['catatan'].insert(0,'Seluruh bobot dinyatakan dalam kilogram. Persentase menggunakan total bahan terpakai sebagai dasar.' if data['kode']=='penyosohan' else 'Seluruh bobot dinyatakan dalam kilogram.')
     return data
 
 
@@ -106,6 +106,10 @@ def kelompokkan_ringkasan(data,kode,baris):
         for item in groups.get('Hasil',[]):
             nilai=numerators.get(item['nama'])
             item['persen_bahan']=persen(nilai/bahan*100 if final and nilai is not None else None)
+        susut=jumlah(r.get('_susut') for r in baris)
+        for item in groups.get('Evaluasi proses',[]):
+            if item['nama']=='Susut debu & bobot':
+                item['persen_bahan']=persen(susut/bahan*100 if final and susut is not None else None)
     order=('Aktivitas','Penerimaan','Pemeriksaan bobot','Bahan','Hasil','Hasil kemasan','Estimasi','Pemindahan','Muatan','Barang kembali','Evaluasi proses')
     data['ringkasan_kelompok']=[dict(nama=g,rincian=groups[g]) for g in order if g in groups]
     return satuan_di_keterangan(data)
