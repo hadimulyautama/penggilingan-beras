@@ -103,12 +103,8 @@ async def test_tab_draf_koreksi_qc_pdf_dan_asal_asli(pg,riwayat,width):
    r=await c.get('/riwayat-sosoh/'+str(riwayat['id'])+'/laporan');assert r.status_code==200
    r=await c.get('/riwayat-sosoh/'+str(riwayat['id'])+'/laporan.pdf');assert r.status_code==200 and 'application/pdf' in r.headers['content-type']
    await page.locator('[data-rhs-tab=riwayat]').click();await expect(page.locator('#rhs-panel-riwayat')).to_contain_text('Informasi proses')
-   if width<=700:await page.locator('.rhs-menu>summary').click()
-   await page.locator('[data-rhs-guide]:visible').click();await expect(page.locator('#rhs-panduan')).to_be_visible();await page.locator('[data-rhs-guide-close]').click()
-   await page.locator('.rhs-menu>summary').click();await page.locator('[data-rhs-nav-open]').click()
-   await expect(page.locator('#rhs-navigation')).to_be_visible()
-   assert await page.locator('#rhs-navigation .laporan-nav__tabs a').count()>=3
-   await page.locator('[data-rhs-nav-close]').click()
+   await page.locator('[data-lk-buka=rhs-panduan]:visible').click();await expect(page.locator('#rhs-panduan')).to_be_visible();await page.locator('[data-rhs-guide-close]').click()
+   await expect(page.locator('.laporan-nav__tabs')).to_be_visible()
 
 async def test_operator_tanpa_koreksi_dan_hash_qc(pg,riwayat):
  from playwright.async_api import expect

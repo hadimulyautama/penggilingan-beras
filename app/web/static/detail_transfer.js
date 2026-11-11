@@ -5,14 +5,12 @@
  function pasang(root,navLama){
   if(!root||root.dataset.rhtReady)return;root.dataset.rhtReady='1';
   const tabs=[...root.querySelectorAll('.transfer-tabs [role=tab]')],menu=root.querySelector('.rhs-menu');
-  const nav=document.querySelector('.laporan-riwayat>.laporan-nav')||navLama,slot=root.querySelector('[data-rht-parent-nav-slot]');
-  if(nav&&slot){for(const d of [...nav.querySelectorAll('dialog')])nav.before(d);slot.append(nav);root.querySelector('[data-rht-nav-open]').onclick=()=>{menu.open=false;root.querySelector('#rht-navigation').showModal();};root.querySelector('[data-rht-nav-close]').onclick=()=>root.querySelector('#rht-navigation').close();}
   // Pada 422 koreksi.js mengganti main tanpa menjalankan ulang script.
   // Pakai isian dan baseline dari jawaban server, bukan baseline tersimpan.
   const parent=root.parentElement;
-  if(parent&&!parent._transferDesainObserver){parent._transferDesainObserver=new MutationObserver(records=>{for(const r of records)for(const added of r.addedNodes)if(added.nodeType===1&&added.matches('[data-riwayat-transfer]'))pasang(added,nav);});parent._transferDesainObserver.observe(parent,{childList:true});}
+  if(parent&&!parent._transferDesainObserver){parent._transferDesainObserver=new MutationObserver(records=>{for(const r of records)for(const added of r.addedNodes)if(added.nodeType===1&&added.matches('[data-riwayat-transfer]'))pasang(added);});parent._transferDesainObserver.observe(parent,{childList:true});}
   const guide=root.querySelector('#rht-panduan');
-  for(const b of root.querySelectorAll('[data-rht-guide]'))b.onclick=()=>{menu.open=false;guide.showModal();};root.querySelector('[data-rht-guide-close]').onclick=()=>guide.close();
+  for(const b of root.querySelectorAll('[data-rht-guide]'))b.onclick=()=>{if(menu)menu.open=false;guide.showModal();};root.querySelector('[data-rht-guide-close]').onclick=()=>guide.close();
   const box=root.querySelector('#koreksi-transfer .riwayat-koreksi'),form=box&&box.querySelector('form');let editor;
   const node=(tag,text)=>{const n=document.createElement(tag);n.textContent=text;return n;};
   if(form){
@@ -21,7 +19,7 @@
    const close=node('button','×');close.type='button';close.className='btn';close.setAttribute('aria-label','Tutup koreksi');close.onclick=()=>editor.close();head.append(title,close);editor.append(head);box.before(editor);editor.append(box);box.open=true;
    const trigger=node('button','Buka koreksi berat transfer');trigger.type='button';trigger.className='btn';trigger.dataset.rhtOpenEditor='';editor.before(trigger);trigger.onclick=()=>bukaEditor();
   }
-  function bukaEditor(){if(editor&&!editor.open){menu.open=false;editor.showModal();}}
+  function bukaEditor(){if(editor&&!editor.open){if(menu)menu.open=false;editor.showModal();}}
   function tampil(id){
    tabs.forEach(t=>{const active=t.getAttribute('aria-controls')===id;t.setAttribute('aria-selected',String(active));root.querySelector('#'+t.getAttribute('aria-controls')).hidden=!active;});
    for(const a of root.querySelectorAll('.rht-actions a[href*="buka="]')){const u=new URL(a.href);u.searchParams.set('tab_detail',id.slice(6));u.hash=id;a.href=u.href;}

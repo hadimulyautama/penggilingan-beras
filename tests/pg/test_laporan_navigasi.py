@@ -18,11 +18,11 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
         r=await c.get('/laporan-riwayat')
         assert r.status_code==200
         assert r.url.path==('/riwayat-sosoh' if gudang=='Gudang 2' else '/riwayat-pengeringan')
-        tabs=r.text.split('aria-label="Bagian Laporan dan Riwayat"')[1].split('</nav>')[0]
-        assert 'aria-current="page">Proses</a>' in tabs.split('</a>')[0] + '</a>'
-        assert 'Bagian Laporan dan Riwayat' in r.text
+        tabs=r.text.split('aria-label="Jenis halaman"')[1].split('</nav>')[0]
+        assert 'aria-current="page">Riwayat proses</a>' in tabs.split('</a>')[0] + '</a>'
         sidebar=r.text.split('aria-label="Navigasi utama"')[1]
-        assert sidebar.count('>Laporan &amp; Riwayat<')==1
+        assert sidebar.count('>Riwayat<')==1
+        assert sidebar.count('>Laporan periode<')==1
         for old in ['>Riwayat Proses<','>Riwayat QC<','>Laporan<','>List audit<']:
             assert old not in sidebar
         assert 'pintu__ikon--laporan_riwayat' in sidebar and '<svg' in sidebar
@@ -42,6 +42,31 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
             assert r.status_code==(200 if allowed else 403)
         r=await c.get('/api/laporan/pembelian_gabah?periode=semua')
         assert r.status_code==404
+
+
+async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(pg,qc):
+    from bs4 import BeautifulSoup
+    async with await _klien(pg,peran='superadmin') as c:
+        for path,panduan in [('/riwayat-giling','rpd-panduan'),('/riwayat-qc/gabah-basah','rqd-panduan'),
+                             ('/riwayat-qc/gabah-kering/GB-QC-KERING','rqd-panduan'),('/laporan','lk-panduan'),('/audit','lk-panduan')]:
+            r=await c.get(path);assert r.status_code==200
+            soup=BeautifulSoup(r.text,'html.parser')
+            bar=soup.select_one('.laporan-riwayat>.laporan-nav>.laporan-nav__bar')
+            assert bar is not None
+            assert [x.get_text(strip=True) for x in bar.select('.laporan-nav__tabs>a')]==['Riwayat proses','Riwayat QC','Laporan periode','Audit']
+            assert len(bar.select(f'[data-lk-buka="{panduan}"]'))==1
+            assert len(soup.select('button[data-lk-cetak]'))==1
+            assert soup.select_one('.desktop-back') is None
+            assert not soup.select('[data-rpd-nav-open],[data-rqd-nav-open],[data-rhs-nav-open],#lk-menu')
+            assert 'Laporan &amp; Riwayat' not in r.text
+            for menu in soup.select('.rhs-menu'):
+                assert not any('Panduan' in b.get_text() or 'Cetak' in b.get_text() for b in menu.select('button'))
+        r=await c.get('/laporan')
+        soup=BeautifulSoup(r.text,'html.parser')
+        assert soup.h1.get_text(strip=True)=='Laporan periode'
+        assert not soup.select('.laporan-nav a[href="/laporan"]:not([data-tab-riwayat])')
+        r=await c.get('/riwayat',follow_redirects=False)
+        assert r.status_code==303 and r.headers['location']=='/riwayat-pengeringan'
 
 
 async def test_gateway_tidak_membuang_query_kursor_atau_audit(pg,qc):
@@ -66,7 +91,7 @@ async def test_lihat_sebagai_operator_menurunkan_tab_dan_api(pg,qc):
         c.cookies.set(NAMA_KUKI,'operator:g2')
         r=await c.get('/laporan-riwayat?tab=proses')
         assert r.status_code==200 and r.url.path=='/riwayat-sosoh'
-        nav=r.text.split('aria-label="Bagian Laporan dan Riwayat"')[1].split('</nav>')[0]
+        nav=r.text.split('aria-label="Jenis halaman"')[1].split('</nav>')[0]
         assert '>Audit<' in nav and 'aria-disabled="true"' in nav
         assert 'href="/audit"' not in nav
         assert (await c.get('/audit')).status_code==403
@@ -78,7 +103,7 @@ async def test_detail_qc_lama_dan_seluruh_putaran_tetap_terjangkau(pg,qc):
     async with await _klien(pg,peran='superadmin') as c:
         r=await c.get('/riwayat-qc/gabah-kering/GB-QC-KERING')
         assert r.status_code==200
-        assert 'Bagian Laporan dan Riwayat' in r.text
+        assert 'Jenis halaman' in r.text
         assert 'Pencatat QC' in r.text and 'QC 5' in r.text
         assert 'href="/riwayat-qc/gabah-kering"' in r.text
         assert 'MENU_AKTIF' not in r.text

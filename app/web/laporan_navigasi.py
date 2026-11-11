@@ -7,8 +7,8 @@ from fastapi.responses import RedirectResponse
 from app.web.security import butuh_akun
 
 router = APIRouter(tags=["laporan"])
-TAB = (("proses", "Proses"), ("qc", "QC"),
-       ("laporan", "Laporan"), ("audit", "Audit"))
+TAB = (("proses", "Riwayat proses"), ("qc", "Riwayat QC"),
+       ("laporan", "Laporan periode"), ("audit", "Audit"))
 PROSES = (
     ("pengeringan", "Pengeringan", "/riwayat-pengeringan", "g1"),
     ("giling", "Penggilingan", "/riwayat-giling", "g1"),
@@ -54,22 +54,30 @@ async def siapkan(request: Request, konteks: dict):
     akun = getattr(request.state, "akun", None)
     if not aktif or not akun: return
     opsi = await pilihan(akun)
-    judul = {"laporan": "Laporan", "proses": "Riwayat Proses",
-             "qc": "Riwayat QC", "audit": "List audit"}
+    judul = {"laporan": "Laporan periode", "proses": "Riwayat proses",
+             "qc": "Riwayat QC", "audit": "Audit aktivitas"}
     jenis = next((x[0] for x in opsi[aktif] if request.url.path == x[2]
                   or request.url.path.startswith(x[2] + "/")), None)
     detail = any(request.url.path.startswith(x[2] + "/") for x in opsi[aktif])
-    konteks["MENU_AKTIF"] = "laporan_riwayat"
+    konteks["MENU_AKTIF"] = "laporan" if aktif=='laporan' else "laporan_riwayat"
+    panduan='lk-panduan'
+    if aktif=='qc':panduan='rqd-panduan'
+    if aktif=='proses':
+        panduan='rpd-panduan' if not detail else {'pengeringan':'rhp-panduan','giling':'rhs-panduan','sosoh':'rhs-panduan','transfer':'rht-panduan','retur-supplier':'rsd-panduan'}.get(jenis,'rpd-panduan')
+    if detail:
+        parent=next((x for x in opsi[aktif] if x[0]==jenis),None)
+        if parent:konteks.setdefault('breadcrumb_induk',dict(nama=('Riwayat '+parent[1]),alamat=parent[2]))
     konteks["LAPORAN_NAV"] = {
-        "aktif": aktif, "judul": judul[aktif], "jenis": jenis, "detail": detail,
+        "aktif": aktif, "judul": judul[aktif], "jenis": jenis, "detail": detail,"panduan":panduan,
         "tab": [{"kunci": k, "nama": n, "href": opsi[k][0][2] if opsi[k] else "",
-                 "boleh": bool(opsi[k])} for k, n in TAB],
+                 "boleh": bool(opsi[k]),"alamat":[x[2] for x in opsi[k]]} for k, n in TAB],
         "pilihan": list(PROSES if aktif == "proses" else QC) if aktif in ("proses", "qc") else [],
         "boleh_alamat": [x[2] for x in opsi[aktif]],
     }
 
 
 @router.get("/laporan-riwayat")
+@router.get("/riwayat")
 async def masuk(request: Request, tab: str | None = None, jenis: str = "",
                 akun=Depends(butuh_akun)):
     """Pintu baru; URL lama tetap menjadi halaman sumber dan penjaga izin."""

@@ -30,9 +30,9 @@
 <p class="rhs-meta">Gudang 1 · {{ d.dryer }} · {{ d.mode }}</p>
 {% if d.jeda_mulai %}<p class="pengeringan-jeda">{{ d.jeda_sebab }} · Mulai jeda {{ d.jeda_mulai }}</p>{% elif proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
 <p class="rhs-meta">Dinyatakan dingin {{ d.dingin_waktu }}<br>{{ d.lokasi }}</p>
-<div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rhp-guide>ⓘ Panduan</button><a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a><details class="rhs-menu"><summary class="btn" aria-label="Tindakan riwayat">⋮</summary><div class="rhs-menu-body">{% if LAPORAN_NAV %}<button class="btn" type="button" data-rhp-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}<button class="btn" type="button" data-rhp-guide>ⓘ Panduan</button>{% if d.laporan_tersedia %}<a class="btn" href="/riwayat-pengeringan/{{ d.lot_id }}/laporan">Lihat / bagikan laporan PDF</a>{% endif %}<button class="btn" type="button" data-rhp-print>Print detail</button></div></details></div>
+<div class="rhs-tools">{% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rhp-guide>ⓘ Panduan</button>{% endif %}{% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a>{% endif %}{% if d.laporan_tersedia %}<details class="rhs-menu"><summary class="btn" aria-label="Tindakan riwayat">⋮</summary><div class="rhs-menu-body">{% if d.laporan_tersedia %}<a class="btn" href="/riwayat-pengeringan/{{ d.lot_id }}/laporan">PDF proses</a>{% endif %}</div></details>{% endif %}{% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rhp-print>Cetak</button>{% endif %}</div>
 </header>
-{% if d.laporan_tersedia %}<div class="rhs-actions"><a class="btn" href="/riwayat-pengeringan/{{ d.lot_id }}/laporan">↓ Lihat / bagikan laporan PDF</a></div>{% endif %}
+{% if d.laporan_tersedia %}<div class="rhs-actions"><a class="btn" href="/riwayat-pengeringan/{{ d.lot_id }}/laporan">↓ PDF proses</a></div>{% endif %}
 <nav class="pengeringan-tabs rhs-tabs" role="tablist" aria-label="Bagian riwayat pengeringan">
 {% for id, label in [('ringkasan','Ringkasan'),('bahan','Bahan'),('pengukuran','Pengukuran'),('riwayat','Riwayat')] %}<a id="tab-{{ id }}" role="tab" aria-controls="panel-{{ id }}" aria-selected="{{ 'true' if tab_pengeringan == id else 'false' }}" href="{{ request.url.remove_query_params(['buka','nilai']).include_query_params(tab_detail=id) }}#panel-{{ id }}">{{ label }}</a>{% endfor %}
 </nav>
@@ -70,7 +70,7 @@
 <p><strong>Pengukuran.</strong> Alat tes beserta titik sampel dan waktunya ditampilkan terpisah dari indikator mesin. Bacaan terakhir tiap alat tidak saling menggantikan.</p>
 <p><strong>Riwayat.</strong> Waktu, durasi, putaran pendinginan, catatan, jeda dan paginasi tetap tersedia. Data lama yang tidak lengkap diberi keterangan. PDF memakai laporan yang sama.</p>
 {% endcall %}
-{% if LAPORAN_NAV %}{% call panduan('rhp-navigation','Navigasi Laporan & Riwayat',penutup={'data-rhp-nav-close':'','data-lk-tutup':''}) %}<div data-rhp-parent-nav-slot></div>{% endcall %}{% endif %}
+
 <dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
 </main>
 <script src="/static/riwayat-pengeringan-desain.js?v={{ VERSI }}"></script>

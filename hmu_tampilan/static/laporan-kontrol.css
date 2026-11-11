@@ -39,3 +39,19 @@ body.padiflow-ui .lk-form-filter .fld {box-sizing:border-box;width:100%;min-widt
  body.laporan-print-dialog #lembar .lembar__isi {width:100%!important;max-width:none!important;max-height:none!important;overflow:visible!important;}
  body.laporan-print-dialog #lembar :is(#tutup,[data-lk-cetak]) {display:none!important;}
 }
+
+/* Tab utama dan tindakan tidak berpindah ke dialog atau isi halaman. */
+body.padiflow-ui .laporan-nav {margin-bottom:24px;}
+body.padiflow-ui .laporan-nav__bar {display:grid;grid-template-columns:minmax(0,1fr) 196px;align-items:start;gap:20px;margin-bottom:14px;}
+body.padiflow-ui .laporan-nav .laporan-nav__tabs {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;padding:0;margin:0;border-bottom:1px solid var(--pd-line);}
+body.padiflow-ui .laporan-nav .laporan-nav__tabs>a,body.padiflow-ui .laporan-nav .laporan-nav__tabs>span {display:flex;align-items:center;justify-content:center;min-width:0;min-height:52px;box-sizing:border-box;padding:10px 6px;font-size:13px;line-height:1.35;text-align:center;white-space:normal;}
+body.padiflow-ui .laporan-nav .lk-aksi-tetap {display:grid;grid-template-columns:104px 84px;gap:8px;padding-top:3px;}
+body.padiflow-ui .lk-cetak-slot {display:block;width:84px;min-height:44px;}
+body.padiflow-ui .lk-cetak-slot>.btn {width:100%;min-height:44px;justify-content:center;}
+body.padiflow-ui .laporan-nav .laporan-nav__jenis {margin:0;}
+.laporan-riwayat .rpd .rpd-header,.laporan-riwayat .rhs .rhs-header {padding-right:64px;}
+.laporan-riwayat .rhs-tools:empty {display:none;}
+body.padiflow-ui .lk-audit-kontrol .lk-filter-desktop {display:inline-flex;}
+@media(max-width:1000px){body.padiflow-ui .laporan-nav__bar {grid-template-columns:minmax(0,1fr);gap:8px;}body.padiflow-ui .laporan-nav .lk-aksi-tetap {justify-self:end;padding-top:0;}}
+@media(max-width:650px){body.padiflow-ui .laporan-nav {margin-bottom:20px;}body.padiflow-ui .laporan-nav .laporan-nav__tabs>a,body.padiflow-ui .laporan-nav .laporan-nav__tabs>span {font-size:12px;min-height:52px;padding:9px 4px;}body.padiflow-ui .laporan-nav .laporan-nav__jenis {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}body.padiflow-ui .laporan-nav .laporan-nav__jenis>a,body.padiflow-ui .laporan-nav .laporan-nav__jenis>span {min-width:0;min-height:44px;width:auto;padding:8px 4px;text-align:center;justify-content:center;white-space:normal;font-size:12px;box-sizing:border-box;}}
+@media print{.laporan-nav,.rhs-tools{display:none!important;}}

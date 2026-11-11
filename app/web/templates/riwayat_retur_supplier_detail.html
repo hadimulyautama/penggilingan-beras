@@ -16,13 +16,13 @@
   <p class="rhs-meta">{{ rec.sumber.supplier }} · {{ rec.waktu|jam('%d/%m/%Y · %H:%M') }}</p>
   <div class="rhs-identity">{{ r.status(status,statuses) }}</div>
   <p class="rhs-meta">Penerimaan {{ rec.sumber.kode_tiket }}</p>
-  <div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rsd-guide>ⓘ Panduan</button><a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a><details class="rhs-menu"><summary class="btn" aria-label="Tindakan dan dokumen retur">⋮</summary><div class="rhs-menu-body">
-   <button class="btn" type="button" data-rsd-guide>ⓘ Panduan</button>
+  <div class="rhs-tools">{% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rsd-guide>ⓘ Panduan</button>{% endif %}{% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a>{% endif %}<details class="rhs-menu"><summary class="btn" aria-label="Tindakan dan dokumen retur">⋮</summary><div class="rhs-menu-body">
+
    {% if ledger %}<a class="btn" href="{{ tab_href('stok') }}#catatan-keluar">Lihat mutasi stok {{ ledger.kode }}</a>{% endif %}
    {% if tera_url and rec.timbangan_transaksi_id %}<a class="btn" href="{{ tera_url }}/timbangan/transaksi/{{ rec.timbangan_transaksi_id }}" rel="noopener">Buka tiket TeraFlow</a>{% endif %}
    <a class="btn" href="/barang-masuk/{{ rec.penerimaan_tiket_id }}">Buka penerimaan asal</a>
    <a class="btn" href="{{ tab_href('jejak') }}">Jejak &amp; dokumen</a>
-   {% if LAPORAN_NAV %}<button class="btn" type="button" data-rsd-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}
+
   </div></details></div>
  </header>
  {% if state and state.dibatalkan %}<p class="rsp-peringatan">Pembatalan administratif sudah dicatat. Keluar efektif tetap {{ r.kg(total_efektif) }}. Pembatalan tidak menambah stok atau membuktikan supplier menerima barang.</p>{% endif %}{% if ledger %}<p class="rsp-peringatan">Barang keluar sudah tercatat. Status selesai di gudang belum membuktikan supplier menerima barang.</p>{% elif status=='cancel' %}<p class="rsp-peringatan">Pengajuan dibatalkan: {{ rec.alasan_batal }}. Alokasi pengajuan dilepas; tidak ada penambahan stok fisik.</p>{% endif %}
@@ -59,7 +59,7 @@
 <p><strong>Koreksi &amp; pembatalan.</strong> Koreksi jumlah mencatat selisih terhadap versi efektif sebelumnya; koreksi keterangan tidak mengubah stok. Pembatalan setelah keluar bersifat administratif dan tidak menambah stok. Barang kembali hanya diakui dari penerimaan sah yang terhubung. Formulir pemeriksaan dan penyimpanan tetap dibuka melalui tindakan aplikasi yang sama.</p>
 <p><strong>Penelusuran &amp; dokumen.</strong> Ringkasan memuat setiap barang dan penerimaan asal. Timbang &amp; verifikasi memuat tiket terkini, rekaman pemeriksaan, verifikasi dan audit tiket yang diizinkan. Stok memuat saldo historis dan tautan stok terkini. Jejak &amp; dokumen memuat audit sebelum/sesudah dan tautan sumber. Koreksi, audit serta cetak tiket tetap mengikuti hak dan fasilitas TeraFlow.</p>
 {% endcall %}
-{% if LAPORAN_NAV %}{% call panduan('rsd-navigation','Navigasi Laporan & Riwayat',penutup={'data-rsd-nav-close':'','data-lk-tutup':''}) %}<div data-rsd-parent-nav-slot></div>{% endcall %}{% endif %}
+
 
 </div>
 <script src="/static/riwayat-retur-supplier-desain.js?v={{ VERSI }}"></script>

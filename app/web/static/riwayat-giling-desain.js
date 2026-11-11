@@ -14,15 +14,6 @@ window.PadiRiwayatGilingDesain=function(root){
  }
  const key=root.dataset.rhsActor+'|'+(root.querySelector('.riwayat-koreksi__form [name=_csrf]')?.value||'');
  const memory=window.PADI_RIWAYAT_GILING_DRAF||(window.PADI_RIWAYAT_GILING_DRAF={}),cache=memory[key]||(memory[key]={});
- // Navigasi induk tetap utuh di dialog, sehingga detail tidak memiliki
- // dua header/tab bertingkat. Tautan, izin dan handler asal dipertahankan.
- const navDialog=root.querySelector('#rhs-navigation'),slot=root.querySelector('[data-rhs-parent-nav-slot]');
- if(navDialog&&slot){
-  const nav=document.querySelector('.laporan-riwayat>.laporan-nav')||cache.nav;
-  if(nav){for(const d of [...nav.querySelectorAll('dialog')])nav.before(d);slot.append(nav);cache.nav=nav;}
-  root.querySelector('[data-rhs-nav-open]').onclick=()=>{root.querySelector('.rhs-menu').open=false;navDialog.showModal();};
-  root.querySelector('[data-rhs-nav-close]').onclick=()=>navDialog.close();
- }
  const tabs=[...root.querySelectorAll('[data-rhs-tab]')],panels=[...root.querySelectorAll('[data-rhs-panel]')],guide=root.querySelector('#rhs-panduan');
  function show(id,focus=false){if(!panels.some(p=>p.dataset.rhsPanel===id))return;root.dataset.rhsSelected=id;cache.tab=id;for(const p of panels)p.hidden=p.dataset.rhsPanel!==id;for(const b of tabs)b.setAttribute('aria-selected',String(b.dataset.rhsTab===id));if(focus)root.querySelector('[data-rhs-panel="'+id+'"]').scrollIntoView({block:'nearest'});}
  for(const b of tabs)b.onclick=e=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0)return;e.preventDefault();show(b.dataset.rhsTab);};
@@ -32,7 +23,7 @@ window.PadiRiwayatGilingDesain=function(root){
  for(const b of root.querySelectorAll('[data-rhs-guide]'))b.onclick=()=>{const menu=b.closest('.rhs-menu');if(menu)menu.open=false;guide.showModal();};
  root.querySelector('[data-rhs-guide-close]').onclick=()=>guide.close();
  guide.addEventListener('click',e=>{if(e.target===guide){const r=guide.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)guide.close();}});
- root.querySelector('[data-rhs-print]').onclick=()=>window.print();
+ root.querySelectorAll('[data-rhs-print]').forEach(b=>b.onclick=()=>window.print());
  function hash(){let id;try{id=decodeURIComponent(location.hash.slice(1))}catch(_){return}const target=document.getElementById(id);if(!target||!root.contains(target))return;const p=target.closest('[data-rhs-panel]');if(p){show(p.dataset.rhsPanel);for(let n=target.parentElement;n&&n!==root;n=n.parentElement)if(n.tagName==='DETAILS')n.open=true;target.scrollIntoView({block:'nearest'});}}
  show(root.dataset.rhsReturn==='1'?root.dataset.tabAwal:(cache.tab||root.dataset.tabAwal));if(root.dataset.rhsReturn!=='1')hash();if(window.PINDAH)PINDAH.pasang(window,'hashchange',hash);else window.addEventListener('hashchange',hash);
  // Hanya pratinjau lokal. POST tetap mengirim seluruh field dan token asli.

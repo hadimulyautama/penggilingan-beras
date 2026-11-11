@@ -16,15 +16,10 @@ OUT=Path(__file__).resolve().parents[3]/'bukti'
 
 async def guide(page,width):
  from playwright.async_api import expect
- if width<=700:await page.locator('.rhs-menu>summary').click()
- await page.locator('[data-rqd-guide]:visible').first.click()
+ await page.locator('[data-lk-buka=rqd-panduan]:visible').first.click()
  await expect(page.locator('#rqd-panduan')).to_be_visible()
  await page.locator('[data-rqd-guide-close]').click()
- await page.locator('.rhs-menu>summary').click()
- await page.locator('[data-rqd-nav-open]').click()
- await expect(page.locator('#rqd-navigation')).to_be_visible()
- assert await page.locator('#rqd-navigation .laporan-nav__tabs a').count()>=3
- await page.locator('[data-rqd-nav-close]').click()
+ await expect(page.locator('.laporan-nav__tabs')).to_be_visible()
 
 @pytest.mark.parametrize('width',[1440,390,320])
 async def test_semua_jenis_putaran_rumus_asal_dan_navigasi(pg,qc,width):
@@ -37,7 +32,7 @@ async def test_semua_jenis_putaran_rumus_asal_dan_navigasi(pg,qc,width):
     path=f'/riwayat-qc/{jenis}/{ref}'
     await page.goto('/riwayat-qc/'+jenis)
     await page.locator('[data-rqd-ready]').wait_for()
-    assert await page.locator('[data-rqd-category-slot] a').count()==5
+    assert await page.locator('.laporan-nav__jenis a').count()==5
     await page.locator('.tabel-standar__baris').first.click()
     await expect(page.locator('[data-rqd-panel=ringkasan]')).to_be_visible()
     assert await page.locator('.qc-history-round').count()==n

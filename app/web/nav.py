@@ -88,8 +88,8 @@ log = logging.getLogger("web.nav")
 #: ganti — jangan biarkan, sebab kotak kosong lebih buruk daripada gerigi yang
 #: dipakai bersama.
 TAB = (
-    ("laporan_riwayat", "/laporan-riwayat", "Laporan & Riwayat",
-     "Laporan, proses, QC dan audit sesuai hak akses", None, "chart-no-axes-combined"),
+    ("laporan_riwayat", "/riwayat", "Riwayat",
+     "Catatan proses, QC dan audit", None, "chart-no-axes-combined"),
     ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None, "⌂"),
     ("barang_masuk", "/barang-masuk", "Barang Masuk", "Tiket dan penerimaan", None, "↙"),
     ("pekerjaan", "/pekerjaan", "Pekerjaan", "Perlu tindakan dan berjalan", None, "≡"),
@@ -332,7 +332,7 @@ TAB = (
     # adalah yang SUDAH TERJADI dan perlu diketahui — sedudukan dengan Laporan,
     # bukan dengan antrean. Pintu kabar yang berdiri di atas antrean akan
     # ditekan lebih dulu tiap pagi, dan pekerjaan hari itu terbaca belakangan.
-    ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None, "▤"),
+    ("laporan",    "/laporan",    "Laporan periode", "Rekap per proses dan PDF", None, "▤"),
     ("kabar",      "/kabar",      "Kabar",
      "Pemberitahuan dan catatan terkait", None, "✉"),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
@@ -379,7 +379,7 @@ JUDUL = {k: nama for k, _, nama, _, _, _ in TAB}
 
 # Kunci lama dipertahankan untuk judul dan pemakai lama. Hanya pintu sidebar
 # yang disatukan; rute dan gerbangnya tetap milik modul asal.
-MENU_TERSEMBUNYI = ("aksi_lain", "kabar", "retur", "laporan", "riwayat_sosoh", "riwayat_giling",
+MENU_TERSEMBUNYI = ("aksi_lain", "kabar", "retur", "riwayat_sosoh", "riwayat_giling",
                     "riwayat_pengeringan", "riwayat_transfer", "riwayat_qc", "audit")
 
 

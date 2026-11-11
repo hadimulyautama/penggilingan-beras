@@ -34,25 +34,15 @@ async def contoh(pg,pabrik):
 async def controls(page,width):
  from playwright.async_api import expect
  await page.locator('[data-rpd-ready]').wait_for()
- assert await page.locator('[data-rpd-category-slot] a').count()==5
- assert await page.locator('[data-rpd-category-slot] a[aria-current=page]').count()==1
+ assert await page.locator('.laporan-nav__jenis a').count()==5
+ assert await page.locator('.laporan-nav__jenis a[aria-current=page]').count()==1
  assert await page.locator('.rpd-stats>div').count()==3
- if width<=700:await page.locator('.rpd .rhs-menu>summary').click()
- await page.locator('[data-rpd-guide]:visible').first.click();await expect(page.locator('#rpd-panduan')).to_be_visible()
+ await page.locator('[data-lk-buka=rpd-panduan]:visible').first.click();await expect(page.locator('#rpd-panduan')).to_be_visible()
  await expect(page.locator('#rpd-panduan')).to_contain_text('Ringkasan menunjukkan data di halaman')
  await page.locator('[data-rpd-guide-close]').click()
  await page.evaluate('()=>{window.__prints=0;window.print=()=>{window.__prints++}}')
- if width<=700:await page.locator('.rpd .rhs-menu>summary').click()
- await page.locator('[data-rpd-print]:visible').first.click();assert await page.evaluate('window.__prints')==1
- await page.locator('.rpd .rhs-menu>summary').click();await page.locator('[data-rpd-nav-open]').click()
- await expect(page.locator('#rpd-navigation')).to_be_visible()
- assert await page.locator('#rpd-navigation .laporan-nav__tabs a').count()==4
- if width<=700:
-  await page.locator('#rpd-navigation [data-lk-buka=lk-menu]:visible').click()
-  await page.locator('#lk-menu [data-lk-buka=lk-panduan]').click()
- else:await page.locator('#rpd-navigation [data-lk-buka=lk-panduan]:visible').click()
- await expect(page.locator('#lk-panduan')).to_be_visible();await page.locator('#lk-panduan [data-lk-tutup]').click()
- assert not await page.locator('#rpd-navigation').is_visible()
+ await page.locator('[data-lk-cetak]:visible').first.click();assert await page.evaluate('window.__prints')==1
+ await expect(page.locator('.laporan-nav__tabs')).to_be_visible()
 
 @pytest.mark.parametrize('width',[1440,390,320])
 async def test_empat_daftar_kontrol_detail_dokumen_dan_kursor(pg,contoh,width):
@@ -63,9 +53,9 @@ async def test_empat_daftar_kontrol_detail_dokumen_dan_kursor(pg,contoh,width):
    async with pg() as db:before=await db.scalar(select(func.count()).select_from(ActivityLog))
    await page.goto(PATHS[0]);await controls(page,width)
    for i,path in enumerate(PATHS):
-    if i:await page.locator('[data-rpd-category-slot] a[href="'+path+'"]').click()
+    if i:await page.locator('.laporan-nav__jenis a[href="'+path+'"]').click()
     await page.locator('[data-rpd-ready]').wait_for()
-    assert await page.locator('[data-rpd-category-slot] a[aria-current=page]').get_attribute('href')==path
+    assert await page.locator('.laporan-nav__jenis a[aria-current=page]').get_attribute('href')==path
     assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
     assert await page.locator('.riwayat-list').count()==1 and await page.locator('.riwayat-desktop-list').count()==1
     await page.screenshot(path=str(OUT/f'{path[1:]}-{width}.png'),full_page=True)
@@ -77,7 +67,7 @@ async def test_empat_daftar_kontrol_detail_dokumen_dan_kursor(pg,contoh,width):
      pdf=page.locator('a[href^="'+path+'/"][href$="/laporan"]').first
      response=await c.get(await pdf.get_attribute('href'));assert response.status_code==200
     if i==3:await expect(page.locator('.riwayat-desktop-list')).to_contain_text('Dibatalkan')
-   await page.locator('[data-rpd-category-slot] a[href="/riwayat-giling"]').click()
+   await page.locator('.laporan-nav__jenis a[href="/riwayat-giling"]').click()
    await page.locator('[data-rpd-ready]').wait_for()
    href=await page.locator('.riwayat-desktop-lot a').first.get_attribute('href')
    await page.locator(('.riwayat-desktop-list' if width>900 else '.riwayat-list')+' a[href="'+href+'"]').first.click()
@@ -96,6 +86,6 @@ async def test_pilihan_terkunci_dan_scope_tetap(pg,contoh,gudang,lihat,boleh,ter
  async with await _klien(pg,peran=OPERATOR,gudang=gudang,lihat=lihat) as c:
   async with browser(c,390) as page:
    await page.goto(boleh);await page.locator('[data-rpd-ready]').wait_for()
-   assert await page.locator('[data-rpd-category-slot] a[href="'+terkunci+'"]').count()==0
-   assert await page.locator('[data-rpd-category-slot] [aria-disabled=true]').count()>=1
+   assert await page.locator('.laporan-nav__jenis a[href="'+terkunci+'"]').count()==0
+   assert await page.locator('.laporan-nav__jenis [aria-disabled=true]').count()>=1
    assert (await c.get(terkunci)).status_code==403

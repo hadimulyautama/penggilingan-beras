@@ -38,7 +38,7 @@ async def test_cari_filter_konteks_rekap_paging_dan_reset_asli(pg,daftar,width):
  async with await _klien(pg,peran='admin',gudang='Gudang 2') as c:
   async with browser(c,width) as page:
    await page.goto('/riwayat-retur-supplier');await page.locator('[data-rrs-ready]').wait_for()
-   assert await page.locator('[data-rpd-category-slot] a').count()==5
+   assert await page.locator('.laporan-nav__jenis a').count()==5
    assert await page.locator('.rrs-metrik>div').count()==3
    await expect(page.locator('.rrs-rekap')).to_contain_text('499 kg')
    if width>700:
@@ -80,8 +80,7 @@ async def test_cari_filter_konteks_rekap_paging_dan_reset_asli(pg,daftar,width):
    await page.locator('[name=q]').press('Enter');await page.locator('[data-rrs-ready]').wait_for()
    assert 'status=done' in page.url and 'gudang='+str(daftar['wh']) in page.url
    await page.evaluate('()=>{window.__prints=0;window.print=()=>window.__prints++}')
-   if width<=700:await page.locator('.rpd .rhs-menu>summary').click()
-   await page.locator('[data-rpd-print]:visible').first.click();assert await page.evaluate('window.__prints')==1
+   await page.locator('[data-lk-cetak]:visible').first.click();assert await page.evaluate('window.__prints')==1
    await page.goto('/riwayat-retur-supplier?penerimaan='+str(daftar['tid'])+'&q=NOTA-DAFTAR-ASLI&status=done')
    await page.locator('[data-rrs-ready]').wait_for();await open_filter(page,width)
    data=await page.evaluate('()=>Object.fromEntries(new FormData(document.getElementById("rrs-form")))')
@@ -92,8 +91,7 @@ async def test_cari_filter_konteks_rekap_paging_dan_reset_asli(pg,daftar,width):
    await page.get_by_role('link',name='Lihat semua penerimaan yang diizinkan').click();await page.locator('[data-rrs-ready]').wait_for()
    assert 'penerimaan=' not in page.url
    assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
-   if width<=700:await page.locator('.rpd .rhs-menu>summary').click()
-   await page.locator('[data-rpd-guide]:visible').first.click();await expect(page.locator('#rpd-panduan')).to_contain_text('tidak menambah stok');await page.locator('[data-rpd-guide-close]').click()
+   await page.locator('[data-lk-buka=rpd-panduan]:visible').first.click();await expect(page.locator('#rpd-panduan')).to_contain_text('tidak menambah stok');await page.locator('[data-rpd-guide-close]').click()
  async with pg() as db:assert await sidik_semua(db)==before
 
 async def test_error_dan_fallback_tanpa_skrip_penataan(pg,daftar):

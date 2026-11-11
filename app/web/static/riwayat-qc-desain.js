@@ -5,10 +5,8 @@
  const root=document.querySelector('[data-riwayat-qc]');
  if(!root||root.dataset.rqdReady)return;root.dataset.rqdReady='1';
  const menu=root.querySelector('.rhs-menu'),guide=root.querySelector('#rqd-panduan');
- for(const b of root.querySelectorAll('[data-rqd-guide]'))b.onclick=()=>{menu.open=false;guide.showModal();};
+ for(const b of root.querySelectorAll('[data-rqd-guide]'))b.onclick=()=>{if(menu)menu.open=false;guide.showModal();};
  root.querySelector('[data-rqd-guide-close]').onclick=()=>guide.close();
- const nav=document.querySelector('.laporan-riwayat>.laporan-nav'),slot=root.querySelector('[data-rqd-parent-nav-slot]'),dialog=root.querySelector('#rqd-navigation');
- if(nav&&slot&&dialog){for(const d of [...nav.querySelectorAll('dialog')])nav.before(d);slot.append(nav);root.querySelector('[data-rqd-nav-open]').onclick=()=>{menu.open=false;dialog.showModal();};root.querySelector('[data-rqd-nav-close]').onclick=()=>dialog.close();}
  const rice=root.querySelector('[data-qc-sosoh]');
  if(rice){
   // Komponen juga dipakai proses aktif. Hanya halaman ini yang menata
@@ -34,7 +32,6 @@
   for(const a of rice.querySelectorAll('a[href*="buka=batalkan_sampel_qc_sosoh"]')){const original=new URL(a.href,location.href),u=new URL(location.href);u.searchParams.set('tab_qc','sampel');for(const [k,v]of original.searchParams)u.searchParams.set(k,v);u.hash='';a.href=u.pathname+u.search;}
 
  }
- const categorySlot=root.querySelector('[data-rqd-category-slot]'),categories=nav?.querySelector('.laporan-nav__jenis');if(categorySlot&&categories)categorySlot.append(categories);
  const tabs=[...root.querySelectorAll('.rhs-tabs [role=tab]')],panels=[...root.querySelectorAll('[data-rqd-panel]')];if(!tabs.length)return;
  function setRound(n){const rounds=[...root.querySelectorAll('.qc-history-round')];if(!rounds.length)return;
   const select=root.querySelector('#qc-putaran'),requested=Number(n);

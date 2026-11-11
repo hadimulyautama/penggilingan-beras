@@ -65,10 +65,8 @@ async def test_tab_draf_koreksi_sumber_qc_pdf_dan_navigasi(pg,selesai,width):
    for suffix in ['/laporan','/laporan.pdf','/laporan.pdf?unduh=1']:
     r=await c.get('/riwayat-giling/'+str(pr.id)+suffix);assert r.status_code==200
     if '.pdf' in suffix:assert r.headers['content-type'].startswith('application/pdf')
-   if width<=700:await page.locator('.rhs-menu>summary').click()
-   await page.locator('[data-rhs-guide]:visible').click();await expect(page.locator('#rhs-panduan')).to_be_visible();await page.locator('[data-rhs-guide-close]').click()
-   await page.locator('.rhs-menu>summary').click();await page.locator('[data-rhs-nav-open]').click();await expect(page.locator('#rhs-navigation')).to_be_visible();assert await page.locator('#rhs-navigation .laporan-nav__tabs a').count()>=3
-   await page.locator('[data-rhs-nav-close]').click()
+   await page.locator('[data-lk-buka=rhs-panduan]:visible').click();await expect(page.locator('#rhs-panduan')).to_be_visible();await page.locator('[data-rhs-guide-close]').click()
+   await expect(page.locator('.laporan-nav__tabs')).to_be_visible()
 
 async def test_konflik_isian_dipertahankan_dan_periksa_ulang(pg,selesai):
  from playwright.async_api import expect

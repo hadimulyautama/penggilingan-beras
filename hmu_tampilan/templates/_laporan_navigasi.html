@@ -1,16 +1,21 @@
-{# Setiap tab menuju reader lama; tidak ada hitungan lintas tahap. #}
+{# Satu bilah di tempat yang sama untuk daftar, detail, QC dan laporan. #}
 <link rel="stylesheet" href="/static/laporan-kontrol.css?v={{ VERSI }}">
-{% from '_laporan_kontrol.html' import kepala, panel with context %}
-<section class="laporan-nav" aria-label="Laporan dan Riwayat" data-laporan-kontrol>
-  {{ kepala() }}
-  <nav class="laporan-nav__tabs" aria-label="Bagian Laporan dan Riwayat">
-    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}>{{ t.nama }}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
-  </nav>
+{% from '_laporan_kontrol.html' import panel with context %}
+<section class="laporan-nav" aria-label="Riwayat dan laporan periode" data-laporan-kontrol>
+  <div class="laporan-nav__bar">
+    <nav class="laporan-nav__tabs" aria-label="Jenis halaman">
+    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}>{{ t.nama }}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
+    </nav>
+    <div class="lk-aksi lk-aksi-tetap" aria-label="Tindakan halaman">
+      <button class="btn btn--kecil" type="button" data-lk-buka="{{ LAPORAN_NAV.panduan }}">ⓘ Panduan</button>
+      <span class="lk-cetak-slot">{% if LAPORAN_NAV.aktif != 'laporan' %}<button class="btn btn--kecil" type="button" data-lk-cetak>Cetak</button>{% endif %}</span>
+    </div>
+  </div>
   {% if LAPORAN_NAV.pilihan %}
   <nav class="laporan-nav__jenis" aria-label="{{ 'Jenis proses' if LAPORAN_NAV.aktif == 'proses' else 'Jenis pemeriksaan QC' }}">
     {% for kunci, nama, alamat, gudang in LAPORAN_NAV.pilihan %}{% if not TAMPILAN_INDUK or alamat in LAPORAN_NAV.boleh_alamat %}<a data-utuh href="{{ alamat }}"{% if kunci == LAPORAN_NAV.jenis %} aria-current="page"{% endif %}>{{ nama }}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses gudang ini">{{ nama }}</span>{% endif %}{% endfor %}
   </nav>
   {% endif %}
-  {{ panel() }}
+  {% if LAPORAN_NAV.aktif in ('laporan','audit') %}{{ panel() }}{% endif %}
 </section>
 <script src="/static/laporan-kontrol.js?v={{ VERSI }}" defer></script>

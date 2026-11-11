@@ -30,8 +30,7 @@ async def test_empat_tab_rincian_panduan_konteks_dan_form_asli(pg,keluar_dua,wid
    for label in ['Diajukan','Aktual dimuat','Keluar awal tercatat','Keluar efektif saat ini','Total aktual dimuat','Penerimaan & sumber','Alasan retur']:await expect(page.locator('#rsd-panel')).to_contain_text(label)
    assert not await page.locator('[data-riwayat-retur-supplier]').evaluate('e=>e.scrollWidth>e.clientWidth')
    await page.screenshot(path=str(out/f'ringkasan-{width}.png'),full_page=True)
-   if width<=700:await page.locator('.rhs-menu>summary').click()
-   await page.locator('[data-rsd-guide]:visible').click();await expect(page.locator('#rsd-panduan')).to_contain_text('tidak menambah stok');await page.locator('[data-rsd-guide-close]').click()
+   await page.locator('[data-lk-buka=rsd-panduan]:visible').click();await expect(page.locator('#rsd-panduan')).to_contain_text('tidak menambah stok');await page.locator('[data-rsd-guide-close]').click()
    await page.locator('#rsd-tab-timbang').click();await page.locator('[data-rsd-ready]').wait_for()
    for label in ['Tiket retur terkini','Rekaman timbang saat pemeriksaan','Verifikasi PadiFlow','Riwayat hasil pemeriksaan','Koreksi tiket yang relevan','Revisi tiket saat pemeriksaan']:await expect(page.locator('#rsd-panel')).to_contain_text(label)
    assert 'tab=timbang' in page.url and 'halaman=2' in page.url and 'q=Uji' in page.url

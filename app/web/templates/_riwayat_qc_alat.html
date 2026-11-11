@@ -1,5 +1,5 @@
 {# Kontrol presentasi saja; data, izin, perhitungan dan formulir tetap milik QC. #}
-{% macro alat() %}<div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rqd-guide>ⓘ Panduan</button><a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a><details class="rhs-menu"><summary class="btn" aria-label="Panduan dan penelusuran QC">⋮</summary><div class="rhs-menu-body"><button class="btn" type="button" data-rqd-guide>ⓘ Panduan</button>{% if LAPORAN_NAV %}<button class="btn" type="button" data-rqd-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}</div></details></div>{% endmacro %}
+{% macro alat() %}<div class="rhs-tools">{% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rqd-guide>ⓘ Panduan</button>{% endif %}{% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a>{% endif %}</div>{% endmacro %}
 {% macro panduan_qc() %}
 {% from '_panduan.html' import panel as panduan %}
 {% call panduan('rqd-panduan','Panduan riwayat QC',penutup={'data-rqd-guide-close':'','data-lk-tutup':''}) %}
@@ -8,5 +8,5 @@
 <p><strong>Putaran &amp; catatan.</strong> Pemilihan putaran hanya mengubah tampilan. Catatan lab terakhir yang terisi tetap terbaca meski putaran sesudahnya kosong. Metadata lama yang tidak tersimpan ditandai tidak tercatat.</p>
 <p><strong>Beras hasil sosoh.</strong> Sampel, jenis dan waktu pengambilan dibedakan dari waktu isi lab dan waktu timbang. Total timbang adalah aktual; bobot sesi dan sampel adalah estimasi. Sampel yang dibatalkan tetap tersimpan dan dikeluarkan dari pemetaan. Pengambilan, pengisian dan pembatalan mengikuti izin, saklar mutu dan status proses yang berlaku.</p>
 {% endcall %}
-{% if LAPORAN_NAV %}{% call panduan('rqd-navigation','Navigasi Laporan & Riwayat',penutup={'data-rqd-nav-close':'','data-lk-tutup':''}) %}<div data-rqd-parent-nav-slot></div>{% endcall %}{% endif %}
+
 {% endmacro %}

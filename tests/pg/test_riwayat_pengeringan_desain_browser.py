@@ -48,9 +48,8 @@ async def test_tab_data_paginasi_tindakan_bobot_pdf_dan_panduan(pg,riwayat,width
    await page.locator('#tindakan-proses a[href*="buka=pindah_silo"]').click();await page.locator('#lembar[open]').wait_for();await expect(page.locator('#lembar')).to_contain_text('silo')
    await page.keyboard.press('Escape');await page.locator('#lembar').wait_for(state='hidden')
    await page.locator('#tindakan-proses a[href*="buka=mulai_pendinginan_ulang"]').click();await page.locator('#lembar[open]').wait_for();await page.keyboard.press('Escape');await page.locator('#lembar').wait_for(state='hidden')
-   if width<=700:await page.locator('.rhs-menu>summary').click()
-   await page.locator('[data-rhp-guide]:visible').click();await expect(page.locator('#rhp-panduan')).to_be_visible();await page.locator('[data-rhp-guide-close]').click()
-   await page.locator('.rhs-menu>summary').click();await page.locator('[data-rhp-nav-open]').click();await expect(page.locator('#rhp-navigation')).to_be_visible();assert await page.locator('#rhp-navigation .laporan-nav__tabs a').count()>=3;await page.locator('[data-rhp-nav-close]').click()
+   await page.locator('[data-lk-buka=rhp-panduan]:visible').click();await expect(page.locator('#rhp-panduan')).to_be_visible();await page.locator('[data-rhp-guide-close]').click()
+   await expect(page.locator('.laporan-nav__tabs')).to_be_visible()
    # Pindah ke silo lewat API yang sama, kemudian catat flowing scale lewat UI asli.
    r=await c.post('/api/actions/pindah-silo',json={'kode_lot':kode,'silo':'A'});assert r.status_code==200,r.text
    await page.goto(url);await expect(page.locator('#panel-ringkasan')).to_contain_text('Sudah dipindah ke Silo A')

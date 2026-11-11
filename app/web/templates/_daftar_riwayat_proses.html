@@ -8,14 +8,10 @@
  <header class="rhs-header rpd-header">
   <h1>Riwayat proses</h1><p class="rhs-meta">Catatan proses yang sudah selesai dan perpindahan PK.</p>
   <div class="rhs-tools">
-   <button class="btn btn--kecil" type="button" data-rpd-guide>ⓘ Panduan</button><a class="btn btn--kecil rhs-period" data-utuh href="/laporan">Laporan periode</a>
-   <button class="btn btn--kecil" type="button" data-rpd-print><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Print</button>
+   {% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rpd-guide>ⓘ Panduan</button>{% endif %}
+   {% if not LAPORAN_NAV or PORTAL_READ_ONLY %}<button class="btn btn--kecil" type="button" data-rpd-print><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Cetak</button>{% endif %}
    {% block daftar_alat_tambahan %}{% endblock %}
-   <details class="rhs-menu"><summary class="btn" aria-label="Panduan, print dan navigasi riwayat">⋮</summary><div class="rhs-menu-body">
-    <button class="btn" type="button" data-rpd-guide>ⓘ Panduan</button>
-    <button class="btn" type="button" data-rpd-print>Print</button>
-    {% if LAPORAN_NAV %}<button class="btn" type="button" data-rpd-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}
-   </div></details>
+
   </div>
  </header>
  <div data-rpd-category-slot></div>
@@ -34,11 +30,11 @@
 {% elif request.url.path == '/riwayat-transfer' %}
 <p><strong>Transfer.</strong> Transfer dibatalkan tetap ditampilkan dengan statusnya. Catatan itu tidak dianggap telah sampai ke Gudang 2.</p>
 {% endif %}
-<p><strong>Penelusuran.</strong> Buka kode atau kartu untuk detail lengkap. Laporan PDF dibuka melalui fasilitas yang sudah tersedia pada setiap proses. Print mencetak bagian yang sedang dibuka.</p>
+<p><strong>Penelusuran.</strong> Buka kode atau kartu untuk detail lengkap. Laporan PDF dibuka melalui fasilitas yang sudah tersedia pada setiap proses. Tombol Cetak di bilah atas mencetak halaman yang sedang dibuka.</p>
 <p><strong>Catatan lama.</strong> “30 sebelumnya” membuka catatan yang lebih lama. “Kembali ke yang terbaru” kembali ke awal. Ringkasan menunjukkan data di halaman yang sedang dibuka, bukan total seluruh riwayat.</p>
 {% endblock %}
 {% endcall %}
-{% if LAPORAN_NAV %}{% call panduan('rpd-navigation','Navigasi Laporan & Riwayat',penutup={'data-rpd-nav-close':'','data-lk-tutup':''}) %}<div data-rpd-parent-nav-slot></div>{% endcall %}{% endif %}
+
 </div>
 <script src="/static/riwayat-daftar-proses.js?v={{ VERSI }}"></script>
 {% block daftar_skrip %}{% endblock %}

@@ -36,8 +36,7 @@ async def test_tab_draf_koreksi_ditolak_dan_nol_asli(pg,langsung,width):
    await page.locator('#tab-permintaan').click();await expect(page.locator('#panel-permintaan')).to_contain_text('Tidak ada permintaan operator')
    await page.locator('#tab-riwayat').click();await expect(page.locator('#panel-riwayat')).to_contain_text('20 karung × 50 kg')
    await page.locator('#tab-ringkasan').focus();await page.keyboard.press('ArrowRight');await expect(page.locator('#panel-bahan')).to_be_visible()
-   if width<=700:await page.locator('.rhs-menu>summary').click()
-   await page.locator('[data-rht-guide]:visible').click();await expect(page.locator('#rht-panduan')).to_contain_text('Bobot 0 membatalkan tanpa pengganti');await page.keyboard.press('Escape')
+   await page.locator('[data-lk-buka=rht-panduan]:visible').click();await expect(page.locator('#rht-panduan')).to_contain_text('Bobot 0 membatalkan tanpa pengganti');await page.keyboard.press('Escape')
    await page.locator('[data-rht-edit]').click();editor=page.locator('.rht-correction');await expect(editor).to_be_visible()
    field=page.locator('[name=hasil_transfer]');await field.fill('900');await page.locator('[name=alasan]').fill('Hasil pemeriksaan <uji>');await field.evaluate('e=>e.dataset.nodeUji="asli"')
    await page.keyboard.press('Escape');await page.locator('#tab-bahan').click();await page.locator('[data-rht-edit]').click();assert await field.input_value()=='900' and await field.get_attribute('data-node-uji')=='asli'
@@ -77,8 +76,7 @@ async def test_permintaan_aksi_asli_paginasi_hash_dan_panduan(pg,pabrik,width):
    action=page.locator('[data-aksi-permintaan=tutup_permintaan_pk]');await action.click();await page.locator('#lembar[open]').wait_for()
    await expect(page.locator('#lembar')).to_contain_text('Tutup');await page.keyboard.press('Escape');await expect(page.locator('#panel-permintaan')).to_be_visible()
    await page.locator('#tab-riwayat').click();await page.locator('.transfer-paginasi a').filter(has_text='Lebih lama').click();await expect(page.locator('#panel-riwayat')).to_be_visible();assert 'halaman_transfer=2' in page.url and 'buka=' not in page.url;await expect(page.locator('#lembar')).not_to_be_visible()
-   if width<=700:await page.locator('.rhs-menu>summary').click()
-   await page.locator('[data-rht-guide]:visible').click();await expect(page.locator('#rht-panduan')).to_be_visible();await page.locator('[data-rht-guide-close]').click()
+   await page.locator('[data-lk-buka=rht-panduan]:visible').click();await expect(page.locator('#rht-panduan')).to_be_visible();await page.locator('[data-rht-guide-close]').click()
    await page.reload();await expect(page.locator('#panel-riwayat')).to_be_visible();assert await _saldo(pg,pabrik['proses_id'])==before
    assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
 
