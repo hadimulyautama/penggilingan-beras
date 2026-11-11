@@ -2,10 +2,15 @@
 {% block judul %}Laporan{% endblock %}
 {% block isi %}
 <style>
-#lembar .lp-ringkasan {display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin:16px 0;}
-#lembar .lp-ringkasan div {padding:12px;background:var(--pd-paper,var(--latar));border-radius:8px;}
-#lembar .lp-ringkasan span {display:block;color:var(--pd-muted,var(--redup));font-size:13px;}
-#lembar .lp-ringkasan strong {display:block;margin-top:5px;font-size:18px;}
+#lembar .lp-ringkasan {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;margin:16px 0;align-items:start;}
+#lembar .lp-kelompok {padding:16px;background:var(--pd-paper,var(--latar));border:1px solid var(--pd-line,var(--garis));border-radius:10px;min-width:0;}
+#lembar .lp-kelompok h3 {font-size:16px;margin:0 0 10px;color:var(--pd-ink,var(--teks));}
+#lembar .lp-kelompok h4 {font-size:13px;margin:14px 0 4px;padding-top:10px;border-top:1px solid var(--pd-line,var(--garis));color:var(--pd-muted,var(--redup));}
+#lembar .lp-kelompok dl {margin:0;}
+#lembar .lp-metrik {display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:12px;padding:7px 0;}
+#lembar .lp-metrik dt {font-size:13px;color:var(--pd-muted,var(--redup));overflow-wrap:anywhere;}
+#lembar .lp-metrik dd {margin:0;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;}
+#lembar .lp-total {border-bottom:1px solid var(--pd-line,var(--garis));padding-bottom:10px;margin-bottom:3px;}
 #lembar .lp-tabel {overflow-x:auto;margin:16px 0;}
 #lembar table {width:100%;border-collapse:collapse;font-size:14px;}
 #lembar th,#lembar td {padding:10px 8px;border-bottom:1px solid var(--pd-line,var(--garis));text-align:left;vertical-align:top;}
@@ -120,7 +125,17 @@
   function tabel(d) {
     var h = '<p class="lp-catatan">Periode: ' + aman(d.periode) + ' · WIB</p>' +
       '<p class="lp-catatan">Dasar: ' + aman(d.dasar) + '</p><div class="lp-ringkasan">';
-    d.ringkasan.forEach(function (r) { h += '<div><span>' + aman(r.nama) + '</span><strong>' + aman(r.nilai) + '</strong></div>'; });
+    (d.ringkasan_kelompok || [{nama:'Ringkasan',rincian:d.ringkasan}]).forEach(function (g) {
+      h += '<section class="lp-kelompok"><h3>' + aman(g.nama) + '</h3><dl>';
+      var bagian = null;
+      g.rincian.forEach(function (r) {
+        if (r.bagian && r.bagian !== bagian) {
+          h += '</dl><h4>' + aman(r.bagian) + '</h4><dl>'; bagian = r.bagian;
+        }
+        h += '<div class="lp-metrik' + (r.nama.indexOf('Total ') === 0 ? ' lp-total' : '') + '"><dt>' + aman(r.nama) + '</dt><dd>' + aman(r.nilai) + '</dd></div>';
+      });
+      h += '</dl></section>';
+    });
     h += '</div>';
     if (d.rincian.length) {
       var kolommen = d.kolom.map(function (c) { return [c.kunci,c.nama,c.kelompok]; });

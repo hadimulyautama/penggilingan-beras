@@ -71,6 +71,8 @@ async def test_hasil_samping_tambahan_dari_master_ikut_laporan(pg,pemakai):
         d=await ambil(db,'penyosohan',now_local().date(),now_local().date())
         assert 'Serbuk khusus: 25 kg' in d['rincian'][0]['hasil_samping']
         assert any(x['nama']=='Serbuk khusus' and x['nilai']=='25 kg' for x in d['ringkasan'])
+        hasil=next(g for g in d['ringkasan_kelompok'] if g['nama']=='Hasil')
+        assert any(x['nama']=='Serbuk khusus' and x['bagian']=='Hasil samping' for x in hasil['rincian'])
         from app.web.pdf_periode import buat_pdf
         from pypdf import PdfReader
         from io import BytesIO

@@ -40,17 +40,24 @@ def buat_pdf(data, *, contoh=False):
         for i in belum_selesai:
             table.setStyle(TableStyle([('BACKGROUND',(0,i),(-1,i),colors.HexColor('#fff3cd'))]))
         return table
-    ringkas = [['Ringkasan', 'Nilai', 'Ringkasan', 'Nilai']]
-    for i in range(0, len(data['ringkasan']), 2):
-        pasangan = data['ringkasan'][i:i+2]
-        ringkas.append([pasangan[0]['nama'],pasangan[0]['nilai']] + ([pasangan[1]['nama'],pasangan[1]['nilai']] if len(pasangan)>1 else ['','']))
     story = [p('PADIFLOW / PT HADI MULYA UTAMA','SubPeriode')]
     if contoh:
         story.append(p('CONTOH TAMPILAN - DATA SIMULASI','BagianPeriode'))
     story += [p(data['nama'],'JudulPeriode'),
               p('Periode: '+data['periode'],'SubPeriode'),
-              p('Dasar periode: '+data['dasar']+' (WIB)','SubPeriode'), Spacer(1,4*mm),
-              tabel(ringkas,[lebar*.26,lebar*.24,lebar*.26,lebar*.24])]
+              p('Dasar periode: '+data['dasar']+' (WIB)','SubPeriode'), Spacer(1,4*mm)]
+    from itertools import groupby
+    for grup in data.get('ringkasan_kelompok',[dict(nama='Ringkasan',rincian=data['ringkasan'])]):
+        rows=[[grup['nama'],'','','']];spans=[('SPAN',(0,0),(3,0))]
+        for bagian,items in groupby(grup['rincian'],key=lambda r:r.get('bagian')):
+            if bagian:
+                i=len(rows);rows.append([p(bagian,'BagianPeriode'),'','',''])
+                spans.extend([('SPAN',(0,i),(3,i)),('BACKGROUND',(0,i),(3,i),colors.HexColor('#e1ece5'))])
+            items=list(items)
+            for i in range(0,len(items),2):
+                pair=items[i:i+2]
+                rows.append([pair[0]['nama'],pair[0]['nilai']]+([pair[1]['nama'],pair[1]['nilai']] if len(pair)>1 else ['','']))
+        story.extend([tabel(rows,[lebar*.32,lebar*.18,lebar*.32,lebar*.18],spans=spans),Spacer(1,2*mm)])
     story += [Spacer(1,5*mm), CondPageBreak(50*mm), p('Rincian transaksi','BagianPeriode')]
     if data['rincian']:
         cols=data['kolom']

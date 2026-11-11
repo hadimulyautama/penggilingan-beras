@@ -89,6 +89,16 @@ def test_penyosohan_bahan_dan_hasil_memiliki_subkolom_dan_pdf_landscape():
     assert len(bahan)==3 and len(hasil)==7
     assert d['rincian'][0][bahan[0]['kunci']]=='9.000 kg'
     assert d['rincian'][0][bahan[1]['kunci']]=='1.000 kg'
+    groups={g['nama']:g['rincian'] for g in d['ringkasan_kelompok']}
+    assert list(groups)==['Aktivitas','Bahan','Hasil','Evaluasi proses']
+    assert {i['nama']:i['nilai'] for i in groups['Bahan']}=={'Total bahan terpakai':'10.000 kg','Pk':'9.000 kg','Broken':'1.000 kg'}
+    hasil_ringkas={i['nama']:i for i in groups['Hasil']}
+    assert hasil_ringkas['Total hasil tercatat']['nilai']=='9.500 kg'
+    assert hasil_ringkas['Total beras']['nilai']=='6.500 kg'
+    assert hasil_ringkas['Total hasil samping']['nilai']=='3.000 kg'
+    from app.services.stok import nama_produk
+    assert hasil_ringkas[nama_produk('premium')]['bagian']=='Beras'
+    assert hasil_ringkas['Bekatul']['bagian']=='Hasil samping'
     assert all('silo' not in c['nama'].lower() for c in d['kolom'])
     reader=PdfReader(BytesIO(buat_pdf(d)))
     assert all(p.mediabox.width>p.mediabox.height for p in reader.pages)
@@ -130,6 +140,8 @@ def test_status_diganti_warna_dan_tanggal_di_bawah_kode(kode,status,belum):
     d=data_laporan(kode,D,D,[dict(id=1,tanggal=D,kode='KODE-UJI',status=status,bobot=100,jasa_id=None)])
     assert not {'status','tanggal'} & {c['kunci'] for c in d['kolom']}
     assert d['status']==[] and d['rincian'][0]['belum_selesai']==belum
+    assert d['ringkasan_kelompok'][0]['nama']=='Aktivitas'
+    assert all(g['rincian'] for g in d['ringkasan_kelompok'])
     assert any('KODE-UJI' in c for c in d['catatan'])==belum
     reader=PdfReader(BytesIO(buat_pdf(d)))
     text=' '.join(p.extract_text() for p in reader.pages)
