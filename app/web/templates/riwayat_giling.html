@@ -57,8 +57,7 @@
     {% if k.pemilik %}
       <div class="nota nota--hati" style="margin:6px 0 0">
         <span aria-hidden="true">◇</span>
-        <span>Titipan <b>{{ k.pemilik }}</b> — disosoh/digiling lalu
-          dikembalikan, bukan dijual</span>
+        <span title="{{ k.pemilik }}">Jasa · <b>{{ k.nama_pemilik or "Pemilik belum tercatat" }}</b></span>
       </div>
     {% endif %}
 

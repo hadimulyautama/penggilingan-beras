@@ -56,3 +56,7 @@
 @container(max-width:570px){.detail-kirim-identitas{grid-template-columns:repeat(2,minmax(0,1fr))}}
 [data-detail-tab] .riwayat-detail__card{padding:20px;border-radius:14px;box-shadow:none}
 @container(max-width:570px){[data-detail-tab] .riwayat-detail__card{padding:14px}}
+
+/* Ringkasan ponsel berdampingan agar isi utama lebih cepat terlihat. */
+@container(max-width:570px){.detail-kirim-stat{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.detail-kirim-stat>div{display:grid;grid-template-rows:1fr auto;gap:6px;padding:10px 8px}.detail-kirim-stat span{font-size:11px}.detail-kirim-stat strong{font-size:clamp(13px,4cqw,17px)}[data-detail-tab] .kirim-detail__total{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}[data-detail-tab] .kirim-detail__total>div{display:grid;grid-template-rows:1fr auto;gap:6px;padding:10px}[data-detail-tab] .kirim-detail__total dt{font-size:11px}[data-detail-tab] .kirim-detail__total dd{font-size:clamp(13px,4cqw,17px)}}
+@container(max-width:570px){.detail-kirim-stat,[data-detail-tab] .kirim-detail__total{grid-template-rows:auto auto}.detail-kirim-stat>div,[data-detail-tab] .kirim-detail__total>div{grid-template-rows:subgrid;grid-row:span 2}}

@@ -33,3 +33,6 @@ body .isi .transfer-detail .riwayat-detail__hero{padding:16px 20px;border:1px so
 .transfer-bobot>div{background:var(--panel-2);border-color:transparent}.transfer-aksi .pilihan__satu--utama{background:var(--aman);border-color:var(--aman);color:#fff}.transfer-aksi .pilihan__satu--utama .pilihan__ket{color:#ffffffde}.transfer-detail .riwayat-detail__card>p{font-size:.82rem;line-height:1.6}.transfer-detail .proses-detail__statistik .riwayat-detail__card{min-height:44px;box-sizing:border-box}.transfer-rute>div{background:transparent;padding:8px 0}.transfer-rute small{font-size:.76rem}.transfer-detail .proses-detail__sementara{display:block;font-size:.78rem;color:var(--kulit-redup);margin-top:6px}
 
 .transfer-detail .riwayat-status--pabrik{display:inline-flex;align-items:center;padding:3px 7px;border:1px solid var(--kulit-batas);border-radius:6px;background:var(--panel-2);color:var(--tinta)}.transfer-aksi .pilihan__satu--utama{--tombol-pucat:#4b7043;--tombol-pucat-teks:#fff;--tombol-batas:#4b7043;--tombol-hover:#3e6037;--tombol-tekan:#35532e}
+
+/* Ringkasan ponsel berdampingan agar isi utama lebih cepat terlihat. */
+@media(max-width:700px){.transfer-detail .proses-detail__statistik{grid-template-columns:repeat(3,minmax(0,1fr))}}

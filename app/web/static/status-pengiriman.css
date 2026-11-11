@@ -6,3 +6,6 @@
 .sp-status dd{font-weight:600;margin:0;font-size:15px;line-height:1.5}
 .sp-status p{font-size:13px;line-height:1.6;margin:12px 0 0;color:var(--pd-muted,var(--redup))}
 @media(max-width:600px){.sp-status dl{grid-template-columns:minmax(0,1fr)}.sp-status dl>div+div{border-top:1px solid var(--garis);padding-top:12px}}
+
+/* Ringkasan ponsel berdampingan agar isi utama lebih cepat terlihat. */
+@media(max-width:600px){.sp-status dl{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.sp-status dl>div+div{border:0;padding-top:0}.sp-status dt{font-size:11px}.sp-status dd{font-size:13px}}

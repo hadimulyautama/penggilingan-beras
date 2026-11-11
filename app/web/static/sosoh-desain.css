@@ -89,3 +89,7 @@ body.padiflow-ui .sr.sr-redesign .sr-design-tabs>button{background:transparent!i
 body.padiflow-ui .sr.sr-redesign .sr-design-tabs>button[aria-selected=true]{color:var(--pd-green)!important;border-bottom-color:var(--pd-green)!important}
 body.padiflow-ui .sr-redesign .sr-shortcut{background:transparent!important;border-color:var(--pd-line)!important}
 body.padiflow-ui .sr-redesign .sr-shortcut small{color:var(--pd-muted)!important}
+
+/* Ringkasan ponsel berdampingan agar isi utama lebih cepat terlihat. */
+@media(max-width:650px){.sr-design-mass{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.sr-design-mass>div{min-width:0;gap:6px}.sr-design-mass>div+div{border:0;border-left:1px solid var(--pd-line);padding:0 0 0 8px}.sr-design-mass span{font-size:11px;line-height:1.4}.sr-design-mass strong{font-size:clamp(13px,4.2vw,17px)}.sr-design-mass small{font-size:10px;line-height:1.4}.sr-redesign .sr-original-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+@media(max-width:650px){.sr-design-mass{grid-template-rows:auto auto auto auto}.sr-design-mass>div{grid-template-rows:subgrid;grid-row:span 4;align-items:start}}

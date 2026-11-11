@@ -24,3 +24,6 @@
  .gr.gr-redesign .sr-design-actions>.btn{flex:1 1 135px}
  .gr.gr-redesign .kb-detail-entry>.btn{min-height:44px}
 }
+
+/* Ringkasan ponsel berdampingan agar isi utama lebih cepat terlihat. */
+@media(max-width:650px){.gr.gr-redesign .gr-design-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.gr.gr-redesign .gr-design-metrics>.sr-metric{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:1fr auto;align-items:start;gap:6px;min-width:0;font-size:11px}.gr.gr-redesign .gr-design-metrics>.sr-metric+div{border:0;border-left:1px solid var(--pd-line);padding:0 0 0 8px}.gr.gr-redesign .gr-design-metrics strong{font-size:clamp(13px,4.2vw,17px);text-align:left}}

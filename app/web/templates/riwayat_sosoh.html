@@ -88,7 +88,7 @@
            dari gudang orang lain dan mutunya tak dipilih pabrik. #}
         <div class="nota nota--hati" style="margin:6px 0 0">
           <span aria-hidden="true">◇</span>
-          <span>Titipan <b>{{ k.pemilik }}</b></span>
+          <span title="{{ k.pemilik }}">Jasa · <b>{{ k.nama_pemilik or "Pemilik belum tercatat" }}</b></span>
         </div>
       {% endif %}
 

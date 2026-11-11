@@ -57,3 +57,7 @@ body .proses-detail .proses-detail__aksi .pilihan__satu--utama .pilihan__ket{col
  .proses-aktif-list__row>span:not(:last-child){grid-column:1}
  .proses-aktif-list__row>span:last-child{grid-column:2;grid-row:1/4}
 }
+
+/* Ringkasan ponsel berdampingan agar isi utama lebih cepat terlihat. */
+@media(max-width:700px){.proses-detail__statistik{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.proses-detail__statistik .riwayat-detail__card{display:grid;grid-template-rows:1fr auto;align-items:start;gap:6px;padding:10px 8px}.proses-detail__statistik span{max-width:none;font-size:11px}.proses-detail__statistik strong{margin:0;text-align:left;font-size:clamp(12px,3.9vw,16px)}}
+@media(max-width:700px){.proses-detail__statistik{grid-template-rows:auto auto}.proses-detail__statistik .riwayat-detail__card{grid-template-rows:subgrid;grid-row:span 2}}

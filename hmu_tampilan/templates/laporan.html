@@ -116,6 +116,15 @@
 #lembar table td::before {border-right:1px solid var(--garis);padding-right:8px;}
 #lembar .lp-bagian-metrik>dl.lp-metrik+dl.lp-metrik {padding-left:12px;}
 }
+@media(max-width:650px){
+ #lembar .lp-kelompok{padding:14px;}
+ #lembar .lp-kelompok h3{margin-bottom:12px;}
+ #lembar .lp-bagian-metrik{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+ #lembar .lp-bagian-metrik>dl.lp-metrik{min-width:0;}
+ #lembar .lp-bagian-metrik>dl.lp-metrik dt{font-size:11px;line-height:1.4;}
+ #lembar .lp-bagian-metrik>dl.lp-metrik dd{font-size:16px;overflow-wrap:anywhere;}
+ #lembar .lp-kelompok--hasil .lp-bagian-metrik{gap:12px;}
+}
 </style>
 
 <div class="lp-pilihan">

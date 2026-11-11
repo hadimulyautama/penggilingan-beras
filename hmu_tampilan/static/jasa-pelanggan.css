@@ -82,3 +82,8 @@
 .jasa-detail .jasa-pesanan-paginasi{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-top:16px}
 .jasa-detail .jasa-pesanan-paginasi a{white-space:normal;min-height:44px}
 @container(max-width:570px){.jasa-detail .jasa-pesanan-filter{grid-template-columns:minmax(0,1fr)}.jasa-detail .jasa-pesanan-paginasi a{flex:1 1 110px}.jasa-detail .jasa-pesanan-paginasi span{flex:1 1 100%;text-align:center;order:-1}}
+
+/* Angka ringkasan tetap berdampingan pada ponsel. */
+@media(max-width:600px){.jasa-detail .jasa-detail-angka{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.jasa-detail .jasa-detail-angka>div{display:grid;grid-template-rows:1fr auto;gap:6px;padding:10px 8px}.jasa-detail .jasa-detail-angka span{font-size:11px}.jasa-detail .jasa-detail-angka strong{font-size:clamp(13px,4.2vw,17px);margin:0;text-align:left}}
+
+@media(max-width:600px){.jasa-detail .jasa-detail-angka{grid-template-rows:auto auto}.jasa-detail .jasa-detail-angka>div{grid-template-rows:subgrid;grid-row:span 2;align-items:start}}
