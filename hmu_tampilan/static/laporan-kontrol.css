@@ -57,3 +57,16 @@ body.padiflow-ui .lk-audit-kontrol .lk-filter-desktop {display:inline-flex;}
 @media print{.laporan-nav,.rhs-tools{display:none!important;}}
 
 body.padiflow-ui .laporan-nav__judul {display:flex;align-items:center;min-height:53px;margin:0;font-size:24px;line-height:1.3;letter-spacing:-.3px;}
+
+/* Di ponsel pilihan jenis berbagi satu baris dengan tindakan tetap.
+   Slot yang kosong pada Audit/Laporan menjaga posisi Panduan dan Cetak. */
+body.padiflow-ui .laporan-nav .laporan-nav__pilihan {display:none;}
+@media(max-width:650px){
+ body.padiflow-ui .laporan-nav__bar {grid-template-columns:minmax(0,1fr) 166px;gap:8px;margin-bottom:0;align-items:center;}
+ body.padiflow-ui .laporan-nav .laporan-nav__tabs,body.padiflow-ui .laporan-nav__judul {grid-column:1/-1;grid-row:1;}
+ body.padiflow-ui .laporan-nav .laporan-nav__pilihan {display:block;grid-column:1;grid-row:2;box-sizing:border-box;width:100%;min-width:0;min-height:44px;height:44px;margin:0;padding:8px 4px;border:1px solid var(--pd-line);border-radius:8px;background:var(--pd-sheet);color:var(--pd-ink);font:inherit;font-size:13px!important;}
+ body.padiflow-ui .laporan-nav .lk-aksi-tetap {grid-column:2;grid-row:2;grid-template-columns:96px 64px;gap:6px;}
+ body.padiflow-ui .laporan-nav .lk-aksi-tetap>.btn {width:100%;padding:8px;}
+ body.padiflow-ui .laporan-nav .lk-cetak-slot {width:64px;}
+ body.padiflow-ui .laporan-nav .laporan-nav__jenis {display:none;}
+}

@@ -32,6 +32,13 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
             nav=r.text.split(f'aria-label="{label}"')[1].split('</nav>')[0]
             assert nav.count('<a ')==count
             assert 'aria-current="page"' in nav
+            from bs4 import BeautifulSoup
+            soup=BeautifulSoup(r.text,'html.parser')
+            pilihan=soup.select_one('[data-jenis-riwayat]')
+            tautan=soup.select('.laporan-nav__jenis a')
+            assert [o['value'] for o in pilihan.select('option[value]:not([disabled])')]==[a['href'] for a in tautan]
+            assert pilihan.select_one('option[selected]')['value']==soup.select_one('.laporan-nav__jenis a[aria-current]')['href']
+            assert all(not o.has_attr('value') for o in pilihan.select('option[disabled]'))
             assert 'pintu pintu--kini' in r.text
         r=await c.get('/laporan-riwayat?tab=audit&rentang=semua&kelompok=giling&cari=LOT')
         assert r.status_code==(200 if audit else 403)
@@ -65,6 +72,7 @@ async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(p
         r=await c.get('/laporan')
         soup=BeautifulSoup(r.text,'html.parser')
         assert soup.h1.get_text(strip=True)=='Laporan periode'
+        assert soup.select_one('[data-jenis-riwayat]') is None
         assert not soup.select('.laporan-nav a[href="/laporan"]:not([data-tab-riwayat])')
         r=await c.get('/riwayat',follow_redirects=False)
         assert r.status_code==303 and r.headers['location']=='/riwayat-pengeringan'

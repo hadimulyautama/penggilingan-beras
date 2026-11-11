@@ -21,6 +21,11 @@
   const menu=document.querySelector('#laci a.pintu[href="/riwayat"]');
   if(menu&&resolved[last])menu.href=resolved[last];
  }catch(_){}
+ const jenis=root.querySelector('[data-jenis-riwayat]');
+ jenis?.addEventListener('change',()=>{
+  const opsi=jenis.selectedOptions[0];
+  if(opsi&&!opsi.disabled&&opsi.value.startsWith('/riwayat-'))location.assign(opsi.value);
+ });
  const dialogs=()=>[...scope.querySelectorAll('dialog.lk-panel,dialog.pd-panduan')];
  scope.querySelectorAll('[data-lk-buka]').forEach(b=>b.addEventListener('click',()=>{
   const target=scope.querySelector('#'+b.dataset.lkBuka);if(!target)return;

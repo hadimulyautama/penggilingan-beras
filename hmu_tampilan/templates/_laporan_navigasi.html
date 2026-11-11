@@ -6,6 +6,11 @@
     {% if LAPORAN_NAV.aktif != 'laporan' %}<nav class="laporan-nav__tabs" aria-label="Jenis halaman">
     {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}>{{ t.nama }}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
     </nav>{% else %}<h1 class="laporan-nav__judul">Laporan periode</h1>{% endif %}
+    {% if LAPORAN_NAV.pilihan %}
+    <select class="laporan-nav__pilihan" data-jenis-riwayat aria-label="{{ 'Pilih proses' if LAPORAN_NAV.aktif == 'proses' else 'Pilih pemeriksaan QC' }}">
+      {% for kunci, nama, alamat, gudang in LAPORAN_NAV.pilihan %}{% if not TAMPILAN_INDUK or alamat in LAPORAN_NAV.boleh_alamat %}<option value="{{ alamat }}"{% if kunci == LAPORAN_NAV.jenis %} selected{% endif %}>{{ nama }}</option>{% else %}<option disabled>{{ nama }} — tidak memiliki akses</option>{% endif %}{% endfor %}
+    </select>
+    {% endif %}
     <div class="lk-aksi lk-aksi-tetap" aria-label="Tindakan halaman">
       <button class="btn btn--kecil" type="button" data-lk-buka="{{ LAPORAN_NAV.panduan }}">ⓘ Panduan</button>
       <span class="lk-cetak-slot">{% if LAPORAN_NAV.aktif != 'laporan' %}<button class="btn btn--kecil" type="button" data-lk-cetak>Cetak</button>{% endif %}</span>
