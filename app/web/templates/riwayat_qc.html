@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/riwayat-qc-desain.css?v={{ VERSI }}">
 <main class="riwayat-detail rhs rqd rqd-list" data-riwayat-qc>
-<header class="rhs-header"><h1>{{ judul }}</h1>{{ alat() }}</header>
+{% if not LAPORAN_NAV %}{{ alat() }}{% endif %}
 <div data-rqd-category-slot></div>
 <section class="riwayat-detail__card"><div class="rhs-mass"><div><span>Lot atau proses</span><strong>{{ rows|length }}</strong></div><div><span>Pencatatan QC</span><strong>{{ jumlah_putaran.n }}</strong></div><div><span>Urut berdasarkan waktu</span><strong>Terbaru</strong></div></div></section>
 <section>

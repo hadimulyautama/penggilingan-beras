@@ -71,7 +71,7 @@ async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(p
                 assert soup.select_one('.rpd-header h1,.rpd-header .rhs-meta,.rpd-description') is None
                 assert 'Giling yang sudah ditutup' in soup.select_one('#rpd-panduan').get_text()
             if path=='/riwayat-qc/gabah-basah':
-                assert soup.select_one('.rqd-list>.rhs-header .rhs-meta') is None
+                assert soup.select_one('.rqd-list>.rhs-header') is None
                 assert 'Pilih batch atau proses' in soup.select_one('#rqd-panduan').get_text()
             for menu in soup.select('.rhs-menu'):
                 assert not any('Panduan' in b.get_text() or 'Cetak' in b.get_text() for b in menu.select('button'))

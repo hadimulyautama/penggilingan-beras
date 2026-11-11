@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/riwayat-qc-desain.css?v={{ VERSI }}">
 <main class="riwayat-detail rhs rqd" data-riwayat-qc data-rqd-beras>
 {% if qc_sosoh is defined %}<a class="rhs-back" href="/riwayat-qc/beras-hasil-sosoh">← Kembali ke daftar Riwayat QC beras</a>{% endif %}
-  <header class="rhs-header"><h1>Riwayat QC beras hasil sosoh</h1>{% if qc_sosoh is defined %}<p class="rhs-code">{{ qc_kode }}</p><p class="rhs-meta">{{ qc_sosoh.sampel|length }} sampel · {{ qc_sosoh.menunggu }} menunggu hasil lab</p>{% endif %}{{ alat() }}</header>
+  {% if qc_sosoh is defined %}<header class="rhs-header"><h1>Riwayat QC beras hasil sosoh</h1><p class="rhs-code">{{ qc_kode }}</p><p class="rhs-meta">{{ qc_sosoh.sampel|length }} sampel · {{ qc_sosoh.menunggu }} menunggu hasil lab</p>{{ alat() }}</header>{% elif not LAPORAN_NAV %}{{ alat() }}{% endif %}
   {% if qc_sosoh is defined %}
     <div class="rhs-actions" data-rqd-proses-aksi><a class="btn btn--kecil" href="{{ proses_href }}">Lihat proses {{ qc_kode }}</a></div>
     <nav class="rhs-tabs" role="tablist" aria-label="Bagian riwayat QC beras" data-rqd-beras-tabs hidden>{% for id,nama in [('ringkasan','Ringkasan'),('sampel','Sampel & hasil'),('sesi','Sesi & pemetaan'),('asal','Asal & catatan')] %}<a id="qc-tab-{{ id }}" role="tab" aria-controls="qc-panel-{{ id }}" aria-selected="{{ 'true' if loop.first else 'false' }}" href="?tab_qc={{ id }}">{{ nama }}</a>{% endfor %}</nav>
