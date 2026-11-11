@@ -11,7 +11,8 @@ def buat_pdf(data, *, contoh=False):
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, CondPageBreak
 
     stream = BytesIO()
-    page=landscape(A3 if len(data.get('kolom',[]))>12 else A4)
+    cols=data.get('kolom',[])
+    page=landscape(A3 if len(cols)>12 or any(c.get('subkelompok') for c in cols) else A4)
     lebar=page[0]-34*mm
     doc = SimpleDocTemplate(stream, pagesize=page, rightMargin=17*mm, leftMargin=17*mm,
                             topMargin=14*mm, bottomMargin=18*mm,
@@ -36,6 +37,8 @@ def buat_pdf(data, *, contoh=False):
             ('LEFTPADDING',(0,0),(-1,-1),7), ('RIGHTPADDING',(0,0),(-1,-1),7),
             ('TOPPADDING',(0,0),(-1,-1),5), ('BOTTOMPADDING',(0,0),(-1,-1),5),
             ('LINEBELOW',(0,0),(-1,0),.5,green),
+            ('LINEBEFORE',(0,0),(-1,-1),.4,colors.HexColor('#b4c5b9')),
+            ('LINEAFTER',(-1,0),(-1,-1),.4,colors.HexColor('#b4c5b9')),
         ]))
         if spans: table.setStyle(TableStyle(list(spans)))
         for i in belum_selesai:
@@ -139,21 +142,14 @@ def buat_pdf(data, *, contoh=False):
     story += [Spacer(1,5*mm), CondPageBreak(50*mm), p('Rincian transaksi','BagianPeriode')]
     if data['rincian']:
         cols=data['kolom']
-        spans=[];headers=1
-        if any(c.get('kelompok') for c in cols):
-            headers=2;top=['']*len(cols);sub=['']*len(cols);i=0
-            while i<len(cols):
-                c=cols[i];kelompok=c.get('kelompok')
-                if not kelompok:
-                    top[i]=c['nama'];spans.append(('SPAN',(i,0),(i,1)));i+=1;continue
-                j=i+1
-                while j<len(cols) and cols[j].get('kelompok')==kelompok:j+=1
-                top[i]=kelompok;spans.append(('SPAN',(i,0),(j-1,0)))
-                spans.append(('ALIGN',(i,0),(j-1,0),'CENTER'))
-                for k in range(i,j):sub[k]=cols[k]['nama']
-                i=j
-            rows=[top,sub]
-        else:rows=[[c['nama'] for c in cols]]
+        from app.services.laporan_kepala import susun
+        kepala=data.get('kepala_tabel') or susun(cols)
+        spans=[];headers=len(kepala);rows=[['']*len(cols) for _ in kepala]
+        for i,cells in enumerate(kepala):
+            for c in cells:
+                col=c['mulai'];rows[i][col]=c['nama']
+                if c['kolom']>1 or c['baris']>1:
+                    spans.append(('SPAN',(col,i),(col+c['kolom']-1,i+c['baris']-1)))
         for r in data['rincian']:
             cells=[]
             for c in cols:

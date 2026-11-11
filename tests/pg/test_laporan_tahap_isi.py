@@ -24,7 +24,44 @@ async def test_giling_bahan_dan_hasil_verifikasi_mengalahkan_progres(pg,pabrik):
         assert r['bahan'].startswith('10.000')
         assert r['hasil']=='6.400'
         assert r['asal'].startswith('GB-RGL-') and 'Silo' not in r['asal']
+        assert r['bahan_basah']=='-' and r['bahan_kering']=='10.000'
+        assert len(d['kepala_tabel'])==3
         assert 'rendemen' in keys(d) and 'asal' in keys(d)
+
+
+from tests.pg.test_giling_beberapa_silo import silos
+
+
+async def test_giling_memisahkan_asal_basah_dari_kering_tanpa_mengubah_total(pg,silos):
+    from sqlalchemy import select
+    from app import models as m
+    from tests.pg.test_giling_beberapa_silo import _mulai
+    from app.services.laporan_bahan_giling import per_kondisi
+    result=await _mulai(pg,silos,['A','B'])
+    async with pg() as db:
+        # Cuplikan sumber giling tetap 10.000: bahan ini berasal dari lot
+        # pengeringan gabah basah, sementara sumber lain langsung kering.
+        src=await db.scalar(select(m.MillingProcessSource).where(m.MillingProcessSource.purchase_batch_id==silos['isi']['A']['batch']))
+        batch=await db.get(m.PurchaseBatch,src.purchase_batch_id);batch.kondisi_gabah='basah'
+        lot=m.DryingLot(kode_lot='PGR-ASAL-BASAH',created_by=silos['user'],status='selesai')
+        db.add(lot);await db.flush()
+        db.add(m.DryingLotBatch(drying_lot_id=lot.id,purchase_batch_id=batch.id))
+        src.drying_lot_id=lot.id;src.purchase_batch_id=None
+        st=await db.get(m.SiloStorage,src.silo_storage_id)
+        st.drying_lot_id=lot.id;st.purchase_batch_id=None;st.tipe_masuk='dari_pengeringan'
+        await db.commit()
+        d=await ambil(db,'penggilingan',now_local().date(),now_local().date())
+        r=d['rincian'][0]
+        assert (r['bahan_basah'],r['bahan_kering'],r['bahan'])==('10.000','6.000','16.000')
+        assert 'Silo' not in r['asal'] and 'PGR-ASAL-BASAH' in r['asal']
+        assert any(c['nama']=='Gabah terpakai' and c['kolom']==3 for c in d['kepala_tabel'][1])
+        assert {'Gabah basah','Gabah kering'}<={x['nama'] for x in d['ringkasan']}
+        # Ketidakcocokan sumber tidak boleh diatasi dengan membagi total
+        # secara proporsional dan menghasilkan dua angka yang tampak pasti.
+        src.berat_kg=9000;await db.commit()
+        p=await db.get(m.MillingProcess,result.proc.id)
+        split=(await per_kondisi(db,{p.id:p}))[p.id]
+        assert split=={'basah':None,'kering':None}
 
 async def test_sosoh_semua_catatan_hasil_spek_samping_dan_neraca(pg,pemakai):
     await _sosoh_selesai(pg,pemakai.id,masuk=10000,hasil=(('medium',4000),('medium',2000),('premium',500),('broken',1200),('menir',700),('bekatul',1500),('reject',50)))

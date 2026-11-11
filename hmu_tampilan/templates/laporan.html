@@ -106,6 +106,16 @@
 #lembar .lp-tabel{border:0;border-radius:0;overflow:visible;}#lembar table caption{padding:0 0 12px;}#lembar tbody{display:grid;gap:12px;}#lembar tbody tr{padding:12px;border:1px solid var(--garis);border-radius:10px;background:var(--panel);}#lembar td{min-width:0;}#lembar td:first-child{padding-left:0;}
 }
 @media print { #lembar .lp-panel-kepala{position:static;}#lembar .lp-panel-kontrol,#lembar .lp-tutup{display:none!important;}#lembar.lembar--laporan .lembar__isi{max-height:none;overflow:visible;border:0;}#lembar .lp-kelompok{break-inside:avoid;}}
+#lembar table th,#lembar table td {border-right:1px solid var(--garis);}
+#lembar table th:last-child,#lembar table td:last-child {border-right:0;}
+#lembar .lp-subkelompok .lp-metrik {grid-template-columns:minmax(0,1fr) minmax(90px,auto);}
+#lembar .lp-subkelompok .lp-metrik dd {border-left:1px solid var(--garis);padding-left:12px;}
+#lembar .lp-bagian-metrik>dl.lp-metrik+dl.lp-metrik {border-left:1px solid var(--garis);padding-left:16px;}
+@media(max-width:650px) {
+#lembar table td {border-right:0;}
+#lembar table td::before {border-right:1px solid var(--garis);padding-right:8px;}
+#lembar .lp-bagian-metrik>dl.lp-metrik+dl.lp-metrik {padding-left:12px;}
+}
 </style>
 
 <div class="lp-pilihan">
@@ -223,26 +233,22 @@
     });
     h += '</div>';
     if (d.rincian.length) {
-      var kolommen = d.kolom.map(function (c) { return [c.kunci,c.nama,c.kelompok]; });
-      h += '<div class="lp-tabel"><table><caption class="lbl">Rincian transaksi</caption><thead><tr>';
-      var bertingkat = d.kolom.some(function (c) { return !!c.kelompok; });
-      if (bertingkat) {
-        for (var i = 0; i < d.kolom.length;) {
-          var c = d.kolom[i];
-          if (!c.kelompok) { h += '<th scope="col" rowspan="2">' + aman(c.nama) + '</th>'; i++; continue; }
-          var j = i + 1; while (j < d.kolom.length && d.kolom[j].kelompok === c.kelompok) j++;
-          h += '<th scope="colgroup" colspan="' + (j-i) + '">' + aman(c.kelompok) + '</th>'; i = j;
-        }
-        h += '</tr><tr>';
-        d.kolom.forEach(function (c) { if (c.kelompok) h += '<th scope="col">' + aman(c.nama) + '</th>'; });
-      } else { kolommen.forEach(function (c) { h += '<th scope="col">' + aman(c[1]) + '</th>'; }); }
-      h += '</tr></thead><tbody>';
+      var kolommen = d.kolom.map(function (c) { return [c.kunci,c.nama,c.kelompok,c.subkelompok]; });
+      h += '<div class="lp-tabel"><table><caption class="lbl">Rincian transaksi</caption><thead>';
+      d.kepala_tabel.forEach(function (row) {
+        h += '<tr>';
+        row.forEach(function (c) {
+          h += '<th scope="' + (c.kolom > 1 ? 'colgroup' : 'col') + '" colspan="' + c.kolom + '" rowspan="' + c.baris + '">' + aman(c.nama) + '</th>';
+        });
+        h += '</tr>';
+      });
+      h += '</thead><tbody>';
       d.rincian.forEach(function (r) {
         h += r.belum_selesai ? '<tr class="lp-belum-selesai" aria-label="' + aman(r.kode).replace(/"/g, '&quot;') + ', belum selesai">' : '<tr>';
         kolommen.forEach(function (c) {
           var nilai = r[c[0]] == null ? 'Belum tercatat' : r[c[0]];
           if (c[0] === "kode" && r.tiket !== "-") nilai += " / " + r.tiket;
-          h += '<td data-label="' + aman((c[2] ? c[2] + ' · ' : '') + c[1]).replace(/"/g, '&quot;') + '">' + aman(nilai) +
+          h += '<td data-label="' + aman([c[2],c[3],c[1]].filter(Boolean).join(' · ')).replace(/"/g, '&quot;') + '">' + aman(nilai) +
             (c[0] === "kode" ? '<small class="lp-tanggal">' + aman(r.tanggal) + '</small>' : '') +
             (c[0] === "nota" && r.sumber_nota === "Mengikuti timbangan" ? '<small class="lp-catatan">Mengikuti timbangan</small>' : '') + '</td>';
         });
