@@ -37,8 +37,7 @@ def buat_pdf(data, *, contoh=False):
             ('LEFTPADDING',(0,0),(-1,-1),7), ('RIGHTPADDING',(0,0),(-1,-1),7),
             ('TOPPADDING',(0,0),(-1,-1),5), ('BOTTOMPADDING',(0,0),(-1,-1),5),
             ('LINEBELOW',(0,0),(-1,0),.5,green),
-            ('LINEBEFORE',(0,0),(-1,-1),.4,colors.HexColor('#b4c5b9')),
-            ('LINEAFTER',(-1,0),(-1,-1),.4,colors.HexColor('#b4c5b9')),
+            ('GRID',(0,0),(-1,-1),.4,colors.HexColor('#b4c5b9')),
         ]))
         if spans: table.setStyle(TableStyle(list(spans)))
         for i in belum_selesai:
@@ -103,6 +102,9 @@ def buat_pdf(data, *, contoh=False):
                     col=starts[j];last=col+counts[j]-1
                     if i>=len(items):
                         spans.append(('BACKGROUND',(col,i+1),(last,i+1),colors.white))
+                        spans.extend([('LINEBEFORE',(col,i+1),(last,i+1),.4,colors.white),
+                                      ('LINEAFTER',(last,i+1),(last,i+1),.4,colors.white),
+                                      ('LINEBELOW',(col,i+1),(last,i+1),.4,colors.white)])
                         continue
                     item=items[i]
                     if 'judul' in item:
@@ -126,7 +128,9 @@ def buat_pdf(data, *, contoh=False):
                 widths += [lebar*part*r for r in ratios]
                 if j<n-1:
                     col=starts[j]+counts[j];widths.append(lebar*gap)
-                    spans.extend([('BACKGROUND',(col,0),(col,-1),colors.white),('LINEBELOW',(col,0),(col,0),.5,colors.white)])
+                    spans.extend([('BACKGROUND',(col,0),(col,-1),colors.white),
+                                  ('LINEBELOW',(col,0),(col,-1),.5,colors.white),
+                                  ('LINEABOVE',(col,0),(col,0),.5,colors.white)])
             story.extend([tabel(rows,widths,spans=spans),Spacer(1,2*mm)])
             continue
         rows=[[grup['nama'],'','','']];spans=[('SPAN',(0,0),(3,0))]
