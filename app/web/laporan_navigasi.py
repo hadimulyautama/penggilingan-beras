@@ -70,7 +70,7 @@ async def siapkan(request: Request, konteks: dict):
     konteks["LAPORAN_NAV"] = {
         "aktif": aktif, "judul": judul[aktif], "jenis": jenis, "detail": detail,"panduan":panduan,
         "tab": [{"kunci": k, "nama": n, "href": opsi[k][0][2] if opsi[k] else "",
-                 "boleh": bool(opsi[k]),"alamat":[x[2] for x in opsi[k]]} for k, n in TAB],
+                 "boleh": bool(opsi[k]),"alamat":[x[2] for x in opsi[k]]} for k, n in TAB if k!='laporan'],
         "pilihan": list(PROSES if aktif == "proses" else QC) if aktif in ("proses", "qc") else [],
         "boleh_alamat": [x[2] for x in opsi[aktif]],
     }

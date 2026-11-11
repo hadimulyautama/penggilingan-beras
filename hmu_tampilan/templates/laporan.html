@@ -37,7 +37,7 @@
 @media print { #lembar :is(#periode-grup,#rentang-khusus,#lap-pdf,#lap-unduh){display:none!important;}#lembar .lp-tabel{overflow:visible;}#lembar thead{display:table-header-group;}#lembar tr{break-inside:avoid;}}
 
 .lp-pengantar {display:flex;justify-content:space-between;align-items:center;gap:24px;margin:12px 0 30px;}
-.lp-pengantar h1 {font-size:23px;line-height:1.3;letter-spacing:-.4px;margin:6px 0 8px;}
+.lp-pengantar h2 {font-size:18px;line-height:1.3;letter-spacing:-.4px;margin:6px 0 8px;}
 .lp-pengantar p {font-size:14px;color:var(--redup);margin:0;max-width:620px;}
 .lp-info {font-size:12px;white-space:nowrap;color:var(--redup);padding:8px 12px;border:1px solid var(--garis);border-radius:30px;}
 .lp-bagian-pilihan {margin:0 0 26px;}
@@ -93,7 +93,7 @@
 #lembar :focus-visible,.lp-pilihan :focus-visible {outline:3px solid var(--aman);outline-offset:3px;}
 @media(max-width:1000px){.lp-pilihan .laporan-catalogue{grid-template-columns:repeat(2,minmax(0,1fr));}.lp-pengantar{align-items:start;}.lp-info{display:none;}}
 @media(max-width:650px){
-.lp-pengantar{margin:8px 0 24px;}.lp-pengantar h1{font-size:21px;}.lp-pilihan .laporan-catalogue{grid-template-columns:1fr;gap:8px;}.lp-pilihan .lp-pintu{min-height:88px;padding:16px;}.lp-bagian-pilihan{margin-bottom:24px;}
+.lp-pengantar{margin:8px 0 24px;}.lp-pengantar h2{font-size:18px;}.lp-pilihan .laporan-catalogue{grid-template-columns:1fr;gap:8px;}.lp-pilihan .lp-pintu{min-height:88px;padding:16px;}.lp-bagian-pilihan{margin-bottom:24px;}
 #lembar.lembar--laporan[open]{padding:0;align-items:stretch;}
 #lembar.lembar--laporan .lembar__isi{max-height:100dvh;height:100dvh;border:0;border-radius:0;scrollbar-gutter:auto;}
 #lembar .lp-panel-kepala{padding:18px 16px;}#lembar #lap-judul{font-size:22px;}#lembar .lp-eyebrow{font-size:10px;}
@@ -119,7 +119,7 @@
 </style>
 
 <div class="lp-pilihan">
-  <div class="lp-pengantar"><div><h1>Laporan periode</h1><p>Pilih proses, tentukan periode, lalu lihat ringkasan dan rincian transaksinya.</p></div><span class="lp-info">Data terbaru saat dibuka</span></div>
+  <div class="lp-pengantar"><div><h2>Pilih laporan</h2><p>Tentukan periode setelah memilih proses untuk melihat ringkasan dan rincian transaksinya.</p></div><span class="lp-info">Data terbaru saat dibuka</span></div>
   {% set kelompok = [
     ('Penerimaan', ['tahap_gabah_masuk','tahap_pk_masuk']),
     ('Proses produksi', ['tahap_pengeringan','tahap_penggilingan','tahap_penyosohan','tahap_pengemasan','tahap_kemas_ulang']),

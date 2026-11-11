@@ -2,23 +2,24 @@
 (function(){
  const root=document.querySelector('[data-laporan-kontrol]');if(!root||root.dataset.siap)return;root.dataset.siap='1';
  const scope=root.closest('.laporan-riwayat')||root;let asal;
- for(const a of root.querySelectorAll('[data-tab-riwayat]')){
-  const key='padiflow.riwayat.'+a.dataset.tabRiwayat;
-  try{
-   const allowed=JSON.parse(a.dataset.tujuan||'[]');
-   const current=allowed.find(p=>location.pathname===p||location.pathname.startsWith(p+'/'));
-   if(current&&a.hasAttribute('aria-current')){sessionStorage.setItem(key,current);a.href=current;if(a.dataset.tabRiwayat!=='laporan')sessionStorage.setItem('padiflow.riwayat.terakhir',a.dataset.tabRiwayat);}
-   else {const saved=sessionStorage.getItem(key);if(allowed.includes(saved))a.href=saved;}
-  }catch(_){}
- }
-
+ // Riwayat dan laporan adalah pintu berbeda. Ingatan hanya memuat
+ // daftar riwayat yang diizinkan server, termasuk ketika sedang di laporan.
  try{
-  const last=sessionStorage.getItem('padiflow.riwayat.terakhir');
-  if(['proses','qc','audit'].includes(last)){
-   const target=root.querySelector('[data-tab-riwayat="'+last+'"]');
-   const menu=document.querySelector('#laci a.pintu[href="/riwayat"]');
-   if(target&&menu)menu.href=target.href;
+  const resolved={};
+  for(const t of JSON.parse(root.dataset.tujuanTab||'[]')){
+   if(!t.boleh)continue;
+   const key='padiflow.riwayat.'+t.kunci;
+   const allowed=t.alamat||[];
+   const current=allowed.find(p=>location.pathname===p||location.pathname.startsWith(p+'/'));
+   const saved=sessionStorage.getItem(key);
+   const url=current||(allowed.includes(saved)?saved:t.href);
+   resolved[t.kunci]=url;
+   if(current&&root.dataset.aktif===t.kunci){sessionStorage.setItem(key,current);sessionStorage.setItem('padiflow.riwayat.terakhir',t.kunci);}
+   const link=root.querySelector('[data-tab-riwayat="'+t.kunci+'"]');if(link)link.href=url;
   }
+  const last=sessionStorage.getItem('padiflow.riwayat.terakhir');
+  const menu=document.querySelector('#laci a.pintu[href="/riwayat"]');
+  if(menu&&resolved[last])menu.href=resolved[last];
  }catch(_){}
  const dialogs=()=>[...scope.querySelectorAll('dialog.lk-panel,dialog.pd-panduan')];
  scope.querySelectorAll('[data-lk-buka]').forEach(b=>b.addEventListener('click',()=>{
