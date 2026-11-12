@@ -297,7 +297,7 @@ def test_stok_karung_operator_g2_hanya_gudangnya_sendiri():
     """
     from app.web import layar_produk
 
-    kode = kode_saja(layar_produk.halaman_stok_karung)
+    kode = kode_saja(layar_produk._halaman_stok_karung)
     assert "stok_kemasan_rinci(db" in kode, "stok karung tak diambil"
     assert "gudang1(view)" in kode, "batas gudang tak diperiksa"
     # Dan tak ada harga yang ikut: satuannya lembar, dan operator tak melihat

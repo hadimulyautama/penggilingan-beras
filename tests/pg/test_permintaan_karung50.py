@@ -16,6 +16,20 @@ pytestmark = pytest.mark.asyncio
 async def post(c, aksi, **isi):
     return await c.post('/api/actions/'+aksi, json=isi, headers={'X-CSRF-Token':cap_formulir(c)})
 
+async def sebagai_permohonan_historis(pg,pid):
+    """Permohonan baru wajib bertahap; bagian lanjutan di sini menguji baris lama."""
+    from app.services.permintaan_pk import setujui,PermintaanError
+    async with pg() as db:
+        row=await db.get(PermintaanPk,pid)
+        assert row.bertahap is True
+        user=await db.get(User,await db.scalar(select(User.id).where(User.role=='admin')))
+        with pytest.raises(PermintaanError,match='Transfer PK'):
+            await setujui(db,user=user,permintaan_id=pid,tujuan='ditumpuk',berat=100)
+        await db.rollback()
+        row=await db.get(PermintaanPk,pid);row.bertahap=False
+        await db.commit()
+
+
 async def test_empat_tahap_unit_dan_saldo(pg,pabrik):
     async with await _klien(pg,pabrik['op2'],'minta-karung',mode='operator') as c:
         for _ in range(2):
@@ -31,6 +45,7 @@ async def test_empat_tahap_unit_dan_saldo(pg,pabrik):
         b=(await db.scalars(select(PermintaanPk))).one();pid=b.id
         assert b.berat_minta_kg==520 and b.status=='diminta'
         assert await saldo_pk(db,pabrik['proses_id'])==6000
+    await sebagai_permohonan_historis(pg,pid)
     await _acc(pg,pabrik,pid,tujuan='ditumpuk',berat=510)
     async with pg() as db: assert await saldo_pk(db,pabrik['proses_id'])==6000
     async with await _klien(pg,pabrik['op1'],'kirim-karung',mode='operator') as c:
@@ -62,6 +77,7 @@ async def test_kontrak_kg_dan_curah_saja(pg,pabrik,isi):
         r=await post(c,'minta-pk-g1',kode_proses=pabrik['lot'],**isi);assert r.status_code==200,r.text
     async with pg() as db:
         b=(await db.scalars(select(PermintaanPk))).one();pid=b.id
+    await sebagai_permohonan_historis(pg,pid)
     await _acc(pg,pabrik,pid,tujuan='ditumpuk',berat=100)
     async with await _klien(pg,pabrik['op1'],'kontrak-kg-kirim',mode='operator') as c:
         r=await post(c,'kirim-permintaan-pk',permintaan=str(pid),**isi);assert r.status_code==200,r.text
@@ -120,6 +136,7 @@ async def test_permohonan_dan_pengiriman_bersamaan(pg,pabrik):
         rs=await asyncio.gather(*(post(c,'minta-pk-g1',kode_proses=pabrik['lot'],cara='karung',jumlah_karung=10) for _ in range(2)))
         assert sorted(r.status_code for r in rs)==[200,400]
     async with pg() as db: pid=(await db.scalars(select(PermintaanPk))).one().id
+    await sebagai_permohonan_historis(pg,pid)
     await _acc(pg,pabrik,pid,tujuan='ditumpuk',berat=500)
     async with await _klien(pg,pabrik['op1'],'ganda-kirim',mode='operator') as c:
         rs=await asyncio.gather(*(post(c,'kirim-permintaan-pk',permintaan=str(pid),cara='karung',jumlah_karung=10) for _ in range(2)))

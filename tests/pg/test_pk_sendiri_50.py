@@ -248,6 +248,8 @@ async def test_pesan_kirim_permintaan_memakai_unit_transfer_tersimpan(pg,pemakai
         for c in [g2c,g1c,admin]:c.headers['X-CSRF-Token']=cap_formulir(c)
         assert (await g2c.post('/api/actions/minta-pk-g1',json=dict(kode_proses=dunia['lot'],berat=1.005))).status_code==200
         async with pg() as db:pid=await db.scalar(select(PermintaanPk.id))
+        from tests.pg.test_permintaan_karung50 import sebagai_permohonan_historis
+        await sebagai_permohonan_historis(pg,pid)
         assert (await admin.post('/api/actions/acc-permintaan-pk',json=dict(permintaan=str(pid),tujuan='ditumpuk',berat=5))).status_code==200
         r=await g1c.post('/api/actions/kirim-permintaan-pk',json=dict(permintaan=str(pid),berat=1.005))
         assert r.status_code==200,r.text

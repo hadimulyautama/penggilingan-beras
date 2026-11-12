@@ -30,7 +30,9 @@ def test_label_neraca_tidak_terjepit_status_panjang(width, value, tmp_path):
         number = cell.locator(':scope>strong')
         boxes = [el.bounding_box() for el in (cell, label, number)]
         line = label.evaluate('e => parseFloat(getComputedStyle(e).lineHeight)')
-        assert boxes[1]['width'] >= 120
+        # Neraca ponsel kini tiga kolom; label harus mengisi sel dan terbaca.
+        assert boxes[0]['width'] >= 70
+        assert boxes[1]['width'] >= boxes[0]['width'] * .8
         assert boxes[1]['height'] <= line * 2 + 1
         if width <= 650:
             assert boxes[2]['y'] >= boxes[1]['y'] + boxes[1]['height']

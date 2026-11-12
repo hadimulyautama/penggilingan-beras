@@ -37,7 +37,7 @@ async def test_pengiriman_semua_tab_tanpa_perubahan_stok(pg,gudang):
         async with pg() as db:
             await bk.muat_semua(db,user=await db.get(User,gudang['op']),rec_id=r.rec.id)
         html=await potret(c,f'/barang-keluar/{r.rec.id}','pengiriman-dimuat')
-        assert 'buka=verifikasi_keluar' in html.text
+        assert 'data-verifikasi-pengiriman data-inline' in html.text
         assert 'buka=muat_semua' not in html.text
         assert await _stok(pg,gudang)==7500
         async with pg() as db:
