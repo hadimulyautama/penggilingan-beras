@@ -89,8 +89,7 @@ def navigasi_stok(html):
     assert nav and len(nav.select('a,span[aria-disabled]')) == 3
     form = s.select_one('#sk-filter form[method="get"][action="/stok"]')
     assert form
-    pemilik={'pabrik','jasa'}
-    if form.select_one('input[name=tab]')['value']=='bahan':pemilik.add('semua')
+    pemilik={'semua','pabrik','jasa'}
     assert {o['value'] for o in form.select('select[name="pemilik"] option')} == pemilik
     assert {o['value'] for o in form.select('select[name="gudang"] option')} == {'', 'g1', 'g2'}
 
@@ -202,7 +201,7 @@ async def test_detail_dan_kembali_mempertahankan_filter(pg, stok_lengkap):
 
 async def test_parameter_tidak_sah_tidak_membuka_semua_pemilik(pg, stok_lengkap):
     async with await _klien(pg, role='admin') as c:
-        for url in ['/stok?tab=salah', '/stok?pemilik=asing', '/stok?tab=produk&pemilik=semua', '/stok?pemilik=jasa&pelanggan_id=x']:
+        for url in ['/stok?tab=salah', '/stok?pemilik=asing', '/stok?tab=produk&pemilik=asing', '/stok?pemilik=jasa&pelanggan_id=x']:
             assert (await c.get(url)).status_code == 422
         assert (await c.get('/stok?pemilik=jasa&pelanggan_id=99999')).status_code == 404
 
@@ -219,6 +218,8 @@ async def test_membaca_seluruh_tab_tidak_menulis_stok_atau_audit(pg, stok_lengka
     event.listen(mesin, 'before_cursor_execute', rekam)
     try:
         async with c:
+            for tab in ('bahan', 'produk', 'karung'):
+                assert (await c.get(f'/stok?tab={tab}')).status_code == 200
             for lama, tab, pemilik in PASANGAN:
                 for url in (lama, f'/stok?tab={tab}&pemilik={pemilik}'):
                     assert (await c.get(url)).status_code == 200
@@ -252,3 +253,56 @@ async def test_karung_jasa_mempertahankan_cakupan_baca_lama_g2(pg, stok_lengkap,
             assert 'Karung PK' in r.text
         r = await c.get('/stok?tab=karung&pemilik=pabrik')
         assert 'Karung PK' not in r.text
+
+
+@pytest.mark.parametrize('tab', ['bahan', 'produk', 'karung'])
+async def test_default_semua_pemilik_dan_gudang(pg, stok_lengkap, monkeypatch, tab):
+    from bs4 import BeautifulSoup
+    from app.web import tampilan
+    asli = tampilan.render
+    hasil = []
+    def rekam(request, nama, **konteks):
+        hasil.append(konteks)
+        return asli(request, nama, **konteks)
+    monkeypatch.setattr(tampilan, 'render', rekam)
+    async with await _klien(pg, role='admin') as c:
+        r = await c.get(f'/stok?tab={tab}')
+        assert r.status_code == 200, r.text
+        konteks = hasil[-1]
+        nav = konteks['STOK_NAV']
+        assert nav['pemilik'] == 'semua' and nav['gudang'] == ''
+        assert nav['lokasi'] == 'Semua gudang'
+        assert all('pemilik=semua' in t['href'] for t in nav['tab'])
+        soup = BeautifulSoup(r.text, 'html.parser')
+        assert soup.select_one('select[name=pemilik] option[selected]')['value'] == 'semua'
+        assert soup.select_one('select[name=gudang] option[selected]')['value'] == ''
+        assert len(soup.select('#lembar')) <= 1
+        if tab == 'bahan':
+            assert konteks['total'] == 11250
+        else:
+            jasa = konteks['stok_jasa']['daftar']
+            assert {p['pelanggan_id'] for p in jasa} == {stok_lengkap['pelanggan_id'], stok_lengkap['lain']}
+            if tab == 'produk':
+                assert konteks['sisa_beras'] == 9000
+                assert sum(p['sisa_beras'] for p in jasa) == 7300
+            if tab == 'karung':
+                assert sum(b['lembar'] for b in konteks['karung']) == 650
+                assert sum(b['lembar'] for p in jasa for b in p['karung']) == 150
+        # Pilihan eksplisit tetap terbawa saat berpindah tab.
+        r = await c.get(f'/stok?tab={tab}&pemilik=pabrik&gudang=g2')
+        assert r.status_code == 200
+        assert all('pemilik=pabrik' in t['href'] and 'gudang=g2' in t['href']
+                   for t in hasil[-1]['STOK_NAV']['tab'])
+
+
+@pytest.mark.parametrize('tab', ['produk', 'karung'])
+async def test_semua_kepemilikan_tetap_mematuhi_filter_gudang(pg, stok_lengkap, tab):
+    async with await _klien(pg, role='admin') as c:
+        r = await c.get(f'/stok?tab={tab}&gudang=g1')
+        assert r.status_code == 200
+        assert 'Belum ada stok untuk pilihan ini' in r.text
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(r.text, 'html.parser')
+        assert len(soup.select('#lembar')) <= 1
+    async with await _klien(pg, gudang_id=stok_lengkap['gudang']['g1']) as c:
+        assert (await c.get(f'/stok?tab={tab}')).status_code == 403

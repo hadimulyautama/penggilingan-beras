@@ -1,0 +1,25 @@
+{% extends template_kepemilikan_asal %}
+{% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+{% if kartu or karung %}
+<div class="lbl" style="margin-bottom:8px">Pabrik</div>
+{{ super() }}
+{% elif not stok_jasa.daftar %}
+{{ super() }}
+{% endif %}
+{% with daftar=stok_jasa.daftar, BOLEH_PINDAH=stok_jasa.BOLEH_PINDAH, BOLEH_MASUKKAN_SILO=stok_jasa.BOLEH_MASUKKAN_SILO %}
+{% include '_stok_' ~ STOK_NAV.jenis ~ '_pelanggan.html' %}
+{% endwith %}
+{% set aksi_pabrik = BOLEH_CATAT if STOK_NAV.jenis == 'produk' else BOLEH_PINDAH %}
+{% if (not aksi_pabrik or (not (kartu or karung) and stok_jasa.daftar)) and (stok_jasa.BOLEH_PINDAH or stok_jasa.BOLEH_MASUKKAN_SILO or aksi_pabrik) %}
+<dialog class="lembar" id="lembar"></dialog>
+<div class="kabar" id="kabar" role="status"></div>
+{% endif %}
+{% endblock %}
+{% block kaki %}
+{% set aksi_pabrik = BOLEH_CATAT if STOK_NAV.jenis == 'produk' else BOLEH_PINDAH %}
+{% if aksi_pabrik or stok_jasa.BOLEH_PINDAH or stok_jasa.BOLEH_MASUKKAN_SILO %}
+<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endif %}
+{% endblock %}

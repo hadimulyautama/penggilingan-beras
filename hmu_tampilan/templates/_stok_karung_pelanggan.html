@@ -1,0 +1,6 @@
+  {% for p in daftar %}
+    <div style="margin-bottom:8px">
+      <span class="lbl">{{ p.pemilik }}</span>
+    </div>
+    {{ st.karung_blok(p.karung, judul="Karung", boleh_pindah=False, pemilik=p.pemilik) }}
+  {% endfor %}

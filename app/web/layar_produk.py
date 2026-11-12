@@ -51,6 +51,13 @@ router = APIRouter(tags=["webapp"])
 @router.get("/stok-produk")
 @router.get("/stok-produk/detail")
 async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis: str | None = None):
+    konteks = await _halaman_stok_produk(request, akun=akun, jenis=jenis)
+    if not isinstance(konteks, dict):
+        return konteks
+    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+
+
+async def _halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis: str | None = None):
     from app.web.layar import SELEPAN
 
     view = getattr(request.state, "view", "tamu")
@@ -121,8 +128,8 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis:
     if request.url.path.endswith("/detail"):
         return await _detail_produk(request, kartu, jenis, kemasan,
                                     boleh_catat=boleh_catat)
-    return await render_laci(
-        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_produk.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_produk",
+    return dict(
+        template_kepemilikan_asal="stok_produk.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_produk",
         BOLEH_CATAT=boleh_catat,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
@@ -140,6 +147,14 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis:
 @router.get("/stok-produk-jasa")
 @router.get("/stok-produk-jasa/detail")
 async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
+                                  jenis: str | None = None, pelanggan_id: int | None = None):
+    konteks = await _halaman_stok_produk_jasa(request, akun=akun, jenis=jenis, pelanggan_id=pelanggan_id)
+    if not isinstance(konteks, dict):
+        return konteks
+    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+
+
+async def _halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
                                   jenis: str | None = None, pelanggan_id: int | None = None):
     """Barang jadi & hasil samping MILIK PESANAN JASA — terpisah per PELANGGAN.
 
@@ -358,8 +373,8 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
                                     boleh_masukkan_silo=boleh_masukkan_silo,
                                     curah_titipan={"broken":p["broken_curah_kg"],
                                                    "bekatul":p["bekatul_curah_kg"]})
-    return await render_laci(
-        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_produk_jasa.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_produk_jasa",
+    return dict(
+        template_kepemilikan_asal="stok_produk_jasa.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_produk_jasa",
         daftar=daftar, BOLEH_PINDAH=boleh_pindah,
         BOLEH_MASUKKAN_SILO=boleh_masukkan_silo,
         buka=request.query_params.get("buka") or "",
@@ -497,6 +512,13 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
 
 @router.get("/stok-karung")
 async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
+    konteks = await _halaman_stok_karung(request, akun=akun)
+    if not isinstance(konteks, dict):
+        return konteks
+    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+
+
+async def _halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
     """Stok karung kosong (kemasan) milik PABRIK — DIPISAH dari `/stok` 7
     Oktober 2026 (keputusan pemilik: karung butuh stok terpisah per
     pemilik, menyusul "Stok Karung Jasa" di bawah).
@@ -523,8 +545,8 @@ async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
     async with SessionLocal() as db:
         karung = [b for b in await kms.stok_kemasan_rinci(db, pelanggan_id=None)
                   if b["gudang"] != "Gudang 1" or gudang1(view)]
-    return await render_laci(
-        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_karung.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_karung",
+    return dict(
+        template_kepemilikan_asal="stok_karung.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_karung",
         karung=karung, BOLEH_PINDAH=can_see_financials(akun.user),
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
@@ -533,6 +555,13 @@ async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
 
 @router.get("/stok-karung-jasa")
 async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
+    konteks = await _halaman_stok_karung_jasa(request, akun=akun)
+    if not isinstance(konteks, dict):
+        return konteks
+    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+
+
+async def _halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
     """Karung kosong MILIK PESANAN JASA — per PELANGGAN, padanan
     `/stok-produk-jasa` untuk kemasan.
 
@@ -578,9 +607,27 @@ async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
                 "karung": karung,
             })
     daftar.sort(key=lambda p: p["pemilik"])
-    return await render_laci(
-        request, "stok_kepemilikan.html", template_kepemilikan_asal="stok_karung_jasa.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_karung_jasa",
+    return dict(
+        template_kepemilikan_asal="stok_karung_jasa.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_karung_jasa",
         daftar=daftar,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
+
+
+async def halaman_stok_semua(request: Request, akun, tab):
+    """Gabungkan pembaca asal; saldo dan aksi tetap terpisah per pemilik."""
+    from app.web.stok_navigasi import siapkan
+    pembaca = {
+        "produk": (_halaman_stok_produk, _halaman_stok_produk_jasa),
+        "karung": (_halaman_stok_karung, _halaman_stok_karung_jasa),
+    }[tab]
+    if is_customer_read(request):
+        # Portal tetap hanya membaca barang milik pelanggannya sendiri.
+        tujuan = halaman_stok_produk_jasa if tab == "produk" else halaman_stok_karung_jasa
+        return await tujuan(request, akun=akun)
+    pabrik = await pembaca[0](request, akun=akun)
+    titipan = await pembaca[1](request, akun=akun)
+    await siapkan(request, titipan["template_kepemilikan_asal"], titipan)
+    pabrik.update(semua_kepemilikan=True, stok_jasa=titipan)
+    return await render_laci(request, "stok_semua.html", **pabrik)

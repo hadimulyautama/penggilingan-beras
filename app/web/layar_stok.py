@@ -60,11 +60,13 @@ async def _pk_tidak_tersedia(request: Request, pesan: str):
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     # Satu pintu navigasi, tetapi tetap memakai pembaca dan gerbang lama.
     tab = request.query_params.get("tab", "bahan")
-    pemilik = request.query_params.get("pemilik", "semua" if tab == "bahan" else "pabrik")
-    if tab not in {"bahan", "produk", "karung"} or pemilik not in ({"semua", "pabrik", "jasa"} if tab == "bahan" else {"pabrik", "jasa"}):
+    pemilik = request.query_params.get("pemilik", "semua")
+    if tab not in {"bahan", "produk", "karung"} or pemilik not in {"semua", "pabrik", "jasa"}:
         raise HTTPException(422, "Pilihan stok tidak dikenal.")
     if tab != "bahan":
         from app.web import layar_produk
+        if pemilik == "semua":
+            return await layar_produk.halaman_stok_semua(request, akun, tab)
         tujuan = {
             ("produk", "pabrik"): layar_produk.halaman_stok_produk,
             ("produk", "jasa"): layar_produk.halaman_stok_produk_jasa,

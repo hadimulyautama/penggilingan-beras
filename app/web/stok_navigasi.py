@@ -21,7 +21,7 @@ HALAMAN = {
 
 
 def alamat(jenis='bahan', pemilik=None, *, pelanggan_id='', gudang='', cari=''):
-    pemilik = pemilik or ('semua' if jenis == 'bahan' else 'pabrik')
+    pemilik = pemilik or 'semua'
     params = {'tab': jenis, 'pemilik': pemilik}
     if pemilik == 'jasa' and pelanggan_id:
         params['pelanggan_id'] = pelanggan_id
@@ -58,9 +58,9 @@ def kembali_aman(nilai):
         return ''
     q = parse_qs(bagian.query)
     tab = q.get('tab', ['bahan'])[0]
-    pemilik = q.get('pemilik', ['semua' if tab == 'bahan' else 'pabrik'])[0]
+    pemilik = q.get('pemilik', ['semua'])[0]
     pid, gudang = q.get('pelanggan_id', [''])[0], q.get('gudang', [''])[0]
-    if tab not in {'bahan', 'produk', 'karung'} or pemilik not in ({'semua', 'pabrik', 'jasa'} if tab == 'bahan' else {'pabrik', 'jasa'}):
+    if tab not in {'bahan', 'produk', 'karung'} or pemilik not in {'semua', 'pabrik', 'jasa'}:
         return ''
     if gudang not in {'', 'g1', 'g2'} or pid and (not pid.isascii() or not pid.isdigit() or int(pid) <= 0):
         return ''
@@ -89,7 +89,7 @@ async def siapkan(request, nama, konteks):
     if nama not in HALAMAN:
         return
     jenis, pemilik = HALAMAN[nama]
-    if jenis == 'bahan' and konteks.get('semua_kepemilikan'):
+    if konteks.get('semua_kepemilikan'):
         pemilik = 'semua'
     from app.peran import can_see_financials
     akun = getattr(request.state, "akun", None)
@@ -169,20 +169,17 @@ async def siapkan(request, nama, konteks):
     nama_pemilik = {'semua':'Semua kepemilikan', 'pabrik':'Pabrik', 'jasa':'Titipan jasa'}[pemilik]
     nama_pelanggan = dict(pelanggan).get(pid, 'Semua pelanggan')
     def href(tab=jenis, milik=pemilik, lokasi=gudang):
-        if milik == 'semua' and tab != 'bahan':milik = 'pabrik'
         return alamat(tab, milik, pelanggan_id=pid or '', gudang=lokasi, cari=cari)
     konteks['STOK_NAV'] = dict(
         url=alamat(jenis, pemilik, pelanggan_id=pid or '', gudang=gudang, cari=cari),
         jenis=jenis, pemilik=pemilik, pelanggan_id=pid or '', pelanggan=pelanggan,
         gudang=gudang, label=label, nama_pemilik=nama_pemilik,
         cakupan=nama_pemilik + (' · ' + nama_pelanggan if pemilik == 'jasa' else ''),
-        lokasi=('Gudang 1' if gudang == 'g1' else 'Gudang 2') if gudang else
-               ('Gudang 2' if jenis == 'produk' or view == POLESAN and jenis == 'karung' and pemilik == 'pabrik'
-                else 'Gudang 1' if not gudang2(view) else 'Semua gudang'),
+        lokasi=('Gudang 1' if gudang == 'g1' else 'Gudang 2') if gudang else 'Semua gudang',
         tab=[dict(nama=n, kunci=k, href=href(k), boleh=k == 'bahan' or gudang2(view))
              for k, n in [('bahan', 'Bahan & PK'), ('produk', 'Produk'), ('karung', 'Karung')]],
         milik=[dict(nama=n, kunci=k, href=href(milik=k))
-               for k, n in ([('semua','Semua kepemilikan')] if jenis == 'bahan' else []) + [('pabrik', 'Pabrik'), ('jasa', 'Titipan jasa')]],
+               for k, n in [('semua','Semua kepemilikan')] + [('pabrik', 'Pabrik'), ('jasa', 'Titipan jasa')]],
         lokasi_pil=[dict(nama=n, kunci=k, href=href(lokasi=k))
                     for k, n in [('', 'Semua gudang'), ('g1', 'Gudang 1'), ('g2', 'Gudang 2')]],
     )
