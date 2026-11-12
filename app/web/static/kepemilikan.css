@@ -74,28 +74,31 @@ body.padiflow-ui [data-pk-target] .ko-target-pages .btn{width:auto;min-height:44
 [data-pk-target-status]{padding:0 8px;margin:8px 0}
 [data-pk-target] small{margin:0}
 
-/* Lima kolom riwayat; pada ponsel tiap transaksi menjadi kartu yang ringkas. */
+/* Empat kolom riwayat; pada ponsel tiap transaksi menjadi kartu yang ringkas. */
 [data-kepemilikan] .ko-list-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px;background:var(--pd-sheet);}
 [data-kepemilikan] .ko-list-table th,[data-kepemilikan] .ko-list-table td{padding:12px;border:1px solid var(--pd-line);vertical-align:top;overflow-wrap:anywhere;}
 [data-kepemilikan] .ko-list-table th{text-align:center;background:var(--pd-soft);font-weight:600;}
-[data-kepemilikan] .ko-list-table th:nth-child(1){width:14%;}[data-kepemilikan] .ko-list-table th:nth-child(2){width:30%;}
-[data-kepemilikan] .ko-list-table th:nth-child(3),[data-kepemilikan] .ko-list-table th:nth-child(4){width:20%;}
-[data-kepemilikan] .ko-list-table th:nth-child(5){width:16%;}
+[data-kepemilikan] .ko-list-table th:nth-child(1){width:40%;}
+[data-kepemilikan] .ko-list-table th:nth-child(2),[data-kepemilikan] .ko-list-table th:nth-child(3){width:22%;}
+[data-kepemilikan] .ko-list-table th:nth-child(4){width:16%;}
 [data-kepemilikan] .ko-list-table small{display:block;color:var(--pd-muted);font-size:12px;margin-top:4px;}
-[data-kepemilikan] .ko-col-barang>a{display:block;min-height:44px;align-content:center;font-size:13px;}
+[data-kepemilikan] .ko-transaksi>a{display:block;text-decoration:none;min-height:44px;align-content:center;font-size:13px;}
 [data-kepemilikan] .ko-col-jumlah{text-align:right;font-variant-numeric:tabular-nums;}
 [data-kepemilikan] .ko-kepala>.ko-list-scope{grid-column:1/-1;}
 @media(max-width:650px){
  [data-kepemilikan] .ko-list-table,[data-kepemilikan] .ko-list-table tbody{display:block;}
  [data-kepemilikan] .ko-list-table{background:none;}
  [data-kepemilikan] .ko-list-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
- [data-kepemilikan] .ko-list-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:'tanggal jumlah' 'barang barang' 'dari kepada';gap:10px 14px;border:1px solid var(--pd-line);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--pd-sheet);}
+ [data-kepemilikan] .ko-list-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:'barang barang' 'transaksi jumlah' 'dari kepada';gap:10px 14px;border:1px solid var(--pd-line);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--pd-sheet);}
  [data-kepemilikan] .ko-list-table td{display:block;border:0;padding:0;}
- [data-kepemilikan] .ko-col-tanggal{grid-area:tanggal;font-size:12px;color:var(--pd-muted);}
- [data-kepemilikan] .ko-col-barang{grid-area:barang;}
+ [data-kepemilikan] .ko-list-table .ko-col-barang{display:contents;}
+ [data-kepemilikan] .ko-col-barang>strong{grid-area:barang;}
+ [data-kepemilikan] .ko-transaksi{grid-area:transaksi;}
  [data-kepemilikan] .ko-col-dari{grid-area:dari;}[data-kepemilikan] .ko-col-kepada{grid-area:kepada;}
  [data-kepemilikan] .ko-col-jumlah{grid-area:jumlah;}
  [data-kepemilikan] .ko-col-dari:before,[data-kepemilikan] .ko-col-kepada:before{content:attr(data-label);display:block;font-size:12px;color:var(--pd-muted);margin-bottom:4px;}
 }
 
 [data-kepemilikan] .ko-kepala>.sk-alat{justify-content:flex-start;}
+
+[data-kepemilikan] .ko-transaksi>a>span{text-decoration:underline;}

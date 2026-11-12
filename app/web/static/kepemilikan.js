@@ -93,14 +93,15 @@ async function listing(){busy=true;const pending=new URLSearchParams(location.se
  const params=new URLSearchParams(location.search);if(!params.has('kind'))params.set('kind','produk');
  const result=await call('/api/kepemilikan?'+params);controlsHeader('Riwayat alih kepemilikan',{params,total:result.total});body.replaceChildren();
  const rows=el('table',null,'ko-list-table');rows.setAttribute('aria-label','Riwayat alih kepemilikan');
- const thead=el('thead'),head=el('tr');for(const label of ['Tanggal','Barang','Dari','Kepada','Jumlah']){const th=el('th',label);th.scope='col';head.append(th);}thead.append(head);rows.append(thead);const tbody=el('tbody');rows.append(tbody);
+ const thead=el('thead'),head=el('tr');for(const label of ['Barang','Dari','Kepada','Jumlah']){const th=el('th',label);th.scope='col';head.append(th);}thead.append(head);rows.append(thead);const tbody=el('tbody');rows.append(tbody);
  for(const item of result.items){
   const row=el('tr');
   function cell(key,label){const td=el('td',null,'ko-col-'+key);td.dataset.label=label;row.append(td);return td;}
-  const tanggal=cell('tanggal','Tanggal'),dt=item.time?new Date(item.time):null;
-  tanggal.append(el('span',dt?dt.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'}):'Belum tercatat'),el('small',dt?dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):''));
+  const dt=item.time?new Date(item.time):null;
   const barang=cell('barang','Barang');barang.append(el('strong',item.label||item.summary||'Rincian belum tercatat'));
-  const code=link(item.code,'/kepemilikan/'+item.id+'?kembali='+encodeURIComponent(location.pathname+location.search));code.setAttribute('aria-label','Detail '+item.code);barang.append(code,el('small',statusNames[item.status]||item.status));
+  const transaksi=el('div',null,'ko-transaksi'),code=link(item.code,'/kepemilikan/'+item.id+'?kembali='+encodeURIComponent(location.pathname+location.search));code.setAttribute('aria-label','Detail '+item.code);
+  code.replaceChildren(el('span',item.code),el('small',dt?dt.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'})+' · '+dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):'Tanggal belum tercatat','ko-tanggal'));
+  transaksi.append(code,el('small',statusNames[item.status]||item.status));barang.append(transaksi);
   cell('dari','Dari').append(el('span',item.from_label||'Belum tercatat'));
   cell('kepada','Kepada').append(el('span',item.to_label||'Belum tercatat'));
   const jumlah=cell('jumlah','Jumlah');jumlah.append(el('strong',item.quantity==null?'Belum tercatat':n(item.quantity)+' '+(item.unit||(item.kind==='karung'?'lembar':item.kind==='barang'?'karung':'kg'))));

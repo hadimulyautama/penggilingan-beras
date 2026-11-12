@@ -61,7 +61,7 @@ def test_daftar_kontrol_isi_tema_dan_ukuran(width,theme):
   page.on('pageerror',lambda e:errors.append(str(e)));route_for(page,None,theme,requests)
   page.goto('https://uji.local/kepemilikan?kind=karung&kembali_stok=%2Fstok%3Ftab%3Dkarung')
   expect(page.get_by_role('table',name='Riwayat alih kepemilikan')).to_be_visible()
-  assert page.locator('.ko-list-table thead th').all_text_contents()==['Tanggal','Barang','Dari','Kepada','Jumlah']
+  assert page.locator('.ko-list-table thead th').all_text_contents()==['Barang','Dari','Kepada','Jumlah']
   for text in ['PKM/00128','Pak Pras','Karung laminasi','Hadi Mulya','25 kg','120 lembar','30 karung','1.500 kg','Terkoreksi','Halaman 1 / 2']:
    assert text in page.locator('[data-ko-body]').inner_text()
   assert page.locator('.sk-tab [aria-current=page]').inner_text()=='Karung'
