@@ -134,4 +134,9 @@
 .lp-detail .lp-panel-aksi{flex-wrap:wrap;}
 @media(max-width:650px){.lp-detail .lp-panel-kontrol{align-items:stretch;}.lp-detail .lp-periode-form{display:grid;grid-template-columns:minmax(0,1fr) auto;}.lp-detail #periode-grup{width:100%;}.lp-detail .lp-rentang{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}.lp-detail .lp-panel-aksi{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;}}
 @media print{.lp-detail .lp-panel-kontrol{display:none!important;}}
+
+.lp-detail .lp-proses-grup{margin:0;min-width:180px;max-width:320px;flex:1;}
+.lp-detail .lp-proses-grup .lbl{font-size:12px;letter-spacing:0;text-transform:none;margin:0 0 7px;}
+.lp-detail #lp-proses{margin:0;min-height:44px;font-size:15px;width:100%;box-sizing:border-box;}
+@media(max-width:650px){.lp-detail .lp-periode-form{grid-template-columns:repeat(2,minmax(0,1fr));}.lp-detail .lp-proses-grup{width:100%;max-width:none;min-width:0;}.lp-detail .lp-tampilkan{grid-column:1/-1;justify-self:end;}}
 </style>

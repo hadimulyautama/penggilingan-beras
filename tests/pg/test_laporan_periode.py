@@ -49,6 +49,11 @@ async def test_laporan_pdf_dan_rentang_per_peran(pg,peran,gudang):
         halaman=BeautifulSoup(detail.text,'html.parser')
         assert halaman.select_one('[data-laporan-detail]')
         assert halaman.select_one('select[name=periode] option[selected]')['value']=='khusus'
+        proses=halaman.select_one('[data-lp-proses]')
+        assert proses.select_one('option[selected]')['value']=='/laporan/gabah_masuk'
+        assert [o.get_text() for o in proses.select('optgroup[label=Proses] option')]==['Penyosohan','Penggilingan','Pengeringan','Transfer PK']
+        from app.services.laporan_periode import TAHAP
+        assert len(proses.select('option'))==len(TAHAP)
         assert halaman.select_one('.desktop-back')['href']=='/laporan'
         pdf_url=halaman.select_one('.lp-pdf-utama')['href']
         assert 'periode=khusus' in pdf_url and 'dari=2026-11-11' in pdf_url

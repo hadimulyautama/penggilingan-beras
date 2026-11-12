@@ -52,8 +52,9 @@
   }
 
 const data=JSON.parse(document.getElementById('laporan-data').textContent);root.querySelector('#lap-isi').innerHTML=tabel(data);
-const form=root.querySelector('form'),periode=form.elements.periode,rentang=form.querySelector('.lp-rentang');
-periode.addEventListener('change',()=>{const khusus=periode.value==='khusus';rentang.hidden=!khusus;rentang.querySelectorAll('input').forEach(el=>{el.disabled=!khusus;el.required=khusus;});if(!khusus)form.requestSubmit();});
+const form=root.querySelector('form'),periode=form.elements.periode,rentang=form.querySelector('.lp-rentang'),tampilkan=form.querySelector('.lp-tampilkan');
+root.querySelector('[data-lp-proses]').addEventListener('change',e=>{form.action=e.target.value;form.requestSubmit();});
+periode.addEventListener('change',()=>{const khusus=periode.value==='khusus';rentang.hidden=!khusus;tampilkan.hidden=!khusus;rentang.querySelectorAll('input').forEach(el=>{el.disabled=!khusus;el.required=khusus;});if(!khusus)form.requestSubmit();});
 form.addEventListener('submit',e=>{const awal=form.elements.dari,akhir=form.elements.sampai;akhir.setCustomValidity('');if(periode.value==='khusus'&&awal.value>akhir.value){e.preventDefault();akhir.setCustomValidity('Tanggal akhir harus sama atau setelah tanggal awal.');akhir.reportValidity();}});
 rentang.querySelectorAll('input').forEach(el=>el.addEventListener('input',()=>form.elements.sampai.setCustomValidity('')));
 const panduan=root.querySelector('#lp-panduan');root.querySelector('[data-lp-panduan]').addEventListener('click',()=>panduan.showModal());root.querySelector('[data-lp-tutup]').addEventListener('click',()=>panduan.close());

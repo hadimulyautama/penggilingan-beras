@@ -162,7 +162,12 @@ async def detail_laporan(request: Request, kode: str, periode: str = "bulan_ini"
     parameter = dict(periode=periode)
     if periode == "khusus":
         parameter.update(dari=awal.isoformat(), sampai=akhir.isoformat())
-    return render(request, "laporan_periode_detail.html", laporan=lap, tahap=kode,
+    utama = ("penyosohan", "penggilingan", "pengeringan", "transfer_pk")
+    katalog = [l for l in _daftar() if boleh_lihat(akun.user, l)]
+    urut = sorted(katalog, key=lambda l: utama.index(l.kode.removeprefix("tahap_")) if l.kode.removeprefix("tahap_") in utama else len(utama))
+    pilihan = [dict(kode=l.kode.removeprefix("tahap_"), nama=l.nama,
+                    kelompok="Proses" if l.kode.removeprefix("tahap_") in utama else "Laporan lainnya") for l in urut]
+    return render(request, "laporan_periode_detail.html", laporan=lap, tahap=kode, pilihan_laporan=pilihan,
                   periode=PERIODE, periode_aktif=periode, dari=awal, sampai=akhir,
                   data=jsonable_encoder(data), pdf_href="/laporan-periode/"+kode+".pdf?"+urlencode(parameter),
                   layar="laporan", MENU_AKTIF="laporan", kembali="/laporan",
