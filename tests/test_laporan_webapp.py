@@ -49,6 +49,8 @@ def test_laporan_uang_yang_diminta_langsung_tetap_ditolak():
 def test_kode_laporan_tidak_kembar():
     kode = [l.kode for l in lap._daftar()]
     assert len(kode) == len(set(kode))
+    proses = {"tahap_penyosohan", "tahap_penggilingan", "tahap_pengeringan", "tahap_transfer_pk"}
+    assert [k for k in kode if k in proses] == ["tahap_penyosohan", "tahap_penggilingan", "tahap_pengeringan", "tahap_transfer_pk"]
 
 
 def test_tiap_laporan_punya_cara_membuatnya():

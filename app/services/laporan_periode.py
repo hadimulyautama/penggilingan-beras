@@ -16,9 +16,9 @@ from app.config import settings
 TAHAP = {
     "gabah_masuk": ("Penerimaan gabah", m.PurchaseBatch, "tanggal_pembelian", "kode_batch", "status_batch", "berat_total_kg", "Bobot masuk"),
     "pk_masuk": ("Penerimaan PK luar", m.PkPurchaseBatch, "tanggal_pembelian", "kode_batch", "status_batch", "berat_total_kg", "Bobot masuk"),
-    "pengeringan": ("Pengeringan", m.DryingLot, "waktu_mulai_pengeringan", "kode_lot", "status", None, None),
-    "penggilingan": ("Penggilingan", m.MillingProcess, "waktu_mulai", "kode_proses", "status", "berat_gabah_masuk_kg", "Gabah masuk proses"),
     "penyosohan": ("Penyosohan", m.PolishingProcess, "waktu_mulai", "kode_proses", "status", None, None),
+    "penggilingan": ("Penggilingan", m.MillingProcess, "waktu_mulai", "kode_proses", "status", "berat_gabah_masuk_kg", "Gabah masuk proses"),
+    "pengeringan": ("Pengeringan", m.DryingLot, "waktu_mulai_pengeringan", "kode_lot", "status", None, None),
     "transfer_pk": ("Transfer PK", m.InternalTransfer, "waktu", "kode_transfer", "status", "berat_kg", "Bobot transfer"),
     "pemasukan_pk": ("Pemasukan PK Gudang 2", m.PkGudang2Intake, "tanggal_masuk", None, None, "berat_kg", "Bobot masuk Gudang 2"),
     "pindah_pk": ("Pindah PK ke silo", m.PkTumpukanToSilo, "tanggal", "kode_pindah", None, "berat_timbang_kg", "Bobot timbang"),
