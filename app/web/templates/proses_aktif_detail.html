@@ -15,7 +15,7 @@
     <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">PROSES AKTIF · {{ visual.penanda(proses) }}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>
     <h1>{{ d.kode }}</h1>
     {{ milik.penanda(proses) }}
-    <p>{{ 'Gudang 2' if d.jenis == 'sosoh' else 'Gudang 1' }}</p>
+    <p>{{ d.fasilitas.label }}</p>
     {% if proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
     <span class="proses-detail__sementara">Data berjalan · hasil dan durasi belum final</span>
   </header>

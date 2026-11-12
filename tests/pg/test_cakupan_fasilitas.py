@@ -95,6 +95,7 @@ async def test_filter_gudang_stok_admin_tidak_mengubah_peran(pg):
         assert await hitung_stok_broken_curah(db,user=actor)==0
         assert await hitung_stok_broken_curah(db)==330
 
+@pytest.mark.fondasi_multi
 async def test_line_giling_g2_saldo_riwayat_detail_pdf_dan_batas_operator(pg):
     from app.models import MillingProcess,Supplier,MillingProgressLog
     from app.penggilingan.gudang1.services import milling as m

@@ -115,12 +115,12 @@ async def rincian(db, *, jenis, model, kartu, params):
     akhir_fase = model.waktu_selesai_pendinginan if jenis == "pendinginan" else None
     durasi = max(0, ((akhir_fase or now_local()) - awal_fase).total_seconds()) if awal_fase else 0
     efektif = max(0, durasi - (0 if jenis == "pendinginan" else tertahan))
-    from app.services.fasilitas import label_fasilitas
-    fasilitas_label = await label_fasilitas(db,model)
-    d = dict(jenis=jenis, judul=JENIS[jenis], kode=kartu.kode, proses=kartu,
+    from app.services.fasilitas import identitas_fasilitas
+    fasilitas = await identitas_fasilitas(db,model)
+    d = dict(jenis=jenis, judul=JENIS[jenis], kode=kartu.kode, proses=kartu, fasilitas=fasilitas,
              pemilik=pemilik.get(model.jasa_id, "Pemilik belum tercatat") if model.jasa_id else "Milik pabrik",
              jasa=model.jasa_id is not None, status="Dijeda" if macet and jenis != "pendinginan" else "Sedang berjalan",
-             fakta=[("Gudang / line", fasilitas_label),
+             fakta=[("Gudang / line", fasilitas.label),
                     ("Mulai proses", _waktu(mulai)), ("Mulai fase ini", _waktu(awal_fase)),
                     ("Dicatat oleh", pencatat.nama if pencatat else "Tidak tercatat"),
                     ("Waktu berlalu", svc.lama_kata(durasi)),

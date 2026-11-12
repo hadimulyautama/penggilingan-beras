@@ -20,7 +20,7 @@
     <h1>{{ d.kode }}</h1>
     {{ milik.penanda(proses) }}
     {% if d.jasa and not proses.pemilik_tampil %}<p>{{ d.pemilik }}</p>{% endif %}
-    <p>Gudang 1 · Penggilingan</p>
+    <p>{{ d.fasilitas.label }}</p>
     {% if d.jeda_mulai %}<p class="giling-jeda">{{ d.jeda_sebab }} · Mulai jeda {{ d.jeda_mulai }}</p>{% elif proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
     <span class="proses-detail__sementara">Data berjalan · hasil dan durasi belum final</span>
   </header>

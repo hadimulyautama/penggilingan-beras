@@ -196,7 +196,7 @@ async def lot_diizinkan(db, *, user, lot):
         raise FasilitasError('Catatan ini bukan pengeringan dengan dryer.')
     return await dryer_diizinkan(db,user=user,dryer_id=lot.dryer_id)
 
-async def label_fasilitas(db, proc):
+async def identitas_fasilitas(db, proc):
     """Label dari relasi nyata; ID line historis yang tidak diketahui tidak ditebak."""
     from app.models import Silo,PolishingSiloUsage
     line=await db.get(LiniProduksi,proc.lini_produksi_id) if proc.lini_produksi_id else None
@@ -211,4 +211,11 @@ async def label_fasilitas(db, proc):
         ids=list((await db.execute(select(Silo.warehouse_id).join(PolishingSiloUsage,PolishingSiloUsage.silo_id==Silo.id).where(PolishingSiloUsage.polishing_process_id==proc.id).distinct())).scalars())
         wid=ids[0] if len(ids)==1 else None
     wh=await db.get(Warehouse,wid) if wid else None
-    return ' · '.join(x for x in (wh.nama_gudang if wh else None,line.nama if line else None) if x) or 'Fasilitas historis belum tercatat'
+    from app.services.identitas_fasilitas import IdentitasFasilitas
+    return IdentitasFasilitas(warehouse_id=wid, nama_gudang=wh.nama_gudang if wh else None,
+        lini_id=line.id if line else None, nama_lini=line.nama if line else None)
+
+
+async def label_fasilitas(db, proc):
+    """Pembaca kompatibel untuk seluruh pemanggil label yang sudah berjalan."""
+    return (await identitas_fasilitas(db, proc)).label

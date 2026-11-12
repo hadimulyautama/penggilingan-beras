@@ -31,7 +31,7 @@
   <h1>Pengeringan aktif</h1><p class="dr-code">{{ d.kode }}</p>
   <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">PROSES AKTIF · {{ visual.penanda(proses) }}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>{{ milik.penanda(proses) }}
   {% if d.jasa and not proses.pemilik_tampil %}<p>{{ d.pemilik }}</p>{% endif %}
-  <p>Gudang 1 · {{ d.dryer }} · {{ d.mode }}</p>
+  <p>{{ d.fasilitas.nama_gudang or 'Gudang belum tercatat' }} · {{ d.dryer }} · {{ d.mode }}</p>
   {% if d.jeda_mulai %}<p class="pengeringan-jeda">{{ d.jeda_sebab }} · Mulai jeda {{ d.jeda_mulai }}</p>{% elif proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
   <div class="dr-header-time">{% for label, nilai in d.fakta if label in ['Mulai proses','Durasi efektif','Total jeda'] %}<span>{{ label }} {{ nilai }}</span>{% endfor %}</div>
   <span class="proses-detail__sementara">Data proses aktif belum final</span>
