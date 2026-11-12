@@ -5,7 +5,18 @@
 {% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg_rinci %}
 
+{% macro mutu_giling(k, desktop=false) %}
+<div class="rg-mutu">
+{% if k.mutu %}
+ <div class="rg-mutu__ringkas">{% for nilai in k.mutu.split(' (')[0].split(' · ')[:3] %}<span>{{ nilai }}</span>{% endfor %}</div>
+ {% if desktop %}<button type="button" class="rg-sumber-btn" data-rg-qc="rg-qc-{{ k.id }}" aria-controls="rg-qc-{{ k.id }}" aria-expanded="false">Rincian mutu</button>{% else %}<details class="rg-mutu__rincian"><summary>Rincian mutu</summary><div>{{ k.mutu }}</div></details>{% endif %}<span class="rg-mutu__cetak">{{ k.mutu }}</span>
+{% else %}<span class="rg-redup">Belum dinilai</span>{% endif %}
+</div>
+{% endmacro %}
 {% block daftar_isi %}
+<link rel="stylesheet" href="/static/riwayat-giling-daftar.css?v={{ VERSI }}">
+<div class="rg-daftar">
+
 {% set total = namespace(bahan=0, pk=0) %}
 {% for item in kartu %}
   {% set total.bahan = total.bahan + (item.bahan_kg or 0) %}
@@ -40,8 +51,8 @@
 <div class="riwayat-list daftar-standar">
 {% for k in kartu %}
   {% set laci = k.bahan|length > 0 or k.pemakaian_silo|default([])|length > 0 %}
-  <details class="padat padat--giling">
-  <summary onclick="event.preventDefault();location.href='/riwayat-giling/{{ k.id }}'">
+  <article class="padat padat--giling rg-kartu">
+  <div class="rg-kartu__ringkas">
     <div class="padat__atas">
       <span class="padat__nama padat__nama--kode">
         <a href="/riwayat-giling/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode }}</a> · {{ k.selesai|jam("%d/%m") or k.mulai|jam("%d/%m") }}
@@ -84,11 +95,6 @@
           <dd>{{ k.kelas }}</dd>
         </div>
       {% endif %}
-      <div>
-        <dt>Mutu</dt>
-        <dd{% if not k.mutu %} class="padat__nilai--kosong"{% endif %}>
-          {{ k.mutu or "belum dinilai" }}</dd>
-      </div>
       {% if k.ditransfer_kg %}
         <div>
           <dt>Sudah ditransfer</dt>
@@ -102,6 +108,7 @@
         </div>
       {% endif %}
     </dl>
+    {{ mutu_giling(k) }}
 
     {% if k.belum_dicatat %}
       <div class="nota nota--hati">
@@ -110,9 +117,10 @@
           terhitung.</span>
       </div>
     {% endif %}
-  </summary>
+  </div>
 
-  {% if laci %}
+  <div class="rg-kartu__aksi"><a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}">Detail lot →</a><a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">Laporan PDF</a></div>
+  {% if laci %}<details class="rg-sumber"><summary>Catatan sumber</summary>
     <div class="anak">
       {% if k.pemakaian_silo %}<h3>Bahan &amp; pemakaian silo</h3>{{ bahan_silo(k.pemakaian_silo) }}{% endif %}
       <details><summary>Data batch asal · {{ k.bahan|length }}</summary>
@@ -124,41 +132,29 @@
         </div>
       {% endfor %}
       </details>
-      <div style="margin-top:12px">
-        <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">
-          ↓ Lihat / bagikan laporan PDF
-        </a>
-      </div>
-    </div>
-  {% else %}
-    <div style="padding:0 12px 12px">
-      <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">
-        ↓ Lihat / bagikan laporan PDF
-      </a>
-    </div>
+    </div></details>
   {% endif %}
-  </details>
+  </article>
 {% endfor %}
 </div>
 
-<div class="riwayat-desktop-list tabel-standar" aria-label="Daftar riwayat penggilingan">
-  <div class="riwayat-desktop-grid riwayat-desktop-grid--giling riwayat-desktop-head" aria-hidden="true">
-    <span>Lot / selesai</span><span>Nama pemilik</span><span>Status jasa</span><span>Bahan</span><span>Hasil PK</span>
-    <span>Rendemen</span><span>Kondisi</span><span>Mutu</span>
-  </div>
-  {% for k in kartu %}
-    <details class="riwayat-desktop-row">
-      <summary class="riwayat-desktop-grid riwayat-desktop-grid--giling" onclick="event.preventDefault();location.href='/riwayat-giling/{{ k.id }}'">
-        <span class="riwayat-desktop-lot"><strong><a href="/riwayat-giling/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode }}</a></strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
-        <span class="riwayat-desktop-owner">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
-        <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
-        <span class="riwayat-desktop-number">{{ kg(k.bahan_kg) }} kg</span>
-        <span class="riwayat-desktop-number">{% if k.belum_dicatat %}Belum dicatat{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</span>
-        <span>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</span>
-        <span>{{ k.kelas or "—" }}</span>
-        <span>{{ k.mutu or "Belum dinilai" }}</span>
-      </summary>
-      <div class="riwayat-desktop-detail">
+<div class="riwayat-desktop-list tabel-standar rg-tabel-scroll" role="region" aria-label="Daftar riwayat penggilingan">
+<table class="tabel-standar rg-tabel">
+ <thead><tr><th scope="col">Lot / selesai</th><th scope="col">Pemilik</th><th scope="col" class="rg-angka">Bahan</th><th scope="col" class="rg-angka">Hasil PK</th><th scope="col" class="rg-angka">Rendemen</th><th scope="col">Kondisi</th><th scope="col">Mutu</th></tr></thead>
+ <tbody>{% for k in kartu %}<tr>
+ <td><div class="riwayat-desktop-lot"><a class="rg-kode" href="/riwayat-giling/{{ k.id }}">{{ k.kode }}</a><small class="rg-waktu">{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %}<br>{{ k.lama }}{% endif %}</small></div>
+ <button type="button" class="rg-sumber-btn" data-rg-buka="rg-sumber-{{ k.id }}">Catatan sumber &amp; PK</button>
+ </td>
+ <td class="rg-pemilik">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}<br><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></td>
+ <td class="rg-angka">{{ kg(k.bahan_kg) }} kg</td>
+ <td class="rg-angka">{% if k.belum_dicatat %}<span class="rg-belum">Belum dicatat</span>{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</td>
+ <td class="rg-angka">{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</td>
+ <td>{{ k.kelas or "—" }}</td><td>{{ mutu_giling(k, true) }}</td>
+ </tr>{% if k.mutu %}<tr class="rg-qc-row" id="rg-qc-{{ k.id }}" hidden><td colspan="7"><strong>Mutu · {{ k.kode }}</strong><p>{{ k.mutu }}</p></td></tr>{% endif %}{% endfor %}</tbody>
+</table>
+</div>
+
+{% for k in kartu %}<dialog class="rg-dialog" id="rg-sumber-{{ k.id }}" aria-labelledby="rg-judul-{{ k.id }}"><div class="rg-dialog__kepala"><h2 id="rg-judul-{{ k.id }}">{{ k.kode }} · Catatan sumber &amp; PK</h2><button class="btn btn--kecil" type="button" data-rg-tutup>Tutup</button></div>      <div class="riwayat-desktop-detail">
         {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %} — digiling lalu dikembalikan, bukan dijual</span></div>{% endif %}
         <dl class="fakta">
           <div><dt>Bahan</dt><dd>{{ kg(k.bahan_kg) }} kg</dd></div>
@@ -178,9 +174,8 @@
         {% endif %}
         <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
       </div>
-    </details>
-  {% endfor %}
-</div>
+</dialog>{% endfor %}
+<script src="/static/riwayat-giling-daftar.js?v={{ VERSI }}"></script>
 
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
@@ -195,4 +190,5 @@
   </div>
 {% endif %}
 
+</div>
 {% endblock %}

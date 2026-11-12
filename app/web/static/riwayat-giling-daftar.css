@@ -1,0 +1,34 @@
+/* Tata letak hanya daftar giling: tabel semantik dan kartu yang sama datanya. */
+.rg-daftar{min-width:0}
+.rg-daftar .rg-tabel{min-width:790px;table-layout:fixed}
+.rg-tabel th:nth-child(1){width:20%}.rg-tabel th:nth-child(2){width:14%}.rg-tabel th:nth-child(3),.rg-tabel th:nth-child(4){width:12%}.rg-tabel th:nth-child(5){width:11%}.rg-tabel th:nth-child(6){width:9%}.rg-tabel th:nth-child(7){width:22%}
+body .rg-daftar .rg-tabel :is(th,td){padding:12px 10px;vertical-align:top;overflow-wrap:anywhere}
+body .rg-daftar .rg-tabel .rg-angka{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rg-daftar .rg-kode{font-weight:600;white-space:nowrap}
+.rg-daftar .rg-waktu{display:block;font-size:.73rem;color:var(--kulit-redup);margin-top:5px}
+.rg-daftar .rg-pemilik{overflow-wrap:anywhere}.rg-pemilik .riwayat-status{margin-top:6px}
+.rg-daftar .rg-redup{color:var(--kulit-redup)}.rg-daftar .rg-belum{white-space:normal;display:block}
+.rg-mutu__ringkas{display:grid;gap:3px;font-variant-numeric:tabular-nums}
+.rg-daftar .rg-mutu__rincian{margin:6px 0 0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.rg-daftar .rg-mutu__rincian>summary{display:list-item;list-style:disclosure-closed;padding:3px 0;color:var(--aman);font-size:inherit;cursor:pointer}
+.rg-daftar .rg-mutu__rincian[open]>summary{list-style:disclosure-open}
+.rg-mutu__rincian>div{padding:8px 0;overflow-wrap:anywhere}
+.rg-daftar .rg-kartu__ringkas{padding:14px}
+.rg-daftar .rg-kartu__aksi{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px}
+.rg-daftar .rg-kartu .rg-mutu{border-top:1px solid var(--kulit-batas);padding-top:12px;margin-top:12px}
+.rg-daftar .rg-kartu .rg-mutu__ringkas{display:flex;gap:5px 14px;flex-wrap:wrap;font-size:.82rem}
+.rg-daftar .rg-sumber>summary{padding:8px 14px;font-size:.82rem}
+.rg-daftar .rg-sumber-btn{border:0;background:none;padding:5px 0;margin-top:5px;color:var(--aman);font:inherit;font-size:.73rem;text-decoration:underline;cursor:pointer;text-align:left}
+.rg-daftar .rg-dialog{width:min(850px,calc(100vw - 32px));max-height:85dvh;padding:20px;border:1px solid var(--kulit-batas);border-radius:12px;background:var(--kulit-kartu);color:var(--tinta);overflow:auto}
+.rg-dialog::backdrop{background:#0007}.rg-dialog__kepala{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:16px}.rg-dialog__kepala h2{margin:0;font-size:1.1rem}
+.rg-daftar .rg-dialog .riwayat-desktop-detail{padding:0;border:0}.rg-dialog .riwayat-desktop-detail .fakta{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:899px){.rg-daftar .riwayat-desktop-list{display:none}.rg-daftar .riwayat-list{display:grid}}
+@media print{.rg-daftar .rg-mutu__rincian>div{display:block!important}.rg-daftar .rg-sumber-btn,.rg-daftar .rg-dialog{display:none}}
+
+.rg-mutu__cetak{display:none}
+@media print{.rg-mutu__cetak{display:block}.rg-mutu__ringkas,.rg-mutu__rincian{display:none!important}}
+
+.rg-daftar .rg-qc-row[hidden]{display:none!important}
+body .rg-daftar .rg-qc-row td{background:var(--panel-2);padding:16px 20px}.rg-qc-row p{margin:8px 0 0}
+.rg-daftar .rg-kartu{display:block;width:100%;padding:0;min-width:0}
+.rg-daftar .rg-kartu>.rg-kartu__ringkas{display:block;width:100%;min-width:0}

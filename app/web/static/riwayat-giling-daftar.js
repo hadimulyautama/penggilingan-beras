@@ -1,0 +1,4 @@
+/* Catatan sumber yang sama; tanpa permintaan atau penulisan data tambahan. */
+(()=>{if(window.__rgDaftar)return;window.__rgDaftar=true;
+document.addEventListener('click',e=>{const q=e.target.closest('[data-rg-qc]');if(q){const r=document.getElementById(q.dataset.rgQc);if(r){r.hidden=!r.hidden;q.setAttribute('aria-expanded',String(!r.hidden));q.textContent=r.hidden?'Rincian mutu':'Tutup rincian mutu'}return}const buka=e.target.closest('[data-rg-buka]');if(buka){const d=document.getElementById(buka.dataset.rgBuka);if(d&&!d.open)d.showModal();return}const tutup=e.target.closest('[data-rg-tutup]');if(tutup)tutup.closest('dialog').close();if(e.target.matches('dialog.rg-dialog')){const b=e.target.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)e.target.close()}});
+})();
