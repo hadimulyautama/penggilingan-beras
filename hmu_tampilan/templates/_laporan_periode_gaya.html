@@ -139,4 +139,29 @@
 .lp-detail .lp-proses-grup .lbl{font-size:12px;letter-spacing:0;text-transform:none;margin:0 0 7px;}
 .lp-detail #lp-proses{margin:0;min-height:44px;font-size:15px;width:100%;box-sizing:border-box;}
 @media(max-width:650px){.lp-detail .lp-periode-form{grid-template-columns:repeat(2,minmax(0,1fr));}.lp-detail .lp-proses-grup{width:100%;max-width:none;min-width:0;}.lp-detail .lp-tampilkan{grid-column:1/-1;justify-self:end;}}
+
+/* Aksi laporan selalu satu baris; lebar penuh tombol umum tidak berlaku di sini. */
+body.padiflow-ui .lp-detail .lp-panel-aksi{display:grid;grid-template-columns:max-content max-content 44px;flex:none;gap:8px;align-items:stretch;}
+body.padiflow-ui .lp-detail .lp-panel-aksi>.btn{width:auto;min-width:0;height:44px;min-height:44px;margin:0;}
+@media(min-width:651px){.lp-detail .lp-panel-kontrol{align-items:flex-end;}}
+@media(max-width:650px){body.padiflow-ui .lp-detail .lp-panel-aksi{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;}}
+
+/* Ringkasan sejenis berdampingan agar rincian cepat terlihat. */
+body.padiflow-ui .lp-detail .lp-ringkasan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;}
+body.padiflow-ui .lp-detail .lp-kelompok{padding:16px;margin:0;order:1;}
+body.padiflow-ui .lp-detail .lp-kelompok--aktivitas{grid-column:1/-1;order:0;padding:12px 16px;}
+body.padiflow-ui .lp-detail .lp-kelompok--rinci{grid-column:1/-1;order:2;}
+body.padiflow-ui .lp-detail .lp-kelompok:not(.lp-kelompok--aktivitas):not(.lp-kelompok--rinci) .lp-bagian-metrik{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:12px;}
+body.padiflow-ui .lp-detail .lp-kelompok--hasil:not(.lp-kelompok--rinci) .lp-bagian-metrik>dl{grid-column:auto;padding:0;border:0;}
+@media(max-width:650px){
+ body.padiflow-ui .lp-detail .lp-kelompok{padding:12px;}
+ body.padiflow-ui .lp-detail .lp-kelompok:not(.lp-kelompok--rinci) h3{font-size:12px;margin-bottom:10px;}
+ body.padiflow-ui .lp-detail .lp-kelompok--aktivitas h3{margin:0;}
+ body.padiflow-ui .lp-detail .lp-kelompok:not(.lp-kelompok--aktivitas):not(.lp-kelompok--rinci) .lp-bagian-metrik{grid-template-columns:minmax(0,1fr);gap:10px;}
+ body.padiflow-ui .lp-detail .lp-kelompok:not(.lp-kelompok--rinci) .lp-metrik dt{font-size:11px;}
+ body.padiflow-ui .lp-detail .lp-kelompok:not(.lp-kelompok--rinci) .lp-metrik dd{font-size:16px;}
+}
+
+body.padiflow-ui .lp-detail .lp-ringkasan--tunggal>.lp-kelompok{grid-column:1/-1;}
+@media(max-width:650px){body.padiflow-ui .lp-detail .lp-ringkasan--tunggal>.lp-kelompok:not(.lp-kelompok--aktivitas):not(.lp-kelompok--rinci) .lp-bagian-metrik{grid-template-columns:repeat(2,minmax(0,1fr));}}
 </style>

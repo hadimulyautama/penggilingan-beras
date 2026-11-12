@@ -2,10 +2,13 @@
 (function(){'use strict';const root=document.querySelector('[data-laporan-detail]');if(!root||root.dataset.siap)return;root.dataset.siap='1';
   function aman(s) { var el = document.createElement("span"); el.textContent = String(s); return el.innerHTML; }
   function tabel(d) {
+    var kelompok=d.ringkasan_kelompok || [{nama:'Ringkasan',rincian:d.ringkasan}];
+    var tunggal=kelompok.filter(function(g){return g.nama!=='Aktivitas';}).length===1;
     var h = '<p class="lp-catatan">Periode: ' + aman(d.periode) + ' · WIB</p>' +
-      '<p class="lp-catatan">Dasar: ' + aman(d.dasar) + '</p><div class="lp-ringkasan">';
-    (d.ringkasan_kelompok || [{nama:'Ringkasan',rincian:d.ringkasan}]).forEach(function (g) {
+      '<p class="lp-catatan">Dasar: ' + aman(d.dasar) + '</p><div class="lp-ringkasan'+(tunggal?' lp-ringkasan--tunggal':'')+'">';
+    kelompok.forEach(function (g) {
       var jenis = g.nama === 'Aktivitas' ? ' lp-kelompok--aktivitas' : g.nama === 'Hasil' ? ' lp-kelompok--hasil' : '';
+      if(g.rincian.some(function(r){return !!r.bagian;}))jenis+=' lp-kelompok--rinci';
       h += '<section class="lp-kelompok' + jenis + '"><h3>' + aman(g.nama) + '</h3><div class="lp-bagian-metrik">';
       var bagian = null;
       g.rincian.forEach(function (r) {
