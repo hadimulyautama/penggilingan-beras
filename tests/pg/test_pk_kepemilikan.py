@@ -66,6 +66,9 @@ async def test_dua_arah_dan_gudang_baru_tanpa_percabangan(pg,world,index):
         assert c['description']['unit']=='kg' and c['state']['kind']=='pk'
         listing=await umum.listing(db,user=await db.get(User,w['user']),kind='pk')
         assert listing['total']==2 and all(x['kind']=='pk' for x in listing['items'])
+        assert listing['items'][0]['to_label']=='Pabrik'
+        assert listing['items'][1]['from_label']=='Pabrik'
+        assert all(x['label'] and x['unit']=='kg' for x in listing['items'])
 
 async def test_retry_koreksi_pembatalan_dan_riwayat(pg,world):
     w=world

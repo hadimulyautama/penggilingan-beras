@@ -51,13 +51,17 @@ function panel(title){
 function controlsHeader(title,{params=null,total=null}={}){
  controls.replaceChildren();const header=el('header',null,'kerja-kepala sk-kepala ko-kepala'),top=el('div',null,'sk-judul');
  const desktop=el('div',null,'sk-tindakan-desktop'),mobile=el('div',null,'sk-tindakan-ponsel');
- top.append(el('h1',title),desktop,mobile);header.append(top);controls.append(header);
+ if(!params)controls.append(el('h1',title));top.append(desktop,mobile);header.append(top);controls.append(header);
  const guide=panel('ⓘ Panduan kepemilikan');guide.classList.replace('sk-panel','pd-panduan');guide.querySelector('.sk-panel-kepala').className='pd-panduan__kepala';guide.querySelector('button').className='btn pd-panduan__tutup';
- const guideBody=el('div',null,'pd-panduan__isi');guide.append(guideBody);guideBody.append(el('p','Riwayat kepemilikan menampilkan transaksi pengalihan yang sudah tercatat. Pilih PK, Produk, atau Karung, lalu gunakan pencarian dan filter status.'),el('p','Buka nomor transaksi untuk melihat pemilik, jumlah, gudang, pemakaian, saldo tersedia, dan riwayat perubahan.'),el('p','Koreksi dan pembatalan tersedia pada detail sesuai izin. Periksa dampak dan konfirmasi sebelum menyimpan. Draf serta pemeriksaan dampak tidak mengubah stok.'),el('p','Catatan lama tetap tersedia melalui tautan di daftar.'));
+ const guideBody=el('div',null,'pd-panduan__isi');guide.append(guideBody);guideBody.append(el('p','Riwayat alih kepemilikan menampilkan transaksi pengalihan yang sudah tercatat. Pilih PK, Produk, atau Karung, lalu gunakan pencarian dan filter status.'),el('p','Buka nomor transaksi untuk melihat pemilik, jumlah, gudang, pemakaian, saldo tersedia, dan riwayat perubahan.'),el('p','Koreksi dan pembatalan tersedia pada detail sesuai izin. Periksa dampak dan konfirmasi sebelum menyimpan. Draf serta pemeriksaan dampak tidak mengubah stok.'),el('p','Catatan lama tetap tersedia melalui tautan di daftar.'));
  const menu=panel('Tindakan');menu.classList.add('sk-menu');
  const showGuide=()=>{if(menu.open)menu.close();guide.showModal();};
  const print=()=>{if(menu.open)menu.close();window.print();};
- desktop.append(uiButton('ⓘ Panduan',showGuide),uiButton('Print',print));
+ const guideButton=uiButton('',showGuide),printButton=uiButton('',print);
+ guideButton.setAttribute('aria-label','Panduan');guideButton.title='Panduan';printButton.setAttribute('aria-label','Cetak');printButton.title='Cetak';
+ guideButton.innerHTML='<span class="kontrol-tab-label">ⓘ Panduan</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>';
+ printButton.innerHTML='<span class="kontrol-tab-label">Cetak</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>';
+ desktop.append(guideButton,printButton);
  menu.append(uiButton('ⓘ Panduan',showGuide,'btn'),uiButton('Print',print,'btn'));
  if(params){
   const filter=panel('Filter riwayat'),form_=el('form',null,'sk-form-filter'),label=el('label','Status'),select=el('select',null,'fld');
@@ -72,26 +76,37 @@ function controlsHeader(title,{params=null,total=null}={}){
   function applyQuery({status,q}){const next=new URLSearchParams(params);next.set('q',q);if(!q)next.delete('q');if(status)next.set('status',status);else next.delete('status');next.set('page','1');filter.close();window.history.replaceState(null,'','?'+next);listing();}
   search.onsubmit=e=>{e.preventDefault();applyQuery({status:params.get('status')||'',q:inp.value});};
   form_.onsubmit=e=>{e.preventDefault();applyQuery({status:select.value,q:inp.value});};
-  const tabs=el('nav',null,'sk-tab');tabs.setAttribute('aria-label','Jenis riwayat kepemilikan');
+  const tabs=el('nav',null,'sk-tab');tabs.setAttribute('aria-label','Jenis riwayat alih kepemilikan');
   for(const [k,label]of [['pk','PK'],['produk','Produk'],['karung','Karung']]){const next=new URLSearchParams(params);next.set('kind',k);next.delete('page');const a=link(label,'/kepemilikan?'+next);if((params.get('kind')==='pk'?'pk':params.get('kind')==='karung'?'karung':'produk')===k)a.setAttribute('aria-current','page');tabs.append(a);}header.append(tabs);
   const scope=el('div',null,'ko-list-scope'),statusLabel=select.options[select.selectedIndex]?.textContent||'Semua status',legacy=params.get('legacy')==='true',kindLabel=params.get('kind')==='pk'?'PK':params.get('kind')==='karung'?'Karung':params.get('kind')==='barang'?'Barang berkemasan':params.get('kind')==='curah'?'Produk curah':'Produk';
   scope.append(el('p',kindLabel+' · '+statusLabel+(legacy?' · Catatan lama':'')+(total==null?'':' · '+total+' transaksi'),'ko-muted'));
   const old=new URLSearchParams(params);if(legacy)old.delete('legacy');else old.set('legacy','true');old.delete('page');scope.append(link(legacy?'Transaksi dengan rincian sumber':'Catatan lama','/kepemilikan?'+old));if(params.get('kind')==='pk'){const add=link('Alihkan kepemilikan PK','/kepemilikan/pk/baru'+(params.get('kembali_stok')?'?kembali_stok='+encodeURIComponent(params.get('kembali_stok')):''));add.className='btn btn--kecil';scope.append(add);}header.append(scope);
  }else{
   const back=new URLSearchParams(location.search).get('kembali');const path=back?.startsWith('/kepemilikan?')?back:'/kepemilikan?kind='+(data?.state?.kind==='pk'?'pk':data?.state?.kind==='karung'?'karung':'produk');
-  const context=el('div',null,'ko-detail-context');context.append(link('← Riwayat kepemilikan',path));if(data?.description?.label)context.append(el('p',data.description.label,'ko-muted'));header.append(context);
+  const context=el('div',null,'ko-detail-context');context.append(link('← Riwayat alih kepemilikan',path));if(data?.description?.label)context.append(el('p',data.description.label,'ko-muted'));header.append(context);
  }
  const dots=uiButton('⋮',()=>menu.showModal(),'btn sk-ikon');dots.setAttribute('aria-label','Panduan dan print');dots.setAttribute('aria-haspopup','dialog');mobile.append(dots);
 }
 
 function render(){if(!data)return;controlsHeader(data.code);body.replaceChildren();if(data.legacy){const b=box('Catatan historis');b.append(el('p',data.summary),el('p',date(data.time)),el('p',data.warning),link('Buka audit lama','/audit?rentang=semua&cari=pindah_kepemilikan'));body.append(b);return;}const grid=el('div',null,'ko-grid'),main=el('div'),side=el('aside',null,'ko-sidebar');if(stage==='detail'){main.append(summary());if(data.pending_chain_repair){const actions=el('div',null,'ko-actions');actions.append(button('Sesuaikan bahan lanjutan',()=>open(data.state.status==='dibatalkan'?'batal':'ubah'),true));main.append(actions);}else if(data.state.status!=='dibatalkan'){const actions=el('div',null,'ko-actions');actions.append(button(draft?'Lanjutkan koreksi':'Koreksi transaksi',()=>open(draft?.mode||'ubah')),button('Batalkan perpindahan',()=>open('batal')));main.append(actions);}main.append(usage(),history());balances(side,data.balances,data.state.kind==='pk'?'Saldo sumber PK ini':'Saldo tersedia saat ini');}else{main.append(stage==='review'?reviewPanel():form());side.append(summary(),usage());}grid.append(main,side);body.append(grid);}
-async function listing(){busy=true;const pending=new URLSearchParams(location.search);if(!pending.has('kind'))pending.set('kind','produk');controlsHeader('Riwayat kepemilikan',{params:pending});body.replaceChildren(el('p','Memuat riwayat kepemilikan…','ko-muted'));try{
+async function listing(){busy=true;const pending=new URLSearchParams(location.search);if(!pending.has('kind'))pending.set('kind','produk');controlsHeader('Riwayat alih kepemilikan',{params:pending});body.replaceChildren(el('p','Memuat riwayat alih kepemilikan…','ko-muted'));try{
  const params=new URLSearchParams(location.search);if(!params.has('kind'))params.set('kind','produk');
- const result=await call('/api/kepemilikan?'+params);controlsHeader('Riwayat kepemilikan',{params,total:result.total});body.replaceChildren();
- const rows=el('div',null,'ko-rows');
- for(const item of result.items){const b=box();b.classList.add('ko-record');const title=el('div',null,'ko-record-title');title.append(link(item.code,'/kepemilikan/'+item.id+'?kembali='+encodeURIComponent(location.pathname+location.search)),el('span',statusNames[item.status]||item.status,'ko-status'));b.append(title,el('p',item.summary||'Pihak tercantum pada detail','ko-record-summary'));
- if(item.quantity!=null)b.append(el('p',n(item.quantity)+' '+(item.kind==='karung'?'lembar':item.kind==='barang'?'karung':'kg')+(item.kind==='barang'?' · '+n(item.kg)+' kg':''),'ko-record-quantity'));
- b.append(el('small',date(item.time),'ko-record-time'));rows.append(b);}body.append(rows);
+ const result=await call('/api/kepemilikan?'+params);controlsHeader('Riwayat alih kepemilikan',{params,total:result.total});body.replaceChildren();
+ const rows=el('table',null,'ko-list-table');rows.setAttribute('aria-label','Riwayat alih kepemilikan');
+ const thead=el('thead'),head=el('tr');for(const label of ['Tanggal','Barang','Dari','Kepada','Jumlah']){const th=el('th',label);th.scope='col';head.append(th);}thead.append(head);rows.append(thead);const tbody=el('tbody');rows.append(tbody);
+ for(const item of result.items){
+  const row=el('tr');
+  function cell(key,label){const td=el('td',null,'ko-col-'+key);td.dataset.label=label;row.append(td);return td;}
+  const tanggal=cell('tanggal','Tanggal'),dt=item.time?new Date(item.time):null;
+  tanggal.append(el('span',dt?dt.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'}):'Belum tercatat'),el('small',dt?dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):''));
+  const barang=cell('barang','Barang');barang.append(el('strong',item.label||item.summary||'Rincian belum tercatat'));
+  const code=link(item.code,'/kepemilikan/'+item.id+'?kembali='+encodeURIComponent(location.pathname+location.search));code.setAttribute('aria-label','Detail '+item.code);barang.append(code,el('small',statusNames[item.status]||item.status));
+  cell('dari','Dari').append(el('span',item.from_label||'Belum tercatat'));
+  cell('kepada','Kepada').append(el('span',item.to_label||'Belum tercatat'));
+  const jumlah=cell('jumlah','Jumlah');jumlah.append(el('strong',item.quantity==null?'Belum tercatat':n(item.quantity)+' '+(item.unit||(item.kind==='karung'?'lembar':item.kind==='barang'?'karung':'kg'))));
+  if(item.kind==='barang'&&item.kg!=null)jumlah.append(el('small',n(item.kg)+' kg'));
+  tbody.append(row);
+ }body.append(rows);
  if(!result.total)body.append(el('p','Tidak ada transaksi yang cocok. Catatan lama tersedia melalui tautan Catatan lama.','ko-empty'));
  const footer=el('div',null,'ko-list-footer'),nav=el('nav',null,'ko-actions');nav.setAttribute('aria-label','Halaman riwayat');
  for(const [label,page]of [['Sebelumnya',result.page-1],['Berikutnya',result.page+1]])if(page>=1&&page<=result.pages){const p=new URLSearchParams(params);p.set('page',String(page));const a=link(label,'?'+p);a.className='btn btn--kecil';nav.append(a);}

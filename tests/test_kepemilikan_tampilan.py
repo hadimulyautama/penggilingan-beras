@@ -43,7 +43,7 @@ def route_for(page,data,theme,requests):
     before=data['state'];after={**before,'quantity':100};value=dict(review='bukti-uji',plan=dict(before=before,after=after,balances_before={'7':{'lembar':120}},balances_after={'7':{'lembar':100}}))
    elif path.endswith('/simpan'):value=dict(event_id=22)
    elif path=='/api/kepemilikan/128':value=data
-   elif path=='/api/kepemilikan':value=dict(total=2,page=1,pages=2,items=[dict(id=128,code='PKM/00128',summary='Pabrik → Pak Pras · Karung laminasi · Hadi Mulya · 25 kg',status='terkoreksi',quantity=120,kind='karung',time='2026-11-04T13:14:00Z'),dict(id=129,code='PKM/00129',summary='Pak Pras → Pabrik · Premium',status='aktif',quantity=30,kg=1500,kind='barang',time='2026-11-03T13:14:00Z')])
+   elif path=='/api/kepemilikan':value=dict(total=2,page=1,pages=2,items=[dict(id=128,code='PKM/00128',label='Karung laminasi · Hadi Mulya · 25 kg',from_label='Pabrik',to_label='Pak Pras',unit='lembar',summary='Pabrik → Pak Pras · Karung laminasi · Hadi Mulya · 25 kg',status='terkoreksi',quantity=120,kind='karung',time='2026-11-04T13:14:00Z'),dict(id=129,code='PKM/00129',label='Premium',from_label='Pak Pras',to_label='Pabrik',unit='karung',summary='Pak Pras → Pabrik · Premium',status='aktif',quantity=30,kg=1500,kind='barang',time='2026-11-03T13:14:00Z')])
    else:raise AssertionError(path)
    route.fulfill(json=value);return
   route.fulfill(body=document(data,theme),content_type='text/html')
@@ -60,12 +60,13 @@ def test_daftar_kontrol_isi_tema_dan_ukuran(width,theme):
   b=mesin(p).launch();page=b.new_page(**konteks(p,width,1000));requests=[];errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)));route_for(page,None,theme,requests)
   page.goto('https://uji.local/kepemilikan?kind=karung&kembali_stok=%2Fstok%3Ftab%3Dkarung')
-  expect(page.get_by_role('heading',name='Riwayat kepemilikan',exact=True)).to_be_visible()
-  for text in ['PKM/00128','Pak Pras','Karung laminasi','Hadi Mulya','25 kg','120 lembar','30 karung · 1.500 kg','Terkoreksi','Halaman 1 / 2']:
+  expect(page.get_by_role('table',name='Riwayat alih kepemilikan')).to_be_visible()
+  assert page.locator('.ko-list-table thead th').all_text_contents()==['Tanggal','Barang','Dari','Kepada','Jumlah']
+  for text in ['PKM/00128','Pak Pras','Karung laminasi','Hadi Mulya','25 kg','120 lembar','30 karung','1.500 kg','Terkoreksi','Halaman 1 / 2']:
    assert text in page.locator('[data-ko-body]').inner_text()
   assert page.locator('.sk-tab [aria-current=page]').inner_text()=='Karung'
   assert 'kembali_stok=' in page.get_by_role('link',name='Produk',exact=True).get_attribute('href')
-  filt=page.get_by_role('button',name='Buka filter riwayat') if width<=650 else page.get_by_role('button',name='Filter',exact=True)
+  filt=page.get_by_role('button',name='Filter',exact=True)
   search=page.get_by_role('searchbox');search.fill('Pras');page.get_by_role('button',name='Cari',exact=True).click()
   expect(page.get_by_role('searchbox')).to_have_value('Pras')
   assert requests[-1][2]['q']==['Pras']
@@ -73,8 +74,7 @@ def test_daftar_kontrol_isi_tema_dan_ukuran(width,theme):
   page.locator('select[name=status]').select_option('terkoreksi');page.get_by_role('button',name='Terapkan filter').click()
   expect(page.get_by_role('searchbox')).to_have_value('Pras');assert requests[-1][2]['status']==['terkoreksi']
   assert requests[-1][2]['kembali_stok']==['/stok?tab=karung']
-  if width<=650:page.get_by_role('button',name='Panduan dan print').click()
-  page.locator('.sk-menu > button' if width<=650 else '.sk-tindakan-desktop button').first.click()
+  page.get_by_role('button',name='Panduan',exact=True).click()
   expect(page.get_by_role('dialog',name='ⓘ Panduan kepemilikan')).to_be_visible();page.keyboard.press('Escape')
   assert page.get_by_role('link',name='Catatan lama').count()==1
   assert page.get_by_role('link',name='Berikutnya').count()==1
@@ -92,7 +92,7 @@ def test_detail_koreksi_pemeriksaan_konfirmasi_dan_batal(width,kind):
   expect(page.get_by_role('heading',name='PKM/00128')).to_be_visible()
   for text in ['Gudang 2','Admin A','Awal tercatat','Sumber #41 → baris #42','Masih bebas','Terpakai / terikat','pembelian #11',('Saldo sumber PK ini' if kind=='pk' else 'Saldo tersedia saat ini'),'Ukuran tercatat']:
    assert text in page.locator('[data-ko-body]').inner_text()
-  assert page.get_by_role('link',name='← Riwayat kepemilikan').get_attribute('href')=='/kepemilikan?kind=karung&status=aktif'
+  assert page.get_by_role('link',name='← Riwayat alih kepemilikan').get_attribute('href')=='/kepemilikan?kind=karung&status=aktif'
   page.get_by_text('Riwayat perubahan · 2',exact=True).click();assert 'Jumlah awal salah catat' in page.locator('[data-ko-body]').inner_text()
   assert page.get_by_role('link',name='Audit terkait').count()==1
   no_overflow(page)

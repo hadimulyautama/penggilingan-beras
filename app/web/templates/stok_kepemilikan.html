@@ -1,5 +1,5 @@
 {% extends template_kepemilikan_asal %}
 {% block isi %}
-{% if BOLEH_KEPEMILIKAN and not STOK_NAV %}<p><a class="btn" href="/kepemilikan?kind={{ 'karung' if 'karung' in template_kepemilikan_asal else 'produk' }}">Riwayat kepemilikan</a></p>{% endif %}
+{% if BOLEH_KEPEMILIKAN and not STOK_NAV %}<p><a class="btn" href="/kepemilikan?kind={{ 'karung' if 'karung' in template_kepemilikan_asal else 'produk' }}">Riwayat alih kepemilikan</a></p>{% endif %}
 {{ super() }}
 {% endblock %}

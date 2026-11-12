@@ -346,3 +346,18 @@ async def test_audit_portal_koreksi_pihak_tidak_membocorkan_sumber_lain(pg,world
             assert 'source_before' not in r.text and 'target_id' not in r.text
             if index==1:assert 'JAS-KOREKSI-0' not in r.text and 'Pelanggan A' not in r.text
             else:assert 'JAS-KOREKSI-2' not in r.text and 'Pelanggan B' not in r.text
+
+@pytest.mark.parametrize('kind,unit', [('barang','karung'), ('karung','lembar'), ('broken','kg')])
+async def test_daftar_memisahkan_barang_dari_tujuan_dan_jumlah(pg,world,kind,unit):
+    w=world
+    await create(pg,w,kind=kind,amount=40)
+    async with pg() as db:
+        user=await db.get(User,w['user'])
+        rows=await s.listing(db,user=user)
+    row=rows['items'][0]
+    assert row['label'] and row['unit']==unit and row['quantity']=='40'
+    if kind=='karung':
+        assert row['from_label']=='Pabrik' and row['to_label']=='Pelanggan A'
+    else:
+        assert row['from_label']=='Pelanggan A · JAS-KOREKSI-0' and row['to_label']=='Pabrik'
+    if kind=='barang':assert D(row['kg'])==D('2000')

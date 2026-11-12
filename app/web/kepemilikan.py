@@ -37,7 +37,7 @@ async def list_page(request:Request,akun=Depends(butuh_akun)):
         except PermissionError as e:raise fail(e)
     from app.web.stok_navigasi import kembali_aman, alamat
     kembali = kembali_aman(request.query_params.get('kembali_stok')) or alamat('bahan' if request.query_params.get('kind') == 'pk' else 'karung' if request.query_params.get('kind') == 'karung' else 'produk')
-    return await render_laci(request,'kepemilikan.html',awal=None,layar='stok',kembali=kembali,breadcrumb_detail='Riwayat kepemilikan')
+    return await render_laci(request,'kepemilikan.html',awal=None,layar='stok',kembali=kembali,breadcrumb_detail='Riwayat alih kepemilikan')
 
 @router.get('/kepemilikan/{ident}')
 async def detail_page(ident:str,request:Request,akun=Depends(butuh_akun)):

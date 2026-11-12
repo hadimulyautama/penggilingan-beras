@@ -529,7 +529,20 @@ async def listing(db,*,user,kind=None,status=None,search='',page=1,legacy=False)
         q=q.where(or_(*(Peristiwa.muatan['warehouses'].contains([wid]) for wid in whs))) if whs else q.where(False)
     total=await db.scalar(select(func.count()).select_from(q.subquery()));page=max(1,min(page,max(1,math.ceil(total/25))))
     rows=(await db.execute(q.order_by(Peristiwa.id.desc()).offset((page-1)*25).limit(25))).all()
-    return dict(items=[dict(id=e.id,code=('AM-PK-' if st['kind']=='pk' else 'AM-KRG-' if st['kind']=='karung' else 'AM-BRG-')+str(e.id),kind=st['kind'],status=st['status'],quantity=st['quantity'],kg=st['kg'],time=e.waktu.isoformat(),summary=(st.get('parties',{}).get(str(st['owners'][0]),'Pabrik')+' → '+st.get('parties',{}).get(str(st.get('customer')),'Pabrik')+' · '+st.get('label','PK')) if st['kind']=='pk' else ' · '.join(st.get('parties',{}).values())) for e,st in rows],total=total,page=page,pages=math.ceil(total/25),legacy=False)
+    items=[]
+    for e,st in rows:
+        names=st.get('parties',{})
+        def name(owner):
+            return names.get(str(owner)) or ('Pabrik' if owner is None else 'Pemilik belum tercatat')
+        description = dict(label=st.get('label','PK'),unit='kg') if st['kind']=='pk' else await describe(db,st)
+        asal='; '.join(dict.fromkeys(name(owner) for owner in st['owners']))
+        tujuan=name(st.get('customer'))
+        items.append(dict(id=e.id,code=('AM-PK-' if st['kind']=='pk' else 'AM-KRG-' if st['kind']=='karung' else 'AM-BRG-')+str(e.id),
+                          kind=st['kind'],status=st['status'],quantity=st['quantity'],kg=st['kg'],time=e.waktu.isoformat(),
+                          label=description['label'],unit=description['unit'],from_label=asal,to_label=tujuan,
+                          summary=asal+' → '+tujuan+' · '+description['label']))
+    return dict(items=items,total=total,page=page,pages=math.ceil(total/25),legacy=False)
+
 
 async def legacy_detail(db,*,user,ident):
     await izin(db,user)
