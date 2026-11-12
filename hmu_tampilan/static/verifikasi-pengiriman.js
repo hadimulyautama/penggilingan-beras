@@ -5,6 +5,7 @@
   var root=document.querySelector('[data-verifikasi-pengiriman]');
   if (!root || root.dataset.siap) return;
   root.dataset.siap='1';
+  var inline=root.hasAttribute('data-inline');
   var data=JSON.parse(document.getElementById('verifikasi-awal').textContent);
   var isi=root.querySelector('[data-isi-verifikasi]'),galat=root.querySelector('[data-galat]');
   var kabar=root.querySelector('[data-kabar]'),refresh=root.querySelector('[data-terbaru]');
@@ -114,7 +115,7 @@
   }
   function buka(d) {
     pilihan=d;if(catatan[key(d)]==null)catatan[key(d)]='';awal=sebab();
-    tahap=d.terverifikasi?'hasil':'form';rencana=null;galat.hidden=true;refresh.hidden=false;gambar();
+    tahap=d.terverifikasi?'hasil':'form';rencana=null;galat.hidden=true;refresh.hidden=inline&&!d.halangan;gambar();
   }
   function kembali() {
     if(sibuk)return;
@@ -126,6 +127,7 @@
     pilihan=null;tahap='daftar';rencana=null;gambar();
   }
   function form() {
+    if(inline){formInline();return;}
     var d=pilihan,box=el('section',null,'cm-form');
     box.append(el('h2',d.terverifikasi?'Hasil verifikasi pengiriman':tahap==='review'?'Konfirmasi verifikasi manual':'Pemeriksaan verifikasi'),identitas(d),status(d));
     var layout=el('div',null,'vv-layout'),fields=el('div'),side=el('aside',null,'vv-side');
@@ -149,6 +151,25 @@
     }
     var a=el('a','Lihat detail dan riwayat pengiriman','btn');a.href='/barang-keluar/'+d.perintah_id;actions.append(a);
     box.append(actions);isi.append(box);
+  }
+  // Satu keputusan pada detail. GET pratinjau dan pagar POST tetap sama;
+  // tahap review lama hanya dipakai halaman pemeriksaan terpisah.
+  function formInline() {
+    var d=pilihan,box=el('section',null,'cm-form');
+    box.append(el('h2',d.terverifikasi?'Pengiriman terverifikasi':'Verifikasi pengiriman'),identitas(d),perbandingan(d));
+    if(d.halangan)box.append(el('p',d.halangan,'nota nota--hati'));
+    if(!d.terverifikasi) {
+      var note=el('div'),label=el('label',d.sebab_wajib?'Sebab selisih besar · wajib':'Catatan pemeriksaan · opsional');
+      label.htmlFor='vv-sebab';var input=el('textarea');input.id='vv-sebab';input.rows=3;input.maxLength=300;input.value=sebab();
+      input.setAttribute('aria-required',d.sebab_wajib?'true':'false');
+      input.oninput=function(){catatan[key(d)]=input.value;rencana=null;};note.append(label,input);
+      if(d.sebab_wajib)box.append(note);
+      else {var opt=el('details');opt.append(el('summary','Tambah catatan pemeriksaan'),note);box.append(opt);}
+      box.append(el('p','Verifikasi menutup seluruh '+d.jumlah_pelanggan+' pelanggan dalam kiriman ini. Muatan dan saldo stok tetap.','cm-bantu'));
+      var actions=el('div',null,'cm-tindakan'),b=btn('Verifikasi pengiriman',periksa,true);
+      b.classList.add('btn--utama');b.dataset.konfirmasi='';b.disabled=!d.boleh_manual||basi||takPasti;actions.append(b);box.append(actions);
+    } else box.append(jejak(d));
+    var details=el('details');details.append(el('summary','Rincian pemeriksaan pengiriman'),status(d),tiket(d),pelanggan(d),aturan(d));box.append(details);isi.append(box);
   }
   function gambar() { isi.replaceChildren();if(pilihan)form();else daftar(); }
   function payload() { return {perintah:String(pilihan.perintah_id),tiket:pilihan.tiket?String(pilihan.tiket.id):null,
@@ -176,14 +197,16 @@
   }
   async function periksa() {
     if(sibuk||basi||takPasti||!pilihan||!pilihan.boleh_manual||pilihan.terverifikasi)return;
-    if(pilihan.sebab_wajib&&!sebab().trim()){pesan('Tuliskan sebab selisih besar. Spasi kosong tidak dianggap sebagai sebab.');return;}
+    if(pilihan.sebab_wajib&&!sebab().trim()){pesan('Tuliskan sebab selisih besar. Spasi kosong tidak dianggap sebagai sebab.');var f=isi.querySelector('#vv-sebab');if(f)f.focus();return;}
     kunci(true);
     try {
       var j=await ambil();
-      if(j.dasar!==pilihan.dasar){basi=true;pesan('Data pemeriksaan berubah. Catatan tetap tersedia; periksa data terbaru lalu konfirmasi ulang.');return;}
+      if(j.dasar!==pilihan.dasar){basi=true;refresh.hidden=false;pesan('Data pemeriksaan berubah. Catatan tetap tersedia; periksa data terbaru lalu konfirmasi ulang.');return;}
       if(!j.boleh_manual)throw Error(j.halangan||'Kiriman belum dapat diverifikasi manual.');
-      rencana=j;tahap='review';galat.hidden=true;gambar();
-    }catch(e){pesan(e.message);if(e.status===409)basi=true;}
+      rencana=j;galat.hidden=true;
+      if(inline){await simpan(true);return;}
+      tahap='review';gambar();
+    }catch(e){refresh.hidden=false;pesan(e.message);if(e.status===409)basi=true;}
     finally{kunci(false);}
   }
   async function terbaru(tersimpan) {
@@ -191,20 +214,27 @@
     if(!tersimpan)kunci(true);
     try {
       var j=await ambil();var index=data.findIndex(function(d){return key(d)===key(pilihan);});if(index>=0)data[index]=j;
-      pilihan=j;rencana=null;basi=false;takPasti=false;tahap=j.terverifikasi?'hasil':'form';galat.hidden=true;
+      pilihan=j;rencana=null;basi=false;takPasti=false;tahap=j.terverifikasi?'hasil':'form';galat.hidden=true;refresh.hidden=inline&&!j.halangan;
       if(!tersimpan){kabar.textContent='Data terbaru dimuat. Catatan tetap tersedia; baca ringkasan sebelum konfirmasi ulang.';kabar.hidden=false;}
       gambar();
     }catch(e){basi=true;pesan(tersimpan?'Verifikasi sudah dikonfirmasi server, tetapi ringkasan belum dapat dimuat. Periksa status atau riwayat sebelum tindakan berikutnya.':e.message);}
     finally{if(!tersimpan)kunci(false);}
   }
-  async function simpan() {
-    if(sibuk||!rencana||basi||takPasti||!pilihan.boleh_manual||pilihan.terverifikasi)return;
-    kunci(true);galat.hidden=true;
+  async function simpan(dariInline) {
+    dariInline=dariInline===true;
+    if((sibuk&&!dariInline)||!rencana||basi||takPasti||!pilihan.boleh_manual||pilihan.terverifikasi)return;
+    if(!dariInline)kunci(true);galat.hidden=true;
     try {
       var j=await panggil('/api/actions/verifikasi-keluar','POST',payload());
       if(j.ok!==true)throw Error('Balasan verifikasi belum lengkap.');
-      kabar.textContent=j.pesan||'Seluruh kiriman terverifikasi.';kabar.hidden=false;await terbaru(true);
-    }catch(e){takPasti=!e.status||e.status>=500;basi=e.status===409;rencana=null;tahap='form';pesan(takPasti?'Status verifikasi belum dapat dipastikan. Catatan tetap tersedia. Periksa status kiriman atau riwayat sebelum mengulang.':e.message);gambar();}
+      kabar.textContent=j.pesan||'Seluruh kiriman terverifikasi.';kabar.hidden=false;
+      if(inline){
+        // Muat ulang detail yang sama agar status, tindakan dan audit seluruh
+        // halaman ikut mutakhir. Jangan diarahkan ke daftar/halaman pemeriksaan.
+        var url=new URL(location.href);url.searchParams.set('rincian_perintah','1');url.searchParams.delete('buka');url.searchParams.delete('nilai');location.replace(url.href);return;
+      }
+      await terbaru(true);
+    }catch(e){refresh.hidden=false;takPasti=!e.status||e.status>=500;basi=e.status===409;rencana=null;tahap='form';pesan(takPasti?'Status verifikasi belum dapat dipastikan. Catatan tetap tersedia. Periksa status kiriman atau riwayat sebelum mengulang.':e.message);gambar();}
     finally{kunci(false);}
   }
   refresh.onclick=function(){terbaru(false);};gambar();if(data.length===1)buka(data[0]);

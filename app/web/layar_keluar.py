@@ -88,6 +88,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         tujuan = "/selesai-muat" if buka_muat == "selesai_muat" else "/muatan"
         return RedirectResponse(tujuan + "?" + urlencode({"perintah": transaksi_id}), 303)
 
+    verifikasi_detail = None
     draf_saya = []
     from app.web.stok_navigasi import pelanggan_diminta
     pid=pelanggan_diminta(request)
@@ -145,6 +146,12 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         from app.penggilingan.inventory.models import ReturRincian
         retur_terkait = (await db.scalars(select(ReturRincian).where(
             ReturRincian.outgoing_record_id == transaksi_id).order_by(ReturRincian.id.desc()))).all() if transaksi_id and (boleh_perintah or is_customer_read(request)) else []
+        # Ringkasan dan sidik server yang sama dengan halaman pemeriksaan lama.
+        # Hanya Admin efektif; data seluruh armada tidak dibuka ke portal/operator.
+        if transaksi_id is not None and boleh_perintah and not is_customer_read(request) and baris[0][0].status in (OUT_DIMUAT, OUT_SELESAI):
+            from app.web.verifikasi_pengiriman import baca as baca_verifikasi
+            from fastapi.encoders import jsonable_encoder
+            verifikasi_detail = jsonable_encoder(await baca_verifikasi(db, transaksi_id))
         from app.services.jasa import nama_pemilik_banyak
         pemilik_item = await nama_pemilik_banyak(db, {it.jasa_id for _, items in baris for it in items if it.jasa_id})
         nama = await _nama_barang(db, baris)
@@ -269,6 +276,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     return await render_laci(
         request, "pengiriman.html", layar="barang_keluar", kartu=kartu,
         detail=transaksi_id is not None,
+        verifikasi_detail=verifikasi_detail,
         retur_terkait=retur_terkait,
         pencarian=q, status_filter=status, sejak_filter=sejak, sebelum=sebelum,
         filter_query=urlencode({"q": q, "status": status, "sejak": sejak}),
