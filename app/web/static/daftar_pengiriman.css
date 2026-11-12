@@ -97,3 +97,8 @@
  .keluar-ringkas .keluar-filter label:first-child {grid-column:1/-1}
  .keluar-ringkas .keluar-filter>a {min-height:44px;display:flex;align-items:center;justify-content:center}
 }
+
+/* Koreksi menyentuh catatan pengiriman, jadi sasaran sentuhnya harus utuh. */
+.tabel-standar__sekunder .pengiriman-perbaiki { min-height:44px; white-space:normal; }
+
+.keluar-ringkas .tabel-standar__kode { display:inline-flex; align-items:center; min-height:44px; }

@@ -13,3 +13,5 @@
 .serah-items{width:100%}@media(max-width:600px){.serah-items td:nth-child(2)::before{content:attr(data-label) ": ";color:var(--redup)}}
 
 .serah-identitas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px}@media(max-width:600px){.serah-identitas{grid-template-columns:minmax(0,1fr)}}
+
+.rekap-totals dd small { display:block; margin-top:8px; font-weight:400; letter-spacing:normal; line-height:1.5; }

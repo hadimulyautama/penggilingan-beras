@@ -303,7 +303,7 @@
   <div data-blok{% if tabel %} class="antrian-listview antrian-listview--tabel tabel-standar{% if tabel == 'packing' %} antrian-listview--tabel-packing{% endif %}"{% elif listview %} class="antrian-listview daftar-standar"{% else %} class="daftar-standar"{% endif %}>
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>
     {% if tabel %}<div class="antrian-tabel-scroll">
-      <div class="antrian-tabel__kepala" role="row">
+      <div class="antrian-tabel__kepala" aria-hidden="true">
         {% if tabel == "packing" %}
           <span>Barang</span><span>Kode proses</span><span>Layanan</span>
           <span class="antrian-tabel__berat-label">Berat siap packing</span><span aria-hidden="true"></span>
@@ -312,7 +312,7 @@
           <span>Nopol / Supir</span><span class="antrian-tabel__berat-label">Berat</span><span aria-hidden="true"></span>
         {% endif %}
       </div>{% endif %}
-    <div class="grup" style="gap:9px"{% if tabel %} role="rowgroup"{% endif %}>
+    <div class="grup" style="gap:9px"{% if tabel %} role="group" aria-label="{{ judul }}"{% endif %}>
       {% for b in daftar %}
         {# ── Tujuan yang ditekan langsung ──
            Antrean adalah pekerjaan yang paling sering dilakukan. Membentangkan

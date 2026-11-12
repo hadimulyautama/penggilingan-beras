@@ -2403,19 +2403,19 @@ details.padat > .anak { margin: 0 12px 12px; }
    tanda apa pun, operator tak bisa membedakan "angka ini baru" dari "angka
    ini sudah setengah jam tak berubah". Temuan QA P-K-19.
 
-   Sengaja kecil, samar, dan di sudut: ia informasi, bukan peringatan — dan
-   peringatan yang muncul tiap menit berhenti dibaca. Tak ikut tercetak. */
+   Tetap di sudut dan tidak ikut tercetak. Warna sekunder harus tetap
+   terbaca di gudang; opacity rendah juga memudarkan latarnya sehingga
+   kontras berubah mengikuti kartu yang kebetulan berada di bawahnya. */
 .segar {
   position: fixed;
   right: 10px;
   bottom: 8px;
   z-index: 5;
   font-size: 13px;
-  color: var(--samar, #8a8a8a);
-  background: var(--latar, #fff);
+  color: var(--redup);
+  background: var(--panel);
   padding: 2px 7px;
   border-radius: 9px;
-  opacity: .72;
   pointer-events: none;
 }
 
@@ -2662,7 +2662,7 @@ body.terik a:hover { color: #203d2a; }
    dibaca lebih dulu NAMA grupnya, dan angka sebesar namanya membuat mata
    membandingkan angka alih-alih memilih grup. */
 .pil__jml {
-  font-family: var(--mono); font-size: 12px; opacity: .72; margin-left: 4px;
+  font-family: var(--mono); font-size: 12px; margin-left: 4px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════

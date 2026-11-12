@@ -481,6 +481,7 @@
   </nav>
   <div class="laci__ukur" role="separator" tabindex="0"
        aria-orientation="vertical" aria-label="Ubah lebar sidebar"
+       aria-controls="laci" aria-valuemin="220" aria-valuemax="440" aria-valuenow="280"
        title="Tarik untuk mengubah lebar sidebar"></div>
 </div>
 {% endif %}
@@ -565,10 +566,13 @@
     pegangan.setAttribute("aria-valuenow", String(n));
     if (tetap) { try { localStorage.setItem(kunci, String(n)); } catch (_) {} }
   };
+  // Nilai awal juga diumumkan pada perangkat yang belum menyimpan ukuran.
+  var awal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar")) || 280;
   try {
-    var awal = Number(localStorage.getItem(kunci));
-    if (awal) simpan(awal, false);
+    var tersimpan = Number(localStorage.getItem(kunci));
+    if (Number.isFinite(tersimpan) && tersimpan > 0) awal = tersimpan;
   } catch (_) {}
+  simpan(awal, false);
   var tarik = false;
   pegangan.addEventListener("pointerdown", function (e) {
     tarik = true; pegangan.setPointerCapture(e.pointerId);

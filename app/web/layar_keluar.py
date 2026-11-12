@@ -66,8 +66,12 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     # gudang juga tidak berhak membaca daftar maupun URL detail langsung.
     boleh_perintah = can_see_financials(akun.user)
     if not is_customer_read(request) and not (boleh_perintah or await _is_g2_operator(akun.user)):
-        raise HTTPException(403, "Pengiriman tersedia untuk Admin dan Operator Gudang 2. "
-                            "Pilih gudang kerja melalui menu Kerja di gudang.")
+        pesan = ("Pengiriman tersedia untuk Admin dan Operator Gudang 2. "
+                 "Pilih gudang kerja melalui menu Kerja di gudang.")
+        if "application/json" in request.headers.get("accept", "") and "text/html" not in request.headers.get("accept", ""):
+            raise HTTPException(403, pesan)
+        return await render_laci(request, "error.html", pesan=pesan, status_code=403,
+                                 pemulihan_url="/pengaturan/peran", pemulihan_label="Kerja di gudang")
     if request.query_params.get("buka") == "perintah_keluar":
         return RedirectResponse("/barang-keluar/baru", 303)
     if request.query_params.get("buka") == "ambil_jasa":
