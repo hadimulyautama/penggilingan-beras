@@ -4164,3 +4164,24 @@ fieldset.akses-bidang { border:0; padding:0; margin:0; min-width:0; display:grid
  body.padiflow-ui .kontrol-cari-kiri button.cari-berikon{flex:none;width:auto}
  body.padiflow-ui .kerja-cari.kontrol-cari-kiri>select{order:-1}
 }
+
+/* Desktop: satu item memegang label dan pemisahnya, sehingga pemisah tidak
+   tertinggal sendiri saat nama panjang membungkus. Ponsel tidak disentuh. */
+@media(min-width:900px){
+ .nav-rantai{list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0;padding:0;min-width:0}
+ .nav-rantai>li{display:flex;align-items:baseline;gap:10px;min-width:0;max-width:100%;line-height:1.6}
+ .nav-rantai :is(a,[aria-current=page]){overflow-wrap:anywhere;min-width:0;padding-block:4px}
+ .nav-rantai a{text-decoration:none}
+ .nav-rantai a:hover{text-decoration:underline;text-underline-offset:3px}
+ .nav-rantai [aria-current=page]{font-weight:600}
+ .nav-rantai__pemisah{flex:none;font-size:16px;user-select:none}
+}
+@media(min-width:900px){
+ .desktop-chrome__crumbrow{align-items:flex-start;gap:20px}
+ .desktop-breadcrumb{flex:1;min-width:0}
+ .desktop-breadcrumb .nav-rantai a{color:var(--kulit-redup)}
+ .desktop-breadcrumb .nav-rantai [aria-current=page]{color:var(--tinta)}
+ .desktop-breadcrumb .nav-rantai__pemisah{color:var(--kulit-redup)}
+ .desktop-back[hidden]{display:none}
+ .desktop-back{flex:none;min-height:32px;align-self:flex-start}
+}

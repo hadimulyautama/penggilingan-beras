@@ -159,6 +159,10 @@ templates.env.globals["FASE"] = {
 }
 
 
+from app.web.breadcrumb import tampil as breadcrumb_susun
+templates.env.globals["breadcrumb_susun"] = breadcrumb_susun
+
+
 def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     """Render template dengan konteks bawaan (akun yang sedang masuk).
 

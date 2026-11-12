@@ -1,0 +1,10 @@
+<nav class="desktop-breadcrumb" aria-label="Jejak halaman">
+  <ol class="nav-rantai">
+    {% for item in rantai["items"] %}
+    <li>{% if not loop.first %}<span class="nav-rantai__pemisah" aria-hidden="true">›</span>{% endif %}
+      {% if item.alamat %}<a href="{{ item.alamat }}">{{ item.nama }}</a>{% else %}<span aria-current="page">{{ item.nama }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
+{% if rantai.kembali %}<a class="desktop-back" href="{{ rantai.kembali }}" aria-label="Kembali ke {{ rantai["items"][-2].nama }}"><span aria-hidden="true">←</span> Kembali</a>{% endif %}

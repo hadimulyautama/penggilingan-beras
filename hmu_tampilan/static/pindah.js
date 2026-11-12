@@ -587,7 +587,9 @@
     var merek = document.querySelector('.bar__merek');
     if (merek) merek.textContent = nama;
     var crumb = document.querySelector('.desktop-breadcrumb');
-    if (crumb) { crumb.textContent = nama; }
+    if (crumb) { crumb.textContent = 'Memuat navigasi…'; crumb.setAttribute('aria-busy', 'true'); }
+    var balikDesktop = document.querySelector('.desktop-back');
+    if (balikDesktop) balikDesktop.hidden = true;
     document.title = nama + ' · PT Hadi Mulya Utama';
     var terpilih = null;
     document.querySelectorAll('#laci summary.pintu').forEach(function (a) { a.classList.remove('pintu--kini'); a.removeAttribute('aria-current'); });
@@ -612,6 +614,8 @@
   }
 
   function gagalMuat(alamat, judul) {
+    var crumb = document.querySelector('.desktop-breadcrumb');
+    if (crumb) { crumb.textContent = 'Navigasi belum dimuat'; crumb.removeAttribute('aria-busy'); }
     var isi = gantiIsiHalaman('<h1></h1><p role="alert">Data belum dapat dimuat. Periksa koneksi Anda.</p><button type="button" class="btn">Coba lagi</button> <a class="btn" data-utuh>Muat ulang halaman</a>');
     if (!isi) { location.href = alamat; return; }
     isi.querySelector('h1').textContent = judul || 'Halaman';

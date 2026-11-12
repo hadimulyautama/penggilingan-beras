@@ -176,6 +176,10 @@
     </div>
   </div>
   <div class="desktop-chrome__crumbrow">
+    {% if breadcrumb_susun is defined %}
+    {% set rantai = breadcrumb_susun(self.judul()|striptags|trim) %}
+    {% include '_breadcrumb.html' %}
+    {% else %}
     <nav class="desktop-breadcrumb" aria-label="Breadcrumb">
       <a href="/">Beranda</a>
       {% if breadcrumb_induk %}<span aria-hidden="true">›</span><a href="{{ breadcrumb_induk.alamat }}">{{ breadcrumb_induk.nama }}</a>{% endif %}
@@ -183,6 +187,7 @@
       {% if breadcrumb_detail %}<span aria-hidden="true">›</span><strong>{{ breadcrumb_detail }}</strong>{% endif %}
     </nav>
     {% if layar != 'beranda' and not LAPORAN_NAV %}<a class="desktop-back" href="{{ kembali or '/' }}" aria-label="Kembali"><span aria-hidden="true">←</span> Kembali</a>{% endif %}
+    {% endif %}
   </div>
 </div>
 {% endif %}

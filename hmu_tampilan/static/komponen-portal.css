@@ -343,3 +343,12 @@ body.padiflow-ui :is(.laporan-nav__tabs,.sk-tab,.pengiriman-kontrol__tab,.kb-tab
 /* Batas menu, bukan batas kartu atau tabel di belakangnya. */
 body.padiflow-ui :is(.bk-buat-opsi,.rhs-menu-body,.dr-menu-body,.sr-design-menu-body){box-sizing:border-box;min-width:min(220px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;overflow-wrap:anywhere;}
 body.padiflow-ui :is(.bk-buat-opsi,.rhs-menu-body,.dr-menu-body,.sr-design-menu-body) :is(a,button,.btn){box-sizing:border-box;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;}
+
+@media(min-width:900px){
+ body.padiflow-ui .bingkai>.isi>.desktop-chrome{align-self:stretch;flex:0 0 auto;width:calc(100% + 64px);max-width:none;box-sizing:border-box;margin-inline:-32px}
+ body.padiflow-ui .desktop-chrome>.desktop-chrome__crumbrow{width:100%;min-height:56px;box-sizing:border-box;align-items:center;padding:10px 22px;background:var(--pd-sheet);border-bottom:1px solid var(--pd-line)}
+}
+@media(min-width:900px){
+ /* Ruang scrollbar sama pada daftar panjang maupun formulir pendek. */
+ body.padiflow-ui .bingkai>.isi{scrollbar-gutter:stable}
+}
