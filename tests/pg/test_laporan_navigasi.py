@@ -18,7 +18,7 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
     async with await _klien(pg,peran=role,gudang=gudang) as c:
         r=await c.get('/laporan-riwayat')
         assert r.status_code==200
-        assert r.url.path==('/riwayat-sosoh' if gudang=='Gudang 2' else '/riwayat-pengeringan')
+        assert r.url.path==('/riwayat-giling' if gudang=='Gudang 1' else '/riwayat-sosoh')
         tabs=r.text.split('aria-label="Jenis halaman"')[1].split('</nav>')[0]
         aktif=BeautifulSoup(r.text,'html.parser').select_one('nav[aria-label="Jenis halaman"] a[aria-current]')
         assert aktif.get_text(strip=True)=='Riwayat proses'
@@ -38,6 +38,8 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
             soup=BeautifulSoup(r.text,'html.parser')
             pilihan=soup.select_one('[data-jenis-riwayat]')
             tautan=soup.select('.laporan-nav__jenis a')
+            if tab=='proses':
+                assert [o.get_text(strip=True).split(' — ')[0] for o in pilihan.select('option')]==['Penyosohan','Penggilingan','Pengeringan','Transfer']
             assert [o['value'] for o in pilihan.select('option[value]:not([disabled])')]==[a['href'] for a in tautan]
             assert pilihan.select_one('option[selected]')['value']==soup.select_one('.laporan-nav__jenis a[aria-current]')['href']
             assert all(not o.has_attr('value') for o in pilihan.select('option[disabled]'))
@@ -87,7 +89,7 @@ async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(p
         assert soup.select_one('[data-jenis-riwayat]') is None
         assert not soup.select('.laporan-nav a[href="/laporan"]:not([data-tab-riwayat])')
         r=await c.get('/riwayat',follow_redirects=False)
-        assert r.status_code==303 and r.headers['location']=='/riwayat-pengeringan'
+        assert r.status_code==303 and r.headers['location']=='/riwayat-sosoh'
 
 
 async def test_gateway_tidak_membuang_query_kursor_atau_audit(pg,qc):

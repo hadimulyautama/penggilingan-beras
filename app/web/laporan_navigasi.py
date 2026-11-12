@@ -10,9 +10,9 @@ router = APIRouter(tags=["laporan"])
 TAB = (("proses", "Riwayat proses"), ("qc", "Riwayat QC"),
        ("laporan", "Laporan periode"), ("audit", "Audit"))
 PROSES = (
-    ("pengeringan", "Pengeringan", "/riwayat-pengeringan", "g1"),
-    ("giling", "Penggilingan", "/riwayat-giling", "g1"),
     ("sosoh", "Penyosohan", "/riwayat-sosoh", "g2"),
+    ("giling", "Penggilingan", "/riwayat-giling", "g1"),
+    ("pengeringan", "Pengeringan", "/riwayat-pengeringan", "g1"),
     ("transfer", "Transfer", "/riwayat-transfer", "g1"),
 )
 QC = (

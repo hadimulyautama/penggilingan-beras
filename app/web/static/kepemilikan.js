@@ -102,8 +102,16 @@ async function listing(){busy=true;const pending=new URLSearchParams(location.se
   const transaksi=el('div',null,'ko-transaksi'),code=link(item.code,'/kepemilikan/'+item.id+'?kembali='+encodeURIComponent(location.pathname+location.search));code.setAttribute('aria-label','Detail '+item.code);
   code.replaceChildren(el('span',item.code),el('small',dt?dt.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'})+' · '+dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):'Tanggal belum tercatat','ko-tanggal'));
   transaksi.append(code,el('small',statusNames[item.status]||item.status));barang.append(transaksi);
-  cell('dari','Dari').append(el('span',item.from_label||'Belum tercatat'));
-  cell('kepada','Kepada').append(el('span',item.to_label||'Belum tercatat'));
+  function pemilik(td,label){
+   for(const pihak of (label||'Belum tercatat').split('; ')){
+    const block=el('div',null,'ko-pihak'),bagian=pihak.match(/^(.*) · (JAS[-/][^\s·;]+)$/);
+    block.append(el('span',bagian?bagian[1]:pihak));
+    if(bagian)block.append(el('small',bagian[2],'ko-kode-jasa'));
+    td.append(block);
+   }
+  }
+  pemilik(cell('dari','Dari'),item.from_label);
+  pemilik(cell('kepada','Kepada'),item.to_label);
   const jumlah=cell('jumlah','Jumlah');jumlah.append(el('strong',item.quantity==null?'Belum tercatat':n(item.quantity)+' '+(item.unit||(item.kind==='karung'?'lembar':item.kind==='barang'?'karung':'kg'))));
   if(item.kind==='barang'&&item.kg!=null)jumlah.append(el('small',n(item.kg)+' kg'));
   tbody.append(row);

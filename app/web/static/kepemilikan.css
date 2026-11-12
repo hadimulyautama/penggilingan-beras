@@ -102,3 +102,5 @@ body.padiflow-ui [data-pk-target] .ko-target-pages .btn{width:auto;min-height:44
 [data-kepemilikan] .ko-kepala>.sk-alat{justify-content:flex-start;}
 
 [data-kepemilikan] .ko-transaksi>a>span{text-decoration:underline;}
+
+[data-kepemilikan] .ko-pihak+.ko-pihak{margin-top:8px;}

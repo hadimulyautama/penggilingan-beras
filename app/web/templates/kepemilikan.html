@@ -2,12 +2,12 @@
 {% block judul %}{{ awal.code if awal else 'Riwayat alih kepemilikan' }}{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/stok-seragam.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/kepemilikan.css?v={{ VERSI }}-tanggal-kode1">
+<link rel="stylesheet" href="/static/kepemilikan.css?v={{ VERSI }}-pemilik-kode2">
 <section data-kepemilikan data-editor-perintah data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
 <div data-ko-controls></div>
 <div data-ko-message role="status"></div><div data-ko-error role="alert"></div>
 <div data-ko-recovery hidden><button type="button" class="btn" data-ko-latest>Baca status terbaru</button><p>Isian dipertahankan. Periksa status sebelum mengulang penyimpanan.</p></div>
 <div data-ko-body></div><noscript>Aktifkan JavaScript untuk membaca rincian dan pemeriksaan dampak. Membuka halaman tidak mengubah stok.</noscript>
 </section><script type="application/json" id="kepemilikan-awal">{{ awal|tojson }}</script>
-<script src="/static/kepemilikan.js?v={{ VERSI }}-tanggal-kode1" defer></script>
+<script src="/static/kepemilikan.js?v={{ VERSI }}-pemilik-kode2" defer></script>
 {% endblock %}
