@@ -40,7 +40,17 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
    assert page.locator('.pengiriman-kontrol .pengiriman-tab a[aria-current]').get_attribute('href')==path
    tab=page.locator('.pengiriman-tab a[aria-current]');styles.append(tab.evaluate('(e)=>{const s=getComputedStyle(e);return [s.fontSize,s.padding,s.borderBottomWidth,s.borderBottomColor,s.backgroundColor]}'))
    if path=='/barang-keluar':
-    # Tombol sekarang di kiri; posisi menu lama pernah memotong seluruh awal label.
+    # Filter tetap paling kiri; pencarian di tengah, tambah di kanan.
+    assert page.locator(".bk-alat").locator(":scope > *").evaluate_all("els=>els.map(e=>e.className)")==["btn btn--kecil bk-filter-desktop","bk-pencarian","bk-buat"]
+    filter_box=page.locator('.bk-filter-desktop').bounding_box()
+    search_box=page.locator('.bk-pencarian').bounding_box()
+    assert 0<=search_box['x']-(filter_box['x']+filter_box['width'])<=16
+    if width<=650:
+     add=page.locator('[data-bk-buat]>summary')
+     assert add.evaluate('e=>getComputedStyle(e.parentElement).position')=='fixed'
+     bounds=add.bounding_box()
+     assert bounds['width']==bounds['height']==56
+     assert bounds['x']+bounds['width']<=width-16
     page.locator('[data-bk-buat]>summary').click()
     menu=page.locator('.bk-buat-opsi');expect(menu).to_be_visible()
     bounds=menu.bounding_box()

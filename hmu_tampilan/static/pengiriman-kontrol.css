@@ -37,7 +37,7 @@ body.padiflow-ui .pengiriman-kontrol .bk-buat>summary.btn {background:var(--pd-g
  .bk-pencarian {width:100%;}.bk-panel {padding:20px;}
  .bk-buat-label,.bk-buat-panah {display:none;}.bk-buat-ikon {display:inline;font-size:24px;line-height:1;}
  body.padiflow-ui .bk-buat>summary {width:44px;padding:8px;justify-content:center;}
- .bk-buat-opsi {right:-92px;width:280px;}
+ .bk-buat-opsi {right:0;width:280px;}
 }
 @media print {
  body:has(.pengiriman-kontrol) :is(.bk-alat,.bk-tindakan,.bk-panel,.pd-panduan,.bar,.bawah,.segar,#lembar,#kabar,[data-hapus-draf]) {display:none!important;}
@@ -58,4 +58,17 @@ body.padiflow-ui .bk-judul{justify-content:flex-end;}
 body.padiflow-ui .pengiriman-kontrol__tab>span{display:flex;align-items:center;justify-content:center;min-height:53px;box-sizing:border-box;padding:10px 6px;text-align:center;font-size:14px;line-height:1.55;border-bottom:2px solid transparent;}
 @media(max-width:650px){body.padiflow-ui .pengiriman-kontrol__tab>span{font-size:11px;padding:6px 3px;}}
 
-body.padiflow-ui .bk-alat>.bk-buat>.bk-buat-opsi{left:0;right:auto;box-sizing:border-box;width:min(280px,calc(100vw - 32px));}
+body.padiflow-ui .bk-alat>.bk-buat>.bk-buat-opsi{left:auto;right:0;box-sizing:border-box;width:min(280px,calc(100vw - 32px));}
+
+/* Filter menempel pada pencarian; aksi membuat pengiriman berada di kanan. */
+body.padiflow-ui .bk-alat{justify-content:flex-start;}
+body.padiflow-ui .bk-alat>.bk-buat{margin-left:auto;}
+@media(max-width:650px){
+ body.padiflow-ui .bk-alat>.bk-buat{position:fixed;right:20px;bottom:calc(36px + env(safe-area-inset-bottom,0px));z-index:30;margin:0;}
+ body.padiflow-ui .bk-alat>.bk-buat>summary.btn{box-sizing:border-box;width:56px;min-width:56px;height:56px;min-height:56px;padding:0;border-radius:50%;box-shadow:0 5px 16px #0003;}
+ body.padiflow-ui .bk-buat-ikon{font-size:32px;line-height:1;}
+ body.padiflow-ui .bk-alat>.bk-buat>.bk-buat-opsi{top:auto;bottom:calc(100% + 8px);right:0;left:auto;}
+ body.padiflow-ui:has([data-bk-buat]) main.isi{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px));}
+}
+
+@media(min-width:651px){body.padiflow-ui .bk-alat>.bk-buat>summary.btn{min-height:48px;}}
