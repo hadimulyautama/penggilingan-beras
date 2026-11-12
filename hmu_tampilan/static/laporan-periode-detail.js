@@ -17,7 +17,9 @@
           bagian = r.bagian || null;
           if (bagian) h += '<div class="lp-subkelompok"><h4>' + aman(bagian) + '</h4><dl>';
         }
-        var metrik = '<dt>' + aman(r.nama) + '</dt><dd>' + aman(r.nilai) + (r.persen_bahan ? '<small class="lp-persen">' + aman(r.persen_bahan) + (r.persen_bahan.endsWith('%') ? ' bahan baku' : '') + '</small>' : '') + '</dd>';
+        var nama=g.nama==='Aktivitas'?r.nama.replace('Jumlah transaksi','Transaksi').replace('Jumlah proses','Proses'):r.nama;
+        var nilai=g.nama==='Aktivitas'?String(r.nilai).replace(/\s+transaksi$/,''):r.nilai;
+        var metrik = '<dt>' + aman(nama) + '</dt><dd>' + aman(nilai) + (r.persen_bahan ? '<small class="lp-persen">' + aman(r.persen_bahan) + (r.persen_bahan.endsWith('%') ? ' bahan baku' : '') + '</small>' : '') + '</dd>';
         var kelas = 'lp-metrik' + (r.nama.indexOf('Total ') === 0 ? ' lp-total' : '');
         h += bagian ? '<div class="' + kelas + '">' + metrik + '</div>' : '<dl class="' + kelas + '">' + metrik + '</dl>';
       });

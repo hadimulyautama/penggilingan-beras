@@ -164,4 +164,13 @@ body.padiflow-ui .lp-detail .lp-kelompok--hasil:not(.lp-kelompok--rinci) .lp-bag
 
 body.padiflow-ui .lp-detail .lp-ringkasan--tunggal>.lp-kelompok{grid-column:1/-1;}
 @media(max-width:650px){body.padiflow-ui .lp-detail .lp-ringkasan--tunggal>.lp-kelompok:not(.lp-kelompok--aktivitas):not(.lp-kelompok--rinci) .lp-bagian-metrik{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+@media(max-width:650px){
+ body.padiflow-ui .lp-detail .lp-kelompok--aktivitas{display:block;}
+ body.padiflow-ui .lp-detail .lp-kelompok--aktivitas>h3{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+ body.padiflow-ui .lp-detail .lp-kelompok--aktivitas .lp-bagian-metrik{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+ body.padiflow-ui .lp-detail .lp-kelompok--aktivitas .lp-bagian-metrik>dl.lp-metrik{display:flex;flex-direction:column;align-items:start;gap:4px;width:auto;min-width:0;padding:0;border:0;}
+ body.padiflow-ui .lp-detail .lp-kelompok--aktivitas .lp-metrik dt{min-height:2.8em;font-size:11px;line-height:1.4;}
+ body.padiflow-ui .lp-detail .lp-kelompok--aktivitas .lp-metrik dd{font-size:16px;}
+}
 </style>
