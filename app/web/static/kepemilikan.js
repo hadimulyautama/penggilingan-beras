@@ -63,12 +63,12 @@ function controlsHeader(title,{params=null,total=null}={}){
   const filter=panel('Filter riwayat'),form_=el('form',null,'sk-form-filter'),label=el('label','Status'),select=el('select',null,'fld');
   for(const [v,l]of [['','Semua status'],['aktif','Aktif'],['terkoreksi','Terkoreksi'],['dibatalkan','Dibatalkan']]){const o=el('option',l);o.value=v;select.append(o);}
   select.name='status';select.value=params.get('status')||'';label.append(select);form_.append(label);
-  const apply=el('button','Terapkan filter','btn btn--utama');apply.type='submit';form_.append(apply);
+  const apply=el('button','Terapkan filter','btn btn--utama filter-berikon');apply.type='submit';form_.append(apply);
   form_.append(uiButton('Atur ulang filter',()=>{select.value='';applyQuery({status:'',q:params.get('q')||''});},'btn'));filter.append(form_);
   const openFilter=()=>filter.showModal();const active=!!params.get('status');
   const filterIcon=uiButton('',openFilter,'btn sk-ikon');filterIcon.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v8l-4-2v-6z"/></svg>';if(active)filterIcon.append(el('span',null,'sk-titik'));filterIcon.setAttribute('aria-label','Buka filter riwayat'+(active?' · 1 aktif':''));filterIcon.setAttribute('aria-haspopup','dialog');mobile.append(filterIcon);
   const tools=el('div',null,'sk-alat'),search=el('form',null,'sk-pencarian'),searchLabel=el('label',null,'sk-cari'),inp=el('input',null,'cari'),submit=el('button','Cari','btn btn--kecil');
-  inp.type='search';inp.name='q';inp.maxLength=100;inp.placeholder='Cari transaksi atau pelanggan…';inp.value=params.get('q')||'';inp.setAttribute('aria-label','Cari transaksi atau pelanggan');searchLabel.append(inp);submit.type='submit';search.setAttribute('role','search');search.append(searchLabel,submit);tools.append(uiButton('Filter'+(active?' · 1':''),openFilter,'btn btn--kecil sk-filter-desktop'),search);header.append(tools);
+  inp.type='search';inp.name='q';inp.maxLength=100;inp.placeholder='Cari transaksi atau pelanggan…';inp.value=params.get('q')||'';inp.setAttribute('aria-label','Cari transaksi atau pelanggan');searchLabel.append(inp);submit.type='submit';search.setAttribute('role','search');search.append(searchLabel,submit);tools.append(uiButton('Filter'+(active?' · 1':''),openFilter,'btn btn--kecil sk-filter-desktop filter-berikon'),search);header.append(tools);
   function applyQuery({status,q}){const next=new URLSearchParams(params);next.set('q',q);if(!q)next.delete('q');if(status)next.set('status',status);else next.delete('status');next.set('page','1');filter.close();window.history.replaceState(null,'','?'+next);listing();}
   search.onsubmit=e=>{e.preventDefault();applyQuery({status:params.get('status')||'',q:inp.value});};
   form_.onsubmit=e=>{e.preventDefault();applyQuery({status:select.value,q:inp.value});};

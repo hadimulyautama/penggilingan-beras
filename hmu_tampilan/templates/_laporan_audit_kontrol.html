@@ -1,6 +1,6 @@
 <div class="lk-audit-kontrol">
   <form class="lk-alat" method="get" action="/audit" role="search">
-    <button class="btn btn--kecil lk-filter-desktop" type="button" data-lk-buka="lk-filter" aria-haspopup="dialog">Filter</button>
+    <button class="filter-berikon btn btn--kecil lk-filter-desktop" type="button" data-lk-buka="lk-filter" aria-haspopup="dialog">Filter</button>
     <input type="hidden" name="rentang" value="{{ rentang }}"><input type="hidden" name="kelompok" value="{{ kelompok }}">
     <div class="lk-pencarian"><input class="fld" type="search" name="cari" value="{{ cari }}" autocomplete="off" aria-label="Cari catatan audit" placeholder="Cari kode, pemasok, atau isi catatan…"><button class="btn btn--kecil" type="submit">Cari</button></div>
   </form>
@@ -9,7 +9,7 @@
     <form class="lk-form-filter" method="get" action="/audit"><input type="hidden" name="cari" value="{{ cari }}">
       <label>Rentang waktu<select class="fld" name="rentang">{% for k,n,_ in RENTANG %}<option value="{{ k }}"{% if k==rentang %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
       <label>Kelompok aktivitas<select class="fld" name="kelompok">{% for k,n,_ in KELOMPOK %}<option value="{{ k }}"{% if k==kelompok %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
-      <button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" data-lk-reset href="/audit?{{ {'rentang':'48j','kelompok':'semua','cari':cari}|urlencode }}">Reset filter</a>
+      <button class="filter-berikon btn btn--utama" type="submit">Terapkan filter</button><a class="btn" data-lk-reset href="/audit?{{ {'rentang':'48j','kelompok':'semua','cari':cari}|urlencode }}">Reset filter</a>
     </form>
   </dialog>
 </div>

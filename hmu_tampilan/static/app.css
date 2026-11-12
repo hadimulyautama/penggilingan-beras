@@ -4136,3 +4136,14 @@ fieldset.akses-bidang { border:0; padding:0; margin:0; min-width:0; display:grid
 .milik-review th,.milik-review td{padding:10px 6px;text-align:left;border-bottom:1px solid var(--garis);overflow-wrap:anywhere}
 .milik-confirm{display:flex;gap:10px;align-items:start;margin:20px 0;line-height:1.6}
 .milik-confirm input{flex-shrink:0;min-width:22px;min-height:22px}
+
+/* Ikon dekoratif untuk pembuka/penerapan filter. Tidak menambah node atau
+   pendengar klik; label, badge aktif, dan target sentuh tetap milik kontrol. */
+.filter-berikon::before {
+  content: "" !important; display: inline-block; width: 18px; height: 18px;
+  flex: 0 0 18px; vertical-align: -3px; margin-inline-end: 6px;
+  background-color: currentColor; pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h18l-7%208v8l-4-2v-6z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h18l-7%208v8l-4-2v-6z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+}
+.btn.filter-berikon::before, .tbl.filter-berikon::before { margin-inline-end: 0; }

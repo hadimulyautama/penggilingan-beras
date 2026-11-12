@@ -41,7 +41,8 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
    tab=page.locator('.pengiriman-tab a[aria-current]');styles.append(tab.evaluate('(e)=>{const s=getComputedStyle(e);return [s.fontSize,s.padding,s.borderBottomWidth,s.borderBottomColor,s.backgroundColor]}'))
    if path=='/barang-keluar':
     # Filter tetap paling kiri; pencarian di tengah, tambah di kanan.
-    assert page.locator(".bk-alat").locator(":scope > *").evaluate_all("els=>els.map(e=>e.className)")==["btn btn--kecil bk-filter-desktop","bk-pencarian","bk-buat"]
+    # Kelas ikon dekoratif tidak mengubah identitas/urutan tiga kontrol.
+    assert page.locator(".bk-alat").locator(":scope > *").evaluate_all("els=>els.map(e=>Array.from(e.classList).filter(c=>c!=='filter-berikon').join(' '))")==["btn btn--kecil bk-filter-desktop","bk-pencarian","bk-buat"]
     filter_box=page.locator('.bk-filter-desktop').bounding_box()
     search_box=page.locator('.bk-pencarian').bounding_box()
     assert 0<=search_box['x']-(filter_box['x']+filter_box['width'])<=16

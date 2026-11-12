@@ -6,7 +6,7 @@
 <details class="bk-buat" data-bk-buat><summary class="btn" aria-label="Buat pengiriman" aria-haspopup="true"><span class="bk-buat-label">Buat pengiriman</span><span class="bk-buat-ikon" aria-hidden="true">＋</span><span class="bk-buat-panah" aria-hidden="true">⌄</span></summary><div class="bk-buat-opsi"><a href="/barang-keluar/baru" data-utuh>Buat perintah barang keluar</a><a href="/barang-keluar/pengambilan-jasa" data-utuh>Pengambilan barang jasa</a></div></details>
 {% endif %}
 {% elif slot=='alat' %}
-<div class="bk-alat"><button class="btn btn--kecil bk-filter-desktop" type="button" data-bk-buka="bk-filter" aria-haspopup="dialog">Filter{% if filter_jumlah %} · {{ filter_jumlah }}{% endif %}</button>
+<div class="bk-alat"><button class="filter-berikon btn btn--kecil bk-filter-desktop" type="button" data-bk-buka="bk-filter" aria-haspopup="dialog">Filter{% if filter_jumlah %} · {{ filter_jumlah }}{% endif %}</button>
 <form class="bk-pencarian" method="get" action="/barang-keluar" role="search">
 {% for key,value in request.query_params.items() %}{% if key not in ('q','sebelum','buka','nilai') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
 <label class="bk-cari"><span class="sr-only">Cari kode, pelanggan, atau plat</span><input class="cari" type="search" name="q" aria-label="Cari kode, pelanggan, atau plat" placeholder="Kode, pelanggan, atau plat" value="{{ pencarian }}" maxlength="200"></label><button class="btn btn--kecil" type="submit">Cari</button>
@@ -20,7 +20,7 @@
 <form class="bk-form-filter" method="get" action="/barang-keluar"><input type="hidden" name="q" value="{{ pencarian }}">
 {% for key,value in request.query_params.items() %}{% if key not in ('q','status','sejak','sebelum','buka','nilai') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
 <label>Status<select class="fld" name="status">{% for nilai,label in [('', 'Semua status'),('perintah','Menunggu pengeluaran'),('dimuat','Menunggu verifikasi'),('selesai','Terverifikasi'),('batal','Dibatalkan')] %}<option value="{{ nilai }}"{{ ' selected' if status_filter == nilai }}>{{ label }}</option>{% endfor %}</select></label>
-<label>Sejak tanggal<input class="fld" type="date" name="sejak" value="{{ sejak_filter }}"></label><button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" href="/barang-keluar?q={{ pencarian|urlencode }}{% if request.query_params.get('pelanggan_id') %}&amp;pelanggan_id={{ request.query_params.get('pelanggan_id')|urlencode }}{% endif %}">Reset filter</a></form></dialog>
+<label>Sejak tanggal<input class="fld" type="date" name="sejak" value="{{ sejak_filter }}"></label><button class="filter-berikon btn btn--utama" type="submit">Terapkan filter</button><a class="btn" href="/barang-keluar?q={{ pencarian|urlencode }}{% if request.query_params.get('pelanggan_id') %}&amp;pelanggan_id={{ request.query_params.get('pelanggan_id')|urlencode }}{% endif %}">Reset filter</a></form></dialog>
 {% include "_pengiriman_bantuan.html" %}
 
 {% endif %}{% endcall %}
