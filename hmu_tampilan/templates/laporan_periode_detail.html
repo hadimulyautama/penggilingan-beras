@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block judul %}{{ laporan.nama }} · Laporan periode{% endblock %}
+{% block isi %}
+{% include "_laporan_periode_gaya.html" %}
+<section class="lp-detail" data-laporan-detail>
+<div class="lp-panel-kontrol">
+<form class="lp-periode-form" method="get" action="/laporan/{{ tahap }}" data-utuh>
+<div class="grup" id="periode-grup"><label class="lbl" for="periode">Periode laporan</label><select class="fld" id="periode" name="periode">{% for kode,nama in periode %}<option value="{{ kode }}"{% if kode==periode_aktif %} selected{% endif %}>{{ nama }}</option>{% endfor %}</select></div>
+<button class="btn" type="submit">Tampilkan</button>
+<div class="lp-rentang"{% if periode_aktif!='khusus' %} hidden{% endif %}><label>Dari tanggal<input class="fld" type="date" name="dari" value="{{ dari }}"{% if periode_aktif!='khusus' %} disabled{% else %} required{% endif %}></label><label>Sampai tanggal<input class="fld" type="date" name="sampai" value="{{ sampai }}"{% if periode_aktif!='khusus' %} disabled{% else %} required{% endif %}></label></div>
+</form>
+<div class="lp-panel-aksi" aria-label="Aksi laporan"><a class="btn btn--utama lp-pdf-utama" href="{{ pdf_href }}" target="_blank" rel="noopener">Lihat PDF ↗</a><a class="btn" href="{{ pdf_href }}&amp;unduh=true">Unduh PDF</a><button class="btn" type="button" data-lp-panduan aria-label="Panduan" title="Panduan">ⓘ</button></div>
+</div>
+<div class="lap" id="lap-isi"><noscript>Buka PDF untuk melihat ringkasan dan rincian laporan.</noscript></div>
+{% from '_panduan.html' import panel as panel_panduan %}
+{% call panel_panduan('lp-panduan','Panduan laporan periode',penutup={'data-lp-tutup':''}) %}<p>Pilih periode untuk membaca ringkasan dan rincian {{ laporan.nama|lower }}. Rentang tanggal dapat diisi melalui pilihan Rentang tanggal.</p><p>Tanggal transaksi mengikuti dasar yang tercantum pada laporan. Lihat PDF atau Unduh PDF memakai periode yang sama dengan halaman ini.</p><p>Gunakan Kembali untuk memilih laporan lain. Alamat halaman ini menyimpan pilihan periode dan dapat dibuka kembali.</p>{% endcall %}
+</section>
+<script type="application/json" id="laporan-data">{{ data|tojson }}</script>
+<script src="/static/laporan-periode-detail.js?v={{ VERSI }}" defer></script>
+{% endblock %}

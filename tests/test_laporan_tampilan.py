@@ -13,28 +13,20 @@ TPL = AKAR / "hmu_tampilan/templates/laporan.html"
 CSS = AKAR / "hmu_tampilan/static/app.css"
 
 
-def test_laporan_tidak_lagi_ditumpahkan_ke_pre():
-    teks = TPL.read_text()
-    assert "<pre" not in teks, "isi laporan kembali jadi blok monospasi"
-    assert '<div class="lap" id="lap-isi" role="status" aria-live="polite">' in teks
-    assert "function gambar(" in teks, "tak ada penggambar"
+def test_laporan_dibaca_di_halaman_detail_tanpa_modal():
+    katalog = TPL.read_text()
+    detail = (TPL.parent / "laporan_periode_detail.html").read_text()
+    assert '<pre' not in detail
+    assert 'href="/laporan/' in katalog
+    assert '<dialog' not in katalog
+    assert 'data-laporan-detail' in detail
+    assert 'id="laporan-data"' in detail
 
 
-# Kontrak API laporan lama berupa teks sudah dihapus dari katalog.
-# Respons terstruktur dan PDF laporan periode diuji lewat HTTP di
-# tests/pg/test_laporan_periode.py.
-
-
-def test_penggambar_mengenali_pola_yang_memang_dipatuhi():
-    """Kepala bagian berakhiran titik dua, butir '•', anak butir '–'. Yang tak
-    cocok pola apa pun tetap jadi paragraf — laporan yang menyimpang tak lebih
-    buruk daripada sebelumnya, hanya tak ikut membaik."""
-    teks = TPL.read_text()
-    for pola in (r"lap__bab", r"lap__baris", r"lap__anak", r"lap__teks"):
-        assert pola in teks, pola
-    assert "lap__sub" in teks, "kepala yang sebenarnya kalimat tak dibedakan"
-    # Judul laporan tak boleh terulang: ia sudah ada di kepala lembar.
-    assert "=== sapu" in teks or "toLowerCase() === sapu" in teks
+def test_penggambar_mempertahankan_kolom_dan_keterangan_terstruktur():
+    renderer = (AKAR / "hmu_tampilan/static/laporan-periode-detail.js").read_text()
+    assert 'd.kepala_tabel' in renderer and 'd.rincian' in renderer
+    assert 'd.catatan' in renderer and 'aman(nilai)' in renderer
 
 
 def test_baris_membungkus_bukan_mengempis():

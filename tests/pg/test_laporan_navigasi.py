@@ -67,7 +67,7 @@ async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(p
             assert [x.get_text(strip=True) for x in bar.select('.laporan-nav__tabs>a')]==([] if path=='/laporan' else ['Riwayat proses','Riwayat QC','Audit'])
             assert not bar.select('a[href="/laporan"]')
             assert len(bar.select(f'[data-lk-buka="{panduan}"]'))==1
-            assert len(soup.select('button[data-lk-cetak]'))==1
+            assert len(soup.select('button[data-lk-cetak]'))==(0 if path=='/laporan' else 1)
             # Kembali desktop mengikuti induk breadcrumb, termasuk laporan.
             back=soup.select_one('.desktop-back')
             assert back is not None

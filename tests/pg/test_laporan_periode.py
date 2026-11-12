@@ -39,9 +39,21 @@ async def test_cermin_batal_dan_batas_tanggal(pg,pemakai,pemasok):
 async def test_laporan_pdf_dan_rentang_per_peran(pg,peran,gudang):
     async with await _klien(pg,peran=peran,gudang=gudang) as c:
         r=await c.get('/laporan')
-        assert r.status_code==200 and 'Unduh PDF' in r.text
+        assert r.status_code==200 and 'href="/laporan/gabah_masuk"' in r.text
+        assert '<dialog class="lembar lembar--laporan"' not in r.text
         params=dict(periode='khusus',dari='2026-11-11',sampai='2026-11-11')
+        detail=await c.get('/laporan/gabah_masuk',params=params)
+        assert detail.status_code==200
+        from bs4 import BeautifulSoup
+        import json
+        halaman=BeautifulSoup(detail.text,'html.parser')
+        assert halaman.select_one('[data-laporan-detail]')
+        assert halaman.select_one('select[name=periode] option[selected]')['value']=='khusus'
+        assert halaman.select_one('.desktop-back')['href']=='/laporan'
+        pdf_url=halaman.select_one('.lp-pdf-utama')['href']
+        assert 'periode=khusus' in pdf_url and 'dari=2026-11-11' in pdf_url
         r=await c.get('/api/laporan/tahap_gabah_masuk',params=params)
+        assert json.loads(halaman.select_one('#laporan-data').string)==r.json()['data']
         assert r.status_code==200 and r.json()['data']['rincian']==[]
         r=await c.get('/laporan-periode/gabah_masuk.pdf',params=params)
         assert r.status_code==200 and r.content.startswith(b'%PDF-')
@@ -49,10 +61,12 @@ async def test_laporan_pdf_dan_rentang_per_peran(pg,peran,gudang):
         assert 'inline;' in r.headers['content-disposition']
         r=await c.get('/laporan-periode/gabah_masuk.pdf',params={**params,'unduh':'true'})
         assert 'attachment;' in r.headers['content-disposition']
-        for path in ('/api/laporan/tahap_gabah_masuk','/laporan-periode/gabah_masuk.pdf'):
+        for path in ('/api/laporan/tahap_gabah_masuk','/laporan-periode/gabah_masuk.pdf','/laporan/gabah_masuk'):
             assert (await c.get(path,params={'periode':'khusus'})).status_code==422
             assert (await c.get(path,params={**params,'sampai':'2026-11-01'})).status_code==422
         assert (await c.get('/laporan-periode/tidak-dikenal.pdf')).status_code==404
+        assert (await c.get('/laporan/tidak-dikenal')).status_code==404
+        assert (await c.get('/laporan/gabah_masuk?periode=asing')).status_code==422
 
 async def test_pdf_tanpa_sesi_ditolak(pg):
     import httpx

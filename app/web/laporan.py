@@ -140,6 +140,36 @@ async def halaman_laporan(request: Request, akun=Depends(butuh_akun)):
                   **await lencana(akun.user), **konteks)
 
 
+@router.get("/laporan/{kode}")
+async def detail_laporan(request: Request, kode: str, periode: str = "bulan_ini",
+                         dari: date | None = None, sampai: date | None = None,
+                         akun=Depends(butuh_akun)):
+    from urllib.parse import urlencode
+    from fastapi.encoders import jsonable_encoder
+    from app.services.laporan_periode import ambil
+    from app.web.nav import lencana
+
+    lap = next((l for l in _daftar() if l.kode == "tahap_" + kode), None)
+    if lap is None:
+        raise HTTPException(404, "Laporan tidak dikenal.")
+    if not boleh_lihat(akun.user, lap):
+        raise HTTPException(403, "Laporan ini tidak tersedia untuk peran Anda.")
+    if periode not in {k for k, _ in PERIODE}:
+        raise HTTPException(422, "Periode tidak dikenal.")
+    awal, akhir = _rentang(periode, dari, sampai)
+    async with SessionLocal() as db:
+        data = await ambil(db, kode, awal, akhir)
+    parameter = dict(periode=periode)
+    if periode == "khusus":
+        parameter.update(dari=awal.isoformat(), sampai=akhir.isoformat())
+    return render(request, "laporan_periode_detail.html", laporan=lap, tahap=kode,
+                  periode=PERIODE, periode_aktif=periode, dari=awal, sampai=akhir,
+                  data=jsonable_encoder(data), pdf_href="/laporan-periode/"+kode+".pdf?"+urlencode(parameter),
+                  layar="laporan", MENU_AKTIF="laporan", kembali="/laporan",
+                  breadcrumb_induk=dict(nama="Laporan periode", alamat="/laporan"),
+                  breadcrumb_detail=lap.nama, **await lencana(akun.user))
+
+
 @router.get("/api/laporan/{kode}")
 async def isi_laporan(kode: str, periode: str = "bulan_ini",
                       dari: date | None = None, sampai: date | None = None,
