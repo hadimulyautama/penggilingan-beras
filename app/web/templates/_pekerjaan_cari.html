@@ -1,6 +1,6 @@
-<form class="saring kerja-cari" method="get" action="/pekerjaan" role="search">
+<form class="kontrol-cari-kiri saring kerja-cari" method="get" action="/pekerjaan" role="search">
 {% for key,value in request.query_params.items() %}{% if key not in ('cari','pemasok','halaman','buka','nilai') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
 <input class="cari" type="search" name="cari" aria-label="Cari nama, kode atau plat" placeholder="Cari nama, kode atau plat…" value="{{ request.query_params.get('cari','') }}" maxlength="200">
 <select class="fld fld--kecil" name="pemasok"{{ ' hidden' if nama_saring|length<2 }} aria-label="Saring per nama"><option value="">Semua nama</option>{% for nama in nama_saring %}<option value="{{ nama }}"{{ ' selected' if request.query_params.get('pemasok')==nama }}>{{ nama }}</option>{% endfor %}</select>
-<button class="btn btn--kecil" type="submit">Cari</button>
+<button class="cari-berikon btn btn--kecil" type="submit">Cari</button>
 </form>

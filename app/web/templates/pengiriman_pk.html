@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}">
 <div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}">
 <header class="pk-kontrol"><div class="pk-judul"><h1>Transfer PK</h1><button class="btn btn--kecil" type="button" id="pk-panduan-buka">ⓘ Panduan</button></div><p><a href="/pekerjaan?tab=tindakan">← Kembali ke Pekerjaan</a></p>
-<div class="pk-alat"><label class="pk-cari">Cari lot atau plat<input type="search" class="cari" id="pk-cari" placeholder="Cari lot atau plat…"></label><button class="btn" type="button" id="pk-muat">Perbarui status</button></div>
+<div class="kontrol-cari-kiri pk-alat"><label class="pk-cari">Cari lot atau plat<input type="search" class="cari" id="pk-cari" placeholder="Cari lot atau plat…"></label><button class="btn" type="button" id="pk-muat">Perbarui status</button></div>
 <nav class="pk-tab" aria-label="Bagian transfer"><a href="#pk-permintaan">Permintaan lot</a><a href="#pk-perjalanan">Perjalanan</a></nav></header>
 <p id="pk-pesan" role="status" aria-live="polite"></p>
 <section id="pk-permintaan"><h2>Permintaan lot</h2><p class="bantu" id="pk-arahan">Memuat permintaan…</p><form id="pk-pilihan"><div id="pk-daftar"></div><div id="pk-armada" hidden><label>Nomor polisi<input class="fld" name="nomor_polisi" maxlength="20"></label><label>Sopir<input class="fld" name="nama_sopir" maxlength="100"></label></div><p><button class="btn btn--utama" type="submit" id="pk-simpan" hidden>Setujui yang dipilih</button></p></form></section>

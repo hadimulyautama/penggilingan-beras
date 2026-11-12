@@ -6,7 +6,7 @@
 {% with riwayat=daftar_masuk.riwayat %}
 <form method="get" action="/barang-masuk" class="pelanggan-filter-masuk saring">
 <label>Jenis barang<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for key,nama in daftar_masuk.jenis_barang %}<option value="{{ key }}"{% if daftar_masuk.jenis==key %} selected{% endif %}>{{ nama }}</option>{% endfor %}</select></label>
-<label>Cari penerimaan<input class="fld" type="search" name="cari" placeholder="Cari kode atau plat…" value="{{ daftar_masuk.cari }}"></label><button class="btn" type="submit">Cari</button>
+<label>Cari penerimaan<input class="fld" type="search" name="cari" placeholder="Cari kode atau plat…" value="{{ daftar_masuk.cari }}"></label><button class="cari-berikon btn" type="submit">Cari</button>
 </form>
 <p class="pelanggan-redup">{{ daftar_masuk.jumlah }} penerimaan</p>
 {% include '_daftar_penerimaan.html' %}

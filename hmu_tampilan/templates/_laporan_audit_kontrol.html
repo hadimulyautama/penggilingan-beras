@@ -1,8 +1,8 @@
 <div class="lk-audit-kontrol">
-  <form class="lk-alat" method="get" action="/audit" role="search">
+  <form class="kontrol-cari-kiri lk-alat" method="get" action="/audit" role="search">
     <button class="filter-berikon btn btn--kecil lk-filter-desktop" type="button" data-lk-buka="lk-filter" aria-haspopup="dialog">Filter</button>
     <input type="hidden" name="rentang" value="{{ rentang }}"><input type="hidden" name="kelompok" value="{{ kelompok }}">
-    <div class="lk-pencarian"><input class="fld" type="search" name="cari" value="{{ cari }}" autocomplete="off" aria-label="Cari catatan audit" placeholder="Cari kode, pemasok, atau isi catatan…"><button class="btn btn--kecil" type="submit">Cari</button></div>
+    <div class="lk-pencarian"><input class="fld" type="search" name="cari" value="{{ cari }}" autocomplete="off" aria-label="Cari catatan audit" placeholder="Cari kode, pemasok, atau isi catatan…"><button class="cari-berikon btn btn--kecil" type="submit">Cari</button></div>
   </form>
   <p class="lk-cakupan">{% for k,n,_ in RENTANG %}{% if k==rentang %}{{ n }}{% endif %}{% endfor %} · {% for k,n,_ in KELOMPOK %}{% if k==kelompok %}{{ n }}{% endif %}{% endfor %}</p>
   <dialog class="lk-panel" id="lk-filter" aria-labelledby="lk-filter-judul"><header class="lk-panel-kepala"><h2 id="lk-filter-judul">Filter audit</h2><button class="btn lk-ikon" type="button" data-lk-tutup aria-label="Tutup filter">×</button></header>

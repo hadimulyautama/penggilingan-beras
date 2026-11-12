@@ -8,7 +8,7 @@
 <form method="get" action="/barang-keluar" class="pelanggan-filter-masuk keluar-filter saring">
 <label>Cari pengambilan<input class="fld" type="search" name="q" value="{{ pencarian }}" placeholder="Cari kode atau plat…"></label>
 <label>Status<select class="fld" name="status">{% for value,label in [('', 'Semua status'),('perintah','Menunggu dimuat'),('dimuat','Menunggu pemeriksaan'),('selesai','Selesai'),('batal','Dibatalkan')] %}<option value="{{ value }}"{% if status_filter==value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-<label>Sejak tanggal<input class="fld" type="date" name="sejak" value="{{ sejak_filter }}"></label><button class="btn" type="submit">Cari</button>{% if pencarian or status_filter or sejak_filter %}<a class="pelanggan-tautan" href="/barang-keluar">Hapus filter</a>{% endif %}
+<label>Sejak tanggal<input class="fld" type="date" name="sejak" value="{{ sejak_filter }}"></label><button class="cari-berikon btn" type="submit">Cari</button>{% if pencarian or status_filter or sejak_filter %}<a class="pelanggan-tautan" href="/barang-keluar">Hapus filter</a>{% endif %}
 </form>
 <section class="keluar-ringkas__bagian" aria-labelledby="judul-aktif-keluar"><h2 id="judul-aktif-keluar">Pengambilan berjalan</h2>
 {% if kartu_aktif %}{% set daftar_keluar=kartu_aktif %}{% include '_pengiriman_daftar.html' %}{% else %}<p class="pelanggan-redup">Belum ada pengambilan yang sedang berjalan.</p>{% endif %}</section>
