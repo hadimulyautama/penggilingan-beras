@@ -35,15 +35,17 @@ async def browser_http(c,width):
             context=await b.new_context(**konteks(pw,width,1000),service_workers='block')
             await context.add_cookies([dict(name=k.name,value=k.value,url=base) for k in c.cookies.jar])
             page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-            # Pengujian metadata ini tidak menjalankan pekerja SSE. Menolak
-            # request sengaja dengan abort memicu pageerror access-control
-            # nondeterministik di WebKit; berikan stream komentar SSE yang sah.
-            await page.route('**/api/aliran*',lambda r:r.fulfill(status=200,
-                content_type='text/event-stream',body=': denyut pengujian lokal\n\n'))
+            # Kanal realtime memakai HTTP lokal sesungguhnya. Intersepsi
+            # EventSource melalui route.fulfill/abort menghasilkan galat
+            # access-control WebKit saat navigasi; tanpa intersepsi pengujian
+            # sekaligus memeriksa formulir tetap aman ketika SSE aktif.
             await page.route('https://**/*',lambda r:r.abort())
-            try:yield page,base
+            try:
+                yield page,base
+                # Nilai galat sepanjang pemakaian layar, sebelum browser
+                # ditutup dan kanal jaringan dibatalkan oleh teardown.
+                assert not errors,errors
             finally:await b.close()
-            assert not errors,errors
     finally:
         server.should_exit=True
         await asyncio.wait_for(task,timeout=10)
