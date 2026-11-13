@@ -26,6 +26,7 @@
       {{ pintu('/pengaturan/sesi', 'Sesi perangkat', 'Keluar atau ganti pengguna', 'device') }}
     </section>
     <section class="pg-grup" aria-labelledby="pg-fasilitas"><header><span>{{ ikon('factory') }}</span><div><h2 id="pg-fasilitas">Perusahaan &amp; fasilitas</h2><p>Identitas, lokasi, dan sarana produksi</p></div></header>
+      {% block organisasi_pengaturan %}{% endblock %}
       {{ pintu('/pengaturan/perusahaan', 'Identitas & logo perusahaan', 'Nama, alamat, kontak, dan logo dokumen', 'factory', blok_perusahaan) }}
       {{ pintu('/pengaturan/gudang', 'Gudang', 'Nama, alamat, dan geotag', 'warehouse', blok_kelola) }}
       {{ pintu('/pengaturan/mesin', 'Mesin & line produksi', 'Pengering, penggilingan, dan penyosohan', 'factory', blok_kelola) }}
