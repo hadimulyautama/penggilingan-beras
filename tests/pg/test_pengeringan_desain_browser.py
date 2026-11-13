@@ -23,9 +23,6 @@ async def browser(c, width):
             dict(name=k.name, value=k.value, url='https://uji') for k in c.cookies.jar])
 
         async def route(r):
-            task = asyncio.current_task()
-            if not closing:
-                pending.add(task)
             try:
                 req = r.request
                 if closing or urlsplit(req.url).netloc != 'uji':
@@ -38,9 +35,12 @@ async def browser(c, width):
                     return
                 headers = {k: v for k, v in req.headers.items()
                            if k.lower() not in ('host', 'cookie', 'content-length')}
-                response = await asyncio.wait_for(c.request(
+                task = asyncio.create_task(c.request(
                     req.method, req.url, headers=headers,
-                    content=req.post_data_buffer), timeout=20)
+                    content=req.post_data_buffer))
+                pending.add(task)
+                # Penutupan halaman tidak boleh membatalkan rollback ASGI.
+                response = await asyncio.wait_for(asyncio.shield(task), timeout=20)
                 await r.fulfill(status=response.status_code, body=response.content,
                     headers={k: v for k, v in response.headers.items()
                              if k.lower() not in ('content-length', 'content-encoding', 'set-cookie')})
@@ -51,19 +51,18 @@ async def browser(c, width):
             except Exception as exc:
                 errors.append(str(exc))
                 raise
-            finally:
-                pending.discard(task)
 
         await page.route('**/*', route)
         try:
             yield page
         finally:
-            # Jangan tinggalkan SELECT aktif saat fixture berikutnya TRUNCATE.
-            # Hentikan permintaan baru, lalu tunggu handler lama selesai/rollback.
+            # Tutup browser agar tidak ada callback baru. Permintaan ASGI
+            # dimiliki harness, bukan tugas callback Playwright: tetap tunggu
+            # hingga dependency sesi DB menyelesaikan commit/rollback-nya.
             closing = True
-            if pending:
-                await asyncio.gather(*tuple(pending), return_exceptions=True)
             await b.close()
+            if pending:
+                await asyncio.wait_for(asyncio.gather(*pending), timeout=25)
             assert not errors, errors
 from tests.pg.test_form_kadar_air import fakta
 from tests.pg.test_riwayat_giling import _klien

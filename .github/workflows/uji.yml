@@ -350,6 +350,7 @@ jobs:
             tests/pg/test_muat_navigasi_browser.py \
             tests/pg/test_pembaruan_aset_browser.py \
             tests/pg/test_safari_portal.py \
+            tests/pg/test_browser_izolasi.py \
             --junitxml=bukti/safari.xml
       - uses: actions/upload-artifact@v4
         if: always()
