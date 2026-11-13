@@ -7,6 +7,7 @@ PK pembelian luar tetap memakai pembagi partainya sendiri.
 from decimal import Decimal, ROUND_HALF_UP
 
 UKURAN = Decimal('50')
+KEMASAN = 'Karung bekas 50 kg'
 
 
 def bagi(berat):
@@ -36,6 +37,12 @@ def angka(kg):
 def teks(berat):
     n, c = bagi(berat)
     return f'{n} karung × 50 kg + {angka(c)} kg curah'
+
+
+def teks_packing(berat):
+    """Kemasan otomatis PK giling sendiri; rincian dari stok kg yang sama."""
+    n, c = bagi(berat)
+    return f'{n} karung bekas × 50 kg + {angka(c)} kg curah'
 
 
 def bobot_isian(*, berat=None, jumlah_karung=None, berat_curah_kg=None,

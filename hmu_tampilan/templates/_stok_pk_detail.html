@@ -40,6 +40,7 @@
         <div><dt>Letak</dt><dd>{{ t.gudang_nama or "Lokasi belum tercatat" }} · {{ "hasil giling" if g1 else "tumpukan" }}</dd></div>
         {% if g1 %}
           <div><dt>Hasil giling</dt><dd>{% if t.belum_dicatat %}Belum dicatat{% else %}{{ kg(t.dihasilkan) }} kg{% endif %}</dd></div>
+          {% if t.ringkasan_karung|default('') %}<div><dt>Kemasan tersedia</dt><dd>{{ t.ringkasan_karung }}</dd></div>{% endif %}
           {% if t.bahan_kg %}<div><dt>Bahan masuk</dt><dd>{{ kg(t.bahan_kg) }} kg{% if not t.bahan_final %}<small>Belum final</small>{% endif %}</dd></div>{% endif %}
           {% if t.rendemen is not none %}<div><dt>Rendemen</dt><dd>{{ "%.1f"|format(t.rendemen)|replace(".", ",") }}%</dd></div>{% endif %}
           {% if t.dikirim %}<div><dt>Sudah dikirim</dt><dd>{{ kg(t.dikirim) }} kg</dd></div>{% endif %}

@@ -174,6 +174,9 @@ bukan bukti barang sudah dimuat.
 ## PK giling sendiri: karung 50 kg dan curah (25 Oktober 2026)
 
 Keputusan pemilik: "otomatis packing ukuran 50kg. sisanya jadi curah".
+Penegasan pemilik 13 November 2026: memakai karung bekas 50 kg.
+Rincian stok Gudang 1 menampilkan karung penuh dan sisa curah otomatis;
+isian transfer mengikuti sisa persetujuan dan dapat dikurangi untuk transfer sebagian.
 Transfer PK sendiri mencatat karung penuh dan sisa curah sebagai rincian dari
 bobot transfer yang sama; tidak membuat stok hasil atau transaksi packing
 produk jadi. `services.pk_50` menjadi satu sumber pemecahan unit. Transfer

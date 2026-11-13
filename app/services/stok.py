@@ -130,6 +130,12 @@ class LotPk:
     #: dan tombol "Muat & kirim" muncul untuk yang meminta.
     diminta_siap: bool = False
 
+    @property
+    def ringkasan_karung(self):
+        if self.belum_dicatat:return None
+        from app.services.pk_50 import teks_packing
+        return 'Packing otomatis: '+teks_packing(self.tersedia)
+
     #: Giling sudah DITUTUP tetapi hasilnya tak pernah dicatat — bukan nol,
     #: melainkan tidak diketahui.
     #:

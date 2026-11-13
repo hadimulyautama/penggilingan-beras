@@ -453,9 +453,9 @@ def _medan_unit_transfer(tahap):
     acuan = 'kode_proses' if tahap == 'minta' else 'permintaan'
     return [
         {'name': 'cara', 'label': 'Cara mengisi jumlah', 'type': 'select',
-         'bawaan': 'karung', 'options': [['karung', 'Karung 50 kg dan curah'],
+         'bawaan': 'karung', 'options': [['karung', 'Karung bekas 50 kg dan curah'],
                                         ['kg', 'Bobot hasil timbang (kg)']]},
-        {'name': 'jumlah_karung', 'label': 'Jumlah karung 50 kg', 'type': 'number'},
+        {'name': 'jumlah_karung', 'label': 'Jumlah karung bekas 50 kg', 'type': 'number'},
         {'name': 'berat_curah_kg', 'label': 'Curah / bagian karung (kg, boleh kosong)', 'type': 'number'},
         {'name': 'berat', 'label': 'Bobot hasil timbang (kg)', 'type': 'number'},
         {'name': 'unit_pk', 'label': 'Pilih lot untuk melihat jumlah dan bobot.', 'type': 'pratinjau',

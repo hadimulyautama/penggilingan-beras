@@ -69,3 +69,25 @@ async def test_beberapa_lot_boleh_memakai_unit_berbeda(pg,siap,api):
  async with pg() as db:
   amounts=list((await db.scalars(select(InternalTransfer.berat_kg).order_by(InternalTransfer.id))).all())
   assert amounts==[Decimal('52'),Decimal('100.75')]
+
+async def test_stok_gudang1_menampilkan_karung_bekas_otomatis_tanpa_stok_kedua(pg,siap,api):
+ from app.models import FinishedGoodsStock
+ from app.services import stok
+ from tests.pg.test_riwayat_giling import _klien
+ async with pg() as db:
+  cards=await stok.pk_gudang1(db,user=await db.get(User,siap['op1']))
+  card=next(c for c in cards if c.kode==siap['lot'])
+  assert card.tersedia==6000
+  assert card.ringkasan_karung=='Packing otomatis: 120 karung bekas × 50 kg + 0 kg curah'
+  assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock))==0
+ r=await api.post('/api/transfer-bertahap/pengiriman',json=body(siap,cara='karung',jumlah_karung=23,berat_curah_kg='2'));assert r.status_code==200,r.text
+ async with pg() as db:
+  cards=await stok.pk_gudang1(db,user=await db.get(User,siap['op1']))
+  card=next(c for c in cards if c.kode==siap['lot'])
+  assert card.tersedia==4848
+  assert card.ringkasan_karung=='Packing otomatis: 96 karung bekas × 50 kg + 48 kg curah'
+  assert await db.scalar(select(func.count()).select_from(FinishedGoodsStock))==0
+ async with await _klien(pg,peran='operator',gudang='Gudang 1') as c:
+  page=await c.get('/stok/pk/detail',params={'gudang':'g1','kode':siap['lot'],'pemilik_id':'pabrik'})
+  assert page.status_code==200,page.text
+  assert 'Kemasan tersedia' in page.text and card.ringkasan_karung in page.text
