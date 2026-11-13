@@ -11,6 +11,8 @@ pemilihan perusahaan serta pembatasan transaksi belum diaktifkan pada aplikasi.
 | `LokasiPabrik` | `hmu_factory_sites` | Milik tepat satu perusahaan; kode unik dalam perusahaan. Nama/kode boleh sama di perusahaan lain. |
 | `PenempatanGudang` | `hmu_warehouse_sites` | Satu gudang berada pada satu lokasi; FK gabungan menjaga lokasi dan perusahaan cocok. |
 | `KeanggotaanPerusahaan` | `hmu_company_memberships` | Satu keanggotaan per pengguna/perusahaan, peran dan status tersendiri. |
+| `AksesLokasiAnggota` | `hmu_membership_sites` | Lokasi eksplisit per anggota; pilihan semua gudang harus disengaja. |
+| `AksesGudangAnggota` | `hmu_membership_warehouses` | Gudang terpilih pada lokasi dan perusahaan yang cocok, dijaga FK gabungan. |
 | `KonteksKerja` | Tidak disimpan | Nilai immutable hasil pemeriksaan pengguna, perusahaan, lokasi, gudang dan keanggotaan aktif. |
 
 Model berasal dari `core/hmu_core/organisasi.py`; kedua aplikasi menggunakan
@@ -31,9 +33,11 @@ g1/g2 yang masih unik global belum digeneralisasi pada tahap ini.
 pemanggil server. Nilai perusahaan/lokasi/gudang dari formulir tetap diperiksa
 ke database dalam satu pembacaan. Super Admin tanpa keanggotaan tidak otomatis
 mendapat akses perusahaan lain. Peran global tidak dipakai sebagai fallback.
-Dalam kontrak awal, keanggotaan berlaku untuk seluruh lokasi/gudang aktif pada
-perusahaan tersebut; pembatasan per lokasi dapat dirancang sebelum aktivasi bila
-operasi membutuhkan itu. Gudang bawaan pengguna tidak membatasi pilihan ini.
+Keanggotaan saja tidak memberi hak seluruh fasilitas. Kontrak lanjutan
+mewajibkan akses lokasi eksplisit, kemudian semua gudang pada lokasi itu
+atau daftar gudang tertentu. Tidak ada pilihan berarti tidak ada hak kerja
+baru. Super Admin adalah wewenang platform; peran keanggotaan hanya Admin
+atau Operator. Gudang bawaan pengguna tidak membatasi pilihan yang sah.
 
 Pembacaan tidak melakukan autoflush terhadap draf ORM milik pemanggil, tidak
 menulis audit, dan tidak menyimpan konteks pada sesi. Peran tak dikenal ditolak.
@@ -101,3 +105,9 @@ yang ditinjau pengguna. Sesudah itu: keanggotaan terverifikasi pada sesi,
 pembatasan master pelanggan/pemasok/produk/kemasan, gudang dan line, seluruh
 transaksi/portal/cache/integrasi, serta pengujian kebocoran lintas perusahaan.
 Mengisi master baru saja belum cukup untuk mengaktifkan operasi multi-perusahaan.
+
+
+Tahap Console website dan layanan administrasi terikat perusahaan dijelaskan
+di [CONSOLE-CENTER.md](CONSOLE-CENTER.md). Migrasi 0130 menambah dua tabel izin,
+kunci relasi metadata, dan sesi Console terpisah; tidak mengisi data atau
+mengaktifkan konteks baru pada gerbang transaksi harian.

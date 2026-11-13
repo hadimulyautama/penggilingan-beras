@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select, text, func
 from sqlalchemy.exc import IntegrityError
-from hmu_core import User, Warehouse, Perusahaan, LokasiPabrik, KeanggotaanPerusahaan, PenempatanGudang
+from hmu_core import User, Warehouse, Perusahaan, LokasiPabrik, KeanggotaanPerusahaan, PenempatanGudang,AksesLokasiAnggota
 from hmu_identitas import peran as P
 from hmu_identitas.organisasi import konteks_kerja, OrganisasiTidakDiizinkan
 from tests.pg.test_masuk_detail_timbang import sidik
@@ -29,6 +29,7 @@ async def organisasi(pg):
             for n in range(2):
                 site = LokasiPabrik(company_id=c.id, kode='lokasi-'+str(n), nama='Nama lokasi sama')
                 db.add(site); await db.flush(); sites.append(site)
+                db.add(AksesLokasiAnggota(keanggotaan_id=m.id,company_id=c.id,lokasi_pabrik_id=site.id,semua_gudang=True))
                 for k in range(2):
                     w = Warehouse(nama_gudang='Gudang sama', aktif=True)
                     db.add(w); await db.flush(); whs.append(w)
@@ -124,9 +125,11 @@ async def test_migrasi_tabel_kosong_tidak_mengubah_proses_transaksi_atau_master_
     from alembic.operations import Operations
     async with pg() as db: awal=await sidik(db)
     m=migrasi()
+    spec=importlib.util.spec_from_file_location('uji_console_migrasi',Path(__file__).resolve().parents[2]/'migrations/versions/0130_console_akses_anggota.py')
+    akses=importlib.util.module_from_spec(spec);spec.loader.exec_module(akses)
     def putaran(conn):
         with Operations.context(MigrationContext.configure(conn)):
-            m.downgrade();m.upgrade()
+            akses.downgrade();m.downgrade();m.upgrade();akses.upgrade()
     async with pg.kw['bind'].begin() as conn: await conn.run_sync(putaran)
     async with pg() as db:
         assert await sidik(db)==awal

@@ -86,6 +86,7 @@ _TABLE_LABEL = {
     "hmu_companies": "master perusahaan",
     "hmu_factory_sites": "lokasi pabrik",
     "hmu_warehouse_sites": "penetapan gudang",
+    "hmu_company_memberships": "keanggotaan perusahaan",
     "pk_penyesuaian_stok": "penyesuaian stok PK lama",
     # Bisa dibatalkan
     "drying_lots": "lot pengeringan",
@@ -1565,7 +1566,7 @@ async def _log_terakhir(db: AsyncSession, cakupan: Cakupan | None):
         ActivityLog.table_name != "undo",
         # Pengelolaan organisasi tidak menggeser kandidat pembatalan
         # pekerjaan lantai; koreksi master tetap melalui Pengaturan.
-        ActivityLog.table_name.not_in(("hmu_companies", "hmu_factory_sites", "hmu_warehouse_sites")),
+        ActivityLog.table_name.not_in(("hmu_companies", "hmu_factory_sites", "hmu_warehouse_sites", "hmu_company_memberships")),
         # Yang sudah dibatalkan bukan lagi "tindakan terakhir". Dulu ia hilang
         # dari tabel sehingga tak perlu disaring; sekarang ia tinggal sebagai
         # jejak, dan jejak bukan pekerjaan.

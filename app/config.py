@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # Tautan antaraplikasi saja; tidak menjadi sumber tiket atau angka timbang.
     # Kosong ditampilkan sebagai konfigurasi belum tersedia, bukan URL tebakan.
     teraflow_web_url: str = ""
+    # Callback tetap untuk Console di website; kosong berarti pintu belum aktif.
+    console_website_url: str = ""
 
     # Pool per proses: empat web maksimal 28 koneksi, pekerja maksimal 5.
     db_pool_size: int = Field(default=3,ge=1,le=20)

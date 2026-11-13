@@ -688,3 +688,5 @@ app.include_router(pengiriman_pk_router)
 
 from app.web.organisasi import router as organisasi_router
 app.include_router(organisasi_router)
+from app.web.console import router as console_router
+app.include_router(console_router)
