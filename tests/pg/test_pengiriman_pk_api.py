@@ -21,6 +21,11 @@ async def test_daftar_dan_aksi_mengikuti_peran_efektif(pg,siap):
    assert data['permintaan'][0]['id']==w['rid']
    if not isadmin:
     r=await client.post('/api/transfer-bertahap/setujui',json={'items':[dict(permintaan_id=w['rid'],berat_kg='1',tujuan='ditumpuk')]});assert r.status_code==403
+    r=await client.post(f"/api/transfer-bertahap/permintaan/{w['rid']}/tutup-sisa",json={'alasan':'Operator tidak berwenang menutup persetujuan'});assert r.status_code==403,r.text
+    from app.models import PermintaanPk
+    async with pg() as db:
+     request=await db.get(PermintaanPk,w['rid'])
+     assert request.status=='disetujui' and request.berat_setuju_kg==6000 and request.ditutup_oleh is None
    if not send:
     r=await client.post('/api/transfer-bertahap/pengiriman',json=dict(items=[dict(permintaan_id=w['rid'],berat_kg='1')],nomor_polisi='K 9773 J',nama_sopir='Kasidi',kunci='a'*32));assert r.status_code==403
    assert r.headers.get('cache-control')=='private, no-store' if r.status_code==200 else True

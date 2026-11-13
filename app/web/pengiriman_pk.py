@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Request, HTTPException, Header
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel,Field,PositiveInt
+from pydantic import BaseModel,Field,PositiveInt,StrictBool
 from sqlalchemy import select
 from app.database import SessionLocal
 from app.models import User,Warehouse,Silo,PermintaanPk,MillingProcess,PengirimanPk
@@ -25,8 +25,9 @@ class Setujui(BaseModel):
     items:list[Persetujuan]=Field(min_length=1,max_length=50)
 class Buat(BaseModel):
     items:list[Item]=Field(min_length=1,max_length=50)
-    nomor_polisi:str=Field(min_length=1,max_length=20)
-    nama_sopir:str=Field(min_length=1,max_length=100)
+    pakai_kendaraan:StrictBool=True
+    nomor_polisi:str=Field(default='',max_length=20)
+    nama_sopir:str=Field(default='',max_length=100)
     kunci:str=Field(pattern=r'^[a-f0-9]{32}$')
 class Alasan(BaseModel):alasan:str=Field(min_length=1,max_length=2000)
 
@@ -83,7 +84,7 @@ async def setujui(body:Setujui,user=Depends(pengguna_aksi)):
 @router.post('/api/transfer-bertahap/pengiriman')
 async def buat(body:Buat,user=Depends(pengguna_aksi)):
     try:
-        async with SessionLocal() as db:return jawab(await s.buat(db,user=user,items=[x.model_dump() for x in body.items],nomor_polisi=body.nomor_polisi,nama_sopir=body.nama_sopir,kunci=body.kunci))
+        async with SessionLocal() as db:return jawab(await s.buat(db,user=user,items=[x.model_dump() for x in body.items],nomor_polisi=body.nomor_polisi,nama_sopir=body.nama_sopir,kunci=body.kunci,pakai_kendaraan=body.pakai_kendaraan))
     except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/permintaan/{rid}/tutup-sisa')
@@ -139,6 +140,7 @@ async def plan(pid:int,x_internal_token:str|None=Header(default=None),x_operator
         async with SessionLocal() as db:
             u=await akun_internal(db,x_internal_token,x_operator_akun,x_produksi_lihat)
             data=await s.rincian(db,pid);w=await baca_izin(db,u)
+            if not data['pakai_kendaraan']:raise s.PengirimanError('Transfer tanpa kendaraan tidak menggunakan tiket kendaraan.')
             if not can_see_financials(u) and w.id not in (data['lintasan']['asal']['gudang_id'],data['lintasan']['tujuan']['gudang_id']):raise PermissionError('Perjalanan berada di luar gudang tugas Anda.')
             return jawab(data)
     except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)

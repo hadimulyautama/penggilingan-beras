@@ -112,14 +112,18 @@ async def setujui_banyak(db,*,user,items):
     await db.commit()
     return dict(ok=True,permintaan_ids=ids)
 
-async def buat(db,*,user,items,nomor_polisi,nama_sopir,kunci):
+async def buat(db,*,user,items,kunci,nomor_polisi="",nama_sopir="",pakai_kendaraan=True):
     await operator_asal(db,user);await kunci_stok(db)
     nomor_polisi=' '.join(nomor_polisi.upper().split());nama_sopir=' '.join(nama_sopir.split())
     if len(nomor_polisi)>20 or len(nama_sopir)>100:raise PengirimanError('Nomor polisi maksimal 20 karakter dan sopir maksimal 100 karakter.')
-    if not nomor_polisi or not nama_sopir:raise PengirimanError('Isi nomor polisi dan sopir.')
+    if type(pakai_kendaraan) is not bool:raise PengirimanError('Pilih cara transfer yang sah.')
+    if pakai_kendaraan and (not nomor_polisi or not nama_sopir):raise PengirimanError('Isi nomor polisi dan sopir untuk transfer dengan kendaraan.')
+    if not pakai_kendaraan and (nomor_polisi or nama_sopir):raise PengirimanError('Transfer tanpa kendaraan tidak memakai nomor polisi atau sopir.')
     ids=[x['permintaan_id'] for x in items]
     if not ids or len(ids)!=len(set(ids)):raise PengirimanError('Pilih permintaan berbeda sedikitnya satu.')
     payload=dict(items=sorted([dict(permintaan_id=x['permintaan_id'],berat_kg=angka(kg(x['berat_kg']))) for x in items],key=lambda x:x['permintaan_id']),nomor_polisi=nomor_polisi,nama_sopir=nama_sopir)
+    # Pertahankan sidik kendaraan lama agar pengulangan setelah rilis tetap sah.
+    if not pakai_kendaraan:payload['pakai_kendaraan']=False
     signature=sidik(payload);key='pk:'+str(user.id)+':'+kunci
     old=await db.scalar(select(PengirimanPk).where(PengirimanPk.kunci==key))
     if old:
@@ -142,12 +146,16 @@ async def buat(db,*,user,items,nomor_polisi,nama_sopir,kunci):
         if route and route!=current:raise PengirimanError('Gabungkan hanya permintaan dengan asal dan tujuan yang sama.')
         if owner is not ... and not await cocok_pemilik(db,owner,r.jasa_id):raise PengirimanError('Pemilik muatan berbeda; buat perjalanan terpisah.')
         route=current;owner=r.jasa_id
-    j=PengirimanPk(kunci=key,sidik=signature,asal_id=route[0],tujuan_id=route[1],silo_id=route[2],jasa_id=owner,nomor_polisi=nomor_polisi,nama_sopir=nama_sopir,dibuat_oleh=user.id,waktu=now,status='dalam_perjalanan')
+    j=PengirimanPk(kunci=key,sidik=signature,asal_id=route[0],tujuan_id=route[1],silo_id=route[2],jasa_id=owner,pakai_kendaraan=pakai_kendaraan,nomor_polisi=nomor_polisi or None,nama_sopir=nama_sopir or None,dibuat_oleh=user.id,waktu=now,status='dalam_perjalanan' if pakai_kendaraan else 'selesai')
     db.add(j);await db.flush()
     for x in payload['items']:
         r=requests[x['permintaan_id']];sebelumnya=await terpakai(db,r.id);db.add(PengirimanPkItem(pengiriman_id=j.id,permintaan_id=r.id,berat_kg=D(x['berat_kg'])))
         r.status='dikirim';r.berat_kirim_kg=sebelumnya+D(x['berat_kg']);r.dikirim_oleh=user.id;r.waktu_kirim=now
-    await _jejak(db,j,user,'buat','Muatan perjalanan dicatat; menunggu timbang, belum menambah stok tujuan.')
+    await db.flush()
+    await _jejak(db,j,user,'buat','Muatan perjalanan dicatat; menunggu timbang, belum menambah stok tujuan.' if pakai_kendaraan else 'Transfer tanpa kendaraan dicatat setelah pemindahan fisik selesai.')
+    if not pakai_kendaraan:
+        parts=list((await db.scalars(select(PengirimanPkItem).where(PengirimanPkItem.pengiriman_id==j.id).order_by(PengirimanPkItem.permintaan_id))).all())
+        await _selesaikan(db,j,parts,requests,user,'Transfer tanpa kendaraan; bobot per lot dicatat operator asal setelah pemindahan selesai.')
     await db.commit();return dict(ok=True,id=j.id,ulang=False)
 
 async def rincian(db,pid):
@@ -163,7 +171,7 @@ async def rincian(db,pid):
     if 'pengiriman_pk_id' in columns:
         ticket=(await db.execute(text('SELECT id,status_tiket FROM timbangan_transaksi WHERE pengiriman_pk_id=:id LIMIT 1'),{'id':pid})).mappings().first()
 
-    return dict(id=j.id,waktu=j.waktu.isoformat(),waktu_selesai=j.waktu_selesai.isoformat() if j.waktu_selesai else None,status=j.status,sidik=j.sidik,nomor_polisi=j.nomor_polisi,nama_sopir=j.nama_sopir,tiket_id=j.tiket_id or (ticket['id'] if ticket else None),status_tiket=ticket['status_tiket'] if ticket else None,total=angka(sum((D(i['berat_kg']) for i in items),D(0))),items=items,
+    return dict(id=j.id,waktu=j.waktu.isoformat(),waktu_selesai=j.waktu_selesai.isoformat() if j.waktu_selesai else None,status=j.status,sidik=j.sidik,pakai_kendaraan=j.pakai_kendaraan,nomor_polisi=j.nomor_polisi,nama_sopir=j.nama_sopir,tiket_id=j.tiket_id or (ticket['id'] if ticket else None),status_tiket=ticket['status_tiket'] if ticket else None,total=angka(sum((D(i['berat_kg']) for i in items),D(0))),items=items,
                 lintasan=dict(versi=1,asal=dict(gudang_id=a.id,nama=a.nama_gudang),tujuan=dict(gudang_id=t.id,silo_id=j.silo_id,pilihan='silo:'+str(s.id) if s else 'gudang:'+str(t.id),nama=s.nama_silo+' · '+t.nama_gudang if s else 'Tumpukan · '+t.nama_gudang)),
                 bobot_timbang_kg=None if j.bobot_timbang_kg is None else angka(j.bobot_timbang_kg),selisih_kg=None if j.selisih_kg is None else angka(j.selisih_kg),alasan=j.alasan)
 
@@ -179,6 +187,7 @@ async def sinkron(db,*,pid,tid,user=None,alasan=None):
     await kunci_stok(db)
     j=await db.scalar(select(PengirimanPk).where(PengirimanPk.id==pid).with_for_update())
     if not j or j.status=='dibatalkan':raise PengirimanError('Pengiriman tidak aktif.')
+    if not j.pakai_kendaraan:raise PengirimanError('Transfer tanpa kendaraan tidak menggunakan tiket kendaraan.')
     route=ticket.get('lintasan_transfer')
     if isinstance(route,str):route=json.loads(route)
     if not isinstance(route,dict) or route.get('_pengiriman_pk',{}).get('sidik')!=j.sidik:raise PengirimanError('Cuplikan muatan tiket tidak cocok dengan perjalanan.')
@@ -203,8 +212,12 @@ async def sinkron(db,*,pid,tid,user=None,alasan=None):
         if not alasan.strip():raise PengirimanError('Isi alasan menerima selisih perjalanan.')
         j.diputus_oleh=user.id;j.alasan=alasan.strip()
     actor=user if user else await db.get(User,j.dibuat_oleh)
-    from app.services.transfer import create_internal_transfer,TransferError
-    from app.penggilingan.gudang2.service import label_tujuan
+    await _selesaikan(db,j,items,requests,actor,alasan or 'Hasil timbang '+angka(measured)+' kg; muatan lot '+angka(total)+' kg; selisih '+angka(delta)+' kg. Selisih kurang dari 0,5%; bobot lot asal dianggap genap.')
+    await db.commit();return dict(ok=True,status='selesai',selisih_kg=angka(delta),ulang=False)
+
+async def _selesaikan(db,j,items,requests,actor,alasan):
+    """Buku stok, kapasitas dan penutupan permintaan dalam satu transaksi."""
+    from app.services.transfer import create_internal_transfer
     from app.services.permintaan_pk import _jejak as jejak_minta
     for i in items:
         r=requests[i.permintaan_id]
@@ -216,9 +229,9 @@ async def sinkron(db,*,pid,tid,user=None,alasan=None):
             silo=await db.scalar(select(Silo).where(Silo.id==j.silo_id).with_for_update())
             if not silo or not silo.aktif or silo.jenis_isi!='pk':raise PengirimanError('Silo tujuan tidak lagi tersedia untuk PK.')
             if silo.kapasitas_ton is not None and D(await hitung_stok_silo(db,silo.id))+D(i.berat_kg)>D(silo.kapasitas_ton)*1000:
-                raise PengirimanError('Kapasitas silo tujuan tidak mencukupi perjalanan. Timbangan tetap tersimpan; pencatatan stok menunggu ruang tersedia.')
+                raise PengirimanError('Kapasitas silo tujuan tidak mencukupi transfer. Periksa kapasitas sebelum mengulang pencatatan stok.')
         with lepas_item(db,r,i.berat_kg):
-            result=await create_internal_transfer(db,user=actor,kode_proses=proc.kode_proses,lokasi_tujuan=(await db.get(Silo,r.silo_id)).nama_silo if r.silo_id else 'ditumpuk',berat=float(i.berat_kg),pemilik_id=r.jasa_id,kunci_kiriman='pengiriman-pk:'+str(pid)+':item:'+str(i.id),commit=False,aksi='pengiriman_pk_selesai',alasan=alasan or 'Selisih kurang dari 0,5%; bobot lot asal dianggap genap.')
+            result=await create_internal_transfer(db,user=actor,kode_proses=proc.kode_proses,lokasi_tujuan=(await db.get(Silo,r.silo_id)).nama_silo if r.silo_id else 'ditumpuk',berat=float(i.berat_kg),pemilik_id=r.jasa_id,kunci_kiriman='pengiriman-pk:'+str(j.id)+':item:'+str(i.id),commit=False,aksi='pengiriman_pk_selesai',alasan=alasan)
         if D(result.transfer.berat_kg)!=D(i.berat_kg):raise PengirimanError('Bobot transfer terpotong oleh saldo; seluruh perjalanan dibatalkan penyimpanannya.')
         i.internal_transfer_id=result.transfer.id;await db.flush()
     j.status='selesai';j.waktu_selesai=now_local();await db.flush()
@@ -226,10 +239,9 @@ async def sinkron(db,*,pid,tid,user=None,alasan=None):
         final=await terpakai(db,r.id,selesai=True)
         if final>D(r.berat_setuju_kg):raise PengirimanError('Akumulasi perjalanan melebihi persetujuan lot.')
         if final==D(r.berat_setuju_kg):
-            r.status='selesai';r.berat_final_kg=final;r.waktu_tutup=now_local();r.sebab='Selesai otomatis dari seluruh perjalanan yang sudah selesai timbang.'
+            r.status='selesai';r.berat_final_kg=final;r.waktu_tutup=now_local();r.sebab='Selesai dari seluruh transfer yang sudah dicatat.'
             await jejak_minta(db,r,langkah='selesai_bertahap',oleh=actor,ringkas=r.sebab)
-    await _jejak(db,j,actor,'selesai','Hasil timbang '+angka(measured)+' kg; muatan lot '+angka(total)+' kg; selisih '+angka(delta)+' kg. Tanpa konfirmasi penerimaan operator tujuan.')
-    await db.commit();return dict(ok=True,status='selesai',selisih_kg=angka(delta),ulang=False)
+    await _jejak(db,j,actor,'selesai',alasan)
 
 async def batalkan(db,*,pid,user,alasan):
     admin(user)

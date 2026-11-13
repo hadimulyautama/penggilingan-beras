@@ -1,12 +1,12 @@
 """Satu perjalanan membawa beberapa bagian permintaan PK; stok baru dicatat setelah timbang."""
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, CheckConstraint
+from sqlalchemy import Boolean, true, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, TimestampMixin
 
 class PengirimanPk(Base, TimestampMixin):
     __tablename__='pengiriman_pk'
-    __table_args__=(CheckConstraint("status IN ('dalam_perjalanan','menunggu_admin','selesai','dibatalkan')",name='ck_pengiriman_pk_status'),)
+    __table_args__=(CheckConstraint("status IN ('dalam_perjalanan','menunggu_admin','selesai','dibatalkan')",name='ck_pengiriman_pk_status'),CheckConstraint("(pakai_kendaraan AND nomor_polisi IS NOT NULL AND nama_sopir IS NOT NULL) OR (NOT pakai_kendaraan AND nomor_polisi IS NULL AND nama_sopir IS NULL AND tiket_id IS NULL AND status = 'selesai')",name='ck_pengiriman_pk_kendaraan'))
     id:Mapped[int]=mapped_column(primary_key=True)
     status:Mapped[str]=mapped_column(String(24),default='dalam_perjalanan',nullable=False)
     kunci:Mapped[str]=mapped_column(String(120),unique=True,nullable=False)
@@ -15,8 +15,9 @@ class PengirimanPk(Base, TimestampMixin):
     tujuan_id:Mapped[int]=mapped_column(ForeignKey('warehouses.id'),nullable=False)
     silo_id:Mapped[int|None]=mapped_column(ForeignKey('silos.id'))
     jasa_id:Mapped[int|None]=mapped_column(ForeignKey('jasa.id'))
-    nomor_polisi:Mapped[str]=mapped_column(String(30),nullable=False)
-    nama_sopir:Mapped[str]=mapped_column(String(100),nullable=False)
+    pakai_kendaraan:Mapped[bool]=mapped_column(Boolean,default=True,server_default=true(),nullable=False)
+    nomor_polisi:Mapped[str|None]=mapped_column(String(30))
+    nama_sopir:Mapped[str|None]=mapped_column(String(100))
     dibuat_oleh:Mapped[int]=mapped_column(ForeignKey('users.id'),nullable=False)
     waktu:Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False)
     # Tabel tiket dimiliki TeraFlow; ID ini ditetapkan dari pembacaan tiket,
