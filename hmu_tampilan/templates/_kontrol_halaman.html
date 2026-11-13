@@ -1,0 +1,7 @@
+{# Atribut aksi berasal dari halaman; rupa dan ukuran berasal dari komponen. #}
+{% macro tombol(jenis, atribut={}) -%}
+<button class="kontrol-tombol" type="button" aria-label="{{ 'Panduan' if jenis=='panduan' else 'Cetak' }}" title="{{ 'Panduan' if jenis=='panduan' else 'Cetak' }}"{% for nama,nilai in atribut.items() %} {{ nama }}="{{ nilai }}"{% endfor %}>
+<svg class="kontrol-tombol__ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">{% if jenis=='panduan' %}<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>{% else %}<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>{% endif %}</svg>
+<span class="kontrol-tombol__teks">{{ 'Panduan' if jenis=='panduan' else 'Cetak' }}</span>
+</button>
+{%- endmacro %}

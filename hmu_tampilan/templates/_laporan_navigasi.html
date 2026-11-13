@@ -1,19 +1,20 @@
+{% from '_kontrol_halaman.html' import tombol %}
 {# Satu bilah di tempat yang sama untuk daftar, detail, QC dan laporan. #}
 <link rel="stylesheet" href="/static/laporan-kontrol.css?v={{ VERSI }}">
 {% from '_laporan_kontrol.html' import panel with context %}
 <section class="laporan-nav" aria-label="{{ LAPORAN_NAV.kelompok_nama|default('Laporan periode' if LAPORAN_NAV.aktif == 'laporan' else 'Riwayat') }}" data-laporan-kontrol data-aktif="{{ LAPORAN_NAV.aktif }}" data-tujuan-tab='{{ LAPORAN_NAV.tab|tojson }}'>
-  <div class="laporan-nav__bar">
-    {% if LAPORAN_NAV.aktif != 'laporan' %}<nav class="laporan-nav__tabs" aria-label="{{ LAPORAN_NAV.tab_label|default('Jenis halaman') }}"{% if LAPORAN_NAV.pakai_jumlah %} data-tab-berjumlah{% endif %}>
-    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}><span class="tab-label">{{ t.nama }}</span>{% if LAPORAN_NAV.pakai_jumlah %} <span class="pil__jml"{% if t.jumlah is not defined %} aria-hidden="true"{% endif %}>{{ t.jumlah|default('') }}</span>{% endif %}</a>{% else %}<span aria-disabled="true" class="akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
-    </nav>{% else %}<span class="laporan-nav__judul" aria-hidden="true"></span>{% endif %}
+  <div class="kontrol-halaman">
+    {% if LAPORAN_NAV.aktif != 'laporan' %}<nav class="kontrol-tab kontrol-tab--berjumlah" aria-label="{{ LAPORAN_NAV.tab_label|default('Jenis halaman') }}"{% if LAPORAN_NAV.pakai_jumlah %} data-tab-berjumlah{% endif %}>
+    {% for t in LAPORAN_NAV.tab %}{% if t.boleh|default(true) %}<a class="kontrol-tab__item" data-utuh data-tab-riwayat="{{ t.kunci }}" data-tujuan='{{ t.alamat|tojson }}' href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}><span class="kontrol-tab__label">{{ t.nama }}</span>{% if LAPORAN_NAV.pakai_jumlah %} <span class="kontrol-tab__jumlah"{% if t.jumlah is not defined %} aria-hidden="true"{% endif %}>{{ t.jumlah|default('') }}</span>{% endif %}</a>{% else %}<span aria-disabled="true" class="kontrol-tab__item akses-terkunci" title="Tidak memiliki akses">{{ t.nama }}</span>{% endif %}{% endfor %}
+    </nav>{% else %}<span class="kontrol-halaman__judul" aria-hidden="true"></span>{% endif %}
     {% if LAPORAN_NAV.pilihan %}
     <select class="laporan-nav__pilihan" data-jenis-riwayat aria-label="{{ 'Pilih proses' if LAPORAN_NAV.aktif == 'proses' else 'Pilih pemeriksaan QC' }}">
       {% for kunci, nama, alamat, gudang in LAPORAN_NAV.pilihan %}{% if not TAMPILAN_INDUK or alamat in LAPORAN_NAV.boleh_alamat %}<option value="{{ alamat }}"{% if kunci == LAPORAN_NAV.jenis %} selected{% endif %}>{{ nama }}</option>{% else %}<option disabled>{{ nama }} — tidak memiliki akses</option>{% endif %}{% endfor %}
     </select>
     {% endif %}
-    <div class="lk-aksi lk-aksi-tetap" aria-label="Tindakan halaman">
-      <button class="btn btn--kecil" type="button" data-lk-buka="{{ LAPORAN_NAV.panduan }}" aria-label="Panduan" title="Panduan"><span class="kontrol-tab-label">ⓘ Panduan</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button>
-      <span class="lk-cetak-slot">{% if LAPORAN_NAV.aktif != 'laporan' %}<button class="btn btn--kecil" type="button" data-lk-cetak aria-label="Cetak" title="Cetak"><span class="kontrol-tab-label">Cetak</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg></button>{% endif %}</span>
+    <div class="kontrol-aksi kontrol-halaman__aksi">
+      {{ tombol('panduan', {'data-lk-buka': LAPORAN_NAV.panduan}) }}
+      {% if LAPORAN_NAV.aktif != 'laporan' %}{{ tombol('cetak', {'data-lk-cetak':''}) }}{% else %}<span class="kontrol-aksi__slot" aria-hidden="true"></span>{% endif %}
     </div>
   </div>
   {% if LAPORAN_NAV.pilihan %}

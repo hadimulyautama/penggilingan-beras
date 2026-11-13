@@ -8,9 +8,6 @@ body.padiflow-ui .pk-kepala .pk-ikon { display:inline-flex; align-items:center; 
 .pk-cari { display:block; width:min(380px,100%); min-width:0; }
 body.padiflow-ui .pk-cari .cari { width:100%; max-width:none; margin:0; min-width:0; box-sizing:border-box; min-height:44px; font-size:16px; }
 .pk-cari .sr-only { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-.pk-tab { display:flex; gap:24px; border-bottom:1px solid var(--pd-line); }
-.pk-tab a { display:flex; align-items:center; gap:6px; min-height:48px; padding:8px 0 12px; text-decoration:none; color:var(--pd-muted); border-bottom:2px solid transparent; }
-.pk-tab a[aria-current=page] { color:var(--pd-green); border-bottom-color:var(--pd-green); font-weight:600; }
 .pk-kepala [data-hasil-cari]:empty { display:none; }
 .pk-panel { box-sizing:border-box; color:var(--pd-ink); background:var(--pd-sheet); border:0; border-left:1px solid var(--pd-line); margin:0 0 0 auto; padding:24px; width:min(420px,100%); max-width:100%; height:100dvh; max-height:100dvh; overflow-y:auto; }
 .pk-panel::backdrop { background:#0007; }
@@ -27,8 +24,6 @@ body.padiflow-ui .pk-form-filter .fld { width:100%; min-width:0; min-height:48px
   body.padiflow-ui .pk-tindakan-ponsel { display:flex; gap:4px; }
   .pk-judul h1 { font-size:24px; }
   .pk-cari { width:100%; }
-  .pk-tab { gap:20px; }
-  .pk-tab a { font-size:14px; }
   .pk-panel { width:min(420px,100%); padding:20px; }
 }
 
@@ -36,19 +31,14 @@ body.padiflow-ui .pk-form-filter .fld { width:100%; min-width:0; min-height:48px
 body.padiflow-ui .pk-pencarian .pk-cari { flex:1; min-width:0; width:auto; margin:0; }
 body.padiflow-ui .pk-pencarian>.btn { width:auto; flex:0 0 auto; min-width:64px; min-height:48px; }
 body.padiflow-ui .pk-filter-desktop { min-height:48px; }
-body.padiflow-ui .pk-tab { gap:20px; }
-.pk-tab a { white-space:nowrap; }
 .pk-panel p { line-height:1.6; margin:16px 0; }
 @media(max-width:650px) {
   .pk-pencarian { width:100%; }
-  body.padiflow-ui .pk-tab { gap:14px; }
-  .pk-tab a { gap:4px; font-size:13px; }
 }
-@media(max-width:360px) { body.padiflow-ui .pk-tab { gap:10px; } .pk-tab a { font-size:12px; } }
+
 @media print {
   body:has(.pk-kepala) :is(.pk-alat,.pk-tindakan-desktop,.pk-tindakan-ponsel,.pk-panel,.bawah,.bar,.segar,#kabar,#lembar) { display:none!important; }
   body:has(.pk-kepala) :is(.bingkai,.isi) { display:block!important; height:auto!important; max-height:none!important; overflow:visible!important; }
-  .pk-tab a:not([aria-current=page]) { display:none; }
 }
 
 .laporan-riwayat .pk-kepala{margin-top:0;}

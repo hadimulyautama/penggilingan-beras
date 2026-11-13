@@ -4,8 +4,9 @@
 <link rel="stylesheet" href="/static/stok-seragam.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/kepemilikan.css?v={{ VERSI }}">
 <section data-kepemilikan data-pk-baru data-editor-perintah data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}" data-kembali="{{ kembali }}">
-  <header class="kerja-kepala sk-kepala">
-    <div class="sk-judul"><h1>Alihkan kepemilikan PK</h1><button class="btn btn--kecil" type="button" data-pk-panduan>ⓘ Panduan</button></div>
+  <header class="kerja-kepala kontrol-halaman">
+    {% from '_kontrol_halaman.html' import tombol %}
+    <h1 class="kontrol-halaman__judul">Alihkan kepemilikan PK</h1><div class="kontrol-aksi kontrol-halaman__aksi">{{ tombol('panduan', {'data-pk-panduan':''}) }}</div>
     <p class="ko-muted">Pabrik ↔ pelanggan jasa · hasil PK tercatat yang masih bebas, termasuk saat penggilingan berjalan.</p>
   </header>
   {% from '_panduan.html' import panel as panel_panduan %}

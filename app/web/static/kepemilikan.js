@@ -49,18 +49,18 @@ function panel(title){
  controls.append(d);return d;
 }
 function controlsHeader(title,{params=null,total=null}={}){
- controls.replaceChildren();const header=el('header',null,'kerja-kepala sk-kepala ko-kepala'),top=el('div',null,'sk-judul');
- const desktop=el('div',null,'sk-tindakan-desktop'),mobile=el('div',null,'sk-tindakan-ponsel');
- if(!params)controls.append(el('h1',title));top.append(desktop,mobile);header.append(top);controls.append(header);
+ controls.replaceChildren();const header=el('header',null,'kerja-kepala kontrol-halaman ko-kepala'),top=el('div',null,'kontrol-halaman__aksi');
+ const desktop=el('div',null,'kontrol-aksi'),mobile=el('div',null,'sk-tindakan-ponsel');
+ if(!params)controls.append(el('h1',title));mobile.hidden=true;top.append(desktop,mobile);header.append(top);controls.append(header);
  const guide=panel('ⓘ Panduan kepemilikan');guide.classList.replace('sk-panel','pd-panduan');guide.querySelector('.sk-panel-kepala').className='pd-panduan__kepala';guide.querySelector('button').className='btn pd-panduan__tutup';
  const guideBody=el('div',null,'pd-panduan__isi');guide.append(guideBody);guideBody.append(el('p','Riwayat alih kepemilikan menampilkan transaksi pengalihan yang sudah tercatat. Pilih PK, Produk, atau Karung, lalu gunakan pencarian dan filter status.'),el('p','Buka nomor transaksi untuk melihat pemilik, jumlah, gudang, pemakaian, saldo tersedia, dan riwayat perubahan.'),el('p','Koreksi dan pembatalan tersedia pada detail sesuai izin. Periksa dampak dan konfirmasi sebelum menyimpan. Draf serta pemeriksaan dampak tidak mengubah stok.'),el('p','Catatan lama tetap tersedia melalui tautan di daftar.'));
  const menu=panel('Tindakan');menu.classList.add('sk-menu');
  const showGuide=()=>{if(menu.open)menu.close();guide.showModal();};
  const print=()=>{if(menu.open)menu.close();window.print();};
- const guideButton=uiButton('',showGuide),printButton=uiButton('',print);
+ const guideButton=uiButton('',showGuide,'kontrol-tombol'),printButton=uiButton('',print,'kontrol-tombol');
  guideButton.setAttribute('aria-label','Panduan');guideButton.title='Panduan';printButton.setAttribute('aria-label','Cetak');printButton.title='Cetak';
- guideButton.innerHTML='<span class="kontrol-tab-label">ⓘ Panduan</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>';
- printButton.innerHTML='<span class="kontrol-tab-label">Cetak</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>';
+ guideButton.innerHTML='<span class="kontrol-tombol__teks">ⓘ Panduan</span><svg class="kontrol-tombol__ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>';
+ printButton.innerHTML='<span class="kontrol-tombol__teks">Cetak</span><svg class="kontrol-tombol__ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>';
  desktop.append(guideButton,printButton);
  menu.append(uiButton('ⓘ Panduan',showGuide,'btn'),uiButton('Print',print,'btn'));
  if(params){
@@ -76,8 +76,8 @@ function controlsHeader(title,{params=null,total=null}={}){
   function applyQuery({status,q}){const next=new URLSearchParams(params);next.set('q',q);if(!q)next.delete('q');if(status)next.set('status',status);else next.delete('status');next.set('page','1');filter.close();window.history.replaceState(null,'','?'+next);listing();}
   search.onsubmit=e=>{e.preventDefault();applyQuery({status:params.get('status')||'',q:inp.value});};
   form_.onsubmit=e=>{e.preventDefault();applyQuery({status:select.value,q:inp.value});};
-  const tabs=el('nav',null,'sk-tab');tabs.setAttribute('aria-label','Jenis riwayat alih kepemilikan');
-  for(const [k,label]of [['pk','PK'],['produk','Produk'],['karung','Karung']]){const next=new URLSearchParams(params);next.set('kind',k);next.delete('page');const a=link(label,'/kepemilikan?'+next);if((params.get('kind')==='pk'?'pk':params.get('kind')==='karung'?'karung':'produk')===k)a.setAttribute('aria-current','page');tabs.append(a);}header.append(tabs);
+  const tabs=el('nav',null,'kontrol-tab');tabs.setAttribute('aria-label','Jenis riwayat alih kepemilikan');
+  for(const [k,label]of [['pk','PK'],['produk','Produk'],['karung','Karung']]){const next=new URLSearchParams(params);next.set('kind',k);next.delete('page');const a=link(label,'/kepemilikan?'+next);a.className='kontrol-tab__item';if((params.get('kind')==='pk'?'pk':params.get('kind')==='karung'?'karung':'produk')===k)a.setAttribute('aria-current','page');tabs.append(a);}header.append(tabs);
   const scope=el('div',null,'ko-list-scope'),statusLabel=select.options[select.selectedIndex]?.textContent||'Semua status',legacy=params.get('legacy')==='true',kindLabel=params.get('kind')==='pk'?'PK':params.get('kind')==='karung'?'Karung':params.get('kind')==='barang'?'Barang berkemasan':params.get('kind')==='curah'?'Produk curah':'Produk';
   scope.append(el('p',kindLabel+' · '+statusLabel+(legacy?' · Catatan lama':'')+(total==null?'':' · '+total+' transaksi'),'ko-muted'));
   const old=new URLSearchParams(params);if(legacy)old.delete('legacy');else old.set('legacy','true');old.delete('page');scope.append(link(legacy?'Transaksi dengan rincian sumber':'Catatan lama','/kepemilikan?'+old));if(params.get('kind')==='pk'){const add=link('Alihkan kepemilikan PK','/kepemilikan/pk/baru'+(params.get('kembali_stok')?'?kembali_stok='+encodeURIComponent(params.get('kembali_stok')):''));add.className='btn btn--kecil';scope.append(add);}header.append(scope);

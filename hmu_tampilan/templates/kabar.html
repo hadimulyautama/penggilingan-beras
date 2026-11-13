@@ -1,3 +1,4 @@
+{% from '_kontrol_halaman.html' import tombol %}
 {% extends "base.html" %}
 {% block judul %}Kabar{% endblock %}
 {% block isi %}
@@ -5,11 +6,11 @@
 <section class="kb" data-sampai="{{ sampai }}" aria-label="Kabar">
 
 
-  <div class="kb-controls">
-    <nav class="kb-tabs" aria-label="Status baca">
-      <a href="{{ href_kabar(tab='', batas=30, sebelum=None) }}" {% if not tab %}aria-current="page"{% endif %}>Semua</a>
-      <a data-kabar-belum href="{{ href_kabar(tab='belum', batas=30, sebelum=None) }}" {% if tab %}aria-current="page"{% endif %}>Belum dibaca ({{ baru }})</a>
-    </nav><button class="btn kb-panduan-buka" type="button" data-kb-panduan aria-label="Panduan" title="Panduan"><span class="kontrol-tab-label">ⓘ Panduan</span><svg class="kontrol-tab-ikon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button>
+  <div class="kontrol-halaman">
+    <nav class="kontrol-tab" aria-label="Status baca">
+      <a class="kontrol-tab__item" href="{{ href_kabar(tab='', batas=30, sebelum=None) }}" {% if not tab %}aria-current="page"{% endif %}>Semua</a>
+      <a class="kontrol-tab__item" data-kabar-belum href="{{ href_kabar(tab='belum', batas=30, sebelum=None) }}" {% if tab %}aria-current="page"{% endif %}>Belum dibaca ({{ baru }})</a>
+    </nav><div class="kontrol-aksi kontrol-halaman__aksi">{{ tombol('panduan', {'data-kb-panduan':''}) }}</div>
     <form method="get" action="/kabar" class="kb-kind">
       <input type="hidden" name="tab" value="{{ tab }}">
       <label for="kb-jenis">Jenis</label>

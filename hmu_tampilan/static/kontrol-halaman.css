@@ -1,0 +1,70 @@
+/* Satu kontrak ukuran untuk navigasi tab dan tindakan halaman.
+   Kelas halaman hanya mengatur isi/filter. Ukuran komponen ini tidak boleh
+   bergantung pada CSS halaman mana yang pernah dimuat oleh PINDAH. */
+:root {
+  --kontrol-tinggi-tab:64px;
+  --kontrol-tinggi-tombol:44px;
+  --kontrol-lebar-tombol:104px;
+  --kontrol-jarak-aksi:8px;
+  --kontrol-ukuran-font:14px;
+}
+.kontrol-halaman {
+  display:grid; grid-template-columns:minmax(0,1fr) auto;
+  align-items:center; gap:12px 16px; min-width:0;
+}
+.kontrol-halaman > * { grid-column:1/-1; min-width:0; }
+.kontrol-halaman > .kontrol-tab,
+.kontrol-halaman > .kontrol-halaman__judul { grid-column:1; grid-row:1; }
+.kontrol-halaman > .kontrol-halaman__aksi { grid-column:2; grid-row:1; }
+.kontrol-halaman__judul { min-height:var(--kontrol-tinggi-tab); margin:0; }
+.kontrol-aksi { display:flex; align-items:center; justify-content:flex-end; gap:var(--kontrol-jarak-aksi); }
+.kontrol-tombol,
+.kontrol-aksi__slot {
+  box-sizing:border-box; flex:0 0 var(--kontrol-lebar-tombol);
+  width:var(--kontrol-lebar-tombol); min-width:var(--kontrol-lebar-tombol);
+  height:var(--kontrol-tinggi-tombol); min-height:var(--kontrol-tinggi-tombol);
+}
+.kontrol-tombol {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  margin:0; padding:8px 10px; border:1px solid var(--pd-line);
+  border-radius:9px; background:var(--pd-sheet); color:var(--pd-ink);
+  font:500 14px/20px var(--pd-font); letter-spacing:0; text-transform:none;
+  text-decoration:none; white-space:nowrap; box-shadow:none; cursor:pointer;
+}
+.kontrol-tombol:hover { background:var(--pd-soft); }
+.kontrol-tombol:disabled { opacity:.5; cursor:not-allowed; }
+.kontrol-tombol__ikon { order:-1; display:block; flex:none; width:20px; height:20px; }
+.kontrol-tab {
+  display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr);
+  align-items:stretch; gap:0; width:100%; min-width:0; margin:0; padding:0;
+  border:0; border-bottom:1px solid var(--pd-line); background:transparent;
+}
+.kontrol-tab__item {
+  box-sizing:border-box; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:2px; min-width:0;
+  height:var(--kontrol-tinggi-tab); min-height:var(--kontrol-tinggi-tab);
+  margin:0; padding:6px; border:0; border-bottom:2px solid transparent;
+  border-radius:0; background:transparent; color:var(--pd-muted); box-shadow:none;
+  font:500 var(--kontrol-ukuran-font)/20px var(--pd-font);
+  letter-spacing:0; text-transform:none; text-align:center;
+  text-decoration:none; white-space:normal; overflow-wrap:normal;
+}
+.kontrol-tab__item[aria-current],
+.kontrol-tab__item[aria-selected=true] { color:var(--pd-green); border-bottom-color:var(--pd-green); }
+.kontrol-tab__item[aria-disabled=true] { cursor:default; }
+.kontrol-tab__label { min-width:0; }
+.kontrol-tab__jumlah { display:block; min-width:3ch; margin:0; padding:0; font:500 11px/12px var(--pd-font); font-variant-numeric:tabular-nums; }
+.kontrol-tab--berjumlah:has(.kontrol-tab__jumlah) .kontrol-tab__item:not(:has(.kontrol-tab__jumlah))::after { content:''; display:block; height:12px; }
+.kontrol-tombol:focus-visible,
+.kontrol-tab__item:focus-visible { outline:2px solid var(--pd-green); outline-offset:-3px; }
+@media(max-width:650px) {
+  :root { --kontrol-lebar-tombol:44px; --kontrol-jarak-aksi:6px; --kontrol-ukuran-font:12px; }
+  .kontrol-halaman { column-gap:8px; }
+  .kontrol-tombol { padding:8px; gap:0; }
+  .kontrol-tombol__teks { display:none; }
+  .kontrol-tab__item { line-height:16px; padding:6px 3px; }
+}
+@media print {
+  .kontrol-halaman,.kontrol-tab,.kontrol-aksi { display:none!important; }
+  body:has(.kontrol-halaman) :is(.bingkai,.isi) { height:auto!important; max-height:none!important; overflow:visible!important; display:block!important; }
+}

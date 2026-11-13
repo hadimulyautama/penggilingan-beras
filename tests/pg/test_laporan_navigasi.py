@@ -62,9 +62,9 @@ async def test_tab_dan_tindakan_punya_satu_lokasi_di_daftar_detail_dan_laporan(p
                              ('/riwayat-qc/gabah-kering/GB-QC-KERING','rqd-panduan'),('/laporan','lk-panduan'),('/audit','lk-panduan')]:
             r=await c.get(path);assert r.status_code==200
             soup=BeautifulSoup(r.text,'html.parser')
-            bar=soup.select_one('.laporan-riwayat>.laporan-nav>.laporan-nav__bar')
+            bar=soup.select_one('.laporan-riwayat>.laporan-nav>.kontrol-halaman')
             assert bar is not None
-            assert [x.get_text(strip=True) for x in bar.select('.laporan-nav__tabs>a')]==([] if path=='/laporan' else ['Riwayat proses','Riwayat QC','Audit'])
+            assert [x.get_text(strip=True) for x in bar.select('.kontrol-tab>a')]==([] if path=='/laporan' else ['Riwayat proses','Riwayat QC','Audit'])
             assert not bar.select('a[href="/laporan"]')
             assert len(bar.select(f'[data-lk-buka="{panduan}"]'))==1
             assert len(soup.select('button[data-lk-cetak]'))==(0 if path=='/laporan' else 1)

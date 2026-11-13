@@ -17,6 +17,7 @@ var NAMA = 'hmu-' + VERSI;
 
 var RANGKA = [
   '/static/app.css?v=' + VERSI,
+  '/static/kontrol-halaman.css?v=' + VERSI,
   '/static/komponen-portal.css?v=' + VERSI,
   '/static/padiflow-brand.css?v=' + VERSI,
   '/static/padiflow-logo-terang.png?v=' + VERSI,

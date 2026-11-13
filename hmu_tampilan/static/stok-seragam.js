@@ -31,7 +31,7 @@
 
   }
   
-  pasang(document.querySelector('.sk-kepala'));
+  pasang(document.querySelector('[data-stok-controls]'));
 /* Saldo adalah informasi cakupan, bukan jumlah yang boleh berubah karena
  * menyaring tampilan. Semua baris sudah dirender oleh pembaca stok lama. */
 function pasangDaftar(root) {
@@ -49,7 +49,7 @@ function pasangDaftar(root) {
     hasil.textContent=q?jumlah+' baris cocok. Angka total tetap saldo seluruh cakupan.':'';
     if(tulis){var u=new URL(location.href);if(input.value.trim())u.searchParams.set('cari',input.value.trim());else u.searchParams.delete('cari');history.replaceState(history.state,'',u.pathname+u.search);}
     root.querySelector('.sk-form-filter [name=cari]').value=input.value;
-    if(tulis)document.querySelectorAll('.sk-tab a,.stok-seragam a[href],.sk-form-filter>a').forEach(function(a){
+    if(tulis)document.querySelectorAll('[data-stok-controls] .kontrol-tab a,.stok-seragam a[href],.sk-form-filter>a').forEach(function(a){
       var u=new URL(a.href,location.href);if(u.origin!==location.origin)return;
       if(u.pathname==='/stok'){if(input.value.trim())u.searchParams.set('cari',input.value.trim());else u.searchParams.delete('cari');}
       if(u.searchParams.has('kembali_stok')){var k=new URL(u.searchParams.get('kembali_stok'),location.href);if(k.origin===location.origin&&k.pathname==='/stok'){if(input.value.trim())k.searchParams.set('cari',input.value.trim());else k.searchParams.delete('cari');u.searchParams.set('kembali_stok',k.pathname+k.search);}}
