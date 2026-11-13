@@ -9,6 +9,9 @@ from hmu_core.models import (
     Armada, Brand, Dryer, PackageSize, PackagingMaterial, Pelanggan, RiceQualityStandard,
     Silo, Supplier, User, Warehouse,
 )
+from hmu_core.organisasi import (
+    Perusahaan, LokasiPabrik, KeanggotaanPerusahaan, PenempatanGudang,
+)
 from hmu_core.komoditas import (
     ALIAS_KOMODITAS, KATALOG, TRANSFORMASI_KOMODITAS, DefinisiAtribut,
     DefinisiKomoditas, Kemasan, Produk, TransformasiKomoditas, buat_produk,
@@ -22,6 +25,10 @@ from hmu_core.proses_db import ArusProsesTerpadu, ProsesTerpadu
 
 __all__ = [
     "Base",
+    "Perusahaan",
+    "LokasiPabrik",
+    "KeanggotaanPerusahaan",
+    "PenempatanGudang",
     "TimestampMixin",
     "Warehouse",
     "Armada",

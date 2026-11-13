@@ -1,10 +1,12 @@
 # Fondasi multi-perusahaan — tahap awal
 
-Status 12 November 2026: persiapan, bukan pengaktifan multi-perusahaan.
+Status 13 November 2026: fondasi tahap awal selesai; master organisasi kosong
+disiapkan pada [tahap 2](MASTER-ORGANISASI.md). Multi-perusahaan belum diaktifkan.
 PadiFlow dan TeraFlow masih memakai satu kumpulan data bisnis. Tahap ini
 menyediakan inventaris, pembanding perilaku lama, dan identitas fasilitas
-baca-saja. Tidak ada migrasi atau perubahan hitungan stok, izin, maupun
-transaksi produksi.
+baca-saja. Tahap awal tidak mengubah hitungan stok, izin, maupun transaksi produksi.
+Tahap 2 menambah empat tabel master kosong melalui migrasi tersendiri;
+tidak ada pemetaan atau penghitungan ulang data lama.
 
 ## Aturan yang sudah disepakati
 
@@ -30,7 +32,7 @@ masih berada di kode. Literal untuk membaca riwayat bukan otomatis boleh dihapus
 | Identitas perusahaan | `hmu_dokumen/perusahaan.py`, `app/services/perusahaan.py`, `app/web/perusahaan.py` | Satu kunci global; butuh master perusahaan dan pengaturan per perusahaan. |
 | Pelanggan/pemasok | `hmu_core/models.py`, `hmu_core/kledo_kontak.py`, `app/services/kledo_sinkron.py` | Master dan pencocokan kontak global; perlu pembatas perusahaan sebelum sinkron. |
 | Pengguna dan akses | `hmu_identitas/model.py`, `hmu_identitas/peran.py`, `app/web/security.py`, `app/services/cakupan_fasilitas.py` | Peran dan konteks gudang belum mempunyai keanggotaan perusahaan. |
-| Lokasi pabrik | Belum ada master lokasi pabrik; rancangan membutuhkan `lokasi_pabrik_id` | Satu perusahaan dapat mempunyai beberapa lokasi. Alamat operasional, zona waktu, pos timbang, printer dan akses lokasi perlu dipetakan. |
+| Lokasi pabrik | `hmu_core/organisasi.py:LokasiPabrik`, `PenempatanGudang` (tahap 2; belum dipakai alur operasional) | Satu perusahaan dapat mempunyai beberapa lokasi. Alamat operasional, zona waktu, pos timbang, printer dan akses lokasi perlu dipetakan. |
 | Gudang dan fasilitas | `hmu_core/models.py`, `app/models/fasilitas.py`, `app/services/fasilitas.py` | Line sudah eksplisit; kode fungsi gudang masih unik global. |
 | Tampilan fasilitas | `app/services/identitas_fasilitas.py`, `app/services/proses_aktif.py`, `app/web/giling_ringkas.py`, `app/web/sosoh_ringkas.py` | Objek identitas baca-saja menjadi sumber label; pembaca string lama tetap tersedia. |
 | Produk/spesifikasi | `app/services/spesifikasi_beras.py`, `hmu_core/models.py` | Master sudah dinamis tetapi masih global. |
@@ -56,8 +58,8 @@ mengubah satu salinan vendor saja. Kontrak database bersama perlu diuji kedua ap
 | `Warehouse`, `LiniProduksi`, `JenisProsesProduksi` | Identitas dan relasi fasilitas yang tersimpan | Sudah ada; dipertahankan. |
 | `IdentitasFasilitas` | ID/nama gudang dan line untuk tampilan, immutable, tanpa izin/perhitungan | Diterapkan di tahap ini. |
 | `KonteksGudang` | Konteks gudang efektif yang sudah dipakai pembaca | Sudah ada; perubahan izin di luar tahap ini. |
-| Model perusahaan, lokasi pabrik dan keanggotaan | Perusahaan, banyak lokasi pabrik, serta peran dan akses pengguna pada perusahaan/lokasi | Rancangan tahap berikutnya, belum diaktifkan. |
-| `KonteksKerja` | Konteks immutable perusahaan, lokasi pabrik, pengguna dan gudang aktif yang sudah diverifikasi server | Tahap akses; bukan percaya pada company_id dari formulir. |
+| Model perusahaan, lokasi pabrik dan keanggotaan | Perusahaan, banyak lokasi pabrik, serta peran dan akses pengguna pada perusahaan/lokasi | Disiapkan di tahap 2 sebagai master kosong; belum diaktifkan. |
+| `KonteksKerja` | Konteks immutable perusahaan, lokasi pabrik, pengguna dan gudang aktif yang sudah diverifikasi server | Pembentuk baca-saja disiapkan di tahap 2; belum dipakai gerbang transaksi. |
 | Kebijakan komoditas/pengemasan | Aturan bisnis berversi per perusahaan; hasil validasi terstruktur | Setelah master per perusahaan; tidak mengubah saldo langsung. |
 | Snapshot lintasan/dokumen | Identitas dan aturan saat transaksi; kontrak berversi lintas aplikasi | Pertahankan JSON lama; penguatan tipe harus menjaga serialisasi. |
 | Konteks integrasi | Perusahaan dan otorisasi koneksi, tanpa membocorkan rahasia ke browser | Setelah cakupan perusahaan tersedia. |
