@@ -6,7 +6,7 @@ from app.database import Base, TimestampMixin
 
 class PengirimanPk(Base, TimestampMixin):
     __tablename__='pengiriman_pk'
-    __table_args__=(CheckConstraint("status IN ('dalam_perjalanan','menunggu_admin','selesai','dibatalkan')",name='ck_pengiriman_pk_status'),CheckConstraint("(pakai_kendaraan AND nomor_polisi IS NOT NULL AND nama_sopir IS NOT NULL) OR (NOT pakai_kendaraan AND nomor_polisi IS NULL AND nama_sopir IS NULL AND tiket_id IS NULL AND status = 'selesai')",name='ck_pengiriman_pk_kendaraan'))
+    __table_args__=(CheckConstraint("status IN ('dalam_perjalanan','menunggu_admin','selesai','dibatalkan')",name='ck_pengiriman_pk_status'),CheckConstraint("(pakai_kendaraan AND nomor_polisi IS NOT NULL AND nama_sopir IS NOT NULL) OR (NOT pakai_kendaraan AND nomor_polisi IS NULL AND nama_sopir IS NULL AND tiket_id IS NULL AND status IN ('selesai','dibatalkan'))",name='ck_pengiriman_pk_kendaraan'))
     id:Mapped[int]=mapped_column(primary_key=True)
     status:Mapped[str]=mapped_column(String(24),default='dalam_perjalanan',nullable=False)
     kunci:Mapped[str]=mapped_column(String(120),unique=True,nullable=False)
@@ -31,7 +31,7 @@ class PengirimanPk(Base, TimestampMixin):
 
 class PengirimanPkItem(Base):
     __tablename__='pengiriman_pk_items'
-    __table_args__=(UniqueConstraint('pengiriman_id','permintaan_id',name='uq_pengiriman_pk_permintaan'),CheckConstraint('berat_kg > 0',name='ck_pengiriman_pk_item_positif'))
+    __table_args__=(UniqueConstraint('pengiriman_id','permintaan_id',name='uq_pengiriman_pk_permintaan'),CheckConstraint('berat_kg >= 0',name='ck_pengiriman_pk_item_positif'))
     id:Mapped[int]=mapped_column(primary_key=True)
     pengiriman_id:Mapped[int]=mapped_column(ForeignKey('pengiriman_pk.id'),index=True,nullable=False)
     permintaan_id:Mapped[int]=mapped_column(ForeignKey('permintaan_pk.id'),index=True,nullable=False)

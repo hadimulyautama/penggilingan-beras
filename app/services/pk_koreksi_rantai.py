@@ -214,7 +214,7 @@ async def proyeksi(db,event):
     await db.flush()
 
 
-async def terapkan(db,*,event,user):
+async def terapkan(db,*,event,user,aksi='koreksi_kepemilikan_pk_berantai'):
     from app.services.activity_log import log_activity
     for kind,model in MODELS.items():
         for item in event.muatan['pk_chain'].get(kind,[]):
@@ -228,7 +228,7 @@ async def terapkan(db,*,event,user):
                 setattr(row,key,value)
             await log_activity(db,table_name=model.__tablename__,record_id=row.id,action='UPDATE',
                 changed_by=user.id,old_value=json.dumps(item['before']),new_value=json.dumps(buku.bersih(raw(row))),
-                alasan=event.muatan['request']['reason'],aksi='koreksi_kepemilikan_pk_berantai')
+                alasan=event.muatan['request']['reason'],aksi=aksi)
     await db.flush()
     await proyeksi(db,event)
     ids={x['id'] for x in event.muatan['pk_chain'].get('processes',[])}

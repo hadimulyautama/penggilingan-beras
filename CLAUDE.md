@@ -173,6 +173,25 @@ bukan bukti barang sudah dimuat.
 
 ## PK giling sendiri: karung 50 kg dan curah (25 Oktober 2026)
 
+**Koreksi Transfer PK generik, 13 November 2026:** `koreksi_transfer_pk`
+menyediakan periksa/simpan khusus Admin dari halaman Transfer PK. Koreksi
+permintaan sebelum transfer dapat mengubah jumlah, persetujuan/tujuan,
+mengembalikan ke diminta, atau membatalkan; sisa yang ditutup dapat dibuka
+jika stok bebas masih cukup. Koreksi fakta transfer memakai sisa tumpukan
+terlebih dahulu, lalu sisa silo dan bahan proses terkait (termasuk siklus
+berikutnya). Permintaan yang sudah ditutup tidak dibuka otomatis. Jika
+transfer benar tetapi bahan kurang tercatat, aksi `bahan` mengubah jumlah
+pemindahan dari tumpukan ke silo tanpa mengubah transfer asal. Kekurangannya
+harus tersedia dalam tumpukan sumber yang sama, bukan saldo lot lain.
+Hasil ukur tetap; bahan, susut, rendemen dan ProsesTerpadu mengikuti angka
+efektif. Proses aktif dengan hasil berlebih belum boleh ditutup. Koreksi
+yang membuat proses selesai mempunyai hasil melebihi bahan ditolak sampai
+catatan bahan/hasil yang sebenarnya diperbaiki. Pratinjau tidak menulis;
+HMAC, nonce, kunci stok/proses/silo, audit dan replay menjaga satu transaksi.
+Migrasi 0129 mengizinkan item efektif nol untuk pembatalan tanpa menghapus
+muatan asal dari peristiwa. Koreksi AM-PK dan perjalanan timbang historis
+tetap lewat mekanisme asalnya. Uji: `tests/pg/test_koreksi_transfer_pk.py`.
+
 Keputusan pemilik: "otomatis packing ukuran 50kg. sisanya jadi curah".
 Penegasan pemilik 13 November 2026: memakai karung bekas 50 kg.
 Rincian stok Gudang 1 menampilkan karung penuh dan sisa curah otomatis;
