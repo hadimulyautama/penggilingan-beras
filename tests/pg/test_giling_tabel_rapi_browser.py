@@ -8,7 +8,7 @@ from app.penggilingan.gudang1.services import milling
 pytestmark=pytest.mark.asyncio
 MUTU='KA 14,1% · broken 26,7% · susut 14,0% (rata-rata 3 catatan) · Rata-rata kategori: Butir kuning Bersih · Gabah Bersih · Merang Bersih'
 @pytest.mark.parametrize('width',[1440,1024,390,320])
-async def test_qc_lengkap_tabel_sumber_dan_pdf(pg,pabrik,monkeypatch,width):
+async def test_qc_lengkap_tabel_sumber_dan_pdf(pg,pabrik,monkeypatch,width,tmp_path):
  from playwright.async_api import expect
  code=await _giling_selesai(pg,pabrik);original=milling.riwayat_giling
  async def contoh(*a,**kw):
@@ -37,7 +37,7 @@ async def test_qc_lengkap_tabel_sumber_dan_pdf(pg,pabrik,monkeypatch,width):
    response=await c.get(pdf);assert response.status_code==200
    response=await c.get(pdf+'.pdf');assert response.status_code==200 and response.content.startswith(b'%PDF')
    assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
-   await page.screenshot(path=f'/bukti/giling-{width}.png',full_page=True)
+   await page.screenshot(path=str(tmp_path/f'giling-{width}.png'),full_page=True)
    href=await scope.locator('a[href^="/riwayat-giling/"]:not([href$="/laporan"])').first.get_attribute('href');assert (await c.get(href)).status_code==200
    monkeypatch.setattr(milling,'riwayat_giling',original)
    await page.reload();await expect(page.locator('.rg-mutu').first).to_contain_text('Belum dinilai')

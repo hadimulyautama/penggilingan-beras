@@ -151,7 +151,8 @@ async def test_login_operator_dan_lihat_sebagai_pintu_muat(pg, gudang, width, gu
             OUT.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(OUT/f'pintu-{gudang_kode}-{lihat}-{width}.png'), full_page=True)
             expected = '/muatan' if gudang_kode == 'g1' else '/barang-keluar'
-            links = page.locator('a').filter(has_text='Pengiriman')
+            import re
+            links = page.locator('a').filter(has_text=re.compile(r'^\s*Pengiriman\s*$'))
             assert await links.count() >= 1
             for href in await links.evaluate_all('(xs)=>xs.map(x=>x.getAttribute("href"))'):
                 assert href == expected

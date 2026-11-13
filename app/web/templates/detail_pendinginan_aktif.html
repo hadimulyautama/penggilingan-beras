@@ -33,7 +33,7 @@
 <header class="rhs-header"><h1>Pendinginan aktif</h1><p class="rhs-code">{{ d.kode }}</p>
 <div class="rhs-identity"><span class="rhs-status">{{ d.status }}</span>{{ milik.penanda(proses) }}</div>
 {% if d.jasa and not proses.pemilik_tampil %}<p>{{ d.pemilik }}</p>{% endif %}
-<p class="rhs-meta">Gudang 1 · {{ d.dryer }} · {{ d.mode }}</p>
+<p class="rhs-meta">{{ d.fasilitas.nama_gudang or 'Gudang belum tercatat' }} · {{ d.dryer }} · {{ d.mode }}</p>
 {% if d.jeda_mulai %}<p class="pengeringan-jeda">{{ d.jeda_sebab }} · Mulai jeda {{ d.jeda_mulai }}</p>{% elif proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
 <p class="rhs-meta">Mulai pendinginan {{ d.waktu_pendinginan[1][1] }}<br>{{ d.lokasi }}</p>
 <div class="rhs-tools"><button class="btn btn--kecil" type="button" data-rhp-guide>ⓘ Panduan</button><details class="rhs-menu"><summary class="btn" aria-label="Tindakan riwayat">⋮</summary><div class="rhs-menu-body">{% if LAPORAN_NAV %}<button class="btn" type="button" data-rhp-nav-open>Navigasi Laporan &amp; Riwayat</button>{% endif %}<button class="btn" type="button" data-rhp-guide>ⓘ Panduan</button>{% if d.laporan_tersedia %}<a class="btn" href="/riwayat-pengeringan/{{ d.lot_id }}/laporan">Lihat / bagikan laporan PDF</a>{% endif %}<button class="btn" type="button" data-rhp-print>Print detail</button></div></details></div>

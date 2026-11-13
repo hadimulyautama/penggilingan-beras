@@ -16,6 +16,7 @@ async def tambah(db,u,nama='Hasil master <uji>'):
     await db.commit();return kode
 
 @pytest.mark.parametrize('jasa',[False,True])
+@pytest.mark.fondasi_multi
 async def test_penerimaan_tepat_sekali_silo_proses_pemilik(pg,sosoh,jasa):
     async with pg() as db:
         kode=await tambah(db,await db.get(User,sosoh['user']))

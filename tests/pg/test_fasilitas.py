@@ -34,6 +34,7 @@ async def test_master_edit_audit_versi_dan_operator_ditolak(pg):
         await db.rollback()
         with pytest.raises(FasilitasError,match='Kode jenis tetap'):await simpan_jenis(db,user=u,id=jid,versi=2,nama='Nama',kode='beda')
 
+@pytest.mark.fondasi_multi
 async def test_dua_line_independen_satu_line_dipakai_dan_izin(pg):
     u,wh,ops=await dunia(pg)
     async with pg() as db:
@@ -106,6 +107,7 @@ async def test_pengaturan_endpoint_dan_lihat_sebagai(pg,role,view,expected):
 
 from tests.pg.test_gudang2_operator_pg import gudang2
 
+@pytest.mark.fondasi_multi
 async def test_dua_proses_sosoh_terpisah_hasil_dan_silo(pg,gudang2):
     from app.penggilingan.gudang2 import polishing as p,service as g2
     from app.models import PolishingSiloUsage,PolishingOutputLog

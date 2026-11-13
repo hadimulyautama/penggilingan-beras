@@ -202,3 +202,22 @@ async def test_barang_saya_memisahkan_karung_kosong_dari_karung_berisi_dan_detai
         assert 'Belum ada karung kosong yang tercatat' in s.select_one('#karung-kosong').get_text()
         assert 'Cap Mitra A' not in s.main.get_text() and 'Cap Privat B' not in s.main.get_text()
     (out/'paths.json').write_text(json.dumps(stok_karung))
+
+
+@pytest.mark.fondasi_multi
+async def test_label_lokasi_portal_mengikuti_master_tanpa_mengubah_stok(pg,portal,stok_karung):
+    from tests.pg.test_masuk_detail_timbang import sidik
+    async with pg() as db:
+        wh=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g2'))
+        before=await sidik(db)
+        wh.nama_gudang='Sentra Utara';await db.commit()
+        after=await sidik(db)
+        assert {k:v for k,v in before.items() if k!='warehouses'} == {k:v for k,v in after.items() if k!='warehouses'}
+    async with client(portal.accounts[0]) as c:
+        response=await c.get(stok_karung['pk_karung_timbang'])
+        assert response.status_code==200
+        header=BeautifulSoup(response.text,'html.parser').select_one('.pk-detail__hero')
+        assert 'Sentra Utara · Tumpukan' in header.get_text(' ',strip=True)
+        assert 'Gudang 2' not in header.get_text()
+    async with pg() as db:
+        assert await sidik(db)==after

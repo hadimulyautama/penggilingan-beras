@@ -66,7 +66,7 @@ async def test_default_semua_pemilik_filter_tetap_bekerja_dan_get_tidak_menulis(
         reset = soup.find('a',string='Atur ulang filter')['href']
         assert parse_qs(urlsplit(reset).query)['pemilik']==['semua']
         for link in soup.select('.sk-tab a[href]'):
-            if 'tab=bahan' not in link['href']:assert 'pemilik=semua' not in link['href']
+            assert parse_qs(urlsplit(link['href']).query).get('pemilik',['semua']) == ['semua']
         pabrik = await c.get('/stok?pemilik=pabrik')
         jasa = await c.get('/stok?pemilik=jasa')
         assert pabrik.status_code==jasa.status_code==200

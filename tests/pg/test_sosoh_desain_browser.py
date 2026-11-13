@@ -1,8 +1,7 @@
 """Semua aksi browser memakai API asli dan PostgreSQL uji; tak ada handler tiruan."""
-from tests.profil_browser import mesin, konteks
+from tests.pg.test_pengeringan_desain_browser import browser
 import os
 from pathlib import Path
-from urllib.parse import urlsplit
 import pytest
 from sqlalchemy import select,func
 from app.models import PolishingOutputLog,ActivityLog
@@ -13,23 +12,14 @@ pytestmark=[pytest.mark.asyncio,pytest.mark.skipif(os.getenv('UJI_BROWSER_SOSOH_
 
 @pytest.mark.parametrize('width',[1440,390,320])
 async def test_tab_draf_qc_sumber_dan_editor_asli(pg,running,width):
- from playwright.async_api import async_playwright,expect
+ from playwright.async_api import expect
  out=Path(os.environ.get('BUKTI_SOSOH_DESAIN','../bukti'));out.mkdir(parents=True,exist_ok=True)
  uid,kode,mid,intake=running
  async with await _klien(pg,peran='admin') as c:
   c.headers['X-CSRF-Token']=cap_formulir(c)
   async with pg() as db:
    before=await db.scalar(select(func.count()).select_from(ActivityLog))
-  async with async_playwright() as pw:
-   browser=await mesin(pw).launch();page=await browser.new_page(**konteks(pw,width,1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-   await page.context.add_cookies([dict(name=k.name,value=k.value,url='https://uji') for k in c.cookies.jar])
-   async def route(r):
-    req=r.request;u=urlsplit(req.url)
-    if u.netloc!='uji':await r.abort();return
-    headers={k:v for k,v in req.headers.items() if k.lower() not in ('host','cookie','content-length')}
-    response=await c.request(req.method,req.url,headers=headers,content=req.post_data_buffer)
-    await r.fulfill(status=response.status_code,body=response.content,headers={k:v for k,v in response.headers.items() if k.lower() not in ('content-length','content-encoding','set-cookie')})
-   await page.route('**/*',route)
+  async with browser(c,width) as page:
    await page.goto('https://uji/proses-aktif/sosoh/'+kode)
    await page.locator('.sr-design-tabs').wait_for();assert await page.locator('[data-sr-tab]').count()==5
    assert await page.locator('[data-proses-isi]>header').get_by_text('Mulai',exact=False).is_visible()
@@ -57,7 +47,6 @@ async def test_tab_draf_qc_sumber_dan_editor_asli(pg,running,width):
    await editor.get_by_role('button',name='Tutup koreksi').click()
    assert await page.locator('[data-sr-tab="hasil"]').is_enabled()
    await page.locator('[data-sr-tab="riwayat"]').click();await expect(page.locator('[data-sr-panel="riwayat"]')).to_contain_text('pertambahan')
-   assert not errors,errors
    async with pg() as db:assert await db.scalar(select(func.count()).select_from(ActivityLog))==before
    # Pemeriksaan dan penyimpanan hasil tetap menempuh API asli.
    await page.locator('[data-sr-tab="hasil"]').click();await result.fill('2100')
@@ -68,4 +57,3 @@ async def test_tab_draf_qc_sumber_dan_editor_asli(pg,running,width):
    assert await page.locator('[data-kb-output="medium"] input').input_value()=='2100'
    async with pg() as db:
     values=(await db.scalars(select(PolishingOutputLog.berat_kg))).all();assert sum(values)==2300
-   assert not errors,errors;await browser.close()

@@ -7,10 +7,12 @@ from app.models import User,PermintaanPk,InternalTransfer
 from hmu_identitas.model import Akun
 from tests.pg.test_permintaan_empat_langkah import pabrik
 from tests.pg.test_pengiriman_pk_bertahap import siap,buat
-pytestmark=pytest.mark.asyncio
+from tests.pg.test_teraflow_kiriman import _skema_head
+pytestmark=[pytest.mark.asyncio,pytest.mark.dua_aplikasi]
 
+@pytest.mark.fondasi_multi
 async def test_http_dua_aplikasi_dan_stok_tidak_ganda(pg,siap):
- tera=os.environ.get('UJI_TERAFLOW_ROOT');python=os.environ.get('UJI_TERAFLOW_PYTHON')
+ tera=os.environ.get('UJI_TF_ROOT');python=os.environ.get('UJI_TF_PYTHON')
  if not tera or not python:pytest.skip('Uji dua aplikasi memerlukan source dan interpreter TeraFlow lokal.')
  w=siap;j1=await buat(pg,w,'2000');j2=await buat(pg,w,'4000')
  async with pg() as db:

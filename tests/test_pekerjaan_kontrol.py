@@ -14,10 +14,10 @@ def test_isi_daftar_dan_kartu_tetap_sama():
  assert hashlib.sha256(sebelum.encode()).hexdigest()=='f328c94b5c7d839f916350e1539fa27d5eac47682d35f3eb41658efc355d186b'
  # Jumlah tindakan cukup di tab; petunjuk penerimaan dipusatkan di Panduan.
  assert hashlib.sha256(sesudah.encode()).hexdigest()=='2923e709ebcfa43d645aabe6865249b87992fcea635cf45a9a62d1f273cc13cc'
- for f,sidik in {'app/web/templates/_pekerjaan_berjalan_ringkas.html': 'b187e6dac3dcb75668bd74ce00d140c7d77acf091cf3e527f24d30b1cb487d98', 'hmu_tampilan/templates/_benda.html': '4c2573f23a80b2027de28bdbbdc9da746c2dd212de443e89069ca7a178cc8088'}.items():
+ for f,sidik in {'app/web/templates/_pekerjaan_berjalan_ringkas.html': 'b187e6dac3dcb75668bd74ce00d140c7d77acf091cf3e527f24d30b1cb487d98', 'hmu_tampilan/templates/_benda.html': '8a398c994cd66faed3daaa5153f9f20aadb7ea5f81cd9f7b7538df7dc62018a0'}.items():
   isi=(R/f).read_text()
   if f.endswith('/_benda.html'):
-   # Kartu mendapat tautan langsung untuk transfer bertahap.
+   # Kartu memakai transfer PK generik dan pembungkus isi responsif.
    # Snapshot juga mencakup pembungkus isi kartu transfer;
    # kartu QC tetap dinormalisasi terpisah.
    from tests.kartu_asli import tanpa_kartu_qc
@@ -26,7 +26,7 @@ def test_isi_daftar_dan_kartu_tetap_sama():
 
 @pytest.mark.parametrize('width',[320,390,1440])
 @pytest.mark.parametrize('tab',['tindakan','berjalan'])
-def test_kontrol_saja(width,tab):
+def test_kontrol_saja(width,tab,tmp_path):
  env=Environment(loader=FileSystemLoader([R/'app/web/templates',R/'hmu_tampilan/templates']),autoescape=True)
  calls=[]
  def render(url):
@@ -45,7 +45,7 @@ def test_kontrol_saja(width,tab):
     if f.is_file():r.fulfill(path=f)
     else:r.fulfill(body='')
   page.route('**/*',route);page.goto('http://uji.local/pekerjaan?tab='+tab+'&pelanggan_id=7&halaman=2')
-  assert page.locator('.pk-tab a').count()==3
+  assert page.get_by_role('navigation',name='Tab pekerjaan').locator('a').count()==3
   page.get_by_role('searchbox').fill('Suroto');assert len(calls)==1
   page.get_by_role('button',name='Cari',exact=True).click();page.wait_for_url('**cari=Suroto**')
   assert calls[-1]['pelanggan_id']=='7' and 'halaman' not in calls[-1]
@@ -63,5 +63,5 @@ def test_kontrol_saja(width,tab):
   else:page.locator('.pk-tindakan-desktop [data-pk-buka]').click()
   expect(page.locator('#pk-panduan')).to_be_visible();page.get_by_role('button',name='Tutup panduan').click()
   assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-  out=R/'output/qa-pekerjaan-kontrol';out.mkdir(exist_ok=True);page.screenshot(path=str(out/f'{tab}-{width}.png'),full_page=True)
+  out=tmp_path/'qa-pekerjaan-kontrol';out.mkdir();page.screenshot(path=str(out/f'{tab}-{width}.png'),full_page=True)
   assert not errors;b.close()

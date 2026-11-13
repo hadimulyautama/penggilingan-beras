@@ -22,6 +22,7 @@ async def test_spek_baru_bisa_diselesaikan_dengan_riwayat_lama(pg,sosoh):
   assert r.selesai and r.beras_total==8600
   assert (await stok.output_sosoh(db,sosoh['proc_id']))[kode]==600
 
+@pytest.mark.fondasi_multi
 async def test_spek_baru_packing_silo_tidak_menggandakan_stok(pg,sosoh):
  kode=await siapkan(pg,sosoh)
  async with pg() as db:
@@ -63,6 +64,7 @@ async def test_http_spek_baru_muncul_di_packing_dan_detail(pg,sosoh):
   detail=await c.get('/stok-produk/detail',params={'jenis':kode});assert detail.status_code==200 and 'Ramos audit' in detail.text
 
 @pytest.mark.parametrize('jasa',[False,True])
+@pytest.mark.fondasi_multi
 async def test_campur_pk_beras_spek_baru_dan_samping_lama_sampai_selesai(pg,sosoh,jasa):
  from app.models import PkPurchaseBatch,PkGudang2Intake,Silo,Pelanggan,Jasa,Supplier
  async with pg() as db:

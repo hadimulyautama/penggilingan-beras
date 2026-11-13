@@ -264,6 +264,15 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
             if nama == "stok_kepemilikan.html":
                 assert 'extends template_kepemilikan_asal' in (TPL / nama).read_text()
                 asal = re.search(r'template_kepemilikan_asal="(stok_(?:produk|karung)(?:_jasa)?\.html)"', _panggilan(teks, m.end()))
+                if not asal and '**konteks' in _panggilan(teks, m.end()):
+                    import ast
+                    tree = ast.parse(teks)
+                    line = teks.count('\n', 0, m.start()) + 1
+                    fungsi = next(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.lineno <= line <= n.end_lineno)
+                    reader = re.search(r'konteks\s*=\s*await\s+(_halaman_\w+)\(', ast.get_source_segment(teks, fungsi))
+                    assert reader, 'Pembaca konteks pembungkus harus eksplisit'
+                    asal_fungsi = next(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == reader[1])
+                    asal = re.search(r'template_kepemilikan_asal="(stok_(?:produk|karung)(?:_jasa)?\.html)"', ast.get_source_segment(teks, asal_fungsi))
                 assert asal, "Pembungkus kepemilikan harus membawa identitas layar asal"
                 terlihat.add(asal.group(1))
                 assert m.group(1), "Pembungkus stok harus memakai lencana render_laci"

@@ -7,10 +7,10 @@
 <form class="kontrol-pencarian__form" method="get" action="/pekerjaan" role="search">
 {% for key,value in request.query_params.items() %}{% if key not in ('cari','halaman','buka','nilai') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
 <label class="kontrol-pencarian__field"><span class="sr-only">Cari nama, kode atau plat</span><input class="kontrol-pencarian__input" type="search" name="cari" aria-label="Cari nama, kode atau plat" placeholder="Cari nama, kode atau plat…" value="{{ request.query_params.get('cari','') }}" maxlength="200"></label><button class="kontrol-pencarian__submit cari-berikon" type="submit">Cari</button></form></div>
-{% if not LAPORAN_NAV %}<nav class="pk-tab" aria-label="Tab pekerjaan">
-<a href="{{ href(tab='tindakan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='tindakan' %} aria-current="page"{% endif %}>Perlu tindakan <span class="pil__jml">{{ total_tindakan }}</span></a>
-<a href="{{ href(tab='berjalan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='berjalan' %} aria-current="page"{% endif %}>Berjalan <span class="pil__jml">{{ total_jalan }}</span></a>
-{% if TAMPILAN_INDUK or VIEW in V_MEJA %}<a href="{{ '/pekerjaan/catat-lain?' ~ ({'kembali': href()}|urlencode) }}">Pekerjaan lain</a>{% endif %}
+{% if not LAPORAN_NAV %}<nav class="kontrol-tab kontrol-tab--berjumlah" aria-label="Tab pekerjaan">
+<a class="kontrol-tab__item" href="{{ href(tab='tindakan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='tindakan' %} aria-current="page"{% endif %}>Perlu tindakan <span class="kontrol-tab__jumlah">{{ total_tindakan }}</span></a>
+<a class="kontrol-tab__item" href="{{ href(tab='berjalan',asal='',kategori='',grup='',informasi='') }}"{% if tab=='berjalan' %} aria-current="page"{% endif %}>Berjalan <span class="kontrol-tab__jumlah">{{ total_jalan }}</span></a>
+{% if TAMPILAN_INDUK or VIEW in V_MEJA %}<a class="kontrol-tab__item" href="{{ '/pekerjaan/catat-lain?' ~ ({'kembali': href()}|urlencode) }}">Pekerjaan lain</a>{% endif %}
 </nav>{% endif %}
 {% if pelanggan_saring %}<p class="bantu">Pelanggan: <strong>{{ pelanggan_saring }}</strong> · <a href="{{ href(pelanggan_id='') }}">Semua pelanggan</a></p>{% endif %}
 <dialog class="pk-panel" id="pk-filter" aria-labelledby="pk-filter-judul"><div class="pk-panel-kepala"><h2 id="pk-filter-judul">Filter pekerjaan</h2><button class="btn pk-ikon" type="button" data-pk-tutup aria-label="Tutup filter">×</button></div>

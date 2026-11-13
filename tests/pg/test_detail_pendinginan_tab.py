@@ -49,10 +49,10 @@ async def test_tiga_status_tab_sumber_laporan_dan_akses(pg,pendingin,peran):
                 assert 'buka=kadar_air' not in h.text and 'buka=selesai_pengeringan' not in h.text
                 assert '<progress' not in h.text
                 if status=='Sedang didinginkan':
-                    assert 'buka=selesai_pendinginan' in h.text and 'Lihat / bagikan laporan PDF' not in h.text
+                    assert 'buka=selesai_pendinginan' in h.text and 'PDF proses' not in h.text
                 elif status=='Sudah dingin':
                     assert 'buka=pindah_silo' in h.text and 'buka=mulai_pendinginan_ulang' in h.text
-                    assert 'Masih di ' in h.text and 'Lihat / bagikan laporan PDF' in h.text
+                    assert 'Masih di ' in h.text and 'PDF proses' in h.text
                 else:
                     assert 'Sudah dipindah ke Silo A' in h.text
                     assert 'buka=pindah_silo' not in h.text and 'buka=mulai_pendinginan_ulang' not in h.text

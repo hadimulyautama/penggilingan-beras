@@ -116,7 +116,7 @@ def test_setiap_kartu_membentang_di_tempat():
     Ketukan pertama yang artinya berbeda-beda di tiap kartu memaksa orang
     menebak apa yang akan terjadi sebelum menekan — dan yang menebak akan
     berhenti menekan. Jadi tiap baris yang punya tindakan wajib membawa
-    `pilihan`, sekalipun isinya cuma satu.
+    `pilihan`, sekalipun isinya cuma satu, atau tujuan halaman internal yang eksplisit.
     """
     import ast
 
@@ -128,7 +128,13 @@ def test_setiap_kartu_membentang_di_tempat():
             continue
         kunci = {k.arg for k in simpul.keywords}
         if "aksi" in kunci and not (kunci & {"pilihan", "tombol"}):
-            telanjang.append(f"baris {simpul.lineno}")
+            tujuan = next((k.value for k in simpul.keywords if k.arg == "tautan"), None)
+            # Halaman khusus boleh menjadi tujuan eksplisit; hindari tautan kosong/eksternal.
+            while isinstance(tujuan, ast.BinOp) and isinstance(tujuan.op, ast.Add):
+                tujuan = tujuan.left
+            internal = isinstance(tujuan, ast.Constant) and isinstance(tujuan.value, str) and tujuan.value.startswith('/') and not tujuan.value.startswith('//')
+            if not internal:
+                telanjang.append(f"baris {simpul.lineno}")
     assert not telanjang, (
         "baris ini masih melempar langsung ke lembar, bukan membentang:\n  "
         + "\n  ".join(telanjang))

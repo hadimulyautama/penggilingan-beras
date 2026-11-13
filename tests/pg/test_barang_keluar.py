@@ -1071,7 +1071,7 @@ async def test_verifikasi_pengiriman_cukup_di_barang_keluar(pg, gudang):
     async with c:
         h = (await c.get(f"/barang-keluar/{r.rec.id}")).text
     assert r.rec.kode in h
-    assert "buka=verifikasi_keluar" in h
+    assert "data-verifikasi-pengiriman data-inline" in h
     assert "500" in h and "Sisa perintah" in h
 
 
@@ -1454,13 +1454,13 @@ async def test_kartu_di_halaman_membawa_tombolnya_sendiri(pg, gudang):
     c=await _klien(pg,gudang['adm'],'uji_tombol_detail_adm')
     async with c:
         h=(await c.get('/barang-keluar')).text
-        assert f'href="/barang-keluar/{belum.rec.id}"' in h
-        assert f'href="/barang-keluar/{sudah.rec.id}"' in h
+        assert _tautan_detail_pengiriman(h,belum.rec.id)
+        assert _tautan_detail_pengiriman(h,sudah.rec.id)
         a=(await c.get(f'/barang-keluar/{belum.rec.id}')).text
         b=(await c.get(f'/barang-keluar/{sudah.rec.id}')).text
     assert 'buka=batal_perintah_keluar' in a
     assert 'buka=verifikasi_keluar' not in a
-    assert 'buka=verifikasi_keluar' in b
+    assert 'data-verifikasi-pengiriman data-inline' in b
     assert 'buka=muat_semua' not in a+b
     c=await _klien(pg,gudang['op'],'uji_tombol_detail_op',mode='operator')
     async with c:
@@ -2580,8 +2580,8 @@ async def test_tombol_verifikasi_mendahului_rincian_timbang(pg, gudang):
         r = await c.get(f'/barang-keluar/{rid}')
     assert r.status_code == 200
     html = r.text
-    assert html.index('Verifikasi &amp; tutup') < html.index('Rincian penimbangan')
-    assert f'buka=verifikasi_keluar&nilai={rid}' in html
+    assert html.index('data-verifikasi-pengiriman data-inline') < html.index('Rincian penimbangan')
+    assert 'id="verifikasi-awal"' in html and 'data-isi-verifikasi' in html
     assert 'KLR-UJI-TOMBOL-ATAS' in html
     assert await _stok(pg, gudang) == stok_lama
     async with pg() as db:
@@ -2651,7 +2651,7 @@ async def test_detail_hapus_item_belum_dimuat_dan_formulir_basi(pg,gudang):
     c=await _klien(pg,gudang['adm'],'uji_detail_kelola')
     async with c:
         daftar=await c.get('/barang-keluar');detail=await c.get(f'/barang-keluar/{rec.id}')
-        assert f'href="/barang-keluar/{rec.id}"' in daftar.text
+        assert _tautan_detail_pengiriman(daftar.text,rec.id)
         assert 'Ubah jumlah' not in daftar.text
         assert 'Ubah jumlah' in detail.text
         assert 'Hapus item' not in detail.text  # Barang terakhir memakai pembatalan perintah.
@@ -2898,3 +2898,10 @@ async def test_http_lepas_armada_cuplikan_lama_ditolak_dan_sukses_dicatat(pg,gud
     async with pg() as db:
         assert (await db.get(OutgoingRecord,r.rec.id)).timbangan_transaksi_id is None
     assert await _stok(pg,gudang)==10000
+
+
+def _tautan_detail_pengiriman(html,ident):
+    from bs4 import BeautifulSoup
+    from urllib.parse import urlsplit
+    return any(urlsplit(a['href']).path==f'/barang-keluar/{ident}'
+               for a in BeautifulSoup(html,'html.parser').select('a[href]'))

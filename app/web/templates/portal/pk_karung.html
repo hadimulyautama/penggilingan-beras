@@ -3,7 +3,7 @@
 {% block isi %}{% set t=detail_kartu %}{% set b=portal_pk_karung %}
 <main class="pk-detail pelanggan-pk-karung">
 <a class="pk-detail__back" href="/pelanggan/barang-saya">← Kembali ke Barang saya</a>
-<header class="pk-detail__hero"><div class="pk-detail__heading"><h1>{{ t.kode }}</h1><p class="pelanggan-redup">Gudang 2 · Tumpukan</p></div>
+<header class="pk-detail__hero"><div class="pk-detail__heading"><h1>{{ t.kode }}</h1><p class="pelanggan-redup">{{ t.gudang_nama or 'Lokasi belum tercatat' }} · Tumpukan</p></div>
 <div class="pk-detail__weight"><span>{{ 'Berat stok' if b.stok_kg is not none else 'Jumlah karung tercatat' }}</span><strong>{{ st.kg_rinci(b.stok_kg) ~ ' kg' if b.stok_kg is not none else (b.jumlah or 'Belum tercatat') }}</strong>{% if not t.bobot_final and b.stok_kg is not none %}<span class="pelanggan-status-berat">Berat sementara</span>{% endif %}</div>
 <div class="pelanggan-satuan-stok" aria-label="Jumlah karung dan berat">
 {% if b.stok_kg is none %}<p class="pelanggan-belum-timbang">Berat total belum ditimbang</p>{% elif b.label %}<p class="pelanggan-jumlah-berisi">{{ b.label }}</p>{% endif %}

@@ -20,9 +20,9 @@
 <select name="pemasok" hidden aria-label="Nama yang diterapkan"><option value="">Semua nama</option>{% if pemasok and pemasok not in nama_saring %}<option selected>{{ pemasok }}</option>{% endif %}{% for n in nama_saring %}<option{{ ' selected' if pemasok==n }}>{{ n }}</option>{% endfor %}</select>
 <p id="bm-belum-cari" class="bantu kontrol-pencarian__status" role="status" hidden>Tekan Cari atau Enter untuk memperbarui hasil.</p>
 </form></div>
-{% if not LAPORAN_NAV %}<nav data-bm-nav class="bm-tab" aria-label="Status penerimaan">
-<a href="{{ href(status='belum',halaman='') }}"{% if status=='belum' %} aria-current="page"{% endif %}>Belum diterima <span class="pil__jml">{{ total_belum }}</span></a>
-<a href="{{ href(status='diterima',halaman='') }}"{% if status=='diterima' %} aria-current="page"{% endif %}>Diterima <span class="pil__jml">{{ total_diterima }}</span></a>
+{% if not LAPORAN_NAV %}<nav data-bm-nav class="kontrol-tab kontrol-tab--berjumlah" aria-label="Status penerimaan">
+<a class="kontrol-tab__item" href="{{ href(status='belum',halaman='') }}"{% if status=='belum' %} aria-current="page"{% endif %}>Belum diterima <span class="kontrol-tab__jumlah">{{ total_belum }}</span></a>
+<a class="kontrol-tab__item" href="{{ href(status='diterima',halaman='') }}"{% if status=='diterima' %} aria-current="page"{% endif %}>Diterima <span class="kontrol-tab__jumlah">{{ total_diterima }}</span></a>
 </nav>{% endif %}
 {% if pelanggan_saring %}<p class="bantu">Pelanggan: <strong>{{ pelanggan_saring }}</strong> · <a href="{{ href(pelanggan_id='') }}">Semua pelanggan</a></p>{% endif %}
 <p class="bm-jumlah" aria-live="polite">{% if jumlah is not none %}<strong>{{ jumlah }} hasil</strong>{% else %}<strong>Jumlah hasil belum tersedia</strong>{% endif %}{% if cari %} untuk “{{ cari }}” · <span data-bm-nav><a href="{{ href(cari='') }}">Hapus pencarian</a></span>{% endif %}</p>

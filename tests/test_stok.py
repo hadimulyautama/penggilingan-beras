@@ -652,7 +652,7 @@ def test_stok_karung_filter_gudang1_tetap_ada_di_rute():
     sesudah pindah ke `halaman_stok_karung`."""
     from app.web import layar_produk
 
-    kode = inspect.getsource(layar_produk.halaman_stok_karung)
+    kode = inspect.getsource(layar_produk._halaman_stok_karung)
     assert 'b["gudang"] != "Gudang 1" or gudang1(view)' in kode
 
 

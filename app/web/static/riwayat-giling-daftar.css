@@ -32,3 +32,5 @@ body .rg-daftar .rg-tabel .rg-angka{text-align:right;font-variant-numeric:tabula
 body .rg-daftar .rg-qc-row td{background:var(--panel-2);padding:16px 20px}.rg-qc-row p{margin:8px 0 0}
 .rg-daftar .rg-kartu{display:block;width:100%;padding:0;min-width:0}
 .rg-daftar .rg-kartu>.rg-kartu__ringkas{display:block;width:100%;min-width:0}
+
+.rg-tabel-scroll{min-width:0;max-width:100%;overflow-x:auto}
