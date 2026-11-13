@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% macro awal(aksi) %}<form method="post" action="/pengaturan/perusahaan-sendiri/{{ info.perusahaan.id }}/{{ aksi }}" class="org-form" data-jaga-isian><input type="hidden" name="_csrf" value="{{ CSRF }}">{% endmacro %}
+{% macro alasan() %}<label>Alasan perubahan<textarea class="fld" name="alasan" minlength="5" maxlength="500" required>{{ form.get('alasan','') }}</textarea></label><button class="btn btn--utama" type="submit">Simpan</button>{% endmacro %}
+{% block judul %}{{ info.perusahaan.nama if info else 'Perusahaan saya' }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/organisasi.css?v={{ VERSI }}">
+<section class="pg org"><a class="pg-kembali" href="/pengaturan">← Pengaturan</a><p class="pg-lingkup">Pengaturan / Perusahaan saya</p>
+<h1>{{ info.perusahaan.nama if info else 'Perusahaan saya' }}</h1>
+{% if err %}<p class="nota nota--buruk" role="alert">{{ err }}</p>{% endif %}
+{% if request.query_params.get('tersimpan')=='1' %}<p class="pesan pesan--ok" role="status">Perubahan tersimpan.</p>{% endif %}
+{% if not info %}
+{% for c in companies %}<a class="pg-pintu" href="/pengaturan/perusahaan-sendiri/{{ c.id }}"><strong>{{ c.nama }}</strong><span>{{ c.kode }}</span></a>{% else %}<p>Belum ada keanggotaan Admin perusahaan yang aktif untuk akun ini. Penetapan perusahaan dan Admin pertama dikelola melalui Console Center.</p>{% endfor %}
+{% else %}
+<p>{{ info.perusahaan.kode }} · Pengelolaan sesuai keanggotaan dan lokasi/gudang yang ditugaskan kepada Anda.</p>
+<nav class="org-actions" aria-label="Bagian perusahaan"><a class="btn" href="#anggota">Anggota &amp; akses</a><a class="btn" href="#lokasi">Lokasi &amp; gudang</a><a class="btn" href="#audit">Riwayat perubahan</a></nav>
+<section id="anggota"><h2>Anggota &amp; akses</h2><form method="get" class="org-form"><label>Cari anggota perusahaan<input class="fld" name="cari" maxlength="100" value="{{ request.query_params.get('cari','') }}"></label><button class="btn">Cari</button></form>
+{% for m in info.anggota %}<article class="org-plan"><h3>{{ m.nama }}</h3><p>{{ 'Admin perusahaan' if m.peran=='admin' else 'Operator' }} · {{ 'Aktif' if m.aktif else 'Nonaktif' }}</p><a href="?anggota={{ m.user_id }}#ubah-anggota">Atur akses</a></article>{% else %}<p>Belum ada anggota yang dapat Anda kelola dalam cakupan ini.</p>{% endfor %}
+<p>Penambahan keanggotaan dan pemulihan kredensial dikelola melalui Console Center.</p>
+{% if edit %}
+{% set d=form if form.get('_aksi')=='anggota' else {} %}
+<section class="kartu" id="ubah-anggota"><h2>Atur akses {{ edit.nama }}</h2>{{ awal('anggota') }}
+<input type="hidden" name="user_id" value="{{ edit.user_id }}"><input type="hidden" name="bukti" value="{{ d.get('bukti',edit.bukti) }}">
+<label>Peran dalam perusahaan<select class="fld" name="peran">{% for p,l in [('operator','Operator'),('admin','Admin perusahaan')] %}<option value="{{ p }}" {% if d.get('peran',edit.peran)==p %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+<label class="org-check"><input type="checkbox" name="aktif" {% if d.get('aktif')=='on' or not d and edit.aktif %}checked{% endif %}> Anggota aktif</label>
+{% for s in info.lokasi %}{% set grant=edit.lokasi|selectattr('lokasi_pabrik_id','equalto',s.id)|first %}
+<fieldset><legend>{{ s.nama }}</legend><label class="org-check"><input type="checkbox" name="lokasi_{{ s.id }}" {% if d.get('lokasi_'~s.id)=='on' or not d and grant %}checked{% endif %}>Akses lokasi ini</label>
+{% if s.id in info.lokasi_penuh %}<label class="org-check"><input type="checkbox" name="semua_{{ s.id }}" {% if d.get('semua_'~s.id)=='on' or not d and grant and grant.semua_gudang %}checked{% endif %}>Semua gudang pada lokasi ini</label><p class="bantu">Untuk gudang tertentu, kosongkan pilihan semua gudang.</p>{% endif %}
+{% for w in s.gudang %}<label class="org-check"><input type="checkbox" name="gudang_{{ s.id }}" value="{{ w.id }}" {% if d and w.id|string in d.get('_gudang',{}).get('gudang_'~s.id,[]) or not d and grant and w.id in grant.gudang_ids %}checked{% endif %}>{{ w.nama }}</label>{% endfor %}</fieldset>{% endfor %}
+{{ alasan() }}</form></section>{% endif %}</section>
+<section id="lokasi"><h2>Lokasi &amp; gudang</h2>
+{% for s in info.lokasi %}<section class="kartu"><h3>{{ s.nama }}</h3><p>{{ s.kode }} · {{ s.alamat }}</p>
+{% for w in s.gudang %}<article class="org-plan"><strong>{{ w.nama }}</strong><p>{{ w.alamat }}</p>
+{% if s.id in info.lokasi_penuh %}{% set d=form if form.get('_aksi')=='gudang' and form.get('gudang_id')==w.id|string else {} %}<details {% if d %}open{% endif %}><summary>Ubah identitas gudang</summary>{{ awal('gudang') }}<input type="hidden" name="lokasi_id" value="{{ s.id }}"><input type="hidden" name="gudang_id" value="{{ w.id }}"><input type="hidden" name="bukti" value="{{ d.get('bukti',w.bukti) }}"><label>Nama gudang<input class="fld" name="nama" value="{{ d.get('nama',w.nama) }}" required maxlength="100"></label><label>Alamat<textarea class="fld" name="alamat" maxlength="1000">{{ d.get('alamat',w.alamat) }}</textarea></label>{{ alasan() }}</form></details>{% endif %}</article>{% else %}<p>Belum ada gudang pada lokasi ini.</p>{% endfor %}
+{% if s.id in info.lokasi_penuh %}
+{% set d=form if form.get('_aksi')=='lokasi' and form.get('lokasi_id')==s.id|string else {} %}
+<details {% if d %}open{% endif %}><summary>Ubah identitas lokasi</summary>{{ awal('lokasi') }}<input type="hidden" name="lokasi_id" value="{{ s.id }}"><input type="hidden" name="bukti" value="{{ d.get('bukti',s.bukti) }}"><label>Nama lokasi<input class="fld" name="nama" required maxlength="200" value="{{ d.get('nama',s.nama) }}"></label><label>Kode<input class="fld" name="kode" readonly value="{{ s.kode }}"></label><label>Alamat<textarea class="fld" name="alamat" maxlength="1000">{{ d.get('alamat',s.alamat) }}</textarea></label>{{ alasan() }}</form></details>
+{% set d=form if form.get('_aksi')=='gudang' and not form.get('gudang_id') and form.get('lokasi_id')==s.id|string else {} %}<details {% if d %}open{% endif %}><summary>Tambah gudang pada lokasi ini</summary>{{ awal('gudang') }}<input type="hidden" name="lokasi_id" value="{{ s.id }}"><label>Nama gudang<input class="fld" name="nama" required maxlength="100" value="{{ d.get('nama','') }}"></label><label>Alamat<textarea class="fld" name="alamat" maxlength="1000">{{ d.get('alamat','') }}</textarea></label>{{ alasan() }}</form></details>{% endif %}</section>{% else %}<p>Belum ada lokasi yang ditugaskan kepada Anda.</p>{% endfor %}
+{% set d=form if form.get('_aksi')=='lokasi' and not form.get('lokasi_id') else {} %}<details class="kartu" {% if d %}open{% endif %}><summary>Tambah lokasi perusahaan</summary>{{ awal('lokasi') }}<label>Nama lokasi<input class="fld" name="nama" required maxlength="200" value="{{ d.get('nama','') }}"></label><label>Kode lokasi<input class="fld" name="kode" required maxlength="50" value="{{ d.get('kode','') }}"></label><label>Alamat<textarea class="fld" name="alamat" maxlength="1000">{{ d.get('alamat','') }}</textarea></label>{{ alasan() }}</form></details>
+<p>Gudang lama yang belum memiliki penetapan ditinjau melalui Console Center. Status operasional, fungsi gudang, stok, dan proses tidak diubah dari halaman ini.</p></section>
+<section id="audit"><h2>Riwayat perubahan</h2>{% for log in logs %}<article class="org-plan"><p>#{{ log.id }} · {{ log.waktu_perubahan|jam('%d/%m/%Y %H:%M') }}</p><p>{{ log.alasan_perubahan }}</p><details><summary>Sebelum / sesudah</summary><pre>{{ log.old_value or '—' }}</pre><pre>{{ log.new_value }}</pre></details></article>{% else %}<p>Belum ada perubahan dalam cakupan Anda.</p>{% endfor %}{% if lanjut %}<a href="?sebelum={{ lanjut }}#audit">Riwayat lebih lama</a>{% endif %}</section>
+{% endif %}</section>
+{% endblock %}

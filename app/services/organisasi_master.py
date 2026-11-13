@@ -48,7 +48,13 @@ async def simpan(db,*,user_id,objek,nama,kode,aktif,alasan,identitas=None,bukti=
     nama=teks(nama,'Nama',200,2)
     alasan=teks(alasan,'Alasan perubahan',500,5)
     alamat=teks(alamat,'Alamat',1000,multibaris=True) if model is LokasiPabrik else None
-    row=await db.scalar(select(model).where(model.id==identitas).with_for_update().execution_options(populate_existing=True)) if identitas else None
+    # Satu urutan kunci untuk Console, Pengaturan perusahaan, dan penetapan:
+    # perusahaan -> lokasi -> gudang. Pembacaan awal hanya menentukan induk.
+    if model is LokasiPabrik:
+        awal=await db.get(LokasiPabrik,identitas) if identitas else None
+        if awal:company_id=awal.company_id
+        await db.scalar(select(Perusahaan).where(Perusahaan.id==company_id).with_for_update(key_share=True).execution_options(populate_existing=True))
+    row=await db.scalar(select(model).where(model.id==identitas).with_for_update(key_share=True).execution_options(populate_existing=True)) if identitas else None
     if identitas and (row is None or sidik(row)!=bukti):
         raise OrganisasiError('Data sudah berubah. Buka kembali rincian sebelum menyimpan.')
     if row:
@@ -64,7 +70,7 @@ async def simpan(db,*,user_id,objek,nama,kode,aktif,alasan,identitas=None,bukti=
     # Perubahan lokasi dan penonaktifan induk memakai kunci perusahaan yang sama.
     induk=None
     if model is LokasiPabrik:
-        induk=await db.scalar(select(Perusahaan).where(Perusahaan.id==company_id).with_for_update().execution_options(populate_existing=True))
+        induk=await db.scalar(select(Perusahaan).where(Perusahaan.id==company_id).with_for_update(key_share=True).execution_options(populate_existing=True))
         if not induk:raise OrganisasiError('Pilih perusahaan yang tersedia.')
         if aktif and not induk.aktif:raise OrganisasiError('Aktifkan perusahaan sebelum mengaktifkan lokasi pabrik.')
     q=select(model.id).where(model.kode==kode,model.id!=(identitas or 0))

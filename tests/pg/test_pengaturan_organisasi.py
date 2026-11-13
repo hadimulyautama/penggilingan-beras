@@ -43,9 +43,9 @@ async def test_pintu_berada_di_kelompok_perusahaan_sebelum_gudang(pg):
         r=await c.get('/pengaturan');assert r.status_code==200
         soup=BeautifulSoup(r.text,'html.parser');group=soup.select_one('section[aria-labelledby="pg-fasilitas"]')
         links=[a['href'] for a in group.select('a[href]')]
-        assert links.index(BASE)<links.index('/pengaturan/gudang')
+        assert links.index('/pengaturan/perusahaan-sendiri')<links.index('/pengaturan/gudang')
         assert '/pengaturan/perusahaan' in links
-        assert group.select_one(f'a[href="{BASE}"]').get_text(strip=True).startswith('Perusahaan & lokasi pabrik')
+        assert group.select_one('a[href="/pengaturan/perusahaan-sendiri"]').get_text(strip=True).startswith('Perusahaan saya')
 
 
 async def test_tambah_edit_audit_dan_identitas_transaksi_tetap(pg,running):

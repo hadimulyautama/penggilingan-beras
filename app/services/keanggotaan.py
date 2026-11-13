@@ -5,7 +5,7 @@ administrasi bukan bukti akses mandiri: pelaku dan cakupannya diperiksa ulang.
 """
 import hashlib,json
 from dataclasses import dataclass
-from sqlalchemy import select,delete,func,or_
+from sqlalchemy import select,delete,func,or_,and_
 from hmu_core import Perusahaan,LokasiPabrik,KeanggotaanPerusahaan,PenempatanGudang,User,Warehouse,AksesLokasiAnggota,AksesGudangAnggota
 from hmu_identitas import peran as P
 from app.services.organisasi_master import OrganisasiError,teks
@@ -31,7 +31,7 @@ async def otorisasi(db,ruang,company_id):
     if type(ruang.company_id) is not int or ruang.company_id!=company_id:raise PermissionError('Administrasi hanya untuk perusahaan sendiri.')
     m=await db.scalar(select(KeanggotaanPerusahaan).join(Perusahaan,Perusahaan.id==KeanggotaanPerusahaan.company_id).where(
         KeanggotaanPerusahaan.company_id==company_id,KeanggotaanPerusahaan.user_id==u.id,
-        KeanggotaanPerusahaan.aktif.is_(True),Perusahaan.aktif.is_(True)))
+        KeanggotaanPerusahaan.aktif.is_(True),Perusahaan.aktif.is_(True)).execution_options(populate_existing=True))
     if not m or P.normal(m.peran)!=P.ADMIN:raise PermissionError('Administrasi perusahaan memerlukan keanggotaan Admin aktif.')
     return u,m
 
@@ -44,8 +44,8 @@ def potret_anggota(m,sites,wh):
 
 async def snapshot(db,m):
     if m is None:return None
-    sites=list(await db.scalars(select(AksesLokasiAnggota).where(AksesLokasiAnggota.keanggotaan_id==m.id).order_by(AksesLokasiAnggota.lokasi_pabrik_id)))
-    wh=list(await db.scalars(select(AksesGudangAnggota).where(AksesGudangAnggota.keanggotaan_id==m.id).order_by(AksesGudangAnggota.warehouse_id)))
+    sites=list(await db.scalars(select(AksesLokasiAnggota).where(AksesLokasiAnggota.keanggotaan_id==m.id).order_by(AksesLokasiAnggota.lokasi_pabrik_id).execution_options(populate_existing=True)))
+    wh=list(await db.scalars(select(AksesGudangAnggota).where(AksesGudangAnggota.keanggotaan_id==m.id).order_by(AksesGudangAnggota.warehouse_id).execution_options(populate_existing=True)))
     return potret_anggota(m,sites,wh)
 
 
@@ -93,8 +93,10 @@ async def simpan(db,*,ruang,company_id,user_id,peran,aktif,lokasi,bukti,alasan):
         batas=(await snapshot(db,own))['lokasi']
         if not dalam_batas(lokasi,batas) or not dalam_batas(old['lokasi'],batas):raise PermissionError('Akses anggota melampaui lokasi/gudang yang boleh Anda kelola.')
         if old['peran']==P.ADMIN and old['aktif'] and (peran!=P.ADMIN or not aktif):
-            admins=await db.scalar(select(func.count()).select_from(KeanggotaanPerusahaan).where(
-                KeanggotaanPerusahaan.company_id==company_id,KeanggotaanPerusahaan.aktif.is_(True),func.lower(func.trim(KeanggotaanPerusahaan.peran))==P.ADMIN))
+            from hmu_identitas.model import Akun
+            admins=await db.scalar(select(func.count()).select_from(KeanggotaanPerusahaan).join(User,User.id==KeanggotaanPerusahaan.user_id)
+                .join(Akun,Akun.user_id==User.id).where(KeanggotaanPerusahaan.company_id==company_id,KeanggotaanPerusahaan.aktif.is_(True),
+                    func.lower(func.trim(KeanggotaanPerusahaan.peran))==P.ADMIN,func.lower(User.status)=='aktif',Akun.status=='aktif'))
             if admins<=1:raise OrganisasiError('Admin perusahaan terakhir tidak dapat dinonaktifkan dari Pengaturan perusahaan.')
     site_ids=[x['lokasi_pabrik_id'] for x in lokasi]
     sites=list(await db.scalars(select(LokasiPabrik).where(LokasiPabrik.id.in_(site_ids),LokasiPabrik.company_id==company_id,LokasiPabrik.aktif.is_(True)).with_for_update(key_share=True)))
@@ -131,6 +133,19 @@ async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
     wh=(await db.execute(select(PenempatanGudang,Warehouse).join(Warehouse,Warehouse.id==PenempatanGudang.warehouse_id).where(PenempatanGudang.company_id==company_id).order_by(Warehouse.nama_gudang))).all()
     cari=teks(cari_pengguna,'Pencarian pengguna',100)
     member_q=select(KeanggotaanPerusahaan,User).join(User,User.id==KeanggotaanPerusahaan.user_id).where(KeanggotaanPerusahaan.company_id==company_id).order_by(User.nama,User.id)
+    batas=(await snapshot(db,own))['lokasi'] if own else None
+    if batas is not None:
+        # Saring sebelum LIMIT: banyak anggota di luar cakupan tidak boleh
+        # menyembunyikan anggota sah yang terletak pada halaman berikutnya.
+        site_ids=[x['lokasi_pabrik_id'] for x in batas]
+        partial=[x['lokasi_pabrik_id'] for x in batas if not x['semua_gudang']]
+        outside_sites=select(AksesLokasiAnggota.keanggotaan_id).where(or_(
+            AksesLokasiAnggota.lokasi_pabrik_id.not_in(site_ids),
+            and_(AksesLokasiAnggota.lokasi_pabrik_id.in_(partial),AksesLokasiAnggota.semua_gudang.is_(True))))
+        allowed_wh=or_(*[and_(AksesGudangAnggota.lokasi_pabrik_id==x['lokasi_pabrik_id'],
+            True if x['semua_gudang'] else AksesGudangAnggota.warehouse_id.in_(x['gudang_ids'])) for x in batas],False)
+        outside_wh=select(AksesGudangAnggota.keanggotaan_id).where(~allowed_wh)
+        member_q=member_q.where(KeanggotaanPerusahaan.id.not_in(outside_sites),KeanggotaanPerusahaan.id.not_in(outside_wh))
     if anggota_id is not None:
         if not id_sah(anggota_id):raise OrganisasiError('Identitas anggota tidak valid.')
         member_q=member_q.where(User.id==anggota_id)
@@ -141,13 +156,21 @@ async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
     akses_w=list(await db.scalars(select(AksesGudangAnggota).where(AksesGudangAnggota.keanggotaan_id.in_(mids)).order_by(AksesGudangAnggota.warehouse_id)))
     data=[]
     for m,u in members:
-        d=potret_anggota(m,[s for s in akses_s if s.keanggotaan_id==m.id],[w for w in akses_w if w.keanggotaan_id==m.id]);d.update(nama=u.nama,bukti=sidik(d));data.append(d)
+        d=potret_anggota(m,[s for s in akses_s if s.keanggotaan_id==m.id],[w for w in akses_w if w.keanggotaan_id==m.id])
+        if batas is not None and not dalam_batas(d['lokasi'],batas):continue
+        d.update(nama=u.nama,bukti=sidik(d));data.append(d)
+    if batas is not None:
+        allowed={s['lokasi_pabrik_id']:s for s in batas}
+        sites=[s for s in sites if s.id in allowed]
+        wh=[(b,w) for b,w in wh if b.lokasi_pabrik_id in allowed and
+            (allowed[b.lokasi_pabrik_id]['semua_gudang'] or w.id in allowed[b.lokasi_pabrik_id]['gudang_ids'])]
     q=select(User).where(func.lower(User.status)=='aktif').order_by(User.nama,User.id)
     cari=teks(cari_pengguna,'Pencarian pengguna',100)
     if cari:q=q.where(or_(User.nama.ilike('%'+cari+'%'),User.id==int(cari) if cari.isdigit() and len(cari)<=9 else False))
-    users=list(await db.scalars(q.limit(201))) if own is None else [u for _,u in members]
+    users=list(await db.scalars(q.limit(201))) if own is None else [u for _,u in members if any(d['user_id']==u.id for d in data)]
     lebih=len(users)>200;users=users[:200]
-    return dict(perusahaan=dict(id=co.id,nama=co.nama,kode=co.kode,aktif=co.aktif),anggota=data,anggota_lebih=member_lebih,
+    from app.services.organisasi_master import sidik as sidik_master
+    return dict(perusahaan=dict(id=co.id,nama=co.nama,kode=co.kode,aktif=co.aktif,bukti=sidik_master(co)),anggota=data,anggota_lebih=member_lebih,
         pengguna=[dict(id=u.id,nama=u.nama) for u in users],pengguna_lebih=lebih,bukti_baru=sidik(None),
         lokasi=[dict(id=s.id,nama=s.nama,aktif=s.aktif,gudang=[dict(id=w.id,nama=w.nama_gudang,aktif=w.aktif) for b,w in wh if b.lokasi_pabrik_id==s.id]) for s in sites])
 
