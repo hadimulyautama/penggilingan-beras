@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal
 from app.services import keanggotaan as anggota,perusahaan_sendiri as svc
 from app.services.organisasi_master import OrganisasiError
-from app.web.security import butuh_akun
+from app.web.security import butuh_akun,AksesDitolak
 from app.web.tampilan import render_laci,redirect
 from app.web.console import RuteConsole
 from hmu_identitas import peran as P
@@ -16,7 +16,7 @@ DASAR='/pengaturan/perusahaan-sendiri'
 async def pelaku(request:Request,akun=Depends(butuh_akun)):
     # Penyamaran tetap dihormati; tidak mengangkat kembali hak Admin ketika
     # pengguna sedang mencoba layar operator. Peran keanggotaan diperiksa DB.
-    if P.normal(getattr(request.state,'peran_asli',akun.peran))!=P.normal(akun.peran):raise HTTPException(403,'Kembali ke tampilan akun sendiri untuk mengelola perusahaan.')
+    if P.normal(getattr(request.state,'peran_asli',akun.peran))!=P.normal(akun.peran):raise AksesDitolak('Kembali ke tampilan akun sendiri untuk mengelola perusahaan.')
     return akun
 
 
@@ -42,7 +42,7 @@ async def halaman(request,akun,cid,*,form=None,err='',status=200):
             info=await svc.baca(db,ruang,cari_pengguna=request.query_params.get('cari',''),
                 anggota_id=angka(request.query_params['anggota']) if request.query_params.get('anggota') else None)
             logs,lanjut=await svc.riwayat(db,ruang,sebelum=angka(request.query_params['sebelum']) if 'sebelum' in request.query_params else None)
-    except PermissionError as e:raise HTTPException(403,str(e)) from e
+    except PermissionError as e:raise AksesDitolak(str(e)) from e
     except OrganisasiError as e:raise HTTPException(422,str(e)) from e
     uid=(form or {}).get('user_id') or request.query_params.get('anggota')
     edit=next((m for m in info['anggota'] if str(m['user_id'])==str(uid)),None)
@@ -91,7 +91,7 @@ async def simpan(request:Request,company_id:int,aksi:str,akun=Depends(pelaku)):
                 await svc.simpan_gudang(db,ruang=ruang,lokasi_id=angka(raw.get('lokasi_id')),gudang_id=angka(raw['gudang_id']) if raw.get('gudang_id') else None,
                     nama=raw.get('nama',''),alamat=raw.get('alamat',''),bukti=raw.get('bukti',''),alasan=raw.get('alasan',''))
             await db.commit()
-    except PermissionError as e:raise HTTPException(403,str(e)) from e
+    except PermissionError as e:raise AksesDitolak(str(e)) from e
     except (OrganisasiError,IntegrityError) as e:
         # Tidak mengganti bukti formulir yang gagal: draf usang tidak boleh
         # memperoleh izin untuk menimpa perubahan yang baru disimpan orang lain.

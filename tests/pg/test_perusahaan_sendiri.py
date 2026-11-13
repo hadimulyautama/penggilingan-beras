@@ -44,6 +44,7 @@ async def test_peran_global_tidak_memberikan_perusahaan_otomatis(pg,organisasi,r
         before=await fakta(pg)
         assert (await c.get(BASE)).status_code==200
         r=await c.get(f'{BASE}/{x["c"][0]}');assert r.status_code==403
+        assert r.headers['content-type'].startswith('text/html') and 'text/html' in r.headers['content-type']
         assert (await c.post(f'{BASE}/{x["c"][0]}/lokasi',data=form(c,nama='Tidak boleh',kode='baru',alamat=''))).status_code==403
         assert await fakta(pg)==before
 
