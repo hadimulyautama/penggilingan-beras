@@ -1,4 +1,4 @@
-"""Pengaturan organisasi; penetapan data lama hanya mempunyai rute GET."""
+"""Pengaturan organisasi dan penetapan gudang melalui pratinjau bertanda."""
 from fastapi import APIRouter,Depends,Request,HTTPException
 from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal
@@ -16,10 +16,15 @@ def angka(v):
     return int(v)
 
 
-async def halaman(request,akun,*,mode='daftar',company_id=None,site_id=None,form=None,err='',status=200,plan=None):
+async def halaman(request,akun,*,mode='daftar',company_id=None,site_id=None,form=None,err='',status=200,plan=None,bukti=''):
     async with SessionLocal() as db:
+        jejak=[];lanjut=None
+        if site_id:
+            try:sebelum=angka(request.query_params['sebelum']) if 'sebelum' in request.query_params else None
+            except master.OrganisasiError as exc:raise HTTPException(422,str(exc)) from exc
+            jejak,lanjut=await rencana.riwayat(db,lokasi_pabrik_id=site_id,sebelum=sebelum)
         companies,sites,bindings=await master.baca(db)
-        wh,counts=await rencana.fasilitas(db)
+        wh,_=await rencana.fasilitas(db)
     company=next((c for c in companies if c.id==company_id),None)
     site=next((s for s in sites if s.id==site_id),None)
     if site:
@@ -28,7 +33,8 @@ async def halaman(request,akun,*,mode='daftar',company_id=None,site_id=None,form
     return await render_laci(request,'organisasi.html',layar='pengaturan',kembali=DASAR if mode!='daftar' else '/pengaturan',
       mode=mode,companies=companies,sites=sites,bindings=bindings,warehouses=wh,company=company,site=site,
       form=form or {},err=err,plan=plan,master_sidik=master.sidik,status_code=status,
-      pesan=request.query_params.get('tersimpan')=='1')
+      pesan=request.query_params.get('tersimpan')=='1',bukti=bukti,
+      pesan_penetapan=request.query_params.get('penetapan',''),jejak=jejak,jejak_lanjut=lanjut)
 
 
 @router.get(DASAR)
@@ -57,7 +63,8 @@ async def penetapan(request:Request,akun=Depends(butuh_perusahaan)):
                 plan=await rencana.pratinjau(db,lokasi_pabrik_id=angka(form['lokasi_pabrik_id']),
                      warehouse_ids=[angka(i) for i in form['warehouse_ids']])
         except master.OrganisasiError as exc:err=str(exc)
-    return await halaman(request,akun,mode='penetapan',form=form,err=err,plan=plan,status=422 if err else 200)
+    bukti=rencana.buat_bukti(plan,user_id=akun.user.id) if plan and plan.bisa_diterapkan and plan.jumlah_baru else ''
+    return await halaman(request,akun,mode='penetapan',form=form,err=err,plan=plan,bukti=bukti,status=422 if err else 200)
 
 
 async def simpan(request,akun,*,objek,identitas=None,company_id=None):
@@ -103,3 +110,26 @@ async def tambah_lokasi(request:Request,company_id:int,akun=Depends(butuh_perusa
 @router.post(DASAR+'/lokasi/{site_id:int}')
 async def ubah_lokasi(request:Request,site_id:int,akun=Depends(butuh_perusahaan)):
     return await simpan(request,akun,objek='lokasi',identitas=site_id)
+
+
+@router.post(DASAR+'/penetapan/terapkan')
+async def terapkan_penetapan(request:Request,akun=Depends(butuh_perusahaan)):
+    isi=await request.form();form=dict(isi)
+    try:
+        if set(form)-{'_csrf','bukti','alasan','konfirmasi'} or any(len(isi.getlist(k))!=1 for k in form):
+            raise master.OrganisasiError('Isian penetapan tidak dikenal. Gunakan pratinjau dari Pengaturan.')
+        pilihan=rencana._periksa_bukti(form.get('bukti',''),user_id=akun.user.id)
+        form.update(lokasi_pabrik_id=str(pilihan['lokasi_pabrik_id']),warehouse_ids=[str(i) for i in pilihan['warehouse_ids']])
+        if form.get('konfirmasi')!='on':raise master.OrganisasiError('Periksa tujuan dan gudang, lalu tandai persetujuan penetapan.')
+        async with SessionLocal() as db:
+            hasil=await rencana.terapkan(db,user_id=akun.user.id,bukti=form.get('bukti',''),alasan=form.get('alasan',''))
+            await db.commit()
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc)) from exc
+    except (master.OrganisasiError,IntegrityError) as exc:
+        err='Data penetapan berubah. Buat pratinjau terbaru sebelum menerapkan.' if isinstance(exc,IntegrityError) else str(exc)
+        # Bukti gagal tidak diganti diam-diam dengan izin baru. Draf alasan
+        # tetap ditampilkan; pengguna harus meninjau ulang tujuan/gudangnya.
+        return await halaman(request,akun,mode='penetapan',form=form,err=err,status=422)
+    pesan='tersimpan' if hasil.jumlah_baru or hasil.diulang else 'sesuai'
+    return redirect(f'{DASAR}/lokasi/{hasil.lokasi_pabrik_id}?penetapan={pesan}')

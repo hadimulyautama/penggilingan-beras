@@ -1,4 +1,4 @@
-"""HTTP nyata: kelola master; rencana data lama baca-saja tanpa rute penerapan."""
+"""HTTP nyata: kelola master; master dan penetapan dengan pratinjau wajib."""
 import json
 from urllib.parse import urlencode
 import pytest
@@ -82,7 +82,7 @@ async def test_hanya_super_bahkan_jika_belum_ada_super_aktif(pg,role):
         before=await fakta(pg)
         for path in [BASE,BASE+'/penetapan',BASE+'/perusahaan/1',BASE+'/lokasi/1']:
             assert (await c.get(path)).status_code==403
-        for path in [BASE+'/perusahaan/baru',BASE+'/perusahaan/1',BASE+'/perusahaan/1/lokasi/baru',BASE+'/lokasi/1']:
+        for path in [BASE+'/perusahaan/baru',BASE+'/perusahaan/1',BASE+'/perusahaan/1/lokasi/baru',BASE+'/lokasi/1',BASE+'/penetapan/terapkan']:
             assert (await c.post(path,data=data(c))).status_code==403
         assert await fakta(pg)==before
 
@@ -114,9 +114,9 @@ async def test_pratinjau_menampilkan_konflik_fasilitas_dan_tidak_menulis(pg,runn
         assert 'silo' in plan.get_text() and 'dryer' in plan.get_text() and 'line' in plan.get_text()
         assert not s.select('.org form[method=post]')
         assert await fakta(pg)==before
-        # Tidak ada endpoint penerapan, termasuk variasi URL/payload lama.
+        # Payload lama tanpa bukti pratinjau tetap ditolak; URL tebakan lain tidak tersedia.
         for path in [BASE+'/penetapan',BASE+'/penetapan/terapkan',BASE+'/penetapan/simpan',BASE+'/penetapan/commit']:
-            assert (await c.post(path,data={**data(c),'lokasi_pabrik_id':sa,'warehouse_id':ids})).status_code in (404,405)
+            assert (await c.post(path,data={**data(c),'lokasi_pabrik_id':sa,'warehouse_id':ids})).status_code in ((422,) if path.endswith('/terapkan') else (404,405))
         assert await fakta(pg)==before
 
 
@@ -150,6 +150,7 @@ async def test_super_yang_sedang_lihat_sebagai_operator_tidak_mengelola_master(p
         before=await fakta(pg)
         assert (await c.get(BASE)).status_code==403
         assert (await c.post(BASE+'/perusahaan/baru',data=data(c))).status_code==403
+        assert (await c.post(BASE+'/penetapan/terapkan',data=data(c))).status_code==403
         assert await fakta(pg)==before
 
 

@@ -1,4 +1,4 @@
-"""Browser nyata: pintu Pengaturan, master, dan pratinjau tanpa mutasi stok."""
+"""Browser nyata: pintu Pengaturan, master, pratinjau dan penerapan tanpa mutasi stok."""
 import os,re,asyncio
 from contextlib import asynccontextmanager
 import uvicorn
@@ -46,7 +46,7 @@ async def browser_http(c,width):
 
 
 @pytest.mark.parametrize('width',[320,390,1440])
-async def test_pengaturan_sampai_pratinjau_tetap_terbaca_dan_transaksi_identik(pg,running,width,tmp_path):
+async def test_pengaturan_sampai_penetapan_tetap_terbaca_dan_transaksi_identik(pg,running,width,tmp_path):
     async with await _klien(pg,peran=P.SUPERADMIN) as c:
         before=await fakta(pg)
         async with browser_http(c,width) as (page,base):
@@ -75,8 +75,26 @@ async def test_pengaturan_sampai_pratinjau_tetap_terbaca_dan_transaksi_identik(p
             await page.get_by_role('button',name='Pratinjau penetapan',exact=True).click()
             await expect(page.locator('[data-rencana-penetapan]')).to_be_visible()
             await expect(page.locator('[data-rencana-penetapan]')).to_contain_text('Belum ada penetapan yang disimpan')
-            assert await page.locator('.org form[method=post]').count()==0
+            assert await page.locator('.org form[method=post]').count()==1
+            tujuan=page.locator('select[name=lokasi_pabrik_id]');awal=await tujuan.input_value()
+            await page.get_by_label('Alasan penetapan',exact=True).fill('Draf alasan tetap tersedia')
+            await tujuan.select_option('')
+            await expect(page.get_by_role('button',name='Terapkan penetapan gudang',exact=True)).to_be_disabled()
+            await expect(page.locator('[data-pilihan-berubah]')).to_be_visible()
+            await expect(page.get_by_label('Alasan penetapan',exact=True)).to_have_value('Draf alasan tetap tersedia')
+            await tujuan.select_option(awal)
+            await expect(page.get_by_role('button',name='Terapkan penetapan gudang',exact=True)).to_be_enabled()
+            await expect(page.locator('[data-pilihan-berubah]')).to_be_hidden()
+            assert (await fakta(pg))['hmu_warehouse_sites']==before['hmu_warehouse_sites']
             assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
             out=Path(os.getenv('BUKTI_ORGANISASI',str(tmp_path)));out.mkdir(parents=True,exist_ok=True)
             await page.screenshot(path=str(out/f'pratinjau-{width}.png'),full_page=True)
-        assert tanpa_master(await fakta(pg))==tanpa_master(before)
+            await page.get_by_label('Alasan penetapan',exact=True).fill('Penetapan melalui Pengaturan setelah pemeriksaan')
+            await page.get_by_label('Saya telah memeriksa perusahaan, lokasi, dan gudang pada pratinjau ini.').check()
+            await page.get_by_role('button',name='Terapkan penetapan gudang',exact=True).click()
+            await expect(page).to_have_url(re.compile(r'/organisasi/lokasi/\d+\?penetapan=tersimpan'))
+            await expect(page.locator('.org')).to_contain_text('Penetapan gudang tersimpan.')
+            await expect(page.locator('.org')).to_contain_text('Gudang yang sudah ditetapkan')
+            assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            await page.screenshot(path=str(out/f'penetapan-{width}.png'),full_page=True)
+        assert {k:v for k,v in tanpa_master(await fakta(pg)).items() if k!='hmu_warehouse_sites'}=={k:v for k,v in tanpa_master(before).items() if k!='hmu_warehouse_sites'}
