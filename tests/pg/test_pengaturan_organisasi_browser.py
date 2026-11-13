@@ -35,7 +35,11 @@ async def browser_http(c,width):
             context=await b.new_context(**konteks(pw,width,1000),service_workers='block')
             await context.add_cookies([dict(name=k.name,value=k.value,url=base) for k in c.cookies.jar])
             page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-            await page.route('**/api/aliran*',lambda r:r.abort())
+            # Pengujian metadata ini tidak menjalankan pekerja SSE. Menolak
+            # request sengaja dengan abort memicu pageerror access-control
+            # nondeterministik di WebKit; berikan stream komentar SSE yang sah.
+            await page.route('**/api/aliran*',lambda r:r.fulfill(status=200,
+                content_type='text/event-stream',body=': denyut pengujian lokal\n\n'))
             await page.route('https://**/*',lambda r:r.abort())
             try:yield page,base
             finally:await b.close()
