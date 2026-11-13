@@ -84,13 +84,14 @@ async def test_api_generik_langsung_tanpa_tiket_dan_menolak_metadata_kendaraan(p
   for extra in ({'pakai_kendaraan':True},{'nomor_polisi':'K 1 A'},{'nama_sopir':'Kasidi'}):
    r=await c.post('/api/transfer-bertahap/pengiriman',json={**payload,'kunci':uuid.uuid4().hex,**extra});assert r.status_code==422,r.text
 
+@pytest.mark.parametrize('cara',['karung','kg'])
 @pytest.mark.parametrize('width',[390,1440])
 @pytest.mark.parametrize('peran,lihat,is_admin',[
  ('operator',None,False),('admin',None,True),
  ('superadmin',None,True),('admin','operator:g1',False),
  ('superadmin','operator:g1',False),
 ])
-async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,peran,lihat,is_admin):
+async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,peran,lihat,is_admin,cara):
  from urllib.parse import urlsplit
  from playwright.async_api import async_playwright,expect
  from tests.pg.test_riwayat_giling import _klien
@@ -123,7 +124,22 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    assert response.status_code==403,response.text
   await page.locator('[name=pilih]').check()
   await expect(page.locator('[name=nomor_polisi],[name=nama_sopir],#pk-pakai-kendaraan')).to_have_count(0)
-  await page.locator('[name=berat]').fill('6000')
+  if cara=='kg':
+   await page.locator('[name=cara]').select_option('kg')
+   await page.locator('[name=berat]').fill('6000')
+  else:
+   await page.locator('[name=jumlah_karung]').fill('120')
+   await page.locator('[name=berat_curah_kg]').fill('0.01')
+   await expect(page.locator('[data-total]')).to_contain_text('melebihi sisa persetujuan')
+   assert not await page.locator('#pk-pilihan').evaluate('e=>e.checkValidity()')
+   await page.locator('[name=jumlah_karung]').fill('23')
+   await page.locator('[name=berat_curah_kg]').fill('2')
+   await expect(page.locator('[data-total]')).to_contain_text('1.152 kg')
+   await page.locator('[name=cara]').select_option('kg')
+   await expect(page.locator('[name=berat]')).to_have_value('1152.00')
+   await page.locator('[name=cara]').select_option('karung')
+   await expect(page.locator('[name=jumlah_karung]')).to_have_value('23')
+   await expect(page.locator('[name=berat_curah_kg]')).to_have_value('2.00')
   await page.get_by_role('button',name='Catat transfer · 1 lot',exact=True).click()
   await expect(page.locator('#pk-pesan')).to_contain_text('Stok asal dan tujuan sudah diperbarui.')
   await expect(page.locator('#pk-jalan')).to_contain_text('Transfer #')
@@ -131,7 +147,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
   assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   assert not errors,errors
   await b.close()
- async with pg() as db:assert await db.scalar(select(func.sum(InternalTransfer.berat_kg)))==6000
+ async with pg() as db:assert await db.scalar(select(func.sum(InternalTransfer.berat_kg)))==(1152 if cara=='karung' else 6000)
 
 @pytest.mark.parametrize('ada_silo',[True,False])
 async def test_tujuan_hanya_tumpukan_dan_silo_penerima_pk_gudang_tujuan(pg,siap,ada_silo):

@@ -1,5 +1,6 @@
 """Pintu transfer PK generik dan kontrak historis Pos Timbang."""
 from types import SimpleNamespace
+from typing import Annotated,Literal
 from fastapi import APIRouter, Depends, Request, HTTPException, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field,PositiveInt,ConfigDict
@@ -23,9 +24,25 @@ class Persetujuan(Item):
     tujuan:str=Field(max_length=120)
 class Setujui(BaseModel):
     items:list[Persetujuan]=Field(min_length=1,max_length=50)
+class JumlahTransfer(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    permintaan_id:PositiveInt
+    cara:Literal['karung','kg']|None=None
+    berat_kg:str|None=Field(default=None,max_length=20)
+    jumlah_karung:Annotated[int,Field(strict=True,ge=0)]|None=None
+    berat_curah_kg:str|None=Field(default=None,max_length=20)
+
+    def sebagai_kg(self):
+        from app.services.pk_50 import bobot_isian
+        try:
+            berat=bobot_isian(berat=self.berat_kg,jumlah_karung=self.jumlah_karung,
+                              berat_curah_kg=self.berat_curah_kg,cara=self.cara)
+            return dict(permintaan_id=self.permintaan_id,berat_kg=s.angka(s.kg(berat)))
+        except ValueError as e:raise s.PengirimanError(str(e)) from None
+
 class Buat(BaseModel):
     model_config=ConfigDict(extra='forbid')
-    items:list[Item]=Field(min_length=1,max_length=50)
+    items:list[JumlahTransfer]=Field(min_length=1,max_length=50)
     kunci:str=Field(pattern=r'^[a-f0-9]{32}$')
 class Alasan(BaseModel):alasan:str=Field(min_length=1,max_length=2000)
 
@@ -86,7 +103,7 @@ async def setujui(body:Setujui,user=Depends(pengguna_aksi)):
 @router.post('/api/transfer-bertahap/pengiriman')
 async def buat(body:Buat,user=Depends(pengguna_aksi)):
     try:
-        async with SessionLocal() as db:return jawab(await s.buat(db,user=user,items=[x.model_dump() for x in body.items],kunci=body.kunci,pakai_kendaraan=False))
+        async with SessionLocal() as db:return jawab(await s.buat(db,user=user,items=[x.sebagai_kg() for x in body.items],kunci=body.kunci,pakai_kendaraan=False))
     except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/permintaan/{rid}/tutup-sisa')

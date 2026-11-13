@@ -3,7 +3,7 @@
 {% block judul %}Transfer PK{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/pekerjaan-kontrol.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=5">
 <div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}">
 <header class="pk-kontrol"><div class="pk-judul"><h1>Transfer PK</h1><button class="btn btn--kecil" type="button" id="pk-panduan-buka">ⓘ Panduan</button></div><p><a href="/pekerjaan?tab=tindakan">← Kembali ke Pekerjaan</a></p>
 <div class="kontrol-cari-kiri pk-alat"><label class="pk-cari">Cari lot atau transfer<input type="search" class="cari" id="pk-cari" placeholder="Cari lot atau transfer…"></label><button class="btn" type="button" id="pk-muat">Perbarui status</button></div>
@@ -13,9 +13,9 @@
 <section id="pk-perjalanan"><h2>Riwayat transfer</h2><p class="bantu">Jumlah yang tercatat mengurangi stok asal dan menambah stok tujuan. Sisa persetujuan dapat dipindahkan berikutnya.</p><div id="pk-jalan"></div></section>
 <dialog class="pk-panel" id="pk-alasan"><form id="pk-alasan-form"><h2 id="pk-alasan-judul"></h2><p id="pk-alasan-keterangan"></p><label>Alasan<textarea class="fld" name="alasan" required maxlength="2000"></textarea></label><p><button class="btn btn--utama" type="submit">Simpan keputusan</button> <button class="btn" type="button" data-tutup>Batal</button></p></form></dialog>
 {% call panel_panduan('pk-panduan', 'Panduan transfer PK', penutup={'data-tutup': ''}) %}
-<ol><li><strong>Gudang 2 meminta:</strong> buka detail lot PK dan tekan Minta lot ini. Isi jumlah karung 50 kg dan curah, atau jumlah kg yang diperlukan.</li><li><strong>Admin menyetujui:</strong> pilih permintaan, periksa jumlah kg, lalu pilih Tumpukan atau silo yang menerima PK di gudang tujuan.</li><li><strong>Gudang 1 mencatat transfer:</strong> setelah barang dipindahkan, pilih lot yang disetujui, isi jumlah kg yang dipindahkan, lalu tekan Catat transfer.</li></ol>
+<ol><li><strong>Gudang 2 meminta:</strong> buka detail lot PK dan tekan Minta lot ini. Isi jumlah karung 50 kg dan curah, atau jumlah kg yang diperlukan.</li><li><strong>Admin menyetujui:</strong> pilih permintaan, periksa jumlah kg, lalu pilih Tumpukan atau silo yang menerima PK di gudang tujuan.</li><li><strong>Gudang 1 mencatat transfer:</strong> setelah barang dipindahkan, pilih lot yang disetujui, isi jumlah karung 50 kg dan curah atau langsung kg, lalu tekan Catat transfer.</li></ol>
 <p>Transfer boleh sebagian. Beberapa lot dapat dicatat bersama jika asal, tujuan, dan pemiliknya sama. Stok asal dan tujuan langsung diperbarui saat disimpan. Jika seluruh jumlah yang disetujui sudah dipindahkan, permintaan selesai otomatis.</p>
 <p>Hanya Admin yang dapat memakai Tutup sisa persetujuan, disertai alasan, jika sisanya tidak jadi dipindahkan.</p>
 {% endcall %}
-</div><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=4" defer></script>
+</div><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=5" defer></script>
 {% endblock %}
