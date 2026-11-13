@@ -7,7 +7,7 @@
 <div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}">
 <header class="pk-kontrol"><div class="pk-judul"><h1>Transfer PK</h1><button class="btn btn--kecil" type="button" id="pk-panduan-buka">ⓘ Panduan</button></div><p><a href="/pekerjaan?tab=tindakan">← Kembali ke Pekerjaan</a></p>
 <div class="kontrol-cari-kiri pk-alat"><label class="pk-cari">Cari lot atau transfer<input type="search" class="cari" id="pk-cari" placeholder="Cari lot atau transfer…"></label><button class="btn" type="button" id="pk-muat">Perbarui status</button></div>
-<nav class="pk-tab" aria-label="Bagian transfer"><a href="#pk-permintaan">Permintaan lot</a><a href="#pk-perjalanan">Riwayat transfer</a></nav></header>
+<nav class="kontrol-tab" aria-label="Bagian transfer"><a class="kontrol-tab__item" href="#pk-permintaan">Permintaan lot</a><a class="kontrol-tab__item" href="#pk-perjalanan">Riwayat transfer</a></nav></header>
 <p id="pk-pesan" role="status" aria-live="polite"></p>
 <section id="pk-permintaan"><h2>Permintaan lot</h2><p class="bantu" id="pk-arahan">Memuat permintaan…</p><form id="pk-pilihan"><div id="pk-daftar"></div><p><button class="btn btn--utama" type="submit" id="pk-simpan" hidden>Setujui yang dipilih</button></p></form></section>
 <section id="pk-perjalanan"><h2>Riwayat transfer</h2><p class="bantu">Jumlah yang tercatat mengurangi stok asal dan menambah stok tujuan. Sisa persetujuan dapat dipindahkan berikutnya.</p><div id="pk-jalan"></div></section>

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1] / 'hmu_tampilan'
 
 @pytest.mark.parametrize('width', [390, 1440])
 @pytest.mark.parametrize('status', ['belum', 'diterima'])
-def test_filter_cari_tab_menu_dan_cetak(width, status):
+def test_filter_cari_tab_menu_dan_cetak(width, status, tmp_path):
     env = Environment(loader=ChoiceLoader([
         DictLoader({'base.html': '<div class="bingkai"><main class="isi">{% block isi %}{% endblock %}</main></div>'}),
         FileSystemLoader(ROOT / 'templates'),
@@ -33,7 +33,7 @@ def test_filter_cari_tab_menu_dan_cetak(width, status):
         href=lambda **p: '/barang-masuk?' + urlencode(p), detail_tiket=lambda _: '/barang-masuk/1',
     )
     prefix = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    css = ''.join((ROOT / 'static' / f).read_text() for f in ('app.css', 'komponen-portal.css','panduan.css'))
+    css = ''.join((ROOT / 'static' / f).read_text() for f in ('app.css', 'komponen-portal.css','panduan.css','kontrol-halaman.css'))
     html = prefix + '<style>' + css + '</style><body class="padiflow-ui terik">' + html + '</body>'
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -53,13 +53,13 @@ def test_filter_cari_tab_menu_dan_cetak(width, status):
         search = page.get_by_role('searchbox')
         search.fill('Suroto')
         expect(page.locator('[data-hasil-cari]')).to_contain_text('cocok')
-        assert 'cari=Suroto' in page.locator('.bm-tab a').first.get_attribute('href')
+        assert 'cari=Suroto' in page.locator('nav[aria-label="Status penerimaan"] a').first.get_attribute('href')
         if status == 'diterima':
             expect(page.locator('.masuk-baris')).to_be_visible()
             search.fill('Tidak ada')
             expect(page.locator('.masuk-baris')).to_be_hidden()
             search.fill('Suroto')
-        filter_button = page.locator('.bm-tindakan-ponsel [data-bm-buka="bm-filter"]' if width == 390 else '.bm-filter-desktop')
+        filter_button = page.locator('.bm-tindakan-ponsel [data-bm-buka="bm-filter"]' if width == 390 else '.kontrol-filter')
         expect(page.locator('#bm-filter')).not_to_be_visible()
         filter_button.click()
         expect(page.locator('#bm-filter')).to_be_visible()
@@ -89,7 +89,7 @@ def test_filter_cari_tab_menu_dan_cetak(width, status):
         page.wait_for_url('**/barang-masuk?**')
         assert 'jenis=pk' in page.url and 'cari=Suroto' in page.url
         assert 'pemasok=Pak+Suroto' in page.url
-        out = ROOT.parent / 'output/barang-masuk-rilis'
+        out = tmp_path / 'barang-masuk-rilis'
         out.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(out / f'{status}-{width}.png'), full_page=True)
         assert not errors

@@ -250,7 +250,7 @@ async def test_retur_hanya_di_pengiriman_bukan_sidebar(pg, scenario):
             assert nav is not None and 'Barang Retur' not in nav.get_text()
             if role in ('super', 'admin'):
                 page = await c.get('/barang-keluar')
-                assert BeautifulSoup(page.text, 'html.parser').select_one('.pengiriman-tab a[href="/retur"]')
+                assert BeautifulSoup(page.text, 'html.parser').select_one('nav[aria-label="Jenis pengiriman"] a[href="/retur"]')
             else:
                 assert (await c.get('/retur')).status_code == 403
     async with client(s.staff['super'], view='operator:g2') as c:

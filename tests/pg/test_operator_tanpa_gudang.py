@@ -1,5 +1,6 @@
 """Akses tanpa gudang tertutup; pilihan gudang resmi memulihkan cakupan."""
 import re
+from bs4 import BeautifulSoup
 
 import pytest
 import pytest_asyncio
@@ -62,7 +63,9 @@ async def test_daftar_detail_dan_filter_pengiriman_mengikuti_gudang_sah(pg, akse
             r = await c.get(path)
             assert r.status_code == expected, path
             if expected == 403:
-                assert 'OUT-AKSES' not in r.text
+                # Formulir pergantian gudang menyimpan URL balik milik
+                # pengguna, termasuk kata cari; isi transaksi tetap tertutup.
+                assert 'OUT-AKSES' not in BeautifulSoup(r.text, 'html.parser').get_text()
                 assert 'Pilih gudang kerja' in r.text
         assert (await c.get('/retur')).status_code == (200 if profil in ('admin','super') else 403)
 

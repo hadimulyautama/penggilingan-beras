@@ -146,7 +146,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: hadimulyautama/timbangan
-          ref: 01e22323309ddc8362a8aa7937babec73c0503d1
+          ref: 8b33b4927798e97db9e79455bd4102cf6822b74b
           path: timbangan
       - uses: actions/setup-python@v5
         with:
@@ -156,7 +156,7 @@ jobs:
             padiflow/requirements*.txt
             timbangan/requirements.txt
       - name: Periksa revisi TeraFlow terpin
-        run: test "$(git -C timbangan rev-parse HEAD)" = "01e22323309ddc8362a8aa7937babec73c0503d1"
+        run: test "$(git -C timbangan rev-parse HEAD)" = "8b33b4927798e97db9e79455bd4102cf6822b74b"
       - name: Pasang dua interpreter terpisah
         run: |
           python -m pip install -r padiflow/requirements.txt -r padiflow/requirements-dev.txt -r padiflow/tests/pg/requirements-dua-aplikasi.txt
@@ -208,7 +208,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: hadimulyautama/timbangan
-          ref: 01e22323309ddc8362a8aa7937babec73c0503d1
+          ref: 8b33b4927798e97db9e79455bd4102cf6822b74b
           path: timbangan
       - uses: actions/setup-python@v5
         with:
@@ -218,7 +218,7 @@ jobs:
             padiflow/requirements*.txt
             timbangan/requirements.txt
       - name: Periksa revisi TeraFlow terpin
-        run: test "$(git -C timbangan rev-parse HEAD)" = "01e22323309ddc8362a8aa7937babec73c0503d1"
+        run: test "$(git -C timbangan rev-parse HEAD)" = "8b33b4927798e97db9e79455bd4102cf6822b74b"
       - name: Pasang dua interpreter terpisah untuk retur
         run: |
           python -m pip install -r padiflow/requirements.txt -r padiflow/requirements-dev.txt

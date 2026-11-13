@@ -30,8 +30,8 @@ async def test_ringkasan_tanpa_mengubah_partisi_dan_tindakan(pg,monkeypatch,stat
   assert 'Menunggu keputusan Admin' in s.get_text()
   assert s.select_one('.pekerjaan-informasi summary').get_text(strip=True)=='Informasi pendukung · 1'
   assert 'Pencarian kartu' in s.select_one('#pk-panduan').get_text()
-  assert s.select_one('nav[aria-label="Tab pekerjaan"] a[href*="tab=tindakan"] .pil__jml').text.strip()=='1'
-  assert s.select_one('nav[aria-label="Tab pekerjaan"] a[href*="tab=berjalan"] .pil__jml').text.strip()==str(len(states))
+  assert s.select_one('nav[aria-label="Tab pekerjaan"] a[href*="tab=tindakan"] .kontrol-tab__jumlah').text.strip()=='1'
+  assert s.select_one('nav[aria-label="Tab pekerjaan"] a[href*="tab=berjalan"] .kontrol-tab__jumlah').text.strip()==str(len(states))
   if 'Dijeda' in states:assert 'Jeda sejak' in r.text and 'Mesin pendukung diperiksa' in r.text
   if not states:assert 'Informasi pendukung tetap tersedia' in r.text
   # Pencarian kini di server agar menjangkau kartu pada halaman lain.
