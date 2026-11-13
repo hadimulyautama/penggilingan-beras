@@ -10,7 +10,7 @@ from hmu_core.models import (
     Silo, Supplier, User, Warehouse,
 )
 from hmu_core.organisasi import (
-    Perusahaan, LokasiPabrik, KeanggotaanPerusahaan, PenempatanGudang,
+    Perusahaan, LokasiPabrik, KeanggotaanPerusahaan, PenempatanGudang, AksesLokasiAnggota, AksesGudangAnggota,
 )
 from hmu_core.komoditas import (
     ALIAS_KOMODITAS, KATALOG, TRANSFORMASI_KOMODITAS, DefinisiAtribut,
@@ -29,6 +29,8 @@ __all__ = [
     "LokasiPabrik",
     "KeanggotaanPerusahaan",
     "PenempatanGudang",
+    "AksesLokasiAnggota",
+    "AksesGudangAnggota",
     "TimestampMixin",
     "Warehouse",
     "Armada",
