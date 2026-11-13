@@ -201,3 +201,16 @@ async def test_dua_pengiriman_tambah_gudang_tidak_menggandakan_master(pg,organis
     assert len(set(ids))==1
     async with pg() as db:
         assert await db.scalar(select(func.count()).select_from(ActivityLog).where(ActivityLog.table_name=='warehouses'))==1
+
+
+async def test_admin_tanpa_login_aktif_tidak_dihitung_sebagai_jalur_pemulihan(pg,organisasi):
+    x=organisasi
+    async with await _klien(pg,peran=P.ADMIN) as c:
+        uid,mid=await pasang(pg,c,x)
+        async with pg() as db:
+            old=await member.snapshot(db,await db.get(KeanggotaanPerusahaan,mid))
+            # Admin fixture lain tidak memiliki akun login; hanya keanggotaan
+            # tersebut tidak cukup untuk memulihkan perusahaan dari Pengaturan.
+            with pytest.raises(OrganisasiError,match='terakhir'):
+                await member.simpan(db,ruang=member.RuangAdministrasi(uid,x['c'][0]),company_id=x['c'][0],user_id=uid,
+                    peran=P.OPERATOR,aktif=True,lokasi=old['lokasi'],bukti=member.sidik(old),alasan='Mencegah hilangnya Admin yang bisa masuk')

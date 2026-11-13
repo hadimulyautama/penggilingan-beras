@@ -207,6 +207,11 @@ async def identitas_perusahaan(company_id:int,data:MasterUbah,actor=Depends(pela
 async def tambah_perusahaan(data:PerusahaanBaru,actor=Depends(pelaku)):
     try:
         async with SessionLocal() as db:
+            if data.admin_user_id is not None:
+                from hmu_identitas.model import Akun
+                if not await db.scalar(select(Akun.id).join(User,User.id==Akun.user_id).where(
+                    Akun.user_id==data.admin_user_id,Akun.status=='aktif',func.lower(User.status)=='aktif')):
+                    raise master.OrganisasiError('Admin pertama harus mempunyai akun masuk aktif yang sudah ada.')
             row=await master.simpan(db,user_id=actor['ruang'].user_id,objek='perusahaan',nama=data.nama,kode=data.kode,aktif=True,alasan=data.alasan)
             if data.admin_user_id is not None:
                 await db.flush()

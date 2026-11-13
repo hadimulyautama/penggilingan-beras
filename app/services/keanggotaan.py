@@ -93,8 +93,10 @@ async def simpan(db,*,ruang,company_id,user_id,peran,aktif,lokasi,bukti,alasan):
         batas=(await snapshot(db,own))['lokasi']
         if not dalam_batas(lokasi,batas) or not dalam_batas(old['lokasi'],batas):raise PermissionError('Akses anggota melampaui lokasi/gudang yang boleh Anda kelola.')
         if old['peran']==P.ADMIN and old['aktif'] and (peran!=P.ADMIN or not aktif):
-            admins=await db.scalar(select(func.count()).select_from(KeanggotaanPerusahaan).where(
-                KeanggotaanPerusahaan.company_id==company_id,KeanggotaanPerusahaan.aktif.is_(True),func.lower(func.trim(KeanggotaanPerusahaan.peran))==P.ADMIN))
+            from hmu_identitas.model import Akun
+            admins=await db.scalar(select(func.count()).select_from(KeanggotaanPerusahaan).join(User,User.id==KeanggotaanPerusahaan.user_id)
+                .join(Akun,Akun.user_id==User.id).where(KeanggotaanPerusahaan.company_id==company_id,KeanggotaanPerusahaan.aktif.is_(True),
+                    func.lower(func.trim(KeanggotaanPerusahaan.peran))==P.ADMIN,func.lower(User.status)=='aktif',Akun.status=='aktif'))
             if admins<=1:raise OrganisasiError('Admin perusahaan terakhir tidak dapat dinonaktifkan dari Pengaturan perusahaan.')
     site_ids=[x['lokasi_pabrik_id'] for x in lokasi]
     sites=list(await db.scalars(select(LokasiPabrik).where(LokasiPabrik.id.in_(site_ids),LokasiPabrik.company_id==company_id,LokasiPabrik.aktif.is_(True)).with_for_update(key_share=True)))
