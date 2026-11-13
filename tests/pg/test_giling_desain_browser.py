@@ -1,9 +1,7 @@
 """Penyajian aktif di browser dengan API asli dan PostgreSQL lokal."""
-from tests.profil_browser import mesin, konteks
+from tests.pg.test_pengeringan_desain_browser import browser
 import os
 from pathlib import Path
-from contextlib import asynccontextmanager
-from urllib.parse import urlsplit
 import pytest
 from sqlalchemy import select,func
 from app.models import ActivityLog,MillingQcLog
@@ -13,24 +11,6 @@ from tests.pg.test_form_selesai_penggilingan import lepas
 from tests.pg.test_riwayat_giling import _klien
 from tests.pg.formulir import cap_formulir
 pytestmark=[pytest.mark.asyncio,pytest.mark.skipif(os.getenv('UJI_BROWSER_GILING_DESAIN')!='1',reason='Browser lokal opsional')]
-
-@asynccontextmanager
-async def browser(c,width):
- from playwright.async_api import async_playwright
- async with async_playwright() as pw:
-  b=await mesin(pw).launch();page=await b.new_page(**konteks(pw,width,1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-  await page.context.add_cookies([dict(name=k.name,value=k.value,url='https://uji') for k in c.cookies.jar])
-  async def route(r):
-   req=r.request;u=urlsplit(req.url)
-   if u.netloc!='uji':await r.abort();return
-   headers={k:v for k,v in req.headers.items() if k.lower() not in ('host','cookie','content-length')}
-   response=await c.request(req.method,req.url,headers=headers,content=req.post_data_buffer)
-   await r.fulfill(status=response.status_code,body=response.content,headers={k:v for k,v in response.headers.items() if k.lower() not in ('content-length','content-encoding','set-cookie')})
-  await page.route('**/*',route)
-  try:yield page
-  finally:
-   assert not errors,errors
-   await b.close()
 
 @pytest.mark.parametrize('width',[1440,390,320])
 async def test_editor_tunggal_tab_draf_qc_sumber_stok_dan_simpan(pg,hasil,width):
