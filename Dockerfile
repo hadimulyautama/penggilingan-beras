@@ -22,6 +22,7 @@ COPY hmu_tampilan ./hmu_tampilan
 COPY app ./app
 COPY migrations ./migrations
 COPY scripts/portal_pelanggan.py ./scripts/portal_pelanggan.py
+COPY scripts/hubungkan_perusahaan_lama.py ./scripts/hubungkan_perusahaan_lama.py
 COPY alembic.ini .
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
