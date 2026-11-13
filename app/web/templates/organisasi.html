@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% macro formulir(objek,row=none) -%}
+{% set cocok = mode=='daftar' and objek=='perusahaan' or mode=='lokasi' and objek=='lokasi' or mode=='perusahaan' and (('alamat' in form)==(objek=='lokasi')) %}
+{% set f=form if cocok else {} %}
+{% set action='/pengaturan/organisasi/lokasi/'~row.id if objek=='lokasi' and row else '/pengaturan/organisasi/perusahaan/'~row.id if row else '/pengaturan/organisasi/perusahaan/'~company.id~'/lokasi/baru' if objek=='lokasi' else '/pengaturan/organisasi/perusahaan/baru' %}
+<form action="{{ action }}" method="post" class="org-form" data-jaga-isian>
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+{% if row %}<input type="hidden" name="sidik" value="{{ f.get('sidik',master_sidik(row)) }}">{% endif %}
+<label>Nama {{ 'lokasi pabrik' if objek=='lokasi' else 'perusahaan' }}<input class="fld" name="nama" value="{{ f.get('nama',row.nama if row else '') }}" minlength="2" maxlength="200" required></label>
+<label>Kode {{ 'lokasi pabrik' if objek=='lokasi' else 'perusahaan' }}<input class="fld" name="kode" value="{{ f.get('kode',row.kode if row else '') }}" minlength="2" maxlength="50" required {% if row %}readonly{% endif %}></label>
+<p class="bantu">Kode menjaga identitas dan tetap setelah disimpan. Nama dapat diperbarui.</p>
+{% if objek=='lokasi' %}<label>Alamat lokasi pabrik<textarea class="fld" name="alamat" maxlength="1000" rows="3">{{ f.get('alamat',row.alamat or '' if row else '') }}</textarea></label>{% endif %}
+<label class="org-check"><input name="aktif" type="checkbox" {% if f.get('aktif')=='on' or not f and (not row or row.aktif) %}checked{% endif %}> Aktif</label>
+<label>Alasan {{ 'perubahan' if row else 'penambahan' }}<textarea class="fld" name="alasan" minlength="5" maxlength="500" required rows="2">{{ f.get('alasan','') }}</textarea></label>
+<div class="org-actions"><button type="submit" class="btn btn--utama">{{ 'Simpan perubahan' if row else 'Tambahkan lokasi pabrik' if objek=='lokasi' else 'Tambahkan perusahaan' }}</button>{% if row %}<a class="btn" href="{{ action }}">Buka data terbaru</a>{% endif %}</div>
+</form>
+{%- endmacro %}
+{% block judul %}{{ 'Pratinjau penetapan gudang' if mode=='penetapan' else site.nama if site else company.nama if company else 'Perusahaan & lokasi pabrik' }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/organisasi.css?v={{ VERSI }}">
+<section class="pg org" aria-labelledby="org-judul">
+<a class="pg-kembali" href="{{ '/pengaturan/organisasi/perusahaan/'~company.id if site else '/pengaturan/organisasi' if mode!='daftar' else '/pengaturan' }}">← {{ company.nama if site else 'Perusahaan & lokasi pabrik' if mode!='daftar' else 'Pengaturan' }}</a>
+<p class="pg-lingkup">Pengaturan / Perusahaan &amp; fasilitas / Perusahaan &amp; lokasi pabrik</p>
+<h1 id="org-judul">{{ 'Pratinjau penetapan gudang' if mode=='penetapan' else site.nama if site else company.nama if company else 'Perusahaan & lokasi pabrik' }}</h1>
+{% if err %}<p class="nota nota--buruk" role="alert">{{ err }}</p>{% endif %}
+{% if pesan %}<p class="pesan pesan--ok" role="status">Master tersimpan.</p>{% endif %}
+{% if mode=='daftar' %}
+<p>Atur perusahaan dan lokasi pabrik, lalu siapkan rencana penempatan gudang yang sudah ada. Struktur ini belum mengaktifkan pemisahan akses antarperusahaan.</p>
+<a class="btn" href="/pengaturan/organisasi/penetapan">Pratinjau penetapan gudang</a>
+<section class="org-list" aria-label="Daftar perusahaan">
+{% for c in companies %}<a class="pg-pintu" href="/pengaturan/organisasi/perusahaan/{{ c.id }}"><span class="pg-pintu__isi"><strong>{{ c.nama }}</strong><small>{{ c.kode }} · {{ 'Aktif' if c.aktif else 'Nonaktif' }} · {{ sites|selectattr('company_id','equalto',c.id)|list|length }} lokasi pabrik</small></span><span aria-hidden="true">›</span></a>{% else %}<p>Belum ada perusahaan. Tambahkan perusahaan sesuai identitas yang akan digunakan.</p>{% endfor %}
+</section>
+<details class="kartu" {% if form %}open{% endif %}><summary>Tambah perusahaan</summary>{{ formulir('perusahaan') }}</details>
+<p><a href="/pengaturan/perusahaan">Identitas &amp; logo pada dokumen</a></p>
+{% elif mode=='perusahaan' %}
+<p>{{ company.kode }} · {{ 'Aktif' if company.aktif else 'Nonaktif' }}</p>
+<section aria-labelledby="org-lokasi"><h2 id="org-lokasi">Lokasi pabrik</h2>
+{% for s in sites if s.company_id==company.id %}<a class="pg-pintu" href="/pengaturan/organisasi/lokasi/{{ s.id }}"><span class="pg-pintu__isi"><strong>{{ s.nama }}</strong><small>{{ s.kode }} · {{ 'Aktif' if s.aktif else 'Nonaktif' }}</small></span><span aria-hidden="true">›</span></a>{% else %}<p>Belum ada lokasi pabrik untuk perusahaan ini.</p>{% endfor %}</section>
+<details class="kartu" {% if form and 'alamat' in form %}open{% endif %}><summary>Tambah lokasi pabrik</summary>{{ formulir('lokasi') }}</details>
+<details class="kartu" {% if form and 'alamat' not in form %}open{% endif %}><summary>Ubah master perusahaan</summary>{{ formulir('perusahaan',company) }}</details>
+{% elif mode=='lokasi' %}
+<p>Perusahaan: <a href="/pengaturan/organisasi/perusahaan/{{ company.id }}">{{ company.nama }}</a></p>
+<section class="kartu"><h2>Master lokasi pabrik</h2>{{ formulir('lokasi',site) }}</section>
+<section><h2>Gudang yang sudah ditetapkan</h2>{% set links=bindings|selectattr('lokasi_pabrik_id','equalto',site.id)|list %}
+{% for b in links %}{% for w in warehouses if w.id==b.warehouse_id %}<p><a href="/pengaturan/gudang">{{ w.nama_gudang }}</a></p>{% endfor %}{% else %}<p>Belum ada gudang yang ditetapkan ke lokasi ini.</p>{% endfor %}
+<a class="btn" href="/pengaturan/organisasi/penetapan?lokasi_pabrik_id={{ site.id }}">Siapkan pratinjau penetapan</a></section>
+{% elif mode=='penetapan' %}
+<p>Pilih tujuan dan gudang untuk meninjau rencana. Pratinjau ini tidak menyimpan penetapan atau mengubah catatan timbang, proses, stok, maupun kepemilikan barang.</p>
+<form method="get" action="/pengaturan/organisasi/penetapan" class="org-form">
+<label>Perusahaan / lokasi pabrik tujuan<select class="fld" name="lokasi_pabrik_id" required><option value="">Pilih tujuan</option>{% for c in companies if c.aktif %}<optgroup label="{{ c.nama }} · {{ c.kode }}">{% for s in sites if s.company_id==c.id and s.aktif %}<option value="{{ s.id }}" {% if form.get('lokasi_pabrik_id')==s.id|string %}selected{% endif %}>{{ c.kode }} / {{ s.nama }} · {{ s.kode }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+<fieldset><legend>Gudang yang akan ditinjau</legend>{% for w in warehouses %}<label class="org-check"><input type="checkbox" name="warehouse_id" value="{{ w.id }}" {% if w.id|string in form.get('warehouse_ids',[]) %}checked{% endif %}>{{ w.nama_gudang }}{% if not w.aktif %} · Nonaktif{% endif %}</label>{% else %}<p>Belum ada gudang.</p>{% endfor %}</fieldset>
+<button type="submit" class="btn btn--utama" name="periksa" value="1">Pratinjau penetapan</button>
+</form>
+{% if plan %}<section class="kartu" data-rencana-penetapan aria-labelledby="rencana-judul"><h2 id="rencana-judul">Rencana: {{ plan.perusahaan }} / {{ plan.lokasi }}</h2>
+{% for w in plan.gudang %}<article class="org-plan"><h3>{{ w.nama }}</h3><p><strong>{{ w.keadaan }}</strong></p><dl><div><dt>Penetapan saat ini</dt><dd>{{ w.tujuan_lama }}</dd></div><div><dt>Tujuan rencana</dt><dd>{{ plan.perusahaan }} / {{ plan.lokasi }}</dd></div><div><dt>Fasilitas terkait</dt><dd>{{ w.silo }} silo · {{ w.dryer }} dryer · {{ w.lini }} line</dd></div></dl></article>{% endfor %}
+<p role="status">Pratinjau selesai. Belum ada penetapan yang disimpan.</p><p>Asal-usul transaksi lama perlu diperiksa tersendiri sebelum penetapan datanya diterapkan. Jumlah fasilitas bukan jumlah transaksi yang akan dipindahkan.</p>
+</section>{% endif %}
+{% endif %}
+</section>
+{% endblock %}

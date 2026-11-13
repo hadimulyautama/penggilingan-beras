@@ -322,6 +322,8 @@ jobs:
       UJI_BROWSER_GILING_DESAIN: "1"
       UJI_BROWSER_SOSOH_DESAIN: "1"
       UJI_BROWSER_PEMBARUAN: "1"
+      UJI_BROWSER_ORGANISASI: "1"
+      BUKTI_ORGANISASI: bukti/organisasi
       BUKTI_GILING_DESAIN: bukti/giling
       BUKTI_SOSOH_DESAIN: bukti/sosoh
     steps:
@@ -351,6 +353,7 @@ jobs:
             tests/pg/test_pembaruan_aset_browser.py \
             tests/pg/test_safari_portal.py \
             tests/pg/test_browser_izolasi.py \
+            tests/pg/test_pengaturan_organisasi_browser.py \
             --junitxml=bukti/safari.xml
       - uses: actions/upload-artifact@v4
         if: always()

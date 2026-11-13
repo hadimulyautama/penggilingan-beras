@@ -83,6 +83,8 @@ _UNDOABLE = {
 BATAS_UNDO = timedelta(hours=48)
 
 _TABLE_LABEL = {
+    "hmu_companies": "master perusahaan",
+    "hmu_factory_sites": "lokasi pabrik",
     "pk_penyesuaian_stok": "penyesuaian stok PK lama",
     # Bisa dibatalkan
     "drying_lots": "lot pengeringan",
@@ -1560,6 +1562,9 @@ async def _log_terakhir(db: AsyncSession, cakupan: Cakupan | None):
     q = select(ActivityLog).where(
         ActivityLog.action.in_(["INSERT", "UPDATE"]),
         ActivityLog.table_name != "undo",
+        # Pengelolaan organisasi tidak menggeser kandidat pembatalan
+        # pekerjaan lantai; koreksi master tetap melalui Pengaturan.
+        ActivityLog.table_name.not_in(("hmu_companies", "hmu_factory_sites")),
         # Yang sudah dibatalkan bukan lagi "tindakan terakhir". Dulu ia hilang
         # dari tabel sehingga tak perlu disaring; sekarang ia tinggal sebagai
         # jejak, dan jejak bukan pekerjaan.
