@@ -383,7 +383,9 @@ def test_blok_sistem_tak_bisa_mengunci_semua_orang():
 
     # Syaratnya di RUTE sejak Tahap 2 — templatnya bersama untuk tiga app.
     rute = inspect.getsource(pengaturan.halaman_pengaturan)
-    assert "tuan and not ada_super" in rute
+    # Pemulihan satu perusahaan lama kini juga mensyaratkan belum ada master
+    # organisasi; Admin tenant tidak memperoleh hak platform saat Super off.
+    assert "tuan and await pemulihan_lama_diizinkan()" in rute
     assert "ada_super=ada_super" in rute
     # Dan kalimat yang menjelaskan kenapa bloknya masih terbuka ikut dipasang
     # hanya selama pinjaman itu berlaku: blok yang muncul lalu hilang sendiri
@@ -412,8 +414,8 @@ def test_pintu_dan_gerbang_memakai_aturan_yang_SAMA():
     """
     from app.web import pengaturan, security
 
-    assert "ada_superadmin" in inspect.getsource(security.butuh_super)
-    assert "ada_superadmin" in inspect.getsource(pengaturan.halaman_pengaturan)
+    assert "pemulihan_lama_diizinkan" in inspect.getsource(security.butuh_super)
+    assert "pemulihan_lama_diizinkan" in inspect.getsource(pengaturan.halaman_pengaturan)
 
 
 def test_jaring_pengaman_tak_bisa_dijadikan_jalan_naik():

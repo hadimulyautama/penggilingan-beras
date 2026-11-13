@@ -7,12 +7,13 @@ from fastapi.routing import APIRoute
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel,ConfigDict
-from sqlalchemy import select
+from sqlalchemy import select,func,or_
 from sqlalchemy.exc import IntegrityError
+from hmu_identitas import peran as P
 from app.config import settings
 from app.database import SessionLocal
 from app.models import ActivityLog
-from hmu_core import Perusahaan,KeanggotaanPerusahaan,User
+from hmu_core import Perusahaan,KeanggotaanPerusahaan,User,LokasiPabrik,PenempatanGudang
 from app.services import console_auth as auth,keanggotaan as svc,organisasi_master as master
 from app.web.security import akun_opsional
 
@@ -95,10 +96,43 @@ async def keluar(actor=Depends(pelaku)):
 
 
 @router.get('/internal/console/perusahaan')
-async def perusahaan(actor=Depends(pelaku)):
+async def perusahaan(cari:str='',status:str='',halaman:int=1,actor=Depends(pelaku)):
+    if halaman<1 or halaman>100000 or len(cari)>100 or status not in ('','aktif','nonaktif'):raise HTTPException(422,'Pencarian perusahaan tidak valid.')
     async with SessionLocal() as db:
-        rows=list(await db.scalars(select(Perusahaan).order_by(Perusahaan.nama,Perusahaan.id)))
-    return dict(perusahaan=[dict(id=x.id,kode=x.kode,nama=x.nama,aktif=x.aktif) for x in rows])
+        q=select(Perusahaan)
+        if cari:q=q.where(or_(Perusahaan.nama.ilike('%'+cari+'%'),Perusahaan.kode.ilike('%'+cari+'%')))
+        if status:q=q.where(Perusahaan.aktif.is_(status=='aktif'))
+        total=await db.scalar(select(func.count()).select_from(q.subquery()))
+        stats=dict((await db.execute(select(Perusahaan.aktif,func.count()).group_by(Perusahaan.aktif))).all())
+        rows=list(await db.scalars(q.order_by(Perusahaan.id).offset((halaman-1)*20).limit(20)))
+        ids=[x.id for x in rows]
+        counts=[]
+        for model in (LokasiPabrik,PenempatanGudang,KeanggotaanPerusahaan):
+            counts.append(dict((await db.execute(select(model.company_id,func.count()).where(model.company_id.in_(ids)).group_by(model.company_id))).all()))
+    return dict(perusahaan=[dict(id=x.id,kode=x.kode,nama=x.nama,aktif=x.aktif,lokasi=counts[0].get(x.id,0),gudang=counts[1].get(x.id,0),anggota=counts[2].get(x.id,0)) for x in rows],
+        total=total,halaman=halaman,halaman_total=max(1,(total+19)//20),statistik=dict(total=sum(stats.values()),aktif=stats.get(True,0),nonaktif=stats.get(False,0)))
+
+
+@router.get('/internal/console/pengguna')
+async def direktori(cari:str='',halaman:int=1,actor=Depends(pelaku)):
+    if len(cari)>100 or not 1<=halaman<=100000:raise HTTPException(422,'Pencarian pengguna tidak valid.')
+    async with SessionLocal() as db:
+        q=select(User).where(User.id.in_(select(KeanggotaanPerusahaan.user_id)))
+        if cari:q=q.where(User.nama.ilike('%'+cari+'%'))
+        rows=list(await db.scalars(q.order_by(User.nama,User.id).offset((halaman-1)*50).limit(51)))
+        memberships=(await db.execute(select(KeanggotaanPerusahaan,Perusahaan.nama).join(Perusahaan,Perusahaan.id==KeanggotaanPerusahaan.company_id)
+            .where(KeanggotaanPerusahaan.user_id.in_([u.id for u in rows[:50]])))).all()
+    return dict(pengguna=[dict(id=u.id,nama=u.nama,keanggotaan=[dict(company_id=m.company_id,perusahaan=n,peran=m.peran,aktif=m.aktif) for m,n in memberships if m.user_id==u.id]) for u in rows[:50]],lanjut=halaman+1 if len(rows)>50 else None)
+
+
+@router.get('/internal/console/audit')
+async def jejak_pusat(sebelum:int|None=None,actor=Depends(pelaku)):
+    async with SessionLocal() as db:
+        q=select(ActivityLog,User.nama).outerjoin(User,User.id==ActivityLog.changed_by).where(ActivityLog.aksi.in_(
+            ['keanggotaan_perusahaan','master_organisasi','penetapan_gudang','pengaturan_perusahaan','penetapan_perusahaan_lama']))
+        if sebelum:q=q.where(ActivityLog.id<sebelum)
+        rows=(await db.execute(q.order_by(ActivityLog.id.desc()).limit(51))).all()
+    return dict(catatan=[dict(id=x.id,pelaku=n or 'Sistem',waktu=x.waktu_perubahan.isoformat(),alasan=x.alasan_perubahan,sebelum=x.old_value,sesudah=x.new_value) for x,n in rows[:50]],lanjut=rows[49][0].id if len(rows)>50 else None)
 
 
 @router.get('/internal/console/perusahaan/{company_id:int}')
@@ -150,11 +184,34 @@ class MasterBaru(BaseModel):
     alamat:str=''
 
 
+class MasterUbah(MasterBaru):
+    aktif:bool
+    bukti:str
+
+
+class PerusahaanBaru(MasterBaru):
+    admin_user_id:int|None=None
+
+
+@router.post('/internal/console/perusahaan/{company_id:int}/identitas')
+async def identitas_perusahaan(company_id:int,data:MasterUbah,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:
+            row=await master.simpan(db,user_id=actor['ruang'].user_id,objek='perusahaan',identitas=company_id,
+                nama=data.nama,kode=data.kode,aktif=data.aktif,alasan=data.alasan,bukti=data.bukti)
+            await db.commit();return dict(id=row.id)
+    except (master.OrganisasiError,IntegrityError) as e:raise HTTPException(422,str(e) if isinstance(e,master.OrganisasiError) else 'Data perusahaan berubah.') from e
+
+
 @router.post('/internal/console/perusahaan')
-async def tambah_perusahaan(data:MasterBaru,actor=Depends(pelaku)):
+async def tambah_perusahaan(data:PerusahaanBaru,actor=Depends(pelaku)):
     try:
         async with SessionLocal() as db:
             row=await master.simpan(db,user_id=actor['ruang'].user_id,objek='perusahaan',nama=data.nama,kode=data.kode,aktif=True,alasan=data.alasan)
+            if data.admin_user_id is not None:
+                await db.flush()
+                await svc.simpan(db,ruang=actor['ruang'],company_id=row.id,user_id=data.admin_user_id,peran=P.ADMIN,
+                    aktif=True,lokasi=[],bukti=svc.sidik(None),alasan=data.alasan)
             await db.commit();return dict(id=row.id)
     except (master.OrganisasiError,IntegrityError) as e:raise HTTPException(422,str(e) if isinstance(e,master.OrganisasiError) else 'Kode sudah digunakan.') from e
 

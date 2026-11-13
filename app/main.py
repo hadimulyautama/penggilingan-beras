@@ -690,3 +690,6 @@ from app.web.organisasi import router as organisasi_router
 app.include_router(organisasi_router)
 from app.web.console import router as console_router
 app.include_router(console_router)
+
+from app.web.perusahaan_sendiri import router as perusahaan_sendiri_router
+app.include_router(perusahaan_sendiri_router)

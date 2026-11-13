@@ -135,13 +135,15 @@ async def terapkan(db,*,user_id,bukti,alasan):
     await pengelola(db,user_id)
     data=_periksa_bukti(bukti,user_id=user_id)
     alasan=teks(alasan,'Alasan penetapan',500,5)
+    awal=await db.get(LokasiPabrik,data['lokasi_pabrik_id'])
+    if awal is None:raise OrganisasiError('Lokasi pabrik tidak tersedia. Buat pratinjau baru.')
+    await db.scalar(select(Perusahaan).where(Perusahaan.id==awal.company_id).with_for_update(key_share=True).execution_options(populate_existing=True))
     site=await db.scalar(select(LokasiPabrik).where(LokasiPabrik.id==data['lokasi_pabrik_id'])
-        .with_for_update().execution_options(populate_existing=True))
+        .with_for_update(key_share=True).execution_options(populate_existing=True))
     if site is None:raise OrganisasiError('Lokasi pabrik tidak tersedia. Buat pratinjau baru.')
-    # Sama dengan urutan editor master: lokasi -> perusahaan. Kunci gudang
+    # Sama dengan urutan editor master: perusahaan -> lokasi. Kunci gudang
     # diambil menurut ID walau belum ada baris penempatannya. NO KEY UPDATE
     # tidak menghalangi KEY SHARE pemakaian FK oleh pekerjaan operator.
-    await db.scalar(select(Perusahaan).where(Perusahaan.id==site.company_id).with_for_update().execution_options(populate_existing=True))
     await db.execute(select(Warehouse).where(Warehouse.id.in_(data['warehouse_ids'])).order_by(Warehouse.id)
         .with_for_update(key_share=True).execution_options(populate_existing=True))
     await db.execute(select(PenempatanGudang).where(PenempatanGudang.warehouse_id.in_(data['warehouse_ids'])).order_by(PenempatanGudang.warehouse_id)

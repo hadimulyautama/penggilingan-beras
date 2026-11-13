@@ -288,6 +288,19 @@ async def ada_superadmin() -> bool:
         return await _masuk.ada_superadmin_aktif(db)
 
 
+async def pemulihan_lama_diizinkan() -> bool:
+    """Jaring akun pertama hanya untuk instalasi lama tanpa master perusahaan.
+
+    Setelah ada organisasi, Admin perusahaan tidak boleh memperoleh hak
+    platform ketika Super Admin sedang dinonaktifkan. Pemulihan lintas
+    perusahaan tetap menjadi wewenang pengelola sistem.
+    """
+    from sqlalchemy import select
+    from hmu_core import Perusahaan
+    async with SessionLocal() as db:
+        return await db.scalar(select(Perusahaan.id).limit(1)) is None and not await _masuk.ada_superadmin_aktif(db)
+
+
 async def butuh_super(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
     """Super Admin saja — mengelola ORANG, AKUN, dan ALAT.
 
@@ -316,7 +329,7 @@ async def butuh_super(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
     seseorang membuka Postgres berarti pabrik berhenti sampai orang itu
     sempat — dan orang itu selama ini saya.
     """
-    if not akun.is_super and not (akun.is_admin and not await ada_superadmin()):
+    if not akun.is_super and not (akun.is_admin and await pemulihan_lama_diizinkan()):
         raise AksesDitolak(
             "Halaman ini hanya untuk Super Admin — mengelola orang, akun, "
             "dan alat.")

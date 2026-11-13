@@ -179,6 +179,7 @@ def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
 @router.get("/pengaturan/sistem")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     from app.services import kledo_sinkron
+    from app.web.security import pemulihan_lama_diizinkan
     from app.services.setelan import fitur_mutu, sebab_jeda
     from app.services.undo import BATAS_UNDO
 
@@ -247,7 +248,8 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         tuan=tuan, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
         kledo=kledo,
         ada_super=ada_super,
-        blok_kelola=view == V_SUPER or (tuan and not ada_super),
+        blok_kelola=view == V_SUPER or (tuan and await pemulihan_lama_diizinkan()),
+        console_url=settings.console_website_url.rstrip('/')+'/console' if settings.console_website_url.startswith('https://') else '',
         blok_perusahaan=akun.is_super,
         kelola_darurat=view != V_SUPER,
         blok_lihat_sebagai=_P.admin_keatas(peran_asli),

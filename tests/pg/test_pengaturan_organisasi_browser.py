@@ -51,7 +51,10 @@ async def test_pengaturan_sampai_penetapan_tetap_terbaca_dan_transaksi_identik(p
         before=await fakta(pg)
         async with browser_http(c,width) as (page,base):
             await page.goto(base+'/pengaturan')
-            await page.get_by_role('link',name='Perusahaan & lokasi pabrik',exact=False).click()
+            await expect(page.get_by_role('link',name='Perusahaan saya',exact=False)).to_be_visible()
+            # Jalur master lama tetap kompatibel bagi Super Admin; pintu utama
+            # kini perusahaan sendiri dan pengelolaan pusat melalui Console.
+            await page.goto(base+'/pengaturan/organisasi')
             await expect(page.locator('#org-judul')).to_have_text('Perusahaan & lokasi pabrik')
             await page.get_by_text('Tambah perusahaan',exact=True).click()
             await page.get_by_label('Nama perusahaan',exact=True).fill('Perusahaan uji panjang untuk ponsel')

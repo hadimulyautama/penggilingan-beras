@@ -1567,6 +1567,7 @@ async def _log_terakhir(db: AsyncSession, cakupan: Cakupan | None):
         # Pengelolaan organisasi tidak menggeser kandidat pembatalan
         # pekerjaan lantai; koreksi master tetap melalui Pengaturan.
         ActivityLog.table_name.not_in(("hmu_companies", "hmu_factory_sites", "hmu_warehouse_sites", "hmu_company_memberships")),
+        ActivityLog.aksi.not_in(("pengaturan_perusahaan", "penetapan_perusahaan_lama")) | ActivityLog.aksi.is_(None),
         # Yang sudah dibatalkan bukan lagi "tindakan terakhir". Dulu ia hilang
         # dari tabel sehingga tak perlu disaring; sekarang ia tinggal sebagai
         # jejak, dan jejak bukan pekerjaan.

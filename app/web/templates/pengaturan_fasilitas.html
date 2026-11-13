@@ -1,4 +1,5 @@
 {% extends "pengaturan.html" %}
 {% block organisasi_pengaturan %}
-{{ pintu('/pengaturan/organisasi', 'Perusahaan & lokasi pabrik', 'Master organisasi, penetapan gudang, dan audit', 'factory', blok_perusahaan) }}
+{{ pintu('/pengaturan/perusahaan-sendiri', 'Perusahaan saya', 'Anggota, lokasi, gudang, dan audit perusahaan Anda', 'factory', true) }}
+{% if blok_perusahaan and console_url %}{{ pintu(console_url, 'Console Center', 'Pengelolaan lintas perusahaan untuk Super Admin sistem', 'factory', true) }}{% endif %}
 {% endblock %}
