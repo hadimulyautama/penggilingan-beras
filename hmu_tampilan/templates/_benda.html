@@ -270,7 +270,7 @@
 {% macro aksi_terlihat(b, alamat='/aksi') -%}
   {% set dasar = dasar_borang(alamat) %}
   {% if b.tautan or b.tombol or b.pilihan or b.aksi %}
-            {% if b.tautan %}<a class="btn btn--utama" href="{{ b.tautan }}">Buka transfer per perjalanan</a>{% elif b.tombol %}
+            {% if b.tautan %}<a class="btn btn--utama" href="{{ b.tautan }}">Buka transfer PK</a>{% elif b.tombol %}
               {% set aktif = b.tombol|rejectattr('mati')|list %}
               {% set utama = (aktif|selectattr('utama')|first)|default(aktif|first)|default(none) %}
               {% if utama %}<button type="button" class="btn btn--utama beranda-kartu-aksi__utama" data-post="{{ utama.post }}" data-kirim='{{ utama.data|tojson }}'>{{ utama.nama }}</button>{% endif %}
@@ -361,7 +361,7 @@
             <div class="benda__konten">
               {{ padat(b,progres) if rapat or listview else penuh(b) }}
               {% if listview %}{{ rincian_antrean(b,tabel == 'packing') }}{% endif %}
-              <p><a class="btn btn--kecil" href="{{ b.tautan }}">Buka transfer per perjalanan</a></p>
+              <p><a class="btn btn--kecil" href="{{ b.tautan }}">Buka transfer PK</a></p>
             </div>
           </article>
         {% elif b.pilihan %}

@@ -460,7 +460,7 @@ async def kirim(db: AsyncSession, *, user, permintaan_id: int,
     # kedua menerima nol baris. Pola yang sama dengan klaim silo giling
     # (migrasi 0056).
     baris = await _kunci(db, permintaan_id, keadaan=DISETUJUI)
-    if baris.bertahap:raise PermintaanError('Gunakan Buat pengiriman pada halaman Transfer bertahap; persetujuan ini dikirim per perjalanan.')
+    if baris.bertahap:raise PermintaanError('Gunakan Catat transfer pada halaman Transfer PK; persetujuan ini dapat dipenuhi bertahap.')
     kg = float(berat if berat is not None else (baris.berat_setuju_kg or 0))
     if kg <= 0:
         raise PermintaanError("Sebutkan berapa kg yang dimuat.")
@@ -562,7 +562,7 @@ async def tutup_admin(db: AsyncSession, *, user, permintaan_id: int,
     from app.services.undo import UndoError, _undo_transfer
 
     baris = await _kunci(db, permintaan_id, keadaan=DIKIRIM)
-    if baris.bertahap:raise PermintaanError('Permintaan bertahap selesai otomatis dari perjalanan timbang; tidak ditutup melalui transfer lama.')
+    if baris.bertahap:raise PermintaanError('Permintaan selesai otomatis dari seluruh transfer yang tercatat. Untuk menghentikan sisanya, Admin memakai Tutup sisa persetujuan di halaman Transfer PK.')
     dikirim = float(baris.berat_kirim_kg or 0)
     final = float(berat_final if berat_final is not None else dikirim)
     if final <= 0:

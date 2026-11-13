@@ -2404,7 +2404,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False, user=None) 
             from app.services.pengiriman_pk import sisa
             remaining=await sisa(db,baris)
             if remaining>0:
-                b.menunggu.append(Baris(kode=kode_lot,isi="Persetujuan lot dapat dikirim sebagian per perjalanan",keadaan="siap dimuat",aksi="kirim_permintaan_pk",nilai=str(baris.id),tautan="/transfer-bertahap",fase="pindah_pk",sejak=baris.waktu_setuju,judul="Kirim PK per perjalanan",utama=(_kg(float(remaining)).removesuffix(" kg"),"kg"),sub=kode_lot,kelompok="permintaan",nota="Sisa sudah dikurangi seluruh perjalanan, termasuk yang sedang ditimbang."))
+                b.menunggu.append(Baris(kode=kode_lot,isi="Catat jumlah PK yang sudah dipindahkan; boleh sebagian",keadaan="siap dimuat",aksi="kirim_permintaan_pk",nilai=str(baris.id),tautan="/transfer-bertahap",fase="pindah_pk",sejak=baris.waktu_setuju,judul="Catat transfer PK",utama=(_kg(float(remaining)).removesuffix(" kg"),"kg"),sub=kode_lot,kelompok="permintaan",nota="Sisa sudah dikurangi transfer yang tercatat dan alokasi perjalanan lama."))
             continue
         lok = await label_tujuan(db, baris.tujuan, baris.silo_id)
         kg = float(baris.berat_setuju_kg or 0)
@@ -3295,7 +3295,7 @@ async def untuk_operator_gudang2(db: AsyncSession, *, user=None) -> Berjalan:
             # keadaan, dan ia yang menentukan apakah orangnya bisa mulai
             # menyosoh hari ini atau menunggu besok.
             nota=("Sudah ada di gudang ini — boleh langsung disosoh."
-                  if baris.status == _pmt.DIKIRIM and not baris.bertahap else ("Stok tujuan dicatat per perjalanan setelah selesai timbang. Tidak perlu konfirmasi penerimaan." if baris.bertahap else None))))
+                  if baris.status == _pmt.DIKIRIM and not baris.bertahap else ("Stok tujuan diperbarui saat operator asal mencatat transfer." if baris.bertahap else None))))
 
     # ── Yang BERAKHIR TANPA BARANG: ditolak, atau gugur ──
     #

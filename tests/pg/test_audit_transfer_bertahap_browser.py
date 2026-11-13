@@ -1,5 +1,5 @@
-"""Audit peran pada UI asli dua aplikasi dan PostgreSQL lokal, tanpa mock API."""
-import asyncio,os,socket,subprocess,json
+"""Regresi perjalanan historis: tiket lama tetap dapat diselesaikan setelah transfer generik."""
+import asyncio,os,socket,subprocess,json,uuid
 from pathlib import Path
 from decimal import Decimal
 from contextlib import asynccontextmanager
@@ -97,8 +97,13 @@ async def test_operator_admin_sebagian_silo_dan_selisih_asli(pg,pabrik,monkeypat
     await tekan(admin.get_by_role('button',name='Setujui 1 permintaan dipilih',exact=True));await expect(admin.locator('#pk-pesan')).to_have_text('Permintaan dipilih telah disetujui.')
     scenario=[]
     for index,(amount,actual) in enumerate([(2000,1995),(4000,3980 if width in (430,768,1440) else 3960)]):
-     await buka(source,pf+'/transfer-bertahap');row=source.locator(f'#pk-daftar [data-id="{rid}"]');await row.locator('[name=pilih]').check();await row.locator('[name=berat]').fill(str(amount));await source.locator('[name=nomor_polisi]').fill('K 9773 J');await source.locator('[name=nama_sopir]').fill('Kasidi')
-     await tekan(source.get_by_role('button',name='Buat 1 perjalanan · 1 lot',exact=True));await expect(source.locator('#pk-pesan')).to_contain_text('tersimpan. Buka timbang perjalanan')
+     # Simulasikan perjalanan yang sudah ada sebelum alur generik dirilis.
+     # UI baru tidak membuat perjalanan kendaraan atau tiket transfer baru.
+     from app.services import pengiriman_pk as legacy
+     async with pg() as db:
+      await legacy.buat(db,user=await db.get(User,pabrik['op1']),items=[dict(permintaan_id=rid,berat_kg=str(amount))],nomor_polisi='K 9773 J',nama_sopir='Kasidi',pakai_kendaraan=True,kunci=uuid.uuid4().hex)
+     await buka(source,pf+'/transfer-bertahap')
+     assert await source.locator('[name=nomor_polisi],[name=nama_sopir]').count()==0
      async with pg() as db:j=await db.scalar(select(PengirimanPk).order_by(PengirimanPk.id.desc()));jid=j.id;assert await transfer.saldo_pk(db,pabrik['proses_id'])==(6000 if index==0 else 4000)
      response=await source.request.get(pf+'/api/transfer-bertahap');data=await response.json();assert data['permintaan'][0]['sisa']==('4000' if index==0 else '0')
      # Operator tujuan melihat perjalanan, tanpa langkah konfirmasi penerimaan.

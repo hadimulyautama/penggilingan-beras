@@ -26,8 +26,8 @@ def keadaan_transfer(catatan, permintaan, gudang_asal, gudang_tujuan):
         return dict(judul='Riwayat transfer PK', status='Dibatalkan', aktif=False,
                     keterangan='Bobot catatan ini tidak dihitung sebagai transfer aktif. Catatan dan alasan pembatalan tetap tersedia di Riwayat.')
     if permintaan and getattr(permintaan,'bertahap',False):
-        if catatan:return dict(judul='Riwayat transfer PK',status='Perjalanan selesai',aktif=False,keterangan='Muatan perjalanan ini sudah selesai timbang dan stoknya tercatat. Permintaan lot dapat mempunyai perjalanan lain; lihat sisa persetujuan pada halaman Transfer PK.')
-        return dict(judul='Transfer PK per perjalanan',status={'diminta':'Menunggu persetujuan Admin','disetujui':'Siap dimuat','dikirim':'Pengiriman bertahap','selesai':'Seluruh perjalanan selesai','ditolak':'Ditolak','gugur':'Tidak dilanjutkan'}.get(permintaan.status,permintaan.status),aktif=permintaan.status in ('diminta','disetujui','dikirim'),etape=1 if permintaan.status=='diminta' else 2 if permintaan.status=='disetujui' else 3,keterangan='Satu persetujuan dapat dipenuhi beberapa perjalanan. Muatan asal dianggap genap bila selisih timbang kurang dari 0,5%; mulai 0,5% perlu pemeriksaan Admin. Stok dicatat setelah selesai timbang tanpa konfirmasi operator tujuan.')
+        if catatan:return dict(judul='Riwayat transfer PK',status='Transfer selesai',aktif=False,keterangan='Pemindahan ini sudah tercatat dalam stok. Lihat sisa persetujuan pada halaman Transfer PK.')
+        return dict(judul='Transfer PK',status={'diminta':'Menunggu persetujuan Admin','disetujui':'Siap dimuat','dikirim':'Pengiriman bertahap','selesai':'Transfer selesai','ditolak':'Ditolak','gugur':'Tidak dilanjutkan'}.get(permintaan.status,permintaan.status),aktif=permintaan.status in ('diminta','disetujui','dikirim'),etape=1 if permintaan.status=='diminta' else 2 if permintaan.status=='disetujui' else 3,keterangan='Satu persetujuan dapat dipenuhi beberapa kali transfer. Setelah barang dipindahkan, operator asal mencatat jumlahnya dan stok tujuan langsung diperbarui. Permintaan selesai otomatis saat jumlah yang disetujui sudah dipenuhi.')
     status = permintaan.status if permintaan else None
     if status == 'diminta':
         return dict(judul='Permintaan transfer PK', status='Menunggu persetujuan Admin', aktif=True, etape=1,
@@ -106,7 +106,7 @@ async def rincian(db, *, catatan=None, permintaan=None, params=None, read_scope=
     status_catatan = 'Dibatalkan' if catatan and catatan.status=='dibatalkan' else 'Terkirim' if catatan else 'Belum terbentuk'
     berat = [(label,bobot(getattr(permintaan,field)) if permintaan else 'Tidak ada permintaan') for label,field in
              [(f'Diminta {gudang_tujuan}','berat_minta_kg'),('Disetujui Admin','berat_setuju_kg'),
-              (f'Dimuat {gudang_asal}','berat_kirim_kg'),('Total selesai per perjalanan' if permintaan and permintaan.bertahap else 'Final Admin','berat_final_kg')]]
+              (f'Dimuat {gudang_asal}','berat_kirim_kg'),('Total transfer selesai' if permintaan and permintaan.bertahap else 'Final Admin','berat_final_kg')]]
     langkah = []
     if permintaan:
         for label,waktu,oleh in [(f'Diminta {gudang_tujuan}','waktu_minta','diminta_oleh'),

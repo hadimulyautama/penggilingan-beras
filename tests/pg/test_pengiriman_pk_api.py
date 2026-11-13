@@ -27,7 +27,7 @@ async def test_daftar_dan_aksi_mengikuti_peran_efektif(pg,siap):
      request=await db.get(PermintaanPk,w['rid'])
      assert request.status=='disetujui' and request.berat_setuju_kg==6000 and request.ditutup_oleh is None
    if not send:
-    r=await client.post('/api/transfer-bertahap/pengiriman',json=dict(items=[dict(permintaan_id=w['rid'],berat_kg='1')],nomor_polisi='K 9773 J',nama_sopir='Kasidi',kunci='a'*32));assert r.status_code==403
+    r=await client.post('/api/transfer-bertahap/pengiriman',json=dict(items=[dict(permintaan_id=w['rid'],berat_kg='1')],kunci='a'*32));assert r.status_code==403
    assert r.headers.get('cache-control')=='private, no-store' if r.status_code==200 else True
 
 async def test_permohonan_dari_stok_hingga_antrean_baru_dengan_csrf(pg,pabrik):
@@ -44,12 +44,12 @@ async def test_permohonan_dari_stok_hingga_antrean_baru_dengan_csrf(pg,pabrik):
   r=await admin.get('/pekerjaan?tab=tindakan');assert r.status_code==200 and '/transfer-bertahap' in r.text
   r=await admin.get('/transfer-bertahap');assert r.status_code==200 and 'id="transfer-pk"' in r.text
   r=await admin.post('/api/transfer-bertahap/setujui',json=dict(items=[dict(permintaan_id=rid,berat_kg='4000',tujuan='ditumpuk')]));assert r.status_code==200,r.text
-  r=await asal.get('/pekerjaan?tab=tindakan');assert r.status_code==200 and 'Buka transfer per perjalanan' in r.text
-  r=await asal.post('/api/transfer-bertahap/pengiriman',json=dict(items=[dict(permintaan_id=rid,berat_kg='1000')],nomor_polisi='K 9773 J',nama_sopir='Kasidi',kunci='b'*32));assert r.status_code==200,r.text
+  r=await asal.get('/pekerjaan?tab=tindakan');assert r.status_code==200 and 'Buka transfer PK' in r.text
+  r=await asal.post('/api/transfer-bertahap/pengiriman',json=dict(items=[dict(permintaan_id=rid,berat_kg='1000')],kunci='b'*32));assert r.status_code==200,r.text
   data=(await tujuan.get('/api/transfer-bertahap')).json();assert data['permintaan'][0]['sisa']=='3000' and len(data['pengiriman'])==1
-  result=await admin.post(f'/api/transfer-bertahap/permintaan/{rid}/tutup-sisa',json={'alasan':'Kebutuhan berubah'});assert result.status_code==409
+  assert data['pengiriman'][0]['status']=='selesai' and data['pengiriman'][0]['tiket_id'] is None
   jid=data['pengiriman'][0]['id']
-  result=await admin.post(f'/api/transfer-bertahap/{jid}/batal',json={'alasan':'Belum berangkat; kendaraan batal'});assert result.status_code==200,result.text
+  result=await admin.post(f'/api/transfer-bertahap/{jid}/batal',json={'alasan':'Transfer yang selesai tidak dibatalkan terpisah'});assert result.status_code==409,result.text
   result=await admin.post(f'/api/transfer-bertahap/permintaan/{rid}/tutup-sisa',json={'alasan':'Kebutuhan ditunda'});assert result.status_code==200,result.text
   async with pg() as db:
-   request=await db.get(PermintaanPk,rid);assert request.status=='gugur' and request.berat_setuju_kg==4000 and request.berat_final_kg==0
+   request=await db.get(PermintaanPk,rid);assert request.status=='selesai' and request.berat_setuju_kg==4000 and request.berat_final_kg==1000

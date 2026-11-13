@@ -1,8 +1,8 @@
-"""Pintu pengiriman bertahap dan kontrak Pos Timbang; tidak menerima bobot timbang dari klien."""
+"""Pintu transfer PK generik dan kontrak historis Pos Timbang."""
 from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Request, HTTPException, Header
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel,Field,PositiveInt,StrictBool
+from pydantic import BaseModel,Field,PositiveInt,ConfigDict
 from sqlalchemy import select
 from app.database import SessionLocal
 from app.models import User,Warehouse,Silo,PermintaanPk,MillingProcess,PengirimanPk
@@ -24,10 +24,8 @@ class Persetujuan(Item):
 class Setujui(BaseModel):
     items:list[Persetujuan]=Field(min_length=1,max_length=50)
 class Buat(BaseModel):
+    model_config=ConfigDict(extra='forbid')
     items:list[Item]=Field(min_length=1,max_length=50)
-    pakai_kendaraan:StrictBool=True
-    nomor_polisi:str=Field(default='',max_length=20)
-    nama_sopir:str=Field(default='',max_length=100)
     kunci:str=Field(pattern=r'^[a-f0-9]{32}$')
 class Alasan(BaseModel):alasan:str=Field(min_length=1,max_length=2000)
 
@@ -71,8 +69,12 @@ async def daftar(user=Depends(pengguna_aksi)):
             q=select(PengirimanPk).order_by(PengirimanPk.id.desc()).limit(100)
             if not is_admin:q=q.where(PengirimanPk.asal_id==w.id if w.kode_fungsi=='g1' else (PengirimanPk.tujuan_id==w.id)&PengirimanPk.jasa_id.is_(None))
             for j in (await db.scalars(q)).all():journeys.append(await s.rincian(db,j.id))
-            silos=(await db.scalars(select(Silo).join(Warehouse,Warehouse.id==Silo.warehouse_id).where(Warehouse.kode_fungsi=='g2',Warehouse.aktif.is_(True),Silo.aktif.is_(True),Silo.jenis_isi=='pk').order_by(Silo.nama_silo))).all()
-            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=[dict(nilai='ditumpuk',nama='Tumpukan')]+[dict(nilai=x.nama_silo,nama=x.nama_silo,id=x.id) for x in silos]))
+            from app.penggilingan.gudang2.service import _g2_warehouse_id
+            from app.penggilingan.silo_policy import boleh_masuk
+            target=await db.get(Warehouse,await _g2_warehouse_id(db))
+            silos=[x for x in (await db.scalars(select(Silo).where(Silo.warehouse_id==target.id,Silo.aktif.is_(True)).order_by(Silo.nama_silo))).all() if boleh_masuk(x,'pk','g2')]
+            tujuan=[dict(nilai='ditumpuk',nama='Tumpukan · '+target.nama_gudang)]+[dict(nilai=x.nama_silo,nama=x.nama_silo+' · '+target.nama_gudang,id=x.id) for x in silos]
+            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=tujuan,gudang_tujuan=dict(id=target.id,nama=target.nama_gudang)))
     except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/setujui')
@@ -84,7 +86,7 @@ async def setujui(body:Setujui,user=Depends(pengguna_aksi)):
 @router.post('/api/transfer-bertahap/pengiriman')
 async def buat(body:Buat,user=Depends(pengguna_aksi)):
     try:
-        async with SessionLocal() as db:return jawab(await s.buat(db,user=user,items=[x.model_dump() for x in body.items],nomor_polisi=body.nomor_polisi,nama_sopir=body.nama_sopir,kunci=body.kunci,pakai_kendaraan=body.pakai_kendaraan))
+        async with SessionLocal() as db:return jawab(await s.buat(db,user=user,items=[x.model_dump() for x in body.items],kunci=body.kunci,pakai_kendaraan=False))
     except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/permintaan/{rid}/tutup-sisa')

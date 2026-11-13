@@ -1,5 +1,7 @@
-"""Penghubung permintaan→perjalanan→tiket; seluruh perpindahan tetap melalui buku stok lama.
+"""Transfer generik dari persetujuan; seluruh perpindahan melalui buku stok lama.
 
+Transfer baru dicatat langsung setelah pemindahan fisik selesai.
+Kontrak tiket berikut dipertahankan untuk menyelesaikan perjalanan historis.
 Tidak ada konfirmasi operator tujuan. Timbang selesai dengan selisih absolut
 KURANG dari 0,5% mengesahkan muatan asal apa adanya. Angka timbang tetap utuh;
 selisih perjalanan tidak pernah dibagi ke lot atau dianggap susut gudang asal.
@@ -79,7 +81,8 @@ async def _rute(db,r):
     silo=await db.get(Silo,r.silo_id) if r.silo_id else None
     tujuan=await db.get(Warehouse,silo.warehouse_id) if silo else await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g2',Warehouse.aktif.is_(True)))
     if not asal or not asal.aktif or not tujuan or not tujuan.aktif:raise PengirimanError('Gudang asal atau tujuan tidak aktif.')
-    if silo and (not silo.aktif or silo.jenis_isi!='pk'):raise PengirimanError('Silo tujuan bukan silo PK aktif.')
+    from app.penggilingan.silo_policy import boleh_masuk
+    if silo and (not silo.aktif or not boleh_masuk(silo,'pk','g2')):raise PengirimanError('Silo tujuan tidak aktif atau tidak menerima PK.')
     return proc,asal,tujuan,silo
 
 async def _jejak(db,j,user,aksi,pesan):
@@ -107,7 +110,7 @@ async def setujui_banyak(db,*,user,items):
             if not all([await cocok_pemilik(db,r.jasa_id,o) for o in owners]):raise PengirimanError('Pemilik silo tujuan berbeda dari lot.')
         r.bertahap=True;r.status='disetujui';r.tujuan=tujuan;r.silo_id=silo_id;r.berat_setuju_kg=value;r.disetujui_oleh=user.id;r.waktu_setuju=now_local()
         await db.flush()
-        await jejak_minta(db,r,langkah='setujui_bertahap',oleh=user,ringkas='Disetujui '+angka(value)+' kg; pengiriman per perjalanan setelah timbang.')
+        await jejak_minta(db,r,langkah='setujui_bertahap',oleh=user,ringkas='Disetujui '+angka(value)+' kg; operator asal dapat mencatat transfer setelah barang dipindahkan.')
         await _kabar(db,r,untuk='operator',pesan='Permintaan '+await _kode_lot(db,r)+' disetujui '+angka(value)+' kg. Operator asal dapat membuat pengiriman sebagian.',prioritas='hijau')
     await db.commit()
     return dict(ok=True,permintaan_ids=ids)
@@ -152,10 +155,10 @@ async def buat(db,*,user,items,kunci,nomor_polisi="",nama_sopir="",pakai_kendara
         r=requests[x['permintaan_id']];sebelumnya=await terpakai(db,r.id);db.add(PengirimanPkItem(pengiriman_id=j.id,permintaan_id=r.id,berat_kg=D(x['berat_kg'])))
         r.status='dikirim';r.berat_kirim_kg=sebelumnya+D(x['berat_kg']);r.dikirim_oleh=user.id;r.waktu_kirim=now
     await db.flush()
-    await _jejak(db,j,user,'buat','Muatan perjalanan dicatat; menunggu timbang, belum menambah stok tujuan.' if pakai_kendaraan else 'Transfer tanpa kendaraan dicatat setelah pemindahan fisik selesai.')
+    await _jejak(db,j,user,'buat','Muatan perjalanan dicatat; menunggu timbang, belum menambah stok tujuan.' if pakai_kendaraan else 'Transfer PK dicatat setelah pemindahan fisik selesai.')
     if not pakai_kendaraan:
         parts=list((await db.scalars(select(PengirimanPkItem).where(PengirimanPkItem.pengiriman_id==j.id).order_by(PengirimanPkItem.permintaan_id))).all())
-        await _selesaikan(db,j,parts,requests,user,'Transfer tanpa kendaraan; bobot per lot dicatat operator asal setelah pemindahan selesai.')
+        await _selesaikan(db,j,parts,requests,user,'Transfer PK; bobot per lot dicatat operator asal setelah pemindahan selesai.')
     await db.commit();return dict(ok=True,id=j.id,ulang=False)
 
 async def rincian(db,pid):
@@ -227,7 +230,8 @@ async def _selesaikan(db,j,items,requests,actor,alasan):
         if j.silo_id:
             from app.penggilingan.gudang2.service import hitung_stok_silo
             silo=await db.scalar(select(Silo).where(Silo.id==j.silo_id).with_for_update())
-            if not silo or not silo.aktif or silo.jenis_isi!='pk':raise PengirimanError('Silo tujuan tidak lagi tersedia untuk PK.')
+            from app.penggilingan.silo_policy import boleh_masuk
+            if not silo or not silo.aktif or silo.warehouse_id!=j.tujuan_id or not boleh_masuk(silo,'pk','g2'):raise PengirimanError('Silo tujuan tidak lagi tersedia untuk PK.')
             if silo.kapasitas_ton is not None and D(await hitung_stok_silo(db,silo.id))+D(i.berat_kg)>D(silo.kapasitas_ton)*1000:
                 raise PengirimanError('Kapasitas silo tujuan tidak mencukupi transfer. Periksa kapasitas sebelum mengulang pencatatan stok.')
         with lepas_item(db,r,i.berat_kg):

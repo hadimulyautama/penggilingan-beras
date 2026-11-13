@@ -68,7 +68,7 @@ async def test_multilot_kapasitas_gagal_rollback_semua_lot(pg,siap):
   await s.buat(db,user=await db.get(User,w['op1']),**args)
  async with pg() as db:assert await db.scalar(select(func.sum(InternalTransfer.berat_kg)))==2000
 
-async def test_api_tanpa_kendaraan_tidak_memerlukan_field_armada(pg,siap):
+async def test_api_generik_langsung_tanpa_tiket_dan_menolak_metadata_kendaraan(pg,siap):
  from fastapi import FastAPI
  from httpx import ASGITransport,AsyncClient
  from app.web.pengiriman_pk import router
@@ -77,12 +77,12 @@ async def test_api_tanpa_kendaraan_tidak_memerlukan_field_armada(pg,siap):
  async with pg() as db:u=await db.get(User,siap['op1'])
  app.dependency_overrides[pengguna_aksi]=lambda:u
  async with AsyncClient(transport=ASGITransport(app=app),base_url='http://uji') as c:
-  payload=dict(items=[dict(permintaan_id=siap['rid'],berat_kg='1000')],pakai_kendaraan=False,kunci=uuid.uuid4().hex)
+  payload=dict(items=[dict(permintaan_id=siap['rid'],berat_kg='1000')],kunci=uuid.uuid4().hex)
   r=await c.post('/api/transfer-bertahap/pengiriman',json=payload);assert r.status_code==200,r.text
-  payload['kunci']=uuid.uuid4().hex;payload['pakai_kendaraan']=True
-  r=await c.post('/api/transfer-bertahap/pengiriman',json=payload);assert r.status_code==409,r.text
-  payload['pakai_kendaraan']='false'
-  r=await c.post('/api/transfer-bertahap/pengiriman',json=payload);assert r.status_code==422,r.text
+  data=(await c.get('/api/transfer-bertahap')).json()['pengiriman'][0]
+  assert data['status']=='selesai' and data['tiket_id'] is None and data['nomor_polisi'] is None
+  for extra in ({'pakai_kendaraan':True},{'nomor_polisi':'K 1 A'},{'nama_sopir':'Kasidi'}):
+   r=await c.post('/api/transfer-bertahap/pengiriman',json={**payload,'kunci':uuid.uuid4().hex,**extra});assert r.status_code==422,r.text
 
 @pytest.mark.parametrize('width',[390,1440])
 @pytest.mark.parametrize('peran,lihat,is_admin',[
@@ -122,16 +122,47 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    response=await c.post(f"/api/transfer-bertahap/permintaan/{siap['rid']}/tutup-sisa",json={'alasan':'Tidak boleh ditutup operator'},headers={csrf.NAMA_HEADER:cap_formulir(c)})
    assert response.status_code==403,response.text
   await page.locator('[name=pilih]').check()
-  assert await page.locator('[name=nomor_polisi]').evaluate('e=>e.required')
-  await page.locator('#pk-pakai-kendaraan').select_option('tidak')
-  await expect(page.locator('#pk-armada')).to_be_hidden()
-  assert not await page.locator('[name=nomor_polisi]').evaluate('e=>e.required')
+  await expect(page.locator('[name=nomor_polisi],[name=nama_sopir],#pk-pakai-kendaraan')).to_have_count(0)
   await page.locator('[name=berat]').fill('6000')
-  await page.get_by_role('button',name='Catat transfer selesai · 1 lot',exact=True).click()
+  await page.get_by_role('button',name='Catat transfer · 1 lot',exact=True).click()
   await expect(page.locator('#pk-pesan')).to_contain_text('Stok asal dan tujuan sudah diperbarui.')
-  await expect(page.locator('#pk-jalan')).to_contain_text('Transfer tanpa kendaraan #')
+  await expect(page.locator('#pk-jalan')).to_contain_text('Transfer #')
   assert await page.locator('#pk-jalan a').count()==0
   assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   assert not errors,errors
   await b.close()
  async with pg() as db:assert await db.scalar(select(func.sum(InternalTransfer.berat_kg)))==6000
+
+@pytest.mark.parametrize('ada_silo',[True,False])
+async def test_tujuan_hanya_tumpukan_dan_silo_penerima_pk_gudang_tujuan(pg,siap,ada_silo):
+ from app.models import Silo,Warehouse
+ from fastapi import FastAPI
+ from httpx import ASGITransport,AsyncClient
+ from app.web.pengiriman_pk import router
+ from app.web.deps import pengguna_aksi
+ async with pg() as db:
+  g2=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g2'))
+  for silo in (await db.scalars(select(Silo).where(Silo.warehouse_id==g2.id))).all():silo.aktif=False
+  other=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g1'))
+  db.add_all([
+   Silo(nama_silo='Silo PK dinonaktifkan',warehouse_id=g2.id,aktif=False,komoditas_diizinkan=['pk']),
+   Silo(nama_silo='Silo hanya broken',warehouse_id=g2.id,komoditas_diizinkan=['broken']),
+   Silo(nama_silo='Silo gudang lain',warehouse_id=other.id,komoditas_diizinkan=['pk']),
+  ])
+  if ada_silo:db.add(Silo(nama_silo='Silo serbaguna penerima PK',warehouse_id=g2.id,jenis_isi='beras',komoditas_diizinkan=['pk','beras_putih']))
+  await db.commit();u=await db.get(User,siap['admin'])
+ app=FastAPI();app.include_router(router);app.dependency_overrides[pengguna_aksi]=lambda:u
+ async with AsyncClient(transport=ASGITransport(app=app),base_url='http://uji') as c:
+  result=await c.get('/api/transfer-bertahap');assert result.status_code==200,result.text
+  data=result.json();choices=data['tujuan']
+  assert data['gudang_tujuan']['id']==g2.id
+  assert choices[0]['nilai']=='ditumpuk' and g2.nama_gudang in choices[0]['nama']
+  assert len(choices)==(2 if ada_silo else 1)
+  if ada_silo:
+   assert choices[1]['nilai']=='Silo serbaguna penerima PK'
+   rid=await lot_lain(pg,siap)
+   r=await c.post('/api/transfer-bertahap/setujui',json=dict(items=[dict(permintaan_id=rid,berat_kg='1000',tujuan=choices[1]['nilai'])]));assert r.status_code==200,r.text
+   r=await c.post('/api/transfer-bertahap/pengiriman',json=dict(items=[dict(permintaan_id=rid,berat_kg='500')],kunci=uuid.uuid4().hex));assert r.status_code==200,r.text
+   async with pg() as db:
+    j=await db.get(PengirimanPk,r.json()['id']);assert j.status=='selesai' and j.tiket_id is None
+    t=await db.scalar(select(InternalTransfer));assert t.silo_id==choices[1]['id'] and t.berat_kg==500

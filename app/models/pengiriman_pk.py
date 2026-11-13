@@ -1,4 +1,4 @@
-"""Satu perjalanan membawa beberapa bagian permintaan PK; stok baru dicatat setelah timbang."""
+"""Satu transfer membawa beberapa bagian permintaan PK; tiket hanya untuk perjalanan historis."""
 from datetime import datetime
 from sqlalchemy import Boolean, true, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
