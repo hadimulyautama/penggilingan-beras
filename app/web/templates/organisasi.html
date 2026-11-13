@@ -24,9 +24,10 @@
 <p class="pg-lingkup">Pengaturan / Perusahaan &amp; fasilitas / Perusahaan &amp; lokasi pabrik</p>
 <h1 id="org-judul">{{ 'Pratinjau penetapan gudang' if mode=='penetapan' else site.nama if site else company.nama if company else 'Perusahaan & lokasi pabrik' }}</h1>
 {% if err %}<p class="nota nota--buruk" role="alert">{{ err }}</p>{% endif %}
+{% if pesan_penetapan in ('tersimpan','sesuai') %}<p class="pesan pesan--ok" role="status">{{ 'Penetapan gudang tersimpan.' if pesan_penetapan=='tersimpan' else 'Semua gudang sudah sesuai. Tidak ada penetapan baru.' }}</p>{% endif %}
 {% if pesan %}<p class="pesan pesan--ok" role="status">Master tersimpan.</p>{% endif %}
 {% if mode=='daftar' %}
-<p>Atur perusahaan dan lokasi pabrik, lalu siapkan rencana penempatan gudang yang sudah ada. Struktur ini belum mengaktifkan pemisahan akses antarperusahaan.</p>
+<p>Atur perusahaan dan lokasi pabrik, lalu tetapkan perusahaan dan lokasi untuk gudang yang sudah ada. Struktur ini belum mengaktifkan pemisahan akses antarperusahaan.</p>
 <a class="btn" href="/pengaturan/organisasi/penetapan">Pratinjau penetapan gudang</a>
 <section class="org-list" aria-label="Daftar perusahaan">
 {% for c in companies %}<a class="pg-pintu" href="/pengaturan/organisasi/perusahaan/{{ c.id }}"><span class="pg-pintu__isi"><strong>{{ c.nama }}</strong><small>{{ c.kode }} · {{ 'Aktif' if c.aktif else 'Nonaktif' }} · {{ sites|selectattr('company_id','equalto',c.id)|list|length }} lokasi pabrik</small></span><span aria-hidden="true">›</span></a>{% else %}<p>Belum ada perusahaan. Tambahkan perusahaan sesuai identitas yang akan digunakan.</p>{% endfor %}
@@ -45,17 +46,34 @@
 <section><h2>Gudang yang sudah ditetapkan</h2>{% set links=bindings|selectattr('lokasi_pabrik_id','equalto',site.id)|list %}
 {% for b in links %}{% for w in warehouses if w.id==b.warehouse_id %}<p><a href="/pengaturan/gudang">{{ w.nama_gudang }}</a></p>{% endfor %}{% else %}<p>Belum ada gudang yang ditetapkan ke lokasi ini.</p>{% endfor %}
 <a class="btn" href="/pengaturan/organisasi/penetapan?lokasi_pabrik_id={{ site.id }}">Siapkan pratinjau penetapan</a></section>
+<section class="kartu" aria-labelledby="org-jejak"><h2 id="org-jejak">Riwayat penetapan gudang</h2>
+{% for j in jejak %}<article class="org-plan"><h3>{{ j.gudang }}</h3><p>#{{ j.id }} · {{ j.waktu|jam('%d/%m/%Y %H:%M') }} · {{ j.pelaku }}</p><dl><div><dt>Sebelum</dt><dd>{{ j.sebelum }}</dd></div><div><dt>Sesudah</dt><dd>{{ j.perusahaan }} / {{ j.lokasi }}<small> · perusahaan #{{ j.company_id }} · lokasi #{{ j.lokasi_pabrik_id }}</small></dd></div><div><dt>Alasan penetapan</dt><dd>{{ j.alasan }}</dd></div></dl></article>{% else %}<p>Belum ada jejak penetapan melalui Pengaturan pada lokasi ini.</p>{% endfor %}
+{% if jejak_lanjut %}<a class="btn" href="/pengaturan/organisasi/lokasi/{{ site.id }}?sebelum={{ jejak_lanjut }}#org-jejak">Riwayat lebih lama</a>{% endif %}
+{% if request.query_params.get('sebelum') %}<a class="btn" href="/pengaturan/organisasi/lokasi/{{ site.id }}#org-jejak">Riwayat terbaru</a>{% endif %}</section>
 {% elif mode=='penetapan' %}
-<p>Pilih tujuan dan gudang untuk meninjau rencana. Pratinjau ini tidak menyimpan penetapan atau mengubah catatan timbang, proses, stok, maupun kepemilikan barang.</p>
-<form method="get" action="/pengaturan/organisasi/penetapan" class="org-form">
+<p>Pilih tujuan dan gudang, lalu periksa pratinjau sebelum menerapkan. Penetapan hanya mencatat hubungan gudang dengan perusahaan dan lokasi pabrik. Catatan timbang, proses, stok, dan kepemilikan barang tetap.</p>
+{% if err and form.get('alasan') %}<label>Alasan penetapan yang belum tersimpan<textarea class="fld" readonly rows="3">{{ form.get('alasan') }}</textarea></label>{% endif %}
+<form method="get" action="/pengaturan/organisasi/penetapan" class="org-form" data-pilihan-penetapan>
 <label>Perusahaan / lokasi pabrik tujuan<select class="fld" name="lokasi_pabrik_id" required><option value="">Pilih tujuan</option>{% for c in companies if c.aktif %}<optgroup label="{{ c.nama }} · {{ c.kode }}">{% for s in sites if s.company_id==c.id and s.aktif %}<option value="{{ s.id }}" {% if form.get('lokasi_pabrik_id')==s.id|string %}selected{% endif %}>{{ c.kode }} / {{ s.nama }} · {{ s.kode }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
 <fieldset><legend>Gudang yang akan ditinjau</legend>{% for w in warehouses %}<label class="org-check"><input type="checkbox" name="warehouse_id" value="{{ w.id }}" {% if w.id|string in form.get('warehouse_ids',[]) %}checked{% endif %}>{{ w.nama_gudang }}{% if not w.aktif %} · Nonaktif{% endif %}</label>{% else %}<p>Belum ada gudang.</p>{% endfor %}</fieldset>
 <button type="submit" class="btn btn--utama" name="periksa" value="1">Pratinjau penetapan</button>
 </form>
 {% if plan %}<section class="kartu" data-rencana-penetapan aria-labelledby="rencana-judul"><h2 id="rencana-judul">Rencana: {{ plan.perusahaan }} / {{ plan.lokasi }}</h2>
 {% for w in plan.gudang %}<article class="org-plan"><h3>{{ w.nama }}</h3><p><strong>{{ w.keadaan }}</strong></p><dl><div><dt>Penetapan saat ini</dt><dd>{{ w.tujuan_lama }}</dd></div><div><dt>Tujuan rencana</dt><dd>{{ plan.perusahaan }} / {{ plan.lokasi }}</dd></div><div><dt>Fasilitas terkait</dt><dd>{{ w.silo }} silo · {{ w.dryer }} dryer · {{ w.lini }} line</dd></div></dl></article>{% endfor %}
-<p role="status">Pratinjau selesai. Belum ada penetapan yang disimpan.</p><p>Asal-usul transaksi lama perlu diperiksa tersendiri sebelum penetapan datanya diterapkan. Jumlah fasilitas bukan jumlah transaksi yang akan dipindahkan.</p>
+<p role="status">Pratinjau selesai. Belum ada penetapan yang disimpan.</p>
+{% if not plan.bisa_diterapkan %}<p class="nota nota--buruk">Belum dapat diterapkan. Pilih gudang aktif yang belum ditetapkan atau sudah menunjuk tujuan yang sama. Penetapan yang berbeda perlu dikoreksi terpisah; seluruh pilihan belum diubah.</p>
+{% elif not plan.jumlah_baru %}<p>Semua gudang sudah sesuai. Tidak ada penetapan baru.</p>
+{% elif bukti %}<p class="nota" role="status" data-pilihan-berubah hidden>Pilihan berubah. Buat pratinjau baru sebelum menerapkan. Alasan yang sudah diketik tetap tersedia.</p>
+<form method="post" action="/pengaturan/organisasi/penetapan/terapkan" class="org-form" data-jaga-isian data-terapkan-penetapan data-rencana-lokasi="{{ plan.lokasi_pabrik_id }}" data-rencana-gudang='{{ plan.gudang|map(attribute="warehouse_id")|list|tojson }}'>
+<input type="hidden" name="_csrf" value="{{ CSRF }}"><input type="hidden" name="bukti" value="{{ bukti }}">
+<p>{{ plan.jumlah_baru }} gudang akan ditetapkan. Gudang yang sudah sesuai tetap. Pratinjau berlaku 30 menit.</p>
+<label>Alasan penetapan<textarea class="fld" name="alasan" minlength="5" maxlength="500" rows="3" required>{{ form.get('alasan','') }}</textarea></label>
+<label class="org-check"><input type="checkbox" name="konfirmasi" required> Saya telah memeriksa perusahaan, lokasi, dan gudang pada pratinjau ini.</label>
+<button type="submit" class="btn btn--utama">Terapkan penetapan gudang</button>
+</form>{% endif %}
+<p>Jumlah fasilitas bukan jumlah transaksi yang dipindahkan. Penetapan ini tidak memindahkan barang, mengubah transaksi lama, atau mengaktifkan pemisahan akses antarperusahaan.</p>
 </section>{% endif %}
 {% endif %}
 </section>
+<script src="/static/organisasi.js?v={{ VERSI }}" defer></script>
 {% endblock %}
