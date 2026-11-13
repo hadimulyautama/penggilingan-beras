@@ -4,6 +4,7 @@
       {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
       {% if penghalang_koreksi %}
         <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+        {% if d.perjalanan and not d.perjalanan.pakai_kendaraan %}<p><a class="btn" href="/transfer-bertahap#perjalanan-{{ d.perjalanan.id }}">Buka koreksi di Transfer PK</a></p>{% endif %}
         {% include '_penghalang_koreksi.html' %}
         {% if isian_koreksi %}<details open><summary>Isian yang belum tersimpan</summary>{% for nama, nilai in isian_koreksi.items() %}<label>{{ 'Alasan koreksi' if nama == 'alasan' else (nama_hasil(nama.removeprefix('hasil_')) if jenis == 'sosoh' else ('PK hasil giling' if jenis == 'giling' else 'Berat transfer')) }}<textarea readonly>{{ nilai }}</textarea></label>{% endfor %}</details>{% endif %}
       {% else %}

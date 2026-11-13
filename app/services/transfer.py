@@ -341,8 +341,13 @@ async def create_internal_transfer(
 
 async def alasan_koreksi_transfer(db: AsyncSession, transfer_id: int) -> str | None:
     """Periksa apakah transfer masih aman dibatalkan untuk koreksi."""
-    from app.models import PengirimanPkItem
-    if await db.scalar(select(PengirimanPkItem.id).where(PengirimanPkItem.internal_transfer_id==transfer_id).limit(1)):
+    from app.models import PengirimanPkItem, PengirimanPk
+    pengiriman=await db.scalar(select(PengirimanPk).join(PengirimanPkItem,
+        PengirimanPkItem.pengiriman_id==PengirimanPk.id).where(
+        PengirimanPkItem.internal_transfer_id==transfer_id).limit(1))
+    if pengiriman and not pengiriman.pakai_kendaraan:
+        return 'Gunakan Koreksi jumlah pada catatan di halaman Transfer PK (/transfer-bertahap) agar permintaan, stok, dan bahan produksi diperbarui bersama.'
+    if pengiriman:
         return 'Transfer merupakan bagian perjalanan timbang bertahap; koreksi terpisah akan memutus jejak muatan.'
     from app.services.pk_koreksi_rantai import alasan_perubahan_terpisah
     reason=await alasan_perubahan_terpisah(db,'transfers',transfer_id)

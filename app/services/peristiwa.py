@@ -375,6 +375,7 @@ async def _koreksi_kepemilikan_rantai(db,e):
         await proyeksi(db,e)
 
 PENANGAN['koreksi_kepemilikan_rinci']=_koreksi_kepemilikan_rantai
+PENANGAN['koreksi_transfer_pk']=_koreksi_kepemilikan_rantai
 
 async def _koreksi_gudang_penerimaan(db,e):
     from app.services.koreksi_gudang_penerimaan import terapkan_peristiwa

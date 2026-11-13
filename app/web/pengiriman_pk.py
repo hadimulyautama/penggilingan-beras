@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field,PositiveInt,ConfigDict
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal
 from app.models import User,Warehouse,Silo,PermintaanPk,MillingProcess,PengirimanPk
 from app.web.deps import pengguna_aksi
@@ -45,6 +46,28 @@ class Buat(BaseModel):
     items:list[JumlahTransfer]=Field(min_length=1,max_length=50)
     kunci:str=Field(pattern=r'^[a-f0-9]{32}$')
 class Alasan(BaseModel):alasan:str=Field(min_length=1,max_length=2000)
+
+class Koreksi(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    aksi:Literal['minta','persetujuan','kembali','batal','buka','jumlah','bahan']
+    berat_kg:str|None=Field(default=None,max_length=20)
+    tujuan:str|None=Field(default=None,max_length=120)
+    pemindahan_id:PositiveInt|None=None
+    alasan:str=Field(min_length=1,max_length=2000)
+    kunci:str=Field(pattern=r'^[a-f0-9]{32}$')
+    pemeriksaan:str=Field(default='',max_length=64)
+    konfirmasi:bool=Field(default=False,strict=True)
+
+@router.post('/api/transfer-bertahap/koreksi/{jenis}/{ident}/{tahap}')
+async def koreksi(jenis:Literal['permintaan','transfer'],ident:PositiveInt,
+                  tahap:Literal['periksa','simpan'],body:Koreksi,user=Depends(pengguna_aksi)):
+    from app.services import koreksi_transfer_pk as koreksi
+    try:
+        async with SessionLocal() as db:
+            action=koreksi.simpan if tahap=='simpan' else koreksi.periksa
+            return jawab(await action(db,jenis=jenis,ident=ident,user=user,req=body.model_dump()))
+    except (ValueError,PermissionError,koreksi.InventoryError,Gudang2Error) as e:raise galat(e)
+    except IntegrityError:raise HTTPException(409,'Catatan terkait berubah atau mempunyai permintaan aktif lain. Periksa ulang; tidak ada perubahan disimpan.')
 
 async def baca_izin(db,u):
     if u.status!='aktif':raise PermissionError('Akun tidak aktif.')
@@ -91,7 +114,23 @@ async def daftar(user=Depends(pengguna_aksi)):
             target=await db.get(Warehouse,await _g2_warehouse_id(db))
             silos=[x for x in (await db.scalars(select(Silo).where(Silo.warehouse_id==target.id,Silo.aktif.is_(True)).order_by(Silo.nama_silo))).all() if boleh_masuk(x,'pk','g2')]
             tujuan=[dict(nilai='ditumpuk',nama='Tumpukan · '+target.nama_gudang)]+[dict(nilai=x.nama_silo,nama=x.nama_silo+' · '+target.nama_gudang,id=x.id) for x in silos]
-            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=tujuan,gudang_tujuan=dict(id=target.id,nama=target.nama_gudang)))
+            audits=[]
+            if is_admin:
+                from app.models import Peristiwa
+                for e in (await db.scalars(select(Peristiwa).where(Peristiwa.jenis=='koreksi_transfer_pk').order_by(Peristiwa.id.desc()).limit(50))).all():
+                    plan=e.muatan['rancangan'];summary=[]
+                    for kind,label in [('items','Transfer'),('permintaan','Permintaan')]:
+                        for row in plan[kind]:
+                            for field,title in [('berat_kg','jumlah'),('berat_minta_kg','diminta'),('berat_setuju_kg','disetujui')]:
+                                if row['before'].get(field)!=row['after'].get(field) and field in row['after']:
+                                    summary.append(f"{label} #{row['id']} {title}: {s.angka(row['before'].get(field))} → {s.angka(row['after'].get(field))} kg")
+                    for row in plan['pk_chain'].get('moves',[]):
+                        summary.append(f"Pemindahan #{row['id']}: {s.angka(row['effective_before'])} → {s.angka(row['effective_after'])} kg")
+                    for proc in plan['pk_chain'].get('processes',[]):
+                        summary.append(f"{proc['kode']} bahan: {s.angka(proc['bahan_before'])} → {s.angka(proc['bahan_after'])} kg; hasil tetap {s.angka(proc['hasil_tercatat'])} kg")
+                    audits.append(dict(id=e.id,jenis=e.muatan['jenis'],ident=e.muatan['ident'],
+                        alasan=e.muatan['isian']['alasan'],waktu=e.waktu.isoformat(),ringkasan=summary))
+            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=tujuan,koreksi=audits,gudang_tujuan=dict(id=target.id,nama=target.nama_gudang)))
     except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/setujui')

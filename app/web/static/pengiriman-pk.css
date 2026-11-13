@@ -3,3 +3,5 @@
 
 .tp-jumlah,.tp-jumlah [data-unit="karung"]{display:grid;gap:.6rem;min-width:0}.tp-jumlah label{display:grid;gap:.4rem}.tp-jumlah [data-galat]{color:#a42a25}@media(max-width:650px){.tp-row>.tp-jumlah{grid-column:2}}
 .pk-kontrol{min-width:0}
+
+#pk-koreksi{max-width:760px;width:calc(100% - 2rem);max-height:90vh;overflow:auto}#pk-koreksi-form{display:grid;gap:1rem}#pk-koreksi label{display:grid;gap:.4rem}#pk-koreksi .fld{width:100%;min-width:0}#pk-koreksi textarea{min-height:90px}#pk-koreksi-konfirmasi{grid-template-columns:auto 1fr;align-items:center}#pk-koreksi-pesan[data-galat],.tp-galat{color:var(--bahaya,#a42a25)}.tp-tabel{overflow-x:auto}#pk-koreksi table{width:100%;border-collapse:collapse}#pk-koreksi th,#pk-koreksi td{text-align:left;padding:.5rem;border-bottom:1px solid var(--garis)}#pk-koreksi th{white-space:nowrap}

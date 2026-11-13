@@ -117,6 +117,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
   else:
    await expect(tutup).to_have_count(0)
    await expect(page.locator('[data-action]')).to_have_count(0)
+   await expect(page.locator('[data-koreksi]')).to_have_count(0)
    # Pintu API juga memakai peran efektif, termasuk mode operator milik Admin.
    from tests.pg.formulir import cap_formulir
    from app.web import csrf
@@ -143,7 +144,8 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
   await page.get_by_role('button',name='Catat transfer · 1 lot',exact=True).click()
   await expect(page.locator('#pk-pesan')).to_contain_text('Stok asal dan tujuan sudah diperbarui.')
   await expect(page.locator('#pk-jalan')).to_contain_text('Transfer #')
-  assert await page.locator('#pk-jalan a').count()==0
+  # Rincian transfer sekarang tersedia; jalur generik tetap tanpa tautan timbang.
+  assert await page.locator('#pk-jalan a[href*="/timbangan/"]').count()==0
   assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   assert not errors,errors
   await b.close()

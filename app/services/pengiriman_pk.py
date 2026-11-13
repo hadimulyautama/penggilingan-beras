@@ -167,6 +167,14 @@ async def rincian(db,pid):
     a=await db.get(Warehouse,j.asal_id);t=await db.get(Warehouse,j.tujuan_id);s=await db.get(Silo,j.silo_id) if j.silo_id else None
     rows=(await db.execute(select(PengirimanPkItem,PermintaanPk,MillingProcess).join(PermintaanPk,PermintaanPk.id==PengirimanPkItem.permintaan_id).join(MillingProcess,MillingProcess.id==PermintaanPk.milling_process_id).where(PengirimanPkItem.pengiriman_id==pid).order_by(PengirimanPkItem.id))).all()
     items=[dict(id=i.id,permintaan_id=r.id,lot=p.kode_proses,berat_kg=angka(i.berat_kg),transfer_id=i.internal_transfer_id,jasa_id=r.jasa_id) for i,r,p in rows]
+    from app.models import PkGudang2Intake,PkTumpukanToSilo
+    for item in items:
+        item['pemindahan']=[]
+        if item['transfer_id']:
+            moves=(await db.execute(select(PkTumpukanToSilo,Silo.nama_silo).join(PkGudang2Intake,
+                PkGudang2Intake.id==PkTumpukanToSilo.pk_gudang2_intake_id).join(Silo,Silo.id==PkTumpukanToSilo.silo_id).where(
+                PkGudang2Intake.internal_transfer_id==item['transfer_id'],PkTumpukanToSilo.dibatalkan_pada.is_(None)))).all()
+            item['pemindahan']=[dict(id=m.id,nama=nama,berat_kg=angka(m.berat_kg)) for m,nama in moves]
     # The ticket is created by TeraFlow before its first completion callback.
     # Resolve it even while that callback has not reached PadiFlow yet.
     columns=await db.run_sync(lambda d:{c['name'] for c in inspect(d.connection()).get_columns('timbangan_transaksi')})

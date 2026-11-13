@@ -765,6 +765,19 @@ async def sinkron_bahan(db,jenis,ids):
             await perbarui_bahan_proses_bersama(db,tabel_sumber='milling_process',id_sumber=pid,bahan=bahan)
         else:
             proc=await db.get(PolishingProcess,pid)
+            # Simpan angka yang pernah diterbitkan sebelum bahan efektif
+            # berubah. Catatan penutupan tetap, hasil ukur tidak diskalakan.
+            from hmu_core.proses_db import ProsesTerpadu
+            from sqlalchemy.orm import selectinload
+            old=await db.scalar(select(ProsesTerpadu).options(selectinload(ProsesTerpadu.arus)).where(
+                ProsesTerpadu.aplikasi=='produksi',ProsesTerpadu.tabel_sumber=='polishing_process',
+                ProsesTerpadu.id_sumber==str(pid)))
+            metadata=dict(old.metadata_domain or {}) if old else {}
+            if old and proc.status=='selesai':
+                metadata.setdefault('catatan_penutupan',dict(
+                    bahan=[dict(komoditas=a.komoditas,berat_kg=str(a.berat_kg),lokasi_id=a.lokasi_id) for a in old.arus if a.arah=='bahan'],
+                    berat_pk_terpakai_kg=metadata.get('berat_pk_terpakai_kg',sum(float(a.berat_kg) for a in old.arus if a.arah=='bahan')),
+                    rendemen_beras_persen=metadata.get('rendemen_beras_persen')))
             rows=(await db.execute(select(PolishingSiloUsage,Silo).join(Silo).where(PolishingSiloUsage.polishing_process_id==pid).order_by(PolishingSiloUsage.id))).all()
             bahan=[];kelompok={};rincian={}
             for u,silo in rows:
@@ -777,7 +790,14 @@ async def sinkron_bahan(db,jenis,ids):
                 rincian[silo.nama_silo]=comp
                 bahan.extend(p._arus_dari_komposisi(silo,comp))
             row=await perbarui_bahan_proses_bersama(db,tabel_sumber='polishing_process',id_sumber=pid,bahan=tuple(bahan))
-            if row is not None:row.metadata_domain={**(row.metadata_domain or {}),'komposisi_bahan':rincian}
+            if row is not None:
+                metadata['komposisi_bahan']=rincian
+                if proc.status=='selesai':
+                    total=sum(value[1] for value in kelompok.values())
+                    outputs=await p._output_map(db,pid)
+                    metadata.update(berat_pk_terpakai_kg=total,
+                        rendemen_beras_persen=p.rendemen(p.beras_dari_output(outputs),total))
+                row.metadata_domain=metadata
 
 
 async def anggaran_pk(db,entries,changes):

@@ -3,7 +3,7 @@
 {% block judul %}Transfer PK{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/pekerjaan-kontrol.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=5">
+<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=6">
 <div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}">
 <header class="pk-kontrol"><div class="pk-judul"><h1>Transfer PK</h1><button class="btn btn--kecil" type="button" id="pk-panduan-buka">ⓘ Panduan</button></div><p><a href="/pekerjaan?tab=tindakan">← Kembali ke Pekerjaan</a></p>
 <div class="kontrol-cari-kiri pk-alat"><label class="pk-cari">Cari lot atau transfer<input type="search" class="cari" id="pk-cari" placeholder="Cari lot atau transfer…"></label><button class="btn" type="button" id="pk-muat">Perbarui status</button></div>
@@ -12,11 +12,27 @@
 <section id="pk-permintaan"><h2>Permintaan lot</h2><p class="bantu" id="pk-arahan">Memuat permintaan…</p><form id="pk-pilihan"><div id="pk-daftar"></div><p><button class="btn btn--utama" type="submit" id="pk-simpan" hidden>Setujui yang dipilih</button></p></form></section>
 <section id="pk-perjalanan"><h2>Riwayat transfer</h2><p class="bantu">Jumlah yang tercatat mengurangi stok asal dan menambah stok tujuan. Sisa persetujuan dapat dipindahkan berikutnya.</p><div id="pk-jalan"></div></section>
 <dialog class="pk-panel" id="pk-alasan"><form id="pk-alasan-form"><h2 id="pk-alasan-judul"></h2><p id="pk-alasan-keterangan"></p><label>Alasan<textarea class="fld" name="alasan" required maxlength="2000"></textarea></label><p><button class="btn btn--utama" type="submit">Simpan keputusan</button> <button class="btn" type="button" data-tutup>Batal</button></p></form></dialog>
+<dialog class="pk-panel" id="pk-koreksi" aria-labelledby="pk-koreksi-judul">
+<form id="pk-koreksi-form">
+<h2 id="pk-koreksi-judul">Koreksi Transfer PK</h2>
+<p id="pk-koreksi-lot"></p><p class="bantu">Koreksi hanya oleh Admin, sesuai barang sebenarnya. Pengurangan memakai sisa tumpukan dahulu, kemudian silo dan bahan proses. Hasil produksi tidak diubah otomatis.</p>
+<label>Tindakan<select class="fld" name="aksi"></select></label>
+<label id="pk-koreksi-berat">Jumlah yang benar (kg)<input class="fld" name="berat_kg" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal"><small>Isi jumlah akhir yang benar, bukan selisihnya.</small></label>
+<label id="pk-koreksi-tujuan">Tujuan<select class="fld" name="tujuan"></select></label>
+<label id="pk-koreksi-pindah">Tambahan transfer yang sudah masuk silo<select class="fld" name="pemindahan_id"></select><small>Pilih pemindahan yang benar hanya jika tambahan ini memang sudah masuk silo atau sudah menjadi bahan produksi. Biarkan di tumpukan jika belum.</small></label>
+<label>Alasan koreksi<textarea class="fld" name="alasan" required maxlength="2000"></textarea></label>
+<p id="pk-koreksi-pesan" role="alert" aria-live="polite"></p>
+<div id="pk-koreksi-dampak" hidden></div>
+<label id="pk-koreksi-konfirmasi" hidden><input type="checkbox" name="konfirmasi"> Saya sudah memeriksa jumlah, stok, dan proses yang terdampak.</label>
+<div class="tp-actions"><button class="btn btn--utama" type="submit" value="periksa">Periksa dampak</button><button class="btn btn--utama" type="submit" value="simpan" disabled>Simpan koreksi</button><button class="btn" type="button" data-tutup>Tutup</button></div>
+</form></dialog>
 {% call panel_panduan('pk-panduan', 'Panduan transfer PK', penutup={'data-tutup': ''}) %}
 <p>PK hasil giling Gudang 1 otomatis dicatat dalam karung bekas 50 kg penuh; sisanya menjadi curah. Jumlah yang ditawarkan mengikuti sisa persetujuan dan boleh diubah untuk transfer sebagian.</p>
 <ol><li><strong>Gudang 2 meminta:</strong> buka detail lot PK dan tekan Minta lot ini. Isi jumlah karung bekas 50 kg dan curah, atau jumlah kg yang diperlukan.</li><li><strong>Admin menyetujui:</strong> pilih permintaan, periksa jumlah kg, lalu pilih Tumpukan atau silo yang menerima PK di gudang tujuan.</li><li><strong>Gudang 1 mencatat transfer:</strong> setelah barang dipindahkan, pilih lot yang disetujui, isi jumlah karung bekas 50 kg dan curah atau langsung kg, lalu tekan Catat transfer.</li></ol>
 <p>Transfer boleh sebagian. Beberapa lot dapat dicatat bersama jika asal, tujuan, dan pemiliknya sama. Stok asal dan tujuan langsung diperbarui saat disimpan. Jika seluruh jumlah yang disetujui sudah dipindahkan, permintaan selesai otomatis.</p>
 <p>Hanya Admin yang dapat memakai Tutup sisa persetujuan, disertai alasan, jika sisanya tidak jadi dipindahkan.</p>
+<p><strong>Jika ada kesalahan:</strong> Admin membuka Koreksi permintaan atau Koreksi jumlah pada catatan yang salah, mengisi jumlah yang benar dan alasan, lalu memeriksa dampak sebelum menyimpan. Sebelum ada transfer, persetujuan dapat dikembalikan ke permintaan. Sisa persetujuan yang terlanjur ditutup dapat dibuka kembali jika stoknya masih tersedia.</p>
+<p>Pengurangan menyentuh sisa tumpukan dahulu, lalu sisa silo, lalu bahan proses terkait. Jika koreksi masih tercukupi dari tumpukan, bahan produksi tetap. Jika transfer sudah benar tetapi bahan kurang tercatat, pilih Bahan dari tumpukan dan pemindahan silo yang terkait: sisa tumpukan berkurang tanpa menambah transfer asal. Proses selesai ikut diperbarui bahan, susut, dan rendemennya; hasil timbang tetap. Hasil melebihi bahan harus diselesaikan dengan catatan bahan/hasil yang benar, bukan diskalakan.</p>
 {% endcall %}
-</div><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=5" defer></script>
+</div><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=6" defer></script>
 {% endblock %}
