@@ -114,3 +114,24 @@ body.padiflow-ui :is(.kontrol-filter,.kontrol-pencarian__submit,.kontrol-pencari
 @media print { .kontrol-pencarian { display:none!important; } }
 
 .kontrol-filter::before,.kontrol-pencarian__submit::before { margin-inline-end:0; }
+
+/* Navigasi data: label tetap satu baris; hitungan pindah ke baris kedua
+   pada ponsel agar kedua tombol tidak dipaksa menyusut oleh hitungan. */
+body.padiflow-ui .kontrol-paginasi {
+  display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center; gap:8px; min-width:0; margin:16px 0;
+}
+body.padiflow-ui .kontrol-paginasi .kontrol-paginasi__tombol {
+  box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center;
+  min-width:0; min-height:44px; margin:0; padding:8px; text-align:center;
+  font:500 14px/20px var(--pd-font); white-space:nowrap; overflow-wrap:normal; word-break:normal;
+}
+.kontrol-paginasi__tombol:first-child { grid-column:1; grid-row:1; }
+.kontrol-paginasi__tombol:last-child { grid-column:3; grid-row:1; }
+.kontrol-paginasi__posisi { grid-column:2; grid-row:1; text-align:center; white-space:nowrap; font:500 12px/20px var(--pd-font); color:var(--pd-muted); }
+@media(max-width:650px) {
+  body.padiflow-ui .kontrol-paginasi { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .kontrol-paginasi__tombol:last-child { grid-column:2; }
+  .kontrol-paginasi__posisi { grid-column:1/-1; grid-row:2; }
+}
+@media print { .kontrol-paginasi { display:none!important; } }

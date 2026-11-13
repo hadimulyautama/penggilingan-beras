@@ -38,8 +38,8 @@
   n=Number.isInteger(requested)?Math.min(rounds.length,Math.max(1,requested)):Number(select.value)||rounds.length;for(const r of rounds)r.hidden=Number(r.dataset.posisi)!==n;select.value=String(n);
   for(const a of tabs){const u=new URL(a.href,location.href);u.searchParams.set('putaran',String(n));a.href=u.pathname+u.search;}
   const pager=root.querySelector('.qc-pager');pager.replaceChildren();
-  function control(label,value,enabled){const a=document.createElement(enabled?'a':'span');a.className='btn';a.textContent=label;if(enabled){const u=new URL(location.href);u.searchParams.set('tab_qc','putaran');u.searchParams.set('putaran',String(value));a.href=u.pathname+u.search;}else a.setAttribute('aria-disabled','true');return a;}
-  const position=document.createElement('span');position.textContent=n+' / '+rounds.length;pager.append(control('← Sebelumnya',n-1,n>1),position,control('Berikutnya →',n+1,n<rounds.length));
+  function control(label,value,enabled){const a=document.createElement(enabled?'a':'span');a.className='btn kontrol-paginasi__tombol';a.textContent=label;if(enabled){const u=new URL(location.href);u.searchParams.set('tab_qc','putaran');u.searchParams.set('putaran',String(value));a.href=u.pathname+u.search;}else a.setAttribute('aria-disabled','true');return a;}
+  const position=document.createElement('span');position.className='kontrol-paginasi__posisi';position.textContent=n+' / '+rounds.length;pager.append(control('← Sebelumnya',n-1,n>1),position,control('Berikutnya →',n+1,n<rounds.length));
  }
  function show(id,url,focus=false){if(!panels.some(p=>p.dataset.rqdPanel===id))id='ringkasan';root.dataset.rqdSelected=id;
   for(const p of panels)p.hidden=p.dataset.rqdPanel!==id;
