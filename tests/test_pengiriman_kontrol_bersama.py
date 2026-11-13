@@ -22,7 +22,7 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
     recent=[N(id=22,kode='RET-UJI-22',nama_pelanggan='CV Makmur',nomor_polisi='AD 1234 ZX',kode_tiket='TT-UJI-10',waktu=None,berat_rincian_kg=250,jumlah_jenis=2,selisih_kg=5)],sebelum_berikut=21)
   else:
    html=env.get_template('_barang_keluar_kontrol.html').render(request=req,VERSI='515',BOLEH_PERINTAH=True,pencarian='',status_filter='',sejak_filter='',n_perintah=2,n_dimuat=1)
-  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css'])
+  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css','kontrol-halaman.css'])
   return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui '+('terik' if light else '')+'"><style>body{padding-left:0!important}</style><main class="isi">'+html+'</main><script>window.print=()=>window.cetak=(window.cetak||0)+1</script><script src="/static/menu-layar.js"></script></body>'
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=1000));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
@@ -35,16 +35,16 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
   page.route('**/*',route);styles=[]
   for path in ['/barang-keluar','/retur']:
    page.goto('http://uji.local'+path)
-   assert page.locator('.pengiriman-kontrol').count()==1
-   assert page.locator('.pengiriman-kontrol .pengiriman-tab a').count()==2
-   assert page.locator('.pengiriman-kontrol .pengiriman-tab a[aria-current]').get_attribute('href')==path
-   tab=page.locator('.pengiriman-tab a[aria-current]');styles.append(tab.evaluate('(e)=>{const s=getComputedStyle(e);return [s.fontSize,s.padding,s.borderBottomWidth,s.borderBottomColor,s.backgroundColor]}'))
+   assert page.locator('[data-pengiriman-controls]').count()==1
+   assert page.locator('[data-pengiriman-controls] .kontrol-tab a').count()==2
+   assert page.locator('[data-pengiriman-controls] .kontrol-tab a[aria-current]').get_attribute('href')==path
+   tab=page.locator('.kontrol-tab a[aria-current]');styles.append(tab.evaluate('(e)=>{const s=getComputedStyle(e);return [s.fontSize,s.padding,s.borderBottomWidth,s.borderBottomColor,s.backgroundColor]}'))
    if path=='/barang-keluar':
     # Filter tetap paling kiri; pencarian di tengah, tambah di kanan.
     # Kelas ikon dekoratif tidak mengubah identitas/urutan tiga kontrol.
-    assert page.locator(".bk-alat").locator(":scope > *").evaluate_all("els=>els.map(e=>Array.from(e.classList).filter(c=>c!=='filter-berikon').join(' '))")==["btn btn--kecil bk-filter-desktop","bk-pencarian","bk-buat"]
-    filter_box=page.locator('.bk-filter-desktop').bounding_box()
-    search_box=page.locator('.bk-pencarian').bounding_box()
+    assert page.locator("[data-pengiriman-alat] > *").count()==3
+    filter_box=page.locator('.kontrol-filter').bounding_box()
+    search_box=page.locator('.kontrol-pencarian__form').bounding_box()
     assert 0<=search_box['x']-(filter_box['x']+filter_box['width'])<=16
     if width<=650:
      add=page.locator('[data-bk-buat]>summary')
@@ -66,12 +66,12 @@ def test_dua_tab_satu_kerangka_dan_informasi_retur_utuh(width,light,tmp_path):
      assert text in page.locator('main').inner_text(),text
     for href in ['/retur/pengajuan/8','/retur/22','/retur?sebelum_pengajuan=7','/retur?sebelum=21']:
      assert page.locator('a[href="'+href+'"]').count()==1,href
-   page.locator('.bk-desktop[data-bk-buka="bk-panduan"]').click()
+   page.locator('.kontrol-tombol[data-bk-buka="bk-panduan"]').click()
    guide=page.locator('#bk-panduan');expect(guide).to_be_visible();assert guide.get_attribute('class')=='pd-panduan'
    if path=='/retur':assert 'Buka pengiriman yang sudah keluar → ajukan retur → timbang dan periksa barang → terima ke stok.' in guide.inner_text()
    bounds=guide.bounding_box();assert bounds['width']<=width and bounds['x']>=0
    page.keyboard.press('Escape');expect(guide).not_to_be_visible()
-   page.locator('.bk-desktop[data-bk-cetak]').click()
+   page.locator('.kontrol-tombol[data-bk-cetak]').click()
    assert page.evaluate('window.cetak')==1
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
    page.screenshot(path=str(tmp_path/(path[1:]+'.png')),full_page=True)

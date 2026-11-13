@@ -9,7 +9,7 @@ R=Path(__file__).resolve().parents[1]
 @pytest.mark.parametrize('tab',['bahan','produk','karung'])
 @pytest.mark.parametrize('owner',['pabrik','jasa'])
 def test_informasi_saldo_detail_dan_kontrol(width,tab,owner):
- css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','tabel-standar.css','komponen-portal.css','panduan.css','padiflow-brand.css','stok-seragam.css'])
+ css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','tabel-standar.css','komponen-portal.css','panduan.css','kontrol-halaman.css','padiflow-brand.css','kontrol-halaman.css','stok-seragam.css'])
  def render(url):
   q={k:v[0] for k,v in parse_qs(urlsplit(url).query,keep_blank_values=True).items()}
   v=views['|'.join([q.get('tab',tab),q.get('pemilik',owner),q.get('gudang','')])]
@@ -24,7 +24,7 @@ def test_informasi_saldo_detail_dan_kontrol(width,tab,owner):
    else:r.fulfill(body='')
   page.route('**/*',route);page.goto('http://uji.local/stok?tab='+tab+'&pemilik='+owner)
   body=page.locator('.stok-seragam');saldo=body.locator('.jumlah__angka').all_text_contents();links=body.locator('a[href]').evaluate_all('els=>els.map(e=>e.getAttribute("href"))')
-  assert page.locator('.sk-tab [aria-current=page]').count()==1
+  assert page.locator('.kontrol-tab [aria-current=page]').count()==1
   fields={'bahan':['PK/00821','PK/00819','13,8%','12,4%','0,6%','85 karung','6.800','4.250','4/6 komponen'],'produk':['Premium','Bekatul','10.000','3.000','6.000','1.000','7.000','2.250'],'karung':['Hadi Mulya','Tanpa merek','Karung laminasi','Karung biasa','25','50','240','18','Menipis']}
   for value in fields[tab]:assert value in body.text_content()
   if tab=='bahan':assert len([x for x in links if '/stok/pk/detail?' in x])==4
@@ -39,15 +39,15 @@ def test_informasi_saldo_detail_dan_kontrol(width,tab,owner):
   if owner=='jasa':
    page.get_by_role('searchbox').fill('Pras');page.get_by_role('button',name='Cari',exact=True).click();assert '0 baris' not in page.locator('[data-stok-hasil]').inner_text();page.get_by_role('searchbox').press('Escape')
   if width==1440:
-   boxes=[page.locator(s).bounding_box() for s in ['.sk-filter-desktop','.sk-cari','.sk-pencarian>button']];assert max(x['y'] for x in boxes)-min(x['y'] for x in boxes)<2
-  trigger=page.locator('.sk-filter-desktop');trigger.click();expect(page.locator('#sk-filter')).to_be_visible()
+   boxes=[page.locator(s).bounding_box() for s in ['.kontrol-filter','.kontrol-pencarian__field','.kontrol-pencarian__form>button']];assert max(x['y'] for x in boxes)-min(x['y'] for x in boxes)<2
+  trigger=page.locator('.kontrol-filter');trigger.click();expect(page.locator('#sk-filter')).to_be_visible()
   if owner=='pabrik':
    page.locator('#sk-filter [name=pemilik]').select_option('jasa');expect(page.locator('#sk-filter [name=pelanggan_id]')).to_be_enabled();expect(page.locator('#sk-filter [name=pelanggan_id] option')).to_have_count(2)
   page.keyboard.press('Escape');expect(trigger).to_be_focused()
-  page.locator('.sk-tindakan-desktop [data-sk-buka]').click()
+  page.locator('.kontrol-tombol[data-sk-buka]').click()
   expect(page.locator('#sk-panduan')).to_be_visible();page.get_by_role('button',name='Tutup panduan').click()
   page.evaluate('() => { window.totalPrint=0;window.print=()=>{window.totalPrint++}; }')
-  page.locator('.sk-tindakan-desktop [data-sk-cetak]').click()
+  page.locator('.kontrol-tombol[data-sk-cetak]').click()
   assert page.evaluate('window.totalPrint')==1
   if tab=='karung' and owner=='pabrik':
    action=page.locator('.karung-aksi').first;action.locator('summary').click();expect(action.get_by_role('link',name='Alihkan ke pelanggan')).to_be_visible();action.locator('summary').click()

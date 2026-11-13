@@ -10,13 +10,13 @@
 }
 .kontrol-halaman {
   display:grid; grid-template-columns:minmax(0,1fr) auto;
-  align-items:center; gap:12px 16px; min-width:0;
+  align-items:center; gap:var(--kontrol-jarak-baris,12px) 16px; min-width:0;
 }
 .kontrol-halaman > * { grid-column:1/-1; min-width:0; }
 .kontrol-halaman > .kontrol-tab,
 .kontrol-halaman > .kontrol-halaman__judul { grid-column:1; grid-row:1; }
 .kontrol-halaman > .kontrol-halaman__aksi { grid-column:2; grid-row:1; }
-.kontrol-halaman__judul { min-height:var(--kontrol-tinggi-tab); margin:0; }
+.kontrol-halaman__judul { min-height:calc(var(--kontrol-tinggi-tab) + 1px); margin:0; }
 .kontrol-aksi { display:flex; align-items:center; justify-content:flex-end; gap:var(--kontrol-jarak-aksi); }
 .kontrol-tombol,
 .kontrol-aksi__slot {
@@ -68,3 +68,49 @@
   .kontrol-halaman,.kontrol-tab,.kontrol-aksi { display:none!important; }
   body:has(.kontrol-halaman) :is(.bingkai,.isi) { height:auto!important; max-height:none!important; overflow:visible!important; display:block!important; }
 }
+
+/* Filter, field Cari dan submit selalu satu baris, di bawah tab/tindakan.
+   Halaman hanya memasok label, query dan aksi; geometri milik komponen ini. */
+:root { --kontrol-jarak-baris:12px; --kontrol-tinggi-cari:48px; --kontrol-lebar-filter:104px; --kontrol-lebar-cari:80px; }
+body.padiflow-ui .kontrol-pencarian {
+  display:flex; align-items:flex-start; justify-content:flex-start; flex-wrap:nowrap;
+  gap:12px; width:100%; min-width:0; margin:0; padding:0; box-sizing:border-box;
+}
+body.padiflow-ui .kontrol-pencarian__form {
+  display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px;
+  flex:0 1 460px; width:460px; max-width:100%; min-width:0; margin:0; padding:0;
+}
+body.padiflow-ui .kontrol-pencarian__field {
+  display:block; flex:1 1 0; width:auto; min-width:0; margin:0; padding:0;
+}
+body.padiflow-ui .kontrol-pencarian__input {
+  box-sizing:border-box; display:block; width:100%; min-width:0; max-width:none;
+  height:var(--kontrol-tinggi-cari); min-height:var(--kontrol-tinggi-cari);
+  margin:0; padding:10px 14px; border:1px solid var(--pd-line); border-radius:9px;
+  background:var(--pd-sheet); color:var(--pd-ink); font:400 16px/24px var(--pd-font); letter-spacing:0;
+}
+body.padiflow-ui .kontrol-pencarian__form > .kontrol-pencarian__input { flex:1 1 0; width:0; }
+body.padiflow-ui :is(.kontrol-filter,.kontrol-pencarian__submit) {
+  box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  height:var(--kontrol-tinggi-cari); min-height:var(--kontrol-tinggi-cari);
+  margin:0; padding:10px 12px; border:1px solid var(--pd-line); border-radius:9px;
+  background:var(--pd-sheet); color:var(--pd-ink); font:500 14px/20px var(--pd-font);
+  letter-spacing:0; white-space:nowrap; text-transform:none; box-shadow:none; cursor:pointer;
+}
+body.padiflow-ui .kontrol-filter { flex:0 0 var(--kontrol-lebar-filter); width:var(--kontrol-lebar-filter); min-width:var(--kontrol-lebar-filter); }
+body.padiflow-ui .kontrol-pencarian__submit { flex:0 0 var(--kontrol-lebar-cari); width:var(--kontrol-lebar-cari); min-width:var(--kontrol-lebar-cari); }
+body.padiflow-ui :is(.kontrol-filter,.kontrol-pencarian__submit):hover { background:var(--pd-soft); }
+body.padiflow-ui :is(.kontrol-filter,.kontrol-pencarian__submit,.kontrol-pencarian__input):focus-visible { outline:2px solid var(--pd-green); outline-offset:2px; }
+.kontrol-pencarian__field > .sr-only { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.kontrol-pencarian__status { flex-basis:100%; margin:0; }
+.kontrol-pencarian [hidden] { display:none!important; }
+@media(max-width:650px) {
+  :root { --kontrol-lebar-filter:96px; --kontrol-lebar-cari:64px; }
+  body.padiflow-ui .kontrol-pencarian { gap:8px; }
+  body.padiflow-ui .kontrol-pencarian__form { flex:1 1 0; width:0; }
+  body.padiflow-ui :is(.kontrol-filter,.kontrol-pencarian__submit) { padding:10px 6px; gap:4px; }
+  body.padiflow-ui .kontrol-pencarian__input { padding:10px; }
+}
+@media print { .kontrol-pencarian { display:none!important; } }
+
+.kontrol-filter::before,.kontrol-pencarian__submit::before { margin-inline-end:0; }

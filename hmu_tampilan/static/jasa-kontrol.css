@@ -1,5 +1,5 @@
 /* Kontrol bersama daftar/detail; badan tab, izin, dan tindakan tetap milik halaman. */
-.jasa-kontrol {display:grid;gap:16px;margin-bottom:18px;min-width:0;}.js-alat,.js-panel-kepala {display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.jasa-kontrol {display:grid;gap:var(--kontrol-jarak-baris);margin-bottom:18px;min-width:0;}.js-alat,.js-panel-kepala {display:flex;justify-content:space-between;align-items:center;gap:12px;}
 body.padiflow-ui .js-ikon {display:inline-flex;align-items:center;justify-content:center;position:relative;width:44px;min-width:44px;min-height:44px;padding:8px;}
 .js-titik {position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--pd-green);}
 .js-pencarian {display:flex;gap:8px;align-items:stretch;min-width:0;width:min(460px,100%);margin:0;}
@@ -43,5 +43,3 @@ body.padiflow-ui .jasa-bahan h3 {font-size:13px;color:var(--pd-muted);margin:0 0
  body.padiflow-ui .jasa-daftar>.jasa-pelanggan {display:grid;grid-template-columns:minmax(0,1fr);justify-content:stretch;grid-template-rows:subgrid;grid-row:span 6;row-gap:0;margin-bottom:16px;}
 }
 @media(max-width:650px){body.padiflow-ui .js-filter-desktop{display:inline-flex;flex:none;width:auto;}body.padiflow-ui .js-alat{display:flex;gap:8px;align-items:center;}body.padiflow-ui .js-pencarian{flex:1;min-width:0;}}
-
-.jasa-kontrol{gap:8px;}

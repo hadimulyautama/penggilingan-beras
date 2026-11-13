@@ -13,12 +13,12 @@
 <div class="bm-tindakan-desktop"><button class="btn btn--kecil" type="button" data-bm-buka="bm-panduan">ⓘ Panduan</button><button class="btn btn--kecil" type="button" data-bm-cetak>Print</button></div>
 <div class="bm-tindakan-ponsel"><button class="btn bm-ikon" type="button" data-bm-buka="bm-filter" aria-label="Buka filter{{ ' · ' ~ filter_jumlah ~ ' aktif' if filter_jumlah }}" aria-haspopup="dialog"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v8l-4-2v-6z"/></svg>{% if filter_jumlah %}<span class="bm-titik"></span>{% endif %}</button><button class="btn bm-ikon" type="button" data-bm-buka="bm-tindakan" aria-label="Panduan dan print" aria-haspopup="dialog">⋮</button></div></div>
 {% endif %}
-<div class="kontrol-cari-kiri bm-alat"><button class="filter-berikon btn btn--kecil bm-filter-desktop" type="button" data-bm-buka="bm-filter" aria-haspopup="dialog">Filter{% if filter_jumlah %} · {{ filter_jumlah }}{% endif %}</button>
-<form method="get" action="/barang-masuk" class="bm-pencarian" role="search" data-bm-form data-bm-search>
+<div class="kontrol-pencarian"><button class="kontrol-filter filter-berikon" type="button" data-bm-buka="bm-filter" aria-haspopup="dialog">Filter{% if filter_jumlah %} · {{ filter_jumlah }}{% endif %}</button>
+<form method="get" action="/barang-masuk" class="kontrol-pencarian__form" role="search" data-bm-form data-bm-search>
 {% for key in ['status','jenis','kepemilikan','gudang','pelanggan_id','kembali_jasa'] %}{% if request.query_params.get(key) or key=='status' %}<input type="hidden" name="{{ key }}" value="{{ status if key=='status' else request.query_params.get(key) }}">{% endif %}{% endfor %}
-<label class="bm-cari"><span class="sr-only">Cari nama, kode atau plat</span><input class="cari" id="bm-cari" name="cari" type="search" placeholder="Cari nama, kode atau plat…" aria-label="Cari nama, kode atau plat" aria-describedby="bm-belum-cari" value="{{ cari }}"></label><button class="cari-berikon btn" type="submit">Cari</button>
+<label class="kontrol-pencarian__field"><span class="sr-only">Cari nama, kode atau plat</span><input class="kontrol-pencarian__input" id="bm-cari" name="cari" type="search" placeholder="Cari nama, kode atau plat…" aria-label="Cari nama, kode atau plat" aria-describedby="bm-belum-cari" value="{{ cari }}"></label><button class="kontrol-pencarian__submit cari-berikon" type="submit">Cari</button>
 <select name="pemasok" hidden aria-label="Nama yang diterapkan"><option value="">Semua nama</option>{% if pemasok and pemasok not in nama_saring %}<option selected>{{ pemasok }}</option>{% endif %}{% for n in nama_saring %}<option{{ ' selected' if pemasok==n }}>{{ n }}</option>{% endfor %}</select>
-<p id="bm-belum-cari" class="bantu" role="status" hidden>Tekan Cari atau Enter untuk memperbarui hasil.</p>
+<p id="bm-belum-cari" class="bantu kontrol-pencarian__status" role="status" hidden>Tekan Cari atau Enter untuk memperbarui hasil.</p>
 </form></div>
 {% if not LAPORAN_NAV %}<nav data-bm-nav class="bm-tab" aria-label="Status penerimaan">
 <a href="{{ href(status='belum',halaman='') }}"{% if status=='belum' %} aria-current="page"{% endif %}>Belum diterima <span class="pil__jml">{{ total_belum }}</span></a>

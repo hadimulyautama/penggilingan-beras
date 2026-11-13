@@ -35,13 +35,13 @@ body.padiflow-ui .lk-form-filter .fld {box-sizing:border-box;width:100%;min-widt
 }
 
 /* Tab utama dan tindakan tidak berpindah ke dialog atau isi halaman. */
-body.padiflow-ui .laporan-nav {margin-bottom:24px;}
+body.padiflow-ui .laporan-nav {margin-bottom:var(--kontrol-jarak-baris);}
 body.padiflow-ui .laporan-nav .laporan-nav__jenis {margin:0;}
 .laporan-riwayat .rpd .rpd-header,.laporan-riwayat .rhs .rhs-header {padding-right:64px;}
 .laporan-riwayat .rhs-tools:empty {display:none;}
 body.padiflow-ui .lk-audit-kontrol .lk-filter-desktop {display:inline-flex;}
 
-@media(max-width:650px){body.padiflow-ui .laporan-nav {margin-bottom:20px;}body.padiflow-ui .laporan-nav .laporan-nav__jenis {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}body.padiflow-ui .laporan-nav .laporan-nav__jenis>a,body.padiflow-ui .laporan-nav .laporan-nav__jenis>span {min-width:0;min-height:44px;width:auto;padding:8px 4px;text-align:center;justify-content:center;white-space:normal;font-size:12px;box-sizing:border-box;}}
+@media(max-width:650px){body.padiflow-ui .laporan-nav {margin-bottom:var(--kontrol-jarak-baris);}body.padiflow-ui .laporan-nav .laporan-nav__jenis {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}body.padiflow-ui .laporan-nav .laporan-nav__jenis>a,body.padiflow-ui .laporan-nav .laporan-nav__jenis>span {min-width:0;min-height:44px;width:auto;padding:8px 4px;text-align:center;justify-content:center;white-space:normal;font-size:12px;box-sizing:border-box;}}
 @media print{.laporan-nav,.rhs-tools{display:none!important;}}
 
 /* Di ponsel pilihan jenis berbagi satu baris dengan tindakan tetap.

@@ -36,7 +36,7 @@
  * menyaring tampilan. Semua baris sudah dirender oleh pembaca stok lama. */
 function pasangDaftar(root) {
   var isi=document.querySelector('.stok-seragam');if(!isi)return;
-  var input=root.querySelector('[type=search]'),form=root.querySelector('.sk-pencarian');
+  var input=root.querySelector('[type=search]'),form=root.querySelector('.kontrol-pencarian__form');
   function cari(tulis) {
     var q=input.value.trim().toLocaleLowerCase('id'),jumlah=0;
     isi.querySelectorAll('.stok-baris__tautan,.stok-mobile-list__baris,.produk-list .tabel-standar__item,.karung-tabel tbody tr').forEach(function(row){

@@ -32,7 +32,7 @@ def test_kontrol_saja(width,tab):
   u=urlsplit(url);q={k:v[0] for k,v in parse_qs(u.query,keep_blank_values=True).items()};calls.append(q)
   req=Request(dict(type='http',path='/pekerjaan',query_string=u.query.encode(),headers=[],scheme='http',server=('uji.local',80)))
   h=env.get_template('_pekerjaan_kontrol.html').render(request=req,VERSI='502',TAMPILAN_INDUK=True,VIEW='super',V_MEJA=['super'],tab=q.get('tab',tab),jenis=q.get('jenis',''),gudang=q.get('gudang',''),total_tindakan=3,total_jalan=2,nama_saring=['Pak Suroto'],pelanggan_saring='',per_jenis=[('giling','Giling',2)],href=lambda **p:'/pekerjaan?'+urlencode(dict(q,**p)))
-  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css'])
+  css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css','kontrol-halaman.css'])
   return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui terik"><div class="bingkai"><main class="isi">'+h+'<section id="daftar-asli">Daftar pekerjaan tetap di sini.</section></main></div></body>'
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport=dict(width=width,height=844));errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
@@ -48,9 +48,9 @@ def test_kontrol_saja(width,tab):
   page.get_by_role('searchbox').fill('Suroto');assert len(calls)==1
   page.get_by_role('button',name='Cari',exact=True).click();page.wait_for_url('**cari=Suroto**')
   assert calls[-1]['pelanggan_id']=='7' and 'halaman' not in calls[-1]
-  trigger=page.locator('.pk-filter-desktop' if width==1440 else '.pk-tindakan-ponsel [data-pk-buka="pk-filter"]')
+  trigger=page.locator('.kontrol-filter')
   if width==1440:
-   boxes=[page.locator(s).bounding_box() for s in ['.pk-filter-desktop','.pk-pencarian .pk-cari','.pk-pencarian > button']]
+   boxes=[page.locator(s).bounding_box() for s in ['.kontrol-filter','.kontrol-pencarian__form .kontrol-pencarian__field','.kontrol-pencarian__form > button']]
    assert max(x['y'] for x in boxes)-min(x['y'] for x in boxes)<2
   trigger.click();expect(page.locator('#pk-filter')).to_be_visible()
   page.locator('#pk-filter [name=jenis]').select_option('giling');page.locator('#pk-filter [name=gudang]').select_option('g2')

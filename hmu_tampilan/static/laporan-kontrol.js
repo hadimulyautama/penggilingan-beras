@@ -44,7 +44,7 @@
   window.addEventListener('afterprint',selesai,{once:true});
   try{window.print()}catch(e){window.removeEventListener('afterprint',selesai);selesai();throw e}
  }));
- const filter=scope.querySelector('.lk-form-filter'),search=scope.querySelector('.lk-pencarian [name=cari]');
+ const filter=scope.querySelector('.lk-form-filter'),search=scope.querySelector('.kontrol-pencarian__form [name=cari]');
  if(filter&&search){
   filter.addEventListener('submit',()=>{filter.elements.cari.value=search.value});
   filter.querySelector('[data-lk-reset]').addEventListener('click',e=>{const a=e.currentTarget;const u=new URL(a.href);u.searchParams.set('cari',search.value);a.href=u.href});

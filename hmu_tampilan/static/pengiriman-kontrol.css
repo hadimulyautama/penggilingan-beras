@@ -1,5 +1,5 @@
 /* Area kontrol saja: daftar, kartu, draf, dan rincian tetap memakai komponen lama. */
-.bk-alat,.bk-panel-kepala {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+[data-pengiriman-alat],.bk-panel-kepala {display:flex;align-items:center;justify-content:space-between;gap:12px;}
 body.padiflow-ui .bk-ikon {display:inline-flex;align-items:center;justify-content:center;position:relative;min-width:44px;min-height:44px;padding:8px;}
 .bk-titik {position:absolute;right:6px;top:6px;width:7px;height:7px;border-radius:50%;background:var(--pd-green);}
 .bk-pencarian {display:flex;align-items:stretch;gap:8px;width:min(460px,100%);margin:0;min-width:0;}
@@ -33,23 +33,23 @@ body.padiflow-ui [data-pengiriman-controls] .bk-buat>summary.btn {background:var
  body:has([data-pengiriman-controls]) :is(.bingkai,.isi) {height:auto!important;max-height:none!important;overflow:visible!important;}
 }
 
-@media(max-width:650px){body.padiflow-ui .bk-filter-desktop{display:inline-flex;flex:none;width:auto;}body.padiflow-ui .bk-alat{display:flex;gap:8px;align-items:center;}body.padiflow-ui .bk-pencarian{flex:1;min-width:0;}}
+@media(max-width:650px){body.padiflow-ui .bk-filter-desktop{display:inline-flex;flex:none;width:auto;}body.padiflow-ui [data-pengiriman-alat]{display:flex;gap:8px;align-items:center;}body.padiflow-ui .bk-pencarian{flex:1;min-width:0;}}
 
-@media(max-width:650px){body.padiflow-ui [data-pengiriman-controls]>.bk-alat,body.padiflow-ui [data-pengiriman-controls]>.bk-cakupan,body.padiflow-ui [data-pengiriman-controls]>.bk-aksi-konteks{grid-column:1/-1;}body.padiflow-ui .bk-alat>.bk-buat{flex:none;}body.padiflow-ui .bk-alat>.bk-buat>summary{width:44px;min-width:44px;justify-content:center;}body.padiflow-ui .bk-pencarian>.btn{min-width:56px;}}
+@media(max-width:650px){body.padiflow-ui [data-pengiriman-controls]>[data-pengiriman-alat],body.padiflow-ui [data-pengiriman-controls]>.bk-cakupan,body.padiflow-ui [data-pengiriman-controls]>.bk-aksi-konteks{grid-column:1/-1;}body.padiflow-ui [data-pengiriman-alat]>.bk-buat{flex:none;}body.padiflow-ui [data-pengiriman-alat]>.bk-buat>summary{width:44px;min-width:44px;justify-content:center;}body.padiflow-ui .bk-pencarian>.btn{min-width:56px;}}
 
-@media(min-width:651px){body.padiflow-ui [data-pengiriman-controls]>.bk-alat,body.padiflow-ui [data-pengiriman-controls]>.bk-cakupan,body.padiflow-ui [data-pengiriman-controls]>.bk-aksi-konteks{grid-column:1/-1;}}
+@media(min-width:651px){body.padiflow-ui [data-pengiriman-controls]>[data-pengiriman-alat],body.padiflow-ui [data-pengiriman-controls]>.bk-cakupan,body.padiflow-ui [data-pengiriman-controls]>.bk-aksi-konteks{grid-column:1/-1;}}
 
-body.padiflow-ui .bk-alat>.bk-buat>.bk-buat-opsi{left:auto;right:0;box-sizing:border-box;width:min(280px,calc(100vw - 32px));}
+body.padiflow-ui [data-pengiriman-alat]>.bk-buat>.bk-buat-opsi{left:auto;right:0;box-sizing:border-box;width:min(280px,calc(100vw - 32px));}
 
 /* Filter menempel pada pencarian; aksi membuat pengiriman berada di kanan. */
-body.padiflow-ui .bk-alat{justify-content:flex-start;}
-body.padiflow-ui .bk-alat>.bk-buat{margin-left:auto;}
+body.padiflow-ui [data-pengiriman-alat]{justify-content:flex-start;}
+body.padiflow-ui [data-pengiriman-alat]>.bk-buat{margin-left:auto;}
 @media(max-width:650px){
- body.padiflow-ui .bk-alat>.bk-buat{position:fixed;right:20px;bottom:calc(36px + env(safe-area-inset-bottom,0px));z-index:30;margin:0;}
- body.padiflow-ui .bk-alat>.bk-buat>summary.btn{box-sizing:border-box;width:56px;min-width:56px;height:56px;min-height:56px;padding:0;border-radius:50%;box-shadow:0 5px 16px #0003;}
+ body.padiflow-ui [data-pengiriman-alat]>.bk-buat{position:fixed;right:20px;bottom:calc(36px + env(safe-area-inset-bottom,0px));z-index:30;margin:0;}
+ body.padiflow-ui [data-pengiriman-alat]>.bk-buat>summary.btn{box-sizing:border-box;width:56px;min-width:56px;height:56px;min-height:56px;padding:0;border-radius:50%;box-shadow:0 5px 16px #0003;}
  body.padiflow-ui .bk-buat-ikon{font-size:32px;line-height:1;}
- body.padiflow-ui .bk-alat>.bk-buat>.bk-buat-opsi{top:auto;bottom:calc(100% + 8px);right:0;left:auto;}
+ body.padiflow-ui [data-pengiriman-alat]>.bk-buat>.bk-buat-opsi{top:auto;bottom:calc(100% + 8px);right:0;left:auto;}
  body.padiflow-ui:has([data-bk-buat]) main.isi{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px));}
 }
 
-@media(min-width:651px){body.padiflow-ui .bk-alat>.bk-buat>summary.btn{min-height:48px;}}
+@media(min-width:651px){body.padiflow-ui [data-pengiriman-alat]>.bk-buat>summary.btn{min-height:48px;}}
