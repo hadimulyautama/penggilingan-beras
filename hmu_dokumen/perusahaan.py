@@ -26,4 +26,15 @@ async def baca(db):
     from sqlalchemy import text
     # Pemilik dan satu-satunya penulis kunci ini adalah Pengaturan PadiFlow.
     nilai=await db.scalar(text('SELECT nilai FROM setelan_pabrik WHERE kunci = :k'), {'k':KUNCI})
+    from hmu_identitas.ruang_data import RuangData
+    ruang=RuangData.lingkungan()
+    if ruang:
+        lama=await db.scalar(text("SELECT nilai FROM setelan_pabrik WHERE kunci='organisasi_perusahaan_lama'"))
+        warisan=bool(lama and json.loads(lama).get('company_id')==ruang.company_id)
+        if not warisan:
+            data=json.loads(nilai) if nilai else {}
+            if not isinstance(data.get('nama'),str) or not data['nama'].strip():
+                raise ValueError('Identitas dokumen perusahaan ini belum diatur.')
+            # Nilai kosong memang kosong; kontak/logo HMU tidak diwariskan.
+            return Perusahaan(**{k:data.get(k,'') for k in Perusahaan.__dataclass_fields__})
     return dari_json(nilai)

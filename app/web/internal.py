@@ -19,7 +19,8 @@ from app.services.jenis_hasil_samping import adalah_samping
 import hmac
 import logging
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from hmu_identitas.ruang_data import integrasi_sah
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -28,7 +29,12 @@ from app.config import settings
 from app.database import SessionLocal
 from hmu_core.proses_db import ProsesTerpadu
 
-router = APIRouter(prefix="/internal", tags=["internal"])
+async def perusahaan_integrasi(request: Request):
+    if not integrasi_sah(request.headers):
+        raise HTTPException(403, 'Sambungan PadiFlow–TeraFlow berbeda perusahaan. Hubungi pengelola sistem.')
+
+
+router = APIRouter(prefix="/internal", tags=["internal"], dependencies=[Depends(perusahaan_integrasi)])
 log = logging.getLogger("web.internal")
 
 

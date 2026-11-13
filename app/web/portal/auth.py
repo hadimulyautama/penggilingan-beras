@@ -9,6 +9,7 @@ from app.web.security import HASH_TIRUAN, cek_sandi_async
 from app.web.tampilan import templates
 from .security import COOKIE, SESSION_SECONDS, issue, key, require_customer, secure_cookie
 from hmu_identitas.token import baca_token
+from hmu_identitas.ruang_data import sesi_sah
 from hmu_tampilan import CAP_ASET as VERSI
 
 router=APIRouter(prefix='/pelanggan')
@@ -18,7 +19,7 @@ def csrf_context(request):
     nonce=request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state,'csrf',None) or csrf.terbitkan_baru()
     request.state.csrf=nonce
     session=baca_token(key(),request.cookies.get(COOKIE))
-    identity=(session['akun_id'],session['versi']) if session else None
+    identity=(session['akun_id'],session['versi']) if sesi_sah(session) else None
     return csrf.untuk_sesi(nonce,identity,'portal-pelanggan')
 
 

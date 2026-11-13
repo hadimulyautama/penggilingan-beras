@@ -81,6 +81,8 @@ async def pratinjau(db,*,lokasi_pabrik_id,warehouse_ids):
         lama={p.warehouse_id:(p,s,c) for p,s,c in (await db.execute(select(PenempatanGudang,LokasiPabrik,Perusahaan)
           .join(LokasiPabrik,PenempatanGudang.lokasi_pabrik_id==LokasiPabrik.id)
           .join(Perusahaan,PenempatanGudang.company_id==Perusahaan.id))).all()}
+        from hmu_identitas.ruang_data import pastikan_perusahaan
+        pastikan_perusahaan(company.id)
         rows=[];snapshot=[]
         for w in wh:
             if w.id not in ids:continue
@@ -137,6 +139,8 @@ async def terapkan(db,*,user_id,bukti,alasan):
     alasan=teks(alasan,'Alasan penetapan',500,5)
     awal=await db.get(LokasiPabrik,data['lokasi_pabrik_id'])
     if awal is None:raise OrganisasiError('Lokasi pabrik tidak tersedia. Buat pratinjau baru.')
+    from hmu_identitas.ruang_data import pastikan_perusahaan
+    pastikan_perusahaan(awal.company_id)
     await db.scalar(select(Perusahaan).where(Perusahaan.id==awal.company_id).with_for_update(key_share=True).execution_options(populate_existing=True))
     site=await db.scalar(select(LokasiPabrik).where(LokasiPabrik.id==data['lokasi_pabrik_id'])
         .with_for_update(key_share=True).execution_options(populate_existing=True))
