@@ -353,7 +353,18 @@
               {% endfor %}
             </div>
           {{ tautan_penerimaan(b) }}</details>
-        {% elif b.tautan %}<article class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>{{ padat(b,progres) if rapat or listview else penuh(b) }}{% if listview %}{{ rincian_antrean(b,tabel == 'packing') }}{% endif %}<p><a class="btn btn--kecil" href="{{ b.tautan }}">Buka transfer per perjalanan</a></p></article>{% elif b.pilihan %}
+        {% elif b.tautan %}
+          {# Kartu .benda/.padat memakai flex mendatar. Seluruh isi harus satu
+             item agar penanda, judul, rincian dan tautan mengalir ke bawah;
+             tanpa pembungkus, teks transfer menyempit hingga satu huruf. #}
+          <article class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
+            <div class="benda__konten">
+              {{ padat(b,progres) if rapat or listview else penuh(b) }}
+              {% if listview %}{{ rincian_antrean(b,tabel == 'packing') }}{% endif %}
+              <p><a class="btn btn--kecil" href="{{ b.tautan }}">Buka transfer per perjalanan</a></p>
+            </div>
+          </article>
+        {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% elif rapat or listview %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {% if listview %}{{ rincian_antrean(b, tabel == "packing") }}
