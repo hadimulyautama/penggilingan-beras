@@ -151,7 +151,7 @@ async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
     if anggota_id is not None:
         if not id_sah(anggota_id):raise OrganisasiError('Identitas anggota tidak valid.')
         member_q=member_q.where(User.id==anggota_id)
-    elif cari:member_q=member_q.where(or_(User.nama.ilike('%'+cari+'%'),User.id==int(cari) if cari.isdigit() and len(cari)<=9 else False))
+    elif cari:member_q=member_q.where(or_(User.nama.ilike('%'+cari+'%'),User.id==int(cari) if cari.isdecimal() and len(cari)<=9 else False))
     members=list((await db.execute(member_q.limit(201))).all());member_lebih=len(members)>200;members=members[:200]
     mids=[m.id for m,_ in members]
     akses_s=list(await db.scalars(select(AksesLokasiAnggota).where(AksesLokasiAnggota.keanggotaan_id.in_(mids)).order_by(AksesLokasiAnggota.lokasi_pabrik_id)))
@@ -168,7 +168,7 @@ async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
             (allowed[b.lokasi_pabrik_id]['semua_gudang'] or w.id in allowed[b.lokasi_pabrik_id]['gudang_ids'])]
     q=select(User).where(func.lower(User.status)=='aktif').order_by(User.nama,User.id)
     cari=teks(cari_pengguna,'Pencarian pengguna',100)
-    if cari:q=q.where(or_(User.nama.ilike('%'+cari+'%'),User.id==int(cari) if cari.isdigit() and len(cari)<=9 else False))
+    if cari:q=q.where(or_(User.nama.ilike('%'+cari+'%'),User.id==int(cari) if cari.isdecimal() and len(cari)<=9 else False))
     users=list(await db.scalars(q.limit(201))) if own is None else [u for _,u in members if any(d['user_id']==u.id for d in data)]
     lebih=len(users)>200;users=users[:200]
     from app.services.organisasi_master import sidik as sidik_master
@@ -180,3 +180,20 @@ async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
 async def rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
     with db.no_autoflush:
         return await _rincian(db,ruang=ruang,company_id=company_id,cari_pengguna=cari_pengguna,anggota_id=anggota_id)
+
+
+async def calon_admin(db,*,cari='',halaman=1,user_id=None):
+    """Akun nyata yang aktif; tidak bergantung pada penetapan ruang perusahaan."""
+    from hmu_identitas.model import Akun
+    if len(cari)>100 or not 1<=halaman<=100000 or (user_id is not None and not id_sah(user_id)):
+        raise OrganisasiError('Pencarian Admin pertama tidak valid.')
+    q=select(User.id.label('user_id'),User.nama,Akun.username).join(Akun,Akun.user_id==User.id).where(
+        func.lower(User.status)=='aktif',Akun.status=='aktif')
+    pattern='%'+cari.strip().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+    filtered=q.where(or_(User.nama.ilike(pattern,escape='\\'),Akun.username.ilike(pattern,escape='\\'),
+        User.id==int(cari) if cari.strip().isdecimal() and len(cari.strip())<=9 else False)) if cari.strip() else q
+    total=await db.scalar(select(func.count()).select_from(filtered.subquery()))
+    rows=(await db.execute(filtered.order_by(func.lower(User.nama),User.id).offset((halaman-1)*30).limit(30))).mappings().all()
+    selected=(await db.execute(q.where(User.id==user_id))).mappings().first() if user_id is not None else None
+    return dict(pengguna=[dict(r) for r in rows],terpilih=dict(selected) if selected else None,total=total,
+        halaman=halaman,halaman_total=max(1,(total+29)//30))

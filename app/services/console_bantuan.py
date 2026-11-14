@@ -21,7 +21,7 @@ class BantuanError(ValueError):pass
 
 def json_(x):return json.dumps(x,sort_keys=True,ensure_ascii=False,separators=(',',':'))
 def hash_(x):return hashlib.sha256(x.encode()).hexdigest()
-def sidik(x):return hash_(json_(x))
+def sidik(x):return hash_(json_({k:v for k,v in x.items() if k!='terakhir_login'}))
 
 
 async def pelaku(db,uid):
@@ -30,10 +30,10 @@ async def pelaku(db,uid):
     return row
 
 
-def tindakan(a):
+def tindakan(a,*,perusahaan_aktif=True):
     if a['jenis']=='staf_belum_login':return []
     out=['aktifkan_akun'] if not a['aktif'] else ['tautan_sandi','buka_penahanan','cabut_sesi']
-    if a['keanggotaan'] and not a['keanggotaan']['aktif']:out.append('aktifkan_keanggotaan')
+    if perusahaan_aktif and a['keanggotaan'] and not a['keanggotaan']['aktif']:out.append('aktifkan_keanggotaan')
     return out
 
 
@@ -69,7 +69,7 @@ async def diagnosis(db,*,cid,jenis,aid):
         grants=(await snapshot(db,member))['lokasi']
     return dict(akun=a,cakupan=scope,sebab=sebab,aplikasi=apps,login=login,
         perangkat=[dict(aplikasi=app,browser=b,perangkat=d,warehouse_id=w,terakhir=t.isoformat()) for app,b,d,w,t in devices],
-        lokasi=grants,tindakan=tindakan(a),
+        lokasi=grants,tindakan=tindakan(a,perusahaan_aktif=company.aktif),
         audit=[dict(id=r.id,waktu=r.waktu_perubahan.isoformat(),alasan=r.alasan_perubahan,sebelum=r.old_value,sesudah=r.new_value,pelaku_id=r.changed_by) for r in logs])
 
 
@@ -77,6 +77,7 @@ async def pratinjau(db,*,cid,jenis,aid,pelaku_id,aksi,alasan):
     await pelaku(db,pelaku_id)
     alasan=alasan.strip()
     if aksi not in AKSI or not 10<=len(alasan)<=500:raise BantuanError('Pilih tindakan dan isi alasan 10–500 karakter.')
+    if aksi=='aktifkan_keanggotaan':await _perusahaan_aktif(db,cid)
     a=await m.akun(db,cid,jenis,aid)
     if aksi not in tindakan(a):raise BantuanError('Tindakan tidak tersedia pada keadaan akun sekarang.')
     plan=RencanaBantuan(id=str(uuid.uuid4()),company_id=cid,pelaku_id=pelaku_id,jenis_akun=jenis,akun_id=aid,aksi=aksi,
@@ -84,6 +85,11 @@ async def pratinjau(db,*,cid,jenis,aid,pelaku_id,aksi,alasan):
     db.add(plan);await db.flush()
     return dict(id=plan.id,company_id=cid,jenis=jenis,akun_id=aid,nama=a['nama'],username=a['username'],aksi=aksi,
                 alasan=alasan,sebelum=a,kedaluwarsa=plan.kedaluwarsa.isoformat(),berdampak_sesi=aksi=='cabut_sesi')
+
+
+async def _perusahaan_aktif(db,cid):
+    company=await db.scalar(select(Perusahaan).where(Perusahaan.id==cid).with_for_update(key_share=True).execution_options(populate_existing=True))
+    if not company or not company.aktif:raise BantuanError('Aktifkan perusahaan sebelum memulihkan keanggotaan.')
 
 
 async def _buka(db,a):
@@ -122,8 +128,18 @@ async def terapkan(db,*,cid,jenis,aid,pelaku_id,plan_id):
     if not plan:raise BantuanError('Pratinjau tidak tersedia untuk akun ini.')
     if plan.diterapkan:return dict(sudah=True,aksi=plan.aksi,tautan_sekali=True)
     if plan.kedaluwarsa<=m.sekarang():raise BantuanError('Pratinjau sudah berakhir. Periksa keadaan akun terbaru.')
+    # Urutan induk -> akun/anggota sama dengan writer master/keanggotaan.
+    if plan.aksi=='aktifkan_keanggotaan':await _perusahaan_aktif(db,cid)
     a=await m.akun(db,cid,jenis,aid,kunci=True)
-    if sidik(a)!=plan.sidik:raise BantuanError('Keadaan akun berubah. Buat pratinjau baru sebelum menerapkan.')
+    if sidik(a)!=plan.sidik:
+        # Pratinjau sepuluh menit dari rilis lama menyertakan waktu login.
+        # Terima hanya snapshot lama yang hash aslinya utuh dan seluruh
+        # keadaan keamanan terkini tetap sama.
+        try:lama=json.loads(plan.sebelum)
+        except (ValueError,TypeError):lama={}
+        if not isinstance(lama,dict):lama={}
+        if hash_(plan.sebelum)!=plan.sidik or sidik(a)!=sidik(lama):
+            raise BantuanError('Keadaan akun berubah. Buat pratinjau baru sebelum menerapkan.')
     if plan.aksi not in tindakan(a):raise BantuanError('Tindakan tidak tersedia lagi.')
     result=dict(sudah=False,aksi=plan.aksi)
     if plan.aksi=='tautan_sandi':
