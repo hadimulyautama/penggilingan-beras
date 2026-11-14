@@ -4,6 +4,7 @@ from datetime import datetime,timedelta,timezone
 from sqlalchemy import select
 from hmu_identitas import masuk,peran as P
 from app.models import SesiConsole
+from hmu_identitas.model import Akun
 
 
 class TolakConsole(PermissionError):
@@ -16,7 +17,10 @@ def challenge(verifier):return base64.urlsafe_b64encode(hashlib.sha256(verifier.
 
 
 async def super_aktif(db,aid,versi):
-    a=await masuk.akun_aktif(db,aid,versi)
+    # Jangan menerima Akun/User dari identity map yang mendahului pencabutan.
+    with db.no_autoflush:
+        await db.scalar(select(Akun).where(Akun.id==aid).execution_options(populate_existing=True))
+        a=await masuk.akun_aktif(db,aid,versi)
     if not a or a.harus_ganti_sandi or not P.super_saja(a.user.role):raise TolakConsole('Console Center hanya untuk Super Admin aktif.')
     return a
 
@@ -42,6 +46,7 @@ async def tukar(db,*,kode,verifier):
 
 async def periksa(db,token):
     if not isinstance(token,str) or not re.fullmatch(r'[A-Za-z0-9_-]{64}',token):raise TolakConsole('Masuk kembali ke Console Center.')
-    row=await db.scalar(select(SesiConsole).where(SesiConsole.token_hash==hash_(token)))
+    with db.no_autoflush:
+        row=await db.scalar(select(SesiConsole).where(SesiConsole.token_hash==hash_(token)).execution_options(populate_existing=True))
     if not row or row.dicabut or not row.ditukar_pada or not row.sesi_sampai or row.sesi_sampai<=now():raise TolakConsole('Sesi Console sudah berakhir. Masuk kembali.')
     return row,await super_aktif(db,row.akun_id,row.versi)

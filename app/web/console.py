@@ -318,6 +318,7 @@ async def pratinjau_penetapan(request:Request,lokasi_pabrik_id:int,actor=Depends
         async with SessionLocal() as db:plan=await r.pratinjau(db,lokasi_pabrik_id=lokasi_pabrik_id,warehouse_ids=ids)
         return dict(rencana=asdict(plan),bisa=plan.bisa_diterapkan,baru=plan.jumlah_baru,
             bukti=r.buat_bukti(plan,user_id=actor['ruang'].user_id) if plan.bisa_diterapkan and plan.jumlah_baru else '')
+    except PermissionError as e:raise HTTPException(403,str(e)) from e
     except (master.OrganisasiError,ValueError) as e:raise HTTPException(422,str(e)) from e
 
 
@@ -336,6 +337,7 @@ async def terapkan_penetapan(data:Penetapan,actor=Depends(pelaku)):
         async with SessionLocal() as db:
             result=await terapkan(db,user_id=actor['ruang'].user_id,bukti=data.bukti,alasan=data.alasan);await db.commit()
         return dict(lokasi_pabrik_id=result.lokasi_pabrik_id)
+    except PermissionError as e:raise HTTPException(403,str(e)) from e
     except (master.OrganisasiError,IntegrityError) as e:raise HTTPException(422,str(e) if isinstance(e,master.OrganisasiError) else 'Data penetapan berubah.') from e
 
 # Layar kerja Admin Sistem: hanya API Console, tidak menerima sesi operator.

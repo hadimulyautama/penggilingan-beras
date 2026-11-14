@@ -26,7 +26,9 @@ def sidik(row):
 
 
 async def pengelola(db,user_id):
-    u=await db.get(User,user_id)
+    if type(user_id) is not int or not 0<user_id<=2147483647:raise PermissionError('Pengelola tidak tersedia.')
+    with db.no_autoflush:
+        u=await db.scalar(select(User).where(User.id==user_id).execution_options(populate_existing=True))
     if not u or not P.super_saja(u.role) or (u.status or '').lower()!='aktif':
         raise PermissionError('Master perusahaan dan lokasi hanya dapat dikelola Super Admin.')
 
@@ -39,6 +41,7 @@ def teks(nilai,nama,batas,minimum=0,multibaris=False):
 
 
 async def simpan(db,*,user_id,objek,nama,kode,aktif,alasan,identitas=None,bukti='',company_id=None,alamat=''):
+    if db.new or db.dirty or db.deleted:raise OrganisasiError('Master organisasi harus memakai transaksi tersendiri.')
     await pengelola(db,user_id)
     if identitas is not None and (type(identitas) is not int or identitas<=0):
         raise OrganisasiError('Identitas master tidak valid.')
@@ -51,8 +54,10 @@ async def simpan(db,*,user_id,objek,nama,kode,aktif,alasan,identitas=None,bukti=
     # Satu urutan kunci untuk Console, Pengaturan perusahaan, dan penetapan:
     # perusahaan -> lokasi -> gudang. Pembacaan awal hanya menentukan induk.
     if model is LokasiPabrik:
-        awal=await db.get(LokasiPabrik,identitas) if identitas else None
-        if awal:company_id=awal.company_id
+        awal=await db.scalar(select(LokasiPabrik).where(LokasiPabrik.id==identitas).execution_options(populate_existing=True)) if identitas else None
+        if awal:
+            if company_id is not None and company_id!=awal.company_id:raise OrganisasiError('Perusahaan pada lokasi tidak cocok dengan perusahaan yang dipilih.')
+            company_id=awal.company_id
         await db.scalar(select(Perusahaan).where(Perusahaan.id==company_id).with_for_update(key_share=True).execution_options(populate_existing=True))
     row=await db.scalar(select(model).where(model.id==identitas).with_for_update(key_share=True).execution_options(populate_existing=True)) if identitas else None
     if identitas and (row is None or sidik(row)!=bukti):
