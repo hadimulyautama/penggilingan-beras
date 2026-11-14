@@ -214,7 +214,8 @@ async def rincian(company_id:int,cari_pengguna:str="",anggota_id:int|None=None,h
             data['ruang_data_lokal']=lokal is not None and lokal.company_id==company_id
             data['ruang_data_ditetapkan']=lokal is not None
             return data
-    except (PermissionError,master.OrganisasiError) as e:raise HTTPException(403,str(e)) from e
+    except PermissionError as e:raise HTTPException(403,str(e)) from e
+    except master.OrganisasiError as e:raise HTTPException(422,str(e)) from e
 
 
 class Anggota(BaseModel):
