@@ -1,12 +1,12 @@
 """API administrasi pusat. Tidak menerima cookie CMS atau token API operator."""
-import re
+import re,hmac,math
 from urllib.parse import urlencode,urlsplit
 from fastapi import APIRouter,Depends,Request,HTTPException
 from fastapi.responses import RedirectResponse,JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel,ConfigDict
+from pydantic import BaseModel,ConfigDict,Field,SecretStr
 from sqlalchemy import select,func,or_
 from sqlalchemy.exc import IntegrityError
 from hmu_identitas import peran as P
@@ -21,9 +21,20 @@ class RuteConsole(APIRoute):
     def get_route_handler(self):
         original=super().get_route_handler()
         async def private(request):
-            try:response=await original(request)
+            try:
+                if request.url.path=='/internal/console/masuk':
+                    # Periksa identitas klien sebelum parsing badan (termasuk input sandi).
+                    key=settings.console_login_secret.get_secret_value()
+                    supplied=request.headers.get('x-console-login-key','')
+                    if len(key)<32:raise HTTPException(503,dict(kode='konfigurasi'))
+                    if not hmac.compare_digest(key.encode(),supplied.encode()):raise HTTPException(403,dict(kode='klien'))
+                    if len(await request.body())>8192:raise HTTPException(413,dict(kode='isian'))
+                response=await original(request)
             except HTTPException as e:response=JSONResponse(dict(detail=e.detail),status_code=e.status_code,headers=e.headers)
-            except RequestValidationError as e:response=JSONResponse(dict(detail=jsonable_encoder(e.errors())),status_code=422)
+            except RequestValidationError as e:
+                # Pydantic menyertakan input dalam errors(); sandi tidak boleh dipantulkan.
+                detail=dict(kode='isian') if request.url.path=='/internal/console/masuk' else jsonable_encoder(e.errors())
+                response=JSONResponse(dict(detail=detail),status_code=422)
             response.headers['Cache-Control']='no-store, private'
             response.headers['Pragma']='no-cache'
             response.headers['X-Robots-Tag']='noindex, nofollow'
@@ -72,6 +83,49 @@ async def tukar(data:Tukar):
     except auth.TolakConsole as e:raise HTTPException(401,str(e)) from e
     return dict(token=token,berlaku_detik=3600)
 
+
+class MasukLangsung(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    username:str=Field(min_length=1,max_length=50)
+    sandi:SecretStr=Field(min_length=1,max_length=1024)
+    jejak:str=Field(pattern=r'^[a-f0-9]{64}$')
+
+
+@router.post('/internal/console/masuk')
+async def masuk_langsung(data:MasukLangsung,request:Request):
+    callback()
+    from hmu_identitas import masuk as identitas
+    from app.web import gerbang_masuk as gerbang
+    from app.monitoring import petunjuk_masuk,catat_login
+    from app.services import console_masuk
+    uname=identitas.normal_username(data.username)
+    # Jejak IP dibuat HMAC oleh server Console yang identitasnya sudah diperiksa.
+    # Namespace terpisah: penolakan Console tidak mengunci sesi/operator harian.
+    sumber='console:'+data.jejak
+    from app.services.console_pembatas import pembatas
+    delay=pembatas.mulai(data.jejak)
+    if delay is not None:raise HTTPException(429,dict(kode='sibuk'),headers={'Retry-After':str(math.ceil(delay))})
+    try:
+        await petunjuk_masuk(request,uname,gerbang)
+        sisa=gerbang.boleh_coba(uname,sumber)
+        if sisa is not None:
+            catat_login(request,'ditahan')
+            raise HTTPException(429,dict(kode='ditahan'),headers={'Retry-After':str(math.ceil(sisa))})
+        try:
+            async with SessionLocal() as db:
+                result=await console_masuk.masuk(db,uname,data.sandi.get_secret_value())
+                await db.commit()
+        except console_masuk.Ditolak as e:
+            if e.kode=='kredensial':gerbang.catat_gagal(uname,sumber)
+            else:gerbang.catat_sandi_benar(uname,sumber)
+            catat_login(request,'nonaktif' if e.kode=='nonaktif' else 'peran' if e.kode in ('peran','wajib_sandi') else 'kredensial')
+            raise HTTPException(e.status,dict(kode=e.kode)) from None
+        except auth.TolakConsole:
+            raise HTTPException(403,dict(kode='peran')) from None
+        gerbang.catat_berhasil(uname,sumber);catat_login(request,'berhasil')
+        return result
+
+    finally:pembatas.selesai()
 
 async def pelaku(request:Request):
     callback()

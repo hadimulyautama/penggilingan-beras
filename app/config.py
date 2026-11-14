@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from pydantic import field_validator,Field
+from pydantic import field_validator,Field,SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     teraflow_web_url: str = ""
     # Callback tetap untuk Console di website; kosong berarti pintu belum aktif.
     console_website_url: str = ""
+    # Kunci klien server Console, terpisah dari sandi akun dan penanda cookie.
+    console_login_secret: SecretStr = SecretStr("")
 
     # Pool per proses: empat web maksimal 28 koneksi, pekerja maksimal 5.
     db_pool_size: int = Field(default=3,ge=1,le=20)

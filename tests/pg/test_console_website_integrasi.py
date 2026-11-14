@@ -3,6 +3,8 @@ import asyncio,json,os,subprocess
 from pathlib import Path
 from contextlib import asynccontextmanager
 import pytest
+from pydantic import SecretStr
+from hmu_identitas.model import Akun
 import uvicorn
 from sqlalchemy import select,func
 from app.main import app
@@ -37,19 +39,27 @@ async def api_http():
 async def test_console_website_http_sampai_audit_dan_akses_tanpa_mengubah_transaksi(pg,running,organisasi,monkeypatch):
     root=Path(os.environ['UJI_WEBSITE_ROOT']);python=os.environ['UJI_WEBSITE_PYTHON']
     monkeypatch.setattr(settings,'console_website_url','https://website.uji')
+    key='console-login-integrasi-hanya-data-uji-123456789012345'
+    monkeypatch.setattr(settings,'console_login_secret',SecretStr(key))
     x=organisasi
     async with await _klien(pg,peran=P.SUPERADMIN) as c:
         before=await fakta(pg)
+        cols=[c for c in Akun.__table__.columns if c.name!='terakhir_login']
+        async with pg() as db:
+            akun=await db.scalar(select(Akun).order_by(Akun.id.desc()))
+            username=akun.username
+            accounts=(await db.execute(select(*cols).order_by(Akun.id))).all()
         async with api_http() as api:
-            env={**os.environ,'PYTHONPATH':str(root),'UJI_CONSOLE_API':api,'UJI_PF_COOKIE':NAMA_COOKIE,'UJI_PF_TOKEN':c.cookies.get(NAMA_COOKIE),
-                'UJI_CONSOLE_DATA':json.dumps(dict(company_id=x['c'][0],site_id=x['s'][0],warehouse_id=x['w'][0],user_id=x['luar']))}
+            env={**os.environ,'PYTHONPATH':str(root),'UJI_CONSOLE_API':api,'CONSOLE_LOGIN_SECRET':key,'UJI_PF_COOKIE':NAMA_COOKIE,'UJI_PF_TOKEN':c.cookies.get(NAMA_COOKIE),
+                'UJI_CONSOLE_DATA':json.dumps(dict(username=username,company_id=x['c'][0],site_id=x['s'][0],warehouse_id=x['w'][0],user_id=x['luar']))}
             r=await asyncio.to_thread(subprocess.run,[python,'tests/integrasi_console.py'],cwd=root,env=env,capture_output=True,text=True,timeout=90)
             assert r.returncode==0,r.stderr+'\n'+r.stdout
             assert all(json.loads(r.stdout).values())
-        after=await fakta(pg);allowed={'hmu_console_sessions','hmu_company_memberships','hmu_membership_sites','hmu_membership_warehouses','activity_logs'}
+        after=await fakta(pg);allowed={'hmu_console_sessions','hmu_company_memberships','hmu_membership_sites','hmu_membership_warehouses','activity_logs','produksi_akun'}
         assert {k:v for k,v in after.items() if k not in allowed}=={k:v for k,v in before.items() if k not in allowed}
         async with pg() as db:
             assert await db.scalar(select(func.count()).select_from(ActivityLog).where(ActivityLog.aksi=='keanggotaan_perusahaan'))==1
-            assert (await db.scalar(select(SesiConsole))).dicabut
+            assert all(row.dicabut for row in await db.scalars(select(SesiConsole)))
+            assert (await db.execute(select(*cols).order_by(Akun.id))).all()==accounts
             ctx=await konteks_kerja(db,**dict(pilihan(x),user_id=x['luar']));assert ctx.peran==P.OPERATOR
             with pytest.raises(OrganisasiTidakDiizinkan):await konteks_kerja(db,**dict(pilihan(x,gudang=1),user_id=x['luar']))
