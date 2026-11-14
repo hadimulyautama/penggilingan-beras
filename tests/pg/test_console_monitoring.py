@@ -222,3 +222,24 @@ async def test_http_monitoring_bearer_csrf_dan_pergantian_identitas(pg,orang,mon
         async with pg() as db:token=buat_token(await db.get(Akun,orang['aid']))
         c.cookies.set(NAMA_COOKIE,token)
         assert (await c.post('/monitoring/aktivitas',headers=headers,json=payload)).status_code==403
+
+async def test_perubahan_keanggotaan_membatalkan_pratinjau(pg,orang):
+    async with pg() as db:
+        p=await help.pratinjau(db,cid=orang['cid'],jenis='staf',aid=orang['aid'],pelaku_id=orang['root'],aksi='aktifkan_keanggotaan',alasan='Aktifkan lagi akses perusahaan yang tersimpan');await db.commit()
+        member=await db.get(KeanggotaanPerusahaan,orang['mid']);member.updated_at=mon.sekarang();await db.commit()
+    async with pg() as db:
+        with pytest.raises(ValueError,match='berubah'):await help.terapkan(db,cid=orang['cid'],jenis='staf',aid=orang['aid'],pelaku_id=orang['root'],plan_id=p['id'])
+
+
+async def test_pembukaan_penahanan_hanya_username_tujuan():
+    from app.web import gerbang_masuk as g
+    g.bersihkan()
+    try:
+        for _ in range(g.BATAS_GAGAL):g.catat_gagal('pemilik','ip');g.catat_gagal('lain','ip')
+        assert g.boleh_coba('pemilik','ip') and g.boleh_coba('lain','ip')
+        g.pakai_generasi('pemilik',0);assert g.boleh_coba('pemilik','ip')
+        g.pakai_generasi('pemilik',1);assert g.boleh_coba('pemilik','ip') is None
+        assert g.boleh_coba('lain','ip')
+        for _ in range(g.BATAS_GAGAL):g.catat_gagal('pemilik','ip')
+        g.pakai_generasi('pemilik',1);assert g.boleh_coba('pemilik','ip')
+    finally:g.bersihkan()

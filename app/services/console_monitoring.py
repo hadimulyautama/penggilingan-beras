@@ -194,6 +194,9 @@ async def akun(db,cid,jenis,aid,*,kunci=False):
     data['generasi']=gen or 0
     data['jumlah_pemulihan']=await db.scalar(select(func.count()).select_from(PemulihanAkun).where(PemulihanAkun.company_id==cid,PemulihanAkun.jenis_akun==jenis,PemulihanAkun.akun_id==aid))
     data['pemulihan_terakhir']=await db.scalar(select(PemulihanAkun.id).where(PemulihanAkun.company_id==cid,PemulihanAkun.jenis_akun==jenis,PemulihanAkun.akun_id==aid).order_by(PemulihanAkun.kedaluwarsa.desc()).limit(1))
-    membership=await db.scalar(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==cid,KeanggotaanPerusahaan.user_id==data['user_id']).execution_options(populate_existing=True)) if data['user_id'] else None
-    data['keanggotaan']=dict(id=membership.id,aktif=membership.aktif,peran=membership.peran) if membership else None
+    membership=None
+    if data['user_id']:
+        q=select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==cid,KeanggotaanPerusahaan.user_id==data['user_id']).execution_options(populate_existing=True)
+        membership=await db.scalar(q.with_for_update() if kunci else q)
+    data['keanggotaan']=dict(id=membership.id,aktif=membership.aktif,peran=membership.peran,diubah=membership.updated_at.isoformat()) if membership else None
     return data
