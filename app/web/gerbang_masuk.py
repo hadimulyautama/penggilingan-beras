@@ -89,3 +89,16 @@ def catat_sandi_benar(username: str, ip: str) -> None:
 def bersihkan() -> None:
     """Kosongkan seluruh hitungan. Dipakai uji; tak dipanggil aplikasi."""
     _gagal.clear()
+    _generasi_console.clear()
+
+
+_generasi_console={}
+
+def pakai_generasi(username: str, versi: int) -> None:
+    username=(username or '').strip().lower()
+    lama=_generasi_console.get(username,0)
+    if lama!=versi:
+        for key in list(_gagal):
+            if key[0]==username:_gagal.pop(key,None)
+    if len(_generasi_console)>4096:_generasi_console.clear()
+    _generasi_console[username]=versi

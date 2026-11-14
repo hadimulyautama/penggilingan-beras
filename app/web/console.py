@@ -129,7 +129,7 @@ async def direktori(cari:str='',halaman:int=1,actor=Depends(pelaku)):
 async def jejak_pusat(sebelum:int|None=None,actor=Depends(pelaku)):
     async with SessionLocal() as db:
         q=select(ActivityLog,User.nama).outerjoin(User,User.id==ActivityLog.changed_by).where(ActivityLog.aksi.in_(
-            ['keanggotaan_perusahaan','master_organisasi','penetapan_gudang','pengaturan_perusahaan','penetapan_perusahaan_lama']))
+            ['keanggotaan_perusahaan','master_organisasi','penetapan_gudang','pengaturan_perusahaan','penetapan_perusahaan_lama','penetapan_ruang_perusahaan','console_bantuan']))
         if sebelum:q=q.where(ActivityLog.id<sebelum)
         rows=(await db.execute(q.order_by(ActivityLog.id.desc()).limit(51))).all()
     return dict(catatan=[dict(id=x.id,pelaku=n or 'Sistem',waktu=x.waktu_perubahan.isoformat(),alasan=x.alasan_perubahan,sebelum=x.old_value,sesudah=x.new_value) for x,n in rows[:50]],lanjut=rows[49][0].id if len(rows)>50 else None)
@@ -275,3 +275,59 @@ async def terapkan_penetapan(data:Penetapan,actor=Depends(pelaku)):
             result=await terapkan(db,user_id=actor['ruang'].user_id,bukti=data.bukti,alasan=data.alasan);await db.commit()
         return dict(lokasi_pabrik_id=result.lokasi_pabrik_id)
     except (master.OrganisasiError,IntegrityError) as e:raise HTTPException(422,str(e) if isinstance(e,master.OrganisasiError) else 'Data penetapan berubah.') from e
+
+# Layar kerja Admin Sistem: hanya API Console, tidak menerima sesi operator.
+from app.services import console_monitoring as monitoring,console_bantuan as bantuan
+
+@router.get('/internal/console/monitoring')
+async def monitoring_ringkas(company_id:int|None=None,hari:int=30,aplikasi:str='',actor=Depends(pelaku)):
+    try:
+        f=monitoring.FilterMonitoring(company_id,hari,aplikasi)
+        async with SessionLocal() as db:return await monitoring.ringkasan(db,f)
+    except LookupError as e:raise HTTPException(404,str(e))
+    except (ValueError,PermissionError) as e:raise HTTPException(422,str(e))
+
+@router.get('/internal/console/monitoring/pengguna')
+async def monitoring_pengguna(company_id:int|None=None,cari:str='',jenis:str='',status:str='',halaman:int=1,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:return await monitoring.daftar_akun(db,company_id=company_id,cari=cari,jenis=jenis,status=status,halaman=halaman)
+    except LookupError as e:raise HTTPException(404,str(e))
+    except (ValueError,PermissionError) as e:raise HTTPException(422,str(e))
+
+@router.get('/internal/console/monitoring/perusahaan/{cid:int}/pengguna/{jenis}/{aid:int}')
+async def monitoring_diagnosis(cid:int,jenis:str,aid:int,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:return await bantuan.diagnosis(db,cid=cid,jenis=jenis,aid=aid)
+    except LookupError as e:raise HTTPException(404,str(e))
+    except PermissionError as e:raise HTTPException(403,str(e))
+
+class PratinjauBantuan(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    aksi:str
+    alasan:str
+
+class TerapkanBantuan(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    plan_id:str
+    konfirmasi:bool
+
+@router.post('/internal/console/monitoring/perusahaan/{cid:int}/pengguna/{jenis}/{aid:int}/pratinjau')
+async def monitoring_pratinjau(cid:int,jenis:str,aid:int,data:PratinjauBantuan,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:
+            result=await bantuan.pratinjau(db,cid=cid,jenis=jenis,aid=aid,pelaku_id=actor['ruang'].user_id,aksi=data.aksi,alasan=data.alasan)
+            await db.commit();return result
+    except LookupError as e:raise HTTPException(404,str(e))
+    except PermissionError as e:raise HTTPException(403,str(e))
+    except ValueError as e:raise HTTPException(422,str(e))
+
+@router.post('/internal/console/monitoring/perusahaan/{cid:int}/pengguna/{jenis}/{aid:int}/terapkan')
+async def monitoring_terapkan(cid:int,jenis:str,aid:int,data:TerapkanBantuan,actor=Depends(pelaku)):
+    if data.konfirmasi is not True:raise HTTPException(422,'Periksa pratinjau dan konfirmasikan tindakan.')
+    try:
+        async with SessionLocal() as db:
+            result=await bantuan.terapkan(db,cid=cid,jenis=jenis,aid=aid,pelaku_id=actor['ruang'].user_id,plan_id=data.plan_id)
+            await db.commit();return result
+    except LookupError as e:raise HTTPException(404,str(e))
+    except PermissionError as e:raise HTTPException(403,str(e))
+    except ValueError as e:raise HTTPException(409,str(e))

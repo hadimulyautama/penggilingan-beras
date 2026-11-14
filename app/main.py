@@ -68,15 +68,26 @@ log = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.peran_proses == 'web':
-        yield
-        return
-    from app.services.proses_latar import hidup
-    async with hidup(app):
-        yield
+    from app.monitoring import pengumpul
+    pengumpul.mulai()
+    try:
+        if settings.peran_proses == 'web':
+            yield
+        else:
+            from app.services.proses_latar import hidup
+            async with hidup(app):
+                yield
+    finally:
+        await pengumpul.tutup()
 
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
+from app import monitoring as monitoring_web
+from hmu_identitas.monitoring import MonitoringHTTP
+app.add_middleware(MonitoringHTTP,pengumpul=monitoring_web.pengumpul,pelaku=monitoring_web.pelaku_state,skrip='/monitoring/aktivitas.js?v='+monitoring_web.VERSI)
+app.include_router(monitoring_web.router)
+from app.web.pemulihan import router as pemulihan_router
+app.include_router(pemulihan_router)
 app.include_router(api_router)
 # Service worker + halaman /luring (Tahap A rasa native) — dari paket tampilan.
 app.include_router(hmu_tampilan.router_pwa(render))
