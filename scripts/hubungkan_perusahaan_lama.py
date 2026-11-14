@@ -14,7 +14,8 @@ def hanya_metadata(conn,cursor,statement,parameters,context,executemany):
     sql=statement.strip()
     match=re.match(r'(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+"?([a-z_]+)',sql,re.I)
     if match and match[1] not in TABEL_METADATA:raise RuntimeError('Penetapan dilarang menulis tabel selain metadata organisasi.')
-    if re.match(r'(?:TRUNCATE|ALTER|DROP|CREATE)\b',sql,re.I):raise RuntimeError('Penetapan tidak menjalankan perubahan skema.')
+    awal=re.match(r'([A-Za-z]+)',sql)
+    if not awal or awal[1].upper() not in {'SELECT','INSERT','UPDATE','DELETE'}:raise RuntimeError('Penetapan hanya menjalankan pembacaan dan penulisan metadata yang diizinkan.')
 
 
 async def main(args):

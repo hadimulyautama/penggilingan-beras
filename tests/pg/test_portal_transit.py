@@ -74,7 +74,7 @@ async def _pk(pg, dunia, *, silo, jid, code, lewat_tumpukan=False, waktu=None):
         user = await db.get(User, dunia['user'])
         await _add_intake(db, user=user, sumber_tipe='beli_luar',
             tujuan='ditumpuk' if lewat_tumpukan else silo, berat_kg=2000, hpp_per_kg=0,
-            tanggal=date.today(), jam=None, pk_purchase_batch_id=batch.id,
+            tanggal=(waktu or now_local()).date(), jam=None, pk_purchase_batch_id=batch.id,
             bobot_final=True, jasa_id=jid)
         intake = await db.scalar(select(PkGudang2Intake).where(PkGudang2Intake.pk_purchase_batch_id==batch.id))
         if waktu:

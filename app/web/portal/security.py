@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app.models.portal import PortalAccount
 from hmu_identitas import token
+from hmu_identitas.ruang_data import klaim_sesi, sesi_sah
 from app.web.security import _kunci
 
 COOKIE = 'pelanggan_sesi'
@@ -28,7 +29,7 @@ def key():
 
 def issue(account):
     return token.buat_token(key(), akun_id=account.id, versi=account.token_version,
-                            umur_detik=SESSION_SECONDS, ekstra={'pid': account.pelanggan_id})
+                            umur_detik=SESSION_SECONDS, ekstra={'pid': account.pelanggan_id, **klaim_sesi()})
 
 
 @dataclass(frozen=True)
@@ -42,7 +43,7 @@ class CustomerReader:
 
 async def require_customer(request: Request):
     value = token.baca_token(key(), request.cookies.get(COOKIE))
-    if not value:
+    if not sesi_sah(value):
         raise HTTPException(401, 'Silakan masuk ke portal pelanggan.')
     from app.models import Pelanggan
     async with SessionLocal() as db:

@@ -28,6 +28,8 @@ async def otorisasi(db,ruang,company_id):
     if ruang.company_id is None:
         if not P.super_saja(u.role):raise PermissionError('Console Center hanya untuk Super Admin.')
         return u,None
+    from hmu_identitas.ruang_data import pastikan_perusahaan
+    pastikan_perusahaan(company_id)
     if type(ruang.company_id) is not int or ruang.company_id!=company_id:raise PermissionError('Administrasi hanya untuk perusahaan sendiri.')
     m=await db.scalar(select(KeanggotaanPerusahaan).join(Perusahaan,Perusahaan.id==KeanggotaanPerusahaan.company_id).where(
         KeanggotaanPerusahaan.company_id==company_id,KeanggotaanPerusahaan.user_id==u.id,

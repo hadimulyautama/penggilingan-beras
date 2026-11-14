@@ -33,6 +33,10 @@ engine = create_async_engine(
     connect_args={"server_settings": {"timezone": settings.app_timezone}},
 )
 
+from hmu_identitas.ruang_data import pasang_pagar
+import os
+pasang_pagar(engine, wajib=bool(os.environ.get("RAILWAY_ENVIRONMENT_ID")))
+
 from app.performa import pasang_penghitung
 pasang_penghitung(engine)
 

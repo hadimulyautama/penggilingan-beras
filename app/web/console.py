@@ -138,7 +138,13 @@ async def jejak_pusat(sebelum:int|None=None,actor=Depends(pelaku)):
 @router.get('/internal/console/perusahaan/{company_id:int}')
 async def rincian(company_id:int,cari_pengguna:str="",anggota_id:int|None=None,actor=Depends(pelaku)):
     try:
-        async with SessionLocal() as db:return await svc.rincian(db,ruang=actor['ruang'],company_id=company_id,cari_pengguna=cari_pengguna,anggota_id=anggota_id)
+        async with SessionLocal() as db:
+            data=await svc.rincian(db,ruang=actor['ruang'],company_id=company_id,cari_pengguna=cari_pengguna,anggota_id=anggota_id)
+            from hmu_identitas.ruang_data import RuangData
+            lokal=RuangData.lingkungan()
+            data['ruang_data_lokal']=lokal is not None and lokal.company_id==company_id
+            data['ruang_data_ditetapkan']=lokal is not None
+            return data
     except (PermissionError,master.OrganisasiError) as e:raise HTTPException(403,str(e)) from e
 
 

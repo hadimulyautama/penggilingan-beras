@@ -9,10 +9,13 @@ from app.services.activity_log import log_activity
 
 
 async def daftar(db,user_id):
+    from hmu_identitas.ruang_data import RuangData
+    lokal=RuangData.lingkungan()
     with db.no_autoflush:
         return list(await db.scalars(select(Perusahaan).join(KeanggotaanPerusahaan,KeanggotaanPerusahaan.company_id==Perusahaan.id)
             .join(User,User.id==KeanggotaanPerusahaan.user_id).where(User.id==user_id,func.lower(User.status)=='aktif',
                 Perusahaan.aktif.is_(True),KeanggotaanPerusahaan.aktif.is_(True),
+                Perusahaan.id==lokal.company_id if lokal else True,
                 func.lower(func.trim(KeanggotaanPerusahaan.peran))==P.ADMIN).order_by(Perusahaan.nama,Perusahaan.id)))
 
 

@@ -25,6 +25,7 @@ from app.models import ProduksiAkun
 from hmu_identitas import masuk as _masuk
 from hmu_identitas import peran as P
 from hmu_identitas import token as _token
+from hmu_identitas.ruang_data import klaim_sesi, sesi_sah
 from hmu_identitas.sandi import (HASH_TIRUAN, cek_sandi, cek_sandi_async,  # noqa: F401
                                  hash_sandi, sandi_acak)
 from hmu_identitas.token import MAKS_ID as _MAKS_ID  # noqa: F401
@@ -112,14 +113,14 @@ def buat_token(akun: ProduksiAkun) -> str:
     """
     return _token.buat_token(_kunci(), akun_id=int(akun.id),
                              versi=int(getattr(akun, "token_version", 1) or 1),
-                             umur_detik=umur_sesi_detik(akun))
+                             umur_detik=umur_sesi_detik(akun), ekstra=klaim_sesi())
 
 
 def baca_token(token: str | None) -> tuple[int, int] | None:
     """(akun_id, versi) bila token sah & belum kedaluwarsa; selain itu None.
     Tak pernah melempar (QA P-S-12)."""
     d = _token.baca_token(_kunci(), token)
-    return None if d is None else (d["akun_id"], d["versi"])
+    return (d["akun_id"], d["versi"]) if sesi_sah(d) else None
 
 
 def token_masih_berlaku(dibaca: tuple[int, int] | None, *, versi_akun: int) -> bool:
