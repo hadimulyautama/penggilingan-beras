@@ -151,20 +151,27 @@ async def keluar(actor=Depends(pelaku)):
 
 
 @router.get('/internal/console/perusahaan')
-async def perusahaan(cari:str='',status:str='',halaman:int=1,actor=Depends(pelaku)):
-    if halaman<1 or halaman>100000 or len(cari)>100 or status not in ('','aktif','nonaktif'):raise HTTPException(422,'Pencarian perusahaan tidak valid.')
+async def perusahaan(cari:str='',status:str='',halaman:int=1,urut:str='',layanan:str='',actor=Depends(pelaku)):
+    if halaman<1 or halaman>100000 or len(cari)>100 or status not in ('','aktif','nonaktif') or urut not in ('','nama','terbaru','anggota') or layanan not in ('','lokal','registry'):raise HTTPException(422,'Pencarian perusahaan tidak valid.')
     async with SessionLocal() as db:
+        from hmu_identitas.ruang_data import RuangData
+        local=RuangData.lingkungan();local_id=local.company_id if local else None
         q=select(Perusahaan)
+        if layanan=='lokal':q=q.where(Perusahaan.id==local_id if local_id else False)
+        elif layanan=='registry' and local_id:q=q.where(Perusahaan.id!=local_id)
         if cari:q=q.where(or_(Perusahaan.nama.ilike('%'+cari+'%'),Perusahaan.kode.ilike('%'+cari+'%')))
         if status:q=q.where(Perusahaan.aktif.is_(status=='aktif'))
         total=await db.scalar(select(func.count()).select_from(q.subquery()))
         stats=dict((await db.execute(select(Perusahaan.aktif,func.count()).group_by(Perusahaan.aktif))).all())
-        rows=list(await db.scalars(q.order_by(Perusahaan.id).offset((halaman-1)*20).limit(20)))
+        pages=max(1,(total+19)//20);halaman=min(halaman,pages)
+        member_count=select(func.count()).where(KeanggotaanPerusahaan.company_id==Perusahaan.id).correlate(Perusahaan).scalar_subquery()
+        order={'nama':(func.lower(Perusahaan.nama),Perusahaan.id),'terbaru':(Perusahaan.id.desc(),),'anggota':(member_count.desc(),Perusahaan.id)}.get(urut,(func.lower(Perusahaan.nama),Perusahaan.id))
+        rows=list(await db.scalars(q.order_by(*order).offset((halaman-1)*20).limit(20)))
         ids=[x.id for x in rows]
         counts=[]
         for model in (LokasiPabrik,PenempatanGudang,KeanggotaanPerusahaan):
             counts.append(dict((await db.execute(select(model.company_id,func.count()).where(model.company_id.in_(ids)).group_by(model.company_id))).all()))
-    return dict(perusahaan=[dict(id=x.id,kode=x.kode,nama=x.nama,aktif=x.aktif,lokasi=counts[0].get(x.id,0),gudang=counts[1].get(x.id,0),anggota=counts[2].get(x.id,0)) for x in rows],
+    return dict(perusahaan=[dict(id=x.id,kode=x.kode,nama=x.nama,aktif=x.aktif,layanan='lokal' if x.id==local_id else 'registry',lokasi=counts[0].get(x.id,0),gudang=counts[1].get(x.id,0),anggota=counts[2].get(x.id,0)) for x in rows],
         total=total,halaman=halaman,halaman_total=max(1,(total+19)//20),statistik=dict(total=sum(stats.values()),aktif=stats.get(True,0),nonaktif=stats.get(False,0)))
 
 
@@ -198,10 +205,10 @@ async def jejak_pusat(sebelum:int|None=None,actor=Depends(pelaku)):
 
 
 @router.get('/internal/console/perusahaan/{company_id:int}')
-async def rincian(company_id:int,cari_pengguna:str="",anggota_id:int|None=None,actor=Depends(pelaku)):
+async def rincian(company_id:int,cari_pengguna:str="",anggota_id:int|None=None,halaman_anggota:int|None=None,halaman_pengguna:int=1,peran_anggota:str='',status_anggota:str='',lokasi_anggota:int|None=None,actor=Depends(pelaku)):
     try:
         async with SessionLocal() as db:
-            data=await svc.rincian(db,ruang=actor['ruang'],company_id=company_id,cari_pengguna=cari_pengguna,anggota_id=anggota_id)
+            data=await svc.rincian(db,ruang=actor['ruang'],company_id=company_id,cari_pengguna=cari_pengguna,anggota_id=anggota_id,halaman_anggota=halaman_anggota,halaman_pengguna=halaman_pengguna,peran_anggota=peran_anggota,status_anggota=status_anggota,lokasi_anggota=lokasi_anggota)
             from hmu_identitas.ruang_data import RuangData
             lokal=RuangData.lingkungan()
             data['ruang_data_lokal']=lokal is not None and lokal.company_id==company_id
