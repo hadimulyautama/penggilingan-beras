@@ -127,13 +127,17 @@ async def simpan(db,*,ruang,company_id,user_id,peran,aktif,lokasi,bukti,alasan):
     return new
 
 
-async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
+async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None,halaman_anggota=None,halaman_pengguna=1,peran_anggota="",status_anggota="",lokasi_anggota=None):
     _,own=await otorisasi(db,ruang,company_id)
+    if (halaman_anggota is not None and (type(halaman_anggota) is not int or not 1<=halaman_anggota<=100000)) or type(halaman_pengguna) is not int or not 1<=halaman_pengguna<=100000 or peran_anggota not in ('','admin','operator') or status_anggota not in ('','aktif','nonaktif') or (lokasi_anggota is not None and not id_sah(lokasi_anggota)):
+        raise OrganisasiError('Filter anggota tidak valid.')
+    from hmu_identitas.model import Akun
     co=await db.get(Perusahaan,company_id)
     if not co:raise OrganisasiError('Perusahaan tidak tersedia.')
     sites=list(await db.scalars(select(LokasiPabrik).where(LokasiPabrik.company_id==company_id).order_by(LokasiPabrik.nama)))
     wh=(await db.execute(select(PenempatanGudang,Warehouse).join(Warehouse,Warehouse.id==PenempatanGudang.warehouse_id).where(PenempatanGudang.company_id==company_id).order_by(Warehouse.nama_gudang))).all()
     cari=teks(cari_pengguna,'Pencarian pengguna',100)
+    pattern='%'+cari.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
     member_q=select(KeanggotaanPerusahaan,User).join(User,User.id==KeanggotaanPerusahaan.user_id).where(KeanggotaanPerusahaan.company_id==company_id).order_by(User.nama,User.id)
     batas=(await snapshot(db,own))['lokasi'] if own else None
     if batas is not None:
@@ -148,11 +152,21 @@ async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
             True if x['semua_gudang'] else AksesGudangAnggota.warehouse_id.in_(x['gudang_ids'])) for x in batas],False)
         outside_wh=select(AksesGudangAnggota.keanggotaan_id).where(~allowed_wh)
         member_q=member_q.where(KeanggotaanPerusahaan.id.not_in(outside_sites),KeanggotaanPerusahaan.id.not_in(outside_wh))
+    anggota_total=await db.scalar(select(func.count()).select_from(member_q.order_by(None).subquery()))
     if anggota_id is not None:
         if not id_sah(anggota_id):raise OrganisasiError('Identitas anggota tidak valid.')
         member_q=member_q.where(User.id==anggota_id)
-    elif cari:member_q=member_q.where(or_(User.nama.ilike('%'+cari+'%'),User.id==int(cari) if cari.isdecimal() and len(cari)<=9 else False))
-    members=list((await db.execute(member_q.limit(201))).all());member_lebih=len(members)>200;members=members[:200]
+    else:
+        if cari:
+            pattern='%'+cari.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+            member_q=member_q.where(or_(User.nama.ilike(pattern,escape='\\'),User.id.in_(select(Akun.user_id).where(Akun.username.ilike(pattern,escape='\\'))),User.id==int(cari) if cari.isdecimal() and len(cari)<=9 else False))
+        if peran_anggota:member_q=member_q.where(KeanggotaanPerusahaan.peran==peran_anggota)
+        if status_anggota:member_q=member_q.where(KeanggotaanPerusahaan.aktif.is_(status_anggota=='aktif'))
+        if lokasi_anggota is not None:member_q=member_q.where(KeanggotaanPerusahaan.id.in_(select(AksesLokasiAnggota.keanggotaan_id).where(AksesLokasiAnggota.lokasi_pabrik_id==lokasi_anggota)))
+    total=await db.scalar(select(func.count()).select_from(member_q.order_by(None).subquery()))
+    size=30 if halaman_anggota is not None else 200
+    pages=max(1,(total+size-1)//size);page=min(halaman_anggota or 1,pages)
+    members=list((await db.execute(member_q.offset((page-1)*size).limit(size))).all());member_lebih=total>page*size
     mids=[m.id for m,_ in members]
     akses_s=list(await db.scalars(select(AksesLokasiAnggota).where(AksesLokasiAnggota.keanggotaan_id.in_(mids)).order_by(AksesLokasiAnggota.lokasi_pabrik_id)))
     akses_w=list(await db.scalars(select(AksesGudangAnggota).where(AksesGudangAnggota.keanggotaan_id.in_(mids)).order_by(AksesGudangAnggota.warehouse_id)))
@@ -168,18 +182,22 @@ async def _rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
             (allowed[b.lokasi_pabrik_id]['semua_gudang'] or w.id in allowed[b.lokasi_pabrik_id]['gudang_ids'])]
     q=select(User).where(func.lower(User.status)=='aktif').order_by(User.nama,User.id)
     cari=teks(cari_pengguna,'Pencarian pengguna',100)
-    if cari:q=q.where(or_(User.nama.ilike('%'+cari+'%'),User.id==int(cari) if cari.isdecimal() and len(cari)<=9 else False))
-    users=list(await db.scalars(q.limit(201))) if own is None else [u for _,u in members if any(d['user_id']==u.id for d in data)]
-    lebih=len(users)>200;users=users[:200]
+    if cari:q=q.where(or_(User.nama.ilike(pattern,escape='\\'),User.id.in_(select(Akun.user_id).where(Akun.username.ilike(pattern,escape='\\'))),User.id==int(cari) if cari.isdecimal() and len(cari)<=9 else False))
+    users_total=await db.scalar(select(func.count()).select_from(q.order_by(None).subquery())) if own is None else total
+    users_pages=max(1,(users_total+size-1)//size);users_page=min(halaman_pengguna,users_pages)
+    users=list(await db.scalars(q.offset((users_page-1)*size).limit(size))) if own is None else [u for _,u in members if any(d['user_id']==u.id for d in data)]
+    lebih=users_total>users_page*size
+    names=dict((await db.execute(select(Akun.user_id,Akun.username).where(Akun.user_id.in_([u.id for u in users]+[d['user_id'] for d in data])))).all())
+    for d in data:d['username']=names.get(d['user_id'])
     from app.services.organisasi_master import sidik as sidik_master
-    return dict(perusahaan=dict(id=co.id,nama=co.nama,kode=co.kode,aktif=co.aktif,bukti=sidik_master(co)),anggota=data,anggota_lebih=member_lebih,
-        pengguna=[dict(id=u.id,nama=u.nama) for u in users],pengguna_lebih=lebih,bukti_baru=sidik(None),
+    return dict(perusahaan=dict(id=co.id,nama=co.nama,kode=co.kode,aktif=co.aktif,bukti=sidik_master(co)),anggota=data,anggota_lebih=member_lebih,anggota_total=anggota_total,anggota_hasil=total,anggota_halaman=page,anggota_halaman_total=pages,
+        pengguna=[dict(id=u.id,nama=u.nama,username=names.get(u.id)) for u in users],pengguna_lebih=lebih,pengguna_total=users_total,pengguna_halaman=users_page,pengguna_halaman_total=users_pages,bukti_baru=sidik(None),
         lokasi=[dict(id=s.id,nama=s.nama,aktif=s.aktif,gudang=[dict(id=w.id,nama=w.nama_gudang,aktif=w.aktif) for b,w in wh if b.lokasi_pabrik_id==s.id]) for s in sites])
 
 
-async def rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None):
+async def rincian(db,*,ruang,company_id,cari_pengguna="",anggota_id=None,halaman_anggota=None,halaman_pengguna=1,peran_anggota="",status_anggota="",lokasi_anggota=None):
     with db.no_autoflush:
-        return await _rincian(db,ruang=ruang,company_id=company_id,cari_pengguna=cari_pengguna,anggota_id=anggota_id)
+        return await _rincian(db,ruang=ruang,company_id=company_id,cari_pengguna=cari_pengguna,anggota_id=anggota_id,halaman_anggota=halaman_anggota,halaman_pengguna=halaman_pengguna,peran_anggota=peran_anggota,status_anggota=status_anggota,lokasi_anggota=lokasi_anggota)
 
 
 async def calon_admin(db,*,cari='',halaman=1,user_id=None):
