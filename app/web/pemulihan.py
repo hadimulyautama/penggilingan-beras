@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from fastapi import APIRouter,Request,HTTPException
 from fastapi.responses import FileResponse,JSONResponse
-from pydantic import BaseModel,ConfigDict,Field
+from pydantic import BaseModel,ConfigDict,Field,SecretStr
 from sqlalchemy import select
 from app.database import SessionLocal
 from app.config import settings
@@ -19,8 +19,8 @@ class Cap(BaseModel):
     model_config=ConfigDict(extra='forbid')
     cap:str=Field(min_length=64,max_length=64)
 class Sandi(Cap):
-    sandi:str=Field(min_length=8,max_length=512)
-    ulangi:str=Field(min_length=8,max_length=512)
+    sandi:SecretStr=Field(min_length=8,max_length=512)
+    ulangi:SecretStr=Field(min_length=8,max_length=512)
 
 
 def privat(response):
@@ -49,7 +49,7 @@ async def periksa(data:Cap):
 async def simpan(data:Sandi):
     try:
         async with SessionLocal() as db:
-            a=await svc.pulihkan_sandi(db,cap=data.cap,sandi=data.sandi,ulangi=data.ulangi)
+            a=await svc.pulihkan_sandi(db,cap=data.cap,sandi=data.sandi.get_secret_value(),ulangi=data.ulangi.get_secret_value())
             await db.commit()
         tujuan='/pelanggan/masuk' if a['jenis']=='pelanggan' else '/masuk'
         if a['jenis']=='timbangan_lama':

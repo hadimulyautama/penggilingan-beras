@@ -33,7 +33,8 @@ class RuteConsole(APIRoute):
             except HTTPException as e:response=JSONResponse(dict(detail=e.detail),status_code=e.status_code,headers=e.headers)
             except RequestValidationError as e:
                 # Pydantic menyertakan input dalam errors(); sandi tidak boleh dipantulkan.
-                detail=dict(kode='isian') if request.url.path=='/internal/console/masuk' else jsonable_encoder(e.errors())
+                detail=(dict(kode='isian') if request.url.path=='/internal/console/masuk' else
+                    'Isian pemulihan tidak valid. Periksa tautan dan isi sandi minimal 8 karakter.' if request.url.path.startswith('/pemulihan/') else jsonable_encoder(e.errors()))
                 response=JSONResponse(dict(detail=detail),status_code=422)
             response.headers['Cache-Control']='no-store, private'
             response.headers['Pragma']='no-cache'
@@ -165,6 +166,13 @@ async def perusahaan(cari:str='',status:str='',halaman:int=1,actor=Depends(pelak
             counts.append(dict((await db.execute(select(model.company_id,func.count()).where(model.company_id.in_(ids)).group_by(model.company_id))).all()))
     return dict(perusahaan=[dict(id=x.id,kode=x.kode,nama=x.nama,aktif=x.aktif,lokasi=counts[0].get(x.id,0),gudang=counts[1].get(x.id,0),anggota=counts[2].get(x.id,0)) for x in rows],
         total=total,halaman=halaman,halaman_total=max(1,(total+19)//20),statistik=dict(total=sum(stats.values()),aktif=stats.get(True,0),nonaktif=stats.get(False,0)))
+
+
+@router.get('/internal/console/calon-admin')
+async def calon_admin(cari:str='',halaman:int=1,user_id:int|None=None,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:return await svc.calon_admin(db,cari=cari,halaman=halaman,user_id=user_id)
+    except ValueError as e:raise HTTPException(422,str(e)) from e
 
 
 @router.get('/internal/console/pengguna')
