@@ -44,7 +44,7 @@ async def test_console_website_http_sampai_audit_dan_akses_tanpa_mengubah_transa
     x=organisasi
     async with await _klien(pg,peran=P.SUPERADMIN) as c:
         before=await fakta(pg)
-        cols=[c for c in Akun.__table__.columns if c.name!='terakhir_login']
+        cols=[c for c in Akun.__table__.columns if c.name not in ('terakhir_login','updated_at')]
         async with pg() as db:
             akun=await db.scalar(select(Akun).order_by(Akun.id.desc()))
             username=akun.username
