@@ -82,7 +82,7 @@ async def simpan(db,*,ruang,company_id,user_id,peran,aktif,lokasi,bukti,alasan):
     if not id_sah(user_id) or type(aktif) is not bool or peran not in PERAN_ANGGOTA:raise OrganisasiError('Pengguna, peran, atau status anggota tidak valid.')
     lokasi=bersihkan(lokasi);alasan=teks(alasan,'Alasan perubahan',500,5)
     # Kunci induk juga menserialisasi penambahan anggota yang belum punya baris.
-    company=await db.scalar(select(Perusahaan).where(Perusahaan.id==company_id).with_for_update(key_share=True))
+    company=await db.scalar(select(Perusahaan).where(Perusahaan.id==company_id).with_for_update(key_share=True).execution_options(populate_existing=True))
     actor,own=await otorisasi(db,ruang,company_id)
     if not company or not company.aktif:raise OrganisasiError('Perusahaan tidak aktif atau tidak tersedia.')
     m=await db.scalar(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==company_id,

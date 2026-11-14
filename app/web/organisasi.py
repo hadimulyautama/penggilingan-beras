@@ -62,6 +62,7 @@ async def penetapan(request:Request,akun=Depends(butuh_perusahaan)):
             async with SessionLocal() as db:
                 plan=await rencana.pratinjau(db,lokasi_pabrik_id=angka(form['lokasi_pabrik_id']),
                      warehouse_ids=[angka(i) for i in form['warehouse_ids']])
+        except PermissionError as exc:raise HTTPException(403,str(exc)) from exc
         except master.OrganisasiError as exc:err=str(exc)
     bukti=rencana.buat_bukti(plan,user_id=akun.user.id) if plan and plan.bisa_diterapkan and plan.jumlah_baru else ''
     return await halaman(request,akun,mode='penetapan',form=form,err=err,plan=plan,bukti=bukti,status=422 if err else 200)
