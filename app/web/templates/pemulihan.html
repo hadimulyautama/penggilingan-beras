@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block judul %}Pulihkan akses akun{% endblock %}
+{% block isi %}
+<section class="grup" data-pemulihan>
+<h1>Pulihkan akses akun</h1>
+<p class="bantu" data-identitas>Memeriksa tautan pemulihan…</p>
+<p role="status" data-pesan></p>
+<form data-form-pemulihan hidden autocomplete="off">
+<input type="hidden" name="_csrf" value="{{ CSRF }}">
+<label class="lbl" for="pemulihan-sandi">Kata sandi baru</label>
+<input class="fld" id="pemulihan-sandi" name="sandi" type="password" autocomplete="new-password" minlength="8" maxlength="512" required>
+<label class="lbl" for="pemulihan-ulangi">Ulangi kata sandi baru</label>
+<input class="fld" id="pemulihan-ulangi" name="ulangi" type="password" autocomplete="new-password" minlength="8" maxlength="512" required>
+<p class="bantu">Setelah disimpan, sesi lama diakhiri. Masuk kembali memakai kata sandi baru. Tautan hanya berlaku satu kali.</p>
+<button class="btn btn--utama" type="submit">Simpan kata sandi baru</button>
+</form>
+<a class="btn" data-masuk hidden>Masuk ke aplikasi</a>
+<input type="hidden" data-csrf-pemulihan value="{{ CSRF }}">
+</section>
+<script src="/monitoring/pemulihan.js" defer></script>
+{% endblock %}

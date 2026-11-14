@@ -179,3 +179,6 @@ from app.models.fasilitas import JenisProsesProduksi, LiniProduksi, AuditFasilit
 
 from .pengiriman_pk import PengirimanPk, PengirimanPkItem
 from app.models.console import SesiConsole
+
+# Metadata bersama untuk monitoring dan pemulihan; tidak mengubah model transaksi.
+from hmu_identitas.monitoring import SumberMonitoring, KejadianPemakaian, PembukaanMasuk, RencanaBantuan, PemulihanAkun

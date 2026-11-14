@@ -127,9 +127,14 @@ async def test_migrasi_tabel_kosong_tidak_mengubah_proses_transaksi_atau_master_
     m=migrasi()
     spec=importlib.util.spec_from_file_location('uji_console_migrasi',Path(__file__).resolve().parents[2]/'migrations/versions/0130_console_akses_anggota.py')
     akses=importlib.util.module_from_spec(spec);spec.loader.exec_module(akses)
+    spec=importlib.util.spec_from_file_location('uji_monitoring_migrasi',Path(__file__).resolve().parents[2]/'migrations/versions/0132_monitoring_bantuan.py')
+    monitoring=importlib.util.module_from_spec(spec);spec.loader.exec_module(monitoring)
     def putaran(conn):
         with Operations.context(MigrationContext.configure(conn)):
-            akses.downgrade();m.downgrade();m.upgrade();akses.upgrade()
+            # Turunkan dependensi terbaru lebih dahulu; jangan melemahkan FK
+            # atau memakai CASCADE agar tes migrasi lama tetap dapat berjalan.
+            monitoring.downgrade();akses.downgrade();m.downgrade()
+            m.upgrade();akses.upgrade();monitoring.upgrade()
     async with pg.kw['bind'].begin() as conn: await conn.run_sync(putaran)
     async with pg() as db:
         assert await sidik(db)==awal

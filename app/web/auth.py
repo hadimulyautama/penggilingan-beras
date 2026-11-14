@@ -91,8 +91,11 @@ async def proses_masuk(
     #
     # Tanpa ini seluruh daftar sandi bisa dicoba satu per satu, dan tak ada
     # satu baris pun yang mencatat bahwa itu sedang terjadi. Temuan QA P-S-04.
+    from app.monitoring import petunjuk_masuk,catat_login
+    await petunjuk_masuk(request,uname,gerbang)
     sisa = gerbang.boleh_coba(uname, ip)
     if sisa is not None:
+        catat_login(request,'ditahan')
         return gagal(
             f"Terlalu banyak percobaan. Coba lagi {int(sisa // 60) + 1} menit "
             "lagi, atau hubungi Super Admin bila lupa sandi."
@@ -106,12 +109,14 @@ async def proses_masuk(
         try:
             akun = await identitas.periksa_kredensial(db, uname, sandi)
         except identitas.Tolak as e:
+            catat_login(request,'kredensial' if e.kode==401 else 'nonaktif')
             gerbang.catat_gagal(uname, ip)
             return gagal(e.pesan)
         # Pintu per aplikasi (keputusan pemilik 13 Sep 2026). Pos Produksi
         # masih menerima admin sampai Meja dipakai sungguhan.
         sebab = pintu.sebab_tolak(akun.peran, pintu.PRODUKSI)
         if sebab:
+            catat_login(request,'peran')
             # Tidak dihitung sebagai percobaan gagal: sandinya benar, yang
             # menolak perannya. Alasan lengkapnya di `gerbang_masuk.
             # catat_sandi_benar` — hitungan yang sama dipakai ketiga app.
@@ -119,6 +124,7 @@ async def proses_masuk(
             return gagal(sebab)
 
         gerbang.catat_berhasil(uname, ip)
+        catat_login(request,'berhasil')
         akun.terakhir_login = now_local()
         wajib_ganti = akun.harus_ganti_sandi
         await db.commit()

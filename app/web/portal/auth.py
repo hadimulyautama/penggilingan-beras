@@ -40,14 +40,20 @@ async def login_form(request:Request):
 async def login(request:Request, username:str=Form(...,min_length=1,max_length=80), sandi:str=Form(...,min_length=1,max_length=512)):
     name=username.strip().casefold()
     limiter='portal:'+name;ip=request.client.host if request.client else ''
-    if gerbang_masuk.boleh_coba(limiter,ip):return login_page(request,'Terlalu banyak percobaan. Coba lagi nanti.',429)
+    from app.monitoring import petunjuk_masuk,catat_login
+    await petunjuk_masuk(request,name,gerbang_masuk,portal=True)
+    if gerbang_masuk.boleh_coba(limiter,ip):
+        catat_login(request,'ditahan')
+        return login_page(request,'Terlalu banyak percobaan. Coba lagi nanti.',429)
     async with SessionLocal() as db:
         account=await db.scalar(select(PortalAccount).where(PortalAccount.username==name))
         correct=await cek_sandi_async(sandi, account.password_hash if account else HASH_TIRUAN)
         if not correct or account is None or not account.active:
+            catat_login(request,'kredensial' if account is None or not correct else 'nonaktif')
             gerbang_masuk.catat_gagal(limiter,ip)
             return login_page(request,'Nama pengguna atau kata sandi tidak sesuai.',401)
         value=issue(account)
+    catat_login(request,'berhasil')
     gerbang_masuk.catat_berhasil(limiter,ip)
     # Garis miring mempertahankan halaman tujuan di cakupan PWA pelanggan.
     response=RedirectResponse('/pelanggan/',303)
