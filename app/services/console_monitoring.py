@@ -77,7 +77,7 @@ async def sumber_akun(db,cid):
 async def daftar_akun(db,*,company_id=None,cari='',jenis='',status='',halaman=1,limit=30):
     if len(cari)>100 or jenis not in ('',*JENIS) or status not in ('','aktif','nonaktif','belum_login') or not 1<=halaman<=100000 or not 1<=limit<=100:raise ValueError('Pencarian pengguna tidak valid.')
     scope=await cakupan(db,company_id)
-    if not scope['tersedia']:return dict(cakupan=scope,pengguna=[],total=0,halaman=halaman,halaman_total=1)
+    if not scope['tersedia']:return dict(cakupan=scope,pengguna=[],total=0,halaman=1,halaman_total=1)
     cid=scope['company_id'];u=await sumber_akun(db,cid);where=[]
     if jenis:where.append(u.c.jenis==jenis)
     if status=='aktif':where.append(u.c.aktif.is_(True))
@@ -87,6 +87,7 @@ async def daftar_akun(db,*,company_id=None,cari='',jenis='',status='',halaman=1,
         pattern='%'+cari.strip().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
         where.append(or_(u.c.nama.ilike(pattern,escape='\\'),u.c.username.ilike(pattern,escape='\\'),cast(u.c.id,String)==cari.strip()))
     total=await db.scalar(select(func.count()).select_from(u).where(*where))
+    halaman_total=max(1,(total+limit-1)//limit);halaman=min(halaman,halaman_total)
     records=(await db.execute(select(u).where(*where).order_by(func.lower(u.c.nama),u.c.jenis,u.c.id).offset((halaman-1)*limit).limit(limit))).mappings().all()
     ids={}
     for r in records:ids.setdefault(r['jenis'],[]).append(r['id'])
