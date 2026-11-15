@@ -25,10 +25,11 @@ on:
         options:
           - semua
           - koreksi-bahan
+          - console-pemulihan
 
 jobs:
   uji:
-    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' && github.event.inputs.cakupan != 'console-pemulihan' }}
     name: Uji ${{ matrix.profil }}
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -117,7 +118,7 @@ jobs:
           path: bukti/
 
   dua-aplikasi:
-    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' && github.event.inputs.cakupan != 'console-pemulihan' }}
     name: Integrasi HTTP PadiFlow dan TeraFlow terpin
     runs-on: ubuntu-latest
     services:
@@ -179,7 +180,7 @@ jobs:
           path: bukti/dua-aplikasi/
 
   retur-dua-aplikasi:
-    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' && github.event.inputs.cakupan != 'console-pemulihan' }}
     name: Integrasi HTTP retur PadiFlow dan TeraFlow terpin
     runs-on: ubuntu-latest
     services:
@@ -295,6 +296,7 @@ jobs:
           path: bukti/
 
   safari:
+    if: ${{ github.event.inputs.cakupan != 'console-pemulihan' }}
     name: Operator Safari/iPhone (${{ matrix.browser }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -361,3 +363,83 @@ jobs:
           name: safari-padiflow-${{ matrix.browser }}
           path: bukti/
 
+
+  console-pemulihan:
+    if: ${{ github.event.inputs.cakupan == 'console-pemulihan' }}
+    name: Console recovery exact four (${{ matrix.browser }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [webkit, chromium]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: uji
+          POSTGRES_DB: uji_console_webkit
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_console_webkit
+      UJI_PG_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_console_webkit
+      UJI_BROWSER_ORGANISASI: "1"
+      UJI_BROWSER: ${{ matrix.browser }}
+      MODE_UJI: "1"
+      SECRET_KEY: hanya-fixture-console-webkit-bukan-produksi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pinned test runtime
+        run: |
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+          python -m playwright install --with-deps "${{ matrix.browser }}"
+      - name: Require working blank-page runtime before application tests
+        run: |
+          mkdir -p bukti
+          python - <<'PYTHON'
+          import asyncio,json,os,platform,importlib.metadata
+          from pathlib import Path
+          from playwright.async_api import async_playwright
+          async def probe():
+              rows=[]
+              async with async_playwright() as pw:
+                  browser=await getattr(pw,os.environ['UJI_BROWSER']).launch()
+                  try:
+                      for width in [390,1440]:
+                          context=await browser.new_context(viewport=dict(width=width,height=900),service_workers='block')
+                          page=await context.new_page()
+                          await page.set_content('<h1>SYNTHETIC RUNTIME PROBE</h1>')
+                          assert await page.locator('h1').inner_text()=='SYNTHETIC RUNTIME PROBE'
+                          rows.append(dict(width=width,browser=browser.version,ok=True))
+                          await context.close()
+                  finally:await browser.close()
+              Path('bukti/runtime.json').write_text(json.dumps(dict(platform=platform.platform(),playwright=importlib.metadata.version('playwright'),commit=os.environ['GITHUB_SHA'],cases=rows),indent=2))
+          asyncio.run(probe())
+          PYTHON
+      - name: Run unchanged four recovery cases
+        run: |
+          set -o pipefail
+          python -m pytest -vv tests/pg/test_console_pemulihan_browser.py --junitxml=bukti/empat-kasus.xml | tee bukti/empat-kasus.log
+      - name: Require exactly four passes and zero skips
+        run: |
+          python - <<'PYTHON'
+          import xml.etree.ElementTree as E
+          suites=E.parse('bukti/empat-kasus.xml').getroot().iter('testsuite')
+          counts={key:0 for key in ['tests','failures','errors','skipped']}
+          for suite in suites:
+              for key in counts:counts[key]+=int(suite.get(key,0))
+          assert counts==dict(tests=4,failures=0,errors=0,skipped=0),counts
+          print(counts)
+          PYTHON
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: console-four-${{ matrix.browser }}
+          path: bukti/
