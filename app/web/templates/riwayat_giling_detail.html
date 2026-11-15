@@ -84,7 +84,7 @@
         <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi %}open{% endif %}>
           <summary><h2>Catatan hasil</h2></summary>
           <p class="riwayat-koreksi__info">Mengubah berat PK akan memperbarui hasil dan stok dari proses giling ini. Koreksi hanya dapat disimpan sebelum PK ditransfer ke Gudang 2 atau dicatat sebagai barang keluar.</p>
-          <form method="post" action="/riwayat-giling/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
+          <form method="post" action="{{ aksi_koreksi|default('/riwayat-giling/' ~ k.id ~ '/koreksi') }}" class="riwayat-koreksi__form">
             <input type="hidden" name="_csrf" value="{{ CSRF }}">
             {% if gagal_koreksi %}<p role="alert">{{ gagal_koreksi }} Isian Anda dipertahankan.</p>{% endif %}
             <label class="riwayat-koreksi__field">

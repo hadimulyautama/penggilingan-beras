@@ -66,7 +66,9 @@ async def test_tab_draf_koreksi_sumber_qc_pdf_dan_navigasi(pg,selesai,width):
     r=await c.get('/riwayat-giling/'+str(pr.id)+suffix);assert r.status_code==200
     if '.pdf' in suffix:assert r.headers['content-type'].startswith('application/pdf')
    await page.locator('[data-lk-buka=rhs-panduan]:visible').click();await expect(page.locator('#rhs-panduan')).to_be_visible();await page.locator('[data-rhs-guide-close]').click()
-   await expect(page.locator('.laporan-nav__tabs')).to_be_visible()
+   # Sejak navigasi v592, tab detail tetap menjadi kontrol penelusuran;
+   # bilah laporan lama sudah tidak dirender, termasuk pada baseline rilis.
+   await expect(page.locator('.rhs-tabs')).to_be_visible()
 
 async def test_konflik_isian_dipertahankan_dan_periksa_ulang(pg,selesai):
  from playwright.async_api import expect

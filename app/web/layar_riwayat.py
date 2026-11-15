@@ -63,6 +63,14 @@ def _sebelum_id(request: Request) -> int | None:
         return None
 
 
+def _query_giling(request: Request, **params) -> str:
+    """Kursor baca saja mengikuti detail; bukan alamat kembali dari pengguna."""
+    sebelum = _sebelum_id(request)
+    if sebelum:
+        params['sebelum'] = sebelum
+    return '?' + urlencode(params) if params else ''
+
+
 @router.get("/riwayat-giling")
 async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
     """Kartu giling selesai, terbaru lebih dulu, berikut PK yang jadi."""
@@ -84,6 +92,7 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
         kartu=kartu, lagi=lagi, SEKALI=SEKALI,
         sesudah=(kartu[-1].id if kartu and lagi else None),
         dari_awal=bool(sebelum_id),
+        kursor_asal=sebelum_id,
     )
 
 
@@ -116,7 +125,9 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     return await render_laci(
         request, "riwayat_giling_detail.html", jenis="giling", k=kartu[0], qc_gabah_asal=qc_gabah_asal,
         catatan_penghalang=catatan_penghalang,
-        kembali="/riwayat-giling", breadcrumb_detail=kartu[0].kode,
+        kembali="/riwayat-giling" + _query_giling(request) + f"#giling-{process_id}",
+        aksi_koreksi=f"/riwayat-giling/{process_id}/koreksi" + _query_giling(request),
+        breadcrumb_detail=kartu[0].kode,
         layar="riwayat_giling", boleh_koreksi=akun.is_admin,
         hasil_awal=kartu[0].hasil_kg, penghalang_koreksi=penghalang,
         hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
@@ -154,7 +165,7 @@ async def koreksi_riwayat_giling(process_id: int, request: Request,
             await db.rollback()
             pesan = exc.args[0] if exc.args else "Koreksi hasil tidak dapat disimpan."
             return await _gagal_koreksi(request, akun, detail_riwayat_giling, process_id, form, pesan)
-    return RedirectResponse(f"/riwayat-giling/{process_id}?koreksi=berhasil", status_code=303)
+    return RedirectResponse(f"/riwayat-giling/{process_id}" + _query_giling(request, koreksi='berhasil'), status_code=303)
 
 
 def _pdf_laporan_giling(data: dict) -> bytes:
