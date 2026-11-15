@@ -139,13 +139,20 @@ async def test_validasi_server_tidak_mengubah_catatan(pg,hasil,isi):
 
 async def test_legacy_delta_dan_presisi(pg,hasil):
     _,pr=hasil
+    before=await fakta(pg,pr)
     async with await _klien(pg,peran='admin') as c:
-        assert (await kirim(c,pr.kode_proses,berat_kg=12.125)).status_code==200
-        assert (await kirim(c,pr.kode_proses,berat_kumulatif=4412.625)).status_code==200
+        # Jalur tambahan lama tetap menerima dua desimal, tetapi tidak lagi
+        # membulatkan isian yang melebihi ketelitian stok secara diam-diam.
+        for isi in (dict(berat_kg=12.125),dict(berat_kumulatif=4412.625)):
+            r=await kirim(c,pr.kode_proses,**isi)
+            assert r.status_code==400,r.text
+            assert '2 desimal' in r.json()['detail']
+            assert await fakta(pg,pr)==before
+        assert (await kirim(c,pr.kode_proses,berat_kg=12.12)).status_code==200
+        assert (await kirim(c,pr.kode_proses,berat_kumulatif=4412.62)).status_code==200
     f=await fakta(pg,pr)
-    # Numeric(12, 2) lama tetap menentukan presisi tersimpan.
     assert f['total']['medium']==4412.62
-    assert [x[1] for x in f['logs'][-2:]]==[12.13,0.49]
+    assert [x[1] for x in f['logs'][-2:]]==[12.12,0.5]
 
 
 async def test_total_terbaru_dan_balapan_kunci_baris(pg,hasil):
