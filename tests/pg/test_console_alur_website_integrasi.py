@@ -31,7 +31,7 @@ async def test_monitoring_perusahaan_dan_pemulihan_dari_browser_http(pg,orang,mo
         assert all(json.loads(r.stdout).values())
     after=await fakta(pg)
     allowed={'hmu_console_sessions','hmu_support_plans','hmu_account_recoveries','hmu_login_unlocks','produksi_akun','activity_logs',
-        'hmu_companies','hmu_factory_sites','hmu_company_memberships','hmu_membership_sites','hmu_membership_warehouses'}
+        'hmu_companies','hmu_factory_sites','hmu_company_memberships','hmu_membership_sites','hmu_membership_warehouses','hmu_member_products'}
     assert {k:v for k,v in before.items() if k not in allowed}=={k:v for k,v in after.items() if k not in allowed}
     async with pg() as db:
         operator=await db.get(Akun,x['aid']);assert operator.token_version==2 and cek_sandi('baru-aman-console-123',operator.password_hash)
@@ -40,5 +40,8 @@ async def test_monitoring_perusahaan_dan_pemulihan_dari_browser_http(pg,orang,mo
         company=await db.scalar(select(Perusahaan).where(Perusahaan.kode=='uji-alur-console'))
         member=await db.scalar(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==company.id,KeanggotaanPerusahaan.user_id==x['uid']))
         assert member.aktif and member.peran==P.ADMIN
+        from hmu_identitas.produk import hak_pengguna
+        for produk in ('padiflow','teraflow'):
+            assert (await hak_pengguna(db,company_id=x['cid'],produk=produk,user_id=x['uid'])).peran==P.OPERATOR
         assert (await db.scalar(select(Akun).where(Akun.user_id==x['root']))).password_hash==root_hash
         assert all(s.dicabut for s in await db.scalars(select(SesiConsole)))
