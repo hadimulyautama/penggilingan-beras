@@ -24,6 +24,10 @@ async def siapkan(pg):
         for w in await db.scalars(select(Warehouse)):
             db.add(PenempatanGudang(warehouse_id=w.id,company_id=c.id,lokasi_pabrik_id=s.id))
         db.add(SetelanPabrik(kunci='organisasi_perusahaan_lama',nilai=json.dumps({'company_id':c.id})))
+        # Fixture ruang lama yang sudah beroperasi, dengan produk warisan eksplisit.
+        from hmu_core import ProdukAplikasiPerusahaan,IntegrasiProdukPerusahaan
+        db.add_all([ProdukAplikasiPerusahaan(company_id=c.id,produk=p,aktif=True,warisan=True) for p in ('padiflow','teraflow')])
+        db.add(IntegrasiProdukPerusahaan(company_id=c.id,kode='padiflow_teraflow',aktif=True))
         await db.commit();return RuangData(c.id,A,int(time.time())+3600)
 
 def konfigurasi(monkeypatch,r):
