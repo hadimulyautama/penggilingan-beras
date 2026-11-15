@@ -85,12 +85,30 @@ async def simpan(db,*,ruang,company_id,user_id,peran,aktif,lokasi,bukti,alasan):
     company=await db.scalar(select(Perusahaan).where(Perusahaan.id==company_id).with_for_update(key_share=True).execution_options(populate_existing=True))
     actor,own=await otorisasi(db,ruang,company_id)
     if not company or not company.aktif:raise OrganisasiError('Perusahaan tidak aktif atau tidak tersedia.')
+    # Penugasan lintas perusahaan berbagi pengguna yang sama. Kunci pengguna
+    # sebelum anggota agar writer hak produk tidak memakai konteks lama di
+    # tengah penambahan/pencabutan anggota pada perusahaan lainnya.
+    target=await db.scalar(select(User).where(User.id==user_id).with_for_update().execution_options(populate_existing=True))
     m=await db.scalar(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==company_id,
         KeanggotaanPerusahaan.user_id==user_id).with_for_update().execution_options(populate_existing=True))
     old=await snapshot(db,m)
     if own and m is None:raise PermissionError('Keanggotaan baru sementara ditetapkan melalui Console Center.')
-    target=await db.get(User,user_id)
     if not target or (aktif and (target.status or '').lower()!='aktif'):raise OrganisasiError('Pengguna aktif tidak tersedia.')
+    if m is None:
+        # Penugasan kedua tidak boleh mendadak memutus operator perusahaan
+        # asal: fallback warisan berhenti saat ada ikatan perusahaan lain.
+        # Minta penetapan eksplisit terlebih dahulu, tanpa memberi izin baru
+        # atau menyalin hak master secara otomatis ke perusahaan mana pun.
+        from hmu_identitas.produk import KATALOG,hak_pengguna,ProdukDitolak
+        asal=list(await db.scalars(select(KeanggotaanPerusahaan.company_id).where(
+            KeanggotaanPerusahaan.user_id==user_id,KeanggotaanPerusahaan.company_id!=company_id)))
+        for cid in asal:
+            legacy=[]
+            for produk in KATALOG:
+                try:hak=await hak_pengguna(db,company_id=cid,produk=produk.kode,user_id=user_id)
+                except ProdukDitolak:continue
+                if hak.sumber=='warisan':legacy.append(produk.nama)
+            if legacy:raise OrganisasiError('Tetapkan izin produk eksplisit pada perusahaan #'+str(cid)+' ('+', '.join(legacy)+') sebelum menambah keanggotaan lain agar akses operator tetap berjalan.')
     if own:
         batas=(await snapshot(db,own))['lokasi']
         if not dalam_batas(lokasi,batas) or not dalam_batas(old['lokasi'],batas):raise PermissionError('Akses anggota melampaui lokasi/gudang yang boleh Anda kelola.')
