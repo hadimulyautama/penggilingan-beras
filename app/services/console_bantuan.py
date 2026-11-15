@@ -136,6 +136,18 @@ async def _cabut(db,a,*,hash_baru=None):
         await db.execute(text(sql),dict(id=a['id'],**({'h':hash_baru} if hash_baru else {})))
 
 
+async def _cabut_sebelum_aktivasi(db,a):
+    # Status akun lama/impor belum tentu menaikkan versi saat dinonaktifkan.
+    # Pemulihan tidak boleh menghidupkan lagi sesi atau cap sebelum penahanan.
+    if a['user_id'] is not None and (a['status_pengguna'] or '').lower()!='aktif':
+        uid=a['user_id']
+        await db.execute(update(Akun).where(Akun.user_id==uid).values(token_version=Akun.token_version+1))
+        if await m.timbangan_siap(db):
+            await db.execute(text('UPDATE timbangan_akun SET token_version=token_version+1 WHERE user_id=:uid OR akun_id IN (SELECT id FROM produksi_akun WHERE user_id=:uid)'),{'uid':uid})
+    else:
+        await _cabut(db,a)
+
+
 async def _audit(db,a,uid,aksi,reason,before,after):
     # Audit umum tetap lokal; rincian lintas perusahaan hanya pada pratinjau
     # Console Sistem. Sidik mencatat cakupan tanpa membocorkan perusahaan lain.
@@ -177,6 +189,7 @@ async def terapkan(db,*,cid,jenis,aid,pelaku_id,plan_id):
     elif plan.aksi=='buka_penahanan':await _buka(db,a)
     elif plan.aksi=='cabut_sesi':await _cabut(db,a)
     elif plan.aksi=='aktifkan_akun':
+        await _cabut_sebelum_aktivasi(db,a)
         if jenis=='staf':
             await db.execute(update(User).where(User.id==a['user_id']).values(status='aktif'))
             await db.execute(update(Akun).where(Akun.id==aid).values(status='aktif'))

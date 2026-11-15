@@ -32,3 +32,20 @@ async def test_pemulihan_sandi_dan_csrf_dua_interpreter(pg,orang):
     async with pg() as db:
         rows=(await db.execute(text('SELECT perangkat_kode,token_version FROM timbangan_akun ORDER BY id'))).all()
         assert rows==[('UT',2),('LG',2)]
+
+
+async def test_aktivasi_pengguna_lama_memutus_semua_sesi_tanpa_mengubah_izin(pg,orang):
+    from hmu_core import User
+    from hmu_identitas.model import Akun
+    from sqlalchemy import select
+    x=orang
+    async with pg() as db:
+        linked=await db.scalar(text("INSERT INTO timbangan_akun(username,nama,role,akun_id,status,perangkat_kode,token_version) VALUES ('aktifkan-linked','Akun bersama','PETUGAS',:aid,'aktif','AL',1) RETURNING id"),{'aid':x['aid']})
+        legacy=await db.scalar(text("INSERT INTO timbangan_akun(user_id,username,nama,role,password_hash,status,perangkat_kode,token_version) VALUES (:uid,'aktifkan-legacy','Akun lama','PETUGAS',:h,'aktif','AG',1) RETURNING id"),{'uid':x['uid'],'h':hash_sandi('sandi-lama-uji-123')})
+        (await db.get(User,x['uid'])).status='nonaktif';await db.commit()
+    await action(pg,x,'aktifkan_akun','timbangan_lama',legacy)
+    async with pg() as db:
+        a=await db.get(Akun,x['aid']);assert a.aktif and a.token_version==2 and a.user.role=='operator'
+        rows=(await db.execute(text('SELECT id,token_version FROM timbangan_akun ORDER BY id'))).all()
+        assert rows==[(linked,2),(legacy,2)]
+        assert not (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif

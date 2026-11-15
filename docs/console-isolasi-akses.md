@@ -27,3 +27,12 @@ Tidak ada migrasi, seed, koreksi historis, perubahan akun produksi atau transaks
 produksi. Paket hmu_core/hmu_identitas vendored tidak diubah. Jalankan seluruh CI
 backend dan regresi Console Chromium/WebKit sebelum deploy. Rollback hanya kode;
 tidak ada perubahan data yang harus dipulihkan. Uji fisik iPhone tidak dicakup.
+
+
+Pemulihan akun nonaktif menaikkan versi kredensial sebelum mengaktifkannya.
+Sesi dan cap lama tidak hidup kembali, termasuk status akun lama/impor yang
+belum disertai pencabutan versi. Bila status pengguna global dipulihkan,
+seluruh kredensial staf/profil timbang pengguna tersebut dicabut; peran,
+keanggotaan, izin produk, sandi dan transaksi tetap. Pemulihan keanggotaan
+lokal tetap tidak mencabut sesi pengguna perusahaan lain. Tidak ada backfill.
+Urutan kunci profil timbang lama disamakan: pengguna sebelum kredensial.
