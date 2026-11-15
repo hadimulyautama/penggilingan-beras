@@ -13,8 +13,8 @@ from app.models import ActivityLog
 from app.models.portal import PortalAccount
 from app.services import console_monitoring as m
 
-AKSI=('tautan_sandi','cabut_sesi','aktifkan_akun','buka_penahanan','aktifkan_keanggotaan')
-NAMA_AKSI={'tautan_sandi':'Terbitkan tautan pemulihan sandi','cabut_sesi':'Akhiri seluruh sesi aplikasi','aktifkan_akun':'Aktifkan kembali akun','buka_penahanan':'Buka penahanan percobaan masuk','aktifkan_keanggotaan':'Aktifkan keanggotaan tersimpan'}
+AKSI=('tautan_sandi','cabut_sesi','aktifkan_akun','buka_penahanan','aktifkan_keanggotaan','aktifkan_profil_timbang')
+NAMA_AKSI={'tautan_sandi':'Terbitkan tautan pemulihan sandi','cabut_sesi':'Akhiri seluruh sesi aplikasi','aktifkan_akun':'Aktifkan kembali akun','buka_penahanan':'Buka penahanan percobaan masuk','aktifkan_keanggotaan':'Aktifkan keanggotaan tersimpan','aktifkan_profil_timbang':'Pulihkan profil TeraFlow tertaut'}
 
 class BantuanError(ValueError):pass
 
@@ -40,6 +40,19 @@ def tindakan(a,*,perusahaan_aktif=True):
     if a['jenis']=='staf_belum_login':return []
     out=['aktifkan_akun'] if not a['aktif'] else ['tautan_sandi','buka_penahanan','cabut_sesi']
     if perusahaan_aktif and a['keanggotaan'] and not a['keanggotaan']['aktif']:out.append('aktifkan_keanggotaan')
+    return out
+
+
+async def tindakan_tersedia(db,a):
+    company=await db.get(Perusahaan,a['company_id'],populate_existing=True)
+    out=tindakan(a,perusahaan_aktif=bool(company and company.aktif))
+    profile=a.get('profil_timbang')
+    if a['jenis']=='staf' and a['aktif'] and profile and profile['status']!='aktif':
+        from hmu_identitas.produk import hak_pengguna,TERAFLOW,ProdukDitolak
+        try:
+            hak=await hak_pengguna(db,company_id=a['company_id'],produk=TERAFLOW,user_id=a['user_id'])
+            if pintu.boleh_masuk(hak.peran,pintu.TIMBANGAN):out.append('aktifkan_profil_timbang')
+        except ProdukDitolak:pass
     return out
 
 
@@ -97,7 +110,7 @@ async def diagnosis(db,*,cid,jenis,aid):
         grants=(await snapshot(db,member))['lokasi']
     return dict(akun=a,cakupan=scope,sebab=sebab,aplikasi=apps,login=login,
         perangkat=[dict(aplikasi=app,browser=b,perangkat=d,warehouse_id=w,terakhir=t.isoformat()) for app,b,d,w,t in devices],
-        lokasi=grants,tindakan=tindakan(a,perusahaan_aktif=company.aktif),
+        lokasi=grants,tindakan=await tindakan_tersedia(db,a),
         audit=[dict(id=r.id,waktu=r.waktu_perubahan.isoformat(),alasan=r.alasan_perubahan,sebelum=r.old_value,sesudah=r.new_value,pelaku_id=r.changed_by) for r in logs])
 
 
@@ -105,14 +118,14 @@ async def pratinjau(db,*,cid,jenis,aid,pelaku_id,aksi,alasan):
     await pelaku(db,pelaku_id)
     alasan=alasan.strip()
     if aksi not in AKSI or not 10<=len(alasan)<=500:raise BantuanError('Pilih tindakan dan isi alasan 10–500 karakter.')
-    if aksi=='aktifkan_keanggotaan':await _perusahaan_aktif(db,cid)
+    if aksi in ('aktifkan_keanggotaan','aktifkan_profil_timbang'):await _perusahaan_aktif(db,cid)
     a=await m.akun(db,cid,jenis,aid)
-    if aksi not in tindakan(a):raise BantuanError('Tindakan tidak tersedia pada keadaan akun sekarang.')
+    if aksi not in await tindakan_tersedia(db,a):raise BantuanError('Tindakan tidak tersedia pada keadaan akun sekarang.')
     plan=RencanaBantuan(id=str(uuid.uuid4()),company_id=cid,pelaku_id=pelaku_id,jenis_akun=jenis,akun_id=aid,aksi=aksi,
         alasan=alasan,sidik=sidik(a,aksi),sebelum=json_(a),kedaluwarsa=m.sekarang()+timedelta(minutes=10))
     db.add(plan);await db.flush()
     return dict(id=plan.id,company_id=cid,jenis=jenis,akun_id=aid,nama=a['nama'],username=a['username'],aksi=aksi,
-                alasan=alasan,sebelum=a,kedaluwarsa=plan.kedaluwarsa.isoformat(),berdampak_sesi=aksi=='cabut_sesi')
+                alasan=alasan,sebelum=a,kedaluwarsa=plan.kedaluwarsa.isoformat(),berdampak_sesi=aksi in ('cabut_sesi','aktifkan_profil_timbang'))
 
 
 async def _perusahaan_aktif(db,cid):
@@ -173,7 +186,7 @@ async def terapkan(db,*,cid,jenis,aid,pelaku_id,plan_id):
     if plan.diterapkan:return dict(sudah=True,aksi=plan.aksi,tautan_sekali=True)
     if plan.kedaluwarsa<=m.sekarang():raise BantuanError('Pratinjau sudah berakhir. Periksa keadaan akun terbaru.')
     # Urutan induk -> akun/anggota sama dengan writer master/keanggotaan.
-    if plan.aksi=='aktifkan_keanggotaan':await _perusahaan_aktif(db,cid)
+    if plan.aksi in ('aktifkan_keanggotaan','aktifkan_profil_timbang'):await _perusahaan_aktif(db,cid)
     a=await m.akun(db,cid,jenis,aid,kunci=True)
     if sidik(a,plan.aksi)!=plan.sidik:
         # Pratinjau sepuluh menit dari rilis lama menyertakan waktu login.
@@ -184,7 +197,7 @@ async def terapkan(db,*,cid,jenis,aid,pelaku_id,plan_id):
         if not isinstance(lama,dict):lama={}
         if hash_(plan.sebelum)!=plan.sidik or sidik(a,plan.aksi)!=sidik(lama,plan.aksi):
             raise BantuanError('Keadaan akun berubah. Buat pratinjau baru sebelum menerapkan.')
-    if plan.aksi not in tindakan(a):raise BantuanError('Tindakan tidak tersedia lagi.')
+    if plan.aksi not in await tindakan_tersedia(db,a):raise BantuanError('Tindakan tidak tersedia lagi.')
     result=dict(sudah=False,aksi=plan.aksi)
     if plan.aksi=='tautan_sandi':
         await db.execute(update(PemulihanAkun).where(PemulihanAkun.company_id==cid,PemulihanAkun.jenis_akun==jenis,PemulihanAkun.akun_id==aid,PemulihanAkun.dipakai.is_(None)).values(dicabut=True))
@@ -204,6 +217,11 @@ async def terapkan(db,*,cid,jenis,aid,pelaku_id,plan_id):
         else:
             if a['user_id']:await db.execute(update(User).where(User.id==a['user_id']).values(status='aktif'))
             await db.execute(text("UPDATE timbangan_akun SET status='aktif' WHERE id=:id AND akun_id IS NULL"),{'id':aid})
+    elif plan.aksi=='aktifkan_profil_timbang':
+        # Akun bersama tetap aktif. Putuskan sesi lama sebelum menghidupkan
+        # profil supaya JWT bersama yang lama tidak ikut hidup kembali.
+        await _cabut(db,a)
+        await db.execute(text("UPDATE timbangan_akun SET status='aktif' WHERE id=:pid AND akun_id=:aid"),dict(pid=a['profil_timbang']['id'],aid=aid))
     elif plan.aksi=='aktifkan_keanggotaan':
         # Peran serta seluruh lokasi/gudang dipertahankan persis seperti sebelumnya.
         await db.execute(update(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.id==a['keanggotaan']['id'],KeanggotaanPerusahaan.company_id==cid).values(aktif=True))
@@ -223,18 +241,21 @@ def asal_https(value):
     return value if not any(c in value for c in ('\r','\n','\\')) and u.scheme=='https' and u.hostname and u.username is None and u.password is None and u.path in ('','/') and not u.query and not u.fragment else None
 
 
-async def tujuan_masuk(db,a):
+async def tujuan_masuk(db,a,*,produk=''):
     """Pemulihan kredensial tidak mengaktifkan produk atau memberi izin baru."""
     from app.config import settings
     from hmu_identitas.produk import hak_pengguna,hak_lokal,produk_lokal,ProdukDitolak,PADIFLOW,TERAFLOW
+    if produk not in ('',PADIFLOW,TERAFLOW):raise BantuanError('Produk tujuan tidak valid.')
     if a['jenis']=='pelanggan':
+        if produk not in ('',PADIFLOW):return None
         try:await produk_lokal(db,PADIFLOW)
         except ProdukDitolak:return None
         return '/pelanggan/masuk'
-    if a['jenis']=='staf' and P.super_saja(a['peran']):
+    if not produk and a['jenis']=='staf' and P.super_saja(a['peran']):
         origin=asal_https(settings.console_website_url)
         if origin:return origin+'/console/masuk'
-    codes=(TERAFLOW,) if a['jenis']=='timbangan_lama' else (PADIFLOW,TERAFLOW)
+    if a['jenis']=='timbangan_lama' and produk not in ('',TERAFLOW):return None
+    codes=(produk,) if produk else (TERAFLOW,) if a['jenis']=='timbangan_lama' else (PADIFLOW,TERAFLOW)
     for code in codes:
         try:
             if a['jenis']=='timbangan_lama':hak=await hak_lokal(db,produk=code,user_id=a['user_id'],peran_lama=a['peran'])
@@ -242,6 +263,7 @@ async def tujuan_masuk(db,a):
             if not pintu.boleh_masuk(hak.peran,pintu.PRODUKSI if code==PADIFLOW else pintu.TIMBANGAN):continue
         except ProdukDitolak:continue
         if code==PADIFLOW:return '/masuk'
+        if a['jenis']=='staf' and await m.profil_timbang_bersama_nonaktif(db,a['id']):continue
         origin=asal_https(settings.teraflow_web_url)
         if origin:return origin+'/timbangan/masuk'
     return None

@@ -1,6 +1,7 @@
 """Pemilik akun menentukan sandi lewat cap sekali pakai di fragment URL."""
 import re
 from pathlib import Path
+from typing import Literal
 from fastapi import APIRouter,Request,HTTPException
 from fastapi.responses import FileResponse,JSONResponse
 from pydantic import BaseModel,ConfigDict,Field,SecretStr
@@ -17,6 +18,7 @@ router=APIRouter(route_class=RuteConsole)
 class Cap(BaseModel):
     model_config=ConfigDict(extra='forbid')
     cap:str=Field(min_length=64,max_length=64)
+    produk:Literal['','padiflow','teraflow']=''
 class Sandi(Cap):
     sandi:SecretStr=Field(min_length=8,max_length=512)
     ulangi:SecretStr=Field(min_length=8,max_length=512)
@@ -49,7 +51,7 @@ async def simpan(data:Sandi):
     try:
         async with SessionLocal() as db:
             a=await svc.pulihkan_sandi(db,cap=data.cap,sandi=data.sandi.get_secret_value(),ulangi=data.ulangi.get_secret_value())
-            tujuan=await svc.tujuan_masuk(db,a)
+            tujuan=await svc.tujuan_masuk(db,a,produk=data.produk)
             await db.commit()
         return privat(JSONResponse(dict(berhasil=True,tujuan=tujuan,jenis=a['jenis'])))
     except (ValueError,PermissionError,LookupError) as e:raise HTTPException(422,str(e))

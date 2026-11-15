@@ -57,17 +57,17 @@ async def timbangan_siap(db):
     return {'id','akun_id','user_id','nama','username','role','status','token_version','terakhir_login'}.issubset(cols)
 
 
-async def profil_timbang_bersama_nonaktif(db,akun_id):
-    """Status login profil tertaut; profil lama akan disinkronkan saat adopsi.
-
-    Login bersama menolak profil yang sudah tertaut dan nonaktif. Profil lama
-    dengan username sama belum menjadi profil akun ini: TeraFlow menautkan
-    dan menyelaraskannya dengan akun bersama pada login yang sah.
-    """
+async def profil_timbang_bersama(db,akun_id,*,kunci=False):
+    """Profil tertaut aktual; profil lama ditangani adopsi login TeraFlow."""
     with db.no_autoflush:
-        if not await timbangan_siap(db):return False
-        status=await db.scalar(text('SELECT status FROM timbangan_akun WHERE akun_id=:aid ORDER BY id LIMIT 1'),{'aid':akun_id})
-    return status is not None and status!='aktif'
+        if not await timbangan_siap(db):return None
+        sql='SELECT id,status,token_version FROM timbangan_akun WHERE akun_id=:aid ORDER BY id LIMIT 1'
+        row=(await db.execute(text(sql+(' FOR UPDATE' if kunci else '')),{'aid':akun_id})).mappings().one_or_none()
+    return dict(id=row['id'],status=row['status'],versi=row['token_version']) if row else None
+
+async def profil_timbang_bersama_nonaktif(db,akun_id):
+    profile=await profil_timbang_bersama(db,akun_id)
+    return bool(profile and profile['status']!='aktif')
 
 
 def batas_identitas(cid):
@@ -241,6 +241,9 @@ async def akun(db,cid,jenis,aid,*,kunci=False):
     if data['user_id'] is not None:
         if not await db.scalar(select(User.id).where(User.id==data['user_id'],batas_identitas(cid))):
             raise LookupError('Akun tidak ditemukan pada perusahaan ini.')
+    if jenis=='staf':
+        profile=await profil_timbang_bersama(db,aid,kunci=kunci)
+        if profile:data['profil_timbang']=profile
     data['company_id']=cid
     gen=await db.scalar(select(PembukaanMasuk.generasi).where(PembukaanMasuk.company_id==cid,PembukaanMasuk.jenis_akun==jenis,PembukaanMasuk.akun_id==aid))
     data['generasi']=gen or 0
