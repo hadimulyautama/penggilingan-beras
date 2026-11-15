@@ -52,6 +52,9 @@ async def login(request:Request, username:str=Form(...,min_length=1,max_length=8
             catat_login(request,'kredensial' if account is None or not correct else 'nonaktif')
             gerbang_masuk.catat_gagal(limiter,ip)
             return login_page(request,'Nama pengguna atau kata sandi tidak sesuai.',401)
+        from hmu_identitas.produk import produk_lokal,PADIFLOW,ProdukDitolak
+        try:await produk_lokal(db,PADIFLOW)
+        except ProdukDitolak as e:return login_page(request,str(e),403)
         value=issue(account)
     catat_login(request,'berhasil')
     gerbang_masuk.catat_berhasil(limiter,ip)

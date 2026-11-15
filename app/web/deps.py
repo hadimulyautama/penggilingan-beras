@@ -28,6 +28,7 @@ async def pengguna_aksi(request: Request) -> User:
     akun = await akun_opsional(request)
     if akun is not None and akun.user is not None:
         return akun.user
+    if getattr(request.state,'akses_produk_ditolak',None):raise HTTPException(403,request.state.akses_produk_ditolak)
     raise HTTPException(
         status_code=401,
         detail="Sesi Anda berakhir. Muat ulang halaman dan masuk kembali.",

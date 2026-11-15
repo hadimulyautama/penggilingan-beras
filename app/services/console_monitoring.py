@@ -109,7 +109,13 @@ async def ringkasan(db,f:FilterMonitoring):
     empty=dict(cakupan=scope,diperbarui=now.isoformat(),hari=f.hari,aplikasi=f.aplikasi,zona=settings.app_timezone,
         metrik=None,sumber=[],harian=[],per_aplikasi=[],fitur=[],kendala=[],pengguna_aktif=[],cakupan_mulai=None)
     if not scope['tersedia']:return empty
-    cid=scope['company_id'];where=[E.company_id==cid,E.waktu>=start,E.waktu<=now]
+    from hmu_core import ProdukAplikasiPerusahaan
+    from hmu_identitas.produk import KATALOG
+    active_codes=set(await db.scalars(select(ProdukAplikasiPerusahaan.produk).where(ProdukAplikasiPerusahaan.company_id==scope['company_id'],ProdukAplikasiPerusahaan.aktif.is_(True))))
+    enabled=[app for d in KATALOG if d.kode in active_codes for app in d.aplikasi]
+    empty['aplikasi_aktif']=enabled
+    if f.aplikasi and f.aplikasi not in enabled:raise ValueError('Produk aplikasi ini tidak diaktifkan untuk perusahaan yang dipilih.')
+    cid=scope['company_id'];where=[E.company_id==cid,E.waktu>=start,E.waktu<=now,E.aplikasi.in_(enabled)]
     if f.aplikasi:where.append(E.aplikasi==f.aplikasi)
     subject=func.concat(E.jenis_akun,':',cast(E.akun_id,String))
     manual=[*where,E.jenis=='interaksi',E.akun_id>0]
@@ -118,12 +124,12 @@ async def ringkasan(db,f:FilterMonitoring):
     for key,lower in [('aktif_sekarang',now-timedelta(minutes=5)),('aktif_hari',batas(1)),('aktif_minggu',batas(7)),('aktif_bulan',batas(30))]:
         # Metrik hari/minggu/bulan selalu memakai rentang definisinya sendiri,
         # bukan dipotong tanggal grafik 7 hari yang sedang dipilih.
-        w=[E.company_id==cid,E.jenis=='interaksi',E.akun_id>0,E.waktu>=lower,E.waktu<=now]
+        w=[E.company_id==cid,E.aplikasi.in_(enabled),E.jenis=='interaksi',E.akun_id>0,E.waktu>=lower,E.waktu<=now]
         if f.aplikasi:w.append(E.aplikasi==f.aplikasi)
         activity[key]=await db.scalar(select(func.count(func.distinct(subject))).where(*w))
     identities=await sumber_akun(db,cid)
     account_counts=(await db.execute(select(func.count(),func.sum(case((identities.c.jenis!='staf_belum_login',1),else_=0)),func.sum(case((identities.c.aktif.is_(True),1),else_=0))).select_from(identities))).one()
-    sources=list(await db.scalars(select(SumberMonitoring).where(SumberMonitoring.company_id==cid)))
+    sources=list(await db.scalars(select(SumberMonitoring).where(SumberMonitoring.company_id==cid,SumberMonitoring.aplikasi.in_(enabled))))
     applicable=[s for s in sources if not f.aplikasi or s.aplikasi==f.aplikasi]
     first=min((s.mulai for s in applicable),default=None)
     events=await db.scalar(select(func.count()).select_from(E).where(*manual))
@@ -146,12 +152,12 @@ async def ringkasan(db,f:FilterMonitoring):
     latest=(await db.execute(select(E.jenis_akun,E.akun_id,func.max(E.waktu),func.count(),func.count(func.distinct(cast(func.timezone(settings.app_timezone,E.waktu),Date)))).where(*manual).group_by(E.jenis_akun,E.akun_id).order_by(func.max(E.waktu).desc()).limit(10))).all()
     checks=[and_(identities.c.jenis==k,identities.c.id==i) for k,i,*_ in latest]
     names={(a['jenis'],a['id']):dict(a) for a in (await db.execute(select(identities).where(or_(*checks)))).mappings()} if checks else {}
-    audit_count=await db.scalar(select(func.count()).select_from(ActivityLog).where(ActivityLog.waktu_perubahan>=start,ActivityLog.waktu_perubahan<=now,ActivityLog.changed_by.isnot(None),~ActivityLog.table_name.in_(['users','produksi_akun','portal_accounts','hmu_company_memberships','hmu_factory_sites','hmu_companies','hmu_warehouse_sites','setelan_pabrik'])))
+    audit_count=await db.scalar(select(func.count()).select_from(ActivityLog).where(ActivityLog.waktu_perubahan>=start,ActivityLog.waktu_perubahan<=now,ActivityLog.changed_by.isnot(None),~ActivityLog.table_name.in_(['users','produksi_akun','portal_accounts','hmu_company_memberships','hmu_factory_sites','hmu_companies','hmu_warehouse_sites','setelan_pabrik','hmu_company_products','hmu_member_products','hmu_company_integrations'])))
     return dict(empty,metrik=dict(activity,total_identitas=int(account_counts[0]),total_akun=int(account_counts[1] or 0),akun_aktif=int(account_counts[2] or 0),
         interaksi=events,respons_simpan=int(response[0]),respons_diterima=int(response[1] or 0),akses_ditolak=int(response[2] or 0),validasi=int(response[3] or 0),server_error_simpan=int(response[4] or 0),p95_ms=round(p95) if p95 is not None else None,
         galat=errors,login_gagal=loginfails,catatan_audit=audit_count),
         cakupan_mulai=first.isoformat() if first else None,
-        sumber=[dict(aplikasi=app,tercatat=s is not None,mulai=s.mulai.isoformat() if s else None,terakhir=s.terakhir.isoformat() if s else None,versi=s.versi if s else '',segar=bool(s and s.terakhir>=now-timedelta(seconds=120))) for app in APLIKASI for s in [next((r for r in sources if r.aplikasi==app),None)]],
+        sumber=[dict(aplikasi=app,tercatat=s is not None,mulai=s.mulai.isoformat() if s else None,terakhir=s.terakhir.isoformat() if s else None,versi=s.versi if s else '',segar=bool(s and s.terakhir>=now-timedelta(seconds=120))) for app in enabled for s in [next((r for r in sources if r.aplikasi==app),None)]],
         harian=daily,per_aplikasi=[dict(aplikasi=a,pengguna=u,interaksi=n) for a,u,n in byapp],
         fitur=[dict(aplikasi=a,layar=l,interaksi=n,pengguna=u) for a,l,n,u in features],
         kendala=[dict(aplikasi=a,jenis=j,kode=k,jumlah=n,pengguna=u,terakhir=t.isoformat()) for a,j,k,n,u,t in issues],

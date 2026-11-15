@@ -47,6 +47,9 @@ async def require_customer(request: Request):
         raise HTTPException(401, 'Silakan masuk ke portal pelanggan.')
     from app.models import Pelanggan
     async with SessionLocal() as db:
+        from hmu_identitas.produk import produk_lokal,PADIFLOW,ProdukDitolak
+        try:await produk_lokal(db,PADIFLOW)
+        except ProdukDitolak as e:raise HTTPException(403,str(e)) from e
         row = (await db.execute(select(PortalAccount, Pelanggan.nama_pelanggan)
             .join(Pelanggan, Pelanggan.id == PortalAccount.pelanggan_id)
             .where(PortalAccount.id == value['akun_id'],

@@ -12,6 +12,7 @@ from hmu_core.models import (
 from hmu_core.organisasi import (
     Perusahaan, LokasiPabrik, KeanggotaanPerusahaan, PenempatanGudang, AksesLokasiAnggota, AksesGudangAnggota,
 )
+from hmu_core.produk_aplikasi import ProdukAplikasiPerusahaan,AksesProdukAnggota,IntegrasiProdukPerusahaan
 from hmu_core.komoditas import (
     ALIAS_KOMODITAS, KATALOG, TRANSFORMASI_KOMODITAS, DefinisiAtribut,
     DefinisiKomoditas, Kemasan, Produk, TransformasiKomoditas, buat_produk,
@@ -25,6 +26,9 @@ from hmu_core.proses_db import ArusProsesTerpadu, ProsesTerpadu
 
 __all__ = [
     "Base",
+    "ProdukAplikasiPerusahaan",
+    "AksesProdukAnggota",
+    "IntegrasiProdukPerusahaan",
     "Perusahaan",
     "LokasiPabrik",
     "KeanggotaanPerusahaan",

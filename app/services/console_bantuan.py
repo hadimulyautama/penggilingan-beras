@@ -54,6 +54,17 @@ async def diagnosis(db,*,cid,jenis,aid):
             apps.append(dict(aplikasi=app,boleh=a['aktif'] and not reason,sebab='akun_nonaktif' if not a['aktif'] else ('peran' if reason else 'tersedia')))
     elif jenis=='pelanggan':apps=[dict(aplikasi='portal',boleh=a['aktif'],sebab='tersedia' if a['aktif'] else 'akun_nonaktif')]
     elif jenis=='timbangan_lama':apps=[dict(aplikasi='teraflow',boleh=a['aktif'],sebab='tersedia' if a['aktif'] else 'akun_nonaktif')]
+    from hmu_identitas.produk import hak_pengguna,perusahaan_aktif,ProdukDitolak,PADIFLOW,TERAFLOW
+    for item in apps:
+        code=PADIFLOW if item['aplikasi']=='portal' else item['aplikasi']
+        try:
+            if jenis=='staf':
+                hak=await hak_pengguna(db,company_id=cid,produk=code,user_id=a['user_id'])
+                gate=pintu.PRODUKSI if code==PADIFLOW else pintu.TIMBANGAN
+                reason=pintu.sebab_tolak(hak.peran,gate)
+                item.update(boleh=a['aktif'] and not reason,sebab='akun_nonaktif' if not a['aktif'] else 'peran' if reason else 'tersedia',peran_produk=hak.peran)
+            else:await perusahaan_aktif(db,cid,code)
+        except ProdukDitolak as e:item.update(boleh=False,sebab='akses_produk',pesan=str(e))
     since=m.sekarang()-timedelta(days=30)
     rows=list(await db.scalars(select(E).where(E.company_id==cid,E.jenis_akun==jenis,E.akun_id==aid,E.jenis=='login',E.waktu>=since).order_by(E.waktu.desc(),E.id.desc()).limit(50)))
     login=[dict(aplikasi=e.aplikasi,kode=e.kode,waktu=e.waktu.isoformat(),browser=e.browser,perangkat=e.perangkat) for e in rows if e.jenis=='login']

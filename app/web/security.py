@@ -172,7 +172,15 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
         akun = await _masuk.akun_aktif(db, akun_id, versi)
         if akun is None:
             return None
+        from hmu_identitas.produk import hak_lokal,PADIFLOW,ProdukDitolak
+        try:akses_produk=await hak_lokal(db,produk=PADIFLOW,user_id=akun.user_id,peran_lama=akun.peran)
+        except ProdukDitolak as e:
+            request.state.akses_produk_ditolak=str(e)
+            return None
         _ = akun.peran
+    # Objek telah lepas dari sesi; peran produk tidak disimpan ke users.role.
+    akun.user.role=akses_produk.peran
+    request.state.akses_produk=akses_produk
 
     # ── Melihat sebagai peran lain ──
     #
@@ -262,6 +270,7 @@ async def butuh_akun(request: Request) -> ProduksiAkun:
     """Wajib login. Bila belum → diarahkan ke halaman masuk."""
     akun = await akun_opsional(request)
     if akun is None:
+        if getattr(request.state,'akses_produk_ditolak',None):raise AksesDitolak(request.state.akses_produk_ditolak)
         raise ButuhLogin()
     return akun
 

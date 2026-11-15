@@ -114,7 +114,11 @@ async def proses_masuk(
             return gagal(e.pesan)
         # Pintu per aplikasi (keputusan pemilik 13 Sep 2026). Pos Produksi
         # masih menerima admin sampai Meja dipakai sungguhan.
-        sebab = pintu.sebab_tolak(akun.peran, pintu.PRODUKSI)
+        from hmu_identitas.produk import hak_lokal,PADIFLOW,ProdukDitolak
+        try:
+            hak=await hak_lokal(db,produk=PADIFLOW,user_id=akun.user_id,peran_lama=akun.peran)
+            sebab=pintu.sebab_tolak(hak.peran,pintu.PRODUKSI)
+        except ProdukDitolak as e:sebab=str(e)
         if sebab:
             catat_login(request,'peran')
             # Tidak dihitung sebagai percobaan gagal: sandinya benar, yang
