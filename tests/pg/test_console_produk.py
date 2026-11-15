@@ -20,7 +20,10 @@ async def simpan(db,x,**changes):
     body.update(changes);return await svc.simpan(db,ruang=ruang,company_id=x['cid'],**body)
 
 async def test_warisan_hmu_dan_peran_produk_tidak_mengubah_master(pg,orang):
-    x=orang;before=await fakta(pg)
+    x=orang
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True;await db.commit()
+    before=await fakta(pg)
     async with pg() as db:
         assert (await hak_pengguna(db,company_id=x['cid'],produk=PADIFLOW,user_id=x['uid'])).sumber=='warisan'
         member=await db.get(KeanggotaanPerusahaan,x['mid']);member.aktif=True
@@ -39,7 +42,10 @@ async def test_warisan_hmu_dan_peran_produk_tidak_mengubah_master(pg,orang):
 
 @pytest.mark.parametrize('pf,tf',[(True,False),(False,True),(True,True),(False,False)])
 async def test_kombinasi_produk_dan_integrasi(pg,orang,pf,tf):
-    x=orang;before=await fakta(pg)
+    x=orang
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True;await db.commit()
+    before=await fakta(pg)
     async with pg() as db:
         await simpan(db,x,produk=[dict(kode=PADIFLOW,aktif=pf),dict(kode=TERAFLOW,aktif=tf)],integrasi=False);await db.commit()
     async with pg() as db:
@@ -242,6 +248,7 @@ async def test_diagnosis_produk_yang_tidak_dipakai_bukan_peran_salah(pg,orang):
     from app.services import console_bantuan as bantuan
     x=orang
     async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True
         (await db.get(CP,(x['cid'],PADIFLOW))).aktif=False;await db.commit()
         d=await bantuan.diagnosis(db,cid=x['cid'],jenis='staf',aid=x['aid'])
         pf=next(i for i in d['aplikasi'] if i['aplikasi']==PADIFLOW)
@@ -259,6 +266,7 @@ async def test_pemulihan_akun_bersama_menuju_produk_yang_bisa_dipakai(pg,orang,m
     from bs4 import BeautifulSoup
     x=orang;monkeypatch.setattr(settings,'teraflow_web_url','https://teraflow.uji')
     async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True
         for code in (PADIFLOW,TERAFLOW):(await db.get(CP,(x['cid'],code))).aktif=code==produk
         await db.commit()
     result,_=await action(pg,x,'tautan_sandi')
@@ -366,3 +374,87 @@ async def test_diagnosis_legacy_membaca_status_pengguna_terbaru_meski_dicache(pg
         async with pg() as db:
             (await db.get(User,orang['uid'])).status='nonaktif';await db.commit()
         assert not (await mon.akun(stale,orang['cid'],'timbangan_lama',profil_lama,kunci=True))['aktif']
+
+
+@pytest.mark.parametrize('produk',[PADIFLOW,TERAFLOW])
+async def test_keanggotaan_nonaktif_menang_atas_akses_warisan_dan_izin_produk(pg,orang,produk):
+    from app.services import console_bantuan as bantuan
+    x=orang
+    async with pg() as db:
+        # Fixture sengaja memiliki keanggotaan nonaktif tanpa override produk.
+        with pytest.raises(ProdukDitolak,match='Keanggotaan'):
+            await hak_pengguna(db,company_id=x['cid'],produk=produk,user_id=x['uid'])
+        d=await bantuan.diagnosis(db,cid=x['cid'],jenis='staf',aid=x['aid'])
+        assert not next(a for a in d['aplikasi'] if a['aplikasi']==produk)['boleh']
+        assert await bantuan.tujuan_masuk(db,d['akun']) is None
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True;await db.commit()
+        assert (await hak_pengguna(db,company_id=x['cid'],produk=produk,user_id=x['uid'])).sumber=='warisan'
+
+
+async def test_pencabutan_keanggotaan_memutus_cookie_pf_tanpa_ubah_transaksi(pg,orang):
+    import httpx
+    from app.main import app
+    from app.web.security import buat_token,NAMA_COOKIE
+    x=orang
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True;await db.commit()
+        cookie=buat_token(await db.get(Akun,x['aid']))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji',cookies={NAMA_COOKIE:cookie}) as c:
+        assert (await c.get('/api/me')).status_code==200
+        async with pg() as db:
+            (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=False;await db.commit()
+        before=await fakta(pg)
+        assert (await c.get('/api/me')).status_code==403
+        assert bisnis(await fakta(pg))==bisnis(before)
+        # Pemulihan melalui Console mengembalikan akses semula, tanpa grant baru.
+        from tests.pg.test_console_monitoring import action
+        await action(pg,x,'aktifkan_keanggotaan')
+        assert (await c.get('/api/me')).status_code==200
+        async with pg() as db:
+            assert not list(await db.scalars(select(UP).where(UP.user_id==x['uid'])))
+
+
+@pytest.mark.parametrize('produk',[PADIFLOW,TERAFLOW])
+async def test_cache_anggota_warisan_tidak_meloloskan_pencabutan(pg,orang,produk):
+    x=orang
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True;await db.commit()
+    async with pg() as stale:
+        cached=await stale.get(KeanggotaanPerusahaan,x['mid'])
+        assert (await hak_pengguna(stale,company_id=x['cid'],produk=produk,user_id=x['uid'])).sumber=='warisan'
+        async with pg() as db:
+            (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=False;await db.commit()
+        with pytest.raises(ProdukDitolak,match='Keanggotaan'):
+            await hak_pengguna(stale,company_id=x['cid'],produk=produk,user_id=x['uid'])
+        assert not cached.aktif
+
+
+async def test_console_mencabut_anggota_warisan_langsung_menutup_sesi_operasional(pg,orang,monkeypatch):
+    import httpx
+    from pydantic import SecretStr
+    from app.main import app
+    from app.config import settings
+    from app.web.security import buat_token,NAMA_COOKIE
+    from tests.pg.test_console_masuk_langsung import KEY,HEADERS
+    from app.web.gerbang_masuk import bersihkan
+    x=orang;bersihkan()
+    monkeypatch.setattr(settings,'console_login_secret',SecretStr(KEY))
+    monkeypatch.setattr(settings,'console_website_url','https://console.uji')
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True;await db.commit()
+        cookie=buat_token(await db.get(Akun,x['aid']))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji',cookies={NAMA_COOKIE:cookie}) as c:
+        r=await c.post('/internal/console/masuk',headers=HEADERS,json=dict(username='root-monitor',sandi='sandi-uji-12345',jejak='d'*64));assert r.status_code==200
+        h={'Authorization':'Bearer '+r.json()['token']}
+        assert (await c.get('/api/me')).status_code==200
+        async with pg() as db:old=await mem.snapshot(db,await db.get(KeanggotaanPerusahaan,x['mid']))
+        before=await fakta(pg)
+        r=await c.post(f"/internal/console/perusahaan/{x['cid']}/anggota",headers=h,json=dict(user_id=x['uid'],peran=old['peran'],aktif=False,lokasi=old['lokasi'],bukti=mem.sidik(old),alasan='Akun uji tidak lagi bertugas di perusahaan ini'))
+        assert r.status_code==200,r.text
+        assert (await c.get('/api/me')).status_code==403
+        d=await c.get(f"/internal/console/monitoring/perusahaan/{x['cid']}/pengguna/staf/{x['aid']}",headers=h)
+        assert d.status_code==200 and all(not a['boleh'] for a in d.json()['aplikasi'])
+        assert (await c.get('/internal/console/saya',headers=h)).status_code==200
+    after=await fakta(pg)
+    excluded={'hmu_company_memberships','activity_logs'}
+    assert {k:v for k,v in after.items() if k not in excluded}=={k:v for k,v in before.items() if k not in excluded}
