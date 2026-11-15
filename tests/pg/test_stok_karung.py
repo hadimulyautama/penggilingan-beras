@@ -34,6 +34,13 @@ async def _beli(db, models, *, pemakai, kode_mat, nama_mat, ukuran, lembar,
                merk=None, kode="PKP-UJI-01"):
     """Satu pembelian karung, beserta baris master yang diperlukannya."""
     from sqlalchemy import select
+    from app.models import Warehouse
+    # Master lokasi diperlukan pembaca rinci; transaksi lama tanpa lokasi
+    # tetap memakai pemetaan G1/G2 yang sudah berlaku.
+    for code in ('g1','g2'):
+        if not await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi==code)):
+            db.add(Warehouse(nama_gudang='Gudang '+code[-1]+' uji',kode_fungsi=code,aktif=True))
+    await db.flush()
 
     mat = (await db.execute(select(models.PackagingMaterial)
                             .where(models.PackagingMaterial.kode == kode_mat))
@@ -102,7 +109,8 @@ async def test_hitungan_gudang_dan_menipis(pg, kms, pemakai):
     # Tak ada harga yang ikut, meski pembeliannya punya harga per lembar.
     for b in baris:
         assert set(b) == {"pemilik_id", "pemilik_tunggal", "gudang", "kode", "nama", "merk", "ukuran",
-                          "lembar", "menipis"}, b
+                          "lembar", "menipis", "warehouse_id", "gudang_nama"}, b
+        assert b["warehouse_id"] and b["gudang_nama"]
 
 
 async def test_terpakai_dan_hilang_ikut_dikurangi(pg, kms, pemakai):

@@ -25,7 +25,8 @@ async def test_koneksi_putus_periksa_dan_simpan_tidak_menghilangkan_cap_atau_isi
     async with api_http() as base,async_playwright() as pw:
         browser=await getattr(pw,os.environ.get('UJI_BROWSER','chromium')).launch()
         try:
-            context=await browser.new_context(viewport=dict(width=width,height=900));page=await context.new_page();page.on('request',lambda r:urls.append(r.url))
+            # Fault injection harus melewati router Playwright, bukan service worker.
+            context=await browser.new_context(viewport=dict(width=width,height=900),service_workers='block');page=await context.new_page();page.on('request',lambda r:urls.append(r.url))
             if lost_reply:await page.add_init_script("const timer=window.setTimeout;let first=true;window.setTimeout=(fn,ms)=>{if(ms===15000&&first){first=false;ms=2000;}return timer(fn,ms);};")
             async def verify(route):
                 state['check']+=1

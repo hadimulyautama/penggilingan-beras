@@ -62,3 +62,11 @@ penyimpanan sukses dengan balasan hilang, dan cap yang sudah terpakai.
 
 Tidak ada migrasi, backfill atau pemulihan akun produksi. Rilis backend sebelum
 Console. Rollback kode frontend lalu backend; tidak ada data yang perlu dibalik.
+
+CI lengkap juga menyingkap fixture lama stok karung tanpa master gudang dan
+asumsi bahwa operator G1 selalu ditolak pada produk/karung. Tes diselaraskan
+dengan transfer multi-lokasi yang sudah dirilis: baca gudang kerja aktif,
+pemisahan stok fisik per gudang, serta penolakan kebocoran lewat filter URL.
+Tidak mengembalikan pembatas gudang lama atau mengubah layanan hitung stok.
+Injeksi galat jaringan browser memblokir service worker agar intercept benar-
+benar dijalankan pada Chromium maupun WebKit; alur PWA diuji terpisah di CI.

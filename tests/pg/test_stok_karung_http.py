@@ -4,8 +4,8 @@ Keputusan pemilik 7 Oktober 2026, dengan koreksi susulan hari yang sama:
 tujuan "Pindah kepemilikan karung" adalah KONTAK pelanggan (`pelanggan-
 kledo`), BUKAN pesanan jasa (`jasa-berjalan`) — lihat catatan panjang di
 `packaging.pindah_kepemilikan_karung`. Menjaga yang tak terlihat dari uji
-service-level (`test_stok_karung_jasa.py`): gerbang peran (operator Gudang 1
-ditolak, sama dengan `/stok-produk`), gerbang `can_see_financials` pada aksi
+service-level (`test_stok_karung_jasa.py`): cakupan gudang kerja aktif
+(termasuk Gudang 1 setelah transfer barang), gerbang `can_see_financials` pada aksi
 "Pindah kepemilikan karung", dan nilai picker `karung-pabrik-tersedia` yang
 WAJIB cocok persis dengan `nilai=` yang akan dikirim tombol kartu.
 """
@@ -27,7 +27,7 @@ async def _klien(pg, *, peran: str = "admin", g1: bool = False) -> "httpx.AsyncC
     """Klien HTTP berlogin — sebangun `_klien` di `test_pindah_kepemilikan_produk.py`.
 
     `g1=True` → operator dengan `default_warehouse_id` Gudang 1 (view
-    SELEPAN), dipakai menguji gerbang "layar ini milik Gudang 2"."""
+    SELEPAN), dipakai menguji bahwa stok tetap mengikuti gudang kerja."""
     import httpx
 
     from app.main import app
@@ -93,7 +93,7 @@ async def _beli(db, models, *, pemakai_id, lembar, kode):
     await db.commit()
 
 
-async def test_selepan_ditolak_admin_berhasil_lihat_stok_karung(pg):
+async def test_operator_g1_membaca_gudang_sendiri_admin_melihat_semua(pg):
     from sqlalchemy import select
 
     from app.models import User
@@ -120,7 +120,8 @@ async def test_selepan_ditolak_admin_berhasil_lihat_stok_karung(pg):
     c_g1 = await _klien(pg, peran="operator", g1=True)
     try:
         r = await c_g1.get("/stok-karung")
-        assert r.status_code == 403, "operator Gudang 1 bukan pemilik layar ini"
+        assert r.status_code == 200
+        assert "Cap Padi Emas" not in r.text, "pembelian berada di Gudang 2, bukan gudang kerja operator"
     finally:
         await c_g1.aclose()
 
