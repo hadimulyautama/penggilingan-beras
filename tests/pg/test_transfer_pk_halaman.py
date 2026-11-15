@@ -69,10 +69,10 @@ async def browser_app(pg, *, peran='operator', gudang='Gudang 1', width=390, put
 
 @pytest.mark.parametrize('width', [320, 390, 1440])
 @pytest.mark.parametrize('peran,gudang,jumlah,status', [
-    ('admin', None, 2, 'Semua status'),
-    ('operator', 'Gudang 1', 2, 'Semua status'),
-    ('operator', 'Gudang 2', 2, 'Semua status'),
-    ('superadmin', None, 2, 'Semua status'),
+    ('admin', None, 2, 'Aktif'),
+    ('operator', 'Gudang 1', 2, 'Aktif'),
+    ('operator', 'Gudang 2', 2, 'Aktif'),
+    ('superadmin', None, 2, 'Aktif'),
 ])
 async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang, jumlah, status):
     from playwright.async_api import expect
@@ -91,7 +91,7 @@ async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang,
         await expect(page.locator('.pintu__ikon--transfer_pk svg')).to_have_count(1)
         assert await page.locator('.kontrol-tab__item').first.evaluate('e=>e.getBoundingClientRect().height') == 64
         await page.get_by_role('button', name='Filter', exact=False).click()
-        await expect(page.locator('#pk-filter [name=status]')).to_have_value('')
+        await expect(page.locator('#pk-filter [name=status]')).to_have_value('aktif')
         await page.locator('#pk-filter [name=status]').select_option('siap')
         await page.get_by_role('button', name='Terapkan filter', exact=True).click()
         await expect(page.locator('#pk-daftar article')).to_have_count(1)
@@ -106,7 +106,10 @@ async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang,
         await expect(page.locator('#pk-cari')).to_have_value('lot-lain')
         await page.locator('#pk-cari').fill('<img src=x onerror=alert(1)>')
         await expect(page.locator('#pk-daftar .tp-kosong')).to_be_visible()
-        await page.get_by_role('button', name='Tampilkan semua', exact=True).click()
+        await page.get_by_role('button', name='Cari di semua status', exact=True).click()
+        await expect(page.locator('#pk-cari')).to_have_value('<img src=x onerror=alert(1)>')
+        await expect(page.locator('#pk-daftar .tp-kosong')).to_be_visible()
+        await page.locator('#pk-cari').fill('')
         if gudang == 'Gudang 2':
             await expect(page.locator('[data-catatan],[name=pilih]')).to_have_count(0)
             await page.locator('#pk-daftar').get_by_role('button', name='Lihat detail', exact=True).first.click()

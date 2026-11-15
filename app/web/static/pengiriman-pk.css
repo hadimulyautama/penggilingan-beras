@@ -15,6 +15,15 @@
 #transfer-pk .tp-aksi>.btn{white-space:nowrap}
 #transfer-pk .tp-aksi>.tp-menu{width:44px;flex:0 0 44px}
 .tp-meta{font-size:13px;color:var(--pd-muted);line-height:1.5}
+#transfer-pk .rpd-stats.tp-request-filters{padding:0;gap:0;overflow:hidden}
+#transfer-pk .tp-request-filters>button{min-width:0;display:grid;grid-template-rows:1fr auto;align-items:start;gap:8px;padding:20px;text-align:left;font:inherit;color:var(--pd-ink);background:transparent;border:0;border-bottom:3px solid transparent;border-radius:0;cursor:pointer;overflow-wrap:anywhere}
+#transfer-pk .tp-request-filters>button+button{border-left:1px solid var(--pd-line)}
+#transfer-pk .tp-request-filters>button[aria-pressed=true]{background:var(--pd-green-bg);border-bottom-color:var(--pd-green)}
+#transfer-pk .tp-request-filters>button[aria-pressed=true] span{color:var(--pd-green);font-weight:600}
+#transfer-pk .tp-request-filters>button:focus-visible{outline-offset:-3px}
+.tp-next{font-size:12px;line-height:1.5;color:var(--pd-muted);margin:8px 0}
+.tp-kosong .tp-actions{justify-content:center}
+@media(max-width:700px){#transfer-pk .tp-request-filters>button{padding:12px}}
 #pk-pesan{white-space:pre-line;font-size:14px;line-height:1.5;color:var(--pd-muted)}
 #pk-pesan:empty{display:none}
 #transfer-pk [data-galat],#transfer-pk .tp-galat{color:var(--pd-danger)}
@@ -121,6 +130,7 @@
 #pk-daftar .tp-request-grid:not(.riwayat-desktop-head){padding:0 10px}
 #pk-daftar .tp-request-actions>.riwayat-status{justify-self:start}
 @media print{
+ #pk-request-stats,#pk-request-stats+.tp-meta{display:none!important}
  #tb-buka{display:none!important}
  #pk-daftar .tp-request-grid{--riwayat-grid:1.2fr 1fr 1fr 1fr 1fr .8fr 1fr}
  #pk-daftar .tp-request-grid>span{font-size:9px}

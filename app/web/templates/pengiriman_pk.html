@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="/static/pekerjaan-kontrol.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/riwayat-daftar-proses.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=7">
+<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=8">
 <div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}" aria-busy="true">
 <h1 class="sr-only">Transfer</h1>
 <header class="kontrol-halaman">
@@ -24,7 +24,7 @@
 <div class="tp-kesegaran"><p class="tp-meta" id="tp-segar" role="status" aria-live="polite" data-status="memuat">Memuat data…</p><button class="btn btn--kecil" id="tp-coba-lagi" type="button" hidden>Coba lagi</button></div>
 <p id="pk-pesan" role="status" aria-live="polite"></p>
 <p id="pk-ringkasan" class="tp-meta"></p>
-<section id="pk-permintaan" class="rpd" aria-label="Permintaan dan perintah transfer"><div class="riwayat-guide tp-konteks" id="tp-permintaan-konteks" hidden><p><strong id="tp-gudang-kerja"></strong><br>Ajukan kebutuhan barang ke gudang kerja ini.</p><button class="btn btn--kecil" id="tp-minta-konteks" type="button">Pilih sumber untuk permintaan</button></div><div id="pk-request-stats" class="rpd-stats"></div><div id="pk-daftar"></div></section>
+<section id="pk-permintaan" class="rpd" aria-label="Permintaan dan perintah transfer"><div class="riwayat-guide tp-konteks" id="tp-permintaan-konteks" hidden><p><strong id="tp-gudang-kerja"></strong><br>Ajukan kebutuhan barang ke gudang kerja ini.</p><button class="btn btn--kecil" id="tp-minta-konteks" type="button">Pilih sumber untuk permintaan</button></div><div id="pk-request-stats" class="rpd-stats tp-request-filters" role="group" aria-label="Status permintaan"></div><p class="tp-meta">Angka kelompok mengikuti daftar permintaan yang boleh Anda lihat, sebelum pencarian dan filter lain. Catatan transfer lama tetap tersedia di Riwayat.</p><div id="pk-daftar"></div></section>
 <section id="pk-perjalanan" class="rpd" aria-label="Riwayat transfer" hidden><p class="bantu">Catatan ditampilkan per lot, termasuk catatan lama dan yang dibatalkan. Maksimal 100 pencatatan transfer terbaru; jumlah efektif mengikuti koreksi yang sudah disimpan.</p><div id="pk-history-stats" class="rpd-stats" role="status"></div><div id="pk-jalan"></div><div id="pk-audit"></div></section>
 <div id="pk-pilihan" class="tp-pilihan" hidden><strong id="pk-terpilih"></strong><span id="pk-pilihan-pesan"></span><div class="tp-actions"><button class="btn" type="button" id="pk-bersihkan">Batal pilih</button><button class="btn btn--utama" type="button" id="pk-buka-form"></button></div></div>
 <dialog class="pk-panel tp-panel-lebar" id="tb-panel" aria-labelledby="tb-judul">
@@ -60,6 +60,7 @@
 </form></dialog>
 {% call panel_panduan('pk-panduan', 'Panduan transfer', penutup={'data-tutup': ''}) %}
 <p>Pilih alur sesuai peran. Permintaan dan perintah hanya menyiapkan pekerjaan; stok berpindah saat pelaksanaan dicatat.</p>
+<p>Permintaan dibuka pada Aktif: menunggu Admin, menunggu pelaksanaan gudang asal, atau catatan lama yang belum selesai. Pilih Selesai &amp; ditutup untuk keputusan yang sudah berakhir, atau Semua untuk mencari lintas status. Catatan tidak dihapus. Angka pada tab Permintaan adalah jumlah aktif dalam cakupan akses Anda.</p>
 <h3>Permintaan dari operator gudang tujuan</h3><ol><li>Pilih Minta lot ini pada detail bahan baku, atau Pilih sumber untuk permintaan pada konteks kebutuhan gudang. Pilih barang dan jumlah; tujuan mengikuti gudang kerja.</li><li>Admin memeriksa dan menyetujui jumlah serta tujuan. Untuk PK, tujuannya Tumpukan atau silo aktif penerima PK.</li><li>Operator gudang asal memindahkan barang, lalu membuka permintaan yang siap dan mencatat jumlah aktual melalui Catat transfer.</li></ol>
 <h3>Perintah langsung dari Admin</h3><ol><li>Admin membuka Perintah Transfer. Pilih sumber untuk menentukan barang, pemilik dan lokasi asal yang benar; isi jumlah serta pabrik, gudang dan lokasi tujuan. Perintah langsung siap dilaksanakan.</li><li>Operator gudang asal melaksanakan dan mencatat jumlah aktual. Tidak perlu meminta persetujuan diri Admin lagi.</li></ol>
 <p>Riwayat menampilkan satu baris per barang/lot. Asal berisi pabrik dan gudang; Tujuan berisi pabrik, gudang dan lokasi. Catatan batal tetap terlihat, tetapi tidak masuk total efektif.</p>
@@ -71,5 +72,5 @@
 <p>Koreksi barang umum memakai bagian sumber/tujuan yang masih bebas dan dapat dibuktikan. Jika bagian itu sudah dipakai atau dipindah lagi, perbaiki catatan lanjutannya dahulu. Sistem menolak koreksi yang membuat stok tidak konsisten.</p>
 <p>Koreksi PK memeriksa tumpukan terlebih dahulu, kemudian silo dan bahan proses terkait. Proses selesai ikut diperbarui bahan, susut, dan rendemennya; hasil ukur tetap. Bila transfer sudah benar tetapi bahan kurang tercatat, pilih Bahan dari tumpukan pada pemindahan silo terkait. Hasil melebihi bahan harus diselesaikan melalui catatan bahan/hasil yang benar.</p>
 {% endcall %}
-</div><script src="/static/transfer-barang-ui.js?v={{ VERSI }}" defer></script><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=7" defer></script>
+</div><script src="/static/transfer-barang-ui.js?v={{ VERSI }}" defer></script><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=8" defer></script>
 {% endblock %}

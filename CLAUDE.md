@@ -164,7 +164,15 @@ berhenti, sakelar mutu) tetap milik Direksi.
 ## Transfer barang dan pabrik (15 November 2026)
 
 Satu halaman **Transfer** (`/transfer-bertahap`) memuat permintaan,
-persetujuan, pencatatan, riwayat dan koreksi. Default semua status. Riwayat
+persetujuan, pencatatan, riwayat dan koreksi. Permintaan dibuka pada **Aktif**
+(`diminta`, `disetujui`, `dikirim`); terminal `selesai`, `ditolak`, `gugur`
+tersedia melalui **Selesai & ditutup** atau **Semua**. Kelompok mengikuti
+status mentah, bukan stok bebas, sisa kirim atau tombol peran: alokasi lama
+yang belum selesai tetap aktif meski sisa kirim nol. Jumlah kelompok memakai
+seluruh payload permintaan dalam cakupan akses, sebelum pencarian/filter;
+payload ini tidak dipaginasi seperti katalog sumber. Arsip PK nonbertahap
+lama tetap mengikuti pembaca Riwayat. Pilihan eksplisit pada URL dipertahankan.
+Riwayat tetap default semua status dan
 memakai tampilan Riwayat Proses, satu baris per lot; catatan InternalTransfer
 lama digabung tanpa menghitung ulang item yang sudah terhubung. **Asal satu
 kolom**: pabrik dan gudang. **Tujuan satu kolom**: pabrik, gudang dan lokasi.

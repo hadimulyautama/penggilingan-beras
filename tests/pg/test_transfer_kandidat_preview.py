@@ -30,7 +30,7 @@ async def test_preview_daftar_dengan_permintaan_dan_perintah_sintetis(pg,lokasi,
     async with browser_app(pg,peran=peran,gudang=gudang,width=width) as (page,_,_):
         await page.goto(BASE+'/transfer-bertahap')
         await expect(page.locator('#tp-segar')).to_have_attribute('data-status','segar')
-        await expect(page.locator('#pk-request-stats')).to_contain_text('Menunggu Admin2')
+        await expect(page.locator('#pk-request-stats').get_by_role('button',name='Aktif · 3 permintaan',exact=True)).to_have_attribute('aria-pressed','true')
         await expect(page.locator('#pk-daftar .riwayat-list article')).to_have_count(3)
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         if width>=900:
