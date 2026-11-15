@@ -206,12 +206,18 @@ async def akun(db,cid,jenis,aid,*,kunci=False):
             data=dict(id=row.id,jenis=jenis,user_id=None,nama=name,username=row.username,peran='pelanggan',aktif=row.active,versi=row.token_version,status_akun='aktif' if row.active else 'nonaktif',status_pengguna='',wajib_ganti=False,terakhir_login=None)
     elif jenis=='timbangan_lama':
         if await timbangan_siap(db):
-            row=(await db.execute(text('SELECT id,user_id,nama,username,role,status,token_version,terakhir_login FROM timbangan_akun WHERE id=:id AND akun_id IS NULL'+(' FOR UPDATE' if kunci else '')),{'id':aid})).mappings().one_or_none()
+            sql='SELECT id,user_id,nama,username,role,status,token_version,terakhir_login FROM timbangan_akun WHERE id=:id AND akun_id IS NULL'
+            row=(await db.execute(text(sql),{'id':aid})).mappings().one_or_none()
+            if row:
+                uid=row['user_id']
+                if uid:
+                    q=select(User).where(User.id==uid).execution_options(populate_existing=True)
+                    user=await db.scalar(q.with_for_update(key_share=True) if kunci else q)
+                if kunci:
+                    # Sama dengan akun bersama: pengguna -> kredensial.
+                    row=(await db.execute(text(sql+' FOR UPDATE'),{'id':aid})).mappings().one_or_none()
+                    if row and row['user_id']!=uid:raise LookupError('Identitas akun berubah. Baca diagnosis terbaru.')
         if row:
-            if row['user_id']:
-                q=select(User).where(User.id==row['user_id']).execution_options(populate_existing=True)
-                user=await db.scalar(q.with_for_update(key_share=True) if kunci else q)
-            else:user=None
             data=dict(id=aid,jenis=jenis,user_id=row['user_id'],nama=row['nama'],username=row['username'],peran=label_role(P.dari_timbangan(row['role'])),aktif=row['status']=='aktif' and (user is None or user.status=='aktif'),versi=row['token_version'],status_akun=row['status'],status_pengguna=user.status if user else '',wajib_ganti=False,terakhir_login=row['terakhir_login'].isoformat() if row['terakhir_login'] else None)
     else:
         q=select(User).where(User.id==aid)
