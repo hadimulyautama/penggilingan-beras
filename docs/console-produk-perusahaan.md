@@ -27,3 +27,19 @@ Sesudah pemulihan sandi, tautan masuk hanya menuju produk yang diaktifkan dan di
 TeraFlow tetap mengaudit semua penolakan login. Penolakan izin setelah sandi yang benar tidak ditambahkan ke hitungan sandi salah, agar pemulihan produk/izin lewat Console tidak meninggalkan penahanan login. Penebakan sandi tetap dibatasi dengan aturan nama+IP yang sama.
 
 Pengujian memakai PostgreSQL loopback dan data fiktif: perusahaan nonwarisan PadiFlow saja/TeraFlow saja, akun perusahaan lain, cap/pratinjau lama setelah perubahan keanggotaan, grant nonaktif, status cache, origin tidak valid, dan pemulihan sesi tanpa perubahan peran master. Tidak ada migrasi atau backfill transaksi pada audit ini.
+
+
+### Pencabutan keanggotaan pada akses kompatibilitas
+
+Keanggotaan perusahaan yang dinonaktifkan menolak akses kedua produk,
+termasuk akun lama yang belum memiliki override produk. Pemeriksaan sesi,
+diagnosis Console dan tujuan login setelah pemulihan sandi memakai kebijakan
+bersama yang sama. Keanggotaan dibaca ulang; cache ORM tidak boleh menunda
+pencabutan. Akun platform tetap memakai kewenangan platform, dan akun lama
+yang belum mempunyai penetapan anggota tetap mengikuti kompatibilitas HMU.
+
+Mengaktifkan kembali keanggotaan melalui pratinjau/audit Console memulihkan
+izin tersimpan, tanpa menambah grant atau mengubah peran master. Tidak ada
+migrasi, perubahan keanggotaan otomatis, atau penulisan transaksi produksi.
+Uji mencakup pencabutan melalui API Console, cookie PadiFlow/TeraFlow lama,
+diagnosis, pemulihan, serta keanggotaan yang dicabut pada sesi ORM lain.

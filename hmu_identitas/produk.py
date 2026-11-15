@@ -54,6 +54,12 @@ async def hak_pengguna(db,*,company_id,produk,user_id,peran_warisan=None):
         # HMU ditandai oleh migrasi dari dua bukti penetapan, bukan fallback
         # seluruh perusahaan. Override nonaktif selalu menang atas warisan.
         memberships=list(await db.scalars(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.user_id==user_id).execution_options(populate_existing=True)))
+        # Kompatibilitas tanpa penetapan anggota hanya untuk akun lama.
+        # Setelah keanggotaan dicatat, pencabutan eksplisit harus menang
+        # atas peran master, walau belum ada override izin produk.
+        member=next((m for m in memberships if m.company_id==company_id),None)
+        if member is not None and not member.aktif:
+            raise ProdukDitolak('Keanggotaan pengguna pada perusahaan ini tidak aktif.')
         foreign=any(m.company_id!=company_id for m in memberships)
         if foreign:
             raise ProdukDitolak('Pengguna lintas perusahaan memerlukan penetapan akses produk secara eksplisit.')

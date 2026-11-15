@@ -3,6 +3,7 @@ import asyncio,json,os,subprocess
 from pathlib import Path
 import pytest
 from sqlalchemy import text
+from hmu_core import KeanggotaanPerusahaan
 from hmu_identitas.sandi import hash_sandi
 from tests.pg.test_console_monitoring import orang,action
 from tests.pg.test_koreksi_bahan_berjalan import running,dunia
@@ -12,6 +13,9 @@ pytestmark=[pytest.mark.asyncio,pytest.mark.dua_aplikasi,pytest.mark.fondasi_mul
 async def test_pemulihan_sandi_dan_csrf_dua_interpreter(pg,orang):
     x=orang
     async with pg() as db:
+        # Uji pemulihan sandi dimulai dari sesi yang memang diizinkan.
+        # Pencabutan keanggotaan diuji terpisah dan tidak boleh dilewati.
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True
         linked=await db.scalar(text("INSERT INTO timbangan_akun(username,nama,role,akun_id,status,perangkat_kode,token_version) VALUES ('operator-aktif','Operator uji','PETUGAS',:aid,'aktif','UT',1) RETURNING id"),{'aid':x['aid']})
         legacy=await db.scalar(text("INSERT INTO timbangan_akun(username,nama,role,password_hash,status,perangkat_kode,token_version) VALUES ('legacy-monitor','Petugas lama uji','PETUGAS',:h,'aktif','LG',1) RETURNING id"),{'h':hash_sandi('sandi-lama-uji-123')});await db.commit()
     async def helper(phase):
