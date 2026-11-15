@@ -7,6 +7,9 @@ from app.models import SesiConsole
 from hmu_identitas.model import Akun
 
 
+SESI_DETIK=30*24*60*60
+
+
 class TolakConsole(PermissionError):
     pass
 
@@ -40,7 +43,7 @@ async def tukar(db,*,kode,verifier):
     if not row or row.dicabut or row.ditukar_pada or row.kode_sampai<=now() or not hmac.compare_digest(row.tantangan,challenge(verifier)):
         raise TolakConsole('Kode masuk Console tidak valid atau sudah berakhir.')
     await super_aktif(db,row.akun_id,row.versi)
-    token=secrets.token_urlsafe(48);row.token_hash=hash_(token);row.ditukar_pada=now();row.sesi_sampai=now()+timedelta(hours=1)
+    token=secrets.token_urlsafe(48);waktu=now();row.token_hash=hash_(token);row.ditukar_pada=waktu;row.sesi_sampai=waktu+timedelta(seconds=SESI_DETIK)
     await db.flush();return token
 
 

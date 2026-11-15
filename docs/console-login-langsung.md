@@ -17,7 +17,7 @@ status akun/orang. Hanya Super Admin aktif tanpa kewajiban mengganti sandi yang
 mendapat sesi Console. Hash/versi/username diperiksa lagi setelah akun dikunci,
 supaya reset sandi yang bersamaan tidak memberikan sesi dengan sandi lama.
 Sesi memakai model `hmu_console_sessions` dan fungsi penerbitan/penukaran lama:
-umur satu jam, pencabutan/versi/peran/status diperiksa setiap permintaan.
+umur 30 hari pada perangkat pribadi, pencabutan/versi/peran/status diperiksa setiap permintaan.
 Cookie aplikasi harian dan hak pengguna tidak diubah.
 
 Penahanan lima kesalahan per akun+sumber memakai gerbang masuk yang sudah ada,
@@ -53,3 +53,9 @@ sehat dahulu, baru backend; sesi aplikasi harian tidak perlu diubah.
 Uji: `tests/pg/test_console_masuk_langsung.py`, `tests/test_console_pembatas.py`,
 `tests/pg/test_console_akses.py`, dan integrasi HTTP/browser
 `tests/pg/test_console_website_integrasi.py` dengan interpreter website terpisah.
+
+Sesi baru berlaku 30 hari untuk login langsung maupun SSO lama. Tidak ada
+backfill atau perpanjangan massal sesi yang sudah diterbitkan. Setelah rilis,
+masuk sekali lagi untuk mendapatkan masa sesi baru. Cookie HttpOnly, Secure
+dan SameSite tetap berlaku; tiap permintaan tetap memeriksa sesi dicabut,
+versi sandi, status akun, peran Super Admin dan kewajiban ganti sandi.
