@@ -24,7 +24,7 @@ function mode(r){return data.admin&&r.status==='diminta'&&Number(r.bebas)>0?'set
 function totalKiriman(j){return [(Number(j.total)||!Number(j.lembar))?fmt(j.total):'',Number(j.lembar)?qfmt({satuan:'lembar'},j.lembar):''].filter(Boolean).join(' · ')}
 function qfmt(r,n){return Number(n||0).toLocaleString('id-ID',{maximumFractionDigits:2})+' '+(r.satuan||'kg')}
 function ref(r){return r.nomor||'Permintaan #'+r.id}
-function tujuan(r){if(r.id<0||r.multilokasi)return [r.tujuan_pabrik||r.tujuan_lokasi?.pabrik_nama||'Pabrik belum ditetapkan',r.tujuan_gudang,r.tujuan_nama].filter(Boolean).join(' → ');return (r.tujuan_nama||data.tujuan.find(t=>t.id===r.silo_id)?.nama||(!r.silo_id?'Tumpukan':'Silo tidak tersedia'))+' · '+data.gudang_tujuan.nama}
+function tujuan(r){return [r.tujuan_pabrik||r.tujuan_lokasi?.pabrik_nama||'Pabrik belum ditetapkan',r.tujuan_gudang||r.tujuan_lokasi?.gudang_nama||data.gudang_tujuan.nama,r.tujuan_nama||data.tujuan.find(t=>t.id===r.silo_id)?.nama||(!r.silo_id?'Tumpukan':'Silo tidak tersedia')].filter(Boolean).join(' → ')}
 function asal(r){return [r.asal_lokasi?.pabrik_nama||'Pabrik belum ditetapkan',r.asal_lokasi?.gudang_nama||r.asal].filter(Boolean).join(' → ')}
 function lokasiRingkas(l){return [l?.pabrik_nama||'Pabrik belum ditetapkan',l?.gudang_nama||l?.nama,l?.penempatan].filter(Boolean).join(' → ')}
 function badge(k){return `<span class="tp-badge tp-badge--${esc(k)}">${esc(status[k]||k)}</span>`}
