@@ -16,7 +16,7 @@ from app.services.cakupan_fasilitas import lokasi as lokasi_proses
 
 from dataclasses import dataclass, field
 from datetime import datetime, time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import math
 
 from sqlalchemy import func, select
@@ -559,19 +559,35 @@ class OutputResult:
     spek: str | None = None
 
 
+class PresisiHasilError(Gudang2Error):
+    """Bobot hasil tidak sesuai satuan penyimpanan 0,01 kg."""
+
+
+def angka_hasil(value) -> Decimal:
+    """Tolak pecahan yang akan berubah saat disimpan, tanpa membulatkan input."""
+    try:
+        angka = Decimal(str(value))
+        if angka.is_finite() and angka == angka.quantize(Decimal('0.01')):
+            return angka
+    except (InvalidOperation, ValueError, TypeError):
+        pass
+    raise PresisiHasilError('Berat hasil memakai maksimal 2 desimal (0,01 kg). Perbaiki isian sebelum menyimpan.')
+
+
 async def rencana_total_output(db, proc_id, jenis, total):
     """Pemeriksaan kumulatif yang sama untuk satu jenis maupun satu lembar."""
     from app.services.spesifikasi_beras import jenis_untuk_proses
     if not jenis or jenis.lower() not in await jenis_untuk_proses(db, proc_id):
         raise Gudang2Error("Pilih jenis hasil yang aktif di Pengaturan.")
-    if not math.isfinite(float(total)) or float(total) <= 0:
+    total = angka_hasil(total)
+    if total <= 0:
         raise Gudang2Error("Berat hasil harus lebih dari 0. Yang keliru dibatalkan lewat 'Batalkan input terakhir', bukan dicatat sebagai angka minus.")
     jenis = jenis.lower()
     sebelumnya = await _total_output(db, proc_id, jenis)
-    delta = float(total) - sebelumnya
-    if delta < -0.000001:
+    delta = total - Decimal(str(sebelumnya))
+    if delta < 0:
         raise Gudang2Error(f"Total {jenis} sudah {sebelumnya:g} kg. Total baru tidak boleh lebih kecil; gunakan pembatalan atau koreksi hasil.")
-    return dict(jenis=jenis, sebelumnya=sebelumnya, total=float(total), tambahan=0 if abs(delta)<=0.000001 else delta)
+    return dict(jenis=jenis, sebelumnya=sebelumnya, total=float(total), tambahan=float(delta))
 
 
 async def catat_output(
@@ -599,6 +615,7 @@ async def catat_output(
     if berat is None:
         raise Gudang2Error(
             "Isi total hasil sampai sekarang dalam kg.")
+    berat = angka_hasil(berat)
     if float(berat) <= 0:
         raise Gudang2Error(
             "Berat hasil harus lebih dari 0. Yang keliru dibatalkan lewat "

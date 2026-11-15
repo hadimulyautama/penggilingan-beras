@@ -200,6 +200,15 @@ class Permintaan(BaseModel):
     pemeriksaan:str=''
     konfirmasi:bool=False
 
+
+def periksa_presisi_hasil(req):
+    try:
+        for h in req.hasil:
+            p.angka_hasil(h.total)
+    except p.PresisiHasilError as e:
+        raise HTTPException(400,str(e)) from e
+
+
 async def kunci(db,kode,req):
     proc=await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses==kode).with_for_update().execution_options(populate_existing=True))
     if not proc:raise HTTPException(404,'Proses tidak ditemukan.')
@@ -221,6 +230,7 @@ def cap(user,action,plan):
     return hmac.new(_kunci(),raw,hashlib.sha256).hexdigest()
 
 async def rencana(db,kode,req,user,action):
+    if action=='hasil':periksa_presisi_hasil(req)
     proc=await kunci(db,kode,req)
     base=dict(kode=kode,dasar=req.dasar,aksi=action)
     if action=='hasil':
@@ -263,6 +273,7 @@ async def rencana(db,kode,req,user,action):
 @router.post('/api/actions/sosoh-ringkas/{kode}/neraca/pratinjau')
 async def pratinjau_neraca(kode:str,req:Permintaan,user:User=Depends(pengguna_aksi)):
     await izin(user,kode)
+    periksa_presisi_hasil(req)
     if req.silos or req.pemakaian_id is not None or req.sisa is not None:
         raise HTTPException(400,'Konteks pratinjau neraca tidak sesuai.')
     if len({h.jenis for h in req.hasil}) != len(req.hasil) or any(h.jenis not in p._ALL_JENIS or h.total < 0 for h in req.hasil):
