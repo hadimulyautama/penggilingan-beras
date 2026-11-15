@@ -49,3 +49,30 @@ async def test_aktivasi_pengguna_lama_memutus_semua_sesi_tanpa_mengubah_izin(pg,
         rows=(await db.execute(text('SELECT id,token_version FROM timbangan_akun ORDER BY id'))).all()
         assert rows==[(linked,2),(legacy,2)]
         assert not (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif
+
+
+async def test_peta_dan_gangguan_membaca_profil_dan_tanda_terima_nyata_tanpa_mutasi(pg,orang):
+    from app.services import console_operasi as ops
+    from tests.pg.test_pengaturan_organisasi import fakta
+    import uuid
+    x=orang
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True
+        linked=await db.scalar(text("INSERT INTO timbangan_akun(username,nama,role,akun_id,status,perangkat_kode,token_version) VALUES ('operator-aktif','Operator uji','PETUGAS',:aid,'nonaktif','UT',1) RETURNING id"),{'aid':x['aid']})
+        legacy=await db.scalar(text("INSERT INTO timbangan_akun(username,nama,role,password_hash,status,perangkat_kode,token_version) VALUES ('peta-legacy','Profil peta lama','PETUGAS',:h,'aktif','LP',1) RETURNING id"),{'h':hash_sandi('sandi-lama-uji-123')})
+        for raw in (json.dumps(dict(peringatan=True,pesan='RAHASIA TIDAK BOLEH TAMPIL')),json.dumps(dict(berhasil=True)),'rusak'):
+            await db.execute(text("INSERT INTO timbangan_kiriman(kunci,akun_id,jalur,sidik,jawaban,created_at) VALUES (:key,:aid,'masuk',:sidik,:raw,now())"),dict(key=str(uuid.uuid4()),aid=linked,sidik='a'*64,raw=raw))
+        await db.commit()
+    before=await fakta(pg)
+    async with pg() as db:
+        await db.execute(text('SET TRANSACTION READ ONLY'))
+        d=await ops.peta_akses(db,user_id=x['uid'],produk='teraflow');p=d['perusahaan'][0]['produk'][0]
+        assert p['operasional']=='ditolak' and p['sebab_kode']=='profil'
+        legacy_map=await ops.peta_akun_lokal(db,jenis='timbangan_lama',akun_id=legacy)
+        assert legacy_map['user_id'] is None and legacy_map['akun_id']==legacy
+        assert legacy_map['perusahaan'][0]['produk'][0]['operasional']=='diizinkan'
+        d=await ops.gangguan(db);i=d['integrasi']
+        assert i['peringatan']==1 and i['tanda_terima']==3 and i['tidak_terbaca']==1
+        assert 'RAHASIA' not in json.dumps(d)
+        await db.commit()
+    assert await fakta(pg)==before
