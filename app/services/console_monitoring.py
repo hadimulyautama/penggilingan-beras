@@ -57,6 +57,19 @@ async def timbangan_siap(db):
     return {'id','akun_id','user_id','nama','username','role','status','token_version','terakhir_login'}.issubset(cols)
 
 
+async def profil_timbang_bersama_nonaktif(db,akun_id):
+    """Status login profil tertaut; profil lama akan disinkronkan saat adopsi.
+
+    Login bersama menolak profil yang sudah tertaut dan nonaktif. Profil lama
+    dengan username sama belum menjadi profil akun ini: TeraFlow menautkan
+    dan menyelaraskannya dengan akun bersama pada login yang sah.
+    """
+    with db.no_autoflush:
+        if not await timbangan_siap(db):return False
+        status=await db.scalar(text('SELECT status FROM timbangan_akun WHERE akun_id=:aid ORDER BY id LIMIT 1'),{'aid':akun_id})
+    return status is not None and status!='aktif'
+
+
 def batas_identitas(cid):
     """Registry lintas perusahaan bukan bukti kepemilikan akun operasional.
 

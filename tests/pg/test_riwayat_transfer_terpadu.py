@@ -58,7 +58,7 @@ async def test_total_kelompok_dan_catatan_lama_sama_dengan_buku_transfer(pg,camp
 
 
 @pytest.mark.parametrize('width',[390,1440])
-async def test_kartu_lama_dan_baru_satu_daftar_dengan_detail_yang_benar(pg,campuran,width):
+async def test_kartu_lama_dan_baru_satu_daftar_dengan_detail_yang_benar(pg,campuran,width,tmp_path):
     from playwright.async_api import expect
     from tests.pg.test_transfer_pk_halaman import browser_app, BASE
     async with browser_app(pg,peran='admin',gudang=None,width=width) as (page,_,_):
@@ -79,7 +79,7 @@ async def test_kartu_lama_dan_baru_satu_daftar_dengan_detail_yang_benar(pg,campu
         await expect(desktop.nth(4)).to_contain_text('Pabrik Tujuan')
         await expect(desktop.nth(4)).to_contain_text('Tumpukan')
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-        await page.screenshot(path=f'/private/tmp/transfer-riwayat-{width}.png',full_page=True)
+        await page.screenshot(path=str(tmp_path/f'transfer-riwayat-{width}.png'),full_page=True)
         await link.click()
         await expect(page.locator('.desktop-back')).to_have_attribute('href','/transfer-bertahap?tab=riwayat')
 

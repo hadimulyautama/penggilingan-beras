@@ -49,3 +49,24 @@ def test_antrean_terbatas_dan_tidak_merekam_ua_atau_payload(ruang):
     assert 'nilai-rahasia' not in str(row)
     for _ in range(5000):c.catat(actor,jenis='respons_web',kode='200')
     assert c.antrean.qsize()==4096 and c.dibuang>0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status,path,record',[(401,'/stok',True),(403,'/pengaturan',True),(200,'/stok',False),(304,'/stok',False),(403,'/internal/console/peta-akses',False),(401,'/monitoring/konteks',False)])
+async def test_penolakan_halaman_tercatat_tanpa_mengubah_respons(monkeypatch,status,path,record):
+    from hmu_identitas.monitoring import MonitoringHTTP,PengumpulPemakaian,PelakuPemakaian
+    monkeypatch.setenv('HMU_COMPANY_ID','7');monkeypatch.setenv('HMU_RUANG_DATA',str(uuid.uuid4()));monkeypatch.setenv('HMU_SESI_LAMA_SAMPAI','0')
+    actor=PelakuPemakaian('staf',91,user_id=12,peran='operator');sent=[]
+    async def app(scope,receive,send):
+        await send(dict(type='http.response.start',status=status,headers=[(b'content-type',b'application/json')]))
+        await send(dict(type='http.response.body',body=b'{"detail":"pesan tetap"}'))
+    async def send(msg):sent.append(msg)
+    for source in ('padiflow','teraflow'):
+        collect=PengumpulPemakaian(None,source)
+        await MonitoringHTTP(app,pengumpul=collect,pelaku=lambda _:actor)(dict(type='http',method='GET',path=path,state={},headers=[]),None,send)
+        assert sent[-2]['status']==status and sent[-1]['body']==b'{"detail":"pesan tetap"}'
+        assert collect.antrean.qsize()==int(record)
+        if record:
+            row=collect.antrean.get_nowait()
+            assert row['company_id']==7 and row['aplikasi']==source and row['jenis_akun']=='staf' and row['akun_id']==91
+            assert row['kode']==str(status) and row['metode']=='GET'

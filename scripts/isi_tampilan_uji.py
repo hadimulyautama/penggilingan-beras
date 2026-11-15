@@ -494,7 +494,7 @@ async def periksa_halaman(simpan_di=None):
         alamat=['/','/aksi','/berjalan','/keputusan','/mutu','/stok','/stok-pk-jasa','/stok-produk',
                 '/stok-produk-jasa','/stok-karung','/stok-karung-jasa','/barang-keluar','/retur',
                 '/jasa','/jasa?status=selesai','/jasa?status=dibatalkan',
-                '/riwayat-pengeringan','/riwayat-giling','/riwayat-transfer','/riwayat-sosoh','/audit','/kabar']
+                '/riwayat-pengeringan','/riwayat-giling','/transfer-bertahap?tab=riwayat','/riwayat-sosoh','/audit','/kabar']
         alamat += ['/riwayat-qc/'+j for j in ['gabah-basah','gabah-kering','pk-luar','pk-hasil-giling','beras-hasil-sosoh']]
         for model,kolom,path in [(OutgoingRecord,OutgoingRecord.id,'/barang-keluar/'),(CustomerReturn,CustomerReturn.id,'/retur/'),
                                  (MillingProcess,MillingProcess.id,'/riwayat-giling/'),(DryingLot,DryingLot.id,'/riwayat-pengeringan/'),

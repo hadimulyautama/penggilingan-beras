@@ -193,7 +193,7 @@ class MonitoringHTTP:
             if msg['type']=='http.response.body':
                 if not skip and not dicatat and not msg.get('more_body',False):
                     dicatat=True
-                    if method in ('POST','PUT','PATCH','DELETE') or status>=500:
+                    if method in ('POST','PUT','PATCH','DELETE') or status in (401,403) or status>=500:
                         actor=self.pelaku(scope.get('state',{})) or PelakuPemakaian('anonim',0)
                         ua=dict(scope.get('headers',[])).get(b'user-agent',b'').decode('latin1')
                         try:self.pengumpul.catat(actor,jenis='respons_web',layar=layar_dari(path),kode=str(status),ua=ua,durasi_ms=(time.monotonic()-started)*1000,metode=method)

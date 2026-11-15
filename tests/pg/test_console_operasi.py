@@ -46,6 +46,10 @@ async def test_peta_membaca_pencabutan_terkini_tanpa_cache_izin(pg,orang,field):
             await other.commit()
         second=await ops.peta_akses(db,user_id=x['uid'],company_id=x['cid'],produk='padiflow')
         assert not second['perusahaan'][0]['produk'][0]['izin_sesuai']
+        if field=='sandi':
+            from app.services.console_bantuan import diagnosis
+            d=await diagnosis(db,cid=x['cid'],jenis='staf',aid=x['aid'])
+            assert not any(p['boleh'] for p in d['aplikasi'])
 
 async def test_pencarian_username_literal_filter_dan_paginasi(pg,orang):
     x=orang;before=await fakta(pg)
@@ -151,3 +155,52 @@ async def test_pemeriksaan_tidak_memicu_autoflush_draf_pemanggil(pg,orang):
         u=await db.get(User,orang['uid']);u.nama='Draf tidak boleh tersimpan'
         with pytest.raises(ValueError):await ops.peta_akses(db,user_id=u.id)
         assert u in db.dirty
+
+
+async def test_cari_id_pengguna_menerima_spasi_dan_seluruh_id_int32(pg,orang):
+    async with pg() as db:
+        db.add(User(id=2147483000,nama='Identitas ID panjang',role='operator',status='aktif'));await db.commit()
+        for query in ('2147483000',' 2147483000 '):
+            found=await ops.cari_pengguna(db,cari=query)
+            assert [u['user_id'] for u in found['pengguna']]==[2147483000]
+        assert not (await ops.cari_pengguna(db,cari='2147483648'))['pengguna']
+
+@pytest.mark.parametrize('local_pf,local_tf,foreign_pf,foreign_tf',[(True,False,False,True),(False,True,True,False),(True,True,False,False)])
+async def test_pengguna_lintas_perusahaan_tidak_mewarisi_izin_produk_perusahaan_lain(pg,orang,local_pf,local_tf,foreign_pf,foreign_tf):
+    x=orang
+    async with pg() as db:
+        (await db.get(M,x['mid'])).aktif=True
+        db.add(M(company_id=x['asing'],user_id=x['uid'],peran='admin',aktif=True))
+        db.add_all([CP(company_id=x['asing'],produk=c,aktif=True,warisan=False) for c in ('padiflow','teraflow')]);await db.flush()
+        for cid,flags in ((x['cid'],(local_pf,local_tf)),(x['asing'],(foreign_pf,foreign_tf))):
+            for code,flag in zip(('padiflow','teraflow'),flags):db.add(UP(company_id=cid,user_id=x['uid'],produk=code,aktif=flag,peran='admin' if code=='padiflow' else 'operator'))
+        await db.commit()
+    before=await fakta(pg)
+    async with pg() as db:
+        for cid,flags in ((x['cid'],(local_pf,local_tf)),(x['asing'],(foreign_pf,foreign_tf))):
+            for code,flag in zip(('padiflow','teraflow'),flags):
+                d=await ops.peta_akses(db,user_id=x['uid'],company_id=cid,produk=code)
+                co=d['perusahaan'][0];p=co['produk'][0]
+                assert co['company_id']==cid and p['kode']==code and p['izin_sesuai']==flag
+                assert p['operasional']!= 'diizinkan' or cid==x['cid']
+    assert await fakta(pg)==before
+
+
+async def test_penolakan_get_dari_kedua_produk_muncul_hanya_pada_cakupan_sendiri(pg,orang):
+    from hmu_identitas.monitoring import MonitoringHTTP,PengumpulPemakaian,PelakuPemakaian
+    x=orang;before=await fakta(pg)
+    async def blocked(scope,receive,send):
+        await send(dict(type='http.response.start',status=403,headers=[]))
+        await send(dict(type='http.response.body',body=b'akses ditolak'))
+    async def send(msg):pass
+    for app in ('padiflow','teraflow'):
+        collector=PengumpulPemakaian(pg,app,'versi-data-uji')
+        await MonitoringHTTP(blocked,pengumpul=collector,pelaku=lambda _:PelakuPemakaian('staf',x['aid'],x['uid']))(dict(type='http',method='GET',path='/stok',state={},headers=[]),None,send)
+        await collector.kirim()
+    async with pg() as db:
+        for code,app in [('padiflow','padiflow'),('teraflow','teraflow')]:
+            d=await ops.gangguan(db,produk=code,kategori='akses')
+            assert d['jumlah']['akses']==1 and len(d['kejadian'])==1 and d['kejadian'][0]['aplikasi']==app
+        d=await ops.gangguan(db,company_id=x['asing']);assert d['total'] is None and d['kejadian']==[]
+    after=await fakta(pg);metadata={'hmu_usage_events','hmu_monitoring_sources'}
+    assert {k:v for k,v in before.items() if k not in metadata}=={k:v for k,v in after.items() if k not in metadata}
