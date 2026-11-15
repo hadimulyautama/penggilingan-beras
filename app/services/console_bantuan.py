@@ -54,16 +54,22 @@ async def diagnosis(db,*,cid,jenis,aid):
             apps.append(dict(aplikasi=app,boleh=a['aktif'] and not reason,sebab='akun_nonaktif' if not a['aktif'] else ('peran' if reason else 'tersedia')))
     elif jenis=='pelanggan':apps=[dict(aplikasi='portal',boleh=a['aktif'],sebab='tersedia' if a['aktif'] else 'akun_nonaktif')]
     elif jenis=='timbangan_lama':apps=[dict(aplikasi='teraflow',boleh=a['aktif'],sebab='tersedia' if a['aktif'] else 'akun_nonaktif')]
-    from hmu_identitas.produk import hak_pengguna,perusahaan_aktif,ProdukDitolak,PADIFLOW,TERAFLOW
+    from hmu_identitas.produk import hak_pengguna,hak_lokal,perusahaan_aktif,ProdukDitolak,PADIFLOW,TERAFLOW
     for item in apps:
         code=PADIFLOW if item['aplikasi']=='portal' else item['aplikasi']
         try:
-            if jenis=='staf':
-                hak=await hak_pengguna(db,company_id=cid,produk=code,user_id=a['user_id'])
+            await perusahaan_aktif(db,cid,code)
+        except ProdukDitolak as e:
+            item.update(boleh=False,sebab='perusahaan_nonaktif' if not company.aktif else 'produk_nonaktif',pesan=str(e))
+            continue
+        try:
+            hak=None
+            if jenis=='staf':hak=await hak_pengguna(db,company_id=cid,produk=code,user_id=a['user_id'])
+            elif jenis=='timbangan_lama':hak=await hak_lokal(db,produk=TERAFLOW,user_id=a['user_id'],peran_lama=a['peran'])
+            if hak:
                 gate=pintu.PRODUKSI if code==PADIFLOW else pintu.TIMBANGAN
                 reason=pintu.sebab_tolak(hak.peran,gate)
                 item.update(boleh=a['aktif'] and not reason,sebab='akun_nonaktif' if not a['aktif'] else 'peran' if reason else 'tersedia',peran_produk=hak.peran)
-            else:await perusahaan_aktif(db,cid,code)
         except ProdukDitolak as e:item.update(boleh=False,sebab='akses_produk',pesan=str(e))
     since=m.sekarang()-timedelta(days=30)
     rows=list(await db.scalars(select(E).where(E.company_id==cid,E.jenis_akun==jenis,E.akun_id==aid,E.jenis=='login',E.waktu>=since).order_by(E.waktu.desc(),E.id.desc()).limit(50)))
@@ -177,6 +183,40 @@ async def terapkan(db,*,cid,jenis,aid,pelaku_id,plan_id):
     await _audit(db,a,pelaku_id,plan.aksi,plan.alasan,a,after)
     plan.diterapkan=m.sekarang();plan.hasil=json_(dict(aksi=plan.aksi,tersimpan=True))
     await db.flush();return result
+
+
+def asal_https(value):
+    from urllib.parse import urlsplit
+    value=(value or '').rstrip('/')
+    try:
+        u=urlsplit(value)
+        _=u.port
+    except ValueError:return None
+    return value if not any(c in value for c in ('\r','\n','\\')) and u.scheme=='https' and u.hostname and u.username is None and u.password is None and u.path in ('','/') and not u.query and not u.fragment else None
+
+
+async def tujuan_masuk(db,a):
+    """Pemulihan kredensial tidak mengaktifkan produk atau memberi izin baru."""
+    from app.config import settings
+    from hmu_identitas.produk import hak_pengguna,hak_lokal,produk_lokal,ProdukDitolak,PADIFLOW,TERAFLOW
+    if a['jenis']=='pelanggan':
+        try:await produk_lokal(db,PADIFLOW)
+        except ProdukDitolak:return None
+        return '/pelanggan/masuk'
+    if a['jenis']=='staf' and P.super_saja(a['peran']):
+        origin=asal_https(settings.console_website_url)
+        if origin:return origin+'/console/masuk'
+    codes=(TERAFLOW,) if a['jenis']=='timbangan_lama' else (PADIFLOW,TERAFLOW)
+    for code in codes:
+        try:
+            if a['jenis']=='timbangan_lama':hak=await hak_lokal(db,produk=code,user_id=a['user_id'],peran_lama=a['peran'])
+            else:hak=await hak_pengguna(db,company_id=a['company_id'],produk=code,user_id=a['user_id'])
+            if not pintu.boleh_masuk(hak.peran,pintu.PRODUKSI if code==PADIFLOW else pintu.TIMBANGAN):continue
+        except ProdukDitolak:continue
+        if code==PADIFLOW:return '/masuk'
+        origin=asal_https(settings.teraflow_web_url)
+        if origin:return origin+'/timbangan/masuk'
+    return None
 
 
 async def periksa_pemulihan(db,cap):

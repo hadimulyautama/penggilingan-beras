@@ -16,7 +16,7 @@
     try{
       var r=await post('simpan',{cap:token,sandi:form.elements.sandi.value,ulangi:form.elements.ulangi.value});
       token='';form.reset();form.hidden=true;msg.textContent='Kata sandi diperbarui. Silakan masuk kembali.';
-      var link=box.querySelector('[data-masuk]');if(r.tujuan){link.href=r.tujuan;link.hidden=false;}else msg.textContent+=' Buka TeraFlow yang biasa Anda gunakan.';
+      var link=box.querySelector('[data-masuk]');if(r.tujuan){link.href=r.tujuan;link.hidden=false;}else msg.textContent+=' Hubungi Admin Sistem jika akses aplikasi belum tersedia.';
     }catch(err){msg.textContent=err.message;}finally{btn.disabled=false;}
   });
 })();

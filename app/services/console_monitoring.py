@@ -57,12 +57,32 @@ async def timbangan_siap(db):
     return {'id','akun_id','user_id','nama','username','role','status','token_version','terakhir_login'}.issubset(cols)
 
 
+def batas_identitas(cid):
+    """Registry lintas perusahaan bukan bukti kepemilikan akun operasional.
+
+    Anggota nonaktif tetap bisa didiagnosis. Akun tanpa anggota hanya dibaca
+    sebagai warisan pada ruang lama terverifikasi; perusahaan baru wajib
+    mempunyai ikatan anggota. Akun platform tetap dapat dipulihkan di Console.
+    """
+    from hmu_core import ProdukAplikasiPerusahaan
+    local=select(KeanggotaanPerusahaan.id).where(
+        KeanggotaanPerusahaan.user_id==User.id,
+        KeanggotaanPerusahaan.company_id==cid).correlate(User).exists()
+    any_member=select(KeanggotaanPerusahaan.id).where(
+        KeanggotaanPerusahaan.user_id==User.id).correlate(User).exists()
+    legacy=select(ProdukAplikasiPerusahaan.company_id).where(
+        ProdukAplikasiPerusahaan.company_id==cid,
+        ProdukAplikasiPerusahaan.warisan.is_(True)).exists()
+    return or_(local,func.lower(func.trim(User.role))==P.SUPERADMIN,
+               and_(~any_member,legacy))
+
+
 async def sumber_akun(db,cid):
     """Union identitas lokal. Filter dan LIMIT dikerjakan database sebelum nama dimuat."""
     shared=select(case((Akun.id.is_(None),'staf_belum_login'),else_='staf').label('jenis'),
         case((Akun.id.is_(None),User.id),else_=Akun.id).label('id'),User.id.label('user_id'),User.nama.label('nama'),
         func.coalesce(Akun.username,'').label('username'),User.role.label('peran'),
-        and_(Akun.status=='aktif',func.lower(User.status)=='aktif').label('aktif'),Akun.terakhir_login.label('terakhir_login'))        .select_from(User).outerjoin(Akun,Akun.user_id==User.id)
+        and_(Akun.status=='aktif',func.lower(User.status)=='aktif').label('aktif'),Akun.terakhir_login.label('terakhir_login'))        .select_from(User).outerjoin(Akun,Akun.user_id==User.id).where(batas_identitas(cid))
     last=select(func.max(E.waktu)).where(E.company_id==cid,E.jenis_akun=='pelanggan',E.akun_id==PortalAccount.id,E.jenis=='login',E.kode=='berhasil').correlate(PortalAccount).scalar_subquery()
     portal=select(literal('pelanggan').label('jenis'),PortalAccount.id.label('id'),cast(literal(None),Integer).label('user_id'),
         Pelanggan.nama_pelanggan.label('nama'),PortalAccount.username.label('username'),literal('pelanggan').label('peran'),PortalAccount.active.label('aktif'),last.label('terakhir_login')).join(Pelanggan,Pelanggan.id==PortalAccount.pelanggan_id)
@@ -70,7 +90,7 @@ async def sumber_akun(db,cid):
     if await timbangan_siap(db):
         t=table('timbangan_akun',column('id',Integer),column('akun_id',Integer),column('user_id',Integer),column('nama',String),column('username',String),column('role',String),column('status',String),column('terakhir_login',DateTime(timezone=True)))
         queries.append(select(literal('timbangan_lama').label('jenis'),t.c.id.label('id'),t.c.user_id.label('user_id'),t.c.nama.label('nama'),t.c.username.label('username'),t.c.role.label('peran'),
-            and_(t.c.status=='aktif',or_(User.id.is_(None),func.lower(User.status)=='aktif')).label('aktif'),t.c.terakhir_login.label('terakhir_login')).select_from(t).outerjoin(User,User.id==t.c.user_id).where(t.c.akun_id.is_(None)))
+            and_(t.c.status=='aktif',or_(User.id.is_(None),func.lower(User.status)=='aktif')).label('aktif'),t.c.terakhir_login.label('terakhir_login')).select_from(t).outerjoin(User,User.id==t.c.user_id).where(t.c.akun_id.is_(None),or_(t.c.user_id.is_(None),and_(User.id.isnot(None),batas_identitas(cid)))))
     return union_all(*queries).subquery('identitas_lokal')
 
 
@@ -97,7 +117,7 @@ async def daftar_akun(db,*,company_id=None,cari='',jenis='',status='',halaman=1,
         seen={(k,i):t for k,i,t in (await db.execute(select(E.jenis_akun,E.akun_id,func.max(E.waktu)).where(E.company_id==cid,E.jenis=='interaksi',or_(*checks)).group_by(E.jenis_akun,E.akun_id))).all()}
     result=[]
     for r in records:
-        data=dict(r);data['aktif']=bool(data['aktif']);data['peran']=label_role(data['peran']);last=seen.get((data['jenis'],data['id']))
+        data=dict(r);data['aktif']=bool(data['aktif']);data['peran']=label_role(P.dari_timbangan(data['peran']) if data['jenis']=='timbangan_lama' else data['peran']);last=seen.get((data['jenis'],data['id']))
         data.update(company_id=cid,terakhir_login=data['terakhir_login'].isoformat() if data['terakhir_login'] else None,terlihat=last.isoformat() if last else None,aktif_sekarang=bool(last and last>=sekarang()-timedelta(minutes=5)))
         result.append(data)
     return dict(cakupan=scope,pengguna=result,total=total,halaman=halaman,halaman_total=max(1,(total+limit-1)//limit))
@@ -188,14 +208,20 @@ async def akun(db,cid,jenis,aid,*,kunci=False):
         if await timbangan_siap(db):
             row=(await db.execute(text('SELECT id,user_id,nama,username,role,status,token_version,terakhir_login FROM timbangan_akun WHERE id=:id AND akun_id IS NULL'+(' FOR UPDATE' if kunci else '')),{'id':aid})).mappings().one_or_none()
         if row:
-            user=await db.get(User,row['user_id']) if row['user_id'] else None
-            data=dict(id=aid,jenis=jenis,user_id=row['user_id'],nama=row['nama'],username=row['username'],peran=label_role(row['role']),aktif=row['status']=='aktif' and (user is None or user.status=='aktif'),versi=row['token_version'],status_akun=row['status'],status_pengguna=user.status if user else '',wajib_ganti=False,terakhir_login=row['terakhir_login'].isoformat() if row['terakhir_login'] else None)
+            if row['user_id']:
+                q=select(User).where(User.id==row['user_id']).execution_options(populate_existing=True)
+                user=await db.scalar(q.with_for_update(key_share=True) if kunci else q)
+            else:user=None
+            data=dict(id=aid,jenis=jenis,user_id=row['user_id'],nama=row['nama'],username=row['username'],peran=label_role(P.dari_timbangan(row['role'])),aktif=row['status']=='aktif' and (user is None or user.status=='aktif'),versi=row['token_version'],status_akun=row['status'],status_pengguna=user.status if user else '',wajib_ganti=False,terakhir_login=row['terakhir_login'].isoformat() if row['terakhir_login'] else None)
     else:
         q=select(User).where(User.id==aid)
         user=await db.scalar(q.with_for_update() if kunci else q)
         if user and not await db.scalar(select(Akun.id).where(Akun.user_id==aid)):
             row=user;data=dict(id=aid,jenis=jenis,user_id=user.id,nama=user.nama,username='',peran=label_role(user.role),aktif=False,versi=0,status_akun='belum_ada',status_pengguna=user.status,wajib_ganti=False,terakhir_login=None)
     if row is None:raise LookupError('Akun tidak ditemukan.')
+    if data['user_id'] is not None:
+        if not await db.scalar(select(User.id).where(User.id==data['user_id'],batas_identitas(cid))):
+            raise LookupError('Akun tidak ditemukan pada perusahaan ini.')
     data['company_id']=cid
     gen=await db.scalar(select(PembukaanMasuk.generasi).where(PembukaanMasuk.company_id==cid,PembukaanMasuk.jenis_akun==jenis,PembukaanMasuk.akun_id==aid))
     data['generasi']=gen or 0
