@@ -232,4 +232,21 @@ async def akun(db,cid,jenis,aid,*,kunci=False):
         q=select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==cid,KeanggotaanPerusahaan.user_id==data['user_id']).execution_options(populate_existing=True)
         membership=await db.scalar(q.with_for_update() if kunci else q)
     data['keanggotaan']=dict(id=membership.id,aktif=membership.aktif,peran=membership.peran,diubah=membership.updated_at.isoformat()) if membership else None
+    data['keanggotaan_lintas']=[]
+    if data['user_id'] is not None:
+        # Kredensial staf dipakai lintas perusahaan. Pratinjau tindakan global
+        # harus terikat seluruh penugasan/izin, bukan hanya tab asal. Saat
+        # menerapkan bantuan, kunci pengguna di atas menserialisasi writer
+        # keanggotaan dan hak produk sebelum potret ini dibaca kembali.
+        from hmu_core import AksesProdukAnggota
+        members=(await db.execute(select(KeanggotaanPerusahaan,Perusahaan.nama).join(
+            Perusahaan,Perusahaan.id==KeanggotaanPerusahaan.company_id).where(
+            KeanggotaanPerusahaan.user_id==data['user_id']).order_by(KeanggotaanPerusahaan.company_id)
+            .execution_options(populate_existing=True))).all()
+        grants=list(await db.scalars(select(AksesProdukAnggota).where(
+            AksesProdukAnggota.user_id==data['user_id']).order_by(AksesProdukAnggota.company_id,AksesProdukAnggota.produk)
+            .execution_options(populate_existing=True)))
+        data['keanggotaan_lintas']=[dict(company_id=m.company_id,perusahaan=name,peran=m.peran,aktif=m.aktif,
+            diubah=m.updated_at.isoformat(),produk=[dict(kode=g.produk,peran=g.peran,aktif=g.aktif,diubah=g.updated_at.isoformat())
+            for g in grants if g.company_id==m.company_id]) for m,name in members]
     return data

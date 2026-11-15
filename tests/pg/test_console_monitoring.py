@@ -13,6 +13,7 @@ from app.models.portal import PortalAccount
 from app.services import console_monitoring as mon,console_bantuan as help
 from tests.pg.test_masuk_detail_timbang import sidik
 from tests.pg.test_koreksi_bahan_berjalan import running,dunia
+from tests.pg.test_pengaturan_organisasi import fakta
 pytestmark=[pytest.mark.asyncio,pytest.mark.fondasi_multi]
 
 @pytest.fixture
@@ -246,3 +247,119 @@ async def test_pembukaan_penahanan_hanya_username_tujuan():
         for _ in range(g.BATAS_GAGAL):g.catat_gagal('pemilik','ip')
         g.pakai_generasi('pemilik',1);assert g.boleh_coba('pemilik','ip')
     finally:g.bersihkan()
+
+
+
+@pytest.mark.parametrize('aksi',['tautan_sandi','cabut_sesi','aktifkan_akun'])
+@pytest.mark.parametrize('ubah',['anggota','produk'])
+async def test_pratinjau_pemulihan_global_batal_saat_konteks_perusahaan_lain_berubah(pg,orang,aksi,ubah):
+    from hmu_core import ProdukAplikasiPerusahaan as CP,AksesProdukAnggota as UP
+    x=orang
+    async with pg() as db:
+        member=KeanggotaanPerusahaan(company_id=x['asing'],user_id=x['uid'],aktif=True,peran=P.OPERATOR);db.add(member)
+        db.add(CP(company_id=x['asing'],produk='teraflow',aktif=True,warisan=False));await db.flush()
+        db.add(UP(company_id=x['asing'],user_id=x['uid'],produk='teraflow',aktif=True,peran=P.ADMIN))
+        if aksi=='aktifkan_akun':
+            (await db.get(User,x['uid'])).status='nonaktif';(await db.get(Akun,x['aid'])).status='nonaktif'
+        await db.commit();mid=member.id
+        plan=await help.pratinjau(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],aksi=aksi,alasan='Pemilik akun meminta bantuan sebelum konteks berubah');await db.commit()
+    async with pg() as db:
+        if ubah=='anggota':(await db.get(KeanggotaanPerusahaan,mid)).aktif=False
+        else:(await db.get(UP,(x['asing'],x['uid'],'teraflow'))).aktif=False
+        await db.commit()
+    before=await fakta(pg)
+    async with pg() as db:
+        with pytest.raises(help.BantuanError,match='berubah'):
+            await help.terapkan(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],plan_id=plan['id'])
+        assert not db.new and not db.dirty and not db.deleted
+        await db.commit()
+    assert await fakta(pg)==before
+
+
+async def test_penambahan_perusahaan_lain_memerlukan_pratinjau_pemulihan_baru(pg,orang):
+    from tests.pg.test_console_produk import beberapa_perusahaan
+    from app.services import keanggotaan as mem
+    x=orang
+    async with pg() as db:
+        await beberapa_perusahaan(db,x,anggota_lain=False)
+        plan=await help.pratinjau(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],aksi='cabut_sesi',alasan='Akhiri sesi setelah pemilik melaporkan perangkat hilang');await db.commit()
+        await mem.simpan(db,ruang=mem.RuangAdministrasi(x['root']),company_id=x['asing'],user_id=x['uid'],peran=P.OPERATOR,aktif=True,lokasi=[],bukti=mem.sidik(None),alasan='Tugas pengguna bertambah pada perusahaan lain');await db.commit()
+    before=await fakta(pg)
+    async with pg() as db:
+        with pytest.raises(help.BantuanError,match='berubah'):
+            await help.terapkan(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],plan_id=plan['id'])
+    assert await fakta(pg)==before
+
+
+async def test_pemulihan_keanggotaan_tetap_hanya_perusahaan_yang_ditinjau(pg,orang):
+    from tests.pg.test_console_produk import beberapa_perusahaan
+    from hmu_core import AksesProdukAnggota as UP
+    x=orang
+    async with pg() as db:
+        await beberapa_perusahaan(db,x)
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=False;await db.commit()
+        other=await db.scalar(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==x['asing'],KeanggotaanPerusahaan.user_id==x['uid']))
+        mid=other.id;old=(other.aktif,other.peran,str(other.updated_at))
+    await action(pg,x,'aktifkan_keanggotaan')
+    async with pg() as db:
+        other=await db.get(KeanggotaanPerusahaan,mid)
+        assert (other.aktif,other.peran,str(other.updated_at))==old
+        assert (await db.get(UP,(x['asing'],x['uid'],'teraflow'))).peran==P.ADMIN
+        assert (await db.get(Akun,x['aid'])).token_version==1
+
+
+async def test_data_pemulihan_publik_tidak_membocorkan_keanggotaan_lain_dan_tidak_memulihkan_izin(pg,orang):
+    import httpx
+    from app.main import app
+    from tests.pg.test_console_produk import beberapa_perusahaan
+    from hmu_core import AksesProdukAnggota as UP
+    from hmu_identitas.produk import hak_pengguna,ProdukDitolak
+    x=orang
+    async with pg() as db:await beberapa_perusahaan(db,x)
+    result,_=await action(pg,x,'tautan_sandi')
+    async with pg() as db:
+        (await db.get(UP,(x['asing'],x['uid'],'teraflow'))).aktif=False;await db.commit()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
+        from bs4 import BeautifulSoup
+        page=await c.get('/pemulihan');csrf=BeautifulSoup(page.text,'html.parser').select_one('[data-csrf-pemulihan]')['value']
+        r=await c.post('/pemulihan/periksa',headers={'X-CSRF-Token':csrf},json=dict(cap=result['cap']))
+        assert r.status_code==200 and set(r.json())=={'nama','username','perusahaan','jenis'}
+        assert 'Registry tanpa layanan' not in r.text
+    async with pg() as db:
+        await help.pulihkan_sandi(db,cap=result['cap'],sandi='sandi-global-tetap-terpisah-123',ulangi='sandi-global-tetap-terpisah-123');await db.commit()
+        with pytest.raises(ProdukDitolak):await hak_pengguna(db,company_id=x['asing'],produk='teraflow',user_id=x['uid'])
+        assert (await hak_pengguna(db,company_id=x['cid'],produk='padiflow',user_id=x['uid'])).peran==P.ADMIN
+
+
+
+@pytest.mark.parametrize('aksi',['buka_penahanan','aktifkan_keanggotaan'])
+async def test_bantuan_lokal_tidak_terhambat_perubahan_izin_perusahaan_lain(pg,orang,aksi):
+    from hmu_core import ProdukAplikasiPerusahaan as CP,AksesProdukAnggota as UP
+    x=orang
+    async with pg() as db:
+        db.add(KeanggotaanPerusahaan(company_id=x['asing'],user_id=x['uid'],aktif=True,peran=P.OPERATOR))
+        db.add(CP(company_id=x['asing'],produk='teraflow',aktif=True,warisan=False));await db.flush()
+        db.add(UP(company_id=x['asing'],user_id=x['uid'],produk='teraflow',aktif=True,peran=P.ADMIN));await db.commit()
+        plan=await help.pratinjau(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],aksi=aksi,alasan='Bantuan dibatasi pada perusahaan yang sedang dikelola');await db.commit()
+        (await db.get(UP,(x['asing'],x['uid'],'teraflow'))).aktif=False;await db.commit()
+    async with pg() as db:
+        result=await help.terapkan(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],plan_id=plan['id']);await db.commit()
+        assert result['aksi']==aksi
+        assert not (await db.get(UP,(x['asing'],x['uid'],'teraflow'))).aktif
+        assert (await db.get(Akun,x['aid'])).token_version==1
+
+
+async def test_audit_umum_tidak_menyimpan_rincian_keanggotaan_perusahaan_lain(pg,orang):
+    from hmu_identitas.monitoring import RencanaBantuan
+    x=orang
+    async with pg() as db:
+        db.add(KeanggotaanPerusahaan(company_id=x['asing'],user_id=x['uid'],aktif=True,peran=P.OPERATOR));await db.commit()
+        plan=await help.pratinjau(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],aksi='cabut_sesi',alasan='Pemilik meminta sesi dicabut tanpa membocorkan perusahaan lain');await db.commit()
+        assert 'Registry tanpa layanan' in (await db.get(RencanaBantuan,plan['id'])).sebelum
+        await help.terapkan(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],plan_id=plan['id']);await db.commit()
+        audit=await db.scalar(select(ActivityLog).where(ActivityLog.aksi=='console_bantuan').order_by(ActivityLog.id.desc()))
+        for value in (audit.old_value,audit.new_value):
+            assert 'Registry tanpa layanan' not in value and 'keanggotaan_lintas' not in value
+            item=json.loads(value)
+            assert item['akun']['company_id']==x['cid']
+            assert len(item['cakupan_sidik'])==64
