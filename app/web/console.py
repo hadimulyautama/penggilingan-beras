@@ -7,7 +7,7 @@ from fastapi.routing import APIRoute
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel,ConfigDict,Field,SecretStr
-from sqlalchemy import and_,select,func,or_
+from sqlalchemy import and_,select,func,or_,text
 from sqlalchemy.exc import IntegrityError
 from hmu_identitas import peran as P
 from app.config import settings
@@ -453,3 +453,28 @@ async def simpan_akses_produk(company_id:int,user_id:int,data:PengaturanAksesPro
             result=await produk_svc.simpan_akses(db,ruang=actor['ruang'],company_id=company_id,user_id=user_id,**data.model_dump(exclude={'konfirmasi'}));await db.commit();return result
     except PermissionError as e:raise HTTPException(403,str(e)) from e
     except (ValueError,IntegrityError) as e:raise HTTPException(422,str(e) if isinstance(e,ValueError) else 'Data akses produk berubah. Muat ulang pratinjau.') from e
+
+
+# Bacaan operasional Console. Tidak menerima sesi aplikasi harian.
+from app.services import console_operasi as operasi_console
+
+@router.get('/internal/console/peta-akses')
+async def peta_akses_console(user_id:int|None=None,akun_id:int|None=None,jenis:str='staf',company_id:int|None=None,produk:str='',cari:str='',halaman:int=1,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:
+            await db.execute(text('SET TRANSACTION READ ONLY'))
+            if jenis not in ('staf','pelanggan','timbangan_lama') or (jenis!='staf' and user_id is not None) or (jenis=='staf' and akun_id is not None):raise ValueError('Identitas akun tidak valid.')
+            if jenis!='staf':return await operasi_console.peta_akun_lokal(db,jenis=jenis,akun_id=akun_id,company_id=company_id,produk=produk,cari=cari,halaman=halaman)
+            if user_id is None:return await operasi_console.cari_pengguna(db,company_id=company_id,produk=produk,cari=cari,halaman=halaman)
+            return await operasi_console.peta_akses(db,user_id=user_id,company_id=company_id,produk=produk,halaman=halaman)
+    except LookupError as e:raise HTTPException(404,str(e))
+    except (ValueError,PermissionError) as e:raise HTTPException(422,str(e))
+
+@router.get('/internal/console/gangguan')
+async def gangguan_console(company_id:int|None=None,produk:str='',jam:int=24,kategori:str='',halaman:int=1,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:
+            await db.execute(text('SET TRANSACTION READ ONLY'))
+            return await operasi_console.gangguan(db,company_id=company_id,produk=produk,jam=jam,kategori=kategori,halaman=halaman)
+    except LookupError as e:raise HTTPException(404,str(e))
+    except (ValueError,PermissionError) as e:raise HTTPException(422,str(e))
