@@ -7,7 +7,7 @@ Tidak memanggil layanan penerimaan, sinkronisasi bobot, QC, atau stok.
 from types import SimpleNamespace
 from sqlalchemy import select, text
 from hmu_identitas import peran as P
-from app.models import Warehouse, Jasa
+from app.models import Warehouse, Jasa, User
 from app.services import barang_masuk as masuk
 
 
@@ -30,9 +30,14 @@ async def baca(db, tid, user, lihat=None):
         raise PermissionError('Rincian penerimaan berada di luar cakupan gudang akun.')
     rows = await masuk.riwayat(db, g1=g1, g2=g2, tid=tid)
     sumber = rows[0]['catatan'] if rows else []
+    # Satu tiket beras dapat mempunyai beberapa catatan kemasan. Nama
+    # pencatatnya dibaca sekali dari sumber yang telah lolos gerbang gudang,
+    # bukan diulang oleh rincian_lokasi untuk setiap catatan pada tiket itu.
+    petugas_banyak = dict((await db.execute(select(User.id, User.nama).where(
+        User.id.in_({c['petugas_id'] for c in sumber})))).all()) if sumber else {}
     catatan = []
     for c in sumber:
-        lokasi, _, petugas = await masuk.rincian_lokasi(db, [c])
+        lokasi, _, petugas = await masuk.rincian_lokasi(db, [c], petugas=petugas_banyak)
         qc = await masuk.hasil_qc(db, [c])
         pesanan = await db.get(Jasa, c['jasa_id']) if c['jasa_id'] else None
         catatan.append(dict(
