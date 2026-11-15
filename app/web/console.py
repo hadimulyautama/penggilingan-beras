@@ -82,7 +82,7 @@ async def tukar(data:Tukar):
         async with SessionLocal() as db:
             token=await auth.tukar(db,kode=data.kode,verifier=data.verifier);await db.commit()
     except auth.TolakConsole as e:raise HTTPException(401,str(e)) from e
-    return dict(token=token,berlaku_detik=3600)
+    return dict(token=token,berlaku_detik=auth.SESI_DETIK)
 
 
 class MasukLangsung(BaseModel):

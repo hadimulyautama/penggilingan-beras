@@ -43,7 +43,7 @@ async def test_akun_super_lama_masuk_tanpa_cookie_pf_dan_tanpa_transaksi_berubah
         async with pg() as db:
             a=await db.scalar(select(Akun));account=(a.password_hash,a.token_version,a.status,a.harus_ganti_sandi,a.user.role,a.user.status)
         r=await kirim(c,data);assert r.status_code==200,r.text
-        assert len(r.json()['token'])==64 and r.json()['berlaku_detik']==3600
+        assert len(r.json()['token'])==64 and r.json()['berlaku_detik']==30*24*60*60
         assert 'no-store' in r.headers['cache-control']
         from app.web.security import NAMA_COOKIE
         assert NAMA_COOKIE not in r.cookies
@@ -54,6 +54,8 @@ async def test_akun_super_lama_masuk_tanpa_cookie_pf_dan_tanpa_transaksi_berubah
         async with pg() as db:
             a=await db.scalar(select(Akun));assert (a.password_hash,a.token_version,a.status,a.harus_ganti_sandi,a.user.role,a.user.status)==account
             row=await db.scalar(select(SesiConsole));assert row.token_hash!=token and row.ditukar_pada and a.terakhir_login
+            from datetime import timedelta
+            assert row.sesi_sampai-row.ditukar_pada==timedelta(days=30)
         assert (await c.post('/internal/console/keluar',headers=h,json={})).status_code==200
         assert (await c.get('/internal/console/saya',headers=h)).status_code==401
 

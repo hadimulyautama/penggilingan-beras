@@ -243,3 +243,34 @@ async def test_pembacaan_console_tidak_autoflush_draf(pg,organisasi):
         data=await svc.rincian(db,ruang=svc.RuangAdministrasi(x['uid']),company_id=x['c'][0])
         assert data['perusahaan']['id']==x['c'][0] and draft.id is None and draft in db.new
         await db.rollback();assert await fakta(pg)==before
+
+
+async def test_sesi_pribadi_30_hari_tetap_memeriksa_akses_dan_batas_waktu(pg,monkeypatch):
+    from datetime import timedelta
+    async with await _klien(pg,peran=P.SUPERADMIN) as c:
+        h=await sesi(c)
+        async with pg() as db:
+            row=await db.scalar(select(SesiConsole));issued=row.ditukar_pada;expiry=row.sesi_sampai
+            assert expiry-issued==timedelta(days=30)
+        monkeypatch.setattr(auth,'now',lambda:issued+timedelta(days=29))
+        assert (await c.get('/internal/console/saya',headers=h)).status_code==200
+        async with pg() as db:assert (await db.scalar(select(SesiConsole))).sesi_sampai==expiry
+        monkeypatch.setattr(auth,'now',lambda:expiry)
+        before=await fakta(pg)
+        assert (await c.get('/internal/console/saya',headers=h)).status_code==401
+        assert await fakta(pg)==before
+
+
+async def test_sesi_lama_tidak_diperpanjang_diam_diam_dan_pencabutan_tetap_langsung(pg,monkeypatch):
+    from datetime import timedelta
+    async with await _klien(pg,peran=P.SUPERADMIN) as c:
+        h=await sesi(c)
+        async with pg() as db:
+            row=await db.scalar(select(SesiConsole));issued=row.ditukar_pada
+            row.sesi_sampai=issued+timedelta(hours=1);await db.commit()
+        monkeypatch.setattr(auth,'now',lambda:issued+timedelta(minutes=59))
+        assert (await c.get('/internal/console/saya',headers=h)).status_code==200
+        async with pg() as db:
+            row=await db.scalar(select(SesiConsole));assert row.sesi_sampai==issued+timedelta(hours=1)
+            a=await db.get(Akun,row.akun_id);a.user.role=P.OPERATOR;await db.commit()
+        assert (await c.get('/internal/console/saya',headers=h)).status_code==401

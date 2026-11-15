@@ -31,4 +31,4 @@ async def masuk(db,username,sandi):
     token=await auth.tukar(db,kode=code,verifier=verifier)
     a.terakhir_login=auth.now()
     await db.flush()
-    return dict(token=token,nama=a.nama,berlaku_detik=3600)
+    return dict(token=token,nama=a.nama,berlaku_detik=auth.SESI_DETIK)
