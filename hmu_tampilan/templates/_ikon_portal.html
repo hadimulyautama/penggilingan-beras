@@ -4,6 +4,7 @@
 'beranda':'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
 'barang_masuk':'<path d="M17 7 7 17M17 17H7V7"/>',
 'pekerjaan':'<path d="m3 6 1 1 2-2M10 6h11M3 12l1 1 2-2M10 12h11M3 18l1 1 2-2M10 18h11"/>',
+'transfer_pk':'<path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
 'stok':'<path d="M3 21V7l9-4 9 4v14M3 21h18M7 21V11h10v10M7 15h10M7 18h10"/>',
 'barang_keluar':'<path d="M3 17V6h10v11M13 9h4l4 4v4h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
 'jasa':'<path d="m12 3 9 5-9 5-9-5 9-5ZM3 8v9l9 5 9-5V8M12 13v9"/>',
@@ -15,7 +16,7 @@
 'berjalan':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 'mutu':'<path d="M9 3h6M10 3v7l-6 9a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M8 15h8"/>'
 } %}
-{% set aliases = {'⌂':'beranda','↙':'barang_masuk','≡':'pekerjaan','▦':'stok','truck':'barang_keluar','chart-no-axes-combined':'laporan_riwayat','⚙':'pengaturan','◇':'jasa','✉':'kabar','✎':'aksi'} %}
+{% set aliases = {'⇆':'transfer_pk','⌂':'beranda','↙':'barang_masuk','≡':'pekerjaan','▦':'stok','truck':'barang_keluar','chart-no-axes-combined':'laporan_riwayat','⚙':'pengaturan','◇':'jasa','✉':'kabar','✎':'aksi'} %}
 {% set pilihan = aliases.get(nama, nama) %}
 {% if pilihan in paths %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ paths[pilihan]|safe }}</svg>{% else %}{{ nama }}{% endif %}
 {%- endmacro %}

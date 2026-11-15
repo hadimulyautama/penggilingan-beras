@@ -111,9 +111,12 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    await route.fulfill(status=response.status_code,headers={k:v for k,v in response.headers.items() if k.lower() not in ('content-length','content-encoding','transfer-encoding')},body=response.content)
   await page.context.add_cookies([dict(name=x.name,value=x.value,url=base) for x in c.cookies.jar])
   await page.route('**/*',app)
-  await page.goto(base+'/transfer-bertahap');await expect(page.locator('#pk-pesan')).to_have_text('Status diperbarui.')
+  await page.goto(base+'/transfer-bertahap?status=siap');await expect(page.locator('#pk-pesan')).to_have_text('Status diperbarui.')
   tutup=page.get_by_role('button',name='Tutup sisa persetujuan',exact=True)
-  if is_admin:await expect(tutup).to_be_visible()
+  if is_admin:
+   await page.get_by_role('button',name=f"Tindakan permintaan {siap['rid']}").click()
+   await expect(tutup).to_be_visible()
+   await page.get_by_role('button',name='Tutup detail',exact=True).click()
   else:
    await expect(tutup).to_have_count(0)
    await expect(page.locator('[data-action]')).to_have_count(0)
@@ -124,6 +127,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    response=await c.post(f"/api/transfer-bertahap/permintaan/{siap['rid']}/tutup-sisa",json={'alasan':'Tidak boleh ditutup operator'},headers={csrf.NAMA_HEADER:cap_formulir(c)})
    assert response.status_code==403,response.text
   await page.locator('[name=pilih]').check()
+  await page.locator('#pk-buka-form').click()
   await expect(page.locator('[name=nomor_polisi],[name=nama_sopir],#pk-pakai-kendaraan')).to_have_count(0)
   if cara=='kg':
    await page.locator('[name=cara]').select_option('kg')
@@ -132,7 +136,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    await page.locator('[name=jumlah_karung]').fill('120')
    await page.locator('[name=berat_curah_kg]').fill('0.01')
    await expect(page.locator('[data-total]')).to_contain_text('melebihi sisa persetujuan')
-   assert not await page.locator('#pk-pilihan').evaluate('e=>e.checkValidity()')
+   assert not await page.locator('#pk-catatan').evaluate('e=>e.checkValidity()')
    await page.locator('[name=jumlah_karung]').fill('23')
    await page.locator('[name=berat_curah_kg]').fill('2')
    await expect(page.locator('[data-total]')).to_contain_text('1.152 kg')
@@ -141,7 +145,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    await page.locator('[name=cara]').select_option('karung')
    await expect(page.locator('[name=jumlah_karung]')).to_have_value('23')
    await expect(page.locator('[name=berat_curah_kg]')).to_have_value('2.00')
-  await page.get_by_role('button',name='Catat transfer · 1 lot',exact=True).click()
+  await page.locator('#pk-form').get_by_role('button',name='Catat transfer · 1 lot',exact=True).click()
   await expect(page.locator('#pk-pesan')).to_contain_text('Stok asal dan tujuan sudah diperbarui.')
   await expect(page.locator('#pk-jalan')).to_contain_text('Transfer #')
   # Rincian transfer sekarang tersedia; jalur generik tetap tanpa tautan timbang.

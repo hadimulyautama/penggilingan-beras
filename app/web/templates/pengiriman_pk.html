@@ -1,20 +1,36 @@
 {% extends 'base.html' %}
 {% from '_panduan.html' import panel as panel_panduan %}
+{% from '_kontrol_halaman.html' import tombol %}
 {% block judul %}Transfer PK{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/pekerjaan-kontrol.css?v={{ VERSI }}">
-<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=6">
-<div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}">
-<header class="pk-kontrol"><div class="pk-judul"><h1>Transfer PK</h1><button class="btn btn--kecil" type="button" id="pk-panduan-buka">ⓘ Panduan</button></div><p><a href="/pekerjaan?tab=tindakan">← Kembali ke Pekerjaan</a></p>
-<div class="kontrol-cari-kiri pk-alat"><label class="pk-cari">Cari lot atau transfer<input type="search" class="cari" id="pk-cari" placeholder="Cari lot atau transfer…"></label><button class="btn" type="button" id="pk-muat">Perbarui status</button></div>
-<nav class="kontrol-tab" aria-label="Bagian transfer"><a class="kontrol-tab__item" href="#pk-permintaan">Permintaan lot</a><a class="kontrol-tab__item" href="#pk-perjalanan">Riwayat transfer</a></nav></header>
+<link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=7">
+<div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}" aria-busy="true">
+<h1 class="sr-only">Transfer PK</h1>
+<header class="kontrol-halaman">
+<nav class="kontrol-tab kontrol-tab--berjumlah" aria-label="Bagian transfer">
+<a class="kontrol-tab__item" href="/transfer-bertahap?tab=permintaan" data-pk-tab="permintaan" aria-current="page"><span class="kontrol-tab__label">Permintaan lot</span><span class="kontrol-tab__jumlah" id="pk-jumlah-permintaan">…</span></a>
+<a class="kontrol-tab__item" href="/transfer-bertahap?tab=riwayat" data-pk-tab="riwayat"><span class="kontrol-tab__label">Riwayat transfer</span><span class="kontrol-tab__jumlah" id="pk-jumlah-riwayat">…</span></a>
+</nav>
+<div class="kontrol-aksi kontrol-halaman__aksi">{{ tombol('panduan', {'id':'pk-panduan-buka'}) }}{{ tombol('cetak', {'id':'pk-cetak'}) }}</div>
+<div class="kontrol-pencarian">
+<button class="kontrol-filter filter-berikon" type="button" id="pk-filter-buka" aria-haspopup="dialog">Filter</button>
+<form class="kontrol-pencarian__form" id="pk-pencarian" role="search"><label class="kontrol-pencarian__field"><span class="sr-only">Cari lot, pemilik atau transfer</span><input class="kontrol-pencarian__input" type="search" id="pk-cari" placeholder="Cari lot, pemilik…" maxlength="200"></label><button class="kontrol-pencarian__submit cari-berikon" type="submit">Cari</button></form>
+</div>
+</header>
+<div class="tp-keterangan"><p class="bantu" id="pk-arahan">Memuat permintaan…</p><div class="tp-actions">{% if VIEW in (V_POLESAN, V_SUPER) %}<a class="btn btn--kecil" href="/stok?tab=bahan">Pilih bahan baku</a>{% endif %}<button class="btn btn--kecil" type="button" id="pk-muat">Perbarui status</button></div></div>
 <p id="pk-pesan" role="status" aria-live="polite"></p>
-<section id="pk-permintaan"><h2>Permintaan lot</h2><p class="bantu" id="pk-arahan">Memuat permintaan…</p><form id="pk-pilihan"><div id="pk-daftar"></div><p><button class="btn btn--utama" type="submit" id="pk-simpan" hidden>Setujui yang dipilih</button></p></form></section>
-<section id="pk-perjalanan"><h2>Riwayat transfer</h2><p class="bantu">Jumlah yang tercatat mengurangi stok asal dan menambah stok tujuan. Sisa persetujuan dapat dipindahkan berikutnya.</p><div id="pk-jalan"></div></section>
-<dialog class="pk-panel" id="pk-alasan"><form id="pk-alasan-form"><h2 id="pk-alasan-judul"></h2><p id="pk-alasan-keterangan"></p><label>Alasan<textarea class="fld" name="alasan" required maxlength="2000"></textarea></label><p><button class="btn btn--utama" type="submit">Simpan keputusan</button> <button class="btn" type="button" data-tutup>Batal</button></p></form></dialog>
-<dialog class="pk-panel" id="pk-koreksi" aria-labelledby="pk-koreksi-judul">
+<p id="pk-ringkasan" class="tp-meta"></p>
+<section id="pk-permintaan" aria-label="Permintaan lot"><div id="pk-daftar"></div></section>
+<section id="pk-perjalanan" aria-label="Riwayat transfer" hidden><p class="bantu">Menampilkan hingga 100 transfer terbaru. Jumlah efektif mengikuti koreksi yang sudah disimpan.</p><div id="pk-jalan"></div><div id="pk-audit"></div></section>
+<div id="pk-pilihan" class="tp-pilihan" hidden><strong id="pk-terpilih"></strong><span id="pk-pilihan-pesan"></span><div class="tp-actions"><button class="btn" type="button" id="pk-bersihkan">Batal pilih</button><button class="btn btn--utama" type="button" id="pk-buka-form"></button></div></div>
+<dialog class="pk-panel" id="pk-filter" aria-labelledby="pk-filter-judul"><form id="pk-filter-form" class="pk-form-filter"><div class="pk-panel-kepala"><h2 id="pk-filter-judul">Filter transfer PK</h2><button class="btn" type="button" data-tutup aria-label="Tutup filter">×</button></div><label>Status<select class="fld" name="status"></select></label><label>Gudang asal<select class="fld" name="asal"></select></label><label>Tujuan<select class="fld" name="tujuan"></select></label><div class="tp-actions"><button class="btn btn--utama" type="submit">Terapkan filter</button><button class="btn" type="button" id="pk-filter-reset">Tampilkan semua</button></div></form></dialog>
+<dialog class="pk-panel tp-panel-lebar" id="pk-form" aria-labelledby="pk-form-judul"><form id="pk-catatan"><div class="pk-panel-kepala"><h2 id="pk-form-judul"></h2><button class="btn" type="button" data-tutup aria-label="Tutup formulir">×</button></div><p class="bantu" id="pk-form-arahan"></p><div id="pk-form-lot"></div><p id="pk-form-total" class="tp-total" role="status"></p><p id="pk-form-pesan" role="alert"></p><div class="tp-actions"><button class="btn btn--utama" type="submit" id="pk-simpan"></button><button class="btn" type="button" data-tutup>Batal</button></div></form></dialog>
+<dialog class="pk-panel tp-panel-lebar" id="pk-detail" aria-labelledby="pk-detail-judul"><div class="pk-panel-kepala"><h2 id="pk-detail-judul"></h2><button class="btn" type="button" data-tutup aria-label="Tutup detail">×</button></div><div id="pk-detail-isi"></div></dialog>
+<dialog class="pk-panel" id="pk-alasan" aria-labelledby="pk-alasan-judul"><form id="pk-alasan-form"><button class="btn tp-tutup" type="button" data-tutup aria-label="Tutup keputusan">×</button><h2 id="pk-alasan-judul"></h2><p id="pk-alasan-keterangan"></p><label>Alasan<textarea class="fld" name="alasan" required maxlength="2000"></textarea></label><p id="pk-alasan-pesan" role="alert"></p><p><button class="btn btn--utama" type="submit">Simpan keputusan</button> <button class="btn" type="button" data-tutup>Batal</button></p></form></dialog>
+<dialog class="pk-panel tp-panel-lebar" id="pk-koreksi" aria-labelledby="pk-koreksi-judul">
 <form id="pk-koreksi-form">
-<h2 id="pk-koreksi-judul">Koreksi Transfer PK</h2>
+<div class="pk-panel-kepala"><h2 id="pk-koreksi-judul">Koreksi Transfer PK</h2><button class="btn" type="button" data-tutup aria-label="Tutup koreksi">×</button></div>
 <p id="pk-koreksi-lot"></p><p class="bantu">Koreksi hanya oleh Admin, sesuai barang sebenarnya. Pengurangan memakai sisa tumpukan dahulu, kemudian silo dan bahan proses. Hasil produksi tidak diubah otomatis.</p>
 <label>Tindakan<select class="fld" name="aksi"></select></label>
 <label id="pk-koreksi-berat">Jumlah yang benar (kg)<input class="fld" name="berat_kg" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal"><small>Isi jumlah akhir yang benar, bukan selisihnya.</small></label>
@@ -34,5 +50,5 @@
 <p><strong>Jika ada kesalahan:</strong> Admin membuka Koreksi permintaan atau Koreksi jumlah pada catatan yang salah, mengisi jumlah yang benar dan alasan, lalu memeriksa dampak sebelum menyimpan. Sebelum ada transfer, persetujuan dapat dikembalikan ke permintaan. Sisa persetujuan yang terlanjur ditutup dapat dibuka kembali jika stoknya masih tersedia.</p>
 <p>Pengurangan menyentuh sisa tumpukan dahulu, lalu sisa silo, lalu bahan proses terkait. Jika koreksi masih tercukupi dari tumpukan, bahan produksi tetap. Jika transfer sudah benar tetapi bahan kurang tercatat, pilih Bahan dari tumpukan dan pemindahan silo yang terkait: sisa tumpukan berkurang tanpa menambah transfer asal. Proses selesai ikut diperbarui bahan, susut, dan rendemennya; hasil timbang tetap. Hasil melebihi bahan harus diselesaikan dengan catatan bahan/hasil yang benar, bukan diskalakan.</p>
 {% endcall %}
-</div><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=6" defer></script>
+</div><script src="/static/pengiriman-pk.js?v={{ VERSI }}&amp;pk-ui=7" defer></script>
 {% endblock %}

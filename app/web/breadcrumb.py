@@ -98,9 +98,10 @@ def susun(path,ctx,judul):
         else:stok()
         leaf='Koreksi bahan proses'
     elif p=='/pekerjaan':leaf='Pekerjaan'
+    elif p=='/transfer-bertahap':leaf='Transfer PK'
     elif p.startswith('/permintaan-pk/'):
-        add('Pekerjaan','/pekerjaan');add('Transfer PK','/transfer-bertahap');leaf=kode(ctx,judul)
-    elif p.startswith('/pekerjaan/') or p=='/transfer-bertahap':
+        add('Transfer PK','/transfer-bertahap');leaf=kode(ctx,judul)
+    elif p.startswith('/pekerjaan/'):
         add('Pekerjaan','/pekerjaan');leaf=kode(ctx,judul)
     elif p.startswith('/riwayat-qc/'):
         riwayat();parts=p.split('/');add('Riwayat QC','/riwayat?tab=qc')

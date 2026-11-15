@@ -3,6 +3,8 @@ import pytest
 from app.web.breadcrumb import susun
 
 @pytest.mark.parametrize('path,ctx,title,labels,back',[
+ ('/transfer-bertahap',{},'Transfer PK',['Beranda','Transfer PK'],'/'),
+ ('/permintaan-pk/4',{'breadcrumb_detail':'LOT-4'},'Permintaan',['Beranda','Transfer PK','LOT-4'],'/transfer-bertahap'),
  ('/',{},'Beranda',['Beranda'],None),
  ('/stok',{},'Stok',['Beranda','Stok'],'/'),
  ('/stok?tab=produk',{},'Stok',['Beranda','Stok','Produk'],'/stok'),

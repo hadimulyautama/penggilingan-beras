@@ -24,7 +24,7 @@ def hak_view(view):
     return hak(peran, g1=view == P.V_SELEPAN, g2=view == P.V_POLESAN)
 
 
-PINTU_HAK = {"barang_keluar": "pengiriman"}
+PINTU_HAK = {"barang_keluar": "pengiriman", "transfer_pk": "catat"}
 
 
 PERAN_KOLOM = ((P.V_SUPER, "Super Admin"), (P.V_ADMIN, "Admin"),

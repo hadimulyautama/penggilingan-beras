@@ -84,7 +84,7 @@ async def halaman(request:Request,akun=Depends(butuh_akun)):
         async with SessionLocal() as db:await baca_izin(db,akun.user)
     except PermissionError as e:raise galat(e)
     from app.config import settings
-    return await render_laci(request,'pengiriman_pk.html',layar='pekerjaan',teraflow_url=settings.teraflow_web_url.rstrip('/'))
+    return await render_laci(request,"pengiriman_pk.html",layar='transfer_pk',teraflow_url=settings.teraflow_web_url.rstrip('/'))
 
 @router.get('/api/transfer-bertahap')
 async def daftar(user=Depends(pengguna_aksi)):
@@ -96,6 +96,11 @@ async def daftar(user=Depends(pengguna_aksi)):
             from app.services.jasa import nama_pemilik_banyak
             rows=(await db.execute(select(PermintaanPk,MillingProcess).join(MillingProcess,MillingProcess.id==PermintaanPk.milling_process_id).where(PermintaanPk.status.in_(['diminta','disetujui'])|PermintaanPk.bertahap.is_(True)).order_by(PermintaanPk.waktu_minta,PermintaanPk.id))).all()
             loc=await lokasi_banyak(db,MillingProcess,[p.id for r,p in rows]);owners=await nama_pemilik_banyak(db,{r.jasa_id for r,p in rows if r.jasa_id})
+            # Sama pelanggan boleh digabung walaupun nomor pesanan berbeda,
+            # mengikuti cocok_pemilik pada writer, bukan nama tampilannya.
+            from app.models import Jasa
+            pemilik={j.id:j.pelanggan_id for j in (await db.scalars(select(Jasa).where(Jasa.id.in_({r.jasa_id for r,p in rows if r.jasa_id})))).all()}
+            nama_silo={x.id:x.nama_silo for x in (await db.scalars(select(Silo).where(Silo.id.in_({r.silo_id for r,p in rows if r.silo_id})))).all()}
             people={u.id:u.nama for u in (await db.scalars(select(User).where(User.id.in_({r.diminta_oleh for r,p in rows})))).all()}
             requests=[]
             for r,p in rows:
@@ -105,6 +110,7 @@ async def daftar(user=Depends(pengguna_aksi)):
                     if w.kode_fungsi=='g2' and r.jasa_id is not None:continue
                 allocated=await s.terpakai(db,r.id);completed=await s.terpakai(db,r.id,selesai=True)
                 requests.append(dict(peminta=people.get(r.diminta_oleh,'Pencatat belum tercatat'),selesai_kg=s.angka(completed),perjalanan_kg=s.angka(allocated-completed),id=r.id,lot=p.kode_proses,pemilik=owners.get(r.jasa_id,'Milik pabrik'),status=r.status,sebab=r.sebab,waktu=r.waktu_minta.isoformat() if r.waktu_minta else None,bertahap=r.bertahap,asal_id=asal,asal=loc[p.id]['gudang_nama'],diminta=s.angka(r.berat_minta_kg),disetujui=s.angka(r.berat_setuju_kg),sisa=s.angka(max(s.D(0),s.D(r.berat_setuju_kg)-allocated)),bebas=s.angka(await pending_transfer_kg(db,p.id,pemilik_id=r.jasa_id,bebas=True)),tujuan=r.tujuan,silo_id=r.silo_id))
+                requests[-1].update(pemilik_kunci=('pelanggan:'+str(pemilik[r.jasa_id]) if r.jasa_id in pemilik else 'jasa:'+str(r.jasa_id) if r.jasa_id else 'pabrik'),tujuan_nama=nama_silo.get(r.silo_id,'Silo tidak tersedia') if r.silo_id else 'Tumpukan')
             journeys=[]
             q=select(PengirimanPk).order_by(PengirimanPk.id.desc()).limit(100)
             if not is_admin:q=q.where(PengirimanPk.asal_id==w.id if w.kode_fungsi=='g1' else (PengirimanPk.tujuan_id==w.id)&PengirimanPk.jasa_id.is_(None))

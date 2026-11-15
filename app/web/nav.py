@@ -93,6 +93,7 @@ TAB = (
     ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None, "⌂"),
     ("barang_masuk", "/barang-masuk", "Barang Masuk", "Tiket dan penerimaan", None, "↙"),
     ("pekerjaan", "/pekerjaan", "Pekerjaan", "Perlu tindakan dan berjalan", None, "≡"),
+    ("transfer_pk", "/transfer-bertahap", "Transfer PK", "Permintaan, persetujuan, pencatatan dan koreksi PK", None, "⇆"),
     # /aksi, /berjalan, /keputusan dan /mutu tetap rute kompatibel.
     # Pintu utamanya kini Barang Masuk dan Pekerjaan; hak tindakan lama tetap.
     # Stok berdiri SEBELUM Laporan: ia keadaan sekarang, sedangkan laporan
