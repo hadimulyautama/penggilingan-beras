@@ -25,7 +25,14 @@ async def rincian(db,*,ruang,company_id,user_id=None):
             user=await db.get(User,user_id,populate_existing=True)
             if not member or not user:raise OrganisasiError('Pengguna bukan anggota perusahaan ini.')
             grants={g.produk:g for g in await db.scalars(select(AksesProdukAnggota).where(AksesProdukAnggota.company_id==company_id,AksesProdukAnggota.user_id==user_id).execution_options(populate_existing=True))}
-            data.update(user_id=user_id,nama=user.nama,platform=P.super_saja(user.role),keanggotaan=await anggota.snapshot(db,member),akses=[])
+            # Keanggotaan di perusahaan lain meniadakan fallback warisan,
+            # termasuk bila keanggotaan itu nonaktif. Ini sama dengan gerbang
+            # produk; pilihan Console dan bukti pratinjau harus mengikutinya.
+            lintas=bool(await db.scalar(select(KeanggotaanPerusahaan.id).where(
+                KeanggotaanPerusahaan.user_id==user_id,KeanggotaanPerusahaan.company_id!=company_id).limit(1)))
+            data.update(user_id=user_id,nama=user.nama,platform=P.super_saja(user.role),peran_master=P.normal(user.role),
+                pengguna_aktif=(user.status or '').lower()=='aktif',warisan_boleh=not lintas,
+                keanggotaan=await anggota.snapshot(db,member),akses=[])
             for p in data['produk']:
                 g=grants.get(p['kode']);mode=g.peran if g and g.aktif else 'nonaktif' if g else 'warisan' if p['warisan'] else 'nonaktif'
                 data['akses'].append(dict(produk=p['kode'],mode=mode))
@@ -60,17 +67,27 @@ async def simpan(db,*,ruang,company_id,produk,integrasi,bukti,alasan):
 
 async def simpan_akses(db,*,ruang,company_id,user_id,akses,bukti,alasan):
     alasan=teks(alasan,'Alasan perubahan',500,10)
+    if not anggota.id_sah(user_id):raise OrganisasiError('Pengguna tidak valid.')
     if not isinstance(akses,list) or len(akses)!=len(KODE) or any(not isinstance(a,dict) or set(a)!={'produk','mode'} or a['produk'] not in KODE or a['mode'] not in (*PERAN,'nonaktif','warisan') for a in akses) or {a['produk'] for a in akses}!=set(KODE):raise OrganisasiError('Hak akses produk tidak valid.')
-    await _kunci(db,ruang,company_id);before=await rincian(db,ruang=ruang,company_id=company_id,user_id=user_id)
+    await _kunci(db,ruang,company_id)
+    # Satu pengguna dapat diatur dari beberapa perusahaan sekaligus. Urutan
+    # perusahaan -> pengguna -> anggota sama dengan writer keanggotaan,
+    # sehingga fallback warisan tidak diputuskan dari penugasan yang separuh.
+    await db.scalar(select(User).where(User.id==user_id).with_for_update().execution_options(populate_existing=True))
+    before=await rincian(db,ruang=ruang,company_id=company_id,user_id=user_id)
     if before['platform']:raise OrganisasiError('Peran platform tidak dapat diubah melalui akses produk. Produk perusahaan tetap harus aktif.')
     if bukti!=before['bukti']:raise OrganisasiError('Keanggotaan atau akses produk telah berubah. Tinjau ulang sebelum menyimpan.')
     products={p['kode']:p for p in before['produk']}
+    # Validasi seluruh rencana sebelum mengubah ORM. Penolakan produk kedua
+    # tidak boleh meninggalkan perubahan produk pertama bagi pemanggil lain.
     for a in akses:
         p=products[a['produk']]
-        if a['mode']=='warisan' and not p['warisan']:raise OrganisasiError('Akses warisan hanya tersedia untuk produk perusahaan lama yang ditetapkan saat migrasi.')
-        if not p['ditetapkan']:
-            if a['mode']!='nonaktif':raise OrganisasiError('Tetapkan produk perusahaan terlebih dahulu.')
-            continue
+        if a['mode']=='warisan':
+            if not p['warisan']:raise OrganisasiError('Akses warisan hanya tersedia untuk produk perusahaan lama yang ditetapkan saat migrasi.')
+            if not before['warisan_boleh']:raise OrganisasiError('Pengguna beberapa perusahaan memerlukan izin produk eksplisit. Pilih Operator, Admin, atau Tanpa akses.')
+        if not p['ditetapkan'] and a['mode']!='nonaktif':raise OrganisasiError('Tetapkan produk perusahaan terlebih dahulu.')
+    for a in akses:
+        if not products[a['produk']]['ditetapkan']:continue
         g=await db.get(AksesProdukAnggota,(company_id,user_id,a['produk']))
         if a['mode']=='warisan':
             if g:await db.delete(g)

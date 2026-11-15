@@ -458,3 +458,172 @@ async def test_console_mencabut_anggota_warisan_langsung_menutup_sesi_operasiona
     after=await fakta(pg)
     excluded={'hmu_company_memberships','activity_logs'}
     assert {k:v for k,v in after.items() if k not in excluded}=={k:v for k,v in before.items() if k not in excluded}
+
+
+
+async def beberapa_perusahaan(db,x,*,anggota_lain=True):
+    (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True
+    db.add_all([UP(company_id=x['cid'],user_id=x['uid'],produk=PADIFLOW,aktif=True,peran=P.ADMIN),UP(company_id=x['cid'],user_id=x['uid'],produk=TERAFLOW,aktif=True,peran=P.OPERATOR)])
+    db.add_all([CP(company_id=x['asing'],produk=PADIFLOW,aktif=False,warisan=False),CP(company_id=x['asing'],produk=TERAFLOW,aktif=True,warisan=False)])
+    if anggota_lain:
+        db.add(KeanggotaanPerusahaan(company_id=x['asing'],user_id=x['uid'],aktif=True,peran=P.OPERATOR));await db.flush()
+        db.add_all([UP(company_id=x['asing'],user_id=x['uid'],produk=PADIFLOW,aktif=False,peran=P.OPERATOR),UP(company_id=x['asing'],user_id=x['uid'],produk=TERAFLOW,aktif=True,peran=P.ADMIN)])
+    await db.commit()
+
+
+async def test_pengguna_beberapa_perusahaan_tidak_bisa_menyimpan_warisan_yang_tidak_berlaku(pg,orang):
+    x=orang;ruang=mem.RuangAdministrasi(x['root'])
+    async with pg() as db:
+        await beberapa_perusahaan(db,x)
+        old=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+        with pytest.raises(OrganisasiError,match='eksplisit'):
+            await svc.simpan_akses(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],akses=[dict(produk=p,mode='warisan') for p in (PADIFLOW,TERAFLOW)],bukti=old['bukti'],alasan='Jangan hilangkan izin eksplisit pengguna beberapa perusahaan')
+        assert not db.new and not db.dirty and not db.deleted
+        await db.commit()
+        assert (await hak_pengguna(db,company_id=x['cid'],produk=PADIFLOW,user_id=x['uid'])).peran==P.ADMIN
+        assert (await hak_pengguna(db,company_id=x['asing'],produk=TERAFLOW,user_id=x['uid'])).peran==P.ADMIN
+
+
+async def test_semua_mode_produk_divalidasi_sebelum_satu_izin_diubah(pg,orang):
+    x=orang;ruang=mem.RuangAdministrasi(x['root'])
+    async with pg() as db:
+        await beberapa_perusahaan(db,x,anggota_lain=False)
+        (await db.get(CP,(x['cid'],TERAFLOW))).warisan=False;await db.commit()
+        old=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+        with pytest.raises(OrganisasiError):
+            await svc.simpan_akses(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],akses=[dict(produk=PADIFLOW,mode=P.OPERATOR),dict(produk=TERAFLOW,mode='warisan')],bukti=old['bukti'],alasan='Satu izin tidak boleh berubah saat produk berikutnya ditolak')
+        assert not db.new and not db.dirty and not db.deleted
+        await db.commit()
+        assert (await db.get(UP,(x['cid'],x['uid'],PADIFLOW))).peran==P.ADMIN
+
+
+async def test_keanggotaan_baru_membatalkan_pratinjau_hak_warisan_perusahaan_lama(pg,orang):
+    x=orang;ruang=mem.RuangAdministrasi(x['root'])
+    async with pg() as db:
+        await beberapa_perusahaan(db,x,anggota_lain=False)
+        old=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+        db.add(KeanggotaanPerusahaan(company_id=x['asing'],user_id=x['uid'],aktif=True,peran=P.OPERATOR));await db.commit()
+        new=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+        assert new['bukti']!=old['bukti']
+        with pytest.raises(OrganisasiError,match='berubah'):
+            await svc.simpan_akses(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],akses=[dict(produk=p,mode='warisan') for p in (PADIFLOW,TERAFLOW)],bukti=old['bukti'],alasan='Pratinjau lama tidak boleh mencabut izin yang masih diperlukan')
+        assert (await db.get(UP,(x['cid'],x['uid'],PADIFLOW))).peran==P.ADMIN
+
+
+async def test_balapan_keanggotaan_perusahaan_lain_dan_izin_warisan_tidak_menghilangkan_akses(pg,orang):
+    import asyncio
+    x=orang;ruang=mem.RuangAdministrasi(x['root'])
+    async with pg() as db:
+        await beberapa_perusahaan(db,x,anggota_lain=False)
+        old=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+    async def ubah():
+        async with pg() as db:
+            try:
+                await svc.simpan_akses(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],akses=[dict(produk=p,mode='warisan') for p in (PADIFLOW,TERAFLOW)],bukti=old['bukti'],alasan='Simulasi pengelola menyimpan formulir bersamaan')
+                await db.commit();return 'tersimpan'
+            except OrganisasiError as e:return str(e)
+    async with pg() as writer:
+        await mem.simpan(writer,ruang=ruang,company_id=x['asing'],user_id=x['uid'],peran=P.OPERATOR,aktif=True,lokasi=[],bukti=mem.sidik(None),alasan='Penugasan pengguna pada perusahaan tambahan')
+        task=asyncio.create_task(ubah())
+        try:
+            await asyncio.sleep(.15);menunggu=not task.done()
+            await writer.commit()
+            result=await asyncio.wait_for(task,10)
+            assert menunggu,'Writer izin harus menunggu perubahan konteks pengguna selesai'
+            assert 'berubah' in result
+        finally:
+            if not task.done():task.cancel();await asyncio.gather(task,return_exceptions=True)
+    async with pg() as db:
+        assert (await hak_pengguna(db,company_id=x['cid'],produk=PADIFLOW,user_id=x['uid'])).peran==P.ADMIN
+        assert (await hak_pengguna(db,company_id=x['cid'],produk=TERAFLOW,user_id=x['uid'])).peran==P.OPERATOR
+        with pytest.raises(ProdukDitolak):await hak_pengguna(db,company_id=x['asing'],produk=TERAFLOW,user_id=x['uid'])
+
+
+async def test_perubahan_izin_dan_status_anggota_hanya_berdampak_pada_perusahaan_tujuan(pg,orang):
+    x=orang;ruang=mem.RuangAdministrasi(x['root'])
+    async with pg() as db:await beberapa_perusahaan(db,x)
+    before=await fakta(pg)
+    async with pg() as db:
+        old=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+        await svc.simpan_akses(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],akses=[dict(produk=PADIFLOW,mode=P.OPERATOR),dict(produk=TERAFLOW,mode='nonaktif')],bukti=old['bukti'],alasan='Izin berbeda sesuai penugasan pada perusahaan ini');await db.commit()
+        member=await db.get(KeanggotaanPerusahaan,x['mid']);snapshot=await mem.snapshot(db,member)
+        await mem.simpan(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],peran=member.peran,aktif=False,lokasi=snapshot['lokasi'],bukti=mem.sidik(snapshot),alasan='Pencabutan tugas hanya di perusahaan pertama');await db.commit()
+        assert (await hak_pengguna(db,company_id=x['asing'],produk=TERAFLOW,user_id=x['uid'])).peran==P.ADMIN
+        for produk in (PADIFLOW,TERAFLOW):
+            with pytest.raises(ProdukDitolak):await hak_pengguna(db,company_id=x['cid'],produk=produk,user_id=x['uid'])
+        assert (await db.get(User,x['uid'])).role==P.OPERATOR
+    excluded=META|{'hmu_company_memberships'}
+    after=await fakta(pg)
+    assert {k:v for k,v in before.items() if k not in excluded}=={k:v for k,v in after.items() if k not in excluded}
+
+
+async def test_perubahan_peran_master_membatalkan_pratinjau_fallback_warisan(pg,orang):
+    x=orang;ruang=mem.RuangAdministrasi(x['root'])
+    async with pg() as db:
+        await beberapa_perusahaan(db,x,anggota_lain=False)
+        old=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+        (await db.get(User,x['uid'])).role=P.ADMIN;await db.commit()
+        with pytest.raises(OrganisasiError,match='berubah'):
+            await svc.simpan_akses(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],akses=[dict(produk=p,mode='warisan') for p in (PADIFLOW,TERAFLOW)],bukti=old['bukti'],alasan='Jangan memperluas izin melalui pratinjau peran yang usang')
+        assert (await db.get(UP,(x['cid'],x['uid'],TERAFLOW))).peran==P.OPERATOR
+
+
+async def test_http_payload_warisan_pengguna_lintas_perusahaan_ditolak_tanpa_mutasi(pg,orang,monkeypatch):
+    import httpx
+    from pydantic import SecretStr
+    from app.main import app
+    from app.config import settings
+    from tests.pg.test_console_masuk_langsung import KEY,HEADERS
+    from app.web.gerbang_masuk import bersihkan
+    bersihkan();x=orang
+    monkeypatch.setattr(settings,'console_login_secret',SecretStr(KEY))
+    monkeypatch.setattr(settings,'console_website_url','https://console.uji')
+    async with pg() as db:await beberapa_perusahaan(db,x)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://uji') as c:
+        r=await c.post('/internal/console/masuk',headers=HEADERS,json=dict(username='root-monitor',sandi='sandi-uji-12345',jejak='e'*64));assert r.status_code==200
+        h={'Authorization':'Bearer '+r.json()['token']};path=f"/internal/console/perusahaan/{x['cid']}/anggota/{x['uid']}/produk"
+        old=(await c.get(path,headers=h)).json();assert not old['warisan_boleh']
+        before=await fakta(pg)
+        body=dict(akses=[dict(produk=p,mode='warisan') for p in (PADIFLOW,TERAFLOW)],bukti=old['bukti'],alasan='Payload lama tidak boleh menghapus hak yang dibutuhkan',konfirmasi=True)
+        r=await c.post(path,headers=h,json=body)
+        assert r.status_code==422 and 'eksplisit' in r.text
+        assert await fakta(pg)==before
+
+
+
+async def test_konteks_server_memilih_izin_produk_perusahaan_yang_dituju(pg,orang,monkeypatch):
+    x=orang
+    async with pg() as db:await beberapa_perusahaan(db,x)
+    before=await fakta(pg)
+    async with pg() as db:
+        for cid,roles in [(x['cid'],{PADIFLOW:P.ADMIN,TERAFLOW:P.OPERATOR}),(x['asing'],{TERAFLOW:P.ADMIN})]:
+            monkeypatch.setenv('HMU_COMPANY_ID',str(cid))
+            for produk in (PADIFLOW,TERAFLOW):
+                if produk in roles:
+                    hak=await hak_lokal(db,produk=produk,user_id=x['uid'],peran_lama=P.ADMIN)
+                    assert hak.company_id==cid and hak.peran==roles[produk]
+                else:
+                    with pytest.raises(ProdukDitolak):await hak_lokal(db,produk=produk,user_id=x['uid'],peran_lama=P.ADMIN)
+        assert not db.new and not db.dirty and not db.deleted
+    assert await fakta(pg)==before
+
+
+
+async def test_penugasan_perusahaan_kedua_tidak_memutus_akses_operator_yang_masih_warisan(pg,orang):
+    x=orang;ruang=mem.RuangAdministrasi(x['root'])
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True;await db.commit()
+        assert (await hak_pengguna(db,company_id=x['cid'],produk=PADIFLOW,user_id=x['uid'])).sumber=='warisan'
+    before=await fakta(pg)
+    async with pg() as db:
+        with pytest.raises(OrganisasiError,match='izin produk eksplisit'):
+            await mem.simpan(db,ruang=ruang,company_id=x['asing'],user_id=x['uid'],peran=P.OPERATOR,aktif=True,lokasi=[],bukti=mem.sidik(None),alasan='Penambahan tugas tidak boleh menghentikan operator')
+        assert not db.new and not db.dirty and not db.deleted
+        await db.commit()
+    assert await fakta(pg)==before
+    async with pg() as db:
+        old=await svc.rincian(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'])
+        await svc.simpan_akses(db,ruang=ruang,company_id=x['cid'],user_id=x['uid'],akses=[dict(produk=p,mode=P.OPERATOR) for p in (PADIFLOW,TERAFLOW)],bukti=old['bukti'],alasan='Persiapkan izin eksplisit sesuai tugas yang sudah berlaku');await db.commit()
+        await mem.simpan(db,ruang=ruang,company_id=x['asing'],user_id=x['uid'],peran=P.OPERATOR,aktif=True,lokasi=[],bukti=mem.sidik(None),alasan='Izin perusahaan asal sudah ditetapkan secara eksplisit');await db.commit()
+        for produk in (PADIFLOW,TERAFLOW):assert (await hak_pengguna(db,company_id=x['cid'],produk=produk,user_id=x['uid'])).peran==P.OPERATOR
+        with pytest.raises(ProdukDitolak):await hak_pengguna(db,company_id=x['asing'],produk=TERAFLOW,user_id=x['uid'])

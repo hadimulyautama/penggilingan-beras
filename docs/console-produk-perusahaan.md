@@ -43,3 +43,29 @@ izin tersimpan, tanpa menambah grant atau mengubah peran master. Tidak ada
 migrasi, perubahan keanggotaan otomatis, atau penulisan transaksi produksi.
 Uji mencakup pencabutan melalui API Console, cookie PadiFlow/TeraFlow lama,
 diagnosis, pemulihan, serta keanggotaan yang dicabut pada sesi ORM lain.
+
+
+### Pengguna beberapa perusahaan dan pratinjau hak produk
+
+Izin eksplisit disimpan per perusahaan dan produk. Pengguna yang mempunyai
+keanggotaan lain (termasuk nonaktif) tidak memakai fallback warisan; Console
+menawarkan Operator, Admin, atau Tanpa akses, dan server menolak payload
+warisan lama tanpa menghapus grant yang ada. Tidak ada perubahan izin otomatis.
+
+Bukti pratinjau menyertakan kelayakan warisan, peran master dan status pengguna.
+Perubahan konteks tersebut mewajibkan pratinjau baru. Writer anggota dan izin
+produk memakai urutan kunci perusahaan -> pengguna -> anggota agar perubahan
+bersamaan dari perusahaan berbeda tidak menghilangkan akses yang sah.
+Seluruh pilihan produk divalidasi sebelum satu grant ORM pun diubah.
+
+Uji mencakup satu pengguna dengan peran produk berbeda pada dua perusahaan,
+penolakan payload lama, pratinjau usang, perubahan bersamaan, serta pencabutan
+keanggotaan/produk di satu perusahaan tanpa mengubah izin perusahaan lain atau
+transaksi bisnis. Tidak ada migrasi, backfill, atau koreksi transaksi produksi.
+
+
+Penambahan keanggotaan perusahaan kedua ditolak bila masih ada izin warisan
+yang sedang berlaku melalui keanggotaan asal. Pesan menyebut perusahaan dan
+produk yang perlu ditetapkan eksplisit terlebih dahulu. Setelah penetapan
+eksplisit disimpan, penugasan kedua dapat dilanjutkan; operator asal tetap
+diizinkan dan perusahaan baru tidak mendapat izin produk otomatis.
