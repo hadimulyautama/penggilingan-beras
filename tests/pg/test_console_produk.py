@@ -169,3 +169,19 @@ async def test_migrasi_hanya_mewariskan_perusahaan_yang_ditetapkan_tanpa_menguba
         assert len(rows)==2 and all(r.company_id==x['cid'] and r.aktif and r.warisan for r in rows)
         assert await db.get(CP,(x['asing'],TERAFLOW)) is None
     assert bisnis(await fakta(pg))==bisnis(before)
+
+
+async def test_anggota_perusahaan_lain_tidak_mewarisi_akses_hmu(pg,orang):
+    x=orang
+    async with pg() as db:
+        user=User(nama='Admin perusahaan lain',role=P.ADMIN,status='aktif');db.add(user);await db.flush()
+        db.add(KeanggotaanPerusahaan(company_id=x['asing'],user_id=user.id,aktif=True,peran=P.ADMIN));await db.commit()
+        for code in (PADIFLOW,TERAFLOW):
+            with pytest.raises(ProdukDitolak):await hak_pengguna(db,company_id=x['cid'],produk=code,user_id=user.id)
+        # ID pengguna sah dan produk HMU aktif tidak cukup untuk melintasi perusahaan.
+        with pytest.raises(ProdukDitolak):await hak_lokal(db,produk=PADIFLOW,user_id=user.id,peran_lama=P.ADMIN)
+
+        db.add(KeanggotaanPerusahaan(company_id=x['cid'],user_id=user.id,aktif=True,peran=P.OPERATOR));await db.commit()
+        with pytest.raises(ProdukDitolak):await hak_pengguna(db,company_id=x['cid'],produk=PADIFLOW,user_id=user.id)
+        db.add(UP(company_id=x['cid'],user_id=user.id,produk=PADIFLOW,aktif=True,peran=P.OPERATOR));await db.commit()
+        assert (await hak_pengguna(db,company_id=x['cid'],produk=PADIFLOW,user_id=user.id)).peran==P.OPERATOR

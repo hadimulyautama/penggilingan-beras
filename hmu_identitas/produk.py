@@ -53,6 +53,10 @@ async def hak_pengguna(db,*,company_id,produk,user_id,peran_warisan=None):
             return HakProduk(company_id,produk,grant.peran,'eksplisit')
         # HMU ditandai oleh migrasi dari dua bukti penetapan, bukan fallback
         # seluruh perusahaan. Override nonaktif selalu menang atas warisan.
+        memberships=list(await db.scalars(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.user_id==user_id).execution_options(populate_existing=True)))
+        foreign=any(m.company_id!=company_id for m in memberships)
+        if foreign:
+            raise ProdukDitolak('Pengguna lintas perusahaan memerlukan penetapan akses produk secara eksplisit.')
         legacy=P.normal(peran_warisan) if peran_warisan is not None else P.normal(user.role)
         if active.warisan and legacy in PERAN:return HakProduk(company_id,produk,legacy,'warisan')
     raise ProdukDitolak('Pengguna belum diberi akses ke '+produk+'.')
