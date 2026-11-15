@@ -1,9 +1,9 @@
 """Pintu transfer PK generik dan kontrak historis Pos Timbang."""
 from types import SimpleNamespace
 from typing import Annotated,Literal
-from fastapi import APIRouter, Depends, Request, HTTPException, Header
+from fastapi import APIRouter, Depends, Request, HTTPException, Header, Path
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel,Field,PositiveInt,ConfigDict
+from pydantic import BaseModel,Field,PositiveInt,ConfigDict,field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal
@@ -13,25 +13,36 @@ from app.web.security import butuh_akun
 from app.web.tampilan import render_laci
 from app.services import pengiriman_pk as s
 from app.services.transfer import TransferError
+from app.services.kepemilikan import InventoryError
 from app.penggilingan.gudang2.service import Gudang2Error
 from app.peran import can_see_financials
 from hmu_identitas import peran as P
 router=APIRouter()
 
 class Item(BaseModel):
-    permintaan_id:PositiveInt
+    permintaan_id:int=Field(ge=-2147483647,le=2147483647)
     berat_kg:str=Field(max_length=20)
+    @field_validator('permintaan_id')
+    @classmethod
+    def bukan_nol(cls,v):
+        if not v:raise ValueError('Pilih permintaan yang sah.')
+        return v
 class Persetujuan(Item):
     tujuan:str=Field(max_length=120)
 class Setujui(BaseModel):
     items:list[Persetujuan]=Field(min_length=1,max_length=50)
 class JumlahTransfer(BaseModel):
     model_config=ConfigDict(extra='forbid')
-    permintaan_id:PositiveInt
+    permintaan_id:int=Field(ge=-2147483647,le=2147483647)
     cara:Literal['karung','kg']|None=None
     berat_kg:str|None=Field(default=None,max_length=20)
     jumlah_karung:Annotated[int,Field(strict=True,ge=0)]|None=None
     berat_curah_kg:str|None=Field(default=None,max_length=20)
+    @field_validator('permintaan_id')
+    @classmethod
+    def bukan_nol(cls,v):
+        if not v:raise ValueError('Pilih permintaan yang sah.')
+        return v
 
     def sebagai_kg(self):
         from app.services.pk_50 import bobot_isian
@@ -52,27 +63,30 @@ class Koreksi(BaseModel):
     aksi:Literal['minta','persetujuan','kembali','batal','buka','jumlah','bahan']
     berat_kg:str|None=Field(default=None,max_length=20)
     tujuan:str|None=Field(default=None,max_length=120)
-    pemindahan_id:PositiveInt|None=None
+    pemindahan_id:int|None=Field(default=None,ge=1,le=2147483647)
     alasan:str=Field(min_length=1,max_length=2000)
     kunci:str=Field(pattern=r'^[a-f0-9]{32}$')
     pemeriksaan:str=Field(default='',max_length=64)
     konfirmasi:bool=Field(default=False,strict=True)
 
 @router.post('/api/transfer-bertahap/koreksi/{jenis}/{ident}/{tahap}')
-async def koreksi(jenis:Literal['permintaan','transfer'],ident:PositiveInt,
+async def koreksi(jenis:Literal['permintaan','transfer'],ident:Annotated[int,Path(ge=-2147483647,le=2147483647)],
                   tahap:Literal['periksa','simpan'],body:Koreksi,user=Depends(pengguna_aksi)):
     from app.services import koreksi_transfer_pk as koreksi
+    if ident<0:
+        from app.services import koreksi_transfer_barang as koreksi
+        ident=-ident
     try:
         async with SessionLocal() as db:
             action=koreksi.simpan if tahap=='simpan' else koreksi.periksa
             return jawab(await action(db,jenis=jenis,ident=ident,user=user,req=body.model_dump()))
-    except (ValueError,PermissionError,koreksi.InventoryError,Gudang2Error) as e:raise galat(e)
+    except (ValueError,PermissionError,InventoryError,Gudang2Error) as e:raise galat(e)
     except IntegrityError:raise HTTPException(409,'Catatan terkait berubah atau mempunyai permintaan aktif lain. Periksa ulang; tidak ada perubahan disimpan.')
 
 async def baca_izin(db,u):
     if u.status!='aktif':raise PermissionError('Akun tidak aktif.')
     w=await db.get(Warehouse,u.default_warehouse_id) if u.default_warehouse_id else None
-    if not can_see_financials(u) and not (P.operator_saja(u.role) and w and w.kode_fungsi in ('g1','g2')):raise PermissionError('Halaman transfer mengikuti akses gudang asal dan tujuan.')
+    if not can_see_financials(u) and not (P.operator_saja(u.role) and w and w.aktif):raise PermissionError('Halaman transfer mengikuti akses gudang asal dan tujuan.')
     return w
 
 def galat(e):return HTTPException(403 if isinstance(e,PermissionError) else 409,str(e))
@@ -102,80 +116,127 @@ async def daftar(user=Depends(pengguna_aksi)):
             pemilik={j.id:j.pelanggan_id for j in (await db.scalars(select(Jasa).where(Jasa.id.in_({r.jasa_id for r,p in rows if r.jasa_id})))).all()}
             nama_silo={x.id:x.nama_silo for x in (await db.scalars(select(Silo).where(Silo.id.in_({r.silo_id for r,p in rows if r.silo_id})))).all()}
             people={u.id:u.nama for u in (await db.scalars(select(User).where(User.id.in_({r.diminta_oleh for r,p in rows})))).all()}
+            from app.services.transfer_lokasi import daftar as daftar_lokasi
+            locations=await daftar_lokasi(db)
+            default_target=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g2',Warehouse.aktif.is_(True)))
+            silo_warehouses=dict((await db.execute(select(Silo.id,Silo.warehouse_id).where(Silo.id.in_(nama_silo)))).all())
             requests=[]
             for r,p in rows:
                 asal=loc[p.id]['warehouse_id']
-                if not is_admin:
-                    if w.kode_fungsi=='g1' and w.id!=asal:continue
-                    if w.kode_fungsi=='g2' and r.jasa_id is not None:continue
+                target_id=r.tujuan_warehouse_id or silo_warehouses.get(r.silo_id) or (default_target.id if default_target else None)
+                if not is_admin and not (w.id==asal or w.id==target_id and r.jasa_id is None):continue
                 allocated=await s.terpakai(db,r.id);completed=await s.terpakai(db,r.id,selesai=True)
                 requests.append(dict(peminta=people.get(r.diminta_oleh,'Pencatat belum tercatat'),selesai_kg=s.angka(completed),perjalanan_kg=s.angka(allocated-completed),id=r.id,lot=p.kode_proses,pemilik=owners.get(r.jasa_id,'Milik pabrik'),status=r.status,sebab=r.sebab,waktu=r.waktu_minta.isoformat() if r.waktu_minta else None,bertahap=r.bertahap,asal_id=asal,asal=loc[p.id]['gudang_nama'],diminta=s.angka(r.berat_minta_kg),disetujui=s.angka(r.berat_setuju_kg),sisa=s.angka(max(s.D(0),s.D(r.berat_setuju_kg)-allocated)),bebas=s.angka(await pending_transfer_kg(db,p.id,pemilik_id=r.jasa_id,bebas=True)),tujuan=r.tujuan,silo_id=r.silo_id))
-                requests[-1].update(pemilik_kunci=('pelanggan:'+str(pemilik[r.jasa_id]) if r.jasa_id in pemilik else 'jasa:'+str(r.jasa_id) if r.jasa_id else 'pabrik'),tujuan_nama=nama_silo.get(r.silo_id,'Silo tidak tersedia') if r.silo_id else 'Tumpukan')
+                requests[-1].update(boleh_catat=is_admin or w.id==asal,tujuan_id=target_id,multilokasi=r.tujuan_warehouse_id is not None or r.status=='diminta' and bool(locations.get(asal,{}).get('aktif')),asal_lokasi=locations.get(asal,{}),tujuan_lokasi=locations.get(target_id,{}),tujuan_gudang=locations.get(target_id,{}).get('gudang_nama'),company_id=locations.get(asal,{}).get('company_id'),pemilik_kunci=('pelanggan:'+str(pemilik[r.jasa_id]) if r.jasa_id in pemilik else 'jasa:'+str(r.jasa_id) if r.jasa_id else 'pabrik'),tujuan_nama=nama_silo.get(r.silo_id,'Silo tidak tersedia') if r.silo_id else 'Tumpukan')
             journeys=[]
             q=select(PengirimanPk).order_by(PengirimanPk.id.desc()).limit(100)
-            if not is_admin:q=q.where(PengirimanPk.asal_id==w.id if w.kode_fungsi=='g1' else (PengirimanPk.tujuan_id==w.id)&PengirimanPk.jasa_id.is_(None))
+            if not is_admin:q=q.where((PengirimanPk.asal_id==w.id)|((PengirimanPk.tujuan_id==w.id)&PengirimanPk.jasa_id.is_(None)))
             for j in (await db.scalars(q)).all():journeys.append(await s.rincian(db,j.id))
             from app.services.riwayat_transfer_terpadu import catatan_lama,lengkapi_pengiriman
             await lengkapi_pengiriman(db,journeys)
             journeys.extend(await catatan_lama(db,user=user))
             journeys.sort(key=lambda j:j['waktu'],reverse=True)
             journeys=journeys[:100]
-            from app.services.transfer_lokasi import lengkapi_lintasan
-            await lengkapi_lintasan(db,journeys)
             from app.penggilingan.gudang2.service import _g2_warehouse_id
             from app.penggilingan.silo_policy import boleh_masuk
-            target=await db.get(Warehouse,await _g2_warehouse_id(db))
-            silos=[x for x in (await db.scalars(select(Silo).where(Silo.warehouse_id==target.id,Silo.aktif.is_(True)).order_by(Silo.nama_silo))).all() if boleh_masuk(x,'pk','g2')]
-            tujuan=[dict(nilai='ditumpuk',nama='Tumpukan · '+target.nama_gudang)]+[dict(nilai=x.nama_silo,nama=x.nama_silo+' · '+target.nama_gudang,id=x.id) for x in silos]
+            target=default_target
+            silos=[x for x in (await db.scalars(select(Silo).where(Silo.warehouse_id==(target.id if target else None),Silo.aktif.is_(True)).order_by(Silo.nama_silo))).all() if boleh_masuk(x,'pk','g2')]
+            tujuan=([dict(nilai='ditumpuk',nama='Tumpukan · '+target.nama_gudang)] if target else [])+[dict(nilai=x.nama_silo,nama=x.nama_silo+' · '+target.nama_gudang,id=x.id) for x in silos]
+            destinos_pk=[]
+            silos_pk=(await db.scalars(select(Silo).where(Silo.aktif.is_(True)).order_by(Silo.nama_silo))).all()
+            for wid,meta in locations.items():
+                if not meta['aktif']:continue
+                prefix=meta['pabrik_nama']+' → '+meta['gudang_nama']+' → '
+                destinos_pk.append(dict(nilai='gudang:'+str(wid),id=None,gudang_id=wid,company_id=meta['company_id'],nama=prefix+'Tumpukan'))
+                destinos_pk.extend(dict(nilai='silo:'+str(x.id),id=x.id,gudang_id=wid,company_id=meta['company_id'],nama=prefix+x.nama_silo) for x in silos_pk if x.warehouse_id==wid and boleh_masuk(x,'pk','g2'))
             audits=[]
             if is_admin:
                 from app.models import Peristiwa
-                for e in (await db.scalars(select(Peristiwa).where(Peristiwa.jenis=='koreksi_transfer_pk').order_by(Peristiwa.id.desc()).limit(50))).all():
+                for e in (await db.scalars(select(Peristiwa).where(Peristiwa.jenis.in_(['koreksi_transfer_pk','koreksi_transfer_barang'])).order_by(Peristiwa.id.desc()).limit(50))).all():
                     plan=e.muatan['rancangan'];summary=[]
+                    if e.jenis=='koreksi_transfer_barang':
+                        summary=[f"{x['label']}: {x['sebelum']} → {x['sesudah']} {x['satuan']}" for x in plan['barang']]
+                        audits.append(dict(id=e.id,jenis=e.muatan['jenis'],ident=-e.muatan['ident'],alasan=e.muatan['isian']['alasan'],waktu=e.waktu.isoformat(),ringkasan=summary))
+                        continue
                     for kind,label in [('items','Transfer'),('permintaan','Permintaan')]:
                         for row in plan[kind]:
                             for field,title in [('berat_kg','jumlah'),('berat_minta_kg','diminta'),('berat_setuju_kg','disetujui')]:
                                 if row['before'].get(field)!=row['after'].get(field) and field in row['after']:
                                     summary.append(f"{label} #{row['id']} {title}: {s.angka(row['before'].get(field))} → {s.angka(row['after'].get(field))} kg")
+                    for row in plan.get('barang_lokasi',[]):
+                        summary.append(f"{row['kode']}: {row['before']['jumlah']} → {row['after']['jumlah']} kg; sisa persetujuan terkait ditutup.")
                     for row in plan['pk_chain'].get('moves',[]):
                         summary.append(f"Pemindahan #{row['id']}: {s.angka(row['effective_before'])} → {s.angka(row['effective_after'])} kg")
                     for proc in plan['pk_chain'].get('processes',[]):
                         summary.append(f"{proc['kode']} bahan: {s.angka(proc['bahan_before'])} → {s.angka(proc['bahan_after'])} kg; hasil tetap {s.angka(proc['hasil_tercatat'])} kg")
                     audits.append(dict(id=e.id,jenis=e.muatan['jenis'],ident=e.muatan['ident'],
                         alasan=e.muatan['isian']['alasan'],waktu=e.waktu.isoformat(),ringkasan=summary))
-            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=tujuan,koreksi=audits,gudang_tujuan=dict(id=target.id,nama=target.nama_gudang)))
-    except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
+            from app.services import transfer_barang as barang
+            umum=await barang.tambahan(db,user=user)
+            requests.extend(umum['permintaan']);journeys=[j for j in journeys if j['id'] not in umum['linked']]+umum['pengiriman']
+            journeys.sort(key=lambda j:j['waktu'],reverse=True)
+            from app.services.transfer_lokasi import lengkapi_lintasan
+            await lengkapi_lintasan(db,journeys)
+            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=tujuan,tujuan_pk=destinos_pk,tujuan_barang=umum['tujuan_barang'],boleh_minta_barang=umum['boleh_minta_barang'],koreksi=audits,gudang_tujuan=dict(id=target.id if target else None,nama=target.nama_gudang if target else 'Tujuan belum ditetapkan')))
+    except (s.PengirimanError,TransferError,Gudang2Error,PermissionError,ValueError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/setujui')
 async def setujui(body:Setujui,user=Depends(pengguna_aksi)):
     try:
-        async with SessionLocal() as db:return jawab(await s.setujui_banyak(db,user=user,items=[x.model_dump() for x in body.items]))
-    except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
+        from app.services import transfer_barang as barang
+        async with SessionLocal() as db:
+            await barang.kunci(db)
+            pk=[x.model_dump() for x in body.items if x.permintaan_id>0]
+            umum=[{**x.model_dump(),'permintaan_id':-x.permintaan_id} for x in body.items if x.permintaan_id<0]
+            if pk:await s.setujui_banyak(db,user=user,items=pk,commit=False)
+            if umum:await barang.setujui_banyak(db,user=user,items=umum,commit=False)
+            await db.commit();return jawab(dict(ok=True))
+    except (s.PengirimanError,TransferError,Gudang2Error,PermissionError,ValueError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/pengiriman')
 async def buat(body:Buat,user=Depends(pengguna_aksi)):
     try:
-        async with SessionLocal() as db:return jawab(await s.buat(db,user=user,items=[x.sebagai_kg() for x in body.items],kunci=body.kunci,pakai_kendaraan=False))
-    except (s.PengirimanError,TransferError,Gudang2Error,PermissionError) as e:raise galat(e)
+        from app.services import transfer_barang as barang
+        async with SessionLocal() as db:
+            await barang.kunci(db)
+            pk=[x.sebagai_kg() for x in body.items if x.permintaan_id>0]
+            umum=[]
+            for x in body.items:
+                if x.permintaan_id<0:
+                    if x.cara or x.jumlah_karung is not None or x.berat_curah_kg is not None or x.berat_kg is None:raise barang.Error('Gunakan jumlah dan satuan sumber barang yang dipilih.')
+                    umum.append(dict(permintaan_id=-x.permintaan_id,berat_kg=x.berat_kg))
+            if pk:await s.operator_asal(db,user)
+            await barang.periksa_gabungan(db,user=user,items=[x.model_dump() for x in body.items])
+            hasil_pk=await s.buat(db,user=user,items=pk,kunci=body.kunci,pakai_kendaraan=False,commit=False) if pk else None
+            result=await barang.buat(db,user=user,items=umum,kunci_kiriman=body.kunci,pengiriman_pk_id=hasil_pk['id'] if hasil_pk else None,commit=False) if umum else hasil_pk
+            await db.commit();return jawab(result)
+    except (s.PengirimanError,TransferError,Gudang2Error,PermissionError,ValueError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/permintaan/{rid}/tutup-sisa')
-async def tutup_sisa(rid:int,body:Alasan,user=Depends(pengguna_aksi)):
+async def tutup_sisa(rid:Annotated[int,Path(ge=-2147483647,le=2147483647)],body:Alasan,user=Depends(pengguna_aksi)):
     try:
-        async with SessionLocal() as db:return jawab(await s.tutup_sisa(db,rid=rid,user=user,alasan=body.alasan))
-    except (s.PengirimanError,PermissionError) as e:raise galat(e)
+        async with SessionLocal() as db:
+            if rid<0:
+                from app.services import transfer_barang as barang
+                return jawab(await barang.keputusan(db,user=user,rid=-rid,aksi='tutup-sisa',alasan=body.alasan))
+            return jawab(await s.tutup_sisa(db,rid=rid,user=user,alasan=body.alasan))
+    except (s.PengirimanError,PermissionError,ValueError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/permintaan/{rid}/tolak')
-async def tolak(rid:int,body:Alasan,user=Depends(pengguna_aksi)):
+async def tolak(rid:Annotated[int,Path(ge=-2147483647,le=2147483647)],body:Alasan,user=Depends(pengguna_aksi)):
     from app.services.permintaan_pk import tolak as menolak,PermintaanError
     try:
         s.admin(user)
         async with SessionLocal() as db:
+            if rid<0:
+                from app.services import transfer_barang as barang
+                return jawab(await barang.keputusan(db,user=user,rid=-rid,aksi='tolak',alasan=body.alasan))
             await s.kunci_stok(db)
             r=await db.scalar(select(PermintaanPk).where(PermintaanPk.id==rid).with_for_update())
             if not r or r.status!='diminta':raise s.PengirimanError('Permintaan sudah berubah; baca ulang daftar.')
             await menolak(db,user=user,permintaan_id=rid,sebab=body.alasan)
             return jawab(dict(ok=True))
-    except (s.PengirimanError,PermintaanError,PermissionError) as e:raise galat(e)
+    except (s.PengirimanError,PermintaanError,PermissionError,ValueError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/{pid}/terima-selisih')
 async def selisih(pid:int,body:Alasan,user=Depends(pengguna_aksi)):
@@ -223,3 +284,7 @@ async def sinkron(pid:int,tid:int,x_internal_token:str|None=Header(default=None)
     try:
         async with SessionLocal() as db:return jawab(await s.sinkron(db,pid=pid,tid=tid))
     except (s.PengirimanError,TransferError,Gudang2Error) as e:raise galat(e)
+
+# Satu permukaan Transfer; kontrak PK lama tetap tersedia bagi histori.
+from app.web.transfer_barang import router as router_barang
+router.include_router(router_barang)

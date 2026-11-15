@@ -114,7 +114,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
   await page.goto(base+'/transfer-bertahap?status=siap');await expect(page.locator('#pk-pesan')).to_have_text('Status diperbarui.')
   tutup=page.get_by_role('button',name='Tutup sisa persetujuan',exact=True)
   if is_admin:
-   await page.get_by_role('button',name=f"Tindakan permintaan {siap['rid']}").click()
+   await page.get_by_role('button',name=f"Tindakan Permintaan #{siap['rid']}").click()
    await expect(tutup).to_be_visible()
    await page.get_by_role('button',name='Tutup detail',exact=True).click()
   else:

@@ -653,7 +653,7 @@ def test_stok_karung_filter_gudang1_tetap_ada_di_rute():
     from app.web import layar_produk
 
     kode = inspect.getsource(layar_produk._halaman_stok_karung)
-    assert 'b["gudang"] != "Gudang 1" or gudang1(view)' in kode
+    assert 'pembaca_stok(db,request,akun)' in kode and 'user=baca_user' in kode
 
 
 def test_stok_karung_tak_menyebut_uang():

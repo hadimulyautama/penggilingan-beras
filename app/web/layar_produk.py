@@ -48,6 +48,13 @@ from app.web.tampilan import render_laci
 router = APIRouter(tags=["webapp"])
 
 
+async def pembaca_stok(db,request,akun):
+    from app.services.cakupan_fasilitas import boleh_baca_stok,konteks_baca_gudang
+    if is_customer_read(request):return None
+    if not await boleh_baca_stok(db,akun.user):raise HTTPException(403,'Gudang kerja aktif diperlukan untuk membaca stok.')
+    return await konteks_baca_gudang(db,akun.user,request.query_params.get('gudang',''))
+
+
 @router.get("/stok-produk")
 @router.get("/stok-produk/detail")
 async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis: str | None = None):
@@ -61,15 +68,12 @@ async def _halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis
     from app.web.layar import SELEPAN
 
     view = getattr(request.state, "view", "tamu")
-    # Operator selepan tak punya urusan di sini — beras dan hasil samping lahir
-    # di Gudang 2. Pintunya sudah tak ditawarkan (`PINTU_MATI`), tetapi pintu
-    # yang disembunyikan bukan penjagaan: alamatnya bisa diketik, dan lembar
-    # yang masih terbuka di layar orang lain masih bisa memanggilnya.
-    if view == SELEPAN:
-        raise HTTPException(403, "Layar ini milik Gudang 2.")
+    # Produk yang diterima lewat Transfer ikut stok gudang aktual; hak baca
+    # tidak bergantung pada tempat produksinya. Aksi produksi tetap berpagar.
     async with SessionLocal() as db:
-        kartu = await svc.stok_produk(db, user=None if is_customer_read(request) else akun.user)
-        bj = await svc.barang_jadi_g2(db, user=None if is_customer_read(request) else akun.user)
+        baca_user=await pembaca_stok(db,request,akun)
+        kartu = await svc.stok_produk(db, user=baca_user)
+        bj = await svc.barang_jadi_g2(db, user=baca_user)
     # Rincian kemasan digantung ke kartu kategorinya lewat `jenis` — kunci yang
     # sama yang dipakai `stok.jenis_produk`, jadi tak ada pemetaan kedua yang
     # bisa berselisih. Angkanya NETO (masuk − keluar) seperti di layar barang
@@ -230,9 +234,8 @@ async def _halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
     view = getattr(request.state, "view", "tamu")
     # Gerbang yang SAMA dengan `/stok-produk`: barang jadi & titipannya
     # lahir di Gudang 2.
-    if view == SELEPAN:
-        raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
+        baca_user=await pembaca_stok(db,request,akun)
         # Pesanan mana saja yang PERNAH menghasilkan sosoh — lalu pelanggan
         # mana yang memiliki tiap pesanan itu. Sumber BERSAMA dengan picker
         # katalog umum (`aksi_inventory.produk_jasa_tersedia`) — lihat
@@ -298,10 +301,10 @@ async def _halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
             proc_per_jasa.setdefault(jid, []).append(pid)
 
         boleh_pindah = can_see_financials(akun.user)
-        bj = await svc.barang_jadi_g2(db, user=None if is_customer_read(request) else akun.user)
+        bj = await svc.barang_jadi_g2(db, user=baca_user)
         daftar = []
         for pelanggan_id, jasa_ids in jasa_per_pelanggan.items():
-            kartu = await svc.stok_produk(db, jasa_id=jasa_ids, user=None if is_customer_read(request) else akun.user)
+            kartu = await svc.stok_produk(db, jasa_id=jasa_ids, user=baca_user)
             bekatul_kg = sum(
                 bekatul_per_proc.get(pid, 0.0)
                 for jid in jasa_ids for pid in proc_per_jasa.get(jid, []))
@@ -540,11 +543,9 @@ async def _halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
     from app.web.layar import gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
-    if not gudang2(view):
-        raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
-        karung = [b for b in await kms.stok_kemasan_rinci(db, pelanggan_id=None)
-                  if b["gudang"] != "Gudang 1" or gudang1(view)]
+        baca_user=await pembaca_stok(db,request,akun)
+        karung=await kms.stok_kemasan_rinci(db,pelanggan_id=None,user=baca_user)
     return dict(
         template_kepemilikan_asal="stok_karung.html", BOLEH_KEPEMILIKAN=can_see_financials(akun.user), layar="stok_karung",
         karung=karung, BOLEH_PINDAH=can_see_financials(akun.user),
@@ -585,9 +586,8 @@ async def _halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
     from app.web.layar import gudang2
 
     view = getattr(request.state, "view", "tamu")
-    if not gudang2(view):
-        raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
+        baca_user=await pembaca_stok(db,request,akun)
         pelanggan_ids = await kms.pelanggan_ids_dengan_karung(db)
         from app.web.portal.scope import is_customer_read
         if is_customer_read(request):
@@ -598,7 +598,7 @@ async def _halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
         )).all()}
         daftar = []
         for pelanggan_id in pelanggan_ids:
-            karung = await kms.stok_kemasan_rinci(db, pelanggan_id=pelanggan_id)
+            karung = await kms.stok_kemasan_rinci(db, pelanggan_id=pelanggan_id,user=baca_user)
             if not karung:
                 continue
             daftar.append({

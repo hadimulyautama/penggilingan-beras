@@ -88,7 +88,7 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     if gudang not in {g for g, _, _ in saring}:
         gudang = ""                       # nilai karangan dari URL diabaikan
     async with SessionLocal() as db:
-        from app.services.cakupan_fasilitas import konteks_baca_gudang,pilihan_filter_stok
+        from app.services.cakupan_fasilitas import konteks_baca_gudang,pilihan_filter_stok,boleh_baca_stok
         saring=await pilihan_filter_stok(db,akun.user)
         gudang=request.query_params.get('gudang') or ''
         if gudang not in {g for g,_,_ in saring}:gudang=''
@@ -129,9 +129,9 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # operator polesan, "Gudang 1" berarti melihat BAHAN, bukan melihat
         # gudang orang lain.
         lot = ([l for l in await svc.pk_gudang1(db, user=baca_user) if pemilik == 'semua' or not l.pemilik]
-               if (gudang1(view) or gudang2(view))  else [])
+               if await boleh_baca_stok(db,baca_user) else [])
         tempat = ([t for t in await svc.pk_gudang2(db, user=baca_user) if pemilik == 'semua' or not t.pemilik]
-                  if (gudang1(view) or gudang2(view)) else [])
+                  if await boleh_baca_stok(db,baca_user) else [])
         mutu_aktif = await fitur_mutu(db)
         from app.services.koreksi_bahan_berjalan import sumber_bebas_g1
         sisa_koreksi_g1=await sumber_bebas_g1(db,user=baca_user) if gudang1(view) else []
@@ -144,7 +144,7 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # Barang jadi milik Gudang 2, jadi ia ikut penyaring di kepala halaman —
         # membuka "Gudang 1" lalu melihat barang jadi Gudang 2 di bawahnya
         # membuat penyaringnya berbohong (kalimat yang sama di Meja).
-        bj = (await svc.barang_jadi_g2(db, user=baca_user) if gudang2(view) 
+        bj = (await svc.barang_jadi_g2(db, user=baca_user) if await boleh_baca_stok(db,baca_user)
               else svc.BarangJadiG2(produk=[], samping=[]))
     return await render_laci(
         request, "stok_dengan_koreksi.html", template_stok_asal="stok.html", layar="stok", sisa_koreksi_g1=sisa_koreksi_g1,
@@ -240,15 +240,15 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     if gudang not in {g for g, _, _ in saring}:
         gudang = ""
     async with SessionLocal() as db:
-        from app.services.cakupan_fasilitas import konteks_baca_gudang,pilihan_filter_stok
+        from app.services.cakupan_fasilitas import konteks_baca_gudang,pilihan_filter_stok,boleh_baca_stok
         saring=await pilihan_filter_stok(db,akun.user)
         gudang=request.query_params.get('gudang') or ''
         if gudang not in {g for g,_,_ in saring}:gudang=''
         baca_user=None if is_customer_read(request) else await konteks_baca_gudang(db,akun.user,gudang)
         lot = ([l for l in await svc.pk_gudang1(db, user=baca_user) if l.pemilik]
-               if (gudang1(view) or gudang2(view))  else [])
+               if await boleh_baca_stok(db,baca_user) else [])
         tempat = ([t for t in await svc.pk_gudang2(db, user=baca_user) if t.pemilik]
-                  if (gudang1(view) or gudang2(view)) else [])
+                  if await boleh_baca_stok(db,baca_user) else [])
         mutu_aktif = await fitur_mutu(db)
         from app.services.koreksi_bahan_berjalan import sumber_bebas_g1
         from app.web.stok_navigasi import pelanggan_diminta

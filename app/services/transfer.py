@@ -151,7 +151,7 @@ class TransferResult:
 async def create_internal_transfer(
     db: AsyncSession, *, user, kode_proses: str, lokasi_tujuan: str,
     berat: float | None = None, kunci_kiriman: str | None = None,
-    commit: bool = True, alasan: str | None = None, aksi: str | None = None, pemilik_id=...,
+    commit: bool = True, alasan: str | None = None, aksi: str | None = None, pemilik_id=..., warehouse_id: int | None = None,
 ) -> TransferResult:
     """Kirim PK dari sebuah milling ke Gudang 2. Mengurangi stok siap kirim.
 
@@ -177,7 +177,7 @@ async def create_internal_transfer(
         Gudang2Error as _G2Error, _tujuan_and_silo, label_tujuan)
 
     try:
-        lokasi_tujuan, silo_tujuan_id = await _tujuan_and_silo(db, lokasi_tujuan)
+        lokasi_tujuan, silo_tujuan_id = await _tujuan_and_silo(db, lokasi_tujuan,warehouse_id=warehouse_id)
     except _G2Error as e_:
         raise TransferError(e_.args[0] if e_.args else "Tujuan tidak dikenali.")
     # ── Prosesnya DIKUNCI sebelum saldonya dibaca ──
@@ -195,6 +195,15 @@ async def create_internal_transfer(
     if proc is None:
         raise TransferError(f"Proses {kode_proses} tidak ditemukan.")
     owner=proc.jasa_id if pemilik_id is ... else pemilik_id
+    from app.models import Warehouse
+    from app.services.cakupan_fasilitas import lokasi
+    from app.penggilingan.gudang2.service import _g2_warehouse_id
+    asal_warehouse_id=await db.scalar(select(lokasi(MillingProcess)).where(MillingProcess.id==proc.id))
+    target_warehouse_id=warehouse_id if warehouse_id is not None else await _g2_warehouse_id(db)
+    if warehouse_id is not None:
+        from app.services.transfer_lokasi import tujuan_sah
+        try:await tujuan_sah(db,asal_warehouse_id,target_warehouse_id)
+        except ValueError as e:raise TransferError(str(e)) from None
 
     # Pastikan silo cocok SEBELUM mencatat peristiwa yang mengurangi saldo
     # Gudang 1. Penjaga `_add_intake` tetap menjadi pagar terakhir, tetapi
@@ -247,6 +256,7 @@ async def create_internal_transfer(
         "drying_lot_id": proc.drying_lot_id, "berat_kg": kirim,
         "jumlah_karung": karung, "berat_curah_kg": curah,
         "lokasi_tujuan": lokasi_tujuan, "silo_id": silo_tujuan_id,
+        "asal_warehouse_id": asal_warehouse_id, "tujuan_warehouse_id": target_warehouse_id,
         "hpp_per_kg": hpp, "jenis": jenis, "tanggal": now.date(), "waktu": now,
         # Pemiliknya ikut ke buku besar. Tanpa ini, satu-satunya tempat yang
         # menyebut milik siapa PK yang berpindah adalah cermin tabelnya — dan
@@ -265,6 +275,7 @@ async def create_internal_transfer(
 
     transfer = InternalTransfer(
         kode_transfer=kode_transfer,
+        asal_warehouse_id=asal_warehouse_id,tujuan_warehouse_id=warehouse_id,
         milling_process_id=proc.id,
         drying_lot_id=proc.drying_lot_id,
         # DISALIN dari lotnya, bukan dibaca menyusul lewat `milling_process_id`:
@@ -304,7 +315,7 @@ async def create_internal_transfer(
                     if silo_tujuan_id is not None else lokasi_tujuan),
             berat_kg=kirim, hpp_per_kg=hpp, tanggal=None, jam=None,
             internal_transfer_id=transfer.id, transfer_peristiwa_id=e.id, commit=False,
-            jasa_id=owner,
+            jasa_id=owner,warehouse_id=target_warehouse_id,
         )
     except Gudang2Error as e_:  # mis. tumpukan G2 penuh → seluruh transaksi batal
         # Jangan biarkan caller yang memulihkan status permintaan melakukan
@@ -443,6 +454,7 @@ async def koreksi_hasil_transfer(
             db, user=user, kode_proses=proc.kode_proses,
             lokasi_tujuan=tujuan, berat=target, commit=False,
             alasan=alasan, aksi="koreksi_hasil_transfer",
+            warehouse_id=transfer.tujuan_warehouse_id,pemilik_id=transfer.jasa_id,
         )
         pengganti = hasil_baru.transfer
     await db.commit()

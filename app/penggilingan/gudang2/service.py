@@ -167,7 +167,7 @@ async def get_g2_silo(db: AsyncSession, letter: str, warehouse_id: int | None = 
     ).scalars().first()
 
 
-async def silo_g2_dari(db: AsyncSession, nilai: str) -> Silo | None:
+async def silo_g2_dari(db: AsyncSession, nilai: str, warehouse_id=None) -> Silo | None:
     """Silo Gudang 2 dari apa pun yang dikirim layar: "A", "Silo A", "silo_a".
 
     Tiga bentuk, satu jawaban — dan tak satu pun daftar nama yang diketik di
@@ -179,7 +179,7 @@ async def silo_g2_dari(db: AsyncSession, nilai: str) -> Silo | None:
     if not teks:
         return None
     nama = _KATA_LAMA.get(teks.lower(), teks)
-    return await get_g2_silo(db, nama)
+    return await get_g2_silo(db, nama, warehouse_id=warehouse_id)
 
 
 async def label_tujuan(db: AsyncSession, tujuan: str | None,
@@ -537,8 +537,9 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
         return (await hitung_stok_tumpukan(db, pemilik="pabrik",warehouse_id=warehouse_id)
                 + await hitung_stok_tumpukan(db, pemilik="jasa",warehouse_id=warehouse_id))
 
-    syarat = [PkGudang2Intake.tujuan == DITUMPUK, or_(PkGudang2Intake.warehouse_id==warehouse_id,PkGudang2Intake.warehouse_id.is_(None))]
-    syarat_keluar = [OutgoingItem.item_type == "pk_g2", OutgoingItem.silo_id.is_(None)]
+    from app.services.cakupan_fasilitas import lokasi
+    syarat = [PkGudang2Intake.tujuan == DITUMPUK, lokasi(PkGudang2Intake)==warehouse_id]
+    syarat_keluar = [OutgoingItem.item_type == "pk_g2", OutgoingItem.silo_id.is_(None),lokasi(OutgoingItem)==warehouse_id]
     if jasa_id is not _SEMUA_PEMILIK_TUMPUKAN:
         syarat.append(PkGudang2Intake.jasa_id.is_(None) if jasa_id is None else PkGudang2Intake.jasa_id == jasa_id)
         syarat_keluar.append(OutgoingItem.jasa_id.is_(None) if jasa_id is None else OutgoingItem.jasa_id == jasa_id)
@@ -1209,7 +1210,7 @@ class IntakeResult:
     hpp_per_kg: float | None
 
 
-async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
+async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None, *, warehouse_id=None):
     """Normalisasi tujuan → (jenis, silo_id|None).
 
     Yang keluar dari sini `silo` + rujukannya, atau `ditumpuk` + None. Nama
@@ -1219,7 +1220,10 @@ async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
     teks = (tujuan or "").strip()
     if teks.lower() == DITUMPUK:
         return DITUMPUK, None
-    silo = await silo_g2_dari(db, teks) if teks else None
+    if teks.startswith('silo:') and teks[5:].isdigit() and 0<int(teks[5:])<=2147483647:
+        wid=warehouse_id if warehouse_id is not None else await _g2_warehouse_id(db)
+        silo=await db.scalar(select(Silo).where(Silo.id==int(teks[5:]),Silo.warehouse_id==wid,Silo.aktif.is_(True)))
+    else:silo = await silo_g2_dari(db, teks,warehouse_id=warehouse_id) if teks else None
     if silo is None:
         # Daftarnya tak disebut dalam kalimat ini: ia berubah menurut master,
         # dan kalimat yang menyebut dua silo akan keliru begitu ada yang ketiga.
@@ -1229,7 +1233,7 @@ async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
     return SILO, silo.id
 
 
-async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float | None) -> None:
+async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float | None, *, warehouse_id=None) -> None:
     """Batas tumpukan hanya ditegakkan bila memang disetel (> 0).
 
     Keputusan pemilik 12 September 2026: tumpukan Gudang 2 TIDAK berbatas —
@@ -1238,9 +1242,13 @@ async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float | None)
     tak berbatas memang tak menolaknya.
     """
     cap = settings.g2_tumpukan_maks_kg
+    if warehouse_id is not None:
+        wh=await db.get(Warehouse,warehouse_id)
+        if not wh or not wh.aktif:raise Gudang2Error('Gudang tujuan tidak aktif.')
+        cap=float(wh.kapasitas_tumpuk_pk_ton)*1000 if wh.kapasitas_tumpuk_pk_ton is not None else cap if wh.kode_fungsi=='g2' else 0
     if not cap or tambahan_kg is None:
         return
-    stok = await hitung_stok_tumpukan(db)
+    stok = await hitung_stok_tumpukan(db,warehouse_id=warehouse_id)
     if stok + tambahan_kg > cap:
         sisa = max(cap - stok, 0)
         raise Gudang2Error(
@@ -1292,7 +1300,7 @@ async def _add_intake(
     pk_purchase_batch_id: int | None = None, internal_transfer_id: int | None = None,
     kunci_kiriman: str | None = None, transfer_peristiwa_id: int | None = None,
     commit: bool = True, bobot_final: bool = True,
-    jasa_id: int | None = None,
+    jasa_id: int | None = None, warehouse_id: int | None = None,
 ) -> IntakeResult:
     """SATU titik tulis untuk semua PK yang masuk Gudang 2 — dari PK luar
     maupun transfer Gudang 1.
@@ -1304,10 +1312,11 @@ async def _add_intake(
     → jejak → commit. Pembatalannya (`undo._undo_pk_intake`) ditolak bila
     PK-nya sudah dipoles atau tumpukannya sudah dipindah — P-K-10.
     """
-    tujuan_norm, silo_id = await _tujuan_and_silo(db, tujuan)
+    warehouse_id=warehouse_id if warehouse_id is not None else await _g2_warehouse_id(db)
+    tujuan_norm, silo_id = await _tujuan_and_silo(db, tujuan,warehouse_id=warehouse_id)
     ke_proses = None
     if tujuan_norm == "ditumpuk":
-        await _guard_kapasitas_tumpukan(db, berat_kg)
+        await _guard_kapasitas_tumpukan(db, berat_kg,warehouse_id=warehouse_id)
     else:
         # ── Isi silo Gudang 2 harus SEPEMILIK ──
         #
@@ -1338,7 +1347,7 @@ async def _add_intake(
             import secrets
             kunci_kiriman = f"{PK_MASUK_G2}:bebas:{secrets.token_hex(8)}"
     muatan = {
-        "sumber_tipe": sumber_tipe, "pk_purchase_batch_id": pk_purchase_batch_id,
+        "sumber_tipe": sumber_tipe, "warehouse_id": warehouse_id, "pk_purchase_batch_id": pk_purchase_batch_id,
         "internal_transfer_id": internal_transfer_id, "tujuan": tujuan_norm, "silo_id": silo_id,
         "berat_kg": berat_kg, "hpp_per_kg": hpp_per_kg, "ke_proses": ke_proses,
         "tanggal": now.date(), "waktu": now, "transfer_peristiwa_id": transfer_peristiwa_id,
@@ -1359,7 +1368,7 @@ async def _add_intake(
             return IntakeResult(intake=ada, lokasi_label=label, hpp_per_kg=ada.hpp_per_kg)
 
     intake = PkGudang2Intake(
-        warehouse_id=await _g2_warehouse_id(db),
+        warehouse_id=warehouse_id,
         sumber_tipe=sumber_tipe,
         pk_purchase_batch_id=pk_purchase_batch_id,
         internal_transfer_id=internal_transfer_id,
@@ -2182,11 +2191,15 @@ async def pindah_broken_ke_silo(
     if row is None or row.jenis_produk != "broken":
         raise Gudang2Error("Baris broken ini tidak ditemukan.")
 
+    from app.services.cakupan_fasilitas import lokasi
+    if await db.scalar(select(lokasi(ByproductStock)).where(ByproductStock.id==row.id))!=silo.warehouse_id:
+        raise Gudang2Error('Broken sumber berada di gudang lain; transfer ke gudang silo terlebih dahulu.')
+
     # Pembaca yang sama dengan rencana FIFO: retur yang SUDAH keluar
-    # mengurangi fisik; pengajuan aktif di bawah hanya menahan bagian bebas.
-    sisa = await _sisa_broken_row(db, row.id)
-    from app.services.retur_supplier_reservasi import terikat
-    sisa -= float(await terikat(db,sumber=f'broken:{row.id}'))
+    # mengurangi fisik; pembaca sumber juga menahan pengajuan aktif dan
+    # pengeluaran FIFO pada gudang yang sama. Jangan dikurangi dua kali.
+    from app.services.transfer_barang_sumber import bebas as bebas_sumber
+    sisa = min(await _sisa_broken_row(db, row.id),float(await bebas_sumber(db,row,'curah')))
     if sisa <= 0:
         raise Gudang2Error("Broken ini sudah habis dipindah.")
     # TOLERANSI_PINDAH_KG — penjelasan panjangnya di `pindah_tumpukan_ke_silo`.
@@ -2335,6 +2348,9 @@ async def masukkan_broken_ke_silo(
     if not kode_pol:
         raise Gudang2Error("Sebutkan proses penyosohannya (POL-...).")
     proc = await _proc_by_kode(db, kode_pol)
+    from app.services.cakupan_fasilitas import lokasi
+    if proc is None or await db.scalar(select(lokasi(PolishingProcess)).where(PolishingProcess.id==proc.id))!=silo.warehouse_id:
+        raise Gudang2Error('Proses sumber berada di gudang lain atau tidak ditemukan.')
 
     def _milik(kolom):
         return kolom.is_(None) if jasa_id is None else kolom == jasa_id
@@ -2377,13 +2393,14 @@ async def masukkan_broken_ke_silo(
         select(ByproductStock).where(
             ByproductStock.jenis_produk == "broken",
             ByproductStock.source_type == "polishing",
-            ByproductStock.source_id == proc.id, _milik(ByproductStock.jasa_id))
+            ByproductStock.source_id == proc.id, _milik(ByproductStock.jasa_id),lokasi(ByproductStock)==silo.warehouse_id)
         .order_by(ByproductStock.waktu, ByproductStock.id)
         .with_for_update()
     )).scalars().all()
     pool: list[tuple[int, float]] = []
+    from app.services.transfer_barang_sumber import bebas as bebas_sumber
     for row in curah_rows:
-        sisa = await _sisa_broken_row(db, row.id)
+        sisa = min(await _sisa_broken_row(db, row.id),float(await bebas_sumber(db,row,'curah')))
         if sisa > 0.5:
             pool.append((row.id, sisa))
     total_curah = sum(s for _, s in pool)
@@ -2416,8 +2433,9 @@ async def masukkan_broken_ke_silo(
                               "otomatis dari hasil mesin saat 'Masukkan ke "
                               "silo'".replace(",", "."),
                 )
-                pool.append((baris_otomatis.id, catat_kg))
-                total_curah += catat_kg
+                bebas_baru=min(catat_kg,float(await bebas_sumber(db,baris_otomatis,'curah')))
+                pool.append((baris_otomatis.id, bebas_baru))
+                total_curah += bebas_baru
 
     # ── Langkah 2 · kurang? bongkar karung FIFO, SEUKURAN karung penuh ──
     #
@@ -2436,7 +2454,7 @@ async def masukkan_broken_ke_silo(
             .where(ProductSku.kategori == "broken",
                    FinishedGoodsStock.source_type == "polishing",
                    FinishedGoodsStock.source_id == proc.id,
-                   _milik(FinishedGoodsStock.jasa_id))
+                   _milik(FinishedGoodsStock.jasa_id),lokasi(FinishedGoodsStock)==silo.warehouse_id)
             .order_by(FinishedGoodsStock.waktu, FinishedGoodsStock.id)
             .with_for_update()
         )).scalars().all()
@@ -2451,7 +2469,9 @@ async def masukkan_broken_ke_silo(
             )).scalar_one_or_none()
             if not ukuran or not krow.jumlah_karung:
                 continue
-            ambil_karung = jumlah_bongkar_broken(sisa_butuh, ukuran, krow.jumlah_karung)
+            from app.penggilingan.inventory.finished_goods import sisa_karung_per_sumber
+            bebas_karung=dict((r.id,n) for r,n,kg in await sisa_karung_per_sumber(db,krow.product_sku_id,krow.rice_quality_standard_id,jasa_id=krow.jasa_id,source_type=None))
+            ambil_karung = jumlah_bongkar_broken(sisa_butuh, ukuran, min(krow.jumlah_karung,bebas_karung.get(krow.id,0)))
             if ambil_karung <= 0:
                 continue
             ambil_kg = ambil_karung * float(ukuran)
@@ -2462,7 +2482,7 @@ async def masukkan_broken_ke_silo(
                 polishing_process_id=proc.id,stok_asal_id=krow.id,
                 product_sku_id=krow.product_sku_id,jumlah_karung=ambil_karung,
                 berat_kg=ambil_kg,jasa_id=krow.jasa_id,
-                mengurangi_stok=krow.kemasan_mengurangi_stok,
+                mengurangi_stok=krow.kemasan_mengurangi_stok,warehouse_kemasan_id=krow.warehouse_kemasan_id or await db.scalar(select(lokasi(FinishedGoodsStock)).where(FinishedGoodsStock.id==krow.id)),
                 waktu=now,input_by=user.id)
             db.add(jejak);jejak_bongkar.append(jejak)
             krow.jumlah_karung = int(krow.jumlah_karung) - ambil_karung
@@ -2531,6 +2551,9 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
     """
     from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock, ProductSku
     from app.services.stok import output_sosoh
+    from app.penggilingan.inventory.finished_goods import _packed_kg
+    from app.services.cakupan_fasilitas import lokasi
+    wid=await _g2_warehouse_id(db)
     def milik(col):
         return col.is_(None) if jasa_id is None else col == jasa_id
 
@@ -2552,7 +2575,7 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
         .where(PolishingProcess.status.in_(("proses", "selesai")))
     )).scalars())
     procs = (await db.execute(
-        select(PolishingProcess).where(PolishingProcess.id.in_(process_ids))
+        select(PolishingProcess).where(PolishingProcess.id.in_(process_ids),lokasi(PolishingProcess)==wid)
         .order_by(PolishingProcess.created_at, PolishingProcess.id)
     )).scalars().all() if process_ids else []
 
@@ -2564,8 +2587,8 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
     direct_rows = (await db.execute(
         select(ByproductStock.id, ByproductStock.berat_kg)
         .where(ByproductStock.jenis_produk == "broken",
-               ByproductStock.source_type == "timbangan",
-               milik(ByproductStock.jasa_id))
+               or_(ByproductStock.source_type != 'polishing',ByproductStock.source_id.not_in(select(PolishingProcess.id).where(lokasi(PolishingProcess)==wid))),
+               milik(ByproductStock.jasa_id),lokasi(ByproductStock)==wid)
         .order_by(ByproductStock.waktu, ByproductStock.id)
     )).all()
     direct_plan: list[tuple[int, float]] = []
@@ -2584,14 +2607,14 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
             break
         rows = (await db.execute(select(ByproductStock.id).where(
             ByproductStock.jenis_produk == "broken", ByproductStock.source_type == "polishing",
-            ByproductStock.source_id == proc.id, milik(ByproductStock.jasa_id)
+            ByproductStock.source_id == proc.id, milik(ByproductStock.jasa_id),lokasi(ByproductStock)==wid
         ))).scalars().all()
         available = sum([await _sisa_broken_row(db, rid) for rid in rows])
         packed = float((await db.execute(
             select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
             .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
             .where(ProductSku.kategori == "broken", FinishedGoodsStock.source_type == "polishing",
-                   FinishedGoodsStock.source_id == proc.id, milik(FinishedGoodsStock.jasa_id))
+                   FinishedGoodsStock.source_id == proc.id, milik(FinishedGoodsStock.jasa_id),lokasi(FinishedGoodsStock)==wid)
         )).scalar_one())
         from app.services.jasa import pemilik_hasil_proses
         if await pemilik_hasil_proses(db, proc.jasa_id, "broken") == jasa_id:
@@ -2606,7 +2629,7 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
                        milik(ByproductStock.jasa_id))
             )).scalar_one())
             available += max(0, float((await output_sosoh(db, proc.id)).get("broken") or 0)
-                             - curah_dibukukan - packed)
+                             - curah_dibukukan - await _packed_kg(db,proc.id,'broken',None))
         take = min(left, available + packed)
         if take > 0.5:
             plan.append((proc, take))
@@ -2687,7 +2710,9 @@ async def masukkan_hasil_samping_ke_silo(
     from app.services.barang_keluar import _kunci_saldo_keluar
     await _kunci_saldo_keluar(db)
     from .rencana_hasil_samping import saldo_sumber, alokasikan
-    data = await saldo_sumber(db, jenis, jasa_id,user=user)
+    from app.services.cakupan_fasilitas import KonteksGudang
+    scope=KonteksGudang(role=user.role,default_warehouse_id=user.default_warehouse_id,id=user.id,stock_warehouse_filter=silo.warehouse_id)
+    data = await saldo_sumber(db, jenis, jasa_id,user=scope)
     rencana = alokasikan(data, jenis, berat_kg)
 
     await kunci_silo(db, silo.id)

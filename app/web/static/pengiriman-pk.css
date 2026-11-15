@@ -97,3 +97,8 @@
 
 #pk-jalan .riwayat-list .fakta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 #pk-jalan .riwayat-list .tp-history-lot{grid-column:1/-1}
+
+/* Pabrik dan gudang satu kelompok asal; tujuan menyertakan penempatan. */
+.tp-route{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin:0}
+.tp-route dt{font-size:12px;color:var(--pd-muted);margin-bottom:6px}
+.tp-route dd{margin:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}

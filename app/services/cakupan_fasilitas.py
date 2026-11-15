@@ -15,7 +15,7 @@ class KonteksGudang:
 from sqlalchemy import select,func,case,true,false,or_
 from sqlalchemy.orm import aliased
 from hmu_identitas import peran as P
-from app.models import (Warehouse,LiniProduksi,JenisProsesProduksi,Dryer,Silo,
+from app.models import (Warehouse,LiniProduksi,JenisProsesProduksi,Dryer,Silo,PackagingPurchase,PackagingLoss,PackagingMaterial,GabahKeringLot,
     PurchaseBatch,PkPurchaseBatch,DryingLot,DryingLotBatch,MillingProcess,
     PolishingProcess,PolishingSiloUsage,SiloStorage,PkGudang2Intake,FinishedGoodsStock,ByproductStock,OutgoingItem,OutgoingRecord,BrokenKeSilo,HasilSampingKeSilo,InternalTransfer)
 
@@ -27,6 +27,16 @@ def lama(kode):
 def lokasi(model):
     """Ekspresi SQL lokasi catatan; bisa dipakai sebelum count/pagination."""
     line=aliased(LiniProduksi)
+    if model in (PackagingPurchase,PackagingLoss):
+        bahan=aliased(PackagingMaterial)
+        kode=select(bahan.kode).where(bahan.id==model.packaging_material_id).correlate(model).scalar_subquery()
+        return func.coalesce(model.warehouse_id,case((kode=='karung_pk',lama('g1')),else_=lama('g2')))
+    if model is GabahKeringLot:
+        isi=aliased(SiloStorage);silo=aliased(Silo)
+        asal=select(silo.warehouse_id).join(isi,isi.silo_id==silo.id).where(isi.id==model.silo_storage_id).correlate(model).scalar_subquery()
+        return func.coalesce(model.warehouse_id,asal,lama('g1'))
+    if model is SiloStorage:
+        return select(Silo.warehouse_id).where(Silo.id==model.silo_id).correlate(model).scalar_subquery()
     if model in (DryingLot,MillingProcess,PolishingProcess):
         utama=select(line.warehouse_id).where(line.id==model.lini_produksi_id).correlate(model).scalar_subquery()
         if model is DryingLot:
@@ -53,7 +63,9 @@ def lokasi(model):
     if model is OutgoingRecord:return func.coalesce(model.warehouse_id,lama('g2'))
     if model is OutgoingItem:
         return select(lokasi(OutgoingRecord)).where(OutgoingRecord.id==model.outgoing_record_id).correlate(model).scalar_subquery()
-    if model in (BrokenKeSilo,HasilSampingKeSilo,InternalTransfer):
+    if model is InternalTransfer:
+        return func.coalesce(model.tujuan_warehouse_id,select(Silo.warehouse_id).where(Silo.id==model.silo_id).correlate(model).scalar_subquery(),lama('g2'))
+    if model in (BrokenKeSilo,HasilSampingKeSilo):
         return func.coalesce(select(Silo.warehouse_id).where(Silo.id==model.silo_id).correlate(model).scalar_subquery(),lama('g2'))
     if model is PkGudang2Intake:
         return func.coalesce(model.warehouse_id,select(PkPurchaseBatch.warehouse_id).where(PkPurchaseBatch.id==model.pk_purchase_batch_id).correlate(model).scalar_subquery(),select(Silo.warehouse_id).where(Silo.id==model.silo_id).correlate(model).scalar_subquery(),lama('g2'))
@@ -131,7 +143,7 @@ async def konteks_baca_gudang(db,user,kode):
     """Tambahan filter baca saja. Tidak mengganti identitas atau izin aktor."""
     from types import SimpleNamespace
     if not kode:return user
-    if kode.startswith('wh:') and kode[3:].isdigit():q=select(Warehouse.id).where(Warehouse.id==int(kode[3:]))
+    if kode.startswith('wh:') and kode[3:].isascii() and kode[3:].isdigit() and 0<int(kode[3:])<=2147483647:q=select(Warehouse.id).where(Warehouse.id==int(kode[3:]))
     else:q=select(Warehouse.id).where(Warehouse.kode_fungsi==kode)
     wid=await db.scalar(q)
     return KonteksGudang(role=user.role,default_warehouse_id=user.default_warehouse_id,id=user.id,stock_warehouse_filter=wid or -1)
@@ -145,3 +157,10 @@ async def pilihan_filter_stok(db,user):
             other=await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g1',Warehouse.aktif.is_(True)))
             if other and all(w.id!=other.id for w in rows):rows.append(other)
     return tuple((w.kode_fungsi or f'wh:{w.id}',w.nama_gudang,'') for w in sorted(rows,key=lambda w:w.id))
+
+
+async def boleh_baca_stok(db,user):
+    if user is None:return True
+    if P.admin_keatas(user.role):return True
+    if not P.operator_saja(user.role) or not user.default_warehouse_id:return False
+    return bool(await db.scalar(select(Warehouse.id).where(Warehouse.id==user.default_warehouse_id,Warehouse.aktif.is_(True))))

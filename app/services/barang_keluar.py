@@ -344,7 +344,7 @@ def baris_dari_item(it: OutgoingItem, *, jumlah_karung=None, berat_kg=None
 
 
 async def tersedia(db: AsyncSession, b: BarisPerintah,
-                   *, abaikan_pesanan: bool = False) -> tuple[float, str]:
+                   *, abaikan_pesanan: bool = False, warehouse_id=None) -> tuple[float, str]:
     """(kg yang benar-benar bisa keluar, nama barangnya).
 
     `abaikan_pesanan` dipakai langkah MUAT: barisnya sendiri sudah termasuk
@@ -356,12 +356,18 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
     from app.services.stok import nama_produk
     from app.services.transfer import pending_transfer_kg
 
+    # Pengiriman produk yang sudah ada berangkat dari Gudang 2. Barang yang
+    # telah ditransfer ke gudang lain tidak boleh terjual dari saldo global.
+    from app.models import Warehouse
+    from app.services.cakupan_fasilitas import KonteksGudang
+    wid=warehouse_id if warehouse_id is not None else await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g2'))
+    scope=KonteksGudang(role='operator',default_warehouse_id=wid or -1,id=0,stock_warehouse_filter=wid or -1)
     if b.tipe == "finished_goods":
         # Milik siapa yang dihitung mengikuti perintahnya: penjualan pabrik
         # membaca stok pabrik, pengambilan jasa membaca barang pesanan itu.
         # Satu rumus, dua pertanyaan — lihat `hitung_stok_finished_goods`.
         stok = await hitung_stok_finished_goods(db, b.sku_id, b.std_id,
-                                                jasa_id=b.jasa_id)
+                                                jasa_id=b.jasa_id,user=scope)
         ada, nama = float(stok["kg"]), await _nama_sku(db, b.sku_id, b.std_id)
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
             db, sku_id=b.sku_id, std_id=b.std_id, jasa_id=b.jasa_id)
@@ -373,7 +379,7 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         # `finished_goods` di atas — bukan cuma cacat jenisnya yang
         # dibetulkan, saringan pemiliknya pun baru ada sejak di sini.
         ada = float(await hitung_stok_byproduct_total(db, b.jenis or "",
-                                                       jasa_id=b.jasa_id))
+                                                       jasa_id=b.jasa_id,user=scope))
         nama = nama_produk(b.jenis or "")
         dipesan = (0.0 if abaikan_pesanan else
                    await _sudah_dipesan(db, jenis=b.jenis, jasa_id=b.jasa_id))
@@ -474,7 +480,7 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         from app.models import ProductSku
         sku = await db.get(ProductSku, b.sku_id)
         if sku and adalah_samping(sku.kategori):
-            total = float(await hitung_stok_byproduct_total(db, sku.kategori, jasa_id=b.jasa_id))
+            total = float(await hitung_stok_byproduct_total(db, sku.kategori, jasa_id=b.jasa_id,user=scope))
             terikat = (float(await alokasi_supplier(db,jenis=sku.kategori)) if b.jasa_id is None else 0) if abaikan_pesanan else await _sudah_dipesan(db, jenis=sku.kategori, jasa_id=b.jasa_id)
             return min(ada-dipesan, total-terikat), nama
     return ada - dipesan, nama

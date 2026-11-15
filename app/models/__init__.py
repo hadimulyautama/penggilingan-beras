@@ -182,3 +182,5 @@ from app.models.console import SesiConsole
 
 # Metadata bersama untuk monitoring dan pemulihan; tidak mengubah model transaksi.
 from hmu_identitas.monitoring import SumberMonitoring, KejadianPemakaian, PembukaanMasuk, RencanaBantuan, PemulihanAkun
+
+from app.models.transfer_barang import PermintaanTransferBarang, TransferBarang, TransferBarangItem

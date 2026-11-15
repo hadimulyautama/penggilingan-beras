@@ -261,6 +261,18 @@ async def render_laci(request: Request, nama: str, **konteks):
         from app.web.portal.presentation import prepare_context
         await prepare_context(request, nama_asal, konteks)
         return render(request, nama_asal, **konteks)
+    # Gudang penyimpanan boleh melakukan transfer meskipun tidak mempunyai
+    # lini produksi. Tidak membuka aksi catat produksi untuk gudang tersebut.
+    akun_operasional=getattr(request.state,'akun',None)
+    if akun_operasional and getattr(request.state,'view','tamu')=='tamu':
+        from hmu_identitas import peran as P
+        if P.operator_saja(akun_operasional.user.role):
+            from app.database import SessionLocal
+            from app.services.cakupan_fasilitas import boleh_baca_stok
+            from app.web.akses import hak_view
+            async with SessionLocal() as db:
+                izin_transfer=await boleh_baca_stok(db,akun_operasional.user)
+            konteks.setdefault('AKSES',hak_view('tamu'))['transfer']=izin_transfer
     from app.web.nav import lencana
 
     from app.web.stok_navigasi import siapkan

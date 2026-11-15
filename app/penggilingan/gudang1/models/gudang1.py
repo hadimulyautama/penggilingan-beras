@@ -503,6 +503,7 @@ class GabahKeringLot(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
     kode_lot: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     #: Baris silo asalnya — untuk menyambung ke bobot basah pembanding pagar
     #: fisika (lihat `gabah_kering._berat_basah_pembanding`) dan untuk jejak.

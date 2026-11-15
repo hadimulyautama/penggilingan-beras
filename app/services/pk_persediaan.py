@@ -84,7 +84,7 @@ class SumberPK:
 
 
 def _waktu(row, fallback=None):
-    v = getattr(row, 'created_at', None) or fallback or getattr(row, 'waktu', None)
+    v = getattr(row, 'waktu_penempatan', None) or getattr(row, 'created_at', None) or fallback or getattr(row, 'waktu', None)
     if v is None:
         return datetime.min.replace(tzinfo=timezone.utc)
     return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v

@@ -106,7 +106,7 @@ async def physical(db,kind,identity):
     return [str(x) for x in (await db.execute(select(*cols).where(*conditions(kind,identity)))).one()]
 
 @baca_sekali
-async def pemakaian_karung_asli(db):
+async def pemakaian_karung_asli(db,warehouse_id=None):
     """Payer kemasan tetap, hanya dari bukti rinci perpindahan baru.
 
     Koreksi memakai versi efektif; pembatalan nol tidak menambah lembar.
@@ -122,10 +122,19 @@ async def pemakaian_karung_asli(db):
     owners={v.get('customer') for v in states}|{line['source_owner'] for v in states for line in v['lines']}
     contacts=dict((await db.execute(select(Jasa.id,Jasa.pelanggan_id).where(Jasa.id.in_(owners-{None})))).all())
     result={}
+    proc_lokasi={}
+    if warehouse_id is not None:
+        from app.services.cakupan_fasilitas import lokasi
+        ids={line['source_before'].get('source_id') for state in states for line in state['lines'] if line['source_before'].get('source_type')=='polishing'}
+        if ids:proc_lokasi=dict((await db.execute(select(PolishingProcess.id,lokasi(PolishingProcess)).where(PolishingProcess.id.in_(ids)))).all())
+        g2=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g2'))
     for state in states:
         sku=skus[state['identity']['sku']]
         for line in state['lines']:
             if not line['source_before'].get('kemasan_mengurangi_stok') or D(line['quantity'])<=0:continue
+            if warehouse_id is not None:
+                before=line['source_before'];wid=before.get('warehouse_kemasan_id') or before.get('warehouse_id') or proc_lokasi.get(before.get('source_id')) or g2
+                if wid!=warehouse_id:continue
             for who,signum in [(line['source_owner'],1),(state.get('customer'),-1)]:
                 key=(sku.packaging_material_id,sku.package_size_id,sku.brand_id,contacts.get(who) if who is not None else None)
                 result[key]=result.get(key,D(0))+D(line['quantity'])*signum
@@ -207,6 +216,9 @@ async def allocate(db,kind,identity,owners,amount,dest,user,*,source_ids=None,de
     for ident in owners:candidates.extend(await free_guard(db,kind,identity,ident,allocating=True,detail=detail))
     candidates.sort(key=lambda x:(x[0].tanggal,x[0].waktu,x[0].id) if kind=='karung' else (x[0].waktu,x[0].id))
     if source_ids is not None:candidates=[(r,n) for r,n in candidates if r.id in source_ids]
+    if kind=='karung':
+        from app.services.transfer_karung_lokasi import tersebar
+        if await tersebar(db,[r.id for r,n in candidates]):raise InventoryError('Karung ini masih tersebar lewat Transfer. Kembalikan distribusi transfernya sebelum mengubah pemilik sumber pembelian.')
     left=amount;lines=[]
     for r,available in candidates:
         if left<=0:break

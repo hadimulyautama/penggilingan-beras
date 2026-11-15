@@ -150,14 +150,14 @@ async def rancang_permintaan(db, rid, req, user):
             raise kirim.PengirimanError('Lot sudah mempunyai permintaan aktif lain. Lanjutkan permintaan tersebut.')
         if req.get('tujuan'):
             from app.penggilingan.gudang2.service import _tujuan_and_silo
-            target, sid = await _tujuan_and_silo(db, req['tujuan'])
-            if allocated and (target != r.tujuan or sid != r.silo_id):
+            target, sid, wid = await kirim.pilihan_tujuan(db,r,req['tujuan'])
+            if allocated and (target != r.tujuan or sid != r.silo_id or wid != r.tujuan_warehouse_id):
                 raise kirim.PengirimanError('Tujuan transfer yang sudah tercatat tetap. Tutup sisa, lalu minta tujuan baru.')
             if sid:
                 from app.services.jasa import cocok_pemilik, pemilik_silo_g2
                 if not all([await cocok_pemilik(db, r.jasa_id, o) for o in await pemilik_silo_g2(db, sid)]):
                     raise kirim.PengirimanError('Pemilik silo tujuan berbeda dari lot.')
-            changes.update(tujuan=target, silo_id=sid)
+            changes.update(tujuan=target, silo_id=sid,tujuan_warehouse_id=wid)
         changes.update(bertahap=True, berat_setuju_kg=str(value),
                        status='selesai' if value == allocated else 'dikirim' if allocated else 'disetujui',
                        berat_final_kg=str(completed) if value == allocated else None,
@@ -349,6 +349,8 @@ async def rancang(db, *, jenis, ident, req, user):
         plan = await rancang_transfer(db, ident, clean, user)
     else:
         raise kirim.PengirimanError('Jenis koreksi tidak dikenal.')
+    from app.services.transfer_pk_lokasi import rancang_dokumen_lanjutan
+    plan['barang_lokasi']=await rancang_dokumen_lanjutan(db,plan.get('pk_chain',{}))
     # Jam pemeriksaan bukan bagian sidik: waktu simpan akan ditetapkan pada
     # event koreksi, bukan membuat dua pratinjau identik dianggap berbeda.
     for item in plan['permintaan']:
@@ -423,6 +425,8 @@ async def simpan(db, *, jenis, ident, req, user):
         if plan['pk_chain']:
             await rantai.terapkan(db, event=event, user=user, aksi=JENIS)
         await _terapkan_baris(db, event, user)
+        from app.services.transfer_pk_lokasi import terapkan_dokumen_lanjutan
+        await terapkan_dokumen_lanjutan(db,plan.get('barang_lokasi',[]),user,event)
         from app.penggilingan.gudang2.service import hitung_stok_silo
         for sid in plan['pk_chain'].get('silos', []):
             silo = await db.get(Silo, sid)

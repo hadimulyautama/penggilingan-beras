@@ -299,7 +299,7 @@ def test_stok_karung_operator_g2_hanya_gudangnya_sendiri():
 
     kode = kode_saja(layar_produk._halaman_stok_karung)
     assert "stok_kemasan_rinci(db" in kode, "stok karung tak diambil"
-    assert "gudang1(view)" in kode, "batas gudang tak diperiksa"
+    assert "pembaca_stok(db, request, akun)" in kode and "user=baca_user" in kode, "stok harus mengikuti gudang efektif pembaca"
     # Dan tak ada harga yang ikut: satuannya lembar, dan operator tak melihat
     # angka uang. Sumbernya sendiri (`stok_kemasan_rinci`) tak menyusun harga.
     rinci = kode_saja(kms.stok_kemasan_rinci)

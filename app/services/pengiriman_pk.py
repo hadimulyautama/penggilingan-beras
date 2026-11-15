@@ -34,7 +34,7 @@ async def operator_asal(db,u,wid=None):
     if not u or u.status!='aktif':raise PermissionError('Akun tidak aktif.')
     if can_see_financials(u):return
     w=await db.get(Warehouse,u.default_warehouse_id) if u.default_warehouse_id else None
-    if not P.operator_saja(u.role) or not w or w.kode_fungsi!='g1' or (wid is not None and w.id!=wid):raise PermissionError('Pengiriman dicatat operator gudang asal yang berwenang.')
+    if not P.operator_saja(u.role) or not w or not w.aktif or (wid is not None and w.id!=wid):raise PermissionError('Pengiriman dicatat operator gudang asal yang berwenang.')
 
 async def kunci_stok(db):
     from app.services.barang_keluar import _kunci_saldo_keluar
@@ -79,17 +79,40 @@ async def _rute(db,r):
     loc=(await lokasi_banyak(db,MillingProcess,[proc.id]))[proc.id]
     asal=await db.get(Warehouse,loc['warehouse_id'])
     silo=await db.get(Silo,r.silo_id) if r.silo_id else None
-    tujuan=await db.get(Warehouse,silo.warehouse_id) if silo else await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g2',Warehouse.aktif.is_(True)))
+    tujuan=await db.get(Warehouse,r.tujuan_warehouse_id) if r.tujuan_warehouse_id else await db.get(Warehouse,silo.warehouse_id) if silo else await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi=='g2',Warehouse.aktif.is_(True)))
     if not asal or not asal.aktif or not tujuan or not tujuan.aktif:raise PengirimanError('Gudang asal atau tujuan tidak aktif.')
     from app.penggilingan.silo_policy import boleh_masuk
-    if silo and (not silo.aktif or not boleh_masuk(silo,'pk','g2')):raise PengirimanError('Silo tujuan tidak aktif atau tidak menerima PK.')
+    if r.tujuan_warehouse_id:
+        from app.services.transfer_lokasi import tujuan_sah
+        try:await tujuan_sah(db,asal.id,tujuan.id)
+        except ValueError as e:raise PengirimanError(str(e)) from None
+    if silo and (silo.warehouse_id!=tujuan.id or not silo.aktif or not boleh_masuk(silo,'pk','g2')):raise PengirimanError('Silo tujuan tidak aktif atau tidak menerima PK.')
     return proc,asal,tujuan,silo
+
+async def pilihan_tujuan(db,r,value):
+    from app.penggilingan.gudang2.service import _tujuan_and_silo
+    wid=r.tujuan_warehouse_id
+    teks=value or 'ditumpuk'
+    if teks.startswith('gudang:') and teks[7:].isdigit() and 0<int(teks[7:])<=2147483647:
+        wid=int(teks[7:]);teks='ditumpuk'
+    elif teks.startswith('silo:') and teks[5:].isdigit() and 0<int(teks[5:])<=2147483647:
+        silo=await db.get(Silo,int(teks[5:]))
+        if not silo:raise PengirimanError('Silo tujuan tidak ditemukan.')
+        wid=silo.warehouse_id
+    kind,sid=await _tujuan_and_silo(db,teks,warehouse_id=wid)
+    if wid is not None:
+        from app.services.cakupan_fasilitas import lokasi
+        from app.services.transfer_lokasi import tujuan_sah
+        asal=await db.scalar(select(lokasi(MillingProcess)).where(MillingProcess.id==r.milling_process_id))
+        try:await tujuan_sah(db,asal,wid)
+        except ValueError as e:raise PengirimanError(str(e)) from None
+    return kind,sid,wid
 
 async def _jejak(db,j,user,aksi,pesan):
     from app.services.activity_log import log_activity
     await log_activity(db,table_name='pengiriman_pk',record_id=j.id,action='UPDATE' if aksi!='buat' else 'INSERT',changed_by=user.id,new_value=pesan,aksi='pengiriman_pk_'+aksi)
 
-async def setujui_banyak(db,*,user,items):
+async def setujui_banyak(db,*,user,items,commit=True):
     """Satu commit untuk semua pilihan. Permintaan yang tidak dipilih tetap utuh."""
     admin(user);await kunci_stok(db)
     ids=[x['permintaan_id'] for x in items]
@@ -103,19 +126,20 @@ async def setujui_banyak(db,*,user,items):
         r=rows.get(x['permintaan_id']);value=kg(x['berat_kg'])
         if not r or r.status!='diminta':raise PengirimanError('Permintaan sudah berubah; baca daftar terbaru.')
         if value>D(await pending_transfer_kg(db,r.milling_process_id,pemilik_id=r.jasa_id,bebas=True)):raise PengirimanError('Stok bebas lot tidak mencukupi persetujuan.')
-        try:tujuan,silo_id=await _tujuan_and_silo(db,x['tujuan'])
+        try:tujuan,silo_id,wid=await pilihan_tujuan(db,r,x['tujuan'])
         except Gudang2Error as e:raise PengirimanError(str(e)) from None
         if silo_id:
             owners=await pemilik_silo_g2(db,silo_id)
             if not all([await cocok_pemilik(db,r.jasa_id,o) for o in owners]):raise PengirimanError('Pemilik silo tujuan berbeda dari lot.')
-        r.bertahap=True;r.status='disetujui';r.tujuan=tujuan;r.silo_id=silo_id;r.berat_setuju_kg=value;r.disetujui_oleh=user.id;r.waktu_setuju=now_local()
+        r.bertahap=True;r.status='disetujui';r.tujuan=tujuan;r.silo_id=silo_id;r.tujuan_warehouse_id=wid;r.berat_setuju_kg=value;r.disetujui_oleh=user.id;r.waktu_setuju=now_local()
         await db.flush()
         await jejak_minta(db,r,langkah='setujui_bertahap',oleh=user,ringkas='Disetujui '+angka(value)+' kg; operator asal dapat mencatat transfer setelah barang dipindahkan.')
         await _kabar(db,r,untuk='operator',pesan='Permintaan '+await _kode_lot(db,r)+' disetujui '+angka(value)+' kg. Operator asal dapat membuat pengiriman sebagian.',prioritas='hijau')
-    await db.commit()
+    if commit:await db.commit()
+    else:await db.flush()
     return dict(ok=True,permintaan_ids=ids)
 
-async def buat(db,*,user,items,kunci,nomor_polisi="",nama_sopir="",pakai_kendaraan=True):
+async def buat(db,*,user,items,kunci,nomor_polisi="",nama_sopir="",pakai_kendaraan=True,commit=True):
     await operator_asal(db,user);await kunci_stok(db)
     nomor_polisi=' '.join(nomor_polisi.upper().split());nama_sopir=' '.join(nama_sopir.split())
     if len(nomor_polisi)>20 or len(nama_sopir)>100:raise PengirimanError('Nomor polisi maksimal 20 karakter dan sopir maksimal 100 karakter.')
@@ -159,7 +183,9 @@ async def buat(db,*,user,items,kunci,nomor_polisi="",nama_sopir="",pakai_kendara
     if not pakai_kendaraan:
         parts=list((await db.scalars(select(PengirimanPkItem).where(PengirimanPkItem.pengiriman_id==j.id).order_by(PengirimanPkItem.permintaan_id))).all())
         await _selesaikan(db,j,parts,requests,user,'Transfer PK; bobot per lot dicatat operator asal setelah pemindahan selesai.')
-    await db.commit();return dict(ok=True,id=j.id,ulang=False)
+    if commit:await db.commit()
+    else:await db.flush()
+    return dict(ok=True,id=j.id,ulang=False)
 
 async def rincian(db,pid):
     j=await db.get(PengirimanPk,pid)
@@ -243,7 +269,7 @@ async def _selesaikan(db,j,items,requests,actor,alasan):
             if silo.kapasitas_ton is not None and D(await hitung_stok_silo(db,silo.id))+D(i.berat_kg)>D(silo.kapasitas_ton)*1000:
                 raise PengirimanError('Kapasitas silo tujuan tidak mencukupi transfer. Periksa kapasitas sebelum mengulang pencatatan stok.')
         with lepas_item(db,r,i.berat_kg):
-            result=await create_internal_transfer(db,user=actor,kode_proses=proc.kode_proses,lokasi_tujuan=(await db.get(Silo,r.silo_id)).nama_silo if r.silo_id else 'ditumpuk',berat=float(i.berat_kg),pemilik_id=r.jasa_id,kunci_kiriman='pengiriman-pk:'+str(j.id)+':item:'+str(i.id),commit=False,aksi='pengiriman_pk_selesai',alasan=alasan)
+            result=await create_internal_transfer(db,user=actor,kode_proses=proc.kode_proses,lokasi_tujuan=(await db.get(Silo,r.silo_id)).nama_silo if r.silo_id else 'ditumpuk',berat=float(i.berat_kg),pemilik_id=r.jasa_id,kunci_kiriman='pengiriman-pk:'+str(j.id)+':item:'+str(i.id),commit=False,aksi='pengiriman_pk_selesai',alasan=alasan,warehouse_id=r.tujuan_warehouse_id)
         if D(result.transfer.berat_kg)!=D(i.berat_kg):raise PengirimanError('Bobot transfer terpotong oleh saldo; seluruh perjalanan dibatalkan penyimpanannya.')
         i.internal_transfer_id=result.transfer.id;await db.flush()
     j.status='selesai';j.waktu_selesai=now_local();await db.flush()

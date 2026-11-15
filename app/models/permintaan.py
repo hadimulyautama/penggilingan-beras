@@ -62,6 +62,9 @@ class PermintaanPk(Base, TimestampMixin):
         ForeignKey("milling_process.id"), nullable=False
     )
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    tujuan_warehouse_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
+    kunci_transfer: Mapped[str | None] = mapped_column(String(120),unique=True)
+    sidik_transfer: Mapped[str | None] = mapped_column(String(64))
     diminta_oleh: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     waktu_minta: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     #: Berapa kg yang DIMINTA Gudang 2 — permintaan, bukan persetujuan.

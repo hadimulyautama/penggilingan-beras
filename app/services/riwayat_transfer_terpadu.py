@@ -1,5 +1,5 @@
 """Gabungkan catatan lama tanpa menyalin transaksi atau menghitung lot dua kali."""
-from sqlalchemy import select
+from sqlalchemy import select,func
 
 from app.models import InternalTransfer, MillingProcess, PengirimanPkItem, Silo, Warehouse, Jasa, Pelanggan
 from app.peran import can_see_financials
@@ -29,7 +29,7 @@ async def lengkapi_pengiriman(db, journeys):
 async def catatan_lama(db, *, user, batas=100):
     # Satu pencatatan baru dapat memuat beberapa InternalTransfer. Hanya lot
     # yang TIDAK memiliki kelompok baru ditampilkan sebagai catatan mandiri.
-    asal = lokasi(MillingProcess)
+    asal = func.coalesce(InternalTransfer.asal_warehouse_id,lokasi(MillingProcess))
     tujuan = lokasi(InternalTransfer)
     q = (select(InternalTransfer, MillingProcess.kode_proses, asal, tujuan)
          .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)

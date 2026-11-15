@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -167,7 +167,7 @@ async def find_or_create_sku(
 # ─────────────────────────── Stok kemasan ───────────────────────────
 async def hitung_stok_kemasan(
     db: AsyncSession, material_id: int, size_id: int, brand_id: int | None = None,
-    *, pelanggan_id: int | list[int] | None = None,
+    *, pelanggan_id: int | list[int] | None = None, warehouse_id: int | None = None,
 ) -> int:
     """Stok karung (lembar) per (jenis, ukuran, MERK, PEMILIK) = beli − hilang − terpakai.
 
@@ -190,6 +190,8 @@ async def hitung_stok_kemasan(
     pelanggan_id` — konsisten dengan `beli`/`hilang` tanpa menambah kolom
     `pelanggan_id` ke `finished_goods_stock`.
     """
+    from app.services.cakupan_fasilitas import lokasi
+    def wh(model):return true() if warehouse_id is None else lokasi(model)==warehouse_id
     def _brand(col):
         return col.is_(None) if brand_id is None else col == brand_id
 
@@ -215,6 +217,7 @@ async def hitung_stok_kemasan(
                 PackagingPurchase.package_size_id == size_id,
                 _brand(PackagingPurchase.brand_id),
                 _pelanggan(PackagingPurchase.pelanggan_id),
+                wh(PackagingPurchase),
             )
         )
     ).scalar_one()
@@ -225,6 +228,7 @@ async def hitung_stok_kemasan(
                 PackagingLoss.package_size_id == size_id,
                 _brand(PackagingLoss.brand_id),
                 _pelanggan(PackagingLoss.pelanggan_id),
+                wh(PackagingLoss),
             )
         )
     ).scalar_one()
@@ -237,6 +241,7 @@ async def hitung_stok_kemasan(
                 ProductSku.package_size_id == size_id,
                 _brand(ProductSku.brand_id),
                 FinishedGoodsStock.kemasan_mengurangi_stok.is_(True),
+                true() if warehouse_id is None else func.coalesce(FinishedGoodsStock.warehouse_kemasan_id,lokasi(FinishedGoodsStock))==warehouse_id,
                 _jasa_milik_pelanggan(FinishedGoodsStock.jasa_id),
             )
         )
@@ -244,24 +249,29 @@ async def hitung_stok_kemasan(
     # Saat stok asal berkurang karena kemas ulang, karung lamanya tetap habis.
     from app.models import KemasUlang
     lama = await db.scalar(select(func.coalesce(func.sum(KemasUlang.karung_lama_dihitung),0))
-        .join(ProductSku,ProductSku.id==KemasUlang.sku_asal_id).where(
+        .join(ProductSku,ProductSku.id==KemasUlang.sku_asal_id).outerjoin(FinishedGoodsStock,FinishedGoodsStock.id==KemasUlang.sumber_id).where(
             ProductSku.packaging_material_id==material_id,ProductSku.package_size_id==size_id,
-            _brand(ProductSku.brand_id),_jasa_milik_pelanggan(KemasUlang.jasa_id)))
+            _brand(ProductSku.brand_id),_jasa_milik_pelanggan(KemasUlang.jasa_id),
+            true() if warehouse_id is None else func.coalesce(KemasUlang.warehouse_kemasan_asal_id,FinishedGoodsStock.warehouse_kemasan_id,lokasi(FinishedGoodsStock))==warehouse_id))
     # Broken yang dibongkar tidak mengembalikan karung kosong. Pertahankan
     # jejak pemakaian setelah baris FG berkurang, dengan merk/pemilik asli.
-    from app.models import BrokenKarungDibongkar
+    from app.models import BrokenKarungDibongkar,PolishingProcess
     dibongkar = await db.scalar(select(func.coalesce(func.sum(BrokenKarungDibongkar.jumlah_karung),0))
-        .join(ProductSku,ProductSku.id==BrokenKarungDibongkar.product_sku_id).where(
+        .join(ProductSku,ProductSku.id==BrokenKarungDibongkar.product_sku_id).join(PolishingProcess,PolishingProcess.id==BrokenKarungDibongkar.polishing_process_id).where(
             ProductSku.packaging_material_id==material_id,ProductSku.package_size_id==size_id,
             _brand(ProductSku.brand_id),BrokenKarungDibongkar.mengurangi_stok.is_(True),
-            _jasa_milik_pelanggan(BrokenKarungDibongkar.jasa_id)))
+            _jasa_milik_pelanggan(BrokenKarungDibongkar.jasa_id),true() if warehouse_id is None else func.coalesce(BrokenKarungDibongkar.warehouse_kemasan_id,lokasi(PolishingProcess))==warehouse_id))
     # Alih milik isi tidak mengembalikan lembar kosong atau memindahkan
     # pihak yang dahulu memakai kemasan. Bukti hanya dari operasi rinci baru.
     from app.services.kepemilikan import pemakaian_karung_asli
     rekening=set(pelanggan_id) if isinstance(pelanggan_id,list) else {pelanggan_id}
-    delta=sum(n for (m,z,b,p),n in (await pemakaian_karung_asli(db)).items()
+    delta=sum(n for (m,z,b,p),n in (await pemakaian_karung_asli(db,warehouse_id=warehouse_id)).items()
               if (m,z,b)==(material_id,size_id,brand_id) and p in rekening)
-    return int(beli) - int(hilang) - int(terpakai) - int(lama) - int(dibongkar) - int(delta)
+    transfer=0
+    if warehouse_id is not None:
+        from app.services.transfer_karung_lokasi import delta as delta_transfer
+        transfer=await delta_transfer(db,material_id,size_id,brand_id,pelanggan_id,warehouse_id)
+    return int(beli) - int(hilang) - int(terpakai) - int(lama) - int(dibongkar) - int(delta) + int(transfer)
 
 
 # `hpp_kemasan_wavg` DIBUANG 28 September 2026. Satu-satunya pembacanya
@@ -403,7 +413,7 @@ _URUT_GUDANG = ("Gudang 2", "Gudang 1")
 
 
 async def stok_kemasan_rinci(
-    db: AsyncSession, *, pelanggan_id: int | list[int] | None = None,
+    db: AsyncSession, *, pelanggan_id: int | list[int] | None = None, user=None,
 ) -> list[dict]:
     """Stok tiap kombinasi karung yang pernah dibeli — satu baris per kombinasi.
 
@@ -437,24 +447,35 @@ async def stok_kemasan_rinci(
             .distinct()
         )
     ).all()
+    from app.models import Warehouse
+    from app.services.cakupan_fasilitas import batas,lokasi
+    warehouses=list((await db.scalars(select(Warehouse))).all())
+    from hmu_identitas import peran as P
+    if user is not None and not P.admin_keatas(user.role):warehouses=[w for w in warehouses if w.id==user.default_warehouse_id]
+    requested=getattr(user,'stock_warehouse_filter',None)
+    if requested is not None:warehouses=[w for w in warehouses if w.id==requested]
     minimum = settings.min_kemasan_lembar
     keluar: list[dict] = []
     for mat_id, size_id, brand_id in combos:
         mat = await db.get(PackagingMaterial, mat_id)
         size = await db.get(PackageSize, size_id)
         brand = await db.get(Brand, brand_id) if brand_id else None
-        stok = await hitung_stok_kemasan(db, mat_id, size_id, brand_id, pelanggan_id=pelanggan_id)
-        keluar.append({
-            "gudang": kemasan_gudang(mat.kode if mat else None),
-            "kode": mat.kode if mat else None,
-            "nama": mat.nama if mat else "-",
-            "merk": brand.nama if brand else None,
-            "ukuran": int(size.ukuran_kg) if size else 0,
-            "lembar": int(stok),
-            "menipis": stok <= minimum,
-            "pemilik_id": pelanggan_id if not isinstance(pelanggan_id,list) else None,
-            "pemilik_tunggal": not isinstance(pelanggan_id,list),
-        })
+        original=set(await db.scalars(select(lokasi(PackagingPurchase)).where(PackagingPurchase.packaging_material_id==mat_id,PackagingPurchase.package_size_id==size_id,PackagingPurchase.brand_id==brand_id)))
+        for wh in warehouses:
+            stok=await hitung_stok_kemasan(db,mat_id,size_id,brand_id,pelanggan_id=pelanggan_id,warehouse_id=wh.id)
+            if not stok and wh.id not in original:continue
+            keluar.append({
+                "gudang": 'Gudang 1' if wh.kode_fungsi=='g1' else 'Gudang 2' if wh.kode_fungsi=='g2' else wh.nama_gudang,
+                "warehouse_id":wh.id,"gudang_nama":wh.nama_gudang,
+                "kode": mat.kode if mat else None,
+                "nama": mat.nama if mat else "-",
+                "merk": brand.nama if brand else None,
+                "ukuran": int(size.ukuran_kg) if size else 0,
+                "lembar": int(stok),
+                "menipis": stok <= minimum,
+                "pemilik_id": pelanggan_id if not isinstance(pelanggan_id,list) else None,
+                "pemilik_tunggal": not isinstance(pelanggan_id,list),
+            })
     keluar.sort(key=lambda b: (_URUT_GUDANG.index(b["gudang"])
                                if b["gudang"] in _URUT_GUDANG else 9,
                                b["nama"], b["merk"] or "", b["ukuran"]))

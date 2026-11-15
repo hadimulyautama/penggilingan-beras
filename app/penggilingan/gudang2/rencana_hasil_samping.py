@@ -4,15 +4,19 @@ Urutan proses ID, pengurangan pengiriman sebelum alokasi, dan toleransi
 0,005 kg berasal dari layanan lama. Pembaca tidak menulis atau mengunci;
 layanan penyimpanan tetap bertanggung jawab atas transaksi dan izin.
 """
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from app.models import (PolishingProcess, HasilSampingKeSilo, FinishedGoodsStock,
                         ProductSku, OutgoingItem, ByproductStock)
 from app.services.stok import output_sosoh
 
 
 async def saldo_sumber(db, jenis, jasa_id, *, user=None):
+    from app.services.cakupan_fasilitas import batas,lokasi
+    scope=batas(user,PolishingProcess)
+    local_packed=select(FinishedGoodsStock.source_id).join(ProductSku).where(FinishedGoodsStock.source_type=='polishing',ProductSku.kategori==jenis,FinishedGoodsStock.jasa_id==jasa_id,batas(user,FinishedGoodsStock))
+    local_proc=set((await db.scalars(select(PolishingProcess.id).where(scope))).all())
     procs = (await db.execute(
-        select(PolishingProcess).where(PolishingProcess.status.in_(("proses", "selesai")))
+        select(PolishingProcess).where(PolishingProcess.status.in_(("proses", "selesai")),or_(scope,PolishingProcess.id.in_(local_packed)))
         .order_by(PolishingProcess.id)
     )).scalars().all()
     from app.penggilingan.inventory.finished_goods import _packed_kg
@@ -29,16 +33,19 @@ async def saldo_sumber(db, jenis, jasa_id, *, user=None):
                                  FinishedGoodsStock.source_id == proc.id,
                                  ProductSku.kategori == jenis,
                                  (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
-                                  else FinishedGoodsStock.jasa_id == jasa_id))
+                                  else FinishedGoodsStock.jasa_id == jasa_id),batas(user,FinishedGoodsStock))
                           )
         packed_owner = float((await db.execute(packed_owner_q)).scalar_one())
         from app.services.jasa import pemilik_hasil_proses
         owner = await pemilik_hasil_proses(db,proc.jasa_id,jenis)
-        curah_owner = max(0.0, hasil - packed_all) if owner == jasa_id else 0.0
+        # Pembukuan di gudang lain tetap mengurangi hasil yang belum punya
+        # rumah, tetapi bukan stok fisik yang dapat dipakai di gudang ini.
+        booked_bulk=float(await db.scalar(select(func.coalesce(func.sum(ByproductStock.berat_kg),0)).where(ByproductStock.source_type=='polishing',ByproductStock.source_id==proc.id,ByproductStock.jenis_produk==jenis)))
+        curah_owner = max(0.0, hasil - packed_all-booked_bulk) if owner == jasa_id and proc.id in local_proc else 0.0
         moved = float((await db.execute(
             select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
             .where(HasilSampingKeSilo.polishing_process_id == proc.id,
-                   HasilSampingKeSilo.jenis == jenis,
+                   HasilSampingKeSilo.jenis == jenis,batas(user,HasilSampingKeSilo),
                    (HasilSampingKeSilo.jasa_id.is_(None) if jasa_id is None
                     else HasilSampingKeSilo.jasa_id == jasa_id))
         )).scalar_one())
@@ -51,11 +58,9 @@ async def saldo_sumber(db, jenis, jasa_id, *, user=None):
     from app.services.retur_supplier_stok import keluar as keluar_supplier
     raw = (await db.scalars(select(ByproductStock).where(
         ByproductStock.jenis_produk == jenis,
-        ByproductStock.jasa_id.is_(None) if jasa_id is None else ByproductStock.jasa_id == jasa_id
+        ByproductStock.jasa_id.is_(None) if jasa_id is None else ByproductStock.jasa_id == jasa_id, batas(user,ByproductStock)
     ).order_by(ByproductStock.waktu, ByproductStock.id))).all()
     for row in raw:
-        if row.source_type == 'polishing' and (await output_sosoh(db, row.source_id)).get(jenis,0)>0:
-            continue # Pembukuan curah hasil mesin bukan produksi kedua.
         moved = float(await db.scalar(select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg),0)).where(
             HasilSampingKeSilo.byproduct_stock_id == row.id)))
         retur = float((await keluar_supplier(db, sumber=f'broken:{row.id}'))[0])
@@ -72,13 +77,13 @@ async def saldo_sumber(db, jenis, jasa_id, *, user=None):
     keluar_curah = float((await db.execute(
         select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
         .where(OutgoingItem.item_type == "byproduct_curah",
-               OutgoingItem.jenis_byproduct == jenis, milik_keluar)
+               OutgoingItem.jenis_byproduct == jenis, milik_keluar,batas(user,OutgoingItem))
     )).scalar_one())
     keluar_karung = float((await db.execute(
         select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
         .join(ProductSku, ProductSku.id == OutgoingItem.product_sku_id)
         .where(OutgoingItem.item_type == "finished_goods",
-               ProductSku.kategori == jenis, milik_keluar)
+               ProductSku.kategori == jenis, milik_keluar,batas(user,OutgoingItem))
     )).scalar_one())
     sisa_keluar = keluar_curah + keluar_karung
     # Stok dikeluarkan FIFO; terapkan pengeluaran lama sebelum merencanakan
@@ -91,19 +96,12 @@ async def saldo_sumber(db, jenis, jasa_id, *, user=None):
 
     # Perintah dan retur yang masih dialokasikan juga mengikat saldo.
     from app.services.barang_keluar import tersedia, BarisPerintah
-    bebas,_ = await tersedia(db, BarisPerintah(tipe='byproduct_curah',jenis=jenis,jasa_id=jasa_id))
+    bebas,_ = await tersedia(db, BarisPerintah(tipe='byproduct_curah',jenis=jenis,jasa_id=jasa_id),warehouse_id=getattr(user,'stock_warehouse_filter',None))
     terikat = max(0,sum(c[1] for c in candidates)-max(float(bebas),0))
     for candidate, baris in zip(candidates,rincian):
         kurang = min(candidate[1],terikat);candidate[1]-=kurang;terikat-=kurang
         baris['keluar'] += kurang;baris['tersedia']=candidate[1]
 
-    if user is not None:
-        from app.services.cakupan_fasilitas import batas
-        proses_di_gudang=set((await db.scalars(select(PolishingProcess.id).where(batas(user,PolishingProcess)))).all())
-        stok_di_gudang=set((await db.scalars(select(ByproductStock.id).where(batas(user,ByproductStock)))).all())
-        pasangan=[(c,r) for c,r in zip(candidates,rincian) if
-                  (getattr(c[0],'byproduct_stock_id',None) in stok_di_gudang if getattr(c[0],'byproduct_stock_id',None) else c[0].id in proses_di_gudang)]
-        candidates=[c for c,r in pasangan];rincian=[r for c,r in pasangan]
     return dict(candidates=candidates, sumber=rincian,
                 keluar_curah=keluar_curah, keluar_kemasan=keluar_karung,
                 saldo_kg=sum(c[1] for c in candidates))

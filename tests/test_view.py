@@ -249,7 +249,7 @@ def test_stok_mengikuti_view_pembacanya():
     from app.web import layar_stok
 
     sumber = inspect.getsource(layar_stok.halaman_stok)
-    assert "gudang1(view)" in sumber and "gudang2(view)" in sumber
+    assert "konteks_baca_gudang" in sumber and "boleh_baca_stok(db,baca_user)" in sumber
     # Koreksi hasil giling milik Gudang 1; operator polesan tak punya hasil
     # giling untuk dikoreksi.
     assert "view != POLESAN" in sumber

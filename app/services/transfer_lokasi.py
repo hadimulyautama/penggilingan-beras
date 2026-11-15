@@ -9,7 +9,7 @@ async def daftar(db):
         .outerjoin(PenempatanGudang, PenempatanGudang.warehouse_id == Warehouse.id)
         .outerjoin(LokasiPabrik, LokasiPabrik.id == PenempatanGudang.lokasi_pabrik_id)
         .outerjoin(Perusahaan, Perusahaan.id == PenempatanGudang.company_id))).all()
-    return {w.id:dict(gudang_id=w.id,gudang_nama=w.nama_gudang,
+    return {w.id:dict(gudang_id=w.id,gudang_nama=w.nama_gudang,kode_fungsi=w.kode_fungsi,
         pabrik_id=p.id if p else None,pabrik_nama=p.nama if p else None,
         company_id=c.id if c else None,perusahaan_nama=c.nama if c else None,
         aktif=bool(w.aktif and p and p.aktif and c and c.aktif)) for w,b,p,c in rows}

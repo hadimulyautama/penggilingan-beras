@@ -36,6 +36,8 @@ class InternalTransfer(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_transfer: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    asal_warehouse_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
+    tujuan_warehouse_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
     milling_process_id: Mapped[int] = mapped_column(
         ForeignKey("milling_process.id"), nullable=False
     )

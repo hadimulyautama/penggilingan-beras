@@ -655,7 +655,7 @@ async def hitung_stok_byproduct_curah(
 
 
 async def hitung_stok_byproduct_total(
-    db: AsyncSession, jenis: str, *, jasa_id: int | None = None,
+    db: AsyncSession, jenis: str, *, jasa_id: int | None = None, user=None,
 ) -> float:
     """Saldo hasil samping yang bisa keluar, termasuk saldo otomatis kartu.
 
@@ -672,7 +672,7 @@ async def hitung_stok_byproduct_total(
     """
     from app.services.stok import stok_produk
 
-    kartu = next((k for k in await stok_produk(db, jasa_id=jasa_id)
+    kartu = next((k for k in await stok_produk(db, jasa_id=jasa_id,user=user)
                   if k.jenis == jenis), None)
     return max(float(kartu.sisa_kg), 0.0) if kartu else 0.0
 
@@ -777,10 +777,10 @@ async def sisa_karung_per_sumber(
         q = q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
     else:
         q = q.where(FinishedGoodsStock.rice_quality_standard_id == standard_id)
-    rows = (await db.execute(q.order_by(FinishedGoodsStock.waktu,
+    rows = (await db.execute(q.order_by(func.coalesce(FinishedGoodsStock.waktu_penempatan,FinishedGoodsStock.waktu),
                                        FinishedGoodsStock.id)
                              .with_for_update() if kunci else
-                             q.order_by(FinishedGoodsStock.waktu,
+                             q.order_by(func.coalesce(FinishedGoodsStock.waktu_penempatan,FinishedGoodsStock.waktu),
                                         FinishedGoodsStock.id))).scalars().all()
     keluar_q = select(func.coalesce(func.sum(OutgoingItem.jumlah_karung), 0)).where(
         OutgoingItem.item_type == "finished_goods",
@@ -791,7 +791,13 @@ async def sisa_karung_per_sumber(
         keluar_q = keluar_q.where(OutgoingItem.rice_quality_standard_id.is_(None))
     else:
         keluar_q = keluar_q.where(OutgoingItem.rice_quality_standard_id == standard_id)
-    keluar = max(0, int((await db.execute(keluar_q)).scalar_one()))
+    # Pengeluaran di gudang lain tidak menghabiskan baris ini. Transfer
+    # lokasi mempertahankan SKU/pemilik, sehingga FIFO wajib per gudang.
+    from app.services.cakupan_fasilitas import lokasi, lokasi_banyak
+    lokasi_keluar=lokasi(OutgoingItem)
+    keluar_q=keluar_q.add_columns(lokasi_keluar).group_by(lokasi_keluar)
+    keluar_per_gudang={wid:max(0,int(n)) for n,wid in (await db.execute(keluar_q)).all()}
+    lokasi_rows=await lokasi_banyak(db,FinishedGoodsStock,[r.id for r in rows])
     from app.services.retur_supplier_stok import keluar_banyak
     from app.services.retur_supplier_reservasi import terikat_banyak
     keys=[f'beras:{r.id}' for r in rows]
@@ -802,8 +808,9 @@ async def sisa_karung_per_sumber(
         rkg,rn=retur.get(f'beras:{row.id}',(0,0))
         stok_n=max(int(row.jumlah_karung)-int(rn),0)
         alokasi=int(alokasi_retur.get(f'beras:{row.id}',0))
-        terpakai = min(max(0,stok_n-alokasi), keluar)
-        keluar -= terpakai
+        wid=lokasi_rows[row.id]['warehouse_id']
+        terpakai = min(max(0,stok_n-alokasi), keluar_per_gudang.get(wid,0))
+        keluar_per_gudang[wid]=keluar_per_gudang.get(wid,0)-terpakai
         tersedia = max(stok_n - terpakai, 0)
         if proses_id is not None and (
                 row.source_type != "polishing" or row.source_id != proses_id):

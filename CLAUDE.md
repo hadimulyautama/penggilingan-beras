@@ -161,6 +161,37 @@ Mengelola orang, akun, dan alat: **Super Admin saja**, dengan jaring pengaman
 tak pernah terkunci dari dalam. Setelan KERJA (target kadar air, sebab
 berhenti, sakelar mutu) tetap milik Direksi.
 
+## Transfer barang dan pabrik (15 November 2026)
+
+Satu halaman **Transfer** (`/transfer-bertahap`) memuat permintaan,
+persetujuan, pencatatan, riwayat dan koreksi. Default semua status. Riwayat
+memakai tampilan Riwayat Proses, satu baris per lot; catatan InternalTransfer
+lama digabung tanpa menghitung ulang item yang sudah terhubung. **Asal satu
+kolom**: pabrik dan gudang. **Tujuan satu kolom**: pabrik, gudang dan lokasi.
+Nama/lintasan berasal dari PenempatanGudang → LokasiPabrik → Perusahaan.
+Transfer boleh antar pabrik dalam perusahaan yang sama; pemilik tetap.
+
+`transfer_barang` memakai stok sumber tercatat: produk berkarung (karung dan
+bobot nyata), curah (kg), karung kosong (lembar), gabah/gabah kering dan
+PK tumpukan bebas (lot utuh). PK hasil giling memakai PermintaanPk dan
+penulis/koreksi lama, termasuk karung bekas 50 kg + curah dan silo yang
+menerima PK. Permintaan lama serta riwayat timbang tetap dapat dibaca.
+Permintaan/persetujuan tidak memindahkan stok. Operator gudang asal mencatat
+jumlah aktual; Admin menyetujui, menutup sisa dan mengoreksi. Persetujuan
+barang umum menetapkan batas; saldo aktual diperiksa lagi di bawah kunci
+inventory saat simpan. Jangan menjanjikan reservasi lintas seluruh writer.
+
+Transfer tidak membuat pembelian, hasil produksi atau alih milik baru.
+Karung kosong memakai delta lokasi atas pembelian asal; karung berisi tetap
+membebankan kemasan pada gudang pengemas semula. `waktu_penempatan` menjaga
+FIFO gudang penerima tanpa mengganti waktu penerimaan/pengemasan asal.
+Koreksi barang umum menolak bagian yang sudah dipakai/berpindah lagi sampai
+catatan lanjutan diperbaiki. Koreksi PK tetap mengikuti tumpukan → silo →
+bahan proses dan menyelaraskan dokumen transfer lokasi lot utuh terkait;
+hasil ukur produksi tetap. Pratinjau HMAC, nonce dan satu transaksi menjaga
+koreksi/retry. Migrasi0134–0135 hanya menambah struktur, tanpa backfill.
+Uji: `test_transfer_barang.py`, `test_transfer_pk_multilokasi.py`.
+
 ## PK sebagai stok dan bahan proses (keputusan pemilik 18 Oktober 2026)
 
 PK yang masih di tumpukan adalah stok: boleh dijual bila milik pabrik,

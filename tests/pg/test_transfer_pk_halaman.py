@@ -112,7 +112,7 @@ async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang,
             await expect(page.locator('[data-action],[data-koreksi]')).to_have_count(0)
             await page.get_by_role('button', name='Tutup detail', exact=True).click()
             await expect(page.get_by_role('link', name='Pilih bahan baku', exact=True)).to_have_attribute('href', '/stok?tab=bahan')
-        await page.get_by_role('link', name='Riwayat transfer', exact=False).click()
+        await page.locator('[data-pk-tab=riwayat]').click()
         await expect(page.locator('#pk-permintaan')).not_to_be_visible()
         await expect(page.locator('#pk-perjalanan')).to_be_visible()
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
@@ -171,7 +171,7 @@ async def test_koneksi_putus_sesudah_commit_tetap_satu_transfer(pg, siap):
         await page.get_by_role('button', name='Ulangi pencatatan', exact=True).click()
         await expect(page.locator('#pk-pesan')).to_contain_text('Stok asal dan tujuan sudah diperbarui')
         assert len(kiriman) == 2 and kiriman[0] == kiriman[1]
-        await page.get_by_role('link', name='Permintaan lot', exact=False).click()
+        await page.locator('[data-pk-tab=permintaan]').click()
         await expect(page.locator('#pk-daftar article')).to_have_count(1)
         await expect(page.locator('#pk-daftar')).to_contain_text('Dipindahkan sebagian')
         await page.reload()
@@ -186,7 +186,7 @@ async def test_penutupan_sisa_terlihat_di_status_ditutup_dan_alasan_tidak_hilang
     from playwright.async_api import expect
     async with browser_app(pg, peran='admin', gudang=None) as (page, client, _):
         await page.goto(BASE + '/transfer-bertahap?status=perlu_transfer')
-        await page.get_by_role('button', name=f"Tindakan permintaan {siap['rid']}", exact=True).click()
+        await page.get_by_role('button', name=f"Tindakan Permintaan #{siap['rid']}", exact=True).click()
         await page.get_by_role('button', name='Tutup sisa persetujuan', exact=True).click()
         await page.locator('#pk-alasan [name=alasan]').fill('Kebutuhan dibatalkan setelah pemeriksaan')
         # Tolak satu kali untuk membuktikan alasan dan galat ada di panel aktif.

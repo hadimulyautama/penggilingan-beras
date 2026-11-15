@@ -5,7 +5,7 @@ dipakai juga oleh pratinjau. Kunci tetap diambil pada jalur simpan; pembaca
 tidak menjalankan pembukuan, audit, penggabungan pemilik, atau mutasi silo.
 """
 from decimal import Decimal, ROUND_HALF_UP
-from sqlalchemy import select
+from sqlalchemy import select,func
 from app.models import PolishingProcess, PolishingOutputLog, FinishedGoodsStock, ProductSku
 from app.penggilingan.inventory.finished_goods import (
     _packed_kg, _proc_by_kode, get_standard, sisa_karung_per_sumber,
@@ -33,16 +33,22 @@ def berat_karung_nyata(row, jumlah):
         Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
-async def sumber_karung_beras(db, sku_id, std_id, jasa_id=None, *, kunci=False, proses_id=None):
+async def sumber_karung_beras(db, sku_id, std_id, jasa_id=None, *, kunci=False, proses_id=None, warehouse_id=None):
     rows = await sisa_karung_per_sumber(db, sku_id, std_id, jasa_id=jasa_id,
         source_type=None, kunci=kunci, proses_id=proses_id)
+    if warehouse_id is not None:
+        from app.services.cakupan_fasilitas import lokasi_banyak
+        places=await lokasi_banyak(db,FinishedGoodsStock,[r.id for r,n,k in rows])
+        rows=[(r,n,k) for r,n,k in rows if places[r.id]['warehouse_id']==warehouse_id]
     from app.services.retur_supplier_reservasi import karung_terikat
     bebas=[]
     for row,n,berat in rows:
         n=max(0,n-await karung_terikat(db,f'beras:{row.id}'))
         if n:bebas.append((row,n,float(berat_karung_nyata(row,n))))
     rows=bebas
-    stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jasa_id)
+    from app.services.cakupan_fasilitas import KonteksGudang
+    scope=KonteksGudang(role='operator',default_warehouse_id=warehouse_id,id=0,stock_warehouse_filter=warehouse_id) if warehouse_id is not None else None
+    stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jasa_id,user=scope)
     saldo = max(Decimal('0'), min(Decimal(str(stok['kg'])),
         sum((berat_karung_nyata(row, n) for row, n, _ in rows), Decimal('0'))))
     return rows, saldo
@@ -69,13 +75,14 @@ def ambil_karung_nyata(rows, perlu):
     return plan, float(left)
 
 
-async def curah_beras_sumber(db, jenis, jasa_id=None, *, kunci=False):
+async def curah_beras_sumber(db, jenis, jasa_id=None, *, kunci=False,warehouse_id=None):
     """Saldo curah per proses, dengan pengurang dan urutan layanan lama.
 
     Pembaca saldo menghabiskan iterator; alokasi berhenti ketika kebutuhan
     terpenuhi, seperti layanan sebelumnya. Pencatatan kecil tidak membaca
     seluruh log proses yang tidak ikut diambil.
     """
+    from app.services.cakupan_fasilitas import lokasi
     kategori_sku = "beras_b" if jenis == "beras_b" else "beras_putih"
     std = await get_standard(db, jenis)
     proses = (await db.execute(kunci_query(
@@ -83,6 +90,7 @@ async def curah_beras_sumber(db, jenis, jasa_id=None, *, kunci=False):
         .where(PolishingProcess.id.in_(select(
             PolishingOutputLog.polishing_process_id).where(
                 PolishingOutputLog.jenis == jenis)),
+               (lokasi(PolishingProcess)==warehouse_id) if warehouse_id is not None else True,
                PolishingProcess.jasa_id.is_(None) if jasa_id is None
                else PolishingProcess.jasa_id == jasa_id)
         .order_by(PolishingProcess.waktu_mulai, PolishingProcess.id), kunci)
@@ -98,8 +106,10 @@ async def curah_beras_sumber(db, jenis, jasa_id=None, *, kunci=False):
 
 
 async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
-                       kode_pol=None, kunci=True):
-    from app.penggilingan.gudang2.service import Gudang2Error
+                       kode_pol=None, kunci=True,warehouse_id=None):
+    from app.penggilingan.gudang2.service import Gudang2Error,_g2_warehouse_id
+    from app.services.cakupan_fasilitas import lokasi
+    if warehouse_id is None:warehouse_id=await _g2_warehouse_id(db)
     kategori_sku = "beras_b" if jenis == "beras_b" else "beras_putih"
     std = await get_standard(db, jenis)
     alokasi: dict[int, float] = {}
@@ -112,7 +122,7 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
         # Curah mengikuti pemilik proses. Angka yang dikemas dari proses itu
         # dikurangi dahulu, lalu sisa curah dialokasikan FIFO lintas proses.
         perlu = berat_kg
-        async for proc, tersedia in curah_beras_sumber(db, jenis, jasa_id, kunci=kunci):
+        async for proc, tersedia in curah_beras_sumber(db, jenis, jasa_id, kunci=kunci,warehouse_id=warehouse_id):
             ambil = min(perlu, tersedia)
             if ambil > 0.01:
                 alokasi[proc.id] = ambil
@@ -135,6 +145,7 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
             .execution_options(populate_existing=True))
         sku = await db.get(ProductSku, row.product_sku_id) if row else None
         if (row is None or not row.curah_kemas_ulang or row.jumlah_karung != 0
+                or await db.scalar(select(lokasi(FinishedGoodsStock)).where(FinishedGoodsStock.id==row.id))!=warehouse_id
                 or row.jasa_id != jasa_id or sku is None or sku.kategori != kategori_sku
                 or row.rice_quality_standard_id != (std.id if std else None)):
             raise Gudang2Error("Stok curah tidak cocok dengan jenis beras dan pemilik yang dipilih.")
@@ -156,6 +167,7 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
         proc = await _proc_by_kode(db, kode_pol)
         if proc is None:
             raise Gudang2Error("Proses penyosohan yang dipilih tidak ditemukan.")
+        if await db.scalar(select(lokasi(PolishingProcess)).where(PolishingProcess.id==proc.id))!=warehouse_id:raise Gudang2Error('Proses sumber berada pada gudang lain.')
         hasil = (await output_sosoh(db, proc.id)).get(jenis, 0.0)
         dikemas = await _packed_kg(
             db, proc.id, kategori_sku, std.id if std else None)
@@ -189,7 +201,7 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
             if ukuran <= 0:
                 continue
             sisa, saldo = await sumber_karung_beras(db, sku_id, std.id if std else None,
-                jasa_id, proses_id=proc.id, kunci=kunci)
+                jasa_id, proses_id=proc.id, kunci=kunci,warehouse_id=warehouse_id)
             plan, _ = ambil_karung_nyata(sisa, min(perlu, float(saldo)))
             kg_karung = sum(kg for _, _, kg in plan)
             for row, jumlah, kg in plan:
@@ -219,7 +231,7 @@ async def rencana_beras(db, *, jenis, sumber_stok, berat_kg, jasa_id=None,
             raise Gudang2Error("Ukuran kemasan beras tidak valid.")
         ukuran = float(ukuran)
         sumber, saldo = await sumber_karung_beras(db, sku_id, std.id if std else None,
-            jasa_id, kunci=kunci)
+            jasa_id, kunci=kunci,warehouse_id=warehouse_id)
         tersedia = sum(jumlah for _, jumlah, _ in sumber)
         if Decimal(str(berat_kg)) > saldo:
             raise Gudang2Error(

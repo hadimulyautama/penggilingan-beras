@@ -62,7 +62,7 @@ def kembali_aman(nilai):
     pid, gudang = q.get('pelanggan_id', [''])[0], q.get('gudang', [''])[0]
     if tab not in {'bahan', 'produk', 'karung'} or pemilik not in {'semua', 'pabrik', 'jasa'}:
         return ''
-    if gudang not in {'', 'g1', 'g2'} or pid and (not pid.isascii() or not pid.isdigit() or int(pid) <= 0):
+    if (gudang not in {'','g1','g2'} and not (gudang.startswith('wh:') and gudang[3:].isascii() and gudang[3:].isdigit() and 0<int(gudang[3:])<=2147483647)) or pid and (not pid.isascii() or not pid.isdigit() or int(pid) <= 0):
         return ''
     return alamat(tab, pemilik, pelanggan_id=pid, gudang=gudang, cari=q.get('cari',[''])[0][:200])
 
@@ -89,6 +89,8 @@ async def siapkan(request, nama, konteks):
     if nama not in HALAMAN:
         return
     jenis, pemilik = HALAMAN[nama]
+    from app.web.portal.scope import is_customer_read
+    portal=is_customer_read(request)
     if konteks.get('semua_kepemilikan'):
         pemilik = 'semua'
     from app.peran import can_see_financials
@@ -97,8 +99,7 @@ async def siapkan(request, nama, konteks):
     view = getattr(request.state, 'view', 'tamu')
     pid = pelanggan_diminta(request) if pemilik == 'jasa' else None
     gudang = request.query_params.get('gudang', '')
-    if gudang not in {'g1', 'g2'}:
-        gudang = ''
+    if gudang not in {'g1','g2'} and not (gudang.startswith('wh:') and gudang[3:].isdigit()):gudang=''
     pelanggan = []
     kelompok = []
     if pemilik == 'jasa':
@@ -146,18 +147,12 @@ async def siapkan(request, nama, konteks):
         else:
             konteks['daftar'] = kelompok
 
-    # Produk lahir di G2; memilih G1 tidak boleh tetap menampilkan angka G2.
-    if jenis == 'produk' and gudang == 'g1':
-        if pemilik == 'jasa':
-            konteks['daftar'] = []
-        else:
-            konteks.update(kartu=[], beras=[], samping=[], kemasan={},
-                          sisa_beras=0, sisa_samping=0, curah_beras=0, curah_samping=0)
     if jenis == 'karung':
         def saring(baris):
-            return [b for b in baris if b.get('kode') != 'bekas'
-                    and (b['gudang'] != 'Gudang 1' or view in MEJA or pemilik == 'jasa')
-                    and (not gudang or b['gudang'] == ('Gudang 1' if gudang == 'g1' else 'Gudang 2'))]
+            rows=[b for b in baris if b.get('kode')!='bekas']
+            if not gudang:return rows
+            if gudang.startswith('wh:'):return [b for b in rows if str(b.get('warehouse_id',''))==gudang[3:]]
+            return [b for b in rows if b['gudang']==('Gudang 1' if gudang=='g1' else 'Gudang 2')]
         if pemilik == 'jasa':
             konteks['daftar'] = [{**p, 'karung': saring(p['karung'])} for p in konteks['daftar']]
             konteks['daftar'] = [p for p in konteks['daftar'] if p['karung']]
@@ -170,16 +165,27 @@ async def siapkan(request, nama, konteks):
     nama_pelanggan = dict(pelanggan).get(pid, 'Semua pelanggan')
     def href(tab=jenis, milik=pemilik, lokasi=gudang):
         return alamat(tab, milik, pelanggan_id=pid or '', gudang=lokasi, cari=cari)
+    from app.services.cakupan_fasilitas import pilihan_filter_stok,pilihan_gudang
+    from app.services.transfer_lokasi import daftar as daftar_lokasi
+    choices=();metadata={}
+    if akun:
+        async with SessionLocal() as db:
+            choices=await pilihan_filter_stok(db,akun.user) if jenis=='bahan' else tuple((w.kode_fungsi or 'wh:'+str(w.id),w.nama_gudang,'') for w in await pilihan_gudang(db,akun.user))
+            metadata=await daftar_lokasi(db)
+    by_code={m.get('kode_fungsi') or 'wh:'+str(wid):m for wid,m in metadata.items()}
+    if len({by_code.get(code,{}).get('pabrik_id') for code,_,_ in choices}-{None})>1:
+        choices=tuple((code,(by_code.get(code,{}).get('pabrik_nama') or 'Pabrik belum ditetapkan')+' → '+name,kind) for code,name,kind in choices)
+    location_names={code:name for code,name,_ in choices}
     konteks['STOK_NAV'] = dict(
         url=alamat(jenis, pemilik, pelanggan_id=pid or '', gudang=gudang, cari=cari),
         jenis=jenis, pemilik=pemilik, pelanggan_id=pid or '', pelanggan=pelanggan,
         gudang=gudang, label=label, nama_pemilik=nama_pemilik,
         cakupan=nama_pemilik + (' · ' + nama_pelanggan if pemilik == 'jasa' else ''),
-        lokasi=('Gudang 1' if gudang == 'g1' else 'Gudang 2') if gudang else 'Semua gudang',
-        tab=[dict(nama=n, kunci=k, href=href(k), boleh=k == 'bahan' or gudang2(view))
+        lokasi=location_names.get(gudang,'Semua gudang'),
+        tab=[dict(nama=n, kunci=k, href=href(k), boleh=portal or k == 'bahan' or bool(akun and (can_see_financials(akun.user) or getattr(akun.user,'default_warehouse_id',None))))
              for k, n in [('bahan', 'Bahan & PK'), ('produk', 'Produk'), ('karung', 'Karung')]],
         milik=[dict(nama=n, kunci=k, href=href(milik=k))
                for k, n in [('semua','Semua kepemilikan')] + [('pabrik', 'Pabrik'), ('jasa', 'Titipan jasa')]],
         lokasi_pil=[dict(nama=n, kunci=k, href=href(lokasi=k))
-                    for k, n in [('', 'Semua gudang'), ('g1', 'Gudang 1'), ('g2', 'Gudang 2')]],
+                    for k, n in [('', 'Semua gudang'),*[(code,name) for code,name,_ in choices]]],
     )

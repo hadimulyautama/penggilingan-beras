@@ -7,6 +7,8 @@ from app.database import Base
 class KemasUlang(Base):
     __tablename__ = 'kemas_ulang'
     id: Mapped[int] = mapped_column(primary_key=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
+    warehouse_kemasan_asal_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
     kunci: Mapped[str] = mapped_column(String(64), unique=True)
     sidik: Mapped[str] = mapped_column(String(64))
     sumber_id: Mapped[int] = mapped_column(ForeignKey('finished_goods_stock.id'))

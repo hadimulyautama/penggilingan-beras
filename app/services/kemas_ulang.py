@@ -75,18 +75,20 @@ async def simpan(db, *, user, sumber_id, kunci, jumlah_asal, material, ukuran, m
     pelanggan=None
     if row.jasa_id:
         jasa=await db.get(Jasa,row.jasa_id);pelanggan=jasa.pelanggan_id
-    karung=await hitung_stok_kemasan(db,baru.packaging_material_id,baru.package_size_id,baru.brand_id,pelanggan_id=pelanggan)
+    from app.services.cakupan_fasilitas import lokasi
+    wid=await db.scalar(select(lokasi(FinishedGoodsStock)).where(FinishedGoodsStock.id==row.id))
+    karung=await hitung_stok_kemasan(db,baru.packaging_material_id,baru.package_size_id,baru.brand_id,pelanggan_id=pelanggan,warehouse_id=wid)
     if jumlah_baru>karung:raise InventoryError(f'Stok kemasan baru milik pemilik ini tinggal {karung} lembar; diperlukan {jumlah_baru}.')
     dibuka=0 if row.curah_kemas_ulang else int(asal)
     now=now_local();sisa=total-berat_baru
-    cat=KemasUlang(kunci=kunci,sidik=payload,sumber_id=row.id,sku_asal_id=sku.id,sku_baru_id=baru.id,jasa_id=row.jasa_id,
+    cat=KemasUlang(kunci=kunci,sidik=payload,sumber_id=row.id,sku_asal_id=sku.id,sku_baru_id=baru.id,jasa_id=row.jasa_id,warehouse_id=wid,warehouse_kemasan_asal_id=row.warehouse_kemasan_id or wid,
         karung_dibuka=dibuka,karung_lama_dihitung=dibuka if row.kemasan_mengurangi_stok else 0,
         berat_asal_kg=total,karung_baru=jumlah_baru,berat_baru_kg=berat_baru,sisa_kg=sisa,petugas_id=user.id,waktu=now)
     row.jumlah_karung-=dibuka;row.berat_total_kg=D(row.berat_total_kg)-total
     def masuk(sku_id,kg,jumlah,curah):
         db.add(FinishedGoodsStock(product_sku_id=sku_id,rice_quality_standard_id=row.rice_quality_standard_id,
             source_type=row.source_type,source_id=row.source_id,jumlah_karung=jumlah,berat_total_kg=kg,
-            warehouse_id=row.warehouse_id,waktu=now,input_by=user.id,jasa_id=row.jasa_id,hpp_per_kg=row.hpp_per_kg,
+            warehouse_id=wid,warehouse_kemasan_id=wid,waktu=now,input_by=user.id,jasa_id=row.jasa_id,hpp_per_kg=row.hpp_per_kg,
             curah_kemas_ulang=curah,kemasan_mengurangi_stok=not curah))
     masuk(baru.id,berat_baru,jumlah_baru,False)
     if sisa:masuk(sku.id,sisa,0,True)
@@ -121,7 +123,9 @@ async def saldo_kemasan(db, sumber_id, material, ukuran, merk):
         if jasa is None:
             raise InventoryError('Pemilik batch asal tidak ditemukan.')
         pelanggan_id = jasa.pelanggan_id
-    jumlah = await hitung_stok_kemasan(db, mat.id, size.id, brand_id, pelanggan_id=pelanggan_id)
+    from app.services.cakupan_fasilitas import lokasi
+    wid=await db.scalar(select(lokasi(FinishedGoodsStock)).where(FinishedGoodsStock.id==row.id))
+    jumlah = await hitung_stok_kemasan(db, mat.id, size.id, brand_id, pelanggan_id=pelanggan_id,warehouse_id=wid)
     return dict(tersedia=max(0, jumlah), pemilik='pelanggan jasa' if row.jasa_id else 'pabrik')
 
 async def kemasan_tersedia(db, kategori, jasa_id):

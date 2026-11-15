@@ -195,6 +195,7 @@ class PkGudang2Intake(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    waktu_penempatan: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     # beli_luar / transfer_internal
     sumber_tipe: Mapped[str] = mapped_column(String(20), nullable=False)

@@ -14,6 +14,7 @@ def hak(peran, *, g1=False, g2=False):
     return dict(g1=admin or operator and g1, g2=admin or operator and g2,
                 pengiriman=admin or operator and g2,
                 admin=admin, super=super_, catat=admin or operator and (g1 or g2),
+                transfer=admin or operator and (g1 or g2),
                 fisik_g2=super_ or operator and g2,
                 minta_pk=super_ or operator and g2)
 
@@ -24,7 +25,7 @@ def hak_view(view):
     return hak(peran, g1=view == P.V_SELEPAN, g2=view == P.V_POLESAN)
 
 
-PINTU_HAK = {"barang_keluar": "pengiriman", "transfer_pk": "catat"}
+PINTU_HAK = {"barang_keluar": "pengiriman", "transfer_pk": "transfer"}
 
 
 PERAN_KOLOM = ((P.V_SUPER, "Super Admin"), (P.V_ADMIN, "Admin"),

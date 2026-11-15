@@ -46,6 +46,7 @@ class PackagingPurchase(Base, TimestampMixin):
     __tablename__ = "packaging_purchases"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
     kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     packaging_material_id: Mapped[int] = mapped_column(
         ForeignKey("packaging_materials.id"), nullable=False
@@ -77,6 +78,7 @@ class PackagingLoss(Base, TimestampMixin):
     __tablename__ = "packaging_losses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
     packaging_material_id: Mapped[int] = mapped_column(
         ForeignKey("packaging_materials.id"), nullable=False
     )
@@ -107,6 +109,7 @@ class FinishedGoodsStock(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    waktu_penempatan: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     product_sku_id: Mapped[int] = mapped_column(
         ForeignKey("product_skus.id"), nullable=False
     )
@@ -121,6 +124,9 @@ class FinishedGoodsStock(Base, TimestampMixin):
     berat_total_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"))
+    # Memindahkan isi karung tidak memindahkan tempat pemakaian karung kosong.
+    # NULL pada histori dibaca melalui lokasi sumber sebelum transfer pertama.
+    warehouse_kemasan_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     #: Pesanan jasa yang MEMILIKI beras ini. NULL = milik pabrik.
@@ -249,6 +255,7 @@ class ByproductStock(Base, TimestampMixin):
 
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
+    waktu_penempatan: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     jenis_produk: Mapped[str] = mapped_column(String(20), nullable=False)
     # polishing / reject_reprocessing
     source_type: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -512,6 +519,7 @@ class BrokenKarungDibongkar(Base):
     """
     __tablename__ = "broken_karung_dibongkar"
     id: Mapped[int] = mapped_column(primary_key=True)
+    warehouse_kemasan_id: Mapped[int | None] = mapped_column(ForeignKey('warehouses.id'))
     polishing_process_id: Mapped[int] = mapped_column(ForeignKey("polishing_process.id"),nullable=False)
     stok_asal_id: Mapped[int] = mapped_column(Integer,nullable=False)
     product_sku_id: Mapped[int] = mapped_column(ForeignKey("product_skus.id"),nullable=False)
