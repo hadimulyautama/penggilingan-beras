@@ -77,6 +77,11 @@ async def diagnosis(db,*,cid,jenis,aid):
                 reason=pintu.sebab_tolak(hak.peran,gate)
                 item.update(boleh=a['aktif'] and not reason,sebab='akun_nonaktif' if not a['aktif'] else 'peran' if reason else 'tersedia',peran_produk=hak.peran)
         except ProdukDitolak as e:item.update(boleh=False,sebab='akses_produk',pesan=str(e))
+        if item['boleh'] and a['wajib_ganti']:
+            item.update(boleh=False,sebab='wajib_ganti_sandi',pesan='Pengguna wajib mengganti sandi sebelum melanjutkan.')
+        if item['boleh'] and jenis=='staf' and code==TERAFLOW and await m.profil_timbang_bersama_nonaktif(db,aid):
+            item.update(boleh=False,sebab='profil_timbang_nonaktif',pesan='Profil pos timbang dinonaktifkan.')
+            sebab.append('profil_timbang_nonaktif')
     since=m.sekarang()-timedelta(days=30)
     rows=list(await db.scalars(select(E).where(E.company_id==cid,E.jenis_akun==jenis,E.akun_id==aid,E.jenis=='login',E.waktu>=since).order_by(E.waktu.desc(),E.id.desc()).limit(50)))
     login=[dict(aplikasi=e.aplikasi,kode=e.kode,waktu=e.waktu.isoformat(),browser=e.browser,perangkat=e.perangkat) for e in rows if e.jenis=='login']

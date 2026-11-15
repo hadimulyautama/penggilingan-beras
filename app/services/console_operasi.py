@@ -37,9 +37,10 @@ async def cari_pengguna(db,*,company_id=None,produk='',cari='',halaman=1):
         ctx=await scope(db,company_id)
         q=select(User.id,User.nama,Akun.username).outerjoin(Akun,Akun.user_id==User.id)
         if company_id:q=q.where(mon.batas_identitas(company_id))
-        if cari.strip():
+        cari=cari.strip()
+        if cari:
             term='%'+cari.strip().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
-            q=q.where(or_(User.nama.ilike(term,escape='\\'),Akun.username.ilike(term,escape='\\'),User.id==int(cari) if cari.isdecimal() and len(cari)<=9 else False))
+            q=q.where(or_(User.nama.ilike(term,escape='\\'),Akun.username.ilike(term,escape='\\'),User.id==int(cari) if cari.isdecimal() and len(cari)<=10 and id_sah(int(cari)) else False))
         count=await db.scalar(select(func.count()).select_from(q.subquery()));pages=max(1,(count+19)//20);page=min(halaman,pages)
         rows=(await db.execute(q.order_by(func.lower(User.nama),User.id).offset((page-1)*20).limit(20))).all()
         return dict(cakupan=ctx,jenis='staf',akun_id=None,produk=produk,user_id=None,diperbarui=mon.sekarang().isoformat(),pengguna=[dict(user_id=i,nama=n,username=u or '') for i,n,u in rows],total=count,halaman=page,halaman_total=pages)
@@ -76,8 +77,7 @@ async def peta_akses(db,*,user_id,company_id=None,produk='',halaman=1):
                     if not account or not account.aktif:reason='Akun masuk tidak aktif atau belum dibuat.';reason_code='akun'
                     elif account.harus_ganti_sandi:reason='Pengguna wajib mengganti sandi sebelum melanjutkan.';reason_code='sandi'
                     if not reason and tf_ready and definition.kode=='teraflow':
-                        status=await db.scalar(text('SELECT status FROM timbangan_akun WHERE akun_id=:aid OR (akun_id IS NULL AND username=:name) ORDER BY CASE WHEN akun_id=:aid THEN 0 ELSE 1 END,id LIMIT 1'),dict(aid=account.id,name=account.username))
-                        if status is not None and status!='aktif':reason='Profil pos timbang dinonaktifkan.';reason_code='profil'
+                        if await mon.profil_timbang_bersama_nonaktif(db,account.id):reason='Profil pos timbang dinonaktifkan.';reason_code='profil'
                     allowed=not reason
                 except ProdukDitolak as e:
                     reason=str(e);row=product_rows.get(definition.kode)
@@ -128,7 +128,7 @@ async def gangguan(db,*,company_id=None,produk='',jam=24,kategori='',halaman=1):
         names={(r['jenis'],r['id']):dict(r) for r in (await db.execute(select(identities).where(or_(*pairs)))).mappings()} if pairs else {}
         for event in events:
             person=names.get((event.jenis_akun,event.akun_id));kind='login' if event.jenis=='login' else 'browser' if event.jenis=='galat_browser' else 'akses' if event.kode in ('401','403') else 'server'
-            result['kejadian'].append(dict(id=event.id,aplikasi=event.aplikasi,kategori=kind,kode=event.kode,layar=event.layar,waktu=event.waktu.isoformat(),nama=person['nama'] if person else '',jenis=event.jenis_akun if person else '',akun_id=event.akun_id if person else None,user_id=person['user_id'] if person else None))
+            result['kejadian'].append(dict(id=event.id,company_id=event.company_id,aplikasi=event.aplikasi,kategori=kind,kode=event.kode,layar=event.layar,waktu=event.waktu.isoformat(),nama=person['nama'] if person else '',jenis=event.jenis_akun if person else '',akun_id=event.akun_id if person else None,user_id=person['user_id'] if person else None))
         result.update(total=count,halaman=page,halaman_total=pages)
         integration=await db.get(CI,(cid,INTEGRASI),populate_existing=True)
         if set(KODE)<=codes and integration and integration.aktif:
@@ -162,6 +162,6 @@ async def peta_akun_lokal(db,*,jenis,akun_id=None,company_id=None,produk='',cari
         info=await diagnosis(db,cid=ctx['company_id'],jenis=jenis,aid=akun_id);a=info['akun'];app=info['aplikasi'][0]
         code='padiflow' if jenis=='pelanggan' else 'teraflow'
         if a['wajib_ganti']:app=dict(app,boleh=False,sebab='wajib_ganti_sandi',pesan='Pengguna wajib mengganti sandi sebelum melanjutkan.')
-        return dict(cakupan=ctx,jenis=jenis,user_id=None,akun_id=akun_id,produk=produk,diperbarui=mon.sekarang().isoformat(),pengguna=dict(user_id=a['user_id'],nama=a['nama'],username=a['username'],aktif=a['aktif'],wajib_sandi=a['wajib_ganti']),total=1,halaman=1,halaman_total=1,
+        return dict(cakupan=ctx,jenis=jenis,user_id=None,akun_id=akun_id,produk=produk,diperbarui=mon.sekarang().isoformat(),pengguna=dict(user_id=a['user_id'],akun_id=a['id'],nama=a['nama'],username=a['username'],aktif=a['aktif'],wajib_sandi=a['wajib_ganti']),total=1,halaman=1,halaman_total=1,
             perusahaan=[dict(company_id=ctx['company_id'],nama=ctx['nama'],terhubung=True,keanggotaan='',anggota_aktif=False,gudang=[],gudang_lebih=False,
             produk=[dict(kode=code,nama=next(d.nama for d in KATALOG if d.kode==code),izin_sesuai=app['boleh'],operasional='diizinkan' if app['boleh'] else 'ditolak',peran=app.get('peran_produk',a['peran']),sumber='akun_lokal',sebab=app.get('pesan') or ('' if app['boleh'] else app['sebab']),sebab_kode={'wajib_ganti_sandi':'sandi','akun_nonaktif':'akun','perusahaan_nonaktif':'produk','produk_nonaktif':'produk','akses_produk':'izin','peran':'peran'}.get(app['sebab'],'izin'),pintu=[dict(nama='Portal pelanggan' if jenis=='pelanggan' else 'Pos Timbang',boleh=app['boleh'])])])])

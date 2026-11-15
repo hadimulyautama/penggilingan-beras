@@ -28,3 +28,13 @@ Deploy backend terlebih dahulu; frontend baru memerlukan API calon-admin.
 Rollback frontend ke rilis sehat terlebih dahulu, baru backend bila perlu.
 Jangan melakukan reset, reaktivasi atau pencabutan sesi akun produksi sebagai
 smoke test; periksa health/commit dan gerbang anonim saja.
+
+
+## Audit peta akses / pusat gangguan lintas perusahaan (15 November 2026)
+
+- Peta dan diagnosis membaca status profil TeraFlow tertaut dengan fungsi yang sama. Profil lama yang namanya sama belum dianggap sebagai profil tertaut nonaktif: login bersama yang sah akan melakukan adopsi/sinkronisasi sesuai mekanisme TeraFlow. Pembacaan Console tidak menautkan atau mengaktifkan profil. Wajib ganti sandi juga dinyatakan konsisten.
+- Pencarian ID staf menerima spasi di tepi dan seluruh rentang ID int32 yang sah tanpa mengeksekusi angka di luar rentang sebagai ID SQL.
+- Respons kejadian mencantumkan company_id aktual dan respons identitas lokal mencantumkan akun_id. Website memverifikasi isi kartu dan kejadian terhadap konteks tab sebelum menyediakan tautan tindakan.
+- Kolektor metadata di kedua aplikasi mencatat GET 401/403. GET normal dan jalur internal/monitoring/kesehatan/SSE tetap mengikuti pengecualian yang ada. Tidak menahan respons untuk menulis statistik. Tidak mengisi ulang kejadian lama atau mengubah transaksi.
+
+Regresi mencakup matriks dua perusahaan dengan hak produk berbeda, pencabutan izin, sidik semua tabel saat pembacaan, pipeline GET ditolak ke pusat gangguan, kesamaan kebijakan peta/diagnosis, serta login TeraFlow pada profil lama nyata melalui interpreter terpisah. Tidak ada migrasi atau perubahan pada writer transaksi, kredensial, penetapan anggota maupun izin produk. Rollback dengan rilis kode sebelumnya.
