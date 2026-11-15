@@ -269,7 +269,7 @@ async def riwayat(db, *, g1, g2, tid=None, jasa_ids=None, ids_tiket=None, batas_
     return keluar
 
 
-async def rincian_lokasi(db, catatan):
+async def rincian_lokasi(db, catatan, *, petugas=None):
     """Relasi bahan/proses aktual, termasuk pemakaian yang sudah selesai."""
     from app.models import (DryingLot, DryingLotBatch, SiloStorage, Silo,
                             MillingProcess, MillingProcessSource, PkGudang2Intake,
@@ -338,5 +338,6 @@ async def rincian_lokasi(db, catatan):
             if pesanan:
                 params['pelanggan_id'] = pesanan.pelanggan_id
         proses.append(('Stok terkait · '+c['pemilik'], '/stok?'+urlencode(params)))
-    petugas = {u.id: u.nama for u in (await db.scalars(select(User).where(User.id.in_({x['petugas_id'] for x in catatan})))).all()}
+    if petugas is None:
+        petugas = {u.id: u.nama for u in (await db.scalars(select(User).where(User.id.in_({x['petugas_id'] for x in catatan})))).all()}
     return list(dict.fromkeys(lokasi)), list(dict.fromkeys(proses)), petugas
