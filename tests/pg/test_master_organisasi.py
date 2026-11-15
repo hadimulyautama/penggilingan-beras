@@ -129,16 +129,22 @@ async def test_migrasi_tabel_kosong_tidak_mengubah_proses_transaksi_atau_master_
     akses=importlib.util.module_from_spec(spec);spec.loader.exec_module(akses)
     spec=importlib.util.spec_from_file_location('uji_monitoring_migrasi',Path(__file__).resolve().parents[2]/'migrations/versions/0132_monitoring_bantuan.py')
     monitoring=importlib.util.module_from_spec(spec);spec.loader.exec_module(monitoring)
+    modules=[]
+    for name in ('0131_ruang_perusahaan','0133_produk_perusahaan'):
+        spec=importlib.util.spec_from_file_location('uji_'+name,Path(__file__).resolve().parents[2]/('migrations/versions/'+name+'.py'))
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);modules.append(module)
+    ruang,produk=modules
     def putaran(conn):
         with Operations.context(MigrationContext.configure(conn)):
-            # Turunkan dependensi terbaru lebih dahulu; jangan melemahkan FK
-            # atau memakai CASCADE agar tes migrasi lama tetap dapat berjalan.
-            monitoring.downgrade();akses.downgrade();m.downgrade()
-            m.upgrade();akses.upgrade();monitoring.upgrade()
+            # Turunkan seluruh dependensi terbaru dahulu tanpa CASCADE.
+            # Pagar ruang harus ikut dipasang kembali sesudah tabel induknya.
+            produk.downgrade();monitoring.downgrade();ruang.downgrade();akses.downgrade();m.downgrade()
+            m.upgrade();akses.upgrade();ruang.upgrade();monitoring.upgrade();produk.upgrade()
     async with pg.kw['bind'].begin() as conn: await conn.run_sync(putaran)
     async with pg() as db:
         assert await sidik(db)==awal
         for tabel in m.TABEL: assert await db.scalar(text('SELECT count(*) FROM '+tabel))==0
+        assert await db.scalar(text("SELECT count(*) FROM pg_trigger WHERE tgname IN ('hmu_pagar_ruang_setelan','hmu_pagar_ruang_gudang')"))==2
         # Bahan/proses lama tidak diasosiasikan ke perusahaan pertama.
         assert await db.scalar(select(func.count()).select_from(Warehouse))>0
 

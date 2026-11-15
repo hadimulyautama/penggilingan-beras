@@ -32,6 +32,11 @@ from hmu_core.proses_db import ProsesTerpadu
 async def perusahaan_integrasi(request: Request):
     if not integrasi_sah(request.headers):
         raise HTTPException(403, 'Sambungan PadiFlow–TeraFlow berbeda perusahaan. Hubungi pengelola sistem.')
+    if request.url.path.startswith(('/internal/pengiriman/','/internal/retur/','/internal/retur-supplier/','/internal/masuk/')):
+        from hmu_identitas.produk import integrasi_lokal,ProdukDitolak
+        async with SessionLocal() as db:
+            try:await integrasi_lokal(db)
+            except ProdukDitolak as e:raise HTTPException(403,str(e)) from e
 
 
 router = APIRouter(prefix="/internal", tags=["internal"], dependencies=[Depends(perusahaan_integrasi)])
@@ -43,6 +48,19 @@ def _pastikan_token(token: str | None) -> None:
         raise HTTPException(status_code=404, detail="API internal tidak aktif.")
     if not token or not hmac.compare_digest(token, settings.internal_api_token):
         raise HTTPException(status_code=403, detail="Token internal tidak valid.")
+
+
+async def _hak_operator_produk(db,user):
+    # Pemeriksaan tambahan, bukan pengganti pintu aplikasi/izin keuangan.
+    # Peran datang dari grant produk DB milik company_id ruang server.
+    from hmu_identitas.produk import hak_lokal,PADIFLOW,TERAFLOW,ProdukDitolak
+    try:
+        await hak_lokal(db,produk=TERAFLOW,user_id=user.id,peran_lama=user.role)
+        hak=await hak_lokal(db,produk=PADIFLOW,user_id=user.id,peran_lama=user.role)
+    except ProdukDitolak as e:raise HTTPException(403,str(e)) from e
+    from hmu_identitas import peran as P
+    if P.normal(user.role)!=hak.peran:
+        db.expunge(user);user.role=hak.peran
 
 
 def _kunci_teks(value: str | None) -> str:
@@ -293,6 +311,8 @@ async def verifikasi_pengiriman_tiket(
     async with SessionLocal() as db:
         akun = await db.get(Akun, int(x_operator_akun))
         user = await db.get(User, akun.user_id) if akun else None
+        if user is not None and akun is not None and user.status=='aktif' and akun.status=='aktif':
+            await _hak_operator_produk(db,user)
         if akun is None or akun.status != "aktif" or user is None or user.status != "aktif":
             raise HTTPException(status_code=403, detail="Akun operator Timbangan tidak terhubung ke pengguna aktif Produksi.")
         await bk._kunci_saldo_keluar(db)
@@ -455,6 +475,8 @@ async def retur_detail_tiket(
     async with SessionLocal() as db:
         akun = await db.get(Akun, x_operator_akun)
         user = await db.get(User, akun.user_id) if akun else None
+        if user is not None and akun is not None and user.status=='aktif' and akun.status=='aktif':
+            await _hak_operator_produk(db,user)
         if not akun or akun.status != 'aktif' or not user or user.status != 'aktif':
             raise HTTPException(403, 'Akun tidak memiliki izin membaca rincian retur PadiFlow.')
         # Ikuti mode baca akun, tanpa menimpa peran ORM yang masih terikat DB.
@@ -484,6 +506,8 @@ async def retur_supplier_detail_tiket(tid:int,
     async with SessionLocal() as db:
         akun=await db.get(Akun,x_operator_akun)
         user=await db.get(User,akun.user_id) if akun else None
+        if user is not None and akun is not None and user.status=='aktif' and akun.status=='aktif':
+            await _hak_operator_produk(db,user)
         if not akun or akun.status!='aktif' or not user or user.status!='aktif' or not pintu.boleh_masuk(user.role,pintu.PRODUKSI):
             raise HTTPException(403,'Akun tidak memiliki akses PadiFlow.')
         role=P.peran_efektif(user.role,x_produksi_lihat)
@@ -516,6 +540,8 @@ async def masuk_detail_tiket(
     async with SessionLocal() as db:
         akun = await db.get(Akun, x_operator_akun)
         user = await db.get(User, akun.user_id) if akun else None
+        if user is not None and akun is not None and user.status=='aktif' and akun.status=='aktif':
+            await _hak_operator_produk(db,user)
         if not akun or akun.status != 'aktif' or not user or user.status != 'aktif' or not pintu.boleh_masuk(user.role, pintu.PRODUKSI):
             raise HTTPException(403, 'Akun tidak memiliki akses PadiFlow.')
         try:

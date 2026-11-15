@@ -22,6 +22,9 @@ async def orang(pg,running,monkeypatch):
         site=LokasiPabrik(company_id=co.id,kode='lokasi',nama='Pabrik uji');db.add(site);await db.flush()
         for w in await db.scalars(select(Warehouse)):db.add(PenempatanGudang(company_id=co.id,lokasi_pabrik_id=site.id,warehouse_id=w.id))
         root=User(nama='Admin Sistem uji',role=P.SUPERADMIN,status='aktif');op=User(nama='Operator aktif',role=P.OPERATOR,status='aktif');off=User(nama='Operator nonaktif',role=P.OPERATOR,status='nonaktif');db.add_all([root,op,off]);await db.flush()
+        from hmu_core import ProdukAplikasiPerusahaan,IntegrasiProdukPerusahaan
+        db.add_all([ProdukAplikasiPerusahaan(company_id=co.id,produk=code,aktif=True,warisan=True) for code in ('padiflow','teraflow')])
+        db.add(IntegrasiProdukPerusahaan(company_id=co.id,kode='padiflow_teraflow',aktif=True))
         pw=hash_sandi('sandi-uji-12345')
         a=Akun(user_id=op.id,username='operator-aktif',password_hash=pw,status='aktif',token_version=1)
         z=Akun(user_id=off.id,username='operator-off',password_hash=pw,status='nonaktif',token_version=1)

@@ -7,7 +7,7 @@ from fastapi.routing import APIRoute
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel,ConfigDict,Field,SecretStr
-from sqlalchemy import select,func,or_
+from sqlalchemy import and_,select,func,or_
 from sqlalchemy.exc import IntegrityError
 from hmu_identitas import peran as P
 from app.config import settings
@@ -198,7 +198,7 @@ async def direktori(cari:str='',halaman:int=1,actor=Depends(pelaku)):
 async def jejak_pusat(sebelum:int|None=None,actor=Depends(pelaku)):
     async with SessionLocal() as db:
         q=select(ActivityLog,User.nama).outerjoin(User,User.id==ActivityLog.changed_by).where(ActivityLog.aksi.in_(
-            ['keanggotaan_perusahaan','master_organisasi','penetapan_gudang','pengaturan_perusahaan','penetapan_perusahaan_lama','penetapan_ruang_perusahaan','console_bantuan']))
+            ['keanggotaan_perusahaan','master_organisasi','penetapan_gudang','pengaturan_perusahaan','penetapan_perusahaan_lama','penetapan_ruang_perusahaan','console_bantuan','produk_perusahaan','akses_produk']))
         if sebelum:q=q.where(ActivityLog.id<sebelum)
         rows=(await db.execute(q.order_by(ActivityLog.id.desc()).limit(51))).all()
     return dict(catatan=[dict(id=x.id,pelaku=n or 'Sistem',waktu=x.waktu_perubahan.isoformat(),alasan=x.alasan_perubahan,sebelum=x.old_value,sesudah=x.new_value) for x,n in rows[:50]],lanjut=rows[49][0].id if len(rows)>50 else None)
@@ -244,8 +244,7 @@ async def audit(company_id:int,sebelum:int|None=None,actor=Depends(pelaku)):
     async with SessionLocal() as db:
         await svc.otorisasi(db,actor['ruang'],company_id)
         q=select(ActivityLog,User.nama).outerjoin(User,User.id==ActivityLog.changed_by).where(
-            ActivityLog.table_name=='hmu_company_memberships',ActivityLog.aksi=='keanggotaan_perusahaan',
-            ActivityLog.record_id.in_(select(KeanggotaanPerusahaan.id).where(KeanggotaanPerusahaan.company_id==company_id)))
+            or_(and_(ActivityLog.table_name=='hmu_company_memberships',ActivityLog.aksi=='keanggotaan_perusahaan',ActivityLog.record_id.in_(select(KeanggotaanPerusahaan.id).where(KeanggotaanPerusahaan.company_id==company_id))),and_(ActivityLog.aksi.in_(['produk_perusahaan','akses_produk']),ActivityLog.field_name.in_([f'company:{company_id}:produk',f'company:{company_id}:akses_produk']))))
         if sebelum is not None:q=q.where(ActivityLog.id<sebelum)
         rows=list((await db.execute(q.order_by(ActivityLog.id.desc()).limit(51))).all())
     return dict(catatan=[dict(id=x.id,pelaku=n or 'Tidak diketahui',waktu=x.waktu_perubahan.isoformat(),alasan=x.alasan_perubahan,
@@ -403,3 +402,54 @@ async def monitoring_terapkan(cid:int,jenis:str,aid:int,data:TerapkanBantuan,act
     except LookupError as e:raise HTTPException(404,str(e))
     except PermissionError as e:raise HTTPException(403,str(e))
     except ValueError as e:raise HTTPException(409,str(e))
+
+
+# Aktivasi produk dan izin terpisah; seluruh endpoint memakai gerbang Console.
+from app.services import produk_perusahaan as produk_svc
+
+class PengaturanProduk(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    produk:list[dict]
+    integrasi:bool
+    bukti:str
+    alasan:str
+    konfirmasi:bool
+
+class PengaturanAksesProduk(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    akses:list[dict]
+    bukti:str
+    alasan:str
+    konfirmasi:bool
+
+@router.get('/internal/console/perusahaan/{company_id:int}/produk')
+async def produk_perusahaan(company_id:int,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:return await produk_svc.rincian(db,ruang=actor['ruang'],company_id=company_id)
+    except PermissionError as e:raise HTTPException(403,str(e)) from e
+    except ValueError as e:raise HTTPException(422,str(e)) from e
+
+@router.post('/internal/console/perusahaan/{company_id:int}/produk')
+async def simpan_produk_perusahaan(company_id:int,data:PengaturanProduk,actor=Depends(pelaku)):
+    if data.konfirmasi is not True:raise HTTPException(422,'Periksa dan konfirmasikan dampak aktivasi produk.')
+    try:
+        async with SessionLocal() as db:
+            result=await produk_svc.simpan(db,ruang=actor['ruang'],company_id=company_id,**data.model_dump(exclude={'konfirmasi'}));await db.commit();return result
+    except PermissionError as e:raise HTTPException(403,str(e)) from e
+    except (ValueError,IntegrityError) as e:raise HTTPException(422,str(e) if isinstance(e,ValueError) else 'Data produk berubah. Muat ulang pratinjau.') from e
+
+@router.get('/internal/console/perusahaan/{company_id:int}/anggota/{user_id:int}/produk')
+async def akses_produk_anggota(company_id:int,user_id:int,actor=Depends(pelaku)):
+    try:
+        async with SessionLocal() as db:return await produk_svc.rincian(db,ruang=actor['ruang'],company_id=company_id,user_id=user_id)
+    except PermissionError as e:raise HTTPException(403,str(e)) from e
+    except ValueError as e:raise HTTPException(422,str(e)) from e
+
+@router.post('/internal/console/perusahaan/{company_id:int}/anggota/{user_id:int}/produk')
+async def simpan_akses_produk(company_id:int,user_id:int,data:PengaturanAksesProduk,actor=Depends(pelaku)):
+    if data.konfirmasi is not True:raise HTTPException(422,'Periksa dan konfirmasikan akses produk pengguna.')
+    try:
+        async with SessionLocal() as db:
+            result=await produk_svc.simpan_akses(db,ruang=actor['ruang'],company_id=company_id,user_id=user_id,**data.model_dump(exclude={'konfirmasi'}));await db.commit();return result
+    except PermissionError as e:raise HTTPException(403,str(e)) from e
+    except (ValueError,IntegrityError) as e:raise HTTPException(422,str(e) if isinstance(e,ValueError) else 'Data akses produk berubah. Muat ulang pratinjau.') from e
