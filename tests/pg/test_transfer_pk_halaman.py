@@ -83,7 +83,8 @@ async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang,
         if not await link.is_visible():
             await page.get_by_role('button', name='Buka menu', exact=True).click()
         await link.click()
-        await expect(page.locator('#pk-pesan')).to_have_text('Status diperbarui.')
+        await expect(page.locator('#tp-segar')).to_have_attribute('data-status', 'segar')
+        await expect(page.get_by_role('link', name='Pilih bahan baku', exact=True)).to_have_count(0)
         await expect(page.locator('#pk-daftar article')).to_have_count(jumlah)
         await expect(page.locator('#pk-ringkasan')).to_contain_text(status)
         await expect(page.locator('#laci a[href="/transfer-bertahap"]')).to_have_attribute('aria-current', 'page')
@@ -111,7 +112,6 @@ async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang,
             await page.locator('#pk-daftar').get_by_role('button', name='Lihat detail', exact=True).first.click()
             await expect(page.locator('[data-action],[data-koreksi]')).to_have_count(0)
             await page.get_by_role('button', name='Tutup detail', exact=True).click()
-            await expect(page.get_by_role('link', name='Pilih bahan baku', exact=True)).to_have_attribute('href', '/stok?tab=bahan')
         await page.locator('[data-pk-tab=riwayat]').click()
         await expect(page.locator('#pk-permintaan')).not_to_be_visible()
         await expect(page.locator('#pk-perjalanan')).to_be_visible()
@@ -129,8 +129,8 @@ async def test_persetujuan_banyak_tujuan_berbeda_tidak_memindahkan_stok(pg, pabr
         await page.goto(BASE + '/transfer-bertahap')
         await expect(page.locator('#pk-daftar article')).to_have_count(2)
         await expect(page.locator('#pk-form')).not_to_be_visible()
-        await page.locator('[name=pilih]').nth(0).check()
-        await page.locator('[name=pilih]').nth(1).check()
+        await page.locator('[name=pilih]:visible').nth(0).check()
+        await page.locator('[name=pilih]:visible').nth(1).check()
         await page.locator('#pk-buka-form').click()
         rows = page.locator('#pk-form-lot .tp-form-row')
         await rows.nth(0).locator('[name=berat]').fill('4000')
@@ -148,9 +148,9 @@ async def test_persetujuan_banyak_tujuan_berbeda_tidak_memindahkan_stok(pg, pabr
         assert (await db.get(PermintaanPk, rid2)).silo_id is not None
     async with browser_app(pg, width=width) as (page, _, _):
         await page.goto(BASE + '/transfer-bertahap')
-        await expect(page.locator('[name=pilih]')).to_have_count(2)
-        await page.locator('[name=pilih]').nth(0).check()
-        await page.locator('[name=pilih]').nth(1).check()
+        await expect(page.locator('[name=pilih]:visible')).to_have_count(2)
+        await page.locator('[name=pilih]:visible').nth(0).check()
+        await page.locator('[name=pilih]:visible').nth(1).check()
         await expect(page.locator('#pk-buka-form')).to_be_disabled()
         await expect(page.locator('#pk-pilihan-pesan')).to_contain_text('asal, tujuan, dan pemilik yang sama')
 
@@ -159,7 +159,7 @@ async def test_koneksi_putus_sesudah_commit_tetap_satu_transfer(pg, siap):
     from playwright.async_api import expect
     async with browser_app(pg, putus=True) as (page, _, kiriman):
         await page.goto(BASE + '/transfer-bertahap')
-        await page.locator('[data-catatan]').click()
+        await page.locator('[data-catatan]:visible').click()
         await page.locator('[name=jumlah_karung]').fill('20')
         await page.locator('[name=berat_curah_kg]').fill('2')
         await page.locator('#pk-simpan').click()
@@ -186,7 +186,7 @@ async def test_penutupan_sisa_terlihat_di_status_ditutup_dan_alasan_tidak_hilang
     from playwright.async_api import expect
     async with browser_app(pg, peran='admin', gudang=None) as (page, client, _):
         await page.goto(BASE + '/transfer-bertahap?status=perlu_transfer')
-        await page.get_by_role('button', name=f"Tindakan Permintaan #{siap['rid']}", exact=True).click()
+        await page.locator(f'#pk-daftar button[data-detail="permintaan"][data-id="{siap["rid"]}"]:visible').click()
         await page.get_by_role('button', name='Tutup sisa persetujuan', exact=True).click()
         await page.locator('#pk-alasan [name=alasan]').fill('Kebutuhan dibatalkan setelah pemeriksaan')
         # Tolak satu kali untuk membuktikan alasan dan galat ada di panel aktif.
@@ -214,8 +214,7 @@ async def test_penutupan_sisa_terlihat_di_status_ditutup_dan_alasan_tidak_hilang
 async def test_permintaan_tetap_dari_detail_bahan_baku(pg, pabrik):
     from playwright.async_api import expect
     async with browser_app(pg, gudang='Gudang 2') as (page, _, _):
-        await page.goto(BASE + '/transfer-bertahap')
-        await page.get_by_role('link', name='Pilih bahan baku', exact=True).click()
+        await page.goto(BASE + '/stok?tab=bahan')
         await page.locator('a[href^="/stok/pk/detail"][href*="LOT-MINTA-01"]:visible').first.click()
         await page.get_by_role('link', name='Minta lot ini', exact=True).click()
         await expect(page.locator('#lembar')).to_be_visible()
@@ -254,6 +253,6 @@ async def test_daftar_responsif_sidebar_tema_dan_cetak(pg, siap, width):
         assert await page.evaluate('window.cetakan') == 1
         await page.emulate_media(media='print')
         await expect(page.locator('#pk-perjalanan')).not_to_be_visible()
-        await expect(page.locator('#pk-daftar article')).to_have_count(2)
-        await expect(page.locator('#pk-daftar article').first).to_be_visible()
+        await expect(page.locator('#pk-daftar .riwayat-desktop-row')).to_have_count(2)
+        await expect(page.locator('#pk-daftar .riwayat-desktop-row').first).to_be_visible()
         await expect(page.locator('.kontrol-halaman')).not_to_be_visible()

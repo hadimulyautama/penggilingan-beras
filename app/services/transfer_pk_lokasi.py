@@ -13,7 +13,7 @@ from app.services.transfer_lokasi import tujuan_sah
 from app.peran import can_see_financials
 
 
-async def minta(db,*,user,id,tujuan_id,jumlah,kunci):
+async def minta(db,*,user,id,tujuan_id,jumlah,kunci,commit=True,kabari=True):
     from app.services.pengiriman_pk import kunci_stok
     await kunci_stok(db)
     n=stok.angka(jumlah)
@@ -34,12 +34,16 @@ async def minta(db,*,user,id,tujuan_id,jumlah,kunci):
     db.add(r)
     try:await db.flush()
     except IntegrityError:
-        await db.rollback()
+        # Komposisi perintah memakai savepoint milik pemanggil: rollback
+        # seluruh sesi di sini akan memutus transaksi induknya.
+        if commit:await db.rollback()
         raise stok.TransferBarangError('Lot ini sudah mempunyai permintaan aktif. Lanjutkan permintaan yang ada.') from None
     from app.services.permintaan_pk import _jejak,_kabar
     await _jejak(db,r,langkah='minta',oleh=user,ringkas=f"Meminta {n} kg PK dari {source['kode']}; pemilik tetap {source['pemilik']}.")
-    await _kabar(db,r,untuk='admin',pesan=f"Permintaan transfer PK {source['kode']} · {n} kg. Periksa asal dan tujuan di halaman Transfer.")
-    await db.commit()
+    if kabari:
+        await _kabar(db,r,untuk='admin',pesan=f"Permintaan transfer PK {source['kode']} · {n} kg. Periksa asal dan tujuan di halaman Transfer.")
+    if commit:await db.commit()
+    else:await db.flush()
     return dict(ok=True,id=r.id,ulang=False)
 
 

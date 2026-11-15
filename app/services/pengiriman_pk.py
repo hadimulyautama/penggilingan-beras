@@ -134,7 +134,11 @@ async def setujui_banyak(db,*,user,items,commit=True):
         r.bertahap=True;r.status='disetujui';r.tujuan=tujuan;r.silo_id=silo_id;r.tujuan_warehouse_id=wid;r.berat_setuju_kg=value;r.disetujui_oleh=user.id;r.waktu_setuju=now_local()
         await db.flush()
         await jejak_minta(db,r,langkah='setujui_bertahap',oleh=user,ringkas='Disetujui '+angka(value)+' kg; operator asal dapat mencatat transfer setelah barang dipindahkan.')
-        await _kabar(db,r,untuk='operator',pesan='Permintaan '+await _kode_lot(db,r)+' disetujui '+angka(value)+' kg. Operator asal dapat membuat pengiriman sebagian.',prioritas='hijau')
+        lot=await _kode_lot(db,r)
+        pesan=('Perintah '+lot+' siap dilaksanakan operator asal · '+angka(value)+' kg. Catat transfer setelah barang dipindahkan.'
+               if (r.kunci_transfer or '').startswith('transfer-perintah:') else
+               'Permintaan '+lot+' disetujui '+angka(value)+' kg. Operator asal dapat membuat pengiriman sebagian.')
+        await _kabar(db,r,untuk='operator',pesan=pesan,prioritas='hijau')
     if commit:await db.commit()
     else:await db.flush()
     return dict(ok=True,permintaan_ids=ids)

@@ -111,10 +111,10 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    await route.fulfill(status=response.status_code,headers={k:v for k,v in response.headers.items() if k.lower() not in ('content-length','content-encoding','transfer-encoding')},body=response.content)
   await page.context.add_cookies([dict(name=x.name,value=x.value,url=base) for x in c.cookies.jar])
   await page.route('**/*',app)
-  await page.goto(base+'/transfer-bertahap?status=siap');await expect(page.locator('#pk-pesan')).to_have_text('Status diperbarui.')
+  await page.goto(base+'/transfer-bertahap?status=siap');await expect(page.locator('#tp-segar')).to_have_attribute('data-status','segar')
   tutup=page.get_by_role('button',name='Tutup sisa persetujuan',exact=True)
   if is_admin:
-   await page.get_by_role('button',name=f"Tindakan Permintaan #{siap['rid']}").click()
+   await page.locator(f'#pk-daftar button[data-detail="permintaan"][data-id="{siap["rid"]}"]:visible').click()
    await expect(tutup).to_be_visible()
    await page.get_by_role('button',name='Tutup detail',exact=True).click()
   else:
@@ -126,7 +126,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    from app.web import csrf
    response=await c.post(f"/api/transfer-bertahap/permintaan/{siap['rid']}/tutup-sisa",json={'alasan':'Tidak boleh ditutup operator'},headers={csrf.NAMA_HEADER:cap_formulir(c)})
    assert response.status_code==403,response.text
-  await page.locator('[name=pilih]').check()
+  await page.locator('[name=pilih]:visible').check()
   await page.locator('#pk-buka-form').click()
   await expect(page.locator('[name=nomor_polisi],[name=nama_sopir],#pk-pakai-kendaraan')).to_have_count(0)
   if cara=='kg':

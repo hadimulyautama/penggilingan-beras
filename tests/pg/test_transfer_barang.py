@@ -170,9 +170,16 @@ async def test_operator_meminta_admin_menyetujui_operator_mencatat_dengan_satuan
     from playwright.async_api import expect
     from tests.pg.test_transfer_pk_halaman import browser_app, BASE
     w=lokasi
-    async with browser_app(pg,peran='operator',gudang='Gudang 2') as (page,_,_):
+    # Operator penerima hanya membaca stok pabrik di gudang lain. Pagar
+    # barang pelanggan tetap diuji terpisah di uji izin di atas.
+    if kind in ('barang','curah'):
+        async with pg() as db:
+            (await db.get(sumber.MODEL[kind],w[field])).jasa_id=None
+            await db.commit()
+    async with browser_app(pg,peran='operator',gudang='Gudang 1') as (page,_,_):
         await page.goto(BASE+'/transfer-bertahap')
-        await page.locator('#tb-buka').click()
+        await page.locator('#tp-minta-konteks').click()
+        await expect(page.locator('#tb-pesan')).to_contain_text('sumber tersedia')
         await page.locator('#tb-cari-form [name=jenis]').select_option(kind)
         await page.locator('#tb-cari-form').get_by_role('button',name='Cari sumber').click()
         code='PKP-KOR-01' if kind=='karung' else 'Baris stok #'+str(w[field])
@@ -181,6 +188,8 @@ async def test_operator_meminta_admin_menyetujui_operator_mencatat_dengan_satuan
         await expect(page.locator('#tb-jumlah-label')).to_have_text('Jumlah diminta ('+unit+')')
         await expect(page.locator('#tb-asal')).to_contain_text('Pabrik Asal')
         await page.locator('#tb-form [name=jumlah]').fill(n)
+        await expect(page.locator('#tb-form [name=gudang]')).to_have_value(str(w['target']))
+        await expect(page.locator('#tb-form [name=gudang]')).to_be_disabled()
         assert await page.locator('#tb-form').evaluate('e=>e.checkValidity()')
         await page.locator('#tb-simpan').click()
         await expect(page.locator('#tb-panel')).not_to_be_visible()
@@ -191,14 +200,14 @@ async def test_operator_meminta_admin_menyetujui_operator_mencatat_dengan_satuan
         assert await db.scalar(select(func.count()).select_from(TransferBarang))==0
     async with browser_app(pg,peran='admin',gudang=None) as (page,_,_):
         await page.goto(BASE+'/transfer-bertahap')
-        await page.locator('[data-catatan]').click()
+        await page.locator('[data-catatan]:visible').click()
         await expect(page.locator('#pk-form')).to_contain_text('Setujui ('+unit+')')
         assert await page.locator('#pk-catatan').evaluate('e=>e.checkValidity()')
         await page.locator('#pk-simpan').click()
         await expect(page.locator('#pk-pesan')).to_contain_text('telah disetujui')
     async with browser_app(pg,peran='operator',gudang='Gudang 2') as (page,_,_):
         await page.goto(BASE+'/transfer-bertahap')
-        await page.locator('[data-catatan]').click()
+        await page.locator('[data-catatan]:visible').click()
         await expect(page.locator('#pk-form')).to_contain_text('Jumlah dipindahkan ('+unit+')')
         assert await page.locator('#pk-catatan').evaluate('e=>e.checkValidity()')
         await page.locator('#pk-simpan').click()

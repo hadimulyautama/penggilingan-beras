@@ -17,6 +17,11 @@ class MintaTransfer(BaseModel):
     kunci:str=Field(pattern=r'^[a-f0-9]{32}$')
 
 
+class PerintahTransfer(MintaTransfer):
+    asal_id:int=Field(ge=1,le=2147483647,strict=True)
+    tujuan:str|None=Field(default=None,max_length=50)
+
+
 @router.get('/api/transfer-barang/sumber')
 async def sumber(jenis:str='',gudang_id:int|None=Query(None,ge=1,le=2147483647),cari:str=Query('',max_length=200),halaman:int=Query(1,ge=1,le=10000),posisi:int=Query(0,ge=0,le=1000000),user=Depends(pengguna_aksi)):
     from app.web.pengiriman_pk import jawab,galat
@@ -30,4 +35,14 @@ async def minta(body:MintaTransfer,user=Depends(pengguna_aksi)):
     from app.web.pengiriman_pk import jawab,galat
     try:
         async with SessionLocal() as db:return jawab(await s.minta(db,user=user,jenis=body.jenis,id=body.sumber_id,tujuan_id=body.tujuan_id,jumlah=body.jumlah,kunci_kiriman=body.kunci))
+    except (ValueError,PermissionError) as e:raise galat(e)
+
+
+@router.post('/api/transfer-barang/perintah')
+async def perintah(body:PerintahTransfer,user=Depends(pengguna_aksi)):
+    from app.web.pengiriman_pk import jawab,galat
+    from app.services import perintah_transfer
+    try:
+        s.admin(user)
+        async with SessionLocal() as db:return jawab(await perintah_transfer.buat(db,user=user,**body.model_dump()))
     except (ValueError,PermissionError) as e:raise galat(e)

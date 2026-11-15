@@ -58,11 +58,11 @@ async def jejak(db,user,r,aksi,muatan):
     await log_activity(db,table_name='permintaan_transfer_barang',record_id=r.id,action='UPDATE' if aksi!='minta' else 'INSERT',changed_by=user.id,aksi='transfer_barang_'+aksi,new_value=str(muatan))
 
 
-async def minta(db,*,user,jenis,id,tujuan_id,jumlah,kunci_kiriman):
+async def minta(db,*,user,jenis,id,tujuan_id,jumlah,kunci_kiriman,commit=True,kabari=True):
     await stok.izin(user);await kunci(db)
     if jenis=='pk_giling':
         from app.services.transfer_pk_lokasi import minta as minta_pk
-        return await minta_pk(db,user=user,id=id,tujuan_id=tujuan_id,jumlah=jumlah,kunci=kunci_kiriman)
+        return await minta_pk(db,user=user,id=id,tujuan_id=tujuan_id,jumlah=jumlah,kunci=kunci_kiriman,commit=commit,kabari=kabari)
     body=dict(jenis=jenis,id=str(id),tujuan_id=tujuan_id,jumlah=str(stok.angka(jumlah,bulat=jenis in stok.INTEGER)))
     key=f'transfer-minta:{user.id}:{kunci_kiriman}';sidik=fingerprint(body)
     old=await db.scalar(select(Permintaan).where(Permintaan.kunci==key))
@@ -77,9 +77,12 @@ async def minta(db,*,user,jenis,id,tujuan_id,jumlah,kunci_kiriman):
     if s['seluruh'] and (n!=s['total'] or n!=bebas):raise Error('Lot ini hanya dapat dipindah utuh sebelum digunakan proses atau pengeluaran.')
     r=Permintaan(sumber_jenis=jenis,sumber_id=s['id'],sumber=stok.publik(s),asal_id=s['asal_id'],tujuan_id=t.id,satuan=s['satuan'],jumlah_minta=n,jumlah_setuju=0,status='diminta',diminta_oleh=user.id,waktu_minta=now_local(),ditutup=False,kunci=key,sidik=sidik)
     db.add(r);await db.flush();await jejak(db,user,r,'minta',f"{s['kode']} · {n} {s['satuan']} · {s['asal']} → {t.nama_gudang}; pemilik tetap {s['pemilik']}")
-    from app.services.notification import create_notification
-    await create_notification(db,tipe='transfer_barang',pesan=f"Permintaan transfer {s['label']} · {n} {s['satuan']}. Periksa di halaman Transfer.",target_role=P.ADMIN,table_name='permintaan_transfer_barang',record_id=r.id)
-    await db.commit();return dict(ok=True,id=-r.id,ulang=False)
+    if kabari:
+        from app.services.notification import create_notification
+        await create_notification(db,tipe='transfer_barang',pesan=f"Permintaan transfer {s['label']} · {n} {s['satuan']}. Periksa di halaman Transfer.",target_role=P.ADMIN,table_name='permintaan_transfer_barang',record_id=r.id)
+    if commit:await db.commit()
+    else:await db.flush()
+    return dict(ok=True,id=-r.id,ulang=False)
 
 
 async def setujui_banyak(db,*,user,items,commit=True):
@@ -165,7 +168,7 @@ async def tambahan(db,*,user):
         if r.status in ('diminta',*AKTIF):
             try:available=(await cek_sumber(db,r,user,kecuali=(r.id,)))['bebas']
             except (Error,PermissionError):pass
-        result.append(dict(id=-r.id,nomor='PTR-'+r.waktu_minta.strftime('%Y%m%d')+'-'+str(r.id).zfill(4),jenis_transfer='barang',sumber_jenis=r.sumber_jenis,sumber_id=r.sumber_id,satuan=r.satuan,seluruh=s['seluruh'],lot=s['label']+' · '+s['kode'],pemilik=s['pemilik'],pemilik_kunci=s['pemilik_kunci'],peminta=people.get(r.diminta_oleh,'Operator'),waktu=r.waktu_minta.isoformat(),status=r.status,sebab=r.alasan,
+        result.append(dict(jenis_dokumen='perintah' if r.kunci.startswith('transfer-perintah:') else 'permintaan',id=-r.id,nomor='PTR-'+r.waktu_minta.strftime('%Y%m%d')+'-'+str(r.id).zfill(4),jenis_transfer='barang',sumber_jenis=r.sumber_jenis,sumber_id=r.sumber_id,satuan=r.satuan,seluruh=s['seluruh'],lot=s['label']+' · '+s['kode'],pemilik=s['pemilik'],pemilik_kunci=s['pemilik_kunci'],peminta=people.get(r.diminta_oleh,'Operator'),waktu=r.waktu_minta.isoformat(),status=r.status,sebab=r.alasan,
             asal_id=r.asal_id,asal=whs[r.asal_id].nama_gudang,asal_lokasi=locations.get(r.asal_id,{}),company_id=locations.get(r.asal_id,{}).get('company_id'),tujuan_lokasi=locations.get(r.tujuan_id,{}),tujuan_id=r.tujuan_id,tujuan_nama='Tumpukan' if r.sumber_jenis=='pk_tumpukan' else 'Area stok',tujuan_gudang=whs[r.tujuan_id].nama_gudang,silo_id=None,tujuan='ditumpuk',diminta=str(r.jumlah_minta),disetujui=str(r.jumlah_setuju),sisa=str(max(D(0),D(r.jumlah_setuju)-n)),selesai_kg=str(n),perjalanan_kg='0',bebas=str(available),bertahap=True,boleh_catat=is_admin or wid==r.asal_id))
     jq=select(Transfer).order_by(Transfer.id.desc()).limit(100)
     if not is_admin:jq=jq.where(or_(Transfer.asal_id==wid,Transfer.tujuan_id==wid))

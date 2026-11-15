@@ -98,7 +98,7 @@ async def halaman(request:Request,akun=Depends(butuh_akun)):
         async with SessionLocal() as db:await baca_izin(db,akun.user)
     except PermissionError as e:raise galat(e)
     from app.config import settings
-    return await render_laci(request,"pengiriman_pk.html",layar='transfer_pk',teraflow_url=settings.teraflow_web_url.rstrip('/'))
+    return await render_laci(request,"pengiriman_pk.html",layar='transfer_pk',boleh_perintah=can_see_financials(akun.user),teraflow_url=settings.teraflow_web_url.rstrip('/'))
 
 @router.get('/api/transfer-bertahap')
 async def daftar(user=Depends(pengguna_aksi)):
@@ -127,7 +127,7 @@ async def daftar(user=Depends(pengguna_aksi)):
                 if not is_admin and not (w.id==asal or w.id==target_id and r.jasa_id is None):continue
                 allocated=await s.terpakai(db,r.id);completed=await s.terpakai(db,r.id,selesai=True)
                 requests.append(dict(peminta=people.get(r.diminta_oleh,'Pencatat belum tercatat'),selesai_kg=s.angka(completed),perjalanan_kg=s.angka(allocated-completed),id=r.id,lot=p.kode_proses,pemilik=owners.get(r.jasa_id,'Milik pabrik'),status=r.status,sebab=r.sebab,waktu=r.waktu_minta.isoformat() if r.waktu_minta else None,bertahap=r.bertahap,asal_id=asal,asal=loc[p.id]['gudang_nama'],diminta=s.angka(r.berat_minta_kg),disetujui=s.angka(r.berat_setuju_kg),sisa=s.angka(max(s.D(0),s.D(r.berat_setuju_kg)-allocated)),bebas=s.angka(await pending_transfer_kg(db,p.id,pemilik_id=r.jasa_id,bebas=True)),tujuan=r.tujuan,silo_id=r.silo_id))
-                requests[-1].update(boleh_catat=is_admin or w.id==asal,tujuan_id=target_id,multilokasi=r.tujuan_warehouse_id is not None or r.status=='diminta' and bool(locations.get(asal,{}).get('aktif')),asal_lokasi=locations.get(asal,{}),tujuan_lokasi=locations.get(target_id,{}),tujuan_gudang=locations.get(target_id,{}).get('gudang_nama'),company_id=locations.get(asal,{}).get('company_id'),pemilik_kunci=('pelanggan:'+str(pemilik[r.jasa_id]) if r.jasa_id in pemilik else 'jasa:'+str(r.jasa_id) if r.jasa_id else 'pabrik'),tujuan_nama=nama_silo.get(r.silo_id,'Silo tidak tersedia') if r.silo_id else 'Tumpukan')
+                requests[-1].update(jenis_dokumen='perintah' if (r.kunci_transfer or '').startswith('transfer-perintah:') else 'permintaan',boleh_catat=is_admin or w.id==asal,tujuan_id=target_id,multilokasi=r.tujuan_warehouse_id is not None or r.status=='diminta' and bool(locations.get(asal,{}).get('aktif')),asal_lokasi=locations.get(asal,{}),tujuan_lokasi=locations.get(target_id,{}),tujuan_gudang=locations.get(target_id,{}).get('gudang_nama'),company_id=locations.get(asal,{}).get('company_id'),pemilik_kunci=('pelanggan:'+str(pemilik[r.jasa_id]) if r.jasa_id in pemilik else 'jasa:'+str(r.jasa_id) if r.jasa_id else 'pabrik'),tujuan_nama=nama_silo.get(r.silo_id,'Silo tidak tersedia') if r.silo_id else 'Tumpukan')
             journeys=[]
             q=select(PengirimanPk).order_by(PengirimanPk.id.desc()).limit(100)
             if not is_admin:q=q.where((PengirimanPk.asal_id==w.id)|((PengirimanPk.tujuan_id==w.id)&PengirimanPk.jasa_id.is_(None)))
@@ -177,7 +177,7 @@ async def daftar(user=Depends(pengguna_aksi)):
             journeys.sort(key=lambda j:j['waktu'],reverse=True)
             from app.services.transfer_lokasi import lengkapi_lintasan
             await lengkapi_lintasan(db,journeys)
-            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=tujuan,tujuan_pk=destinos_pk,tujuan_barang=umum['tujuan_barang'],boleh_minta_barang=umum['boleh_minta_barang'],koreksi=audits,gudang_tujuan=dict(id=target.id if target else None,nama=target.nama_gudang if target else 'Tujuan belum ditetapkan')))
+            return jawab(dict(admin=is_admin,boleh_kirim=is_admin or w.kode_fungsi=='g1',permintaan=requests,pengiriman=journeys,tujuan=tujuan,tujuan_pk=destinos_pk,tujuan_barang=umum['tujuan_barang'],boleh_minta_barang=umum['boleh_minta_barang'],boleh_perintah=is_admin,gudang_kerja=locations.get(w.id,{}) if w else None,koreksi=audits,gudang_tujuan=dict(id=target.id if target else None,nama=target.nama_gudang if target else 'Tujuan belum ditetapkan')))
     except (s.PengirimanError,TransferError,Gudang2Error,PermissionError,ValueError) as e:raise galat(e)
 
 @router.post('/api/transfer-bertahap/setujui')

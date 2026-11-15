@@ -58,29 +58,33 @@ async def test_formulir_pk_antarpabrik_memakai_karung_50_dan_tujuan_silo_yang_be
     from playwright.async_api import expect
     from tests.pg.test_transfer_pk_halaman import browser_app,BASE
     w=antar_pabrik
-    async with browser_app(pg,peran='operator',gudang='Gudang 1',width=width) as (page,_,_):
+    async with browser_app(pg,peran='operator',gudang='Gudang PK Pabrik Tujuan',width=width) as (page,_,_):
         await page.goto(BASE+'/transfer-bertahap')
-        await page.locator('#tb-buka').click()
+        await page.locator('#tp-minta-konteks').click()
+        await expect(page.locator('#tb-pesan')).to_contain_text('sumber tersedia')
         await page.locator('#tb-cari-form [name=jenis]').select_option('pk_giling')
         await page.locator('#tb-cari-form').get_by_role('button',name='Cari sumber').click()
         await page.locator('#tb-sumber article').filter(has_text=w['lot']).get_by_role('button',name='Pilih sumber ini').click()
         await page.locator('#tb-form [name=karung_pk]').fill('23')
         await page.locator('#tb-form [name=curah_pk]').fill('2')
-        await expect(page.locator('#tb-bobot')).to_have_text('Total diminta 1.152 kg')
-        await page.locator('#tb-form [name=pabrik]').select_option(str(w['pabrik_tujuan']))
+        await expect(page.locator('#tb-bobot')).to_have_text('Total 1.152 kg')
+        await expect(page.locator('#tb-form [name=pabrik]')).to_have_value(str(w['pabrik_tujuan']))
+        await expect(page.locator('#tb-form [name=pabrik]')).to_be_disabled()
+        await expect(page.locator('#tb-form [name=gudang]')).to_have_value(str(w['target']))
+        await expect(page.locator('#tb-form [name=gudang]')).to_be_disabled()
         assert await page.locator('#tb-form').evaluate('e=>e.checkValidity()')
         await page.locator('#tb-simpan').click()
         await expect(page.locator('#tb-panel')).not_to_be_visible()
-        await expect(page.locator('#pk-daftar article')).to_contain_text('Pabrik Tujuan')
+        await expect(page.locator('#pk-daftar')).to_contain_text('Pabrik Tujuan')
     async with browser_app(pg,peran='admin',gudang=None,width=width) as (page,_,_):
         await page.goto(BASE+'/transfer-bertahap')
-        await page.locator('[data-catatan]').click()
+        await page.locator('[data-catatan]:visible').click()
         await page.locator('#pk-form [name=tujuan]').select_option('silo:'+str(w['silo_tujuan']))
         await page.locator('#pk-simpan').click()
         await expect(page.locator('#pk-pesan')).to_contain_text('telah disetujui')
     async with browser_app(pg,peran='operator',gudang='Gudang 1',width=width) as (page,_,_):
         await page.goto(BASE+'/transfer-bertahap')
-        await page.locator('[data-catatan]').click()
+        await page.locator('[data-catatan]:visible').click()
         await expect(page.locator('#pk-form [name=jumlah_karung]')).to_have_value('23')
         await expect(page.locator('#pk-form [name=berat_curah_kg]')).to_have_value('2.00')
         await page.locator('#pk-simpan').click()
