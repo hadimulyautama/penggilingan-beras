@@ -15,3 +15,15 @@ Jalankan workflow uji PadiFlow dengan `cakupan=semua`, workflow TeraFlow dengan 
 Pengujian khusus: `tests/pg/test_console_produk.py` meliputi empat kombinasi produk, izin berbeda, pencabutan sesi, API langsung, bukti pratinjau kadaluarsa, Console tetap terbuka, isolasi perusahaan, migrasi perusahaan warisan dan fingerprint transaksi. TeraFlow `tests/pg/test_produk_terpisah.py` meliputi sesi lama, peran master tidak berubah dan integrasi opsional. Website `tests/test_console_products.py` memeriksa pratinjau tanpa tulis, CSRF, draft dan layar 320/390/1440 dua bahasa.
 
 Jika perlu rollback kode, pertahankan metadata dan audit; downgrade migrasi menolak menghapus metadata produk yang sudah digunakan. Jangan menghapus atau mengembalikan transaksi bisnis sebagai bagian rilis akses produk.
+
+## Audit alur perusahaan satu produk
+
+Direktori, statistik identitas, diagnosis dan pemulihan akun memeriksa keanggotaan pada perusahaan ruang operasional. Akun hanya milik perusahaan lain tidak tampil sebagai akun lokal dan tidak dapat diaktifkan/dipulihkan dari konteks yang salah. Anggota nonaktif tetap dapat didiagnosis; akun tanpa anggota hanya mengikuti kompatibilitas ruang warisan terverifikasi. Kredensial platform tetap dikelola sebagai akun sistem.
+
+Diagnosis profil TeraFlow lama memakai grant produk dan status pengguna terbaru, termasuk saat objek ORM pernah dimuat. Produk yang tidak digunakan, perusahaan nonaktif, akun nonaktif dan izin produk yang belum aktif ditampilkan sebagai keadaan yang berbeda. Filter monitoring produk yang sudah tidak aktif dapat dihapus tanpa mengganti perusahaan/periode.
+
+Sesudah pemulihan sandi, tautan masuk hanya menuju produk yang diaktifkan dan diizinkan bagi pengguna tersebut. Akun platform dapat kembali ke login langsung Console; origin eksternal harus berupa HTTPS yang valid tanpa userinfo, path tambahan, query atau fragment. Jika tak ada tujuan yang sesuai, pengguna diminta menghubungi Admin Sistem. Reset sandi tidak menambah hak atau mengaktifkan produk.
+
+TeraFlow tetap mengaudit semua penolakan login. Penolakan izin setelah sandi yang benar tidak ditambahkan ke hitungan sandi salah, agar pemulihan produk/izin lewat Console tidak meninggalkan penahanan login. Penebakan sandi tetap dibatasi dengan aturan nama+IP yang sama.
+
+Pengujian memakai PostgreSQL loopback dan data fiktif: perusahaan nonwarisan PadiFlow saja/TeraFlow saja, akun perusahaan lain, cap/pratinjau lama setelah perubahan keanggotaan, grant nonaktif, status cache, origin tidak valid, dan pemulihan sesi tanpa perubahan peran master. Tidak ada migrasi atau backfill transaksi pada audit ini.

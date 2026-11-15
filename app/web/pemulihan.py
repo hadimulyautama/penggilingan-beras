@@ -1,7 +1,6 @@
 """Pemilik akun menentukan sandi lewat cap sekali pakai di fragment URL."""
 import re
 from pathlib import Path
-from urllib.parse import urlsplit
 from fastapi import APIRouter,Request,HTTPException
 from fastapi.responses import FileResponse,JSONResponse
 from pydantic import BaseModel,ConfigDict,Field,SecretStr
@@ -50,10 +49,7 @@ async def simpan(data:Sandi):
     try:
         async with SessionLocal() as db:
             a=await svc.pulihkan_sandi(db,cap=data.cap,sandi=data.sandi.get_secret_value(),ulangi=data.ulangi.get_secret_value())
+            tujuan=await svc.tujuan_masuk(db,a)
             await db.commit()
-        tujuan='/pelanggan/masuk' if a['jenis']=='pelanggan' else '/masuk'
-        if a['jenis']=='timbangan_lama':
-            url=settings.teraflow_web_url.rstrip('/');u=urlsplit(url)
-            tujuan=url+'/timbangan/masuk' if u.scheme=='https' and u.netloc and not u.username and not u.password and u.path in ('','/') and not u.query and not u.fragment else None
         return privat(JSONResponse(dict(berhasil=True,tujuan=tujuan,jenis=a['jenis'])))
     except (ValueError,PermissionError,LookupError) as e:raise HTTPException(422,str(e))
