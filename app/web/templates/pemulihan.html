@@ -5,12 +5,14 @@
 <h1>Pulihkan akses akun</h1>
 <p class="bantu" data-identitas>Memeriksa tautan pemulihan…</p>
 <p role="status" data-pesan></p>
+<button class="btn" type="button" data-retry-pemulihan hidden>Coba periksa tautan lagi</button>
 <form data-form-pemulihan hidden autocomplete="off">
 <input type="hidden" name="_csrf" value="{{ CSRF }}">
 <label class="lbl" for="pemulihan-sandi">Kata sandi baru</label>
 <input class="fld" id="pemulihan-sandi" name="sandi" type="password" autocomplete="new-password" minlength="8" maxlength="512" required>
 <label class="lbl" for="pemulihan-ulangi">Ulangi kata sandi baru</label>
 <input class="fld" id="pemulihan-ulangi" name="ulangi" type="password" autocomplete="new-password" minlength="8" maxlength="512" required>
+<p class="bantu" data-dampak-bersama hidden>Sandi akun bersama berlaku untuk seluruh produk dan perusahaan yang memakai akun ini. Hak akses tidak berubah.</p>
 <p class="bantu">Setelah disimpan, sesi lama diakhiri. Masuk kembali memakai kata sandi baru. Tautan hanya berlaku satu kali.</p>
 <button class="btn btn--utama" type="submit">Simpan kata sandi baru</button>
 </form>

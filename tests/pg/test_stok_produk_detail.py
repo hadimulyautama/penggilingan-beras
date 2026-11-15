@@ -65,11 +65,14 @@ async def test_baris_produk_membuka_detail_dan_kemasan_tetap_terpisah_per_pemili
 
 
 async def test_halaman_detail_mengikuti_akses_gudang_daftar(pg,sosoh_jasa):
-    for gudang,status in [('Gudang 1',403),('Gudang 2',200)]:
+    for gudang,status in [('Gudang 1',404),('Gudang 2',200)]:
         async with await _klien(pg,peran=OPERATOR,gudang=gudang) as c:
             for path in ['/stok-produk/detail?jenis=medium',
                          f'/stok-produk-jasa/detail?jenis=medium&pelanggan_id={sosoh_jasa["pelanggan_id"]}']:
                 r=await c.get(path)
+                # Gudang 1 boleh membuka daftar produk miliknya sendiri;
+                # detail stok yang hanya ada di G2 tidak ditemukan dalam cakupannya.
                 assert r.status_code==status
+                if status==404:assert sosoh_jasa['kode_pabrik'] not in r.text and sosoh_jasa['kode_jasa'] not in r.text
                 if status==200:
                     assert 'Pindah kepemilikan' not in r.text

@@ -82,7 +82,7 @@ def normal(nilai):
     return nilai
 
 
-def navigasi_stok(html):
+def navigasi_stok(html, gudang=frozenset(('', 'g1', 'g2'))):
     from bs4 import BeautifulSoup
     s = BeautifulSoup(html, 'html.parser')
     nav = s.select_one('nav[aria-label="Jenis stok"]')
@@ -91,7 +91,7 @@ def navigasi_stok(html):
     assert form
     pemilik={'semua','pabrik','jasa'}
     assert {o['value'] for o in form.select('select[name="pemilik"] option')} == pemilik
-    assert {o['value'] for o in form.select('select[name="gudang"] option')} == {'', 'g1', 'g2'}
+    assert {o['value'] for o in form.select('select[name="gudang"] option')} == set(gudang)
 
 
 @pytest.mark.parametrize('lama,tab,pemilik', PASANGAN)
@@ -159,9 +159,11 @@ async def test_akses_lama_baru_dan_navigasi_saat_kosong(pg, stok_lengkap, role, 
         for lama, tab, pemilik in PASANGAN:
             for url in (lama, f'/stok?tab={tab}&pemilik={pemilik}'):
                 r = await c.get(url)
-                assert r.status_code == (403 if gudang == 'g1' and tab != 'bahan' else 200), url
+                assert r.status_code == 200, url
                 if r.status_code == 200:
-                    navigasi_stok(r.text)
+                    choices={'',gudang} if role=='operator' else {'','g1','g2'}
+                    if gudang=='g2' and tab=='bahan':choices.add('g1')
+                    navigasi_stok(r.text, choices)
                     assert 'class="pintu__jml pintu__jml--stok"' not in r.text
         if role == 'admin':
             r = await c.get('/stok?tab=produk&pemilik=pabrik&gudang=g1')
@@ -233,11 +235,11 @@ async def test_navigasi_enam_pilihan_tetap_ada_pada_database_kosong(pg):
         for lama, tab, pemilik in PASANGAN:
             r = await c.get(f'/stok?tab={tab}&pemilik={pemilik}')
             assert r.status_code == 200, r.text
-            navigasi_stok(r.text)
+            navigasi_stok(r.text, {''})
             assert 'Belum ada' in r.text
 
 
-async def test_karung_jasa_mempertahankan_cakupan_baca_lama_g2(pg, stok_lengkap, pemakai):
+async def test_karung_jasa_dan_pabrik_mengikuti_gudang_fisik(pg, stok_lengkap, pemakai):
     from app.penggilingan.inventory import models, packaging
     from app.models import User
     async with pg() as db:
@@ -250,9 +252,17 @@ async def test_karung_jasa_mempertahankan_cakupan_baca_lama_g2(pg, stok_lengkap,
         for url in ('/stok-karung-jasa', '/stok?tab=karung&pemilik=jasa'):
             r = await c.get(url)
             assert r.status_code == 200
-            assert 'Karung PK' in r.text
+            assert 'Karung PK' not in r.text
+            assert 'Penyunesia' in r.text
         r = await c.get('/stok?tab=karung&pemilik=pabrik')
         assert 'Karung PK' not in r.text
+    async with await _klien(pg, gudang_id=stok_lengkap['gudang']['g1']) as c:
+        for url in ('/stok-karung-jasa','/stok?tab=karung&pemilik=pabrik'):
+            r=await c.get(url);assert r.status_code==200
+            assert 'Karung PK' in r.text and 'Penyunesia' not in r.text
+        # Filter URL bukan pemberian hak membaca gudang lain.
+        r=await c.get('/stok?tab=karung&pemilik=jasa&gudang=g2')
+        assert r.status_code==200 and 'Penyunesia' not in r.text
 
 
 @pytest.mark.parametrize('tab', ['bahan', 'produk', 'karung'])
@@ -305,4 +315,8 @@ async def test_semua_kepemilikan_tetap_mematuhi_filter_gudang(pg, stok_lengkap, 
         soup = BeautifulSoup(r.text, 'html.parser')
         assert len(soup.select('#lembar')) <= 1
     async with await _klien(pg, gudang_id=stok_lengkap['gudang']['g1']) as c:
-        assert (await c.get(f'/stok?tab={tab}')).status_code == 403
+        r=await c.get(f'/stok?tab={tab}');assert r.status_code==200
+        assert 'Belum ada stok untuk pilihan ini' in r.text
+        # Stok gudang lain tetap tidak terlihat meskipun filter diketik langsung.
+        r=await c.get(f'/stok?tab={tab}&gudang=g2');assert r.status_code==200
+        assert 'Belum ada stok untuk pilihan ini' in r.text

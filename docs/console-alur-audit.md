@@ -38,3 +38,35 @@ smoke test; periksa health/commit dan gerbang anonim saja.
 - Kolektor metadata di kedua aplikasi mencatat GET 401/403. GET normal dan jalur internal/monitoring/kesehatan/SSE tetap mengikuti pengecualian yang ada. Tidak menahan respons untuk menulis statistik. Tidak mengisi ulang kejadian lama atau mengubah transaksi.
 
 Regresi mencakup matriks dua perusahaan dengan hak produk berbeda, pencabutan izin, sidik semua tabel saat pembacaan, pipeline GET ditolak ke pusat gangguan, kesamaan kebijakan peta/diagnosis, serta login TeraFlow pada profil lama nyata melalui interpreter terpisah. Tidak ada migrasi atau perubahan pada writer transaksi, kredensial, penetapan anggota maupun izin produk. Rollback dengan rilis kode sebelumnya.
+
+
+## Pemulihan profil dan pergantian produk (15 November 2026)
+
+Diagnosis, peta dan pusat gangguan mempertahankan produk melalui fragment
+pemulihan. Petunjuk itu tidak memberikan izin. Tujuan masuk memakai hak terkini;
+produk yang sudah dicabut tidak dialihkan ke produk lain. Cap tetap sekali
+pakai dan hanya disimpan di memori browser setelah fragment dibersihkan.
+Pemeriksaan awal bisa dicoba ulang setelah jaringan gagal/timeout. Kata sandi
+tidak dikirim ulang otomatis; draf dijaga dan jawaban simpan yang hilang
+dijelaskan tanpa mengulang perubahan server.
+
+Profil TeraFlow tertaut yang nonaktif dapat dipulihkan melalui pratinjau dan
+konfirmasi Super Admin. Perusahaan, produk, anggota dan peran produk harus masih
+mengizinkan. Snapshot mencakup ID/status/versi profil, diperiksa ulang di bawah
+kunci akun dan profil. Seluruh sesi lama akun bersama dicabut agar tidak hidup
+lagi setelah aktivasi. Hak produk/perusahaan, sandi dan data bisnis tidak ditulis.
+Pengujian dua skema memeriksa hak lintas perusahaan, penolakan setelah perubahan
+izin/status, idempotensi dan fingerprint transaksi. Pengujian browser nyata
+menggunakan PostgreSQL loopback uji, termasuk respons non-JSON, timeout,
+penyimpanan sukses dengan balasan hilang, dan cap yang sudah terpakai.
+
+Tidak ada migrasi, backfill atau pemulihan akun produksi. Rilis backend sebelum
+Console. Rollback kode frontend lalu backend; tidak ada data yang perlu dibalik.
+
+CI lengkap juga menyingkap fixture lama stok karung tanpa master gudang dan
+asumsi bahwa operator G1 selalu ditolak pada produk/karung. Tes diselaraskan
+dengan transfer multi-lokasi yang sudah dirilis: baca gudang kerja aktif,
+pemisahan stok fisik per gudang, serta penolakan kebocoran lewat filter URL.
+Tidak mengembalikan pembatas gudang lama atau mengubah layanan hitung stok.
+Injeksi galat jaringan browser memblokir service worker agar intercept benar-
+benar dijalankan pada Chromium maupun WebKit; alur PWA diuji terpisah di CI.

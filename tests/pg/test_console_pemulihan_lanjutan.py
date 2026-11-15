@@ -38,3 +38,24 @@ async def test_aktivasi_memutus_sesi_dan_cap_lama_tanpa_mengubah_peran_atau_tran
         assert not (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif
     after=await fakta(pg)
     assert {k:v for k,v in before.items() if k not in ALLOWED}=={k:v for k,v in after.items() if k not in ALLOWED}
+
+
+@pytest.mark.parametrize('produk,tujuan',[('padiflow','/masuk'),('teraflow','https://tf.uji/timbangan/masuk')])
+async def test_pemulihan_mengikuti_produk_asal_tanpa_mengubah_izin(pg,orang,monkeypatch,produk,tujuan):
+    from app.config import settings
+    monkeypatch.setattr(settings,'teraflow_web_url','https://tf.uji')
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,orang['mid'])).aktif=True;await db.commit()
+        a=await bantuan.m.akun(db,orang['cid'],'staf',orang['aid'])
+        before=await fakta(pg)
+        assert await bantuan.tujuan_masuk(db,a,produk=produk)==tujuan
+        assert await fakta(pg)==before
+
+async def test_produk_pilihan_yang_dicabut_tidak_dialihkan_ke_produk_lain(pg,orang):
+    from hmu_core import AksesProdukAnggota,ProdukAplikasiPerusahaan
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,orang['mid'])).aktif=True
+        db.add(AksesProdukAnggota(company_id=orang['cid'],user_id=orang['uid'],produk='teraflow',aktif=False,peran='operator'));await db.commit()
+        a=await bantuan.m.akun(db,orang['cid'],'staf',orang['aid'])
+        assert await bantuan.tujuan_masuk(db,a,produk='teraflow') is None
+        assert await bantuan.tujuan_masuk(db,a,produk='padiflow')=='/masuk'

@@ -123,3 +123,53 @@ asyncio.run(run())
     assert result.returncode==0,result.stdout+result.stderr
     after=await fakta(pg)
     assert {k:v for k,v in before.items() if k!='timbangan_akun'}=={k:v for k,v in after.items() if k!='timbangan_akun'}
+
+
+async def test_pulihkan_profil_tertaut_tanpa_mengaktifkan_produk_atau_izin_lain(pg,orang):
+    from hmu_identitas.model import Akun
+    from hmu_identitas import masuk
+    from hmu_core import AksesProdukAnggota as UP,ProdukAplikasiPerusahaan as CP
+    from tests.pg.test_pengaturan_organisasi import fakta
+    x=orang
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True
+        db.add(KeanggotaanPerusahaan(company_id=x['asing'],user_id=x['uid'],aktif=True,peran='admin'))
+        db.add(CP(company_id=x['asing'],produk='teraflow',aktif=True,warisan=False));await db.flush()
+        db.add_all([UP(company_id=x['cid'],user_id=x['uid'],produk='teraflow',aktif=True,peran='operator'),UP(company_id=x['asing'],user_id=x['uid'],produk='teraflow',aktif=True,peran='admin')])
+        linked=await db.scalar(text("INSERT INTO timbangan_akun(username,nama,role,akun_id,user_id,status,perangkat_kode,token_version) VALUES ('operator-aktif','Profil uji','PETUGAS',:aid,:uid,'nonaktif','RP',1) RETURNING id"),dict(aid=x['aid'],uid=x['uid']));await db.commit()
+        d=await help.diagnosis(db,cid=x['cid'],jenis='staf',aid=x['aid'])
+        assert 'aktifkan_profil_timbang' in d['tindakan']
+        assert await help.tujuan_masuk(db,d['akun'],produk='teraflow') is None
+        before=await fakta(pg);password=(await db.get(Akun,x['aid'])).password_hash
+    result,plan=await action(pg,x,'aktifkan_profil_timbang')
+    assert plan['berdampak_sesi']
+    async with pg() as db:
+        a=await db.get(Akun,x['aid']);assert a.aktif and a.token_version==2 and a.password_hash==password
+        assert await masuk.akun_aktif(db,x['aid'],1) is None
+        status,version=(await db.execute(text('SELECT status,token_version FROM timbangan_akun WHERE id=:id'),{'id':linked})).one();assert (status,version)==('aktif',2)
+        assert (await db.get(UP,(x['asing'],x['uid'],'teraflow'))).peran=='admin'
+        assert (await db.get(UP,(x['cid'],x['uid'],'teraflow'))).peran=='operator'
+        again=await help.terapkan(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],plan_id=plan['id']);assert again['sudah'];await db.commit()
+        assert (await db.get(Akun,x['aid'])).token_version==2
+    after=await fakta(pg);allowed={'produksi_akun','timbangan_akun','hmu_support_plans','activity_logs'}
+    assert {k:v for k,v in before.items() if k not in allowed}=={k:v for k,v in after.items() if k not in allowed}
+
+@pytest.mark.parametrize('change',['produk','hak','profil'])
+async def test_pemulihan_profil_memerlukan_izin_dan_snapshot_terkini(pg,orang,change):
+    from hmu_core import ProdukAplikasiPerusahaan as CP,AksesProdukAnggota as UP
+    from tests.pg.test_pengaturan_organisasi import fakta
+    x=orang
+    async with pg() as db:
+        (await db.get(KeanggotaanPerusahaan,x['mid'])).aktif=True
+        db.add(UP(company_id=x['cid'],user_id=x['uid'],produk='teraflow',aktif=True,peran='operator'))
+        await db.execute(text("INSERT INTO timbangan_akun(username,nama,role,akun_id,user_id,status,perangkat_kode,token_version) VALUES ('operator-aktif','Profil uji','PETUGAS',:aid,:uid,'nonaktif','RP',1)"),dict(aid=x['aid'],uid=x['uid']));await db.commit()
+        plan=await help.pratinjau(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],aksi='aktifkan_profil_timbang',alasan='Pemilik meminta pemulihan profil pos timbang');await db.commit()
+        if change=='produk':(await db.get(CP,(x['cid'],'teraflow'))).aktif=False
+        elif change=='hak':(await db.get(UP,(x['cid'],x['uid'],'teraflow'))).aktif=False
+        else:await db.execute(text("UPDATE timbangan_akun SET status='aktif' WHERE akun_id=:aid"),{'aid':x['aid']})
+        await db.commit()
+    before=await fakta(pg)
+    async with pg() as db:
+        with pytest.raises(ValueError):await help.terapkan(db,cid=x['cid'],jenis='staf',aid=x['aid'],pelaku_id=x['root'],plan_id=plan['id'])
+        await db.rollback()
+    assert await fakta(pg)==before

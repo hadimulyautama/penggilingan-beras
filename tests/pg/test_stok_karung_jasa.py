@@ -179,10 +179,13 @@ async def test_pelanggan_ids_dengan_karung_dan_rinci_langsung_dari_kolom(pg, kms
     """Satu pelanggan, dua PINDAHAN terpisah (bukan dua pesanan jasa — tak
     ada `Jasa` yang terlibat sama sekali di sini) — WAJIB muncul sebagai
     SATU rekening digabung, murni dari `PackagingPurchase.pelanggan_id`."""
-    from app.models import Pelanggan
+    from app.models import Pelanggan,Warehouse
     from app.penggilingan.inventory import models
 
     async with pg() as db:
+        # Pembaca rinci sekarang mengelompokkan lokasi fisik. Data lama tanpa
+        # warehouse_id mengikuti gudang lama G2; master itu harus ada di fixture.
+        db.add(Warehouse(nama_gudang='Gudang 2 uji',kode_fungsi='g2',aktif=True))
         pel = Pelanggan(nama_pelanggan="Pak Budi")
         db.add(pel)
         await db.commit()
@@ -214,6 +217,7 @@ async def test_pelanggan_ids_dengan_karung_dan_rinci_langsung_dari_kolom(pg, kms
         baris = await kms.stok_kemasan_rinci(db, pelanggan_id=pelanggan_id)
     laminasi = next(b for b in baris if b["nama"] == "Karung Laminasi")
     assert laminasi["lembar"] == 50 + 30, "kedua pindahan pelanggan ini digabung satu angka"
+    assert laminasi["gudang"] == "Gudang 2" and len(baris)==1
 
 
 async def test_terpakai_menyaring_lintas_seluruh_pesanan_pelanggan(pg, kms, pemakai, pelanggan):
