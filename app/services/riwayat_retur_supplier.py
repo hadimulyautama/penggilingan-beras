@@ -89,6 +89,23 @@ def keadaan(rec,last,keluar,tiket,*,gagal=False,state=None):
     return 'check'
 
 
+async def ringkasan_keluar(db,dasar):
+    """Rekap seluruh hasil tanpa memuat objek retur, tiket, atau snapshot lengkap.
+
+    Ambil JSON scalar, bukan teks/cast SQL: angka historis tetap mempunyai
+    tipe Python yang sama dengan snapshot lama sebelum dihitung oleh Decimal.
+    Urutan penjumlahan mengikuti daftar lama, termasuk koreksi dan nilai kosong.
+    """
+    ids=dasar.with_only_columns(R.id)
+    delta=select(I.retur_supplier_id.label('rid'),func.sum(S.bobot_kg).label('kg'))\
+        .join(S,S.item_id==I.id).where(I.retur_supplier_id.in_(ids)).group_by(I.retur_supplier_id).subquery()
+    rows=(await db.execute(select(K.snapshot['total_kg'],func.coalesce(delta.c.kg,0))
+        .join(R,R.id==K.retur_supplier_id).outerjoin(delta,delta.c.rid==R.id)
+        .where(R.id.in_(ids)).order_by(R.waktu.desc(),R.id.desc()))).all()
+    return dict(total_keluar=sum((D(kg)+D(koreksi) for kg,koreksi in rows if kg is not None),D(0)),
+        jumlah_keluar=len(rows),keluar_tidak_lengkap=sum(kg is None for kg,_ in rows))
+
+
 async def daftar(db,user,*,q='',awal='',akhir='',status='',supplier=None,gudang=None,penerimaan=None,halaman=1):
     efektif,wh=await cakupan(db,user)
     ids=[w.id for w in wh]
@@ -118,15 +135,36 @@ async def daftar(db,user,*,q='',awal='',akhir='',status='',supplier=None,gudang=
     if sampai:dasar=dasar.where(R.waktu<sampai)
     if supplier:dasar=dasar.where(R.supplier_id==supplier)
     if gudang:dasar=dasar.where(exists(select(I.id).where(I.retur_supplier_id==R.id,I.warehouse_id==gudang)))
+    # Status mengikuti tiket/ledger terkini, sedangkan pencarian memakai
+    # casefold Python atas snapshot historis. Pertahankan jalur itu utuh.
+    # Tanpa dua filter dinamis tersebut, cakupan/tanggal/supplier/gudang
+    # sudah selesai disaring di SQL: rincian cukup untuk satu halaman.
+    terbatas_halaman=not status and not q.strip()
+    pilihan=dasar.with_only_columns(R.id)
+    rekap=None
+    if terbatas_halaman:
+        total=await db.scalar(select(func.count()).select_from(pilihan.subquery()))
+        pages=max(1,(total+UKURAN_HALAMAN-1)//UKURAN_HALAMAN)
+        halaman=min(halaman,pages)
+        rekap=await ringkasan_keluar(db,dasar)
+        pilihan=select(pilihan.order_by(R.waktu.desc(),R.id.desc())
+            .offset((halaman-1)*UKURAN_HALAMAN).limit(UKURAN_HALAMAN).cte('halaman_retur').c.id)
     agg=select(I.retur_supplier_id.label('rid'),func.count(I.id).label('n'),func.sum(I.bobot_kg).label('pengajuan'),
         func.string_agg(func.distinct(I.snapshot['gudang'].as_string()),' · ').label('gudang'),
         func.string_agg(I.snapshot['nama'].as_string()+' '+I.snapshot['kode'].as_string(),' ').label('barang'),
-        func.sum(A.bobot_kg).label('aktual'),func.count(A.item_id).label('na')).outerjoin(A,A.item_id==I.id).group_by(I.retur_supplier_id).subquery()
-    terbaru=select(C.retur_supplier_id.label('rid'),func.max(C.id).label('id')).group_by(C.retur_supplier_id).subquery()
-    delta=select(I.retur_supplier_id.label('rid'),func.sum(S.bobot_kg).label('kg')).join(S,S.item_id==I.id).group_by(I.retur_supplier_id).subquery()
+        func.sum(A.bobot_kg).label('aktual'),func.count(A.item_id).label('na')).outerjoin(A,A.item_id==I.id)
+    terbaru=select(C.retur_supplier_id.label('rid'),func.max(C.id).label('id'))
+    delta=select(I.retur_supplier_id.label('rid'),func.sum(S.bobot_kg).label('kg')).join(S,S.item_id==I.id)
+    if terbatas_halaman:
+        agg=agg.where(I.retur_supplier_id.in_(pilihan))
+        terbaru=terbaru.where(C.retur_supplier_id.in_(pilihan))
+        delta=delta.where(I.retur_supplier_id.in_(pilihan))
+    agg=agg.group_by(I.retur_supplier_id).subquery()
+    terbaru=terbaru.group_by(C.retur_supplier_id).subquery()
+    delta=delta.group_by(I.retur_supplier_id).subquery()
     rows=(await db.execute(select(R,agg.c.n,agg.c.pengajuan,agg.c.gudang,agg.c.barang,agg.c.aktual,agg.c.na,C,K,func.coalesce(delta.c.kg,0),E)
         .join(agg,agg.c.rid==R.id).outerjoin(terbaru,terbaru.c.rid==R.id).outerjoin(C,C.id==terbaru.c.id)
-        .outerjoin(K,K.retur_supplier_id==R.id).outerjoin(delta,delta.c.rid==R.id).outerjoin(E,E.retur_supplier_id==R.id).where(R.id.in_(dasar.with_only_columns(R.id)))
+        .outerjoin(K,K.retur_supplier_id==R.id).outerjoin(delta,delta.c.rid==R.id).outerjoin(E,E.retur_supplier_id==R.id).where(R.id.in_(pilihan))
         .order_by(R.waktu.desc(),R.id.desc()))).all()
     tickets,gagal=await tiket_banyak(db,{r[0].timbangan_transaksi_id for r in rows if r[0].timbangan_transaksi_id})
     hasil=[]
@@ -141,11 +179,14 @@ async def daftar(db,user,*,q='',awal='',akhir='',status='',supplier=None,gudang=
         kg=ledger.snapshot.get('total_kg') if ledger else None
         hasil.append(dict(rec=r,jumlah_item=n,pengajuan=proposal,gudang=warehouse,
             aktual=actual if na==n else None,keluar=D(kg)+D(koreksi) if kg is not None else None,ledger=ledger,status=st,versi=state.versi if state else 0))
-    total=len(hasil);pages=max(1,(total+UKURAN_HALAMAN-1)//UKURAN_HALAMAN)
-    halaman=min(halaman,pages)
-    return dict(rows=hasil[(halaman-1)*UKURAN_HALAMAN:halaman*UKURAN_HALAMAN],total=total,halaman=halaman,pages=pages,
-        total_keluar=sum((r['keluar'] for r in hasil if r['keluar'] is not None),D(0)),
+    if not terbatas_halaman:
+        total=len(hasil);pages=max(1,(total+UKURAN_HALAMAN-1)//UKURAN_HALAMAN)
+        halaman=min(halaman,pages)
+        rekap=dict(total_keluar=sum((r['keluar'] for r in hasil if r['keluar'] is not None),D(0)),
         jumlah_keluar=sum(r['ledger'] is not None for r in hasil),keluar_tidak_lengkap=sum(r['ledger'] is not None and r['keluar'] is None for r in hasil),
+        )
+        hasil=hasil[(halaman-1)*UKURAN_HALAMAN:halaman*UKURAN_HALAMAN]
+    return dict(rows=hasil,total=total,halaman=halaman,pages=pages,**rekap,
         suppliers=suppliers,warehouses=wh,asal=asal,gagal_tiket=gagal,efektif=efektif)
 
 
