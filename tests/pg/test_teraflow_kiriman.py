@@ -275,6 +275,13 @@ async def kirim_pwa(c,tf,tid,kg):
         assert nilai==kg
         await page.locator('[name=aksi][value=selesai]').click()
         await tunggu_async("window.timbanganLuring && window.timbanganLuring.antrean().then(x=>x.filter(r=>r.status==='terkirim').length===2)")
+        # Pemulihan latar mempertahankan formulir (kontrak PWA), sedangkan
+        # kirim langsung boleh bernavigasi. Keduanya sudah dikonfirmasi pada
+        # antrean di atas; bila sinkron latar menang balapan, gunakan tautan
+        # hasil yang memang tersedia untuk operator, bukan mengharapkan redirect.
+        await page.wait_for_function("location.pathname.includes('/transaksi/') || Array.from(document.querySelectorAll('a.tf-link')).some(a=>new URL(a.href).pathname.startsWith('/timbangan/transaksi/'))")
+        if '/transaksi/' not in page.url:
+            await page.locator('a.tf-link[href*="/timbangan/transaksi/"]').first.click()
         await page.wait_for_url('**/transaksi/**')
         await page.evaluate('window.timbanganLuring.sinkronkan()')
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
