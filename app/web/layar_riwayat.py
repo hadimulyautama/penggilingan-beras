@@ -682,17 +682,8 @@ async def halaman_riwayat_transfer(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(
             403, "Riwayat Transfer milik Admin ke atas dan operator Gudang 1.")
 
-    from app.services.transfer import riwayat_transfer
-
-    sebelum_id = _sebelum_id(request)
-    async with SessionLocal() as db:
-        kartu, lagi = await riwayat_transfer(db, batas=SEKALI, sebelum=sebelum_id)
-    return await render_laci(
-        request, "riwayat_transfer.html",
-        kartu=kartu, lagi=lagi, SEKALI=SEKALI,
-        sesudah=(kartu[-1].id if kartu and lagi else None),
-        dari_awal=bool(sebelum_id),
-    )
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse('/transfer-bertahap?tab=riwayat', status_code=303)
 
 
 @router.get("/riwayat-transfer/{transfer_id}")

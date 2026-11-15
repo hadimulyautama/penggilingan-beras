@@ -115,6 +115,13 @@ async def daftar(user=Depends(pengguna_aksi)):
             q=select(PengirimanPk).order_by(PengirimanPk.id.desc()).limit(100)
             if not is_admin:q=q.where(PengirimanPk.asal_id==w.id if w.kode_fungsi=='g1' else (PengirimanPk.tujuan_id==w.id)&PengirimanPk.jasa_id.is_(None))
             for j in (await db.scalars(q)).all():journeys.append(await s.rincian(db,j.id))
+            from app.services.riwayat_transfer_terpadu import catatan_lama,lengkapi_pengiriman
+            await lengkapi_pengiriman(db,journeys)
+            journeys.extend(await catatan_lama(db,user=user))
+            journeys.sort(key=lambda j:j['waktu'],reverse=True)
+            journeys=journeys[:100]
+            from app.services.transfer_lokasi import lengkapi_lintasan
+            await lengkapi_lintasan(db,journeys)
             from app.penggilingan.gudang2.service import _g2_warehouse_id
             from app.penggilingan.silo_policy import boleh_masuk
             target=await db.get(Warehouse,await _g2_warehouse_id(db))

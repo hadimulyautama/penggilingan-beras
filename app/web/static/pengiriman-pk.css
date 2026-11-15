@@ -85,3 +85,15 @@
  #transfer-pk .tp-row>*{margin-bottom:8px}#transfer-pk .tp-badge{border:1px solid currentColor}
  #transfer-pk [hidden]{display:none!important}
 }
+
+/* Riwayat memakai kartu dan tabel dari Riwayat Proses. */
+#pk-history-stats{margin:16px 0 20px}
+#pk-jalan .tp-history-sub,#pk-jalan .fakta dd small{display:block;color:var(--pd-muted);margin-top:4px}
+#pk-jalan .tp-history-owner{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0}
+#pk-jalan [data-history-card]:focus-visible{outline:2px solid var(--pd-green);outline-offset:-2px}
+#pk-jalan .riwayat-desktop-owner small{display:block;margin-top:6px}
+@container(max-width:700px){#pk-jalan .riwayat-desktop-list{display:none}#pk-jalan .riwayat-list{display:grid}}
+@media print{#pk-jalan .riwayat-list{display:none!important}#pk-jalan .riwayat-desktop-list{display:block!important;overflow:visible}#pk-jalan .riwayat-desktop-grid{min-width:0;font-size:10px}#pk-jalan .riwayat-desktop-head{font-size:9px}#pk-history-stats{break-inside:avoid}}
+
+#pk-jalan .riwayat-list .fakta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+#pk-jalan .riwayat-list .tp-history-lot{grid-column:1/-1}

@@ -21,6 +21,7 @@ function pesan(t,err=false){$('#pk-pesan').textContent=t;$('#pk-pesan').toggleAt
 function fase(r){if(r.status==='disetujui')return Number(r.selesai_kg)>0?'sebagian':'siap';if(r.status==='dikirim')return 'sebagian';if(['selesai','gugur'].includes(r.status)&&Number(r.disetujui)>0&&Number(r.sisa)>0)return 'ditutup';return r.status}
 function mode(r){return data.admin&&r.status==='diminta'?'setujui':data.boleh_kirim&&['disetujui','dikirim'].includes(r.status)&&Number(r.sisa)>0?'kirim':''}
 function tujuan(r){return (r.tujuan_nama||data.tujuan.find(t=>t.id===r.silo_id)?.nama||(!r.silo_id?'Tumpukan':'Silo tidak tersedia'))+' · '+data.gudang_tujuan.nama}
+function lokasiRingkas(l){return [l?.pabrik_nama||'Pabrik belum ditetapkan',l?.gudang_nama||l?.nama,l?.penempatan].filter(Boolean).join(' → ')}
 function badge(k){return `<span class="tp-badge tp-badge--${esc(k)}">${esc(status[k]||k)}</span>`}
 function urlSimpan(){
  const q=new URLSearchParams();q.set('tab',tab);q.set('status',filters[tab].status||'');
@@ -32,29 +33,49 @@ function cocok(r,riwayat=false){
  const f=filters[tab],q=$('#pk-cari').value.trim().toLocaleLowerCase('id-ID');
  const asal=riwayat?r.lintasan.asal.gudang_id:r.asal_id;
  const target=riwayat?r.lintasan.tujuan.silo_id:r.silo_id;
- const text=riwayat?[`Transfer #${r.id}`,r.nomor_polisi,r.nama_sopir,r.lintasan.asal.nama,r.lintasan.tujuan.nama,...r.items.flatMap(i=>[i.lot,data.permintaan.find(x=>x.id===i.permintaan_id)?.pemilik])]:[r.lot,r.pemilik,r.peminta,r.asal,tujuan(r),`Permintaan #${r.id}`];
+ const text=riwayat?[`Transfer #${r.id}`,r.nomor,...r.items.map(i=>i.pemilik),lokasiRingkas(r.lintasan.asal),lokasiRingkas(r.lintasan.tujuan),r.nomor_polisi,r.nama_sopir,r.lintasan.asal.nama,r.lintasan.tujuan.nama,...r.items.flatMap(i=>[i.lot,data.permintaan.find(x=>x.id===i.permintaan_id)?.pemilik])]:[r.lot,r.pemilik,r.peminta,r.asal,tujuan(r),`Permintaan #${r.id}`];
  const statusCocok=!f.status||(!riwayat&&f.status==='perlu_transfer'?['siap','sebagian'].includes(fase(r)):(riwayat?r.status:fase(r))===f.status);
  return (!q||text.join(' ').toLocaleLowerCase('id-ID').includes(q))&&statusCocok&&(!f.asal||String(asal)===f.asal)&&(!f.tujuan||(target?String(target):'ditumpuk')===f.tujuan);
 }
 function kosong(nama){return `<div class="tp-kosong"><h3>Tidak ada ${nama} yang sesuai</h3><p>Periksa pencarian atau tampilkan semua status.</p><button class="btn" type="button" data-semua>Tampilkan semua</button></div>`}
+function riwayatRows(){
+ return data.pengiriman.flatMap(j=>j.items.map((i,n)=>({...j,items:[i],item:i,nomor:i.nomor||j.nomor||`Transfer #${j.id}`,waktu:i.waktu||j.waktu,baris_kunci:`${j.id}-${n}`,urutan:n}))).sort((a,b)=>new Date(b.waktu)-new Date(a.waktu));
+}
+function renderRiwayat(rows){
+ const unit=i=>Number(i.jumlah??i.berat_kg??0).toLocaleString('id-ID',{maximumFractionDigits:2})+' '+(i.satuan||'kg');
+ const place=j=>j.lintasan.tujuan.penempatan||j.lintasan.tujuan.nama.split(' · ')[0];
+ const wh=(j,side)=>j.lintasan[side].gudang_nama||j.lintasan[side].nama;
+ const site=(j,side)=>j.lintasan[side].pabrik_nama||'Pabrik belum ditetapkan';
+ const label=j=>j.status==='selesai'?'Terkirim':status[j.status]||j.status;
+ const flag=j=>j.status==='selesai'?'done':j.status==='dibatalkan'?'cancel':'wait';
+ const link=j=>j.lama?`href="${esc(j.detail_url)}"`:`href="/transfer-bertahap?tab=riwayat&amp;pengiriman=${j.id}" data-detail="transfer" data-id="${j.id}"`;
+ const owner=j=>j.item.nama_pemilik||j.item.pemilik||data.permintaan.find(r=>r.id===j.item.permintaan_id)?.pemilik||'Pabrik';
+ const jasa=j=>j.item.jasa??!!j.item.jasa_id;
+ const mass=rows.reduce((n,j)=>n+(j.status==='selesai'?Number(j.item.berat_kg||0):0),0),lembar=rows.reduce((n,j)=>n+(j.status==='selesai'&&j.item.satuan==='lembar'?Number(j.item.jumlah||0):0),0);
+ $('#pk-history-stats').innerHTML=`<div><span>Catatan lot ditampilkan</span><strong>${rows.length}</strong></div><div><span>Total transfer efektif</span><strong>${fmt(mass)}${lembar?' · '+lembar.toLocaleString('id-ID')+' lembar':''}</strong></div><div><span>Catatan dibatalkan</span><strong>${rows.filter(j=>j.status==='dibatalkan').length}</strong></div>`;
+ if(!rows.length){$('#pk-jalan').innerHTML=kosong('transfer');return}
+ const mobile=rows.map(j=>`<article class="padat padat--diam padat--pindah_pk" data-history-card role="link" tabindex="0"><div><div class="padat__atas"><span class="padat__nama padat__nama--kode"><a ${link(j)}>${esc(j.nomor)}</a> · ${esc(new Date(j.waktu).toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit'}))}</span><span class="padat__nilai ${j.status==='dibatalkan'?'padat__nilai--kosong':''}">${esc(unit(j.item))}</span></div><p class="tp-history-owner">${esc(owner(j))} <span class="riwayat-status riwayat-status--${jasa(j)?'jasa':'pabrik'}">${jasa(j)?'Jasa':'Bukan jasa'}</span></p><dl class="fakta"><div class="tp-history-lot"><dt>Barang / lot asal</dt><dd>${esc(j.item.lot)}</dd></div><div><dt>Asal</dt><dd>${esc(site(j,'asal'))}<small>${esc(wh(j,'asal'))}</small></dd></div><div><dt>Tujuan</dt><dd>${esc(site(j,'tujuan'))}<small>${esc(wh(j,'tujuan'))}</small><small>${esc(place(j))}</small></dd></div></dl><p><span class="riwayat-status riwayat-status--${flag(j)}">${esc(label(j))}</span></p>${j.status==='dibatalkan'?'<div class="nota nota--buruk"><span aria-hidden="true">✕</span><span>Catatan ini tidak dihitung sebagai transfer aktif.</span></div>':''}<a class="btn btn--kecil" ${link(j)}>Lihat detail lengkap →</a></div></article>`).join('');
+ const desktop=rows.map(j=>`<details class="riwayat-desktop-row"><summary class="riwayat-desktop-grid riwayat-desktop-grid--transfer" data-history-card><span class="riwayat-desktop-lot"><strong><a ${link(j)}>${esc(j.nomor)}</a></strong><small>${esc(waktu(j.waktu))}</small></span><span class="riwayat-desktop-owner">${esc(owner(j))}<small><span class="riwayat-status riwayat-status--${jasa(j)?'jasa':'pabrik'}">${jasa(j)?'Jasa':'Bukan jasa'}</span></small></span><span>${esc(j.item.lot)}</span><span>${esc(site(j,'asal'))}<small class="tp-history-sub">${esc(wh(j,'asal'))}</small></span><span>${esc(site(j,'tujuan'))}<small class="tp-history-sub">${esc(wh(j,'tujuan'))}</small><small class="tp-history-sub">${esc(place(j))}</small></span><span class="riwayat-desktop-number">${esc(unit(j.item))}</span><span><span class="riwayat-status riwayat-status--${flag(j)}">${esc(label(j))}</span></span></summary></details>`).join('');
+ $('#pk-jalan').innerHTML=`<div class="riwayat-list daftar-standar">${mobile}</div><div class="riwayat-desktop-list tabel-standar" aria-label="Daftar riwayat transfer"><div class="riwayat-desktop-grid riwayat-desktop-grid--transfer riwayat-desktop-head" aria-hidden="true"><span>Kode transfer / waktu</span><span>Nama pemilik</span><span>Barang / lot asal</span><span>Asal</span><span>Tujuan</span><span class="riwayat-desktop-number">Jumlah</span><span>Status transfer</span></div>${desktop}</div>`;
+}
 function render(){
  if(!data)return;pilihan.clear();
  root.querySelectorAll('[data-pk-tab]').forEach(a=>{if(a.dataset.pkTab===tab)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
  $('#pk-permintaan').hidden=tab!=='permintaan';$('#pk-perjalanan').hidden=tab!=='riwayat';
- $('#pk-jumlah-permintaan').textContent=data.permintaan.length;$('#pk-jumlah-riwayat').textContent=data.pengiriman.length;
+ $('#pk-jumlah-permintaan').textContent=data.permintaan.length;$('#pk-jumlah-riwayat').textContent=riwayatRows().length;
  $('#pk-arahan').textContent=tab==='riwayat'?'Buka detail untuk memeriksa transfer dan jejak koreksi.':data.admin?'Periksa permintaan, pilih jumlah dan tujuan, lalu setujui. Persetujuan belum memindahkan stok.':data.boleh_kirim?'Setelah barang dipindahkan, catat jumlah aktual. Gunakan karung bekas 50 kg dan curah, atau langsung kg.':'Permintaan dimulai dari detail bahan baku → Minta lot ini. Pantau persetujuan dan pencatatannya di sini.';
- const rs=data.permintaan.filter(r=>cocok(r)),js=data.pengiriman.filter(r=>cocok(r,true));
+ const rs=data.permintaan.filter(r=>cocok(r)),js=riwayatRows().filter(r=>cocok(r,true));
  $('#pk-daftar').innerHTML=rs.map(r=>`<article class="tp-row" data-id="${r.id}">
  <div class="tp-pilih">${mode(r)?`<label class="tp-pilih"><input type="checkbox" name="pilih" value="${r.id}" aria-label="Pilih ${esc(r.lot)} · permintaan ${r.id}"></label>`:''}</div>
  <div class="tp-lot"><h3>${esc(r.lot)}</h3><p>${esc(r.pemilik)}</p><p class="tp-meta">Permintaan #${r.id} · ${esc(r.peminta)}<br>${esc(waktu(r.waktu))}</p>${badge(fase(r))}</div>
  <div class="tp-angka"><p>Diminta <strong>${fmt(r.diminta)}</strong></p>${r.status==='diminta'?`<p class="tp-meta">Stok bebas ${fmt(r.bebas)}</p>`:`<p>Disetujui <strong>${fmt(r.disetujui)}</strong></p><p class="tp-meta">Dipindahkan ${fmt(r.selesai_kg)}<br>${['selesai','gugur','ditolak'].includes(r.status)?'Sisa tidak dipindahkan':'Sisa persetujuan'} ${fmt(r.sisa)}</p>`}</div>
  <div class="tp-tujuan"><p>${esc(r.asal)} → ${r.status==='diminta'?esc(data.gudang_tujuan.nama):esc(tujuan(r))}</p>${Number(r.perjalanan_kg)>0?`<p class="tp-meta">Dalam perjalanan lama ${fmt(r.perjalanan_kg)}</p>`:''}</div>
  <div class="tp-aksi">${mode(r)?`<button class="btn btn--kecil" type="button" data-catatan="${r.id}">${mode(r)==='setujui'?'Periksa & setujui':'Catat transfer'}</button>`:`<button class="btn btn--kecil" type="button" data-detail="permintaan" data-id="${r.id}">Lihat detail</button>`}${mode(r)?`<button class="btn tp-menu" type="button" data-detail="permintaan" data-id="${r.id}" aria-label="Tindakan permintaan ${r.id}" aria-haspopup="dialog">⋯</button>`:''}</div></article>`).join('')||kosong('permintaan');
- $('#pk-jalan').innerHTML=js.map(j=>`<article class="tp-row" id="perjalanan-${j.id}"><span class="tp-pilih" aria-hidden="true"></span><div class="tp-lot"><h3>${j.pakai_kendaraan?'Perjalanan lama':'Transfer'} #${j.id}</h3><p>${j.items.map(i=>esc(i.lot)).join('<br>')}</p><p class="tp-meta">${esc(waktu(j.waktu))}</p>${badge(j.status)}</div><div class="tp-angka"><p>Total efektif <strong>${fmt(j.total)}</strong></p><p class="tp-meta">${j.items.length} lot</p></div><div class="tp-tujuan"><p>${esc(j.lintasan.asal.nama)} → ${esc(j.lintasan.tujuan.nama)}</p>${j.pakai_kendaraan?`<p class="tp-meta">${esc(j.nomor_polisi)} · ${esc(j.nama_sopir)}</p>`:''}</div><div class="tp-aksi"><button class="btn btn--kecil" type="button" data-detail="transfer" data-id="${j.id}">Lihat detail</button></div></article>`).join('')||kosong('transfer');
+ renderRiwayat(js);
  const audits=(data.koreksi||[]).filter(k=>!$('#pk-cari').value.trim()||[k.alasan,...(k.ringkasan||[])].join(' ').toLowerCase().includes($('#pk-cari').value.trim().toLowerCase()));
  $('#pk-audit').innerHTML=data.admin&&audits.length?`<details><summary>Riwayat koreksi Admin · ${audits.length}</summary><ul>${audits.map(k=>`<li><strong>Koreksi #${k.id}</strong> · ${esc(waktu(k.waktu))}<p>${esc(k.alasan)}</p>${k.ringkasan?.length?`<ul>${k.ringkasan.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</li>`).join('')}</ul></details>`:'';
  const f=filters[tab];$('#pk-filter-buka').textContent='Filter'+(Object.values(f).some(Boolean)?' · Aktif':'');
- $('#pk-ringkasan').textContent=(tab==='permintaan'?`${rs.length} dari ${data.permintaan.length} permintaan`:`${js.length} dari ${data.pengiriman.length} transfer terbaru`)+(f.status?' · '+(status[f.status]||f.status):' · Semua status');
+ $('#pk-ringkasan').textContent=(tab==='permintaan'?`${rs.length} dari ${data.permintaan.length} permintaan`:`${js.length} dari ${riwayatRows().length} catatan lot`)+(f.status?' · '+(status[f.status]||f.status):' · Semua status');
  selected();
 }
 function rowsDipilih(){return data.permintaan.filter(r=>pilihan.has(r.id))}
@@ -89,7 +110,7 @@ function bukaDetail(jenis,id){
   for(const j of journeys)html+=`<button class="btn" type="button" data-detail="transfer" data-id="${j.id}">Lihat transfer #${j.id} · ${fmt(j.total)}</button>`;
   html+='</div>';
  }else{
-  html=badge(r.status)+dl([['Waktu pencatatan',waktu(r.waktu)],['Asal',r.lintasan.asal.nama],['Tujuan',r.lintasan.tujuan.nama],['Total transfer efektif',fmt(r.total)]]);
+  html=badge(r.status)+dl([['Waktu pencatatan',waktu(r.waktu)],['Asal',lokasiRingkas(r.lintasan.asal)],['Tujuan',lokasiRingkas(r.lintasan.tujuan)],['Total transfer efektif',fmt(r.total)]]);
   if(r.pakai_kendaraan)html+=dl([['Nomor polisi',r.nomor_polisi],['Sopir',r.nama_sopir],['Hasil timbang',r.bobot_timbang_kg===null?'Belum tersedia':fmt(r.bobot_timbang_kg)],['Selisih',r.selisih_kg===null?'Belum tersedia':fmt(r.selisih_kg)]]);
   html+='<div class="tp-detail-lot">'+r.items.map(i=>`<h3>${esc(i.lot)}</h3><p>${fmt(i.berat_kg)}</p><div class="tp-actions"><button class="btn" type="button" data-detail="permintaan" data-id="${i.permintaan_id}">Lihat permintaan #${i.permintaan_id}</button>${i.transfer_id&&data.boleh_kirim?`<a class="btn" href="/riwayat-transfer/${i.transfer_id}">Rincian stok & bahan</a>`:''}${data.admin&&!r.pakai_kendaraan&&r.status==='selesai'&&Number(i.berat_kg)>0?`<button class="btn" type="button" data-koreksi="transfer" data-id="${i.id}">Koreksi jumlah</button>`:''}</div>`).join('')+'</div>';
   if(r.alasan)html+=`<p>Alasan: ${esc(r.alasan)}</p>`;
@@ -166,7 +187,7 @@ root.addEventListener('change',e=>{
 function filterBuka(){
  const f=filters[tab],form=$('#pk-filter-form'),opt=(v,n)=>`<option value="${esc(v)}">${esc(n)}</option>`;
  form.elements.status.innerHTML=opt('','Semua status')+(tab==='permintaan'?['diminta','perlu_transfer','siap','sebagian','selesai','ditutup','ditolak','gugur']:['selesai','dibatalkan','dalam_perjalanan','menunggu_admin']).map(k=>opt(k,status[k])).join('');
- const origins=new Map([...data.permintaan.map(r=>[r.asal_id,r.asal]),...data.pengiriman.map(j=>[j.lintasan.asal.gudang_id,j.lintasan.asal.nama])]);
+ const origins=new Map([...data.permintaan.map(r=>[r.asal_id,r.asal]),...data.pengiriman.map(j=>[j.lintasan.asal.gudang_id,lokasiRingkas(j.lintasan.asal)])]);
  const targets=new Map([['ditumpuk','Tumpukan'],...data.permintaan.filter(r=>r.silo_id).map(r=>[String(r.silo_id),r.tujuan_nama]),...data.pengiriman.filter(j=>j.lintasan.tujuan.silo_id).map(j=>[String(j.lintasan.tujuan.silo_id),j.lintasan.tujuan.nama]),...data.tujuan.filter(t=>t.id).map(t=>[String(t.id),t.nama])]);
  form.elements.asal.innerHTML=opt('','Semua gudang asal')+[...origins].map(([v,n])=>opt(v,n)).join('');form.elements.tujuan.innerHTML=opt('','Semua tujuan')+[...targets].map(([v,n])=>opt(v,n)).join('');
  for(const k of ['status','asal','tujuan'])form.elements[k].value=f[k]||'';$('#pk-filter').showModal();
@@ -185,7 +206,8 @@ root.addEventListener('click',e=>{
  if(busy)return;
  if(e.target.closest('[data-semua]')){semua();return}
  const cat=e.target.closest('[data-catatan]');if(cat){bukaForm([data.permintaan.find(r=>r.id===Number(cat.dataset.catatan))]);return}
- const detail=e.target.closest('[data-detail]');if(detail){bukaDetail(detail.dataset.detail,Number(detail.dataset.id));return}
+ const detail=e.target.closest('[data-detail]');if(detail){e.preventDefault();bukaDetail(detail.dataset.detail,Number(detail.dataset.id));return}
+ const card=e.target.closest('[data-history-card]');if(card&&!e.target.closest('a')){e.preventDefault();card.querySelector('a').click();return}
  if(e.target.closest('[data-koreksi]'))$('#pk-detail').close();
  const b=e.target.closest('[data-action]');if(!b||!data.admin)return;
  $('#pk-detail').close();decision={id:Number(b.dataset.id),action:b.dataset.action};
@@ -318,6 +340,7 @@ formKoreksi.addEventListener('submit',async e=>{
   finally{busy=false;button.disabled=tahap==='simpan'&&!formKoreksi.elements.konfirmasi.checked}
 });
 
+root.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-history-card][role=link]')){e.preventDefault();e.target.querySelector('a').click()}});
 $('#pk-panduan-buka').onclick=()=>$('#pk-panduan').showModal();
 $('#pk-cetak').onclick=()=>window.print();$('#pk-muat').onclick=load;
 load().then(ok=>{if(!ok)return;const id=Number(qawal.get('pengiriman')||location.hash.replace('#perjalanan-',''));if(id&&data.pengiriman.some(j=>j.id===id))bukaDetail('transfer',id)});

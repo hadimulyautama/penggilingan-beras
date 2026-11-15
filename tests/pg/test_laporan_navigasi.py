@@ -10,8 +10,8 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.mark.parametrize('role,gudang,proses,qcs,audit',[
-    ('superadmin',None,4,5,True),('admin',None,4,5,True),
-    ('operator','Gudang 1',3,3,False),('operator','Gudang 2',1,2,False),
+    ('superadmin',None,3,5,True),('admin',None,3,5,True),
+    ('operator','Gudang 1',2,3,False),('operator','Gudang 2',1,2,False),
 ])
 async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
     from bs4 import BeautifulSoup
@@ -39,7 +39,7 @@ async def test_tab_menu_jenis_dan_url_lama(pg,qc,role,gudang,proses,qcs,audit):
             pilihan=soup.select_one('[data-jenis-riwayat]')
             tautan=soup.select('.laporan-nav__jenis a')
             if tab=='proses':
-                assert [o.get_text(strip=True).split(' — ')[0] for o in pilihan.select('option')]==['Penyosohan','Penggilingan','Pengeringan','Transfer']
+                assert [o.get_text(strip=True).split(' — ')[0] for o in pilihan.select('option')]==['Penyosohan','Penggilingan','Pengeringan']
             assert [o['value'] for o in pilihan.select('option[value]:not([disabled])')]==[a['href'] for a in tautan]
             assert pilihan.select_one('option[selected]')['value']==soup.select_one('.laporan-nav__jenis a[aria-current]')['href']
             assert all(not o.has_attr('value') for o in pilihan.select('option[disabled]'))

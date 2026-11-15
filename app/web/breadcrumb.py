@@ -108,6 +108,8 @@ def susun(path,ctx,judul):
         jenis={'gabah-basah':'Gabah basah','gabah-kering':'Gabah kering','pk-hasil-giling':'PK hasil giling','pk-luar':'PK luar','beras-hasil-sosoh':'Beras hasil sosoh'}.get(parts[2],parts[2])
         if len(parts)>3:add(jenis,'/riwayat-qc/'+parts[2]);leaf=kode(ctx,judul)
         else:leaf=jenis
+    elif p.startswith('/riwayat-transfer/'):
+        add('Transfer','/transfer-bertahap?tab=riwayat');leaf=kode(ctx,judul)
     elif any(p==x or p.startswith(x+'/') for x in ('/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan','/riwayat-transfer')):
         riwayat();base='/'+p.split('/')[1];label={'/riwayat-giling':'Riwayat Penggilingan','/riwayat-sosoh':'Riwayat Penyosohan','/riwayat-pengeringan':'Riwayat Pengeringan','/riwayat-transfer':'Riwayat Transfer PK'}[base]
         if p==base:leaf=label

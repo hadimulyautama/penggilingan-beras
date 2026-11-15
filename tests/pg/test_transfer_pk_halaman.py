@@ -1,5 +1,6 @@
 """Alur pada satu halaman; browser sungguhan dengan stok PostgreSQL terisolasi."""
 from contextlib import asynccontextmanager
+import asyncio
 from pathlib import Path
 from urllib.parse import urlsplit
 import pytest
@@ -21,8 +22,9 @@ async def browser_app(pg, *, peran='operator', gudang='Gudang 1', width=390, put
         browser = await pw.chromium.launch()
         page = await browser.new_page(viewport=dict(width=width, height=1000))
         errors, kiriman = [], []
+        inflight = set()
         page.on('pageerror', lambda e: errors.append(str(e)))
-        async def app(route):
+        async def dispatch(route):
             req = route.request
             url = urlsplit(req.url)
             if not req.url.startswith(BASE + '/'):
@@ -43,6 +45,13 @@ async def browser_app(pg, *, peran='operator', gudang='Gudang 1', width=390, put
                     return
             await route.fulfill(status=response.status_code, headers={k:v for k,v in response.headers.items()
                 if k.lower() not in ('content-length', 'content-encoding', 'transfer-encoding')}, body=response.content)
+        async def app(route):
+            task = asyncio.current_task()
+            inflight.add(task)
+            try:
+                await dispatch(route)
+            finally:
+                inflight.discard(task)
         await page.context.add_cookies([dict(name=x.name, value=x.value, url=BASE) for x in client.cookies.jar])
         await page.route('**/*', app)
         try:
@@ -50,6 +59,12 @@ async def browser_app(pg, *, peran='operator', gudang='Gudang 1', width=390, put
             assert not errors, errors
         finally:
             await browser.close()
+            # Penutupan tab bisa mendahului selesainya callback ASGI. Tunggu
+            # agar transaksi baca tidak menahan TRUNCATE uji berikutnya.
+            if inflight:
+                _, pending = await asyncio.wait(inflight, timeout=5)
+                for task in pending:task.cancel()
+                if pending:await asyncio.gather(*pending, return_exceptions=True)
 
 
 @pytest.mark.parametrize('width', [320, 390, 1440])

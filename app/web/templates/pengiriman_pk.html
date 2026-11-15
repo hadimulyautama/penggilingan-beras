@@ -4,6 +4,8 @@
 {% block judul %}Transfer{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/pekerjaan-kontrol.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-daftar-proses.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/pengiriman-pk.css?v={{ VERSI }}&amp;pk-ui=7">
 <div id="transfer-pk" data-csrf="{{ CSRF }}" data-tera="{{ teraflow_url }}" aria-busy="true">
 <h1 class="sr-only">Transfer</h1>
@@ -22,7 +24,7 @@
 <p id="pk-pesan" role="status" aria-live="polite"></p>
 <p id="pk-ringkasan" class="tp-meta"></p>
 <section id="pk-permintaan" aria-label="Permintaan lot"><div id="pk-daftar"></div></section>
-<section id="pk-perjalanan" aria-label="Riwayat transfer" hidden><p class="bantu">Menampilkan hingga 100 transfer terbaru. Jumlah efektif mengikuti koreksi yang sudah disimpan.</p><div id="pk-jalan"></div><div id="pk-audit"></div></section>
+<section id="pk-perjalanan" class="rpd" aria-label="Riwayat transfer" hidden><p class="bantu">Catatan ditampilkan per lot, termasuk catatan lama dan yang dibatalkan. Maksimal 100 pencatatan transfer terbaru; jumlah efektif mengikuti koreksi yang sudah disimpan.</p><div id="pk-history-stats" class="rpd-stats" role="status"></div><div id="pk-jalan"></div><div id="pk-audit"></div></section>
 <div id="pk-pilihan" class="tp-pilihan" hidden><strong id="pk-terpilih"></strong><span id="pk-pilihan-pesan"></span><div class="tp-actions"><button class="btn" type="button" id="pk-bersihkan">Batal pilih</button><button class="btn btn--utama" type="button" id="pk-buka-form"></button></div></div>
 <dialog class="pk-panel" id="pk-filter" aria-labelledby="pk-filter-judul"><form id="pk-filter-form" class="pk-form-filter"><div class="pk-panel-kepala"><h2 id="pk-filter-judul">Filter transfer</h2><button class="btn" type="button" data-tutup aria-label="Tutup filter">×</button></div><label>Status<select class="fld" name="status"></select></label><label>Gudang asal<select class="fld" name="asal"></select></label><label>Tujuan<select class="fld" name="tujuan"></select></label><div class="tp-actions"><button class="btn btn--utama" type="submit">Terapkan filter</button><button class="btn" type="button" id="pk-filter-reset">Tampilkan semua</button></div></form></dialog>
 <dialog class="pk-panel tp-panel-lebar" id="pk-form" aria-labelledby="pk-form-judul"><form id="pk-catatan"><div class="pk-panel-kepala"><h2 id="pk-form-judul"></h2><button class="btn" type="button" data-tutup aria-label="Tutup formulir">×</button></div><p class="bantu" id="pk-form-arahan"></p><div id="pk-form-lot"></div><p id="pk-form-total" class="tp-total" role="status"></p><p id="pk-form-pesan" role="alert"></p><div class="tp-actions"><button class="btn btn--utama" type="submit" id="pk-simpan"></button><button class="btn" type="button" data-tutup>Batal</button></div></form></dialog>

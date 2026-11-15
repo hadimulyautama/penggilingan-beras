@@ -380,7 +380,7 @@ async def test_browser_koreksi_dari_baris_transfer_sampai_neraca(pg, tercatat, w
         await page.context.add_cookies([dict(name=x.name, value=x.value, url=base) for x in c.cookies.jar])
         await page.route('**/*', app)
         await page.goto(base + '/transfer-bertahap?tab=riwayat')
-        await page.locator('#pk-jalan').get_by_role('button', name='Lihat detail', exact=True).click()
+        await page.locator('#pk-jalan [data-detail=transfer]:visible').first.click()
         await page.get_by_role('button', name='Koreksi jumlah', exact=True).click()
         dialog = page.locator('#pk-koreksi')
         await expect(dialog).to_be_visible()

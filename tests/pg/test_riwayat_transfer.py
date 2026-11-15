@@ -159,7 +159,11 @@ async def test_tiga_yang_boleh(pg, pabrik, peran, gudang, lihat):
     finally:
         await c.aclose()
     assert r.status_code == 200, (peran, r.status_code)
-    assert kode in r.text
+    assert r.url.path == '/transfer-bertahap'
+    c = await _klien(pg, peran=peran, gudang=gudang, lihat=lihat)
+    async with c:
+        data = (await c.get('/api/transfer-bertahap')).json()
+    assert any(i['lot'] == kode for j in data['pengiriman'] for i in j['items'])
 
 
 async def test_operator_gudang_dua_ditolak_rutenya_bukan_cuma_pintunya(pg, pabrik):
@@ -189,10 +193,11 @@ async def test_tujuan_silo_dan_ditumpuk_tersebut(pg, pabrik):
         r = await c.get("/riwayat-transfer")
     finally:
         await c.aclose()
-    t = r.text
+    async with await _klien(pg, peran='superadmin') as c:
+        t = str((await c.get('/api/transfer-bertahap')).json())
     assert k1 in t and k2 in t
     assert "Silo A" in t
-    assert "Ditumpuk" in t
+    assert "Tumpukan" in t
 
 
 async def test_transfer_dibatalkan_tetap_tampil_bertanda(pg, pabrik):
@@ -211,9 +216,11 @@ async def test_transfer_dibatalkan_tetap_tampil_bertanda(pg, pabrik):
         r = await c.get("/riwayat-transfer")
     finally:
         await c.aclose()
-    t = r.text
-    assert kode in t
-    assert "Dibatalkan" in t
+    async with await _klien(pg, peran='superadmin') as c:
+        data = (await c.get('/api/transfer-bertahap')).json()
+    rows = [j for j in data['pengiriman'] if any(i['lot'] == kode for i in j['items'])]
+    assert len(rows) == 1 and rows[0]['status'] == 'dibatalkan'
+    assert rows[0]['total_efektif'] == '0'
 
 
 # ═════════════════ 3 · BORONGAN, BUKAN SATU PER KARTU ═════════════════

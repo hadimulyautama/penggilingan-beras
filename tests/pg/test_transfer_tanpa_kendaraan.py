@@ -147,7 +147,7 @@ async def test_browser_cara_transfer_dan_simpan_tanpa_kendaraan(pg,siap,width,pe
    await expect(page.locator('[name=berat_curah_kg]')).to_have_value('2.00')
   await page.locator('#pk-form').get_by_role('button',name='Catat transfer · 1 lot',exact=True).click()
   await expect(page.locator('#pk-pesan')).to_contain_text('Stok asal dan tujuan sudah diperbarui.')
-  await expect(page.locator('#pk-jalan')).to_contain_text('Transfer #')
+  await expect(page.locator('#pk-jalan')).to_contain_text('TRF-')
   # Rincian transfer sekarang tersedia; jalur generik tetap tanpa tautan timbang.
   assert await page.locator('#pk-jalan a[href*="/timbangan/"]').count()==0
   assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')

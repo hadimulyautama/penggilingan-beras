@@ -16,7 +16,7 @@ def kembali_aman(nilai):
     try:u=urlsplit(nilai or '')
     except ValueError:return ''
     return nilai if not u.scheme and not u.netloc and u.path in (
-        '/pekerjaan','/stok','/stok/pk/detail','/stok-pk-jasa','/riwayat-transfer','/kabar') else ''
+        '/transfer-bertahap','/pekerjaan','/stok','/stok/pk/detail','/stok-pk-jasa','/riwayat-transfer','/kabar') else ''
 
 
 async def tampilkan(request, akun, *, transfer_id=None, permintaan_id=None):
@@ -51,13 +51,13 @@ async def tampilkan(request, akun, *, transfer_id=None, permintaan_id=None):
     if gagal:tab='riwayat'
     if tab not in ('ringkasan','bahan','permintaan','riwayat'):tab='ringkasan'
     konteks_kembali=kembali_aman(request.query_params.get('kembali_kerja') or getattr(request.state,'kembali_koreksi',None))
-    kembali=konteks_kembali or ('/riwayat-transfer' if t else '/pekerjaan')
+    kembali=konteks_kembali or ('/transfer-bertahap?tab=riwayat' if t else '/pekerjaan')
     alamat=f'/riwayat-transfer/{transfer_id}' if transfer_id is not None else f'/permintaan-pk/{permintaan_id}'
     detail_url=request.url.replace(path=alamat)
     if konteks_kembali:detail_url=detail_url.include_query_params(kembali_kerja=konteks_kembali)
     return await render_laci(request,'detail_transfer.html',d=d,tab_transfer=tab,tindakan=tindakan,
         izin_tindakan={id_:a.get('boleh',False) for id_,a in menu.items()},
-        kembali=kembali,layar='riwayat_transfer' if t else 'pekerjaan',breadcrumb_detail=d['kode'],
+        kembali=kembali,layar='transfer_pk' if t else 'pekerjaan',breadcrumb_detail=d['kode'],
         boleh_koreksi=akun.is_admin and t is not None,penghalang_koreksi=penghalang,
         catatan_penghalang=catatan_penghalang,hasil_awal=float(t.berat_kg) if t else None,
         hasil_koreksi=request.query_params.get('koreksi')=='berhasil',gagal_koreksi=gagal,

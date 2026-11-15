@@ -13,8 +13,8 @@ PROSES = (
     ("sosoh", "Penyosohan", "/riwayat-sosoh", "g2"),
     ("giling", "Penggilingan", "/riwayat-giling", "g1"),
     ("pengeringan", "Pengeringan", "/riwayat-pengeringan", "g1"),
-    ("transfer", "Transfer", "/riwayat-transfer", "g1"),
 )
+PROSES_PORTAL = (*PROSES, ("transfer", "Transfer", "/riwayat-transfer", "g1"))
 QC = (
     ("gabah-basah", "Gabah basah", "/riwayat-qc/gabah-basah", "g1"),
     ("gabah-kering", "Gabah kering", "/riwayat-qc/gabah-kering", "g1"),
@@ -27,7 +27,7 @@ QC = (
 async def pilihan(akun):
     from app.web.portal.security import CustomerReader
     if isinstance(akun.user,CustomerReader):
-        return {"laporan":[("laporan","Laporan","/laporan",None)],"proses":[x for x in PROSES if x[3]!='semua'],"qc":list(QC),"audit":[("audit","Transfer kepemilikan","/audit",None)]}
+        return {"laporan":[("laporan","Laporan","/laporan",None)],"proses":list(PROSES_PORTAL),"qc":list(QC),"audit":[("audit","Transfer kepemilikan","/audit",None)]}
     # Gerbang yang sama dengan halaman lama, memakai peran/gudang efektif.
     from app.web.api import _is_milling_operator, _is_polishing_operator,_is_drying_operator
     izin = {"g1": await _is_milling_operator(akun.user) or await _is_drying_operator(akun.user),
@@ -43,7 +43,7 @@ def bagian(path):
     if path == "/laporan": return "laporan"
     if path == "/audit": return "audit"
     if path.startswith("/riwayat-qc/"): return "qc"
-    if any(path == x[2] or path.startswith(x[2] + "/") for x in PROSES):
+    if any(path == x[2] or path.startswith(x[2] + "/") for x in PROSES_PORTAL):
         return "proses"
     return None
 
@@ -52,6 +52,11 @@ async def siapkan(request: Request, konteks: dict):
     aktif = bagian(request.url.path)
     akun = getattr(request.state, "akun", None)
     if not aktif or not akun: return
+    from app.web.portal.security import CustomerReader
+    portal = isinstance(akun.user, CustomerReader)
+    if request.url.path.startswith('/riwayat-transfer') and not portal:
+        konteks['MENU_AKTIF'] = 'transfer_pk'
+        return
     opsi = await pilihan(akun)
     judul = {"laporan": "Laporan periode", "proses": "Riwayat proses",
              "qc": "Riwayat QC", "audit": "Audit aktivitas"}
@@ -70,7 +75,7 @@ async def siapkan(request: Request, konteks: dict):
         "aktif": aktif, "judul": judul[aktif], "jenis": jenis, "detail": detail,"panduan":panduan,
         "tab": [{"kunci": k, "nama": n, "href": opsi[k][0][2] if opsi[k] else "",
                  "boleh": bool(opsi[k]),"alamat":[x[2] for x in opsi[k]]} for k, n in TAB if k!='laporan'],
-        "pilihan": list(PROSES if aktif == "proses" else QC) if aktif in ("proses", "qc") else [],
+        "pilihan": list((PROSES_PORTAL if portal else PROSES) if aktif == "proses" else QC) if aktif in ("proses", "qc") else [],
         "boleh_alamat": [x[2] for x in opsi[aktif]],
     }
 
@@ -81,6 +86,10 @@ async def masuk(request: Request, tab: str | None = None, jenis: str = "",
                 akun=Depends(butuh_akun)):
     """Pintu baru; URL lama tetap menjadi halaman sumber dan penjaga izin."""
     opsi = await pilihan(akun)
+    if tab == 'proses' and jenis == 'transfer':
+        from app.web.portal.security import CustomerReader
+        if not isinstance(akun.user, CustomerReader):
+            return RedirectResponse('/transfer-bertahap?tab=riwayat', status_code=303)
     if tab == 'proses' and jenis == 'retur-supplier':
         params = [(k,v) for k,v in request.query_params.multi_items() if k not in ('tab','jenis')]
         return RedirectResponse('/riwayat-retur-supplier' + ('?' + urlencode(params) if params else ''), status_code=303)
