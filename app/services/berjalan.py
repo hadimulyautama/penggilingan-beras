@@ -824,6 +824,35 @@ async def _asal_banyak(db, per_kartu):
             for key, batch_ids in per_kartu.items()}
 
 
+async def _asal_lot_banyak(db, lots):
+    """Asal kartu dryer bersama, tetap melalui model batch tersaring.
+
+    Pendinginan bisa memuat banyak lot. Membaca seluruh objek batch lalu
+    asalnya sekali lagi per lot mengulang query yang sama. Join ke model
+    PurchaseBatch tetap diperlukan agar cermin batal tidak ikut terpetakan.
+    Label, bobot, pemilik dan urutan tetap disusun oleh helper asal lama.
+    """
+    from app.models import DryingLotBatch
+    per_lot = {lot.id: [] for lot in lots}
+    if not per_lot:
+        return {}
+    if len(per_lot) == 1:
+        # Rincian lot dapat memakai lagi objek batch pada permintaan yang
+        # sama. Satu lot tetap memakai pembaca lama agar tak menambah query.
+        from app.penggilingan.gudang1.services.drying import _lot_batches
+        lid = next(iter(per_lot))
+        return {lid: await _asal(db, [x.id for x in await _lot_batches(db, lid)])}
+    sumber = (await db.execute(
+        select(DryingLotBatch.drying_lot_id, PurchaseBatch.id)
+        .select_from(DryingLotBatch)
+        .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
+        .where(DryingLotBatch.drying_lot_id.in_(list(per_lot)))
+    )).all()
+    for lid, bid in sumber:
+        per_lot[lid].append(bid)
+    return await _asal_banyak(db, per_lot)
+
+
 #: Sebanyak-banyaknya baris asal yang ditampilkan satu kartu. Sesudah daftarnya
 #: dibatasi pada isian berjalan (23 Sep 2026) batas ini jarang menggigit —
 #: tetapi bila menggigit, jumlah yang tak tampil DISEBUT, bukan didiamkan.
@@ -1989,8 +2018,9 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False, user=None) 
     dingin=await _lot(db, pendinginan_selesai=True)
     pendinginan=await _lot(db, pendinginan_selesai=False)
     bobot_dryer=await untuk_lot_banyak(db,[*dingin,*pendinginan])
+    asal_dryer=await _asal_lot_banyak(db,[*dingin,*pendinginan])
     for lot in dingin:
-        asal = await _asal(db, [x.id for x in await _lot_batches(db, lot.id)])
+        asal = asal_dryer[lot.id]
         b.transit.append(Baris(
             kode=lot.kode_lot, bobot_pengeringan=[bobot_dryer[lot.id]],
             isi="sudah dingin, dryer perlu dikosongkan",
@@ -2012,7 +2042,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False, user=None) 
         ))
 
     for lot in pendinginan:
-        asal = await _asal(db, [x.id for x in await _lot_batches(db, lot.id)])
+        asal = asal_dryer[lot.id]
         b.berjalan.append(Baris(
             kode=lot.kode_lot, bobot_pengeringan=[bobot_dryer[lot.id]],
             isi="pengeringan selesai, sedang didinginkan",
