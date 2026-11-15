@@ -80,7 +80,7 @@
 }
 @media print{
  body:has(#transfer-pk) :is(.laci,.bar,.desktop-chrome,.tp-keterangan .tp-actions,.tp-aksi,.tp-pilih,.tp-pilihan,dialog,#pk-pesan,#kabar,#lembar,.bawah,.segar){display:none!important}
- #transfer-pk::before{content:'Transfer PK';display:block;font-size:24px;font-weight:600;margin-bottom:16px}
+ #transfer-pk::before{content:'Transfer';display:block;font-size:24px;font-weight:600;margin-bottom:16px}
  #transfer-pk .tp-row{display:block;break-inside:avoid;padding:12px 0}
  #transfer-pk .tp-row>*{margin-bottom:8px}#transfer-pk .tp-badge{border:1px solid currentColor}
  #transfer-pk [hidden]{display:none!important}

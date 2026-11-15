@@ -9,7 +9,7 @@ const status={perlu_transfer:'Siap / sebagian',diminta:'Menunggu Admin',disetuju
 let data,busy=false,decision,formAktif=null,pendingPayload=null;
 const pilihan=new Set(),qawal=new URLSearchParams(location.search);
 let tab=qawal.get('tab')==='riwayat'||qawal.has('pengiriman')||location.hash.startsWith('#perjalanan-')?'riwayat':'permintaan';
-const filters={permintaan:{status:null,asal:'',tujuan:''},riwayat:{status:'',asal:'',tujuan:''}};
+const filters={permintaan:{status:'',asal:'',tujuan:''},riwayat:{status:'',asal:'',tujuan:''}};
 for(const k of ['status','asal','tujuan'])if(qawal.has(k))filters[tab][k]=qawal.get(k);
 $('#pk-cari').value=(qawal.get('cari')||'').slice(0,200);
 async function api(path,body){
@@ -68,7 +68,7 @@ function selected(){
 }
 async function load(){
  if(busy)return;busy=true;root.setAttribute('aria-busy','true');$('#pk-muat').disabled=true;
- try{data=await api('');if(filters.permintaan.status===null)filters.permintaan.status=data.admin?'diminta':data.boleh_kirim?'perlu_transfer':'';render();pesan('Status diperbarui.');return true}catch(e){pesan(e.message,true);return false}finally{busy=false;root.setAttribute('aria-busy','false');$('#pk-muat').disabled=false}
+ try{data=await api('');render();pesan('Status diperbarui.');return true}catch(e){pesan(e.message,true);return false}finally{busy=false;root.setAttribute('aria-busy','false');$('#pk-muat').disabled=false}
 }
 function bukaDetail(jenis,id){
  const r=jenis==='permintaan'?data.permintaan.find(x=>x.id===id):data.pengiriman.find(x=>x.id===id);if(!r)return;
@@ -148,7 +148,7 @@ $('#pk-catatan').addEventListener('submit',async e=>{
  busy=true;$('#pk-simpan').disabled=true;kunciForm(true);$('#pk-form-pesan').textContent='Menyimpan…';
  try{
   const result=await api(m==='setujui'?'/setujui':'/pengiriman',body);pendingPayload=null;$('#pk-form').close();busy=false;
-  if(m==='setujui')filters.permintaan.status='siap';else tab='riwayat';
+  if(m==='kirim')tab='riwayat';
   const fresh=await load();urlSimpan();pesan((m==='setujui'?'Permintaan dipilih telah disetujui.':`Transfer #${result.id} tercatat. Stok asal dan tujuan sudah diperbarui.`)+(fresh?'':' Daftar belum diperbarui. Tekan Perbarui status.'),!fresh);
  }catch(err){
   // Sesudah balasan terputus, payload dikunci untuk pengulangan idempoten.

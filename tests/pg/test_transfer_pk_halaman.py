@@ -54,17 +54,17 @@ async def browser_app(pg, *, peran='operator', gudang='Gudang 1', width=390, put
 
 @pytest.mark.parametrize('width', [320, 390, 1440])
 @pytest.mark.parametrize('peran,gudang,jumlah,status', [
-    ('admin', None, 1, 'Menunggu Admin'),
-    ('operator', 'Gudang 1', 1, 'Siap / sebagian'),
+    ('admin', None, 2, 'Semua status'),
+    ('operator', 'Gudang 1', 2, 'Semua status'),
     ('operator', 'Gudang 2', 2, 'Semua status'),
-    ('superadmin', None, 1, 'Menunggu Admin'),
+    ('superadmin', None, 2, 'Semua status'),
 ])
 async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang, jumlah, status):
     from playwright.async_api import expect
     await lot_lain(pg, siap)
     async with browser_app(pg, peran=peran, gudang=gudang, width=width) as (page, _, _):
         await page.goto(BASE + '/pekerjaan')
-        link = page.locator('#laci').get_by_role('link', name='Transfer PK', exact=True)
+        link = page.locator('#laci').get_by_role('link', name='Transfer', exact=True)
         if not await link.is_visible():
             await page.get_by_role('button', name='Buka menu', exact=True).click()
         await link.click()
@@ -74,6 +74,11 @@ async def test_menu_tab_filter_dan_cakupan_peran(pg, siap, width, peran, gudang,
         await expect(page.locator('#laci a[href="/transfer-bertahap"]')).to_have_attribute('aria-current', 'page')
         await expect(page.locator('.pintu__ikon--transfer_pk svg')).to_have_count(1)
         assert await page.locator('.kontrol-tab__item').first.evaluate('e=>e.getBoundingClientRect().height') == 64
+        await page.get_by_role('button', name='Filter', exact=False).click()
+        await expect(page.locator('#pk-filter [name=status]')).to_have_value('')
+        await page.locator('#pk-filter [name=status]').select_option('siap')
+        await page.get_by_role('button', name='Terapkan filter', exact=True).click()
+        await expect(page.locator('#pk-daftar article')).to_have_count(1)
         await page.get_by_role('button', name='Filter', exact=False).click()
         await page.locator('#pk-filter [name=status]').select_option('')
         await page.get_by_role('button', name='Terapkan filter', exact=True).click()
