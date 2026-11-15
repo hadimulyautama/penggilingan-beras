@@ -21,7 +21,13 @@ class BantuanError(ValueError):pass
 
 def json_(x):return json.dumps(x,sort_keys=True,ensure_ascii=False,separators=(',',':'))
 def hash_(x):return hashlib.sha256(x.encode()).hexdigest()
-def sidik(x):return hash_(json_({k:v for k,v in x.items() if k!='terakhir_login'}))
+def sidik(x,aksi=None):
+    abaikan={'terakhir_login'}
+    # Membuka penahanan atau mengaktifkan satu keanggotaan tidak mengubah
+    # akun bersama di perusahaan lain; perubahan mereka tidak boleh
+    # menghambat bantuan lokal yang sudah ditinjau dengan benar.
+    if aksi in ('buka_penahanan','aktifkan_keanggotaan'):abaikan.add('keanggotaan_lintas')
+    return hash_(json_({k:v for k,v in x.items() if k not in abaikan}))
 
 
 async def pelaku(db,uid):
@@ -98,7 +104,7 @@ async def pratinjau(db,*,cid,jenis,aid,pelaku_id,aksi,alasan):
     a=await m.akun(db,cid,jenis,aid)
     if aksi not in tindakan(a):raise BantuanError('Tindakan tidak tersedia pada keadaan akun sekarang.')
     plan=RencanaBantuan(id=str(uuid.uuid4()),company_id=cid,pelaku_id=pelaku_id,jenis_akun=jenis,akun_id=aid,aksi=aksi,
-        alasan=alasan,sidik=sidik(a),sebelum=json_(a),kedaluwarsa=m.sekarang()+timedelta(minutes=10))
+        alasan=alasan,sidik=sidik(a,aksi),sebelum=json_(a),kedaluwarsa=m.sekarang()+timedelta(minutes=10))
     db.add(plan);await db.flush()
     return dict(id=plan.id,company_id=cid,jenis=jenis,akun_id=aid,nama=a['nama'],username=a['username'],aksi=aksi,
                 alasan=alasan,sebelum=a,kedaluwarsa=plan.kedaluwarsa.isoformat(),berdampak_sesi=aksi=='cabut_sesi')
@@ -131,9 +137,13 @@ async def _cabut(db,a,*,hash_baru=None):
 
 
 async def _audit(db,a,uid,aksi,reason,before,after):
+    # Audit umum tetap lokal; rincian lintas perusahaan hanya pada pratinjau
+    # Console Sistem. Sidik mencatat cakupan tanpa membocorkan perusahaan lain.
+    def lokal(x):
+        return dict(aksi=aksi,akun={k:v for k,v in x.items() if k!='keanggotaan_lintas'},cakupan_sidik=sidik(x))
     # Hash sandi dan cap pemulihan tidak pernah dimasukkan ke audit.
     db.add(ActivityLog(table_name='console_bantuan_akun',record_id=a['id'],action='UPDATE',
-        field_name=f"{a['company_id']}:{a['jenis']}:{a['id']}",old_value=json_(dict(aksi=aksi,akun=before)),new_value=json_(dict(aksi=aksi,akun=after)),
+        field_name=f"{a['company_id']}:{a['jenis']}:{a['id']}",old_value=json_(lokal(before)),new_value=json_(lokal(after)),
         changed_by=uid,alasan_perubahan=reason,aksi='console_bantuan'))
     await db.flush()
 
@@ -148,14 +158,14 @@ async def terapkan(db,*,cid,jenis,aid,pelaku_id,plan_id):
     # Urutan induk -> akun/anggota sama dengan writer master/keanggotaan.
     if plan.aksi=='aktifkan_keanggotaan':await _perusahaan_aktif(db,cid)
     a=await m.akun(db,cid,jenis,aid,kunci=True)
-    if sidik(a)!=plan.sidik:
+    if sidik(a,plan.aksi)!=plan.sidik:
         # Pratinjau sepuluh menit dari rilis lama menyertakan waktu login.
         # Terima hanya snapshot lama yang hash aslinya utuh dan seluruh
         # keadaan keamanan terkini tetap sama.
         try:lama=json.loads(plan.sebelum)
         except (ValueError,TypeError):lama={}
         if not isinstance(lama,dict):lama={}
-        if hash_(plan.sebelum)!=plan.sidik or sidik(a)!=sidik(lama):
+        if hash_(plan.sebelum)!=plan.sidik or sidik(a,plan.aksi)!=sidik(lama,plan.aksi):
             raise BantuanError('Keadaan akun berubah. Buat pratinjau baru sebelum menerapkan.')
     if plan.aksi not in tindakan(a):raise BantuanError('Tindakan tidak tersedia lagi.')
     result=dict(sudah=False,aksi=plan.aksi)

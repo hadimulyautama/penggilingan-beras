@@ -69,3 +69,22 @@ yang sedang berlaku melalui keanggotaan asal. Pesan menyebut perusahaan dan
 produk yang perlu ditetapkan eksplisit terlebih dahulu. Setelah penetapan
 eksplisit disimpan, penugasan kedua dapat dilanjutkan; operator asal tetap
 diizinkan dan perusahaan baru tidak mendapat izin produk otomatis.
+
+
+### Konteks pemulihan akun lintas perusahaan
+
+Pratinjau pemulihan sandi, pengakhiran sesi dan aktivasi akun bersama
+menyertakan seluruh keanggotaan serta izin produk pengguna. Penambahan,
+pencabutan atau perubahan izin pada perusahaan lain mewajibkan pratinjau baru
+sebelum tindakan global diterapkan. Tidak ada izin yang disalin atau
+dipulihkan otomatis. Akun portal/profil tanpa pengguna bersama tetap lokal.
+
+Aktivasi satu keanggotaan dan pembukaan penahanan tetap terikat perusahaan
+asal; perubahan izin perusahaan lain tidak menghambat bantuan lokal ini.
+Halaman pemulihan publik hanya menerima identitas tampilan yang sudah ada,
+tanpa daftar keanggotaan/perizinan perusahaan lain. Cap yang sudah diterbitkan
+tetap sekali pakai; mengganti sandi tidak mengaktifkan kembali izin produk
+yang dicabut sesudah cap diterbitkan. Tidak ada migrasi atau backfill.
+
+Audit umum menyimpan identitas lokal dan sidik cakupan; nama, keanggotaan dan
+izin perusahaan lain hanya tersedia dalam pratinjau Console Sistem.

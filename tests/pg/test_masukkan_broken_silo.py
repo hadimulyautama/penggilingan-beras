@@ -524,12 +524,13 @@ async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemas
             db, user=u, kode=proses.proc.kode_proses, nama_silos=["C"])
         assert ditambah.berat_awal_total == 77
 
-        bahan = 10_077.0
+        # Hasil timbang sintetis mengikuti ketelitian stok 0,01 kg.
+        # Persentase sasaran tidak selalu menghasilkan bobot dua desimal.
         hasil = {
-            "bekatul": bahan * 0.12,
-            "reject": bahan * 0.015,
-            "menir": bahan * 0.01,
-            "medium": bahan * 0.835,
+            "bekatul": 1209.24,
+            "reject": 151.16,
+            "menir": 100.77,
+            "medium": 8414.30,
         }
         for jenis, kg in hasil.items():
             await catat_output(db, user=u, kode=proses.proc.kode_proses,
