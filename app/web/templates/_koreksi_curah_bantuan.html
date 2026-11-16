@@ -1,0 +1,17 @@
+{% if not perjalanan.portal and perjalanan.status == 'Terverifikasi' %}
+{% import '_stok.html' as st with context %}
+{% for p in perjalanan.pelanggan %}
+{% set curah = p.barang|selectattr('tipe','equalto','byproduct_curah')|selectattr('aktual','gt',0)|list %}
+{% if p.rec.status == 'selesai' and curah %}
+<section class="rk" data-bantuan-koreksi-curah aria-labelledby="bantu-curah-{{ p.rec.id }}"><div class="rk-panel">
+<h2 id="bantu-curah-{{ p.rec.id }}">Jumlah curah tercatat salah?</h2>
+<p>Hubungi <strong>Admin atau Super Admin</strong> yang menangani pengiriman <strong>{{ p.rec.kode }}</strong> untuk memeriksa koreksi pencatatan.</p>
+<details data-curah-langkah><summary>Lihat langkah dan bukti yang perlu disiapkan</summary>
+<ol><li>Siapkan kode <strong>{{ p.rec.kode }}</strong> dan item berikut: {% for b in curah %}{{ b.nama }} (item #{{ b.id }}, tercatat {{ st.kg_rinci(b.aktual) }} kg){% if not loop.last %}; {% endif %}{% endfor %}.</li>
+<li>Sampaikan jumlah yang benar dalam kg, alasan koreksi, serta bukti timbang atau dokumen yang menunjukkan kesalahan pencatatan.</li>
+<li>Admin/Super Admin membuka detail pengiriman ini → <strong>Perbaiki pengiriman</strong> → <strong>Koreksi pengiriman terverifikasi</strong>, lalu memeriksa dampak saldo sebelum menyimpan.</li></ol>
+<p>Gunakan koreksi untuk catatan yang salah. Jika barang benar-benar kembali, gunakan retur; jangan membuat retur untuk menutup salah input.</p>
+{% if boleh_perbaiki %}<p><a class="btn" data-curah-perbaikan href="/barang-keluar/{{ p.rec.id }}/perbaikan?{{ filter_query }}#perbaikan-{{ p.rec.id }}" data-utuh>Buka perbaikan pengiriman {{ p.rec.kode }}</a></p>
+{% else %}<p data-curah-handoff>Sampaikan informasi di atas kepada Admin/Super Admin melalui komunikasi yang biasa digunakan. Petunjuk ini tidak mengirim pengajuan.</p>{% endif %}
+</details></div></section>
+{% endif %}{% endfor %}{% endif %}
