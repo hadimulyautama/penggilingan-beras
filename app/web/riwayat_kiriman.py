@@ -46,7 +46,7 @@ async def baca(db,rec,*,scope=None,boleh_retur=False):
             sent=Decimal(i.jumlah_karung or 0) if bag else a
             key='karung' if bag else 'kg'
             balance=None if usage is None else dict(diterima=usage['diterima_'+key],tertunda=usage[key]-usage['diterima_'+key],sisa=max(sent-usage[key],0),satuan='karung' if bag else 'kg')
-            barang.append(dict(id=i.id,nama=nama.get(i.id,'Barang historis'),mutu=mutu.get(i.rice_quality_standard_id),pemilik=pemilik.get(i.jasa_id,'Milik pabrik'),gudang=gudang.get(bk.GUDANG_ITEM.get(i.item_type),'Gudang belum tercatat'),perintah=p,aktual=a,tidak_terkirim=max(p-a,0) if p is not None else None,karung_perintah=i.jumlah_karung_perintah,karung_aktual=i.jumlah_karung,saldo=balance))
+            barang.append(dict(id=i.id,tipe=i.item_type,nama=nama.get(i.id,'Barang historis'),mutu=mutu.get(i.rice_quality_standard_id),pemilik=pemilik.get(i.jasa_id,'Milik pabrik'),gudang=gudang.get(bk.GUDANG_ITEM.get(i.item_type),'Gudang belum tercatat'),perintah=p,aktual=a,tidak_terkirim=max(p-a,0) if p is not None else None,karung_perintah=i.jumlah_karung_perintah,karung_aktual=i.jumlah_karung,saldo=balance))
         close=terakhir(r.id,'barang_keluar_muat');verify=terakhir(r.id,'barang_keluar_verifikasi')
         metode=('otomatis' if verify and ' · otomatis ±0,2% setelah tara' in (verify.new_value or '') else 'manual' if verify else 'tidak tercatat')
         related=[dict(rincian=a,penerimaan=receipts.get(a.customer_return_id),berat=sum((Decimal(m['berat_kg']) for m in a.muatan),Decimal(0))) for a in applications if a.outgoing_record_id==r.id]

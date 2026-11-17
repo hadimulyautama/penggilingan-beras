@@ -2,6 +2,7 @@
 {% block judul %}Riwayat pengiriman · {{ perjalanan.rec.kode }}{% endblock %}
 {% block isi %}
 {% if boleh_perbaiki %}<p><a class="btn" href="/barang-keluar/{{ perjalanan.rec.id }}/perbaikan?{{ filter_query }}" data-utuh>Perbaiki pengiriman</a></p>{% endif %}
+{% include '_koreksi_curah_bantuan.html' %}
 {% include '_riwayat_kiriman.html' %}
 {% if boleh_perbaiki %}<section><h2>Koreksi pascaverifikasi</h2>{% for p in perjalanan.pelanggan %}
 {% if p.rec.status == 'selesai' %}<p><a class="btn" href="/barang-keluar/{{ p.rec.id }}/koreksi-selesai" data-utuh>Koreksi {{ p.rec.kode }} · {{ p.nama }}</a></p>{% endif %}
