@@ -23,9 +23,9 @@
 {% endcall %}
 </main>
 <script id="sosoh-awal" type="application/json">{{ awal|tojson }}</script>
-<link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?kb=20261104.auto1">
-<script src="/static/koreksi-bahan-berjalan.js?kb=20261104.auto1&amp;sr=20261108.operator2" defer></script>
-<script src="/static/koreksi-di-detail.js?v={{ VERSI }}&amp;sr=20261108.operator2" defer></script>
+<link rel="stylesheet" href="/static/koreksi-bahan-berjalan.css?v={{ VERSI }}">
+<script src="/static/koreksi-bahan-berjalan.js?v={{ VERSI }}" defer></script>
+<script src="/static/koreksi-di-detail.js?v={{ VERSI }}" defer></script>
 <script src="/static/sosoh-desain.js?v={{ VERSI }}&amp;sr=20261108.operator2" defer></script>
 <script src="/static/sosoh-ringkas.js?v={{ VERSI }}&amp;sr=20261108.operator2" defer></script>
 {% if not PORTAL_READ_ONLY and akun.is_admin and MUTU_AKTIF %}<script src="/static/qc-sosoh.js?v={{ VERSI }}" defer></script>{% endif %}
