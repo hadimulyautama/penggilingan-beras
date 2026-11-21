@@ -65,7 +65,8 @@ async def test_preview_1900_persiapan350_silo1350_replay(pg,spill,monkeypatch,de
         prepared=(await db.scalars(select(ByproductStock).where(ByproductStock.id.in_([a.record_id for a in audit])))).all()
         assert len(prepared)==2 and all(r.jasa_id is None and r.warehouse_id==spill['warehouse'] for r in prepared)
         assert await db.scalar(select(func.count()).select_from(Peristiwa).where(Peristiwa.jenis=='kiriman_hasil_samping_silo'))==1
-    (Path(os.environ['PHASE_OUT'])/f'plan-proof-{decimal_pending}.json').write_text(json.dumps(d,ensure_ascii=False,indent=2))
+    out=Path(os.environ.get('PHASE_OUT', 'bukti/broken-silo'));out.mkdir(parents=True,exist_ok=True)
+    (out/f'plan-proof-{decimal_pending}.json').write_text(json.dumps(d,ensure_ascii=False,indent=2))
 
 @pytest.mark.parametrize('stage',['after_preparation','receipt_audit'])
 async def test_gagal_menggulung_persiapan_dan_retry_satu_commit(pg,spill,monkeypatch,stage):
@@ -128,18 +129,26 @@ async def test_lokasi_dan_hak_lain_tidak_menutup_defisit(pg,spill):
         assert d['saldo']['total']==1900 and d['rencana']['pembukuan_kg']==350
         assert {x['proc_id'] for x in d['rencana']['pembukuan_sumber']}=={spill['proc_id'],spill['proc_2150']}
 
-async def test_perintah_kemasan_campuran_ditahan_tanpa_membuka_karung(pg,spill):
+async def test_perintah_kemasan_tetap_utuh_saat_hasil_mesin_cukup(pg,spill):
     from tests.pg.test_masukkan_broken_silo import _kemas
+    from app.models import OutgoingItem, BrokenKarungDibongkar
     await _kemas(pg,spill,jumlah_karung=1)
     async with pg() as db:
         sku=await db.scalar(select(FinishedGoodsStock));rec=await db.get(OutgoingRecord,spill['order'])
         await buat_perintah(db,user=await db.get(User,spill['user']),pelanggan_id=rec.pelanggan_id,
             baris=[BarisPerintah(tipe='finished_goods',sku_id=sku.product_sku_id,std_id=sku.rice_quality_standard_id,jumlah_karung=1)],no_polisi='AD 3456 XY')
-    async with await _klien(pg,spill['user'],'broken-spill-pack-held') as c:
+    async with await _klien(pg,spill['user'],'broken-spill-pack-free') as c:
         before=await sidik(pg)
+        d=(await c.get('/api/actions/rincian-broken-silo',params=dict(proses='pemilik|pabrik',berat_kg=1350,silo='C'))).json()
+        assert d['saldo']['total']==1850 and d['saldo']['karung']==0
         r=await c.post('/api/actions/masukkan-broken-silo',json=dict(proses='pemilik|pabrik',silo='C',berat_kg=1350,kunci_kiriman=uuid4().hex),headers={'X-CSRF-Token':cap_formulir(c)})
-        assert r.status_code==400 and 'perintah kemasan' in r.text,r.text
-        assert await sidik(pg)==before
+        assert r.status_code==200,r.text
+        after=await sidik(pg)
+        for table in ['outgoing_records','outgoing_items','finished_goods_stock','polishing_output_logs']:
+            assert after[table]==before[table]
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(BrokenKarungDibongkar))==0
+        assert (await tersedia(db,BarisPerintah(tipe='byproduct_curah',jenis='broken')))[0]==500
 
 async def test_sumber_legacy_tidak_meminjam_hasil_proses_lain(pg,spill):
     async with await _klien(pg,spill['user'],'broken-spill-legacy') as c:

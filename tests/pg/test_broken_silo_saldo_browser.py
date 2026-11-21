@@ -54,4 +54,4 @@ async def test_saldo_terbaru_isian_utuh_dan_keyboard(pg,foto,role,width):
             assert await sidik(pg)==before
             await page.locator('#f_berat_kg').focus();await expect(page.locator('#f_berat_kg')).to_be_focused()
             assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
-            out=Path(os.environ['PHASE_OUT']);await page.screenshot(path=str(out/f'form-{role}-{width}.png'),full_page=True)
+            out=Path(os.environ.get('PHASE_OUT', 'bukti/broken-silo'));out.mkdir(parents=True,exist_ok=True);await page.screenshot(path=str(out/f'form-{role}-{width}.png'),full_page=True)

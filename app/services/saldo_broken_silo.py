@@ -11,11 +11,29 @@ async def curah_bebas(db, row):
 
 
 async def karung_bebas(db, row):
-    from app.penggilingan.inventory.finished_goods import sisa_karung_per_sumber
-    # Pembaca yang sudah dipakai writer: FIFO pengeluaran/lokasi dan retur.
-    rows = await sisa_karung_per_sumber(db, row.product_sku_id,
-        row.rice_quality_standard_id, jasa_id=row.jasa_id, source_type=None)
-    return max(0, min(int(row.jumlah_karung or 0), next((n for r,n,_ in rows if r.id==row.id),0)))
+    from app.models import OutgoingItem, OutgoingRecord
+    from app.penggilingan.gudang2.rencana_beras import sumber_karung_beras
+    from app.penggilingan.gudang2.service import Gudang2Error
+    wid = await db.scalar(select(lokasi(FinishedGoodsStock)).where(FinishedGoodsStock.id == row.id))
+    # Pembaca existing mengurangi pengeluaran dan retur per sumber/gudang.
+    # Perintah SKU masih berupa karung utuh: alokasikan SATU KALI menurut
+    # FIFO yang sama, sebelum menyaring proses/baris yang akan dibongkar.
+    rows, _ = await sumber_karung_beras(db, row.product_sku_id,
+        row.rice_quality_standard_id, row.jasa_id, warehouse_id=wid)
+    pending = (await db.execute(select(OutgoingItem.jumlah_karung_perintah, OutgoingItem.jumlah_karung)
+        .join(OutgoingRecord).where(OutgoingRecord.status == 'perintah',
+            OutgoingItem.item_type == 'finished_goods', OutgoingItem.product_sku_id == row.product_sku_id,
+            OutgoingItem.rice_quality_standard_id == row.rice_quality_standard_id,
+            OutgoingItem.jasa_id == row.jasa_id, lokasi(OutgoingItem) == wid))).all()
+    if any(int(a or 0) < int(b or 0) for a, b in pending):
+        raise Gudang2Error('Saldo perintah kemasan broken perlu ditinjau Admin; transaksi tidak tersimpan.')
+    held = sum(int(a or 0) - int(b or 0) for a, b in pending)
+    for candidate, n, _ in rows:
+        take = min(n, held)
+        held -= take
+        if candidate.id == row.id:
+            return max(0, min(int(row.jumlah_karung or 0), n - take))
+    return 0
 
 
 async def proses(db, proc, owner, wid, *, prep=None):
@@ -92,15 +110,11 @@ async def persiapan(db, owner, wid, procs):
     need=max(0.0,used+pending-physical)
     if need<=0.5:
         return dict(defisit_kg=0.0,items=[],belum_tertutup_kg=0.0)
-    # Supplier holds are source-bound. A curah debt cannot silently move them
-    # onto output logs. Likewise, pending FG retains its SKU/bag contract.
-    fg_pending=float(await db.scalar(select(func.coalesce(func.sum(
-        OutgoingItem.berat_perintah_kg-OutgoingItem.berat_kg),0))
-        .join(OutgoingRecord).join(ProductSku,ProductSku.id==OutgoingItem.product_sku_id)
-        .where(OutgoingRecord.status=='perintah',OutgoingItem.item_type=='finished_goods',
-            ProductSku.kategori=='broken',milik(OutgoingItem.jasa_id),lokasi(OutgoingItem)==wid)))
-    if supplier_held>0.5 or fg_pending>0.5:
-        raise Gudang2Error('Rencana hasil mesin ditahan: ada alokasi retur atau perintah kemasan yang perlu ditinjau Admin. Tidak ada pembukuan atau pemindahan tersimpan.')
+    # Retur terikat sumber tidak dialihkan ke hasil mesin. Perintah kemasan
+    # tetap di SKU/karungnya dan dikurangi oleh karung_bebas; keberadaannya
+    # sendiri tidak menahan curah atau hasil mesin yang memang bebas.
+    if supplier_held>0.5:
+        raise Gudang2Error('Rencana hasil mesin ditahan: ada alokasi retur sumber yang perlu ditinjau Admin. Tidak ada pembukuan atau pemindahan tersimpan.')
     items=[];left=need
     for proc in procs:
         if left<=0.5:

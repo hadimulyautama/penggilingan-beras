@@ -33,7 +33,7 @@ async def test_operator_persiapan_terpisah_dan_saldo_berubah(pg,spill,width,mode
             await expect(section).to_contain_text('POL-UJIB-01')
             await expect(section).to_contain_text('POL-BF-2150')
             before=await sidik(pg)
-            out=Path(os.environ['PHASE_OUT'])
+            out=Path(os.environ.get('PHASE_OUT', 'bukti/broken-silo'));out.mkdir(parents=True,exist_ok=True)
             await page.screenshot(path=str(out/f'preview-operator-{mode}-{width}.png'),full_page=True)
             await section.scroll_into_view_if_needed()
             await page.screenshot(path=str(out/f'preparation-operator-{mode}-{width}.png'),full_page=True)
@@ -76,5 +76,6 @@ async def test_operator_sumber_ditahan_ada_langkah_admin_tanpa_saldo_nol(pg,spil
             await page.locator('#f_berat_kg').fill('1350')
             await expect(page.locator('#f_berat_kg')).to_have_value('1350')
             assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
-            await page.screenshot(path=str(Path(os.environ['PHASE_OUT'])/'held-operator-390.png'),full_page=True)
+            out=Path(os.environ.get('PHASE_OUT', 'bukti/broken-silo'));out.mkdir(parents=True,exist_ok=True)
+            await page.screenshot(path=str(out/'held-operator-390.png'),full_page=True)
             assert await sidik(pg)==before
