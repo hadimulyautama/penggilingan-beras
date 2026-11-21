@@ -21,8 +21,20 @@ async function previewAuto(){
  const seq=++autoSeq,flight={};let snapshot;try{snapshot=autoPayload();}catch(e){const box=root.querySelector('[data-kb-auto-impact]');if(box)box.textContent=e.message;return;}
  autoFlight=flight;
  try{const value=await call(endpoint+'/pratinjau',snapshot.req);if(seq!==autoSeq||!directOutput()||snapshot.stamp!==autoPayload().stamp)return;autoPlan=value;autoStamp=snapshot.stamp;paintAuto();}
- catch(e){if(seq!==autoSeq)return;if(e.status===409)recovery.hidden=false;const box=root.querySelector('[data-kb-auto-impact]');if(box)box.textContent=e.message;autoPlan=null;autoStamp='';const saveButton=root.querySelector('[data-kb-auto-save]');if(saveButton)saveButton.disabled=true;}
+ catch(e){if(seq!==autoSeq)return;const box=root.querySelector('[data-kb-auto-impact]'),explained=box&&pesanPenolakanHasil(box,e);if(e.status===409)recovery.hidden=!!explained;autoPlan=null;autoStamp='';const saveButton=root.querySelector('[data-kb-auto-save]');if(saveButton)saveButton.disabled=true;}
  finally{if(autoFlight===flight)autoFlight=null;if(autoQueued&&directOutput()&&!busy&&!uncertain){autoQueued=false;clearTimeout(autoTimer);autoTimer=setTimeout(previewAuto,Math.max(0,autoDue-performance.now()));}}
+}
+// Ini penolakan domain yang sudah pasti, bukan acuan usang yang selesai dengan
+// membaca ulang. Jangan menjanjikan pengajuan atau membatalkan catatan benar.
+function pesanPenolakanHasil(box,e){
+ const match=e.status===409&&e.message.match(/^([^:]+): hasil sudah mempunyai catatan kemasan\/perpindahan terkait\. Gunakan alur koreksi lama untuk jenis nonotomatis\.$/);
+ const kind=match&&match[1];
+ if(!kind||!data.jenis_hasil.includes(kind)){box.textContent=e.message;return false;}
+ const nama=data.nama_hasil?.[kind]||names[kind]||kind;
+ box.replaceChildren(el('h3','Koreksi belum disimpan'),el('p',nama+' sudah memiliki catatan kemasan atau perpindahan terkait.'),el('p','Angka dan alasan yang Anda isi tetap di editor ini.'));
+ box.append(el('p',root.dataset.layout==='operator'?'Minta Admin meninjau catatan kemasan/perpindahan proses '+data.kode+' bersama jenis hasil dan total yang benar.':'Tinjau catatan kemasan/perpindahan proses '+data.kode+' bersama jenis hasil dan total yang benar sebelum menentukan koreksi lanjutan.'));
+ box.append(el('p','Jangan mengulang pencatatan hasil atau membatalkan kemasan/pengiriman yang sudah benar agar koreksi bisa disimpan.','kb-note'));
+ return true;
 }
 async function saveAuto(){if(busy||uncertain||!directOutput())return;let snapshot;try{snapshot=autoPayload();if(!reason.trim())throw Error('Alasan koreksi wajib diisi.');if(!autoPlan||snapshot.stamp!==autoStamp)throw Error('Tunggu dampak terbaru sebelum menyimpan.');}catch(e){error.textContent=e.message;return;}clearTimeout(autoTimer);++autoSeq;busy=true;render();try{last=snapshot.req;review=await call(endpoint+'/periksa',last);busy=false;await save();}catch(e){busy=false;review=null;autoPlan=null;autoStamp='';error.textContent=e.message;recovery.hidden=false;persist();render();}}
 function btn(label,fn,primary=false){let b=el('button',label,'btn'+(primary?' btn--utama':''));b.type='button';b.disabled=busy||uncertain;b.onclick=fn;return b;}
