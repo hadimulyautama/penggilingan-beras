@@ -351,6 +351,7 @@ async def test_modal_putus_setelah_commit_dan_baca_status_tanpa_ulang(pg,empat_s
 @pytest.mark.parametrize('view',[None,'operator:g2'])
 async def test_bentuk_koreksi_hasil_dari_lembar_operator(pg,running,width,view):
  from playwright.async_api import expect
+ from app.models import Peristiwa
  uid,kode,mid,it=running
  async with await _klien(pg,peran='superadmin' if view else 'operator',gudang='Gudang 2') as c:
   if view:c.cookies.set('produksi_lihat',view)
@@ -359,26 +360,37 @@ async def test_bentuk_koreksi_hasil_dari_lembar_operator(pg,running,width,view):
    row=root.locator('[data-kb-output="medium"]')
    await expect(row.locator('[data-sr-output-correction]')).to_be_attached()
    await row.locator('[data-sr-output-correction]>summary').click()
-   await row.get_by_role('button',name='Koreksi hasil medium',exact=True).click()
+   action=row.get_by_role('button',name='Koreksi hasil medium',exact=True)
+   await action.click()
    editor=root.locator('[data-koreksi-bahan]');await expect(editor).to_be_visible()
-   await expect(root.locator('dialog.sr-correction-dialog')).to_be_visible()
+   # Arahan pemilik: satu editor inline, tanpa modal/pindah halaman. Draf
+   # hasil yang belum dikirim dibuang pada Tutup, bukan dipulihkan diam-diam.
+   await expect(root.locator('dialog.sr-correction-dialog')).to_have_count(0)
+   await expect(root.locator('.kb-inline-editor')).to_have_count(1)
+   assert 'pf-output-correction' in await root.get_attribute('class')
    await expect(editor.get_by_label('Total Medium yang benar (kg)',exact=True)).to_be_visible()
+   await expect(editor.get_by_role('spinbutton')).to_have_count(2)
    await editor.get_by_label('Total Medium yang benar (kg)',exact=True).fill('1900')
-   await editor.get_by_label('Alasan koreksi / penghapusan (wajib)',exact=True).fill('Salah pencatatan total; diperiksa ulang dengan catatan operator.')
-   OUT.mkdir(parents=True,exist_ok=True);await root.locator('dialog.sr-correction-dialog').screenshot(path=str(OUT/f'koreksi-hasil-form-{width}.png'))
-   await page.screenshot(path=str(OUT/f'dialog-koreksi-{width}.png'))
+   await editor.get_by_label('Total Broken yang benar (kg)',exact=True).fill('175')
+   await editor.get_by_label('Alasan koreksi (wajib)',exact=True).fill('Salah pencatatan total; diperiksa ulang dengan catatan operator.')
    assert await editor.get_by_role('button',name='Periksa dampak',exact=True).count()==0
    await expect(editor.locator('[data-kb-auto-impact]')).to_contain_text('1.900 kg')
    await expect(editor.get_by_role('button',name='Simpan koreksi',exact=True)).to_be_enabled()
-   await root.locator('dialog.sr-correction-dialog').screenshot(path=str(OUT/f'koreksi-hasil-dampak-{width}.png'))
+   assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
+   OUT.mkdir(parents=True,exist_ok=True);await editor.screenshot(path=str(OUT/f'koreksi-hasil-inline-{width}.png'))
+   assert not any(x.endswith('/simpan') for x in writes)
+   close=editor.get_by_role('button',name='Tutup koreksi',exact=True);await close.focus();await page.keyboard.press('Enter')
+   await expect(editor).to_have_count(0)
+   assert await action.evaluate('(b)=>document.activeElement===b')
+   await action.click()
+   await expect(editor.get_by_label('Total Medium yang benar (kg)',exact=True)).to_have_value('2000')
+   await expect(editor.get_by_label('Total Broken yang benar (kg)',exact=True)).to_have_value('200')
+   await expect(editor.get_by_label('Alasan koreksi (wajib)',exact=True)).to_have_value('')
    assert not any(x.endswith('/simpan') for x in writes)
    assert not errors,errors
-   await page.keyboard.press('Escape')
-   await expect(root.locator('dialog.sr-correction-dialog')).not_to_be_visible()
-   await row.get_by_role('button',name='Koreksi hasil medium',exact=True).click()
-   await expect(editor.get_by_label('Total Medium yang benar (kg)',exact=True)).to_have_value('1900')
  async with pg() as db:
   assert float(await db.scalar(select(func.sum(PolishingOutputLog.berat_kg))))==2200
+  assert await db.scalar(select(func.count()).select_from(Peristiwa).where(Peristiwa.jenis=='koreksi_bahan_hasil_berjalan'))==0
 
 @pytest.mark.parametrize('width',[320,390,1440])
 async def test_tema_gelap_geometri_dan_isian_operator(pg,running,width):
@@ -410,16 +422,16 @@ async def test_koreksi_otomatis_satu_simpan_dan_dampak_tanpa_alasan(pg,running,w
    await page.goto(BASE+'/proses-aktif/sosoh/'+kode);root=page.locator('[data-sosoh-ringkas]');row=root.locator('[data-kb-output="medium"]')
    await expect(row.locator('[data-sr-output-correction]')).to_be_attached()
    await row.locator('[data-sr-output-correction]>summary').click();await row.get_by_role('button',name='Koreksi hasil medium',exact=True).click()
-   dialog=root.locator('.sr-correction-dialog');field=dialog.get_by_label('Total Medium yang benar (kg)',exact=True)
+   dialog=root.locator('[data-koreksi-bahan]');field=dialog.get_by_label('Total Medium yang benar (kg)',exact=True)
    await field.fill('1900')
    await expect(dialog.locator('[data-kb-auto-impact]')).to_contain_text('1.900 kg')
    assert await field.input_value()=='1900'
    await expect(dialog.get_by_role('button',name='Simpan koreksi',exact=True)).to_be_disabled()
    async with pg() as db:assert float(await db.scalar(select(func.sum(PolishingOutputLog.berat_kg))))==2200
-   await dialog.get_by_label('Alasan koreksi / penghapusan (wajib)',exact=True).fill('Total operator diperiksa ulang')
+   await dialog.get_by_label('Alasan koreksi (wajib)',exact=True).fill('Total operator diperiksa ulang')
    save=dialog.get_by_role('button',name='Simpan koreksi',exact=True);await expect(save).to_be_enabled()
    await save.evaluate('(b)=>{b.click();b.click()}')
-   await expect(root.locator('.sr-correction-dialog')).to_have_count(0)
+   await expect(root.locator('[data-koreksi-bahan]')).to_have_count(0)
    await expect(root.locator('[data-kb-output="medium"]')).to_contain_text('1.900 kg')
    assert sum(x.endswith('/simpan') and '/koreksi-bahan/' in x for x in writes)==1
    assert not errors,errors
@@ -455,13 +467,13 @@ async def test_koreksi_otomatis_respons_putus_tidak_kirim_ulang(pg,running):
    await page.goto(BASE+'/proses-aktif/sosoh/'+kode);root=page.locator('[data-sosoh-ringkas]');row=root.locator('[data-kb-output="medium"]')
    await expect(row.locator('[data-sr-output-correction]')).to_be_attached()
    await row.locator('[data-sr-output-correction]>summary').click();await row.get_by_role('button',name='Koreksi hasil medium',exact=True).click()
-   dialog=root.locator('.sr-correction-dialog');await dialog.get_by_label('Total Medium yang benar (kg)',exact=True).fill('1900')
-   await dialog.get_by_label('Alasan koreksi / penghapusan (wajib)',exact=True).fill('Total yang benar setelah pemeriksaan')
+   dialog=root.locator('[data-koreksi-bahan]');await dialog.get_by_label('Total Medium yang benar (kg)',exact=True).fill('1900')
+   await dialog.get_by_label('Alasan koreksi (wajib)',exact=True).fill('Total yang benar setelah pemeriksaan')
    save=dialog.get_by_role('button',name='Simpan koreksi',exact=True);await expect(save).to_be_enabled();await save.click()
    await expect(dialog.locator('[data-kb-galat]')).to_contain_text('belum pasti')
    await expect(dialog.get_by_label('Total Medium yang benar (kg)',exact=True)).to_have_value('1900')
    await dialog.get_by_role('button',name='Baca data & status terbaru',exact=True).click()
-   await expect(root.locator('.sr-correction-dialog')).to_have_count(0)
+   await expect(root.locator('[data-koreksi-bahan]')).to_have_count(0)
    await expect(root.locator('[data-kb-output="medium"]')).to_contain_text('1.900 kg')
    assert sum(x.endswith('/simpan') and '/koreksi-bahan/' in x for x in writes)==1
    assert not errors,errors
