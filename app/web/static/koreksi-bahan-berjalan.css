@@ -20,3 +20,9 @@
  .pf-correction-open [data-proses-isi]>.sr-actions,.pf-correction-open [data-proses-isi]>.sr-metrics{display:none}
  .kb-detail-entry .btn{min-height:44px}
 }
+
+/* Koreksi hasil memakai satu editor; borang Catat hasil bukan pembanding kedua.
+   Hanya mode hasil Sosoh, tanpa mengubah tata letak editor bahan/Giling. */
+.pf-output-correction .sr-card:has(>.kb-inline-editor){display:block}
+.pf-output-correction .sr-card:has(>.kb-inline-editor)>:not(.kb-inline-editor){display:none}
+.pf-output-correction .sr-card>.kb-inline-editor{grid-column:auto;grid-row:auto;width:100%;max-width:760px;margin:0 auto}

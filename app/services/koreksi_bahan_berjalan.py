@@ -140,25 +140,57 @@ def g1_key(st,bongkar=None):
     raise ValueError('Hubungan sumber historis belum lengkap; telusuri penerimaan asal.')
 
 
-async def g2_sumber(db,it):
+async def _g2_metadata_banyak(db, intakes):
+    """Metadata sumber untuk satu pembentukan konteks, tanpa cache lintas baca.
+
+    Saldo tetap diputuskan _sisa_tumpukan_intake agar FIFO, pengalihan, retur
+    keluar dan pengeluaran lama memakai pembaca otoritatif yang sama. Hanya
+    SELECT metadata yang identik pada tiap sumber digabung. Pemanggil tetap
+    memilih sumber dengan batas gudang/pemilik dan urutan lamanya.
+    """
+    if not intakes:
+        return {}
+    ids = [it.id for it in intakes]
+    batch_ids = {it.pk_purchase_batch_id for it in intakes if it.pk_purchase_batch_id}
+    batches = {b.id: b for b in (await db.scalars(select(PkPurchaseBatch).where(
+        PkPurchaseBatch.id.in_(batch_ids)).execution_options(populate_existing=True))).all()} if batch_ids else {}
+    used = dict((await db.execute(select(PkTumpukanToSilo.pk_gudang2_intake_id,
+        func.coalesce(func.sum(PkTumpukanToSilo.jumlah_karung), 0)).where(
+        PkTumpukanToSilo.pk_gudang2_intake_id.in_(ids),
+        PkTumpukanToSilo.dibatalkan_pada.is_(None)).group_by(
+        PkTumpukanToSilo.pk_gudang2_intake_id))).all())
+    from app.services.retur_supplier_reservasi import terikat_banyak
+    keys = [f'pk:{bid}' for bid in batch_ids]
+    reserved = await terikat_banyak(db, keys)
+    bags = await terikat_banyak(db, keys, karung=True)
+    from app.services.cakupan_fasilitas import lokasi
+    warehouses = dict((await db.execute(select(PkGudang2Intake.id,
+        lokasi(PkGudang2Intake)).where(PkGudang2Intake.id.in_(ids)))).all())
+    return {it.id: dict(batch=batches.get(it.pk_purchase_batch_id),
+        used=int(used.get(it.id, 0)), reservasi=reserved.get(f'pk:{it.pk_purchase_batch_id}', D(0)),
+        karung_terikat=int(bags.get(f'pk:{it.pk_purchase_batch_id}', 0)),
+        warehouse_id=warehouses[it.id]) for it in intakes}
+
+
+async def g2_sumber(db,it,*,metadata=None):
     if not it or it.dibatalkan_pada or it.tujuan!='ditumpuk':raise ValueError('Sumber harus tumpukan PK aktif yang sah.')
-    batch=await db.get(PkPurchaseBatch,it.pk_purchase_batch_id,populate_existing=True) if it.pk_purchase_batch_id else None
+    batch=metadata['batch'] if metadata is not None else await db.get(PkPurchaseBatch,it.pk_purchase_batch_id,populate_existing=True) if it.pk_purchase_batch_id else None
     from app.penggilingan.gudang2.karung import bobot_per_karung
     saldo=await g2._sisa_tumpukan_intake(db,it.id)
     from app.services.retur_supplier_reservasi import terikat,karung_terikat
-    reservasi=await terikat(db,sumber=f'pk:{batch.id}') if batch else D(0)
+    reservasi=metadata['reservasi'] if metadata is not None else await terikat(db,sumber=f'pk:{batch.id}') if batch else D(0)
     n=None;r=None
     if batch and batch.jumlah_karung:
         r=bobot_per_karung(batch)
-        used=await db.scalar(select(func.coalesce(func.sum(PkTumpukanToSilo.jumlah_karung),0)).where(PkTumpukanToSilo.pk_gudang2_intake_id==it.id,PkTumpukanToSilo.dibatalkan_pada.is_(None)))
-        n=batch.jumlah_karung-int(used)-await karung_terikat(db,f'pk:{batch.id}')
+        used=metadata['used'] if metadata is not None else await db.scalar(select(func.coalesce(func.sum(PkTumpukanToSilo.jumlah_karung),0)).where(PkTumpukanToSilo.pk_gudang2_intake_id==it.id,PkTumpukanToSilo.dibatalkan_pada.is_(None)))
+        n=batch.jumlah_karung-int(used)-(metadata['karung_terikat'] if metadata is not None else await karung_terikat(db,f'pk:{batch.id}'))
     transfer=await db.get(InternalTransfer,it.internal_transfer_id) if it.internal_transfer_id else None
     if it.pk_purchase_batch_id is not None and (batch is None or batch.status_batch=='ditolak'):
         raise ValueError('Penerimaan PK asal tidak aktif atau sudah ditolak.')
     if it.internal_transfer_id is not None and (transfer is None or transfer.status!='terkirim'):
         raise ValueError('Transfer sumber tidak lagi aktif; periksa penggantinya.')
     from app.services.cakupan_fasilitas import lokasi
-    wid=await db.scalar(select(lokasi(PkGudang2Intake)).where(PkGudang2Intake.id==it.id))
+    wid=metadata['warehouse_id'] if metadata is not None else await db.scalar(select(lokasi(PkGudang2Intake)).where(PkGudang2Intake.id==it.id))
     return dict(warehouse_id=wid,key=str(it.id),kode=batch.kode_batch if batch else transfer.kode_transfer if transfer else f'Tumpukan #{it.id}',pemilik=it.jasa_id,
         kg=float(it.berat_kg) if it.berat_kg is not None else None,bebas=None if saldo is None else float(D(str(saldo))-reservasi),
         satuan='karung' if n is not None else 'kg',karung=n,rasio=None if r is None else float(r),
@@ -188,8 +220,9 @@ async def konteks(db,*,jenis,kode,user):
                     jumlah=move.jumlah_karung if move.jumlah_karung is not None else float(move.berat_kg) if move.berat_kg is not None else None,
                     satuan='karung' if move.jumlah_karung is not None else 'kg',sisa=u.berat_akhir_kg,raw=raw(move)))
         candidates=(await db.scalars(select(PkGudang2Intake).where(batas(user,PkGudang2Intake),PkGudang2Intake.tujuan=='ditumpuk',PkGudang2Intake.dibatalkan_pada.is_(None),PkGudang2Intake.jasa_id==pr.jasa_id).order_by(PkGudang2Intake.id))).all()
+        metadata=await _g2_metadata_banyak(db,candidates)
         for it in candidates:
-            s=await g2_sumber(db,it)
+            s=await g2_sumber(db,it,metadata=metadata[it.id])
             if s['key'] in sources or s['bebas'] is None or s['bebas']>0:sources[s['key']]=s
         more,alternatives=await konteks_curah(db,pr,usages)
         entries.extend(more);sources.update(alternatives)
@@ -228,6 +261,7 @@ async def konteks(db,*,jenis,kode,user):
         basis=None if any(u.berat_kg is None for u in usages) else sum(float(u.berat_terpakai_kg if u.berat_akhir_kg is not None else u.berat_kg) for u in usages)
     from app.services.jasa import nama_pemilik
     owner=await nama_pemilik(db,pr.jasa_id) if pr.jasa_id else 'Milik pabrik'
+    packing_values={}
     if jenis=='giling':
         stock_values={'PK tersedia proses ini':bd.tersedia}
     else:
@@ -240,10 +274,14 @@ async def konteks(db,*,jenis,kode,user):
             if k in outputs:
                 owner_id=await pemilik_hasil_proses(db,pr.jasa_id,k)
                 stock_values['Stok '+k+' tersedia · seluruh sumber pemilik terkait']=await hitung_stok_byproduct_total(db,k,jasa_id=owner_id)
+                from app.services.stok import _packing_otomatis
+                size,bags,packed,bulk=_packing_otomatis(k,stock_values['Stok '+k+' tersedia · seluruh sumber pemilik terkait'])
+                if size:packing_values[k]=dict(ukuran=size,karung=bags,curah=bulk)
     from app.services.stok import nama_produk
     values=dict(nama_hasil={k:nama_produk(k) for k in jenis_hasil},stok_hasil=stock_values,jenis=jenis,kode=kode,id=pr.id,status=pr.status,pemilik=owner,jasa_id=pr.jasa_id,entries=entries,sources=list(sources.values()),outputs=outputs,jenis_hasil=jenis_hasil,basis=basis,
         verification=raw(verification) if verification else None)
     if jenis=='sosoh':
+        values['kemasan_otomatis']=packing_values
         from app.services.koreksi_broken_terkait import konteks as terkait_broken
         values['broken_terkait']=await terkait_broken(db,pr)
         silo_names={x.id:x.nama_silo for x in (await db.scalars(select(Silo).where(Silo.id.in_([u.silo_id for u in usages])))).all()}
