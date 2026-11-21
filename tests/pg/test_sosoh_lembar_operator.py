@@ -371,7 +371,7 @@ async def test_bentuk_koreksi_hasil_dari_lembar_operator(pg,running,width,view):
    await expect(editor.get_by_label('Total Medium yang benar (kg)',exact=True)).to_be_visible()
    await expect(editor.get_by_role('spinbutton')).to_have_count(2)
    await editor.get_by_label('Total Medium yang benar (kg)',exact=True).fill('1900')
-   await editor.get_by_label('Total Broken yang benar (kg)',exact=True).fill('175')
+   await editor.get_by_label('Total hasil Broken yang benar (kg)',exact=True).fill('175')
    await editor.get_by_label('Alasan koreksi (wajib)',exact=True).fill('Salah pencatatan total; diperiksa ulang dengan catatan operator.')
    assert await editor.get_by_role('button',name='Periksa dampak',exact=True).count()==0
    await expect(editor.locator('[data-kb-auto-impact]')).to_contain_text('1.900 kg')
@@ -384,7 +384,7 @@ async def test_bentuk_koreksi_hasil_dari_lembar_operator(pg,running,width,view):
    assert await action.evaluate('(b)=>document.activeElement===b')
    await action.click()
    await expect(editor.get_by_label('Total Medium yang benar (kg)',exact=True)).to_have_value('2000')
-   await expect(editor.get_by_label('Total Broken yang benar (kg)',exact=True)).to_have_value('200')
+   await expect(editor.get_by_label('Total hasil Broken yang benar (kg)',exact=True)).to_have_value('200')
    await expect(editor.get_by_label('Alasan koreksi (wajib)',exact=True)).to_have_value('')
    assert not any(x.endswith('/simpan') for x in writes)
    assert not errors,errors
