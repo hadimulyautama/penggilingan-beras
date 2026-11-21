@@ -2198,8 +2198,8 @@ async def pindah_broken_ke_silo(
     # Pembaca yang sama dengan rencana FIFO: retur yang SUDAH keluar
     # mengurangi fisik; pembaca sumber juga menahan pengajuan aktif dan
     # pengeluaran FIFO pada gudang yang sama. Jangan dikurangi dua kali.
-    from app.services.transfer_barang_sumber import bebas as bebas_sumber
-    sisa = min(await _sisa_broken_row(db, row.id),float(await bebas_sumber(db,row,'curah')))
+    from app.services.saldo_broken_silo import curah_bebas
+    sisa = await curah_bebas(db, row)
     if sisa <= 0:
         raise Gudang2Error("Broken ini sudah habis dipindah.")
     # TOLERANSI_PINDAH_KG — penjelasan panjangnya di `pindah_tumpukan_ke_silo`.
@@ -2207,8 +2207,8 @@ async def pindah_broken_ke_silo(
     if berat is not None and float(berat) > sisa + TOLERANSI_PINDAH_KG:
         raise Gudang2Error(
             f"Berat pindah ({float(berat):g} kg) melebihi sisa broken "
-            f"({sisa:g} kg). Kosongkan kotak beratnya untuk memindahkan "
-            "seluruh sisanya.")
+            f"({sisa:g} kg). Transaksi ini tidak tersimpan. "
+            "Periksa saldo yang dapat dipakai; isian tetap dapat diperbaiki.")
 
     # ── PAGAR: proses TAK BOLEH memakan broken yang ia hasilkan sendiri ──
     #
@@ -2400,7 +2400,8 @@ async def masukkan_broken_ke_silo(
     pool: list[tuple[int, float]] = []
     from app.services.transfer_barang_sumber import bebas as bebas_sumber
     for row in curah_rows:
-        sisa = min(await _sisa_broken_row(db, row.id),float(await bebas_sumber(db,row,'curah')))
+        from app.services.saldo_broken_silo import curah_bebas
+        sisa = await curah_bebas(db, row)
         if sisa > 0.5:
             pool.append((row.id, sisa))
     total_curah = sum(s for _, s in pool)
@@ -2469,9 +2470,8 @@ async def masukkan_broken_ke_silo(
             )).scalar_one_or_none()
             if not ukuran or not krow.jumlah_karung:
                 continue
-            from app.penggilingan.inventory.finished_goods import sisa_karung_per_sumber
-            bebas_karung=dict((r.id,n) for r,n,kg in await sisa_karung_per_sumber(db,krow.product_sku_id,krow.rice_quality_standard_id,jasa_id=krow.jasa_id,source_type=None))
-            ambil_karung = jumlah_bongkar_broken(sisa_butuh, ukuran, min(krow.jumlah_karung,bebas_karung.get(krow.id,0)))
+            from app.services.saldo_broken_silo import karung_bebas
+            ambil_karung = jumlah_bongkar_broken(sisa_butuh, ukuran, await karung_bebas(db,krow))
             if ambil_karung <= 0:
                 continue
             ambil_kg = ambil_karung * float(ukuran)
@@ -2550,8 +2550,6 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
     membuka karung, mengunci ulang transaksi, ataupun menjalankan pemindahan.
     """
     from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock, ProductSku
-    from app.services.stok import output_sosoh
-    from app.penggilingan.inventory.finished_goods import _packed_kg
     from app.services.cakupan_fasilitas import lokasi
     wid=await _g2_warehouse_id(db)
     def milik(col):
@@ -2593,9 +2591,8 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
     )).all()
     direct_plan: list[tuple[int, float]] = []
     for row_id, gross in direct_rows:
-        available = await _sisa_broken_row(db, row_id)
-        from app.services.retur_supplier_reservasi import terikat
-        available=max(0,available-float(await terikat(db,sumber=f'broken:{row_id}')))
+        from app.services.saldo_broken_silo import curah_bebas
+        available=await curah_bebas(db,await db.get(ByproductStock,row_id))
         take = min(left, available)
         if take > 0.5:
             direct_plan.append((row_id, take))
@@ -2605,32 +2602,9 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
     for proc in procs:
         if left <= 0.5:
             break
-        rows = (await db.execute(select(ByproductStock.id).where(
-            ByproductStock.jenis_produk == "broken", ByproductStock.source_type == "polishing",
-            ByproductStock.source_id == proc.id, milik(ByproductStock.jasa_id),lokasi(ByproductStock)==wid
-        ))).scalars().all()
-        available = sum([await _sisa_broken_row(db, rid) for rid in rows])
-        packed = float((await db.execute(
-            select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
-            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-            .where(ProductSku.kategori == "broken", FinishedGoodsStock.source_type == "polishing",
-                   FinishedGoodsStock.source_id == proc.id, milik(FinishedGoodsStock.jasa_id),lokasi(FinishedGoodsStock)==wid)
-        )).scalar_one())
-        from app.services.jasa import pemilik_hasil_proses
-        if await pemilik_hasil_proses(db, proc.jasa_id, "broken") == jasa_id:
-            # Hasil broken otomatis tersedia setelah proses selesai juga.
-            # Saat dipindah, masukkan_broken_ke_silo membukukan bagian yang
-            # dipakai sebelum mencatat pemindahannya.
-            curah_dibukukan = float((await db.execute(
-                select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
-                .where(ByproductStock.jenis_produk == "broken",
-                       ByproductStock.source_type == "polishing",
-                       ByproductStock.source_id == proc.id,
-                       milik(ByproductStock.jasa_id))
-            )).scalar_one())
-            available += max(0, float((await output_sosoh(db, proc.id)).get("broken") or 0)
-                             - curah_dibukukan - await _packed_kg(db,proc.id,'broken',None))
-        take = min(left, available + packed)
+        from app.services.saldo_broken_silo import proses as saldo_proses
+        available=(await saldo_proses(db,proc,jasa_id,wid))['total']
+        take = min(left, available)
         if take > 0.5:
             plan.append((proc, take))
             left -= take

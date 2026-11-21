@@ -5459,143 +5459,39 @@ async def act_pindah_broken_silo(req: PindahBrokenSiloReq,
 
 @router.get("/actions/broken-proses-tersedia")
 async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Proses penyosohan (berikut pemiliknya) yang masih punya broken untuk
-    dimasukkan ke silo — curah MAUPUN berkarung dijumlah jadi SATU angka,
-    sebab `masukkan_broken_ke_silo` sendiri yang memutuskan sumbernya.
+    """Satu pilihan per pemilik: saldo bebas sumber Isi Silo di Gudang 2.
 
-    Satu baris per (proses, pemilik) — dua pemilik pada proses yang sama
-    (sebagian sudah pindah kepemilikan) tampil sebagai dua pilihan terpisah,
-    sebab keduanya tak boleh tercampur dalam SATU pemindahan ke silo.
-
-    ⚠ Curah dijumlah PER-PROSES lewat `_sisa_broken_row` atas baris
-    `byproduct_stock` proses itu SAJA — BUKAN `hitung_stok_broken_curah()`
-    (itu GLOBAL atas seluruh pemilik, tak menerima `source_id`/proses sama
-    sekali). Dua proses pemilik yang sama dulu menampilkan angka curah yang
-    SAMA PERSIS (keduanya membaca total global yang sama), sampai-sampai
-    proses yang curahnya sendiri sudah nol tetap tampil seolah masih
-    berbobot — lalu ditolak saat disubmit, sebab `masukkan_broken_ke_silo`
-    sendiri SUDAH benar menyaring per-`source_id`. Borang yang menawarkan
-    sesuatu yang kemudian ditolak layanannya membuat orang mengira
-    aplikasinya rusak — laporan lapangan 10 Oktober 2026.
-
-    Proses `proses` dan `selesai` ditawarkan bila masih ada stok broken.
-    Hasil yang belum dibuat menjadi baris ledger juga ikut dihitung karena
-    broken otomatis tersedia sebagai stok/kemasan setelah keluar mesin.
-
-    Angka hasil mesin yang belum dialokasikan (`output_sosoh −
-    _broken_dibukukan`) hanya ditambahkan untuk PEMILIK BAWAAN proses
-    (`pemilik_hasil_proses`). Pemilik yang menerima sebagian lewat "Pindah
-    kepemilikan" tak ikut memiliki hasil mentah yang belum dialokasikan.
+    Rencana dan penyimpanan memakai pembaca sumber yang sama. Hasil mesin
+    belum dialokasikan hanya menjadi milik pemilik hasil proses, setelah
+    seluruh pembukuan curah/kemasan dikurangkan tanpa menghitungnya ulang.
+    Pembaca ini tidak membukukan hasil atau membuka kemasan.
     """
     _require(await _is_g2_operator(user))
-    from sqlalchemy import func, select
-
-    from app.models import ByproductStock, FinishedGoodsStock, PolishingProcess, ProductSku
-    from app.penggilingan.gudang2.service import _sisa_broken_row
-    from app.services.jasa import nama_pemilik, pemilik_hasil_proses
-    from app.services.stok import output_sosoh
-
-    keluar: list[dict] = []
+    from sqlalchemy import select
+    from app.models import ByproductStock,FinishedGoodsStock,PolishingProcess,ProductSku
+    from app.services.jasa import nama_pemilik,pemilik_hasil_proses
+    from app.penggilingan.gudang2.service import rencana_broken_pemilik
+    from app.services.cakupan_fasilitas import lokasi
+    keluar=[]
     async with SessionLocal() as db:
-        proses_sumber = {p.id: p for p in (await db.execute(
-            select(PolishingProcess).where(batas_lokasi(user,PolishingProcess)).where(
-                PolishingProcess.status.in_(("proses", "selesai")))
-        )).scalars().all()}
-
-        # Broken hasil penerimaan tiket tetap stok bertumpuk dan harus bisa
-        # dipilih dari kartu stok untuk dipindahkan ke silo.
-        stok_timbangan = (await db.execute(
-            select(ByproductStock.id, ByproductStock.jasa_id)
-            .where(ByproductStock.jenis_produk == "broken",
-                   ByproductStock.source_type == "timbangan")
-        )).all()
-        for stock_id, owner_id in stok_timbangan:
-            available = await _sisa_broken_row(db, stock_id)
-            if available > 0.5:
-                keluar.append({"pemilik": owner_id, "kg": available})
-
-        pasangan: set[tuple[int, int | None]] = set()
-        if proses_sumber:
-            pasangan |= set((await db.execute(
-                select(ByproductStock.source_id, ByproductStock.jasa_id)
-                .where(ByproductStock.jenis_produk == "broken",
-                       ByproductStock.source_type == "polishing",
-                       ByproductStock.source_id.in_(proses_sumber))
-            )).all())
-            pasangan |= set((await db.execute(
-                select(FinishedGoodsStock.source_id, FinishedGoodsStock.jasa_id)
-                .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-                .where(ProductSku.kategori == "broken",
-                       FinishedGoodsStock.source_type == "polishing",
-                       FinishedGoodsStock.source_id.in_(proses_sumber))
-            )).all())
-        pemilik_bawaan: dict[int, int | None] = {}
-        for proc_id, proc in proses_sumber.items():
-            pb = await pemilik_hasil_proses(db, proc.jasa_id, "broken")
-            pemilik_bawaan[proc_id] = pb
-            # Broken hasil mesin otomatis tersedia setelah proses ditutup
-            # juga, walau belum punya baris stok terpisah.
-            pasangan.add((proc_id, pb))
-
-        for proc_id, jasa_id in sorted(pasangan, key=lambda x: (x[0], x[1] or 0)):
-            proc = proses_sumber.get(proc_id)
-            if proc is None:
-                continue
-            baris_curah = (await db.execute(
-                select(ByproductStock.id)
-                .where(ByproductStock.jenis_produk == "broken",
-                       ByproductStock.source_type == "polishing",
-                       ByproductStock.source_id == proc_id,
-                       (ByproductStock.jasa_id.is_(None) if jasa_id is None
-                        else ByproductStock.jasa_id == jasa_id))
-            )).scalars().all()
-            curah = sum([await _sisa_broken_row(db, rid) for rid in baris_curah]) \
-                if baris_curah else 0.0
-            karung = float((await db.execute(
-                select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
-                .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-                .where(ProductSku.kategori == "broken",
-                       FinishedGoodsStock.source_type == "polishing",
-                       FinishedGoodsStock.source_id == proc_id,
-                       (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
-                        else FinishedGoodsStock.jasa_id == jasa_id))
-            )).scalar_one())
-            belum_dicatat = 0.0
-            if jasa_id == pemilik_bawaan.get(proc_id):
-                keluar_mesin = (await output_sosoh(db, proc_id)).get("broken") or 0.0
-                curah_tercatat = float((await db.execute(
-                    select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
-                    .where(ByproductStock.jenis_produk == "broken",
-                           ByproductStock.source_type == "polishing",
-                           ByproductStock.source_id == proc_id,
-                           (ByproductStock.jasa_id.is_(None) if jasa_id is None
-                            else ByproductStock.jasa_id == jasa_id))
-                )).scalar_one())
-                belum_dicatat = max(
-                    0.0, float(keluar_mesin) - curah_tercatat - karung)
-            total = curah + karung + belum_dicatat
-            if total <= 0.5:
-                continue
-            kode = proc.kode_proses
-            milik = await nama_pemilik(db, jasa_id)
-            label = f"{kode} · {_kg(total)} (curah {_kg(curah)} + kemasan {_kg(karung)}"
-            if belum_dicatat > 0.5:
-                label += f" + hasil otomatis {_kg(belum_dicatat)}"
-            label += ")"
-            if milik:
-                label += f" · titipan {milik}"
-            keluar.append({"pemilik": jasa_id, "kg": total})
-        grouped: dict[int | None, float] = {}
-        for item in keluar:
-            owner = item["pemilik"]
-            grouped[owner] = grouped.get(owner, 0.0) + item["kg"]
-        keluar = []
-        for owner, total in sorted(grouped.items(), key=lambda x: (x[0] is not None, x[0] or 0)):
-            owner_name = await nama_pemilik(db, owner)
-            label = f"{'Pabrik' if owner is None else owner_name} · {_kg(total)} tersedia"
-            keluar.append({"value": f"pemilik|{'pabrik' if owner is None else owner}",
-                           "label": label})
+        from app.penggilingan.gudang2.service import _g2_warehouse_id
+        wid=await _g2_warehouse_id(db)
+        owners=set((await db.scalars(select(ByproductStock.jasa_id).where(
+            ByproductStock.jenis_produk=='broken',lokasi(ByproductStock)==wid))).all())
+        owners.update((await db.scalars(select(FinishedGoodsStock.jasa_id).join(ProductSku,ProductSku.id==FinishedGoodsStock.product_sku_id).where(
+            ProductSku.kategori=='broken',lokasi(FinishedGoodsStock)==wid))).all())
+        for proc in (await db.scalars(select(PolishingProcess).where(
+            PolishingProcess.status.in_(('proses','selesai')),lokasi(PolishingProcess)==wid))).all():
+            owners.add(await pemilik_hasil_proses(db,proc.jasa_id,'broken'))
+        for owner in sorted(owners,key=lambda x:(x is not None,x or 0)):
+            direct,procs,_=await rencana_broken_pemilik(db,jasa_id=owner,berat_kg=None)
+            total=sum(w for _,w in direct+procs)
+            if total<=0.5:continue
+            name=await nama_pemilik(db,owner) if owner is not None else 'Pabrik'
+            keluar.append({'value':f"pemilik|{'pabrik' if owner is None else owner}",
+                'label':f'{name} · {_kg(total)} dapat dipakai'})
     return keluar
+
 
 
 class MasukkanBrokenSiloReq(BaseModel):
@@ -5825,7 +5721,7 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
             r = MasukkanBrokenResult(**await simpan(
                 db, user=u, kunci=req.kunci_kiriman, aksi=aksi, isian=isian, kerjakan=kerjakan))
         except Gudang2Error as e:
-            raise _err(e, "Gagal memasukkan broken ke silo.")
+            raise _err(Gudang2Error("Transaksi ini tidak tersimpan. "+str(e)), "Gagal memasukkan broken ke silo.")
     ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"
            .replace(",", ".") if r.dibongkar_dari_karung_kg else "")
     hasil = {"ok": True,

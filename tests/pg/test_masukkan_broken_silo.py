@@ -384,11 +384,20 @@ async def test_picker_satukan_broken_lintas_proses_tapi_pisah_pemilik(pg, sosoh)
 
     assert {item["value"] for item in daftar} == {"pemilik|pabrik", f"pemilik|{jasa.id}"}
     labels = {item["value"]: item["label"] for item in daftar}
-    # Hasil otomatis proses selesai ikut digabung, setelah mengurangi yang
-    # sudah tercatat untuk pemilik bawaan. Baris 80 kg milik jasa tak terpakai
-    # saat menghitung stok pabrik.
-    assert "8.000 kg" in labels["pemilik|pabrik"]
+    # Writer mengurangi SELURUH pembukuan proses dari hasil mentah, termasuk
+    # hak80 kg yang sudah menjadi baris milik jasa. Picker lama menyebut8000
+    # pabrik+80 jasa atas hasil mesin8000: hak yang sama dihitung dua kali.
+    assert "7.920 kg" in labels["pemilik|pabrik"]
     assert "80 kg" in labels[f"pemilik|{jasa.id}"]
+    from app.services.rencana_broken_silo import rincian
+    from app.penggilingan.gudang2.service import rencana_broken_pemilik
+    async with pg() as db:
+        factory=await rincian(db,'pemilik|pabrik')
+        entrusted=await rincian(db,f'pemilik|{jasa.id}')
+        assert factory['saldo']['total']==7920 and entrusted['saldo']['total']==80
+        assert factory['saldo']['total']+entrusted['saldo']['total']==8000
+        _,_,short=await rencana_broken_pemilik(db,jasa_id=None,berat_kg=8000)
+        assert short==80  # Tidak boleh memakai80 kg milik pelanggan lain.
 
 
 async def test_pemilik_agregat_tetap_melarang_proses_memakai_broken_sendiri(pg, sosoh):
