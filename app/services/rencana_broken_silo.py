@@ -20,28 +20,31 @@ def urai(value):
 async def rincian(db,pilihan,berat=None,silo=''):
     from app.services.jasa import nama_pemilik
     kode,owner=urai(pilihan)
-    if kode:
-        proc=await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses==kode))
-        if proc is None:raise ValueError('Proses sumber tidak ditemukan.')
-        direct=[];procs=[(proc,None)]
-    else:
-        direct,procs,_=await g2.rencana_broken_pemilik(db,jasa_id=owner,berat_kg=None)
-    from app.services.saldo_broken_silo import curah_bebas,proses as saldo_proses
+    from app.services.saldo_broken_silo import curah_bebas, proses as saldo_proses, persiapan
     wid=await g2._g2_warehouse_id(db)
     from app.services.cakupan_fasilitas import lokasi
-    if kode and await db.scalar(select(lokasi(PolishingProcess)).where(PolishingProcess.id==proc.id))!=wid:
-        raise ValueError('Proses sumber berada di gudang lain atau tidak ditemukan.')
+    if kode:
+        proc=await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses==kode))
+        if proc is None or await db.scalar(select(lokasi(PolishingProcess)).where(PolishingProcess.id==proc.id))!=wid:
+            raise ValueError('Proses sumber berada di gudang lain atau tidak ditemukan.')
+        direct=[];procs=[proc]
+    else:
+        wid,direct,procs=await g2._sumber_broken_pemilik(db,owner)
+    prep=await persiapan(db,owner,wid,procs)
     rows=[]
     for rid,_ in direct:
         r=await db.get(ByproductStock,rid);avail=await curah_bebas(db,r)
         if avail>0.5:rows.append(dict(id=rid,kode=f'Penerimaan timbang #{rid}',tipe='timbangan',curah=avail,mesin=0,packs=[],total=avail))
-    for proc,_ in procs:
-        s=await saldo_proses(db,proc,owner,wid)
-        if s['total']>0.5:rows.append(dict(id=proc.id,kode=proc.kode_proses,tipe='polishing',
-            curah=sum(w for _,w in s['curah']),curah_rows=[w for _,w in s['curah']],
-            mesin=s['mesin'],packs=s['packs'],total=s['total']))
+    for proc in procs:
+        s=await saldo_proses(db,proc,owner,wid,prep=prep)
+        if s['total']>0.5 or s['mesin_persiapan']>0.5:
+            rows.append(dict(id=proc.id,kode=proc.kode_proses,tipe='polishing',
+                curah=sum(w for _,w in s['curah']),curah_rows=[w for _,w in s['curah']],
+                mesin=s['mesin'],mesin_total=s['mesin_total'],mesin_persiapan=s['mesin_persiapan'],
+                packs=s['packs'],total=s['total']))
     def saldo(rs):return dict(curah=sum(r['curah']for r in rs),mesin=sum(r['mesin']for r in rs),karung=sum(p['n']for r in rs for p in r['packs']),kemasan=sum(p['kg']for r in rs for p in r['packs']),total=sum(r['total']for r in rs))
     awal=saldo(rows);out=dict(pilihan=pilihan,pemilik=await nama_pemilik(db,owner) if owner else 'Milik pabrik',cakupan=kode or 'Seluruh sumber pemilik',sumber=rows,saldo=awal,rencana=None,pesan='',proses_penerima=[])
+    out['pembukuan_persiapan']=prep
     if berat is None:return out
     from app.services.angka import angka_wajar
     want=angka_wajar(berat,'Berat yang masuk silo')
@@ -91,5 +94,7 @@ async def rincian(db,pilihan,berat=None,silo=''):
                 PolishingSiloUsage.silo_id==dest.id,
                 PolishingSiloUsage.berat_akhir_kg.is_(None),PolishingProcess.status=='proses')
             out['proses_penerima']=list((await db.scalars(q)).all())
-    out['rencana']=dict(kg=sum(u['kg']for u in used),diminta_kg=want,silo=silo,curah=uc,mesin=um,isi_karung=ub,karung=on,bongkar_kg=okg,kelebihan=max(0,okg-ub),sisa=saldo(akhir),urutan=used)
+    out['rencana']=dict(kg=sum(u['kg']for u in used),diminta_kg=want,silo=silo,curah=uc,mesin=um,isi_karung=ub,karung=on,bongkar_kg=okg,kelebihan=max(0,okg-ub),sisa=saldo(akhir),urutan=used,
+        pembukuan_sumber=prep['items'],pembukuan_kg=sum(x['kg'] for x in prep['items']),
+        total_hasil_dibukukan_kg=sum(x['kg'] for x in prep['items'])+sum(u['mesin_dibukukan'] for u in used))
     return out

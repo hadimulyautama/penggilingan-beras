@@ -2286,6 +2286,23 @@ async def masukkan_broken_ke_silo(
     berat_kg: float | None, jasa_id: int | None = None, tanggal=None, jam=None,
     commit: bool = True,
 ) -> MasukkanBrokenResult:
+    """Pemindahan dan pembukuan persiapan satu savepoint/commit caller."""
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
+    async with db.begin_nested():
+        result = await _masukkan_broken_ke_silo(db, user=user, kode_pol=kode_pol,
+            nama_silo=nama_silo, berat_kg=berat_kg, jasa_id=jasa_id,
+            tanggal=tanggal, jam=jam, commit=False)
+    if commit:
+        await db.commit()
+    return result
+
+
+async def _masukkan_broken_ke_silo(
+    db: AsyncSession, *, user: User, kode_pol: str | None, nama_silo: str | None,
+    berat_kg: float | None, jasa_id: int | None = None, tanggal=None, jam=None,
+    commit: bool = True,
+) -> MasukkanBrokenResult:
     """SATU aksi: masukkan broken ke silo. Sumbernya otomatis — curah yang
     SUDAH tercatat dulu (FIFO), lalu hasil mesin yang BELUM tercatat
     dibukukan otomatis bila masih kurang, lalu BONGKAR KARUNG bila masih
@@ -2351,6 +2368,15 @@ async def masukkan_broken_ke_silo(
     from app.services.cakupan_fasilitas import lokasi
     if proc is None or await db.scalar(select(lokasi(PolishingProcess)).where(PolishingProcess.id==proc.id))!=silo.warehouse_id:
         raise Gudang2Error('Proses sumber berada di gudang lain atau tidak ditemukan.')
+
+    from app.services.saldo_broken_silo import persiapan, proses as saldo_proses, bukukan_persiapan
+    prep = await persiapan(db, jasa_id, silo.warehouse_id, [proc])
+    if prep['items']:
+        source = await saldo_proses(db, proc, jasa_id, silo.warehouse_id, prep=prep)
+        if berat_kg > source['total'] + 0.5:
+            raise Gudang2Error(f"Saldo broken proses yang dapat dipakai {source['total']:g} kg; tidak cukup untuk {berat_kg:g} kg.")
+        await bukukan_persiapan(db, user=user, owner=jasa_id, wid=silo.warehouse_id,
+            plan=prep, tanggal=tanggal, jam=jam)
 
     def _milik(kolom):
         return kolom.is_(None) if jasa_id is None else kolom == jasa_id
@@ -2543,12 +2569,8 @@ async def masukkan_broken_ke_silo(
     )
 
 
-async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat_kg: float | None):
-    """Bagian baca dari alokasi lama. None membaca semua sumber untuk tampilan.
-
-    Urutan penerimaan lalu proses FIFO tetap sama; tidak menulis pembukuan,
-    membuka karung, mengunci ulang transaksi, ataupun menjalankan pemindahan.
-    """
+async def _sumber_broken_pemilik(db: AsyncSession, jasa_id: int | None):
+    """Inventaris sumber/lokasi dan FIFO existing, tanpa alokasi atau mutasi."""
     from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock, ProductSku
     from app.services.cakupan_fasilitas import lokasi
     wid=await _g2_warehouse_id(db)
@@ -2577,11 +2599,6 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
         .order_by(PolishingProcess.created_at, PolishingProcess.id)
     )).scalars().all() if process_ids else []
 
-    # Stok broken yang diterima dari Timbangan juga merupakan tumpukan biasa.
-    # Rencanakan sebagai sumber pertama sebelum hasil sosoh, tetap lewat
-    # `pindah_broken_ke_silo` agar ledger dan kepemilikan stok tercatat.
-    left = float("inf") if berat_kg is None else float(berat_kg)
-    plan: list[tuple[PolishingProcess, float]] = []
     direct_rows = (await db.execute(
         select(ByproductStock.id, ByproductStock.berat_kg)
         .where(ByproductStock.jenis_produk == "broken",
@@ -2589,6 +2606,17 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
                milik(ByproductStock.jasa_id),lokasi(ByproductStock)==wid)
         .order_by(ByproductStock.waktu, ByproductStock.id)
     )).all()
+    return wid, direct_rows, procs
+
+
+async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat_kg: float | None):
+    """Satu pembaca rencana untuk preview dan penyimpanan di bawah kunci saldo."""
+    from app.services.saldo_broken_silo import persiapan, proses as saldo_proses
+    from app.models import ByproductStock
+    wid, direct_rows, procs = await _sumber_broken_pemilik(db, jasa_id)
+    prep = await persiapan(db, jasa_id, wid, procs)
+    left = float("inf") if berat_kg is None else float(berat_kg)
+    plan: list[tuple[PolishingProcess, float]] = []
     direct_plan: list[tuple[int, float]] = []
     for row_id, gross in direct_rows:
         from app.services.saldo_broken_silo import curah_bebas
@@ -2603,7 +2631,7 @@ async def rencana_broken_pemilik(db: AsyncSession, *, jasa_id: int | None, berat
         if left <= 0.5:
             break
         from app.services.saldo_broken_silo import proses as saldo_proses
-        available=(await saldo_proses(db,proc,jasa_id,wid))['total']
+        available=(await saldo_proses(db,proc,jasa_id,wid,prep=prep))['total']
         take = min(left, available)
         if take > 0.5:
             plan.append((proc, take))
@@ -2635,6 +2663,26 @@ async def masukkan_stok_broken_pemilik_ke_silo(
             raise Gudang2Error(
                 f"Stok broken milik pemilih tinggal {berat_kg-left:,.0f} kg; "
                 f"tidak cukup untuk memasukkan {berat_kg:,.0f} kg.".replace(",", "."))
+
+        # Rencana mencakup pembukuan sumber yang tetap di stok, terpisah
+        # dari bobot yang masuk silo. Seluruhnya berada dalam savepoint ini.
+        from app.services.saldo_broken_silo import persiapan, bukukan_persiapan
+        wid, _, sources = await _sumber_broken_pemilik(db, jasa_id)
+        prep = await persiapan(db, jasa_id, wid, sources)
+        if prep['items']:
+            await bukukan_persiapan(db, user=user, owner=jasa_id, wid=wid,
+                plan=prep, tanggal=tanggal, jam=jam)
+            # Pembaca yang sama membaca ulang sumber nyata sesudah flush.
+            again_direct, again_plan, again_left = await rencana_broken_pemilik(
+                db, jasa_id=jasa_id, berat_kg=berat_kg)
+            before = (direct_plan, [(p.id,w) for p,w in plan])
+            after = (again_direct, [(p.id,w) for p,w in again_plan])
+            same = (len(before[0]) == len(after[0]) and len(before[1]) == len(after[1])
+                    and all(a[0] == b[0] and abs(a[1]-b[1]) < 1e-7
+                            for old,new in zip(before,after) for a,b in zip(old,new)))
+            if again_left > 0.5 or not same:
+                raise Gudang2Error('Saldo sumber berubah saat disiapkan. Transaksi tidak tersimpan; periksa saldo terbaru.')
+            direct_plan, plan = again_direct, again_plan
 
         moved_codes: list[str] = []
         opened_bags = 0.0

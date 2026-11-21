@@ -5470,7 +5470,7 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
     from sqlalchemy import select
     from app.models import ByproductStock,FinishedGoodsStock,PolishingProcess,ProductSku
     from app.services.jasa import nama_pemilik,pemilik_hasil_proses
-    from app.penggilingan.gudang2.service import rencana_broken_pemilik
+    from app.penggilingan.gudang2.service import rencana_broken_pemilik,Gudang2Error
     from app.services.cakupan_fasilitas import lokasi
     keluar=[]
     async with SessionLocal() as db:
@@ -5484,7 +5484,16 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
             PolishingProcess.status.in_(('proses','selesai')),lokasi(PolishingProcess)==wid))).all():
             owners.add(await pemilik_hasil_proses(db,proc.jasa_id,'broken'))
         for owner in sorted(owners,key=lambda x:(x is not None,x or 0)):
-            direct,procs,_=await rencana_broken_pemilik(db,jasa_id=owner,berat_kg=None)
+            name=await nama_pemilik(db,owner) if owner is not None else 'Pabrik'
+            try:
+                direct,procs,_=await rencana_broken_pemilik(db,jasa_id=owner,berat_kg=None)
+            except Gudang2Error:
+                # Sumber di luar kontrak otomatis tetap dijelaskan, bukan 500
+                # atau angka nol; pemilik lain yang sah tidak ikut terhalang.
+                keluar.append({'value':f"pemilik|{'pabrik' if owner is None else owner}",
+                    'label':f'{name} · rencana ditahan; Admin perlu meninjau sumber/perintah',
+                    'disabled':True})
+                continue
             total=sum(w for _,w in direct+procs)
             if total<=0.5:continue
             name=await nama_pemilik(db,owner) if owner is not None else 'Pabrik'
