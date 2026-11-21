@@ -228,9 +228,9 @@ def test_sorotan_hanya_kalau_memang_ada_rekomendasi():
     sorotan yang muncul di mana-mana berhenti menandakan apa pun."""
     import inspect
 
-    from app.services.berjalan import _tujuan_gabah
+    from app.services.berjalan import _pilihan_tujuan_gabah
 
-    sumber = inspect.getsource(_tujuan_gabah)
+    sumber = inspect.getsource(_pilihan_tujuan_gabah)
     assert 'utama=(kondisi == "kering" and len(silo) == 1)' in sumber
     # Gabah basah cuma punya satu tujuan sungguhan: mesin pengering.
     assert 'utama=(kondisi == "basah" and not mati)' in sumber

@@ -1399,6 +1399,24 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
                         post: str, data: dict,
                         jasa_id: int | None = None,
                         tiket: dict | None = None, warehouse_id: int | None = None) -> list[Tombol]:
+    """Pilihan nilai murni dibaca sekali per GET; payload tetap milik kartunya.
+
+    Banyak batch bisa menawarkan tujuan yang sama. Kode batch/tiket dan URL
+    aksi justru tidak boleh ikut memo: setiap kartu mengikatnya sendiri setelah
+    salinan pilihan diterima. Semua pembeda tujuan (kondisi, pemilik, metadata
+    tiket, gudang) tetap menjadi kunci. Baca di luar GET atau sesi kotor memakai
+    penjaga baca_sekali existing, sehingga bukan cache untuk transaksi.
+    """
+    from dataclasses import replace
+    pilihan = await _pilihan_tujuan_gabah(
+        db, kondisi, jasa_id=jasa_id, tiket=tiket, warehouse_id=warehouse_id)
+    return [replace(t, post=post, data=dict(data, **t.data)) for t in pilihan]
+
+
+@baca_sekali
+async def _pilihan_tujuan_gabah(db: AsyncSession, kondisi: str, *,
+                        jasa_id: int | None = None,
+                        tiket: dict | None = None, warehouse_id: int | None = None) -> list[Tombol]:
     """Tujuan yang sah untuk gabah sekondisi ini — mesinnya disebut satu per satu.
 
     Alasan sebuah tujuan dimatikan diambil dari ATURAN YANG SAMA yang menolak
@@ -1473,8 +1491,8 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
             ket = ("Mesin kosong" if not isi
                    else f"Bergabung dengan {_kg(isi[1])} gabah {isi[0]}")
             keluar.append(Tombol(
-                nama=f"Ke {d.nama}", ket=ket, post=post,
-                data=dict(data, tujuan=f"dryer:{d.id}"),
+                nama=f"Ke {d.nama}", ket=ket, post="",
+                data=dict(tujuan=f"dryer:{d.id}"),
                 utama=(kondisi == "basah" and not mati), mati=mati))
 
     if "silo" in sah:
@@ -1489,18 +1507,18 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
             kg = await _silo_content_kg(db, si.id)
             pemilik_silo, mati_silo = await _pemilik_silo(db, si.id, jasa_id, tiket=tiket)
             keluar.append(Tombol(
-                nama=f"Ke {si.nama_silo}", post=post,
+                nama=f"Ke {si.nama_silo}", post="",
                 ket=("Silo kosong" if not kg
                      else f"Bergabung dengan {_kg(kg)} gabah kering"
                           + (f" milik {pemilik_silo}" if pemilik_silo else "")),
                 mati=mati_silo,
-                data=dict(data, tujuan=f"silo:{si.id}"),
+                data=dict(tujuan=f"silo:{si.id}"),
                 utama=(kondisi == "kering" and len(silo) == 1)))
 
     if "tumpuk" in sah:
         keluar.append(Tombol(
             nama="Ditumpuk di lantai", ket="Tempatnya ditentukan menyusul",
-            post=post, data=dict(data, tujuan="tumpuk")))
+            post="", data=dict(tujuan="tumpuk")))
     return keluar
 
 
