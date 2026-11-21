@@ -1131,13 +1131,44 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True,
         q = q.where(PolishingProcess.id == proses_id)
     if not termasuk_berjalan:
         q = q.where(PolishingProcess.status == "selesai")
+    proses = (await db.execute(q)).scalars().all()
+    # Daftar lintas proses dibaca sekaligus. Jalur satu proses yang dipakai
+    # validasi transaksi tetap memakai pembaca tunggal tanpa memo/snapshot.
+    hasil_banyak = None
+    if proses_id is None and proses:
+        from app.models import FinishedGoodsStock, ProductSku, RiceQualityStandard
+
+        ids = [p.id for p in proses]
+        hasil_banyak = await output_sosoh_banyak(db, ids)
+        standar = {kode: sid for kode, sid in (await db.execute(
+            select(RiceQualityStandard.kode, RiceQualityStandard.id)
+        )).all()}
+        # Predicate dan kilogram bruto persis `_packed_kg`: termasuk batch
+        # curah tercatat, tidak mengurangi kiriman/retur untuk kedua kalinya.
+        dibukukan = {(pid, kategori, sid): float(kg)
+                     for pid, kategori, sid, kg in (await db.execute(
+            select(FinishedGoodsStock.source_id, ProductSku.kategori,
+                   FinishedGoodsStock.rice_quality_standard_id,
+                   func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(FinishedGoodsStock.source_type == "polishing",
+                   dalam(db, FinishedGoodsStock.source_id, ids))
+            .group_by(FinishedGoodsStock.source_id, ProductSku.kategori,
+                      FinishedGoodsStock.rice_quality_standard_id)
+        )).all()}
+        ke_silo = await _dipindah_silo_proc(db, ids)
     keluar: list[BerasCurah] = []
-    for proc in (await db.execute(q)).scalars().all():
-        for jenis, kg in (await output_sosoh(db, proc.id)).items():
+    for proc in proses:
+        hasil = (hasil_banyak.get(proc.id, {}) if hasil_banyak is not None
+                 else await output_sosoh(db, proc.id))
+        for jenis, kg in hasil.items():
             if jenis in _UKURAN_KEMASAN_OTOMATIS:
                 continue
             kategori, mutu = kategori_dan_mutu(jenis)
-            if mutu:
+            if hasil_banyak is not None:
+                sid = standar.get(mutu.lower()) if mutu else None
+                dikemas = dibukukan.get((proc.id, kategori, sid), 0.0)
+            elif mutu:
                 std = await get_standard(db, mutu)
                 dikemas = await _packed_kg(db, proc.id, kategori,
                                            std.id if std else None)
@@ -1146,8 +1177,9 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True,
             # Grade yang sudah dipindah jadi bahan Silo Beras juga "sudah punya
             # rumah" — pola yang sama dengan dikemas di atas (keputusan pemilik
             # 8 Oktober 2026). Lihat docstring `_dipindah_silo_proc`.
-            dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
-                (proc.id, jenis), 0.0) if adalah_grade_beras(jenis) else 0.0
+            pindahan = (ke_silo if hasil_banyak is not None
+                        else await _dipindah_silo_proc(db, [proc.id])) if adalah_grade_beras(jenis) else {}
+            dipindah = pindahan.get((proc.id, jenis), 0.0)
             sisa = float(kg) - dikemas - dipindah
             # Nol berarti sudah habis dikemas — bukan kabar, jadi tak berkartu.
             # Yang MINUS justru kabar: lebih banyak dikemas daripada yang keluar
