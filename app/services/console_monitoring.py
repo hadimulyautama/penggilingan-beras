@@ -153,26 +153,35 @@ async def ringkasan(db,f:FilterMonitoring):
     subject=func.concat(E.jenis_akun,':',cast(E.akun_id,String))
     manual=[*where,E.jenis=='interaksi',E.akun_id>0]
     def batas(days):return datetime.combine(today-timedelta(days=days-1),time.min,tz).astimezone(timezone.utc)
-    activity={}
-    for key,lower in [('aktif_sekarang',now-timedelta(minutes=5)),('aktif_hari',batas(1)),('aktif_minggu',batas(7)),('aktif_bulan',batas(30))]:
-        # Metrik hari/minggu/bulan selalu memakai rentang definisinya sendiri,
-        # bukan dipotong tanggal grafik 7 hari yang sedang dipilih.
-        w=[E.company_id==cid,E.aplikasi.in_(enabled),E.jenis=='interaksi',E.akun_id>0,E.waktu>=lower,E.waktu<=now]
-        if f.aplikasi:w.append(E.aplikasi==f.aplikasi)
-        activity[key]=await db.scalar(select(func.count(func.distinct(subject))).where(*w))
+    bounds=dict(aktif_sekarang=now-timedelta(minutes=5),aktif_hari=batas(1),aktif_minggu=batas(7),aktif_bulan=batas(30))
+    # Satu pembacaan event untuk seluruh metrik. Batas aktivitas tetap
+    # independen dari periode grafik; FILTER membatasi metrik periode.
+    aggregate_where=[E.company_id==cid,E.aplikasi.in_(enabled),E.waktu>=min(start,*bounds.values()),E.waktu<=now]
+    if f.aplikasi:aggregate_where.append(E.aplikasi==f.aplikasi)
+    in_period=E.waktu>=start
+    interaction=and_(E.jenis=='interaksi',E.akun_id>0)
+    post=and_(in_period,E.jenis=='respons_web',E.metode.in_(['POST','PUT','PATCH','DELETE']),E.layar!='masuk')
+    stats=(await db.execute(select(
+        *[func.count(func.distinct(subject)).filter(interaction,E.waktu>=lower).label(key) for key,lower in bounds.items()],
+        func.count().filter(in_period,interaction).label('interaksi'),
+        func.count().filter(post).label('respons_simpan'),
+        func.count().filter(post,func.substr(E.kode,1,1).in_(['2','3'])).label('respons_diterima'),
+        func.count().filter(post,E.kode.in_(['401','403'])).label('akses_ditolak'),
+        func.count().filter(post,E.kode.in_(['409','422'])).label('validasi'),
+        func.count().filter(post,func.substr(E.kode,1,1)=='5').label('server_error_simpan'),
+        func.percentile_cont(.95).within_group(E.durasi_ms).filter(post,E.durasi_ms.isnot(None)).label('p95_ms'),
+        func.count().filter(in_period,or_(E.jenis=='galat_browser',and_(E.jenis=='respons_web',func.substr(E.kode,1,1)=='5'))).label('galat'),
+        func.count().filter(in_period,E.jenis=='login',E.kode!='berhasil').label('login_gagal'),
+    ).select_from(E).where(*aggregate_where))).mappings().one()
+    activity={key:stats[key] for key in bounds}
+    events=stats['interaksi']
+    response=tuple(stats[key] for key in ('respons_simpan','respons_diterima','akses_ditolak','validasi','server_error_simpan'))
+    p95=stats['p95_ms'];errors=stats['galat'];loginfails=stats['login_gagal']
     identities=await sumber_akun(db,cid)
     account_counts=(await db.execute(select(func.count(),func.sum(case((identities.c.jenis!='staf_belum_login',1),else_=0)),func.sum(case((identities.c.aktif.is_(True),1),else_=0))).select_from(identities))).one()
     sources=list(await db.scalars(select(SumberMonitoring).where(SumberMonitoring.company_id==cid,SumberMonitoring.aplikasi.in_(enabled))))
     applicable=[s for s in sources if not f.aplikasi or s.aplikasi==f.aplikasi]
     first=min((s.mulai for s in applicable),default=None)
-    events=await db.scalar(select(func.count()).select_from(E).where(*manual))
-    posts=[*where,E.jenis=='respons_web',E.metode.in_(['POST','PUT','PATCH','DELETE']),E.layar!='masuk']
-    response=(await db.execute(select(func.count(),func.sum(case((func.substr(E.kode,1,1).in_(['2','3']),1),else_=0)),
-        func.sum(case((E.kode.in_(['401','403']),1),else_=0)),func.sum(case((E.kode.in_(['409','422']),1),else_=0)),
-        func.sum(case((func.substr(E.kode,1,1)=='5',1),else_=0))).where(*posts))).one()
-    p95=await db.scalar(select(func.percentile_cont(.95).within_group(E.durasi_ms)).where(*posts,E.durasi_ms.isnot(None)))
-    errors=await db.scalar(select(func.count()).select_from(E).where(*where,or_(E.jenis=='galat_browser',and_(E.jenis=='respons_web',func.substr(E.kode,1,1)=='5'))))
-    loginfails=await db.scalar(select(func.count()).select_from(E).where(*where,E.jenis=='login',E.kode!='berhasil'))
     tanggal_event=cast(func.timezone(settings.app_timezone,E.waktu),Date)
     perday=(await db.execute(select(tanggal_event,func.count(func.distinct(subject)),func.count()).where(*manual).group_by(tanggal_event))).all()
     days={d:(u,n) for d,u,n in perday};daily=[]
