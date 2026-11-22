@@ -26,21 +26,8 @@ async function previewAuto(){
 }
 // Ini penolakan domain yang sudah pasti, bukan acuan usang yang selesai dengan
 // membaca ulang. Jangan menjanjikan pengajuan atau membatalkan catatan benar.
-function pesanPenolakanHasil(box,e,stage='pratinjau'){
- const match=e.status===409&&e.message.match(/^([^:]+): hasil sudah mempunyai catatan kemasan\/perpindahan terkait\. Gunakan alur koreksi lama untuk jenis nonotomatis\.$/);
- const kind=match&&match[1];
- if(!kind||!data.jenis_hasil.includes(kind)){
-  if(stage==='periksa'||stage==='simpan'&&e.status===409){
-   box.replaceChildren(el('h3',stage==='periksa'?'Belum dikirim untuk disimpan':'Koreksi ditolak server'),el('p',stage==='periksa'?'Pemeriksaan belum berhasil. Koreksi ini belum dikirim untuk disimpan.':'Permintaan ini ditolak; tidak ada koreksi baru yang disimpan.'),el('p',e.message),el('p','Angka dan alasan tetap di editor. Baca data & status terbaru sebelum melanjutkan.'));
-  }else box.textContent=e.message;
-  return false;
- }
- const nama=data.nama_hasil?.[kind]||names[kind]||kind;
- box.replaceChildren(el('h3','Koreksi belum disimpan'),el('p',nama+' sudah memiliki catatan kemasan atau perpindahan terkait.'),el('p','Angka dan alasan yang Anda isi tetap di editor ini.'));
- box.append(el('p',root.dataset.layout==='operator'?'Minta Admin meninjau catatan kemasan/perpindahan proses '+data.kode+' bersama jenis hasil dan total yang benar.':'Tinjau catatan kemasan/perpindahan proses '+data.kode+' bersama jenis hasil dan total yang benar sebelum menentukan koreksi lanjutan.'));
- box.append(el('p','Jangan mengulang pencatatan hasil atau membatalkan kemasan/pengiriman yang sudah benar agar koreksi bisa disimpan.','kb-note'));
- return true;
-}
+// Fallback pesan biasa; kontrak pending/status tetap dipertahankan.
+function pesanPenolakanHasil(box,e,stage='pratinjau'){box.textContent=e.message;return false;}
 async function saveAuto(){if(busy||uncertain||!directOutput())return;let snapshot;try{snapshot=autoPayload();if(!reason.trim())throw Error('Alasan koreksi wajib diisi.');if(!autoPlan||snapshot.stamp!==autoStamp)throw Error('Tunggu dampak terbaru sebelum menyimpan.');}catch(e){error.textContent=e.message;return;}clearTimeout(autoTimer);++autoSeq;busy=true;render();try{last=snapshot.req;review=await call(endpoint+'/periksa',last);}catch(e){busy=false;review=null;autoPlan=null;autoStamp='';autoIssue={error:e,stage:'periksa'};error.textContent='';recovery.hidden=false;persist();render();return;}busy=false;await save();}
 function btn(label,fn,primary=false){let b=el('button',label,'btn'+(primary?' btn--utama':''));b.type='button';b.disabled=busy||uncertain;b.onclick=fn;return b;}
 function dirty(){return Object.values(drafts).some(d=>{const e=data.entries.find(x=>x.id===d.id);return e&&(d.hapus||d.sumber!==e.sumber||d.jumlah===''||Number(d.jumlah)!==Number(e.jumlah)||d.sisa!==undefined&&Number(d.sisa)!==Number(e.sisa));})||Object.keys(out).length||Object.values(linked).some(Boolean)||reason.trim()||uncertain;}
