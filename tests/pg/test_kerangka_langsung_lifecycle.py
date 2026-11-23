@@ -103,7 +103,8 @@ async def buka_kerja_berjalan(page):
 async def bungkus(c):
     native=c.request;reads=[]
     async def request(method,url,**kw):
-        reads.append(dict(method=method,url=str(url),headers={k:v for k,v in kw.get('headers',{}).items() if k.lower() in {'x-pindah','x-kerangka-halaman','x-barang-masuk-cari'}}))
+        item=dict(method=method,url=str(url),headers={k:v for k,v in kw.get('headers',{}).items() if k.lower() in {'x-pindah','x-kerangka-halaman','x-barang-masuk-cari'}})
+        reads.append(item)
         assert method=='GET','Uji lifecycle tidak mengirim transaksi'
         response=await native(method,url,**kw)
         if str(url).split('?')[0]=='/static/pindah.js':
@@ -111,7 +112,7 @@ async def bungkus(c):
             import app.main
             expected=Path(app.main.__file__).resolve().parents[1]/'hmu_tampilan/static/pindah.js'
             assert sdk==hashlib.sha256(expected.read_bytes()).hexdigest()
-            reads[-1]['served_SDK_sha256']=sdk
+            item['served_SDK_sha256']=sdk
         return response
     c.request=request
     return reads
@@ -160,8 +161,9 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
                 await page.set_viewport_size({'width':430,'height':900});await flush(page)
                 await page.set_viewport_size({'width':390,'height':900});await flush(page)
                 resize_after=await page.evaluate("({events:__life.resizeEvents,calls:__life.menuHandlers.filter(r=>r.active&&r.target==='window'&&r.jenis==='resize').reduce((s,r)=>s+r.calls,0)})")
-                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset=await page.evaluate('__life.oldAsset'),reads=reads,active_menu_handlers=active,resize_before=resize_before,resize_after=resize_after,three_full_swaps=True,Escape_current_close_once=True)
+                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset=await page.evaluate('__life.oldAsset'),reads=reads,active_menu_handlers=active,resize_before=resize_before,resize_after=resize_after,three_full_swaps=True,Escape_current_close_once=True,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
                 simpan('R1-footer',observed)
+                assert observed['all_public_tables_unchanged'] and not t['posts']
                 assert await page.evaluate('__life.pushes.length')==at
                 assert len([r for r in active if r['target']=='window' and r['jenis']=='resize'])==1,'Listener resize current dari asset native tidak boleh ganda'
                 assert resize_after['events']>resize_before['events']
