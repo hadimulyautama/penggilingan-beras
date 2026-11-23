@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.web.security import butuh_akun
 
 router = APIRouter(tags=["webapp"])
-ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa"}
+ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa", "barang-masuk": "/barang-masuk"}
 
 
 def memakai_kerangka(request: Request, jenis: str) -> bool:
@@ -32,6 +32,7 @@ def memakai_kerangka(request: Request, jenis: str) -> bool:
                  and request.headers.get("Sec-Fetch-Mode") == "navigate"
                  and request.headers.get("Sec-Fetch-Dest") in {"document", "empty"})
             and not is_customer_read(request)
+            and not (jenis == "barang-masuk" and request.headers.get("X-Barang-Masuk-Cari") == "1")
             and request.url.path == ALAMAT[jenis]
             and (jenis != "pekerjaan" or request.query_params.get("tab") == "berjalan"))
 
@@ -108,6 +109,9 @@ async def kerangka(request: Request, akun, jenis: str):
             async with SessionLocal() as db:
                 izin_transfer = await boleh_baca_stok(db, akun.user)
             konteks['AKSES'] = {**hak_view('tamu'), 'transfer': izin_transfer}
+    if jenis == 'barang-masuk':
+        from app.web.barang_masuk_bertahap import kerangka as kerangka_masuk
+        return await kerangka_masuk(request, akun, konteks)
     if jenis == 'jasa':
         from app.web.jasa_bertahap import kerangka as kerangka_jasa
         return await kerangka_jasa(request, akun, konteks)
@@ -191,6 +195,10 @@ async def _isi(request: Request, akun, jenis: str):
         raise HTTPException(404, "Halaman tidak dikenal.")
     if jenis == "pekerjaan" and request.query_params.get("tab") != "berjalan":
         raise HTTPException(422, "Pilih tab Berjalan.")
+    if jenis == 'barang-masuk':
+        from app.web.portal.scope import is_customer_read
+        if is_customer_read(request):
+            raise HTTPException(403, 'Gunakan daftar penerimaan pada portal sesuai cakupan pelanggan.')
     from starlette.requests import Request as NativeRequest
 
     scope = {**request.scope, "path": ALAMAT[jenis], "raw_path": ALAMAT[jenis].encode(),
@@ -199,12 +207,17 @@ async def _isi(request: Request, akun, jenis: str):
     if jenis == "pekerjaan":
         from app.web.layar_pekerjaan import halaman_pekerjaan
         response = await halaman_pekerjaan(native, akun)
+    elif jenis == 'barang-masuk':
+        from app.web.layar_pekerjaan import halaman_barang_masuk
+        response = await halaman_barang_masuk(native, akun)
     elif jenis == 'jasa':
         from app.web.layar_jasa import halaman_jasa
         response = await halaman_jasa(native, akun)
     else:
         from app.web.layar_stok import halaman_stok
         response = await halaman_stok(native, akun)
+    if jenis == 'barang-masuk' and response.status_code == 503:
+        return native, response
     if response.status_code != 200:
         raise HTTPException(409, "Tujuan halaman berubah. Buka kembali halaman dari menu.")
     response.headers["Cache-Control"] = "private, no-store"
@@ -215,6 +228,7 @@ async def _isi(request: Request, akun, jenis: str):
 async def isi_halaman(jenis: str, request: Request, akun=Depends(butuh_akun)):
     native, response = await _isi(request, akun, jenis)
     return JSONResponse(dict(stamp=penanda(native, akun, jenis), html=response.body.decode("utf-8")),
+                        status_code=response.status_code if jenis == "barang-masuk" else 200,
                         headers={"Cache-Control": "private, no-store"})
 
 

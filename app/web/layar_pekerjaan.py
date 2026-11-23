@@ -172,6 +172,9 @@ async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=
 async def halaman_barang_masuk(request: Request, akun=Depends(butuh_akun)):
     if (alih:=tautan_penerimaan_lama(request)) is not None:return alih
     if not is_customer_read(request):
+        from app.web.halaman_bertahap import memakai_kerangka, kerangka
+        if memakai_kerangka(request, 'barang-masuk'):
+            return await kerangka(request, akun, 'barang-masuk')
         from app.web.barang_masuk_pencarian import halaman
         return await halaman(request,akun)
     from app.web.api import _is_g1_operator, _is_g2_operator

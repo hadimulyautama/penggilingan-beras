@@ -13,7 +13,7 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
-  return u.origin===location.origin&&(u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'&&u.searchParams.get('tab')==='berjalan');
+  return u.origin===location.origin&&(u.pathname==='/barang-masuk'||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'&&u.searchParams.get('tab')==='berjalan');
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);

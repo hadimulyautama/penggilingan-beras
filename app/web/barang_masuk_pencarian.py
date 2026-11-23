@@ -11,19 +11,14 @@ log = logging.getLogger(__name__)
 
 
 async def halaman(request, akun):
-    from app.web.layar_pekerjaan import pilihan, tautan
-    from app.web.stok_navigasi import pelanggan_diminta
+    from app.web.layar_pekerjaan import tautan
     from app.services.kelompok_kerja import JENIS_BARANG
     from app.web.api import _is_g1_operator, _is_g2_operator, _is_gabah_operator
     from app.peran import can_see_financials
     from app.models import Pelanggan
-    status=pilihan(request,'status',{'belum','diterima'},'belum')
-    jenis=pilihan(request,'jenis',dict(JENIS_BARANG))
-    pemilik=pilihan(request,'kepemilikan',{'jasa','pabrik'})
-    gudang=pilihan(request,'gudang',{'g1','g2'})
-    pid=pelanggan_diminta(request)
-    cari=request.query_params.get('cari','').strip()
-    pemasok=request.query_params.get('pemasok','')
+    from app.web.barang_masuk_bertahap import parameter, metadata, selesai
+    p = parameter(request)
+    status,jenis,pemilik,gudang,pid,cari,pemasok = (p[k] for k in ('status','jenis','pemilik','gudang','pid','cari','pemasok'))
     pelanggan_saring=''
     gagal=False;b=None
     try:
@@ -47,9 +42,10 @@ async def halaman(request, akun):
     konteks='/barang-masuk?'+urlencode(q)
     def detail(tid):return '/barang-masuk/'+str(tid)+'?'+urlencode(dict(kembali_kerja=konteks))
     # Satu pembaca/satu template untuk navigasi biasa maupun permintaan Cari.
-    return render(request,'barang_masuk_pencarian.html',status_code=503 if gagal else 200,
+    response = render(request,'barang_masuk_pencarian.html',status_code=503 if gagal else 200,
         layar='barang_masuk',status=status,jenis=jenis,pemilik=pemilik,gudang=gudang,
         jenis_barang=JENIS_BARANG,cari=cari,pemasok=pemasok,gagal=gagal,pelanggan_saring=pelanggan_saring,
         detail_tiket=detail,detail_penerimaan={k:detail(v['id']) for k,v in d['meta_tiket'].items()},
         href=lambda **p:tautan(request,'/barang-masuk',**p),lama=berjalan._lama,buka='',nilai='',
-        **d,**(b.lencana() if b else {}))
+        **d,**metadata(request,akun),**(b.lencana() if b else {}))
+    return selesai(response,gagal)

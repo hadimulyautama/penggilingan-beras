@@ -8,12 +8,13 @@ R=Path(__file__).resolve().parents[1]
 @pytest.mark.parametrize('width',[390,1440])
 @pytest.mark.parametrize('status',['belum','diterima'])
 def test_halaman_aktif_dan_pencarian_server(width,status,tmp_path):
- env=Environment(loader=ChoiceLoader([DictLoader({'base.html':'<div class="bingkai"><main class="isi">{% block isi %}{% endblock %}</main></div>'}),FileSystemLoader(R/'app/web/templates'),FileSystemLoader(R/'hmu_tampilan/templates')]),autoescape=True)
+ env=Environment(loader=ChoiceLoader([DictLoader({'base.html':'<div id="formulir-sesi" data-token="fixture"></div><div class="bingkai"><main class="isi">{% block isi %}{% endblock %}</main></div>'}),FileSystemLoader(R/'app/web/templates'),FileSystemLoader(R/'hmu_tampilan/templates')]),autoescape=True)
  env.filters['jam']=lambda *_:'04/11/2026';calls=[]
+ from app.web.barang_masuk_bertahap import KOLOM
  def render(url):
   u=urlsplit(url);q={k:v[0] for k,v in parse_qs(u.query,keep_blank_values=True).items()};calls.append(q)
   req=Request(dict(type='http',path='/barang-masuk',query_string=u.query.encode(),headers=[],scheme='http',server=('uji.local',80)))
-  html=env.get_template('barang_masuk_pencarian.html').render(request=req,VERSI='501',TAMPILAN_INDUK=True,VIEW='super',V_MEJA=['super'],status=q.get('status',status),jenis=q.get('jenis',''),pemilik=q.get('kepemilikan',''),gudang=q.get('gudang',''),cari=q.get('cari',''),pemasok=q.get('pemasok',''),total_belum=0,total_diterima=0,jumlah=0,menunggu=[],riwayat=[],gagal=False,pelanggan_saring='',nama_saring=['Pak Suroto'],jenis_barang=[('gabah','Gabah'),('pk','PK')],halaman_akhir=1,href=lambda **p:'/barang-masuk?'+urlencode(dict(q,**p)))
+  html=env.get_template('barang_masuk_pencarian.html').render(request=req,VERSI='501',BM_CONTEXT='fixture-context',BM_CAP='fixture-cap',BM_SCHEMAS=KOLOM,TAMPILAN_INDUK=True,VIEW='super',V_MEJA=['super'],status=q.get('status',status),jenis=q.get('jenis',''),pemilik=q.get('kepemilikan',''),gudang=q.get('gudang',''),cari=q.get('cari',''),pemasok=q.get('pemasok',''),total_belum=0,total_diterima=0,jumlah=0,menunggu=[],riwayat=[],gagal=False,pelanggan_saring='',nama_saring=['Pak Suroto'],jenis_barang=[('gabah','Gabah'),('pk','PK')],halaman_akhir=1,href=lambda **p:'/barang-masuk?'+urlencode(dict(q,**p)))
   css=''.join((R/'hmu_tampilan/static'/f).read_text() for f in ['app.css','komponen-portal.css','panduan.css','kontrol-halaman.css'])
   return '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body class="padiflow-ui terik">'+html+'<script src="/static/barang-masuk.js?v=501"></script><script src="/static/barang-masuk-pencarian.js?v=501"></script></body>'
  with sync_playwright() as p:
@@ -46,4 +47,5 @@ async def test_rute_internal_memakai_pembaca_pencarian(monkeypatch):
  monkeypatch.setattr(layar_pekerjaan,'tautan_penerimaan_lama',lambda _:None);monkeypatch.setattr(layar_pekerjaan,'is_customer_read',lambda _:False)
  async def halaman(request,akun):return 'pencarian-aktif'
  monkeypatch.setattr(barang_masuk_pencarian,'halaman',halaman)
- assert await layar_pekerjaan.halaman_barang_masuk(object(),object())=='pencarian-aktif'
+ request=Request(dict(type='http',path='/barang-masuk',query_string=b'',headers=[],scheme='http',server=('uji.local',80)))
+ assert await layar_pekerjaan.halaman_barang_masuk(request,object())=='pencarian-aktif'
