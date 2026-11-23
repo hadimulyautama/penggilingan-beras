@@ -302,11 +302,22 @@ async def test_asset_daftar_gagal_tetap_ada_jalur_GET_dan_menu(pg, lengkap, widt
             await expect(page.locator('[data-bm-search] input[name=cari]')).to_have_value('')
             # Recover by one user GET, never by a business POST or another controller.
             transport['fail_asset'] = False
-            await reload.click()
+            origin_before = await page.evaluate('performance.timeOrigin')
+            async with page.expect_navigation(wait_until='domcontentloaded') as navigation:
+                await reload.click()
+            response = await navigation.value
+            assert response is not None and response.status == 200
+            await page.wait_for_load_state('load')
+            assert await page.evaluate('performance.timeOrigin') != origin_before
             await expect(page.locator('[data-bm-shell]')).to_have_count(0)
             await expect(page.locator('[data-bm-bootstrap]')).to_have_count(0)
             if width < 900:
-                await page.locator('#buka-laci').click()
+                button = page.locator('#buka-laci')
+                await expect(button).to_have_attribute('aria-expanded', 'false')
+                await button.click()
+                await expect(button).to_have_attribute('aria-expanded', 'true')
+                await expect(page.locator('#laci')).to_be_visible()
+                await expect(page.locator('#laci a[href="/kabar"]')).to_be_in_viewport()
             await page.locator('#laci a[href="/kabar"]').click()
             await expect(page).to_have_url(BASE + '/kabar')
             assert not transport['posts']
@@ -381,3 +392,65 @@ async def test_pemulihan_belum_commit_kembali_isian_dari_qc(pg,lengkap):
             finally:
                 if job and not job.done():
                     job.cancel();await asyncio.gather(job,return_exceptions=True)
+
+
+_TUNDA_CLOSE_BM = """(() => {
+ const log=[], gate={enabled:true,target:null,log};
+ window.__bmClose=gate;
+ function label(n){return {tag:n?.tagName||null,id:n?.id||null,name:n?.name||null};}
+ document.addEventListener('focusin',e=>log.push({event:'focusin',node:label(e.target),t:performance.now()}),true);
+ document.addEventListener('close',e=>{
+   if(e.target.id!=='bm-filter')return;
+   log.push({event:gate.enabled?'close-held':'close-delivered',active:label(document.activeElement),t:performance.now()});
+   if(gate.enabled){e.stopImmediatePropagation();gate.target=e.target;}
+ },true);
+ gate.release=()=>{gate.enabled=false;gate.target.dispatchEvent(new Event('close'));log.push({event:'released',active:label(document.activeElement),t:performance.now()});};
+})();"""
+
+@pytest.mark.parametrize('renderer',['native','shell'])
+async def test_close_terlambat_menghormati_fokus_isian(pg,lengkap,renderer):
+    entered,release=asyncio.Event(),asyncio.Event()
+    async with await _klien(pg,role=P.ADMIN) as c:
+        if renderer=='native':
+            native=c.request
+            async def request(method,url,**kw):
+                if str(url).split('?',1)[0]=='/barang-masuk':
+                    kw['headers']={**kw.get('headers',{}),'X-Pindah':'1'}
+                    kw['headers'].pop('x-kerangka-halaman',None)
+                return await native(method,url,**kw)
+            c.request=request
+        before=await _sidik(pg)
+        async with peramban(c,390) as (page,transport):
+            await page.add_init_script(_TUNDA_CLOSE_BM)
+            try:
+                if renderer=='shell':
+                    transport['gates']['/api/halaman-bertahap/barang-masuk']=(entered,release)
+                    await page.goto(BASE+'/kabar');await page.locator('#buka-laci').click()
+                    await page.locator('#laci a[href="/barang-masuk"]').click()
+                    await asyncio.wait_for(entered.wait(),15)
+                else:await page.goto(BASE+'/barang-masuk')
+                root=page.locator('[data-bm-page]');search=root.locator('[data-bm-search] input[name=cari]')
+                await root.locator('#bm-filter').evaluate("d=>d.addEventListener('close',()=>{__bmClose.cleanupCount=(__bmClose.cleanupCount||0)+1})")
+                await root.locator('.kontrol-filter').click();await expect(root.locator('#bm-filter')).to_be_visible()
+                await page.keyboard.press('Escape')
+                await page.wait_for_function('window.__bmClose.target!==null')
+                await expect(root.locator('.kontrol-filter')).to_be_focused()
+                await search.fill('Pilihan operator setelah dialog ditutup')
+                await expect(search).to_be_focused()
+                await page.evaluate('window.__bmClose.release()')
+                await page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
+                result=await page.evaluate("()=>({timeline:__bmClose.log,active:{tag:document.activeElement.tagName,id:document.activeElement.id,name:document.activeElement.name||null},value:document.querySelector('[data-bm-search] input[name=cari]').value,native_cleanup_count:__bmClose.cleanupCount||0})")
+                result.update(renderer=renderer,source='native callback, test-only close-event delivery barrier',business_POSTs=len(transport['posts']),tables_unchanged=await _sidik(pg)==before)
+                if os.environ.get('PHASE_OUT'):
+                    engine=os.environ.get('UJI_BROWSER',os.environ.get('OWNER_BROWSER','chromium'))
+                    (Path(os.environ['PHASE_OUT'])/(engine+'-'+renderer+'-close-timeline.json')).write_text(json.dumps(result,indent=2)+'\n')
+                assert not transport['posts'] and result['tables_unchanged'] and result['native_cleanup_count']==1
+                await expect(search).to_be_focused()
+                await expect(search).to_have_value('Pilihan operator setelah dialog ditutup')
+                release.set()
+                if renderer=='shell':
+                    await expect(root.locator('[data-bm-read-status]')).to_contain_text('Isian pilihan tetap dipertahankan')
+                    await expect(search).to_be_focused()
+                assert not transport['errors'],transport['errors']
+            finally:release.set()
+        assert await _sidik(pg)==before
