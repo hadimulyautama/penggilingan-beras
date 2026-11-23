@@ -24,7 +24,7 @@ BASE = 'https://uji'
 async def peramban(client, width):
     """Browser supplies Sec-Fetch; ASGI and native fixture supply all data."""
     gates, posts, errors = {}, [], []
-    transport = dict(gates=gates, posts=posts, errors=errors, gets=[], corrupt_context=False)
+    transport = dict(gates=gates, posts=posts, errors=errors, gets=[], corrupt_context=False, fail_asset=False)
     pending = set()
     closing = False
     async with async_playwright() as pw:
@@ -49,6 +49,9 @@ async def peramban(client, width):
                 posts.append(u.path)
             else:
                 transport['gets'].append(u.path)
+            if u.path == '/static/barang-masuk-pencarian.js' and transport['fail_asset']:
+                await route.fulfill(status=503, body='Fixture asset unavailable')
+                return
             headers = await request.all_headers()
             job = asyncio.create_task(client.request(request.method,
                 u.path + ('?' + u.query if u.query else ''), content=request.post_data_buffer,
@@ -249,3 +252,31 @@ async def test_reload_commit_opaque_memulihkan_key_status_tanpa_post_ulang(pg, l
                 assert not transport['errors'], transport['errors']
             finally:
                 asset_release.set()
+
+
+@pytest.mark.parametrize('width', [390, 1280])
+async def test_asset_daftar_gagal_tetap_ada_jalur_GET_dan_menu(pg, lengkap, width):
+    """A failed optional initializer must not leave an inescapable loading row."""
+    async with await _klien(pg, role=P.OPERATOR, gudang_id=lengkap['gudang']['g2']) as c:
+        before = await _sidik(pg)
+        async with peramban(c, width) as (page, transport):
+            transport['fail_asset'] = True
+            await page.goto(BASE + '/barang-masuk?cari=TRX-391')
+            fallback = page.locator('[data-bm-bootstrap]')
+            await expect(fallback).to_be_visible()
+            await expect(fallback).to_contain_text('hanya membaca data')
+            reload = fallback.get_by_role('link', name='muat ulang halaman')
+            await expect(reload).to_have_attribute('href', '/barang-masuk?cari=TRX-391')
+            await expect(page.locator('[data-bm-search] input[name=cari]')).to_have_value('TRX-391')
+            # Recover by one user GET, never by a business POST or another controller.
+            transport['fail_asset'] = False
+            await reload.click()
+            await expect(page.locator('[data-bm-shell]')).to_have_count(0)
+            await expect(page.locator('[data-bm-bootstrap]')).to_have_count(0)
+            if width < 900:
+                await page.locator('#buka-laci').click()
+            await page.locator('#laci a[href="/kabar"]').click()
+            await expect(page).to_have_url(BASE + '/kabar')
+            assert not transport['posts']
+            assert not transport['errors'], transport['errors']
+        assert await _sidik(pg) == before

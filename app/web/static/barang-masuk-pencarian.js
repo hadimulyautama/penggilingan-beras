@@ -8,6 +8,7 @@
   let schemas;try{schemas=JSON.parse(root.dataset.bmSchemas);}catch(_){return;}
   if(!root.dataset.bmContext||!root.dataset.bmCap||!schemas?.belum||!schemas?.diterima)return;
   root.dataset.siap='1';
+  root.querySelector('[data-bm-bootstrap]')?.setAttribute('hidden','');
   const search=root.querySelector('[data-bm-search]'),input=search.querySelector('[name=cari]'),name=search.querySelector('[name=pemasok]');
   const result=root.querySelector('[data-bm-results]'),status=root.querySelector('[data-bm-read-status]'),error=root.querySelector('[data-bm-error]');
   const token=()=>document.getElementById('formulir-sesi')?.dataset.token||'';
@@ -81,7 +82,8 @@
   outer=document.querySelector('nav[aria-label="Bagian Barang Masuk"]');if(outer){if(outer.bmReadHandler)outer.removeEventListener('click',outer.bmReadHandler);outer.bmReadHandler=nav;outer.addEventListener('click',nav);}
   function leave(e){if(e.defaultPrevented||!root.isConnected||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0)return;const a=e.target.closest('a[href]');if(a&&!a.target&&!a.hash&&!a.hasAttribute('download'))stop();}
   document.addEventListener('click',leave);
-  root.addEventListener('close',resume,true);root.addEventListener('focusout',()=>queueMicrotask(resume));
+  root.addEventListener('close',resume,true);// Tunggu default perpindahan fokus keyboard selesai sebelum mengganti DOM.
+  root.addEventListener('focusout',()=>requestAnimationFrame(resume));
   root.querySelector('[data-bm-retry]').addEventListener('click',()=>{if(values()!==lastDraft&&lastDraft){status.textContent='Isian pilihan berubah. Tekan Cari atau Terapkan filter agar pilihan terbaru digunakan.';return;}baca(lastURL);});
   if(window.PADIFLOW_MASUK)PADIFLOW_MASUK(root.querySelector('.bm-kepala'));changed();
   if(root.hasAttribute('data-bm-shell'))baca(root.dataset.bmUrl,true,false);else printReady(!root.querySelector('[data-bm-error]:not([hidden])'));

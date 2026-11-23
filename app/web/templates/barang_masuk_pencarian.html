@@ -45,6 +45,7 @@
 {% if not LAPORAN_NAV %}<dialog class="bm-panel bm-menu" id="bm-tindakan" aria-labelledby="bm-tindakan-judul"><div class="bm-panel-kepala"><h2 id="bm-tindakan-judul">Tindakan</h2><button class="btn bm-ikon" type="button" data-bm-tutup aria-label="Tutup tindakan">×</button></div><button class="btn" type="button" data-bm-buka="bm-panduan">Panduan penerimaan</button><button class="btn" type="button" data-bm-cetak{% if bm_loading or gagal %} disabled aria-describedby="bm-cetak-alasan"{% endif %}>Print daftar halaman ini</button></dialog>{% endif %}
 </header>
 <p id="bm-cetak-alasan" class="bantu"{% if not bm_loading and not gagal %} hidden{% endif %}>Cetak tersedia setelah daftar berhasil dibaca.</p>
+{% if bm_loading %}<p data-bm-bootstrap class="bantu" role="status">Daftar belum selesai dibaca. Jika tidak muncul, <a data-utuh href="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">muat ulang halaman</a>. Menu dan pencarian tetap tersedia; muat ulang hanya membaca data.</p>{% endif %}
 <p data-bm-read-status role="status" aria-live="polite">{{ 'Memuat daftar penerimaan…' if bm_loading else '' }}</p>
 <div data-bm-error role="alert"{% if not gagal %} hidden{% endif %}>Daftar penerimaan gagal dimuat. Isian dan filter tetap tersedia. <button type="button" class="btn btn--kecil" data-bm-retry>Coba lagi</button></div>
 <div data-bm-results{% if bm_loading %} aria-busy="true"{% endif %}>
