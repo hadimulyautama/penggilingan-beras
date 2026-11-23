@@ -34,6 +34,9 @@ async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
     from app.services.kelompok_kerja import bagi
     if not can_see_financials(akun.user):
         raise HTTPException(403, "Layar Jasa milik Admin ke atas.")
+    from app.web.halaman_bertahap import memakai_kerangka, kerangka
+    if memakai_kerangka(request, 'jasa'):
+        return await kerangka(request, akun, 'jasa')
     tapis = request.query_params.get('status','')
     if tapis not in dict(svc.STATUS):
         tapis=''

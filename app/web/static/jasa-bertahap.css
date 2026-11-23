@@ -1,0 +1,7 @@
+/* Khusus daftar Jasa; kartu dan kontrol native tidak diubah. */
+[data-jasa-bertahap] [hidden]{display:none!important}
+.jasa-baca-status{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-block:12px}
+.jasa-baca-status p{margin:0}
+.jasa-pelanggan--memuat h2{margin-top:0}
+.jasa-pelanggan--memuat .jasa-angka strong{font-size:1rem}
+.jasa-pelanggan--memuat small{display:block}

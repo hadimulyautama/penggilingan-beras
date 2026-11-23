@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block judul %}Pesanan Jasa{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=3">
+<link rel="stylesheet" href="/static/jasa-bertahap.css?v={{ VERSI }}">
+<section data-jasa-bertahap data-stamp="{{ JASA_SHELL.stamp }}" data-url="{{ JASA_SHELL.url }}" data-filtered="{{ '1' if JASA_SHELL.filtered else '0' }}">
+<h1>Pesanan Jasa</h1>
+{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol() }}
+<p class="bantu" id="jasa-cetak-alasan">Cetak tersedia setelah daftar pelanggan selesai dibaca.</p>
+<div class="jasa-baca-status"><p role="status" aria-live="polite" data-jasa-baca-status>Memuat pelanggan dan saldo…</p><button class="btn" type="button" data-jasa-baca-ulang hidden>Coba lagi</button></div>
+<div data-jasa-baca-isi aria-busy="true">
+<p class="bantu" data-jasa-jumlah>Jumlah pelanggan belum dibaca.</p>
+<div class="jasa-daftar" role="list" aria-label="Pelanggan jasa">
+<article class="kartu jasa-pelanggan jasa-pelanggan--memuat" role="listitem">
+<h2>Pelanggan</h2><p class="bantu">Penerimaan · Pesanan · Perlu tindakan · Proses berjalan</p>
+{% from '_jasa_bahan.html' import bahan %}{{ bahan({'bahan_titipan':[]},none) }}
+<div class="jasa-angka">{% for label in ['PK tersedia','Beras tersisa','Hasil samping'] %}<div><small>{{ label }}</small><strong>Memuat…</strong></div>{% endfor %}</div>
+<p data-jasa-baca-pesan>Memuat data. Filter tetap dapat digunakan.</p>
+<button class="btn" type="button" disabled aria-describedby="jasa-detail-alasan">Detail pelanggan</button><small id="jasa-detail-alasan">Pilih pelanggan setelah daftar tersedia.</small>
+</article></div>
+</div>
+<noscript><p>JavaScript diperlukan untuk membaca daftar bertahap. Tidak ada transaksi yang dikirim.</p></noscript>
+</section>
+<script src="/static/jasa-bertahap.js?v={{ VERSI }}" defer></script>
+{% endblock %}

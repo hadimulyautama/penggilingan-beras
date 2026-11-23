@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.web.security import butuh_akun
 
 router = APIRouter(tags=["webapp"])
-ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok"}
+ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa"}
 
 
 def memakai_kerangka(request: Request, jenis: str) -> bool:
@@ -108,6 +108,9 @@ async def kerangka(request: Request, akun, jenis: str):
             async with SessionLocal() as db:
                 izin_transfer = await boleh_baca_stok(db, akun.user)
             konteks['AKSES'] = {**hak_view('tamu'), 'transfer': izin_transfer}
+    if jenis == 'jasa':
+        from app.web.jasa_bertahap import kerangka as kerangka_jasa
+        return await kerangka_jasa(request, akun, konteks)
     if jenis == "pekerjaan":
         from app.services.kelompok_kerja import JENIS_KERJA
         from app.web.layar_pekerjaan import pilihan, tautan
@@ -196,6 +199,9 @@ async def _isi(request: Request, akun, jenis: str):
     if jenis == "pekerjaan":
         from app.web.layar_pekerjaan import halaman_pekerjaan
         response = await halaman_pekerjaan(native, akun)
+    elif jenis == 'jasa':
+        from app.web.layar_jasa import halaman_jasa
+        response = await halaman_jasa(native, akun)
     else:
         from app.web.layar_stok import halaman_stok
         response = await halaman_stok(native, akun)
