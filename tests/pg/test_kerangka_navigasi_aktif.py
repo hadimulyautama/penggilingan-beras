@@ -100,8 +100,8 @@ class _ASGIBrowser:
             await route.fulfill(status=204, body='')
             return
         if url.path == '/api/keadaan':
-            from app.web.tampilan import VERSI
-            await route.fulfill(json={'n': 'fixture-kerangka', 'versi': str(VERSI)})
+            from hmu_tampilan import CAP_ASET
+            await route.fulfill(json={'n': 'fixture-kerangka', 'versi': CAP_ASET})
             return
         path = url.path + ('?' + url.query if url.query else '')
         response = await self.client.get(path, headers=forwarded)
