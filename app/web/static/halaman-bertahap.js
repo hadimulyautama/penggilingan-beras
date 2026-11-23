@@ -9,7 +9,7 @@
  const address=location.pathname+location.search,token=document.getElementById('formulir-sesi')?.dataset.token||'',stamp=root.dataset.stamp;
  const emptyTable=table.cloneNode(true),filtered=root.dataset.filtered==='1';
  const forms=Array.from(root.querySelectorAll('form')),initialForms=forms.map(f=>new URLSearchParams(new FormData(f)).toString());
- let sequence=0,controller=null,pending=null,finished=false;
+ let sequence=0,controller=null,pending=null,finished=false,readFromRetry=false;
  function current(number){return root.isConnected&&number===sequence&&location.pathname+location.search===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
  function stop(){++sequence;pending=null;if(controller)controller.abort();controller=null;observer.disconnect();}
  const observer=new MutationObserver(()=>{if(!root.isConnected)stop();});
@@ -67,6 +67,15 @@
    script.textContent=item.text;item.old.replaceWith(script);
   }
  }
+ function restoreSemanticFocus(previous,content){
+  if(document.activeElement!==document.body)return;
+  let target=null;
+  if(previous?.hasAttribute('data-lk-buka'))target=content.querySelector('[data-lk-buka="'+CSS.escape(previous.dataset.lkBuka)+'"]');
+  else if(previous?.hasAttribute('data-shell-guide'))target=content.querySelector('[data-sk-buka="sk-panduan"]');
+  else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');
+  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label','Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
+  target?.focus({preventScroll:true});
+ }
  async function install(payload,number){
   if(!current(number)||payload.stamp!==stamp)throw Error('Konteks sesi atau gudang berubah. Muat ulang halaman untuk membaca cakupan yang benar.');
   const doc=new DOMParser().parseFromString(payload.html,'text/html'),source=doc.getElementById('isi-halaman'),session=doc.getElementById('formulir-sesi');
@@ -89,11 +98,13 @@
   if(interacting()){
    pending={payload,number};status.textContent='Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
   }
+  const previousFocus=document.activeElement;
   observer.disconnect();finished=true;controller=null;
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
   const valid=()=>content.isConnected&&location.pathname+location.search===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
   try{
    activateScripts(prepared);if(!valid())return;
+   restoreSemanticFocus(previousFocus,content);
    filterEmptyRows(content);
    const removeMessages=()=>content.querySelectorAll('[data-shell-empty-row]').forEach(n=>n.remove());
    content.addEventListener('submit',removeMessages,true);
@@ -106,6 +117,7 @@
   }catch(error){if(valid()){const warning=document.createElement('p');warning.setAttribute('role','alert');warning.textContent=error.message;content.prepend(warning);}}
  }
  async function read(){
+  readFromRetry=document.activeElement===retry;
   if(controller)controller.abort();const number=++sequence;controller=new AbortController();const active=controller;pending=null;
   retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent='Memuat data…';message.textContent='Memuat data. Judul kolom dan filter tetap tersedia.';
   const timeout=setTimeout(()=>active.abort(),20000);

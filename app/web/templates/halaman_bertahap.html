@@ -12,10 +12,10 @@
  {% if not LAPORAN_NAV %}<nav class="kontrol-tab" aria-label="{{ 'Tab pekerjaan' if SHELL.kind=='pekerjaan' else 'Jenis stok' }}">
  {% for tab in SHELL.tabs %}{% if tab.boleh %}<a class="kontrol-tab__item" href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>{% endif %}{% endfor %}
  </nav>{% endif %}
- <form class="kontrol-pencarian__form" method="get" action="{{ request.url.path }}" role="search">
+ <div class="kontrol-pencarian"><form class="kontrol-pencarian__form" method="get" action="{{ request.url.path }}" role="search">
  {% for key,value in request.query_params.items() %}{% if key not in ('cari','halaman','buka','nilai') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
  <label class="kontrol-pencarian__field"><span class="sr-only">{{ SHELL.search.label }}</span><input class="kontrol-pencarian__input" type="search" name="cari" value="{{ SHELL.search.value }}" aria-label="{{ SHELL.search.label }}" placeholder="{{ SHELL.search.label }}…" maxlength="200"></label><button type="submit" class="kontrol-pencarian__submit cari-berikon">Cari</button>
- </form>
+ </form></div>
  <details class="halaman-bertahap__filter"><summary>Filter</summary>
   <form class="halaman-bertahap__form" method="get" action="{{ request.url.path }}" data-shell-filter-form>
    {% for key,value in SHELL.hidden.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
