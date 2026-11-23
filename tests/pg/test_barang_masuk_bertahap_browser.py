@@ -4,6 +4,7 @@ import json
 import os
 import re
 from contextlib import asynccontextmanager
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
@@ -311,3 +312,72 @@ async def test_asset_daftar_gagal_tetap_ada_jalur_GET_dan_menu(pg, lengkap, widt
             assert not transport['posts']
             assert not transport['errors'], transport['errors']
         assert await _sidik(pg) == before
+
+
+async def test_pemulihan_belum_commit_kembali_isian_dari_qc(pg,lengkap):
+    tid=lengkap['tiket']['GABAH_KERING'];path='/barang-masuk/'+str(tid)
+    entered,release=asyncio.Event(),asyncio.Event();job=None;posts=[];status_gets=[];writer_started=False
+    async with await _klien(pg,role=P.OPERATOR,gudang_id=lengkap['gudang']['g1']) as c:
+        native=c.request
+        async def request(method,url,**kw):
+            nonlocal job,writer_started
+            p=urlsplit(str(url)).path
+            if method=='POST':
+                assert p=='/api/actions/gabah-masuk';posts.append(json.loads(kw['content']));assert len(posts)==1
+                async def delayed_native():
+                    nonlocal writer_started
+                    await release.wait()
+                    writer_started=True
+                    return await native(method,url,**kw)
+                job=asyncio.create_task(delayed_native());entered.set()
+                return await asyncio.shield(job)
+            r=await native(method,url,**kw)
+            if p=='/api/actions/penerimaan-ringkas/'+str(tid):status_gets.append(r.status_code)
+            return r
+        c.request=request
+        async with peramban(c,390) as (page,transport):
+            async def accept_reload(dialog):
+                assert dialog.type=='beforeunload';await dialog.accept()
+            page.on('dialog',accept_reload)
+            try:
+                await page.goto(BASE+path)
+                root=page.locator('[data-bm-detail-shell]');form=root.locator('[data-formulir] form')
+                await expect(form).to_be_visible()
+                await form.locator('[name=warehouse_id]').select_option(str(lengkap['gudang']['g1']))
+                await form.locator('[name=tujuan]').select_option('tumpuk')
+                read="()=>JSON.parse(Object.entries(sessionStorage).find(([k])=>k.startsWith('penerimaan-ringkas:'))[1])"
+                original=await page.evaluate(read);before=await _sidik(pg)
+                await form.get_by_role('button',name='Terima ke tujuan',exact=True).click()
+                await asyncio.wait_for(entered.wait(),15)
+                assert posts[0]['kunci_kiriman']==original['key']
+                await page.reload()
+                recovery=root.locator('[data-pemulihan]');await expect(recovery).to_be_visible()
+                restored=await page.evaluate(read)
+                assert restored['key']==original['key'] and restored['forms']==original['forms'] and restored['uncertain']
+                await recovery.get_by_role('button',name='Baca status penerimaan terbaru',exact=True).click()
+                await expect(recovery.locator('[data-hasil-status]')).to_contain_text('Belum ditemukan catatan baru')
+                back=recovery.get_by_role('button',name='Kembali ke isian setelah pemeriksaan',exact=True)
+                await expect(back).to_be_visible()
+                # The native tab is an ordinary button: no request or form clone.
+                await root.locator('[data-bm-tab=qc]').focus()
+                await page.keyboard.press('Enter')
+                await expect(root.locator('[data-bm-detail-panel=qc]')).to_be_visible()
+                await expect(form).to_be_hidden()
+                await back.focus();await page.keyboard.press('Enter')
+                final=await page.evaluate(read)
+                assert final['key']==original['key'] and final['forms']==original['forms'] and not final['uncertain']
+                assert len(posts)==len(transport['posts'])==1 and status_gets==[200] and not writer_started
+                assert await _sidik(pg)==before
+                if os.environ.get('PHASE_OUT'):
+                    out=Path(os.environ['PHASE_OUT']);engine=os.environ['OWNER_BROWSER']
+                    await page.screenshot(path=str(out/(engine+'-after-native-return.png')),full_page=True)
+                    (out/(engine+'-native-return-state.json')).write_text(json.dumps({'same_key':True,'same_input':True,'native_return_cleared_uncertain':True,'POST_attempts':1,'POST_commits':0,'auto_resubmit':False,'manual_status_GETs':1,'alltable_fingerprint_unchanged':True,'summary_hidden':await root.locator('[data-bm-detail-panel=ringkasan]').get_attribute('hidden') is not None,'form_visible':await form.is_visible(),'focused_element':await page.evaluate('()=>({tag:document.activeElement.tagName,name:document.activeElement.name||null})'),'limits':'Native POST execution is held before writer only in test; cleanup cancels its unexecuted fixture task. This does not claim a browser cancels real server commit.'},indent=2)+'\n')
+                await expect(form).to_be_visible()
+                await expect(root.locator('[data-bm-tab=ringkasan]')).to_have_attribute('aria-selected','true')
+                await expect(form.locator('[name=warehouse_id]')).to_have_value(str(lengkap['gudang']['g1']))
+                await expect(form.locator('[name=tujuan]')).to_have_value('tumpuk')
+                await expect(form.locator('[name=warehouse_id]')).to_be_focused()
+                assert not transport['errors'],transport['errors']
+            finally:
+                if job and not job.done():
+                    job.cancel();await asyncio.gather(job,return_exceptions=True)
