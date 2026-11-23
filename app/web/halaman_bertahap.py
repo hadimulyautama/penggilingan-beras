@@ -107,10 +107,11 @@ async def kerangka(request: Request, akun, jenis: str):
     if jenis == "pekerjaan":
         from app.services.kelompok_kerja import JENIS_KERJA
         from app.web.layar_pekerjaan import pilihan, tautan
+        from app.web.layar import GUDANG
 
         href = lambda **p: tautan(request, "/pekerjaan", **p)
         tipe = pilihan(request, "jenis", dict(JENIS_KERJA))
-        gudang = pilihan(request, "gudang", {"g1", "g2"})
+        gudang = pilihan(request, "gudang", {g for g, _, _ in GUDANG})
         pemilik = pilihan(request, "kepemilikan", {"jasa", "pabrik"})
         data.update(
             search=dict(name="cari", label="Cari nama, kode atau plat", value=q.get("cari", "")[:200]),
@@ -123,7 +124,7 @@ async def kerangka(request: Request, akun, jenis: str):
                  + [dict(label="Pekerjaan lain", href="/pekerjaan/catat-lain?" + urlencode({"kembali": href()}), active=False, boleh=True)],
             filters=[_pilihan("jenis", "Jenis pekerjaan", tipe, [("", "Semua jenis"), *JENIS_KERJA]),
                      _pilihan("kepemilikan", "Kepemilikan", pemilik, [("", "Semua kepemilikan"), ("pabrik", "Milik pabrik"), ("jasa", "Jasa")]),
-                     _pilihan("gudang", "Gudang", gudang, [("", "Semua gudang"), ("g1", "Gudang 1"), ("g2", "Gudang 2")]),
+                     _pilihan("gudang", "Gudang", gudang, [("", "Semua gudang"), *((g, nama) for g, nama, _ in GUDANG)]),
                      _pilihan("pemasok", "Nama pihak", q.get("pemasok", ""), [(q.get("pemasok", ""), q.get("pemasok") or "Semua nama")],
                               disabled=True, reason="Pilihan nama tersedia setelah daftar selesai dibaca.")])
         # Navigasi Pekerjaan memakai helper existing, tetapi jumlah belum
