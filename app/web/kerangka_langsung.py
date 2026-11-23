@@ -10,6 +10,37 @@ LITERAL = ('/barang-masuk', '/barang-masuk?status=belum',
            '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan')
 
 
+def kemas_frame(frames: dict[str, str]) -> dict:
+    """Intern baris persis, tanpa menormalkan HTML/atribut/urutan script."""
+    potongan, indeks, rujukan = [], {}, {}
+    for alamat, html in frames.items():
+        refs = []
+        for baris in html.splitlines(keepends=True):
+            nomor = indeks.get(baris)
+            if nomor is None:
+                nomor = len(potongan)
+                indeks[baris] = nomor
+                potongan.append(baris)
+            refs.append(nomor)
+        rujukan[alamat] = refs
+    return dict(penyandian='baris-1', potongan=potongan, frames=rujukan)
+
+
+def sah_rujukan(registry: dict) -> bool:
+    potongan, frames = registry.get('potongan'), registry.get('frames')
+    if (registry.get('versi') != 2 or registry.get('penyandian') != 'baris-1'
+            or not isinstance(potongan, list) or not 0 < len(potongan) <= 16384
+            or not all(isinstance(s, str) and s for s in potongan)
+            or not isinstance(frames, dict) or set(frames) != set(LITERAL)):
+        return False
+    for refs in frames.values():
+        if (not isinstance(refs, list) or not 0 < len(refs) <= 16384
+                or not all(type(i) is int and 0 <= i < len(potongan) for i in refs)
+                or sum(len(potongan[i]) for i in refs) > 524288):
+            return False
+    return True
+
+
 async def susun_registry(request: Request, akun) -> dict | None:
     from hmu_tampilan import CAP_ASET
     from app.web import csrf
@@ -37,8 +68,8 @@ async def susun_registry(request: Request, akun) -> dict | None:
     nonce = request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state, 'csrf', None)
     sesi = csrf.untuk_sesi(nonce, baca_token(request.cookies.get(NAMA_COOKIE)),
                           request.cookies.get('produksi_lihat', ''))
-    return dict(versi=1, konteks=penanda_konteks(nav_request, akun), cap=CAP_ASET,
-                sesi=sesi, frames=frames)
+    return dict(versi=2, konteks=penanda_konteks(nav_request, akun), cap=CAP_ASET,
+                sesi=sesi, **kemas_frame(frames))
 
 
 async def lengkapi_dokumen(request: Request, response):
@@ -72,10 +103,9 @@ async def lengkapi_dokumen(request: Request, response):
             if registry:
                 # Penyusunan opsional harus selesai utuh sebelum badan native
                 # diubah. Kegagalan template/shape pun tetap default-off.
-                if (registry.get('versi') != 1 or set(registry.get('frames', {})) != set(LITERAL)
+                if (not sah_rujukan(registry)
                         or not all(isinstance(registry.get(k), str) and registry[k]
                                    for k in ('konteks', 'cap', 'sesi'))
-                        or not all(isinstance(v, str) and v for v in registry['frames'].values())
                         or body.count(b'</body>') != 1):
                     raise ValueError('Bentuk registry belum tersedia')
                 from app.web.tampilan import templates

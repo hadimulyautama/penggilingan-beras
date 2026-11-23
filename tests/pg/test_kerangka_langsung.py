@@ -1,5 +1,6 @@
 """Registry berizin native tanpa data; bukan tes transaksi atau akses baru."""
 import json
+import hashlib
 import os
 import time
 from pathlib import Path
@@ -23,7 +24,12 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
     from app.web import layar_pekerjaan
 
     asli = s.susun_registry
-    ukuran = {}
+    ukuran, raw = {}, {}
+    kemas_asli = s.kemas_frame
+    def simpan_frame(frames):
+        raw.clear(); raw.update(frames)
+        return kemas_asli(frames)
+    monkeypatch.setattr(s, 'kemas_frame', simpan_frame)
     def dilarang(*a, **kw):
         pytest.fail('Registry tidak boleh membaca daftar operasional')
     async def susun(request, akun):
@@ -44,9 +50,25 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
             event.remove(engine.sync_engine, 'before_cursor_execute', rekam)
         assert request.scope.get('state', {}) == asal_state
         assert (akun.id, akun.user.id, akun.user.role, akun.user.default_warehouse_id) == asal_aktor
-        ukuran.update(sql=len(sql), ms=(time.perf_counter()-start)*1000,
-                      frame_bytes={k:len(v.encode()) for k,v in data['frames'].items()},
-                      json_bytes=len(json.dumps(data).encode()))
+        elapsed = (time.perf_counter()-start)*1000
+        decoded = {k: ''.join(data['potongan'][i] for i in refs) for k, refs in data['frames'].items()}
+        sha = lambda text: hashlib.sha256(text.encode()).hexdigest()
+        assert {k:sha(v) for k,v in decoded.items()} == {k:sha(v) for k,v in raw.items()}
+        from app.web.tampilan import templates
+        naive = {k:data[k] for k in ('konteks', 'cap', 'sesi')}
+        naive.update(versi=1, frames=raw)
+        template = templates.get_template('_kerangka_langsung_registry.html')
+        packed_size = len(template.render(registry=data).encode())
+        naive_size = len(template.render(registry=naive).encode())
+        assert packed_size < naive_size
+        ukuran.update(sql=len(sql), ms=elapsed,
+                      frame_bytes={k:len(v.encode()) for k,v in raw.items()},
+                      frame_source_sha256={k:sha(v) for k,v in raw.items()},
+                      frame_decoded_sha256={k:sha(v) for k,v in decoded.items()},
+                      json_bytes=len(json.dumps(data).encode()), unique_chunks=len(data['potongan']),
+                      frame_ref_counts={k:len(v) for k,v in data['frames'].items()},
+                      packed_encoded_host_bytes=packed_size, naive_same_frames_host_bytes=naive_size,
+                      reduction_bytes=naive_size-packed_size, reduction_percent=100*(naive_size-packed_size)/naive_size)
         return data
     monkeypatch.setattr(s, 'susun_registry', susun)
     async with await _klien(pg, role=role, gudang_id=lengkap['gudang']['g2'] if role=='operator' else None) as c:
@@ -60,7 +82,9 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
         assert set(data['frames']) == set(s.LITERAL)
         assert data['sesi'] == doc.select_one('#formulir-sesi')['data-token']
         assert data['konteks'] == doc.select_one('.bingkai')['data-pindah-konteks']
-        for url, html in data['frames'].items():
+        assert data['versi'] == 2 and data['penyandian'] == 'baris-1'
+        for url, refs in data['frames'].items():
+            html = ''.join(data['potongan'][i] for i in refs)
             frame = BeautifulSoup(html, 'html.parser')
             assert len(frame.select('.bingkai')) == len(frame.select('#isi-halaman')) == 1
             assert frame.select_one('.bingkai')['data-pindah-alamat'] == url
@@ -80,7 +104,8 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
         assert await _sidik(pg) == before
         if os.environ.get('PHASE_OUT'):
             ukuran.update(role=role, all_public_tables_unchanged=True, heavy_readers_called=0,
-                          html_response_bytes=len(r.content), host_encoded_bytes=len(str(host).encode()))
+                          html_response_bytes=len(r.content), host_encoded_bytes=len(str(host).encode()),
+                          naive_equivalent_response_bytes=len(r.content)-ukuran['packed_encoded_host_bytes']+ukuran['naive_same_frames_host_bytes'])
             (Path(os.environ['PHASE_OUT'])/('registry-cost-'+role+'.json')).write_text(json.dumps(ukuran,indent=2)+'\n')
 
 
