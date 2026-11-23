@@ -122,7 +122,7 @@ async def test_empat_literal_native_sebelum_semua_response(pg,lengkap,role,width
                 entered,released,completed=asyncio.Event(),asyncio.Event(),asyncio.Event()
                 t['gates']['/barang-masuk']=(entered,released)
                 t['completed']['/barang-masuk']=completed
-                awal=len(reads);length=await page.evaluate('history.length')
+                awal=len(reads);pushes=await page.evaluate('window.__riwayatPush.length')
                 try:
                     await page.locator('nav[aria-label="Bagian Barang Masuk"] a[href*="status='+status+'"]').click()
                     await asyncio.wait_for(entered.wait(),15)
@@ -132,7 +132,8 @@ async def test_empat_literal_native_sebelum_semua_response(pg,lengkap,role,width
                     await expect(page.locator('[data-bm-results]')).to_have_attribute('aria-busy','true')
                     actual=[r for r in reads[awal:] if r['url'].split('?')[0]=='/barang-masuk']
                     assert len(actual)==1 and actual[0]['headers'].get('x-barang-masuk-cari')=='1'
-                    assert await page.evaluate('history.length')==length+1
+                    assert await page.evaluate('n=>window.__riwayatPush.slice(n)',pushes)==['/barang-masuk?status='+status]
+                    await expect(page).to_have_url(BASE+'/barang-masuk?status='+status)
                     released.set();await asyncio.wait_for(completed.wait(),15)
                     await page.wait_for_function('n=>!n.isConnected',arg=oldroot)
                 finally:
