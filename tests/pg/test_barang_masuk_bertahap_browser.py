@@ -24,7 +24,7 @@ BASE = 'https://uji'
 async def peramban(client, width):
     """Browser supplies Sec-Fetch; ASGI and native fixture supply all data."""
     gates, posts, errors = {}, [], []
-    transport = dict(gates=gates, posts=posts, errors=errors, gets=[], corrupt_context=False, fail_asset=False)
+    transport = dict(gates=gates, posts=posts, errors=errors, gets=[], completed={}, corrupt_context=False, fail_asset=False)
     pending = set()
     closing = False
     async with async_playwright() as pw:
@@ -81,6 +81,9 @@ async def peramban(client, width):
                     raise
             finally:
                 pending.discard(job)
+                completed = transport['completed'].get(u.path)
+                if gate and completed:
+                    completed.set()
         await context.route('**/*', route)
         try:
             yield page, transport
@@ -131,6 +134,7 @@ async def test_daftar_loading_filter_error_retry_stale_dan_keluar(
                 await expect(root.locator('#bm-filter')).to_be_visible()
                 await expect(root.locator('#bm-filter [name=pemasok]')).to_be_disabled()
                 await page.keyboard.press('Escape')
+                await expect(root.locator('.kontrol-filter')).to_be_focused()
                 search = root.locator('[data-bm-search] input[name=cari]')
                 await search.fill('Kode tidak ditemukan')
                 initial_release.set()
@@ -171,6 +175,8 @@ async def test_daftar_loading_filter_error_retry_stale_dan_keluar(
                 await root.locator('[data-bm-retry]').click()
                 await expect(root.locator('[data-bm-error]')).to_be_hidden()
 
+                late_done = asyncio.Event()
+                transport['completed']['/barang-masuk'] = late_done
                 transport['gates']['/barang-masuk'] = (late_entered, late_release)
                 await search.fill('Respons ditinggalkan')
                 await search.press('Enter')
@@ -178,7 +184,8 @@ async def test_daftar_loading_filter_error_retry_stale_dan_keluar(
                 await page.locator('a[href="/kabar"]:visible').first.click()
                 await expect(page).to_have_url(BASE + '/kabar')
                 late_release.set()
-                await page.wait_for_load_state('networkidle')
+                await asyncio.wait_for(late_done.wait(), 15)
+                await page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
                 await expect(page.locator('[data-bm-page]')).to_have_count(0)
                 assert not transport['posts']
                 assert not transport['errors'], transport['errors']
@@ -261,13 +268,16 @@ async def test_asset_daftar_gagal_tetap_ada_jalur_GET_dan_menu(pg, lengkap, widt
         before = await _sidik(pg)
         async with peramban(c, width) as (page, transport):
             transport['fail_asset'] = True
-            await page.goto(BASE + '/barang-masuk?cari=TRX-391')
+            await page.goto(BASE + '/kabar')
+            if width < 900:
+                await page.locator('#buka-laci').click()
+            await page.locator('#laci a[href="/barang-masuk"]').click()
             fallback = page.locator('[data-bm-bootstrap]')
             await expect(fallback).to_be_visible()
             await expect(fallback).to_contain_text('hanya membaca data')
             reload = fallback.get_by_role('link', name='muat ulang halaman')
-            await expect(reload).to_have_attribute('href', '/barang-masuk?cari=TRX-391')
-            await expect(page.locator('[data-bm-search] input[name=cari]')).to_have_value('TRX-391')
+            await expect(reload).to_have_attribute('href', '/barang-masuk')
+            await expect(page.locator('[data-bm-search] input[name=cari]')).to_have_value('')
             # Recover by one user GET, never by a business POST or another controller.
             transport['fail_asset'] = False
             await reload.click()
