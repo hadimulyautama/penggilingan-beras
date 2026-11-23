@@ -1,0 +1,21 @@
+{# Bentuk awal dari metadata tindakan native yang sudah diperiksa server.
+   Tidak ada payload/nilai awal buatan atau kontrol tulis sebelum controller
+   memulihkan isian dan identitas permintaan yang tersimpan di perangkat. #}
+{% set bentuk = awal.formulir[0] if awal.formulir else none %}
+{% if awal.pending and bentuk and bentuk.boleh %}
+<section class="bm-form" data-bm-form-shell aria-busy="true" aria-describedby="bm-form-shell-status">
+ <h2>{{ 'Tentukan tujuan penerimaan' if bentuk.id=='gabah_masuk' else 'Tolak PK luar' if bentuk.id=='tolak_pk_luar' else bentuk.label.split(' ',1)[-1] }}</h2>
+ <p id="bm-form-shell-status" class="bm-meta" data-bm-form-shell-status role="status">Menyiapkan isian dan perlindungan pencatatan. Belum ada penerimaan yang dikirim.</p>
+ <fieldset disabled>
+ {% for field in bentuk.fields if field.name and field.name!='timbangan_transaksi_id' %}
+  <label>{{ field.label }}
+  {% if field.type=='select' or field.name in ['warehouse_id','tujuan'] %}<select disabled aria-label="{{ field.label }}"><option value="">Menyiapkan pilihan…</option></select>
+  {% elif field.name=='alasan' %}<textarea disabled aria-label="{{ field.label }}" placeholder="Menunggu isian siap"></textarea>
+  {% else %}<input type="{{ 'number' if field.type=='number' else 'text' }}" disabled aria-label="{{ field.label }}" placeholder="Menunggu isian siap">{% endif %}
+  </label>
+ {% endfor %}
+ <button class="btn btn--utama" type="button" disabled aria-describedby="bm-form-shell-status">{{ 'Terima ke tujuan' if bentuk.id=='gabah_masuk' else 'Tolak PK luar' if bentuk.id=='tolak_pk_luar' else 'Catat penerimaan' }}</button>
+ </fieldset>
+ <button class="btn" type="button" data-bm-form-retry hidden>Muat ulang isian</button>
+</section>
+{% endif %}
