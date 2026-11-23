@@ -95,6 +95,7 @@ class _ASGIBrowser:
             'sec-fetch-site', 'sec-fetch-user', 'x-pindah',
             'x-kerangka-halaman', 'x-portal-navigasi', 'x-meja-lihat'}}
         self.requests.append(dict(path=url.path, query=url.query,
+                                  navigation_request=request.is_navigation_request(),
                                   headers=forwarded))
         if url.path == '/api/aliran':
             await route.fulfill(status=204, body='')
@@ -216,8 +217,12 @@ async def test_navigasi_kerangka_lalu_data_refresh_native_dan_kosong(
             assert bridge.html.jumlah == bridge.data.jumlah == 1
             document = next(r for r in bridge.requests if
                             r['path'] == '/barang-masuk')
-            assert document['headers'].get('sec-fetch-mode') == 'navigate'
-            assert document['headers'].get('sec-fetch-dest') == 'document'
+            # Route interception can omit wire-generated Sec-Fetch headers.
+            # Never manufacture them in this ASGI transport. The initial
+            # request is a genuine browser navigation; real HTTP cache tests
+            # separately verify the cold document renderer on the wire.
+            assert document['navigation_request'] is True
+            assert 'x-kerangka-halaman' not in document['headers']
 
             start = len(bridge.requests)
             await page.evaluate("""() => new Promise(resolve => {
