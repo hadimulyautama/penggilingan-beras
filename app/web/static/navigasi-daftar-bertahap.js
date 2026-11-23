@@ -9,30 +9,18 @@
   const container=document.querySelector('[data-halaman-isi]')||document.getElementById('isi-halaman');
   if(window.PadiDaftarKosong)PadiDaftarKosong(container,JSON.parse(schema));
  }
- function target(a){
-  if(!a||a.origin!==location.origin)return false;
-  return a.pathname==='/stok'||a.pathname==='/pekerjaan'&&new URL(a.href).searchParams.get('tab')==='berjalan';
- }
- function mark(a){if(target(a))a.setAttribute('data-utuh','');}
- document.querySelectorAll('a[href]').forEach(mark);
  const controls=document.querySelector('[data-stok-controls]');
- if(controls){
+ if(controls&&location.pathname==='/stok'){
   const u=new URL(controls.dataset.pelangganUrl,location.href);u.pathname='/api/halaman-bertahap/stok/html';controls.dataset.pelangganUrl=u.pathname+u.search;
   protectCustomerOptions(controls,binding);
  }
- if(document.documentElement.dataset.daftarBertahap)return;
- document.documentElement.dataset.daftarBertahap='1';
- function prepare(e){mark(e.target.closest?.('a[href]'));}
- document.addEventListener('pointerdown',prepare,true);
- document.addEventListener('click',prepare,true);
- document.addEventListener('focusin',prepare,true);
  function protectCustomerOptions(root,context){
   if(root.dataset.pelangganTerjaga)return;root.dataset.pelangganTerjaga='1';
   const form=root.querySelector('.sk-form-filter');if(!form)return;
   const owner=form.querySelector('[name=pemilik]'),warehouse=form.querySelector('[name=gudang]'),label=form.querySelector('[data-stok-pelanggan]'),select=label?.querySelector('select'),status=form.querySelector('[data-stok-pelanggan-status]');
   if(!owner||!warehouse||!select||!status)return;
-  const token=document.getElementById('formulir-sesi')?.dataset.token||'',pagePath=location.pathname;let sequence=0,load=null;
-  function valid(n){return root.isConnected&&n===sequence&&location.pathname===pagePath&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
+  const token=document.getElementById('formulir-sesi')?.dataset.token||'';let sequence=0,load=null;
+  function valid(n){return root.isConnected&&n===sequence&&location.pathname==='/stok'&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
   async function read(){
    if(load)load.abort();const n=++sequence;label.hidden=owner.value!=='jasa';select.disabled=owner.value!=='jasa';status.hidden=true;
    if(owner.value!=='jasa')return;

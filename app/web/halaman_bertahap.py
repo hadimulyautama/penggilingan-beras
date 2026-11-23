@@ -24,9 +24,13 @@ def memakai_kerangka(request: Request, jenis: str) -> bool:
     from app.web.portal.scope import is_customer_read
 
     return (not getattr(request.state, "isi_halaman_bertahap", False)
-            # PINDAH menyegarkan/membandingkan HTML data pada latar. Header
-            # hanya memilih renderer; autentikasi dan pembaca tetap sama.
-            and request.headers.get("X-Pindah") != "1"
+            # Negosiasi renderer saja, bukan izin. Pemanggil HTML lama dan
+            # refresh X-Pindah tetap menerima data native. Browser document
+            # atau permintaan kerangka eksplisit dapat membaca struktur dulu.
+            and (request.headers.get("X-Kerangka-Halaman") == "1"
+                 or request.headers.get("X-Pindah") != "1"
+                 and request.headers.get("Sec-Fetch-Mode") == "navigate"
+                 and request.headers.get("Sec-Fetch-Dest") == "document")
             and not is_customer_read(request)
             and request.url.path == ALAMAT[jenis]
             and (jenis != "pekerjaan" or request.query_params.get("tab") == "berjalan"))

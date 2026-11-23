@@ -144,7 +144,7 @@ async def test_kerangka_aktif_tidak_memanggil_pembaca_antrean(
 
     monkeypatch.setattr(layar_pekerjaan, 'siapkan_daftar_pekerjaan', tidak_boleh_dibaca)
     async with await _klien(pg, peran=role, gudang=warehouse) as c:
-        response = await c.get('/pekerjaan?tab=berjalan&cari=kode-uji&pemasok=Pihak+uji')
+        response = await c.get('/pekerjaan?tab=berjalan&cari=kode-uji&pemasok=Pihak+uji', headers={'X-Kerangka-Halaman': '1'})
     assert response.status_code == 200
     doc = _Elemen(response.text)
     assert _stamp(response.text)
@@ -172,7 +172,7 @@ async def test_kerangka_stok_tidak_memanggil_pembaca_saldo(
     monkeypatch.setattr(stok, 'barang_jadi_g2', tidak_boleh_dibaca)
     monkeypatch.setattr(layar_produk, 'pembaca_stok', tidak_boleh_dibaca)
     async with await _klien(pg, peran=role, gudang=warehouse) as c:
-        response = await c.get('/stok', params={'tab': tab, 'cari': 'contoh-uji'})
+        response = await c.get('/stok', params={'tab': tab, 'cari': 'contoh-uji'}, headers={'X-Kerangka-Halaman': '1'})
     assert response.status_code == 200
     doc = _Elemen(response.text)
     assert _stamp(response.text)
@@ -194,8 +194,11 @@ async def test_isi_sama_dengan_native_dan_seluruh_tabel_tetap(
     async with await _klien(pg, peran=role, gudang=warehouse) as c:
         # Semua seed dan sesi sintetis selesai sebelum fase baca diukur.
         before = await _sidik(pg)
-        shell = await c.get('/' + kind + '?' + query)
+        shell = await c.get('/' + kind + '?' + query, headers={'X-Kerangka-Halaman': '1'})
         native = await c.get('/' + kind + '?' + query, headers={'X-Pindah': '1'})
+        raw = await c.get('/' + kind + '?' + query)
+        assert raw.status_code == 200 and 'data-halaman-bertahap' not in raw.text
+        assert _isi(raw.text) == _isi(native.text)
         response = await c.get('/api/halaman-bertahap/' + kind + '?' + query)
         assert shell.status_code == native.status_code == response.status_code == 200
         payload = response.json()
@@ -228,7 +231,7 @@ async def test_data_memeriksa_ulang_akun_setelah_kerangka(pg, proses_aktif):
     from app.models import ProduksiAkun
 
     async with await _klien(pg, peran=P.OPERATOR, gudang='Gudang 2 - Kerangka uji') as c:
-        shell = await c.get('/pekerjaan?tab=berjalan')
+        shell = await c.get('/pekerjaan?tab=berjalan', headers={'X-Kerangka-Halaman': '1'})
         assert shell.status_code == 200 and _stamp(shell.text)
         async with pg() as db:
             account = await db.scalar(select(ProduksiAkun).order_by(ProduksiAkun.id.desc()))
@@ -297,7 +300,7 @@ async def test_sidebar_kerangka_mempertahankan_pintu_native(
         pg, proses_aktif, role, warehouse, path):
     """Angka boleh belum ada; alias/pintu yang pensiun tidak boleh muncul lagi."""
     async with await _klien(pg, peran=role, gudang=warehouse) as c:
-        initial = await c.get(path)
+        initial = await c.get(path, headers={'X-Kerangka-Halaman': '1'})
         native = await c.get(path, headers={'X-Pindah': '1'})
     assert initial.status_code == native.status_code == 200
     shell_hrefs = _Struktur(initial.text).sidebar_hrefs
@@ -310,7 +313,7 @@ async def test_sidebar_kerangka_mempertahankan_pintu_native(
 async def test_panduan_tersambung_dan_cetak_belum_aktif_sebelum_data(
         pg, proses_aktif, path):
     async with await _klien(pg, peran=P.OPERATOR, gudang='Gudang 2 - Kerangka uji') as c:
-        response = await c.get(path)
+        response = await c.get(path, headers={'X-Kerangka-Halaman': '1'})
     assert response.status_code == 200
     document = _Struktur(response.text)
     guides = document.named_buttons('Panduan')
@@ -329,3 +332,22 @@ async def test_panduan_tersambung_dan_cetak_belum_aktif_sebelum_data(
     assert reason_id, 'Cetak nonaktif harus memiliki alasan yang dapat dibaca'
     reason = document.by_id(reason_id)
     assert re.search(r'memuat|belum|setelah|tunggu', ''.join(reason['text']), re.I)
+
+
+@pytest.mark.parametrize('headers,expected', [
+    ({}, False),
+    ({'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty'}, False),
+    ({'X-Pindah': '1'}, False),
+    ({'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}, True),
+    ({'X-Pindah': '1', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}, False),
+    ({'X-Kerangka-Halaman': '1'}, True),
+    ({'X-Pindah': '1', 'X-Kerangka-Halaman': '1'}, True),
+])
+async def test_petunjuk_renderer_tidak_mengubah_pembaca_html_lama(headers, expected):
+    from app.web.halaman_bertahap import memakai_kerangka
+    req = Request({'type': 'http', 'method': 'GET', 'scheme': 'http',
+        'path': '/stok', 'query_string': b'tab=bahan',
+        'headers': [(k.lower().encode(), v.encode()) for k, v in headers.items()], 'state': {}})
+    assert memakai_kerangka(req, 'stok') is expected
+    req.state.isi_halaman_bertahap = True
+    assert not memakai_kerangka(req, 'stok')
