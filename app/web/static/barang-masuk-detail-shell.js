@@ -16,6 +16,18 @@
  root.querySelector('[role="tablist"]').addEventListener('click',e=>{
   const tab=e.target.closest('[data-bm-tab]');if(tab)pilih(tab.dataset.bmTab,true);
  });
+ // Controller native merender isian dan menyembunyikan pemulihan hanya
+ // sesudah kembali berhasil. Ikuti hasil DOM itu, tanpa membaca/menyalin
+ // status, draf, atau kunci transaksi ke helper tab.
+ root.addEventListener('click',e=>{
+  const kembali=e.target.closest('[data-status-isian]');
+  if(!kembali||!root.contains(kembali)||e.defaultPrevented||kembali.disabled)return;
+  const pemulihan=root.querySelector('[data-pemulihan]'),host=root.querySelector('[data-formulir]');
+  if(!pemulihan?.hidden||!host||host.hidden)return;
+  const isian=host.querySelector('form input:not([disabled]):not([type=hidden]),form select:not([disabled]),form textarea:not([disabled])');
+  if(!isian)return;
+  pilih('ringkasan',true);isian.focus({preventScroll:true});
+ });
  root.querySelector('[role="tablist"]').addEventListener('keydown',e=>{
   const i=tabs.indexOf(e.target);if(i<0||!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
   e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
