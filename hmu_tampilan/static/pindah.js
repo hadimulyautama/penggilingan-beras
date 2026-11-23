@@ -88,10 +88,11 @@
        bersama isi lama. */
     segarkan: function (sesudah) {
       var alamat = location.pathname + location.search;
+      var generasi = nomorPindah;
       delete simpan[alamat];
       if (!bingkai) { if (sesudah) { sesudah(); } return; }
       ambil(alamat).then(function (teks) {
-        if (teks && location.pathname + location.search === alamat) {
+        if (teks && generasi === nomorPindah && location.pathname + location.search === alamat) {
           pasang(teks, alamat);
         }
         if (sesudah) { sesudah(); }

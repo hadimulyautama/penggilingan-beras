@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import json
 import os
+from urllib.parse import urlsplit
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from tests.pg.test_barang_masuk_bertahap_browser import peramban, BASE
 pytestmark=pytest.mark.asyncio
 BM='/api/halaman-bertahap/barang-masuk'
 WORK='/api/halaman-bertahap/pekerjaan'
+SRC='/static/barang-masuk-pencarian.js'
 
 
 @pytest.fixture(autouse=True)
@@ -125,92 +127,109 @@ async def bungkus(c):
     return reads
 
 
-async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
-    """R1 paired; tidak menganggap src dilepas pasti dieksekusi atau dibatalkan."""
+async def amati_controller(page):
+    await page.add_init_script("""(()=>{
+      window.__bmR1={scripts:[],roots:[],fetches:[]};const ids=new WeakMap();
+      function id(root){if(!root)return null;let n=ids.get(root);if(!n){n=__bmR1.roots.length+1;ids.set(root,n);__bmR1.roots.push({id:n,node:root,siapChanges:0});}return n;}
+      function root(){return document.querySelector('[data-bm-page]');}
+      const watched=new WeakSet();
+      function script(n){if(n.tagName!=='SCRIPT'||!n.src||!n.isConnected||watched.has(n)||new URL(n.src).pathname!=='/static/barang-masuk-pencarian.js')return;
+        watched.add(n);const r={id:__bmR1.scripts.length+1,node:n,src:n.src,root:id(root()),terminal:null};__bmR1.scripts.push(r);
+        for(const kind of ['load','error'])n.addEventListener(kind,()=>{r.terminal=kind;r.connectedAtTerminal=n.isConnected;window.__controllerTerminal?.({id:r.id,kind,connected:n.isConnected});},{once:true});}
+      new MutationObserver(changes=>{for(const c of changes){if(c.type==='attributes'&&c.target.matches('[data-bm-page]')){id(c.target);__bmR1.roots[ids.get(c.target)-1].siapChanges++;continue;}for(const n of c.addedNodes){if(n.nodeType!==1)continue;if(n.matches('[data-bm-page]'))id(n);n.querySelectorAll('[data-bm-page]').forEach(id);script(n);n.querySelectorAll('script[src]').forEach(script);}}}).observe(document,{childList:true,subtree:true,attributes:true,attributeFilter:['data-siap']});
+      const native=window.fetch;window.fetch=function(...args){const u=new URL(typeof args[0]==='string'?args[0]:args[0].url,location.href);let r=null;
+        if(u.pathname==='/api/halaman-bertahap/barang-masuk'||u.pathname==='/api/halaman-bertahap/pekerjaan'||u.pathname==='/barang-masuk'){r={path:u.pathname,query:u.search,owner:id(root()),method:args[1]?.method||'GET',terminal:null};__bmR1.fetches.push(r);}
+        return native.apply(this,args).then(v=>{if(r){r.terminal='response';r.status=v.status;}return v;},e=>{if(r)r.terminal=e.name==='AbortError'?'aborted':'rejected';throw e;});};
+    })();""")
+
+async def snapshot(page):
+    return await page.evaluate("""()=>({scripts:__bmR1.scripts.map(({node,...r})=>({...r,src:new URL(r.src).pathname,isConnected:node.isConnected})),roots:__bmR1.roots.map(({node,...r})=>({...r,isConnected:node.isConnected,siap:node.dataset.siap||null})),fetches:__bmR1.fetches,currentRoot:__bmR1.roots.find(r=>r.node===document.querySelector('[data-bm-page]'))?.id})""")
+
+async def test_controller_src_tertunda_tiga_frame_native(pg,lengkap):
+    """A1→Kabar→A2→Kabar→A3; src lama boleh execute, owner aktif satu."""
     async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g2']) as c:
         before=await _sidik(pg);reads=await bungkus(c)
         async with peramban(c,390) as (page,t):
+            await amati_controller(page)
             terminals={};terminal=asyncio.Event();old_id=None;old_request=None
+            entered,release,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
+            asset={'selected':False,'resource_type':None,'delivered':False,'cancelled':False}
             def terminal_script(info):
                 terminals[info['id']]=info
                 if info['id']==old_id:terminal.set()
-            await page.expose_function('__nativeMenuTerminal',terminal_script)
-            await instrumentasi(page)
-            await page.goto(BASE+'/kabar')
-            entered,release,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
-            asset=dict(selected=False,resource=None,delivered=False,cancelled=False)
+            def request_failed(r):
+                if r==old_request:asset['request_terminal']='failed';terminal.set()
+            await page.expose_function('__controllerTerminal',terminal_script)
+            page.on('requestfailed',request_failed)
             async def tahan_src(route):
                 nonlocal old_request
                 request=route.request
                 if request.resource_type!='script' or asset['selected']:
                     await route.fallback();return
-                old_request=request
-                asset.update(selected=True,resource=request.resource_type,url=request.url)
-                response=await c.request('GET','/static/menu-layar.js?'+request.url.split('?',1)[1])
+                asset.update(selected=True,resource_type=request.resource_type,path=urlsplit(request.url).path)
+                old_request=request;u=urlsplit(request.url)
+                response=await c.request('GET',u.path+('?' + u.query if u.query else ''))
+                import app.main
+                native_path=Path(app.main.__file__).resolve().parents[1]/'app/web/static/barang-masuk-pencarian.js'
                 asset['body_sha256']=hashlib.sha256(response.content).hexdigest()
-                import hmu_tampilan
-                assert asset['body_sha256']==hashlib.sha256((Path(hmu_tampilan.__file__).parent/'static/menu-layar.js').read_bytes()).hexdigest()
+                assert asset['body_sha256']==hashlib.sha256(native_path.read_bytes()).hexdigest()
                 entered.set()
                 try:
                     await release.wait()
-                    await route.fulfill(status=response.status_code,body=response.content,
-                        headers={k:v for k,v in response.headers.items() if k.lower() not in {'content-length','content-encoding','transfer-encoding','set-cookie'}})
+                    await route.fulfill(status=response.status_code,body=response.content,headers={k:v for k,v in response.headers.items() if k.lower() not in {'content-length','content-encoding','transfer-encoding','set-cookie'}})
                     asset['delivered']=True
                 except BrowserError:
                     if not request.failure:raise
                     asset['cancelled']=True
                 finally:done.set()
-            def request_gagal(request):
-                if request==old_request:
-                    asset['terminal']='requestfailed';terminal.set()
-            page.on('requestfailed',request_gagal)
-            await page.route('**/static/menu-layar.js*',tahan_src)
+            await page.goto(BASE+'/kabar')
+            await page.route('**/static/barang-masuk-pencarian.js*',tahan_src)
+            observation={}
             try:
-                await menu(page,'/barang-masuk')
-                await asyncio.wait_for(entered.wait(),15)
-                await frame(page,'[data-bm-page]')
-                old_id=await page.evaluate("src=>__life.menuScripts.find(r=>r.src===src&&r.alamat.startsWith('/barang-masuk'))?.id",asset['url'])
-                assert old_id is not None,'Indeterminate: node SCRIPT native tidak berhasil diamati'
+                await menu(page,'/barang-masuk');await asyncio.wait_for(entered.wait(),15)
+                await expect(page.locator('[data-bm-page]')).to_be_visible()
+                old_id=await page.evaluate("__bmR1.scripts.find(r=>r.node.isConnected)?.id")
+                assert old_id is not None,'Indeterminate: old SCRIPT node not observed'
                 if old_id in terminals:terminal.set()
-                # Tiga frame nyata dipasang selagi src frame pertama ditahan.
-                await menu(page,'/kabar');await frame(page,'.kb')
-                await menu(page,'/barang-masuk');await frame(page,'[data-bm-page]')
-                await menu(page,'/kabar');await frame(page,'.kb')
+                await menu(page,'/kabar')
+                await menu(page,'/barang-masuk');await expect(page.locator('[data-bm-page]')).to_be_visible()
+                await menu(page,'/kabar')
+                await menu(page,'/barang-masuk');await expect(page.locator('[data-bm-page]')).to_be_visible()
+                a3=await page.locator('[data-bm-page]').element_handle()
+                a3_id=await page.evaluate("__bmR1.roots.find(r=>r.node===document.querySelector('[data-bm-page]'))?.id")
+                assert a3_id is not None
                 release.set();await asyncio.wait_for(done.wait(),15)
-                try:
-                    await asyncio.wait_for(terminal.wait(),15)
-                    await page.wait_for_function("__life.menuHandlers.some(r=>r.active&&r.target==='window'&&r.jenis==='resize'&&r.scriptConnected&&r.main===document.getElementById('isi-halaman'))",timeout=15000)
-                except Exception:
-                    simpan('R1-indeterminate',dict(asset=asset,old_script=terminals.get(old_id),reason='Terminal oldsrc atau registrasi currentframe belum terverifikasi'))
-                    raise
+                await asyncio.wait_for(terminal.wait(),15)
+                await bm_siap(page);await expect(page.locator('[data-bm-page]')).to_have_attribute('data-siap','1')
                 await flush(page)
-                start=await page.evaluate('__life.escapeWrites')
-                await page.locator('#buka-laci').click()
-                await expect(page.locator('#laci')).to_be_visible()
-                await page.keyboard.press('Escape')
-                await expect(page.locator('#laci')).to_be_hidden()
-                assert await page.evaluate('__life.escapeWrites')==start+1,'Satu Escape harus satu penutupan laci current'
-                await page.wait_for_function("__life.menuHandlers.some(r=>r.active&&r.target==='window'&&r.jenis==='resize')")
-                active=await page.evaluate("__life.menuHandlers.filter(r=>r.active).map(({fn,wrapped,main,...r})=>({...r,currentMain:main===document.getElementById('isi-halaman')}))")
-                at=await page.evaluate('__life.pushes.length')
-                resize_before=await page.evaluate("({events:__life.resizeEvents,calls:__life.menuHandlers.filter(r=>r.active&&r.target==='window'&&r.jenis==='resize').reduce((s,r)=>s+r.calls,0)})")
-                count=len(reads)
-                await page.set_viewport_size({'width':430,'height':900});await flush(page)
-                await page.set_viewport_size({'width':390,'height':900});await flush(page)
-                resize_after=await page.evaluate("({events:__life.resizeEvents,calls:__life.menuHandlers.filter(r=>r.active&&r.target==='window'&&r.jenis==='resize').reduce((s,r)=>s+r.calls,0)})")
-                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset={**asset,'old_script_terminal':terminals.get(old_id)},reads=reads,active_menu_handlers=active,resize_before=resize_before,resize_after=resize_after,three_full_swaps=True,Escape_current_close_once=True,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
-                simpan('R1-footer',observed)
-                assert observed['all_public_tables_unchanged'] and not t['posts']
-                assert await page.evaluate('__life.pushes.length')==at
-                assert len([r for r in active if r['target']=='window' and r['jenis']=='resize'])==1,'Listener resize current dari asset native tidak boleh ganda'
-                assert resize_after['events']>resize_before['events']
-                assert resize_after['calls']-resize_before['calls']==resize_after['events']-resize_before['events']
-                assert not any(r['url'].split('?')[0] in {'/barang-masuk','/pekerjaan',BM,WORK} for r in reads[count:]),'Resize murni tidak membaca ulang halaman/data'
+                observation=await snapshot(page)
+                assert len([r for r in observation['fetches'] if r['path']==BM and r['owner']==a3_id])==1,'Current A3 shell must own one initial data GET'
+                assert all(r['siapChanges']==1 for r in observation['roots'] if r['siapChanges']),'Each initialized root must cross native siap guard once'
+                # Satu submit native yang terlihat harus menghasilkan satu GET pembaca,
+                # bukan duplikasi handler. Tidak ada perubahan transaksi/otorisasi.
+                start=len([r for r in reads if r['headers'].get('x-barang-masuk-cari')=='1'])
+                search=page.locator('[data-bm-search] input[name=cari]:visible')
+                await search.fill('R1 usual fixture search');await search.press('Enter')
+                await page.wait_for_function("__bmR1.fetches.some(r=>r.path==='/barang-masuk'&&r.query.includes('R1')&&r.terminal==='response')")
+                await flush(page)
+                assert len([r for r in reads if r['headers'].get('x-barang-masuk-cari')=='1'])==start+1
+                observation=await snapshot(page)
+                observation.update(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset=asset,old_script_id=old_id,old_terminal=terminals.get(old_id),A3_initial_root=a3_id,read_requests=reads,one_native_search_GET=True,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']),page_error_count=len(t['errors']))
+                assert observation['all_public_tables_unchanged'] and not t['posts'] and not t['errors']
             finally:
                 release.set()
-                await page.unroute('**/static/menu-layar.js*',tahan_src)
-                page.remove_listener('requestfailed',request_gagal)
-            # A1 -> Berjalan -> A2. Lepaskan A1 hanya setelah A2 sudah ada.
+                if asset['selected'] and not done.is_set():await asyncio.wait_for(done.wait(),15)
+                await page.unroute('**/static/barang-masuk-pencarian.js*',tahan_src)
+                page.remove_listener('requestfailed',request_failed)
+                observation.update(final=await snapshot(page),asset=asset,old_terminal=terminals.get(old_id),no_PWA_claim=True)
+                simpan('R1-controller',observation)
+
+async def test_json_lama_A_berjalan_A(pg,lengkap):
+    """Respons reader nyata ditahan; pisahkan aborted/response yang teramati."""
+    async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g2']) as c:
+        before=await _sidik(pg);reads=await bungkus(c)
+        async with peramban(c,390) as (page,t):
+            await amati_controller(page);await page.goto(BASE+'/kabar')
             e1,r1,d1=asyncio.Event(),asyncio.Event(),asyncio.Event()
             eb,rb,db=asyncio.Event(),asyncio.Event(),asyncio.Event()
             e2,r2,d2=asyncio.Event(),asyncio.Event(),asyncio.Event()
@@ -221,20 +240,18 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
                 await buka_kerja_berjalan(page);await asyncio.wait_for(eb.wait(),15)
                 t['gates'][BM]=(e2,r2)
                 await menu(page,'/barang-masuk');await asyncio.wait_for(e2.wait(),15)
-                current=await frame(page,'[data-bm-page]')
-                r1.set();await asyncio.wait_for(d1.wait(),15)
-                t['completed'][BM]=d2
-                await flush(page)
-                assert await current.evaluate('n=>n.isConnected')
+                current=await page.locator('[data-bm-page]').element_handle()
+                r1.set();await asyncio.wait_for(d1.wait(),15);t['completed'][BM]=d2
+                await flush(page);assert await current.evaluate('n=>n.isConnected')
                 await expect(page.locator('[data-bm-results]')).to_have_attribute('aria-busy','true')
                 rb.set();await asyncio.wait_for(db.wait(),15);await flush(page)
                 assert await current.evaluate('n=>n.isConnected')
                 r2.set();await asyncio.wait_for(d2.wait(),15);await bm_siap(page)
-                assert not t['posts'] and not t['errors'],t['errors']
-                assert await _sidik(pg)==before
-                simpan('lateJSON-A-B-A',dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),old_JSON_not_installed=True,reads=reads,all_public_tables_unchanged=True,business_POSTs=0))
-            finally:
-                r1.set();rb.set();r2.set()
+                observation=await snapshot(page)
+                observation.update(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),old_JSON_not_installed=True,read_requests=reads,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']),page_error_count=len(t['errors']),no_PWA_claim=True)
+                simpan('R1-lateJSON',observation)
+                assert observation['all_public_tables_unchanged'] and not t['posts'] and not t['errors']
+            finally:r1.set();rb.set();r2.set()
 
 
 async def test_segarkan_public_api_A_B_A(pg,lengkap):
@@ -249,7 +266,7 @@ async def test_segarkan_public_api_A_B_A(pg,lengkap):
             fresh,fresh_release,fresh_done=asyncio.Event(),asyncio.Event(),asyncio.Event()
             t['gates']['/barang-masuk']=(entered,release);t['completed']['/barang-masuk']=done
             try:
-                await page.evaluate('()=>PINDAH.segarkan()')
+                await page.evaluate('()=>{window.__refreshDone=0;PINDAH.segarkan(()=>window.__refreshDone++);}')
                 await asyncio.wait_for(entered.wait(),15)
                 await menu(page,'/kabar')
                 t['gates'][BM]=(fresh,fresh_release);t['completed'][BM]=fresh_done
@@ -257,13 +274,39 @@ async def test_segarkan_public_api_A_B_A(pg,lengkap):
                 fresh_release.set();await asyncio.wait_for(fresh_done.wait(),15);await bm_siap(page)
                 current=await page.locator('[data-bm-page]').element_handle()
                 await page.locator('input[name=cari]:visible').fill('Isian baru fixture')
-                release.set();await asyncio.wait_for(done.wait(),15);await flush(page)
-                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),public_API_only=True,visible_native_data_kirim=visible_callers,native_transaction_callers_not_invoked=True,
+                release.set();await asyncio.wait_for(done.wait(),15)
+                await page.wait_for_function('window.__refreshDone===1')
+                await flush(page)
+                observed=dict(callback_count=await page.evaluate('window.__refreshDone'),control=os.environ.get('OWNER_SOURCE_MODE','candidate'),public_API_only=True,visible_native_data_kirim=visible_callers,native_transaction_callers_not_invoked=True,
                     fresh_root_retained=await current.evaluate('n=>n.isConnected'),search_value=await page.locator('input[name=cari]:visible').input_value(),reads=reads,
                     all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
                 simpan('R2-publicAPI',observed)
                 assert observed['all_public_tables_unchanged'] and not t['posts'] and not t['errors'],t['errors']
+                assert observed['callback_count']==1
                 assert observed['fresh_root_retained'],'Refresh generasi A lama tidak boleh menimpa A baru'
                 assert observed['search_value']=='Isian baru fixture'
             finally:
                 release.set();fresh_release.set()
+
+
+async def test_segarkan_tanpa_navigasi_tetap_memasang_dan_callback_sekali(pg,lengkap):
+    """Kontrol positif: guard generasi tidak menahan refresh halaman yang sama."""
+    async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g2']) as c:
+        before=await _sidik(pg);reads=await bungkus(c)
+        async with peramban(c,390) as (page,t):
+            await page.goto(BASE+'/kabar');await menu(page,'/barang-masuk');await bm_siap(page)
+            current=await page.locator('[data-bm-page]').element_handle()
+            entered,release,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
+            t['gates']['/barang-masuk']=(entered,release);t['completed']['/barang-masuk']=done
+            try:
+                await page.evaluate('()=>{window.__refreshDone=0;PINDAH.segarkan(()=>window.__refreshDone++);}')
+                await asyncio.wait_for(entered.wait(),15)
+                assert await current.evaluate('n=>n.isConnected')
+                assert await page.evaluate('window.__refreshDone')==0
+                release.set();await asyncio.wait_for(done.wait(),15)
+                await page.wait_for_function('window.__refreshDone===1');await bm_siap(page)
+                observed=dict(public_API_only=True,callback_count=await page.evaluate('window.__refreshDone'),old_root_replaced=not await current.evaluate('n=>n.isConnected'),read_requests=reads,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
+                simpan('R2-positive-refresh',observed)
+                assert observed['callback_count']==1 and observed['old_root_replaced']
+                assert observed['all_public_tables_unchanged'] and not t['posts'] and not t['errors'],t['errors']
+            finally:release.set()
