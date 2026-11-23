@@ -66,7 +66,14 @@ async def instrumentasi(page):
     await page.add_init_script("""(()=>{
       window.__life={pushes:[],escapeWrites:0,oldAsset:null};
       const push=history.pushState;history.pushState=function(...a){__life.pushes.push(a[2]);return push.apply(this,a);};
-      __life.menuHandlers=[];__life.resizeEvents=0;
+      __life.menuHandlers=[];__life.resizeEvents=0;__life.menuScripts=[];
+      const diawasi=new WeakSet();
+      function awasiScript(n){
+        if(n.tagName!=='SCRIPT'||!n.src||!n.isConnected||diawasi.has(n)||new URL(n.src).pathname!=='/static/menu-layar.js')return;
+        diawasi.add(n);const rec={id:__life.menuScripts.length+1,node:n,src:n.src,alamat:location.pathname+location.search,terminal:null,connectedAtTerminal:null};__life.menuScripts.push(rec);
+        for(const jenis of ['load','error'])n.addEventListener(jenis,()=>{rec.terminal=jenis;rec.connectedAtTerminal=n.isConnected;if(window.__nativeMenuTerminal)window.__nativeMenuTerminal({id:rec.id,kind:jenis,connected:rec.connectedAtTerminal});},{once:true});
+      }
+      new MutationObserver(changes=>{for(const c of changes)for(const n of c.addedNodes){if(n.nodeType!==1)continue;awasiScript(n);n.querySelectorAll?.('script[src]').forEach(awasiScript);}}).observe(document,{childList:true,subtree:true});
       const tambah=EventTarget.prototype.addEventListener,hapus=EventTarget.prototype.removeEventListener,catatan=new WeakMap();
       EventTarget.prototype.addEventListener=function(jenis,fn,opsi){
         const src=document.currentScript?.src||'';
@@ -74,7 +81,7 @@ async def instrumentasi(page):
           let daftar=catatan.get(this);if(!daftar){daftar=[];catatan.set(this,daftar);}
           const capture=typeof opsi==='boolean'?opsi:!!opsi?.capture;
           let rec=daftar.find(r=>r.jenis===jenis&&r.fn===fn&&r.capture===capture);
-          if(!rec){rec={jenis,fn,capture,active:true,calls:0,target:this===window?'window':this===window.visualViewport?'visualViewport':this.id||this.tagName,scriptConnected:document.currentScript.isConnected,alamat:location.pathname+location.search};rec.wrapped=function(...a){rec.calls++;return fn.apply(this,a);};daftar.push(rec);__life.menuHandlers.push(rec);}else rec.active=true;
+          if(!rec){rec={jenis,fn,capture,active:true,calls:0,target:this===window?'window':this===window.visualViewport?'visualViewport':this.id||this.tagName,scriptConnected:document.currentScript.isConnected,alamat:location.pathname+location.search,main:document.getElementById('isi-halaman')};rec.wrapped=function(...a){rec.calls++;return fn.apply(this,a);};daftar.push(rec);__life.menuHandlers.push(rec);}else rec.active=true;
           return tambah.call(this,jenis,rec.wrapped,opsi);
         }
         return tambah.call(this,jenis,fn,opsi);
@@ -123,19 +130,26 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
     async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g2']) as c:
         before=await _sidik(pg);reads=await bungkus(c)
         async with peramban(c,390) as (page,t):
+            terminals={};terminal=asyncio.Event();old_id=None;old_request=None
+            def terminal_script(info):
+                terminals[info['id']]=info
+                if info['id']==old_id:terminal.set()
+            await page.expose_function('__nativeMenuTerminal',terminal_script)
             await instrumentasi(page)
             await page.goto(BASE+'/kabar')
-            await menu(page,'/barang-masuk');await bm_siap(page)
-            await menu(page,'/kabar')
             entered,release,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
             asset=dict(selected=False,resource=None,delivered=False,cancelled=False)
             async def tahan_src(route):
+                nonlocal old_request
                 request=route.request
                 if request.resource_type!='script' or asset['selected']:
                     await route.fallback();return
+                old_request=request
                 asset.update(selected=True,resource=request.resource_type,url=request.url)
                 response=await c.request('GET','/static/menu-layar.js?'+request.url.split('?',1)[1])
                 asset['body_sha256']=hashlib.sha256(response.content).hexdigest()
+                import hmu_tampilan
+                assert asset['body_sha256']==hashlib.sha256((Path(hmu_tampilan.__file__).parent/'static/menu-layar.js').read_bytes()).hexdigest()
                 entered.set()
                 try:
                     await release.wait()
@@ -146,23 +160,29 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
                     if not request.failure:raise
                     asset['cancelled']=True
                 finally:done.set()
+            def request_gagal(request):
+                if request==old_request:
+                    asset['terminal']='requestfailed';terminal.set()
+            page.on('requestfailed',request_gagal)
             await page.route('**/static/menu-layar.js*',tahan_src)
             try:
                 await menu(page,'/barang-masuk')
                 await asyncio.wait_for(entered.wait(),15)
                 await frame(page,'[data-bm-page]')
-                await page.evaluate("""()=>{
-                  const s=[...document.querySelectorAll('script[src]')].find(n=>new URL(n.src).pathname==='/static/menu-layar.js');
-                  __life.oldAsset={elementFound:!!s,loaded:false,error:false,connectedAtLoad:null};
-                  if(!s)return;
-                  s.addEventListener('load',()=>{__life.oldAsset.loaded=true;__life.oldAsset.connectedAtLoad=s.isConnected;},{once:true});
-                  s.addEventListener('error',()=>{__life.oldAsset.error=true;},{once:true});
-                }""")
+                old_id=await page.evaluate("src=>__life.menuScripts.find(r=>r.src===src&&r.alamat.startsWith('/barang-masuk'))?.id",asset['url'])
+                assert old_id is not None,'Indeterminate: node SCRIPT native tidak berhasil diamati'
+                if old_id in terminals:terminal.set()
                 # Tiga frame nyata dipasang selagi src frame pertama ditahan.
                 await menu(page,'/kabar');await frame(page,'.kb')
                 await menu(page,'/barang-masuk');await frame(page,'[data-bm-page]')
                 await menu(page,'/kabar');await frame(page,'.kb')
                 release.set();await asyncio.wait_for(done.wait(),15)
+                try:
+                    await asyncio.wait_for(terminal.wait(),15)
+                    await page.wait_for_function("__life.menuHandlers.some(r=>r.active&&r.target==='window'&&r.jenis==='resize'&&r.scriptConnected&&r.main===document.getElementById('isi-halaman'))",timeout=15000)
+                except Exception:
+                    simpan('R1-indeterminate',dict(asset=asset,old_script=terminals.get(old_id),reason='Terminal oldsrc atau registrasi currentframe belum terverifikasi'))
+                    raise
                 await flush(page)
                 start=await page.evaluate('__life.escapeWrites')
                 await page.locator('#buka-laci').click()
@@ -171,14 +191,14 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
                 await expect(page.locator('#laci')).to_be_hidden()
                 assert await page.evaluate('__life.escapeWrites')==start+1,'Satu Escape harus satu penutupan laci current'
                 await page.wait_for_function("__life.menuHandlers.some(r=>r.active&&r.target==='window'&&r.jenis==='resize')")
-                active=await page.evaluate("__life.menuHandlers.filter(r=>r.active).map(({fn,wrapped,...r})=>r)")
+                active=await page.evaluate("__life.menuHandlers.filter(r=>r.active).map(({fn,wrapped,main,...r})=>({...r,currentMain:main===document.getElementById('isi-halaman')}))")
                 at=await page.evaluate('__life.pushes.length')
                 resize_before=await page.evaluate("({events:__life.resizeEvents,calls:__life.menuHandlers.filter(r=>r.active&&r.target==='window'&&r.jenis==='resize').reduce((s,r)=>s+r.calls,0)})")
                 count=len(reads)
                 await page.set_viewport_size({'width':430,'height':900});await flush(page)
                 await page.set_viewport_size({'width':390,'height':900});await flush(page)
                 resize_after=await page.evaluate("({events:__life.resizeEvents,calls:__life.menuHandlers.filter(r=>r.active&&r.target==='window'&&r.jenis==='resize').reduce((s,r)=>s+r.calls,0)})")
-                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset={**asset,**await page.evaluate('__life.oldAsset')},reads=reads,active_menu_handlers=active,resize_before=resize_before,resize_after=resize_after,three_full_swaps=True,Escape_current_close_once=True,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
+                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset={**asset,'old_script_terminal':terminals.get(old_id)},reads=reads,active_menu_handlers=active,resize_before=resize_before,resize_after=resize_after,three_full_swaps=True,Escape_current_close_once=True,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
                 simpan('R1-footer',observed)
                 assert observed['all_public_tables_unchanged'] and not t['posts']
                 assert await page.evaluate('__life.pushes.length')==at
@@ -189,6 +209,7 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
             finally:
                 release.set()
                 await page.unroute('**/static/menu-layar.js*',tahan_src)
+                page.remove_listener('requestfailed',request_gagal)
             # A1 -> Berjalan -> A2. Lepaskan A1 hanya setelah A2 sudah ada.
             e1,r1,d1=asyncio.Event(),asyncio.Event(),asyncio.Event()
             eb,rb,db=asyncio.Event(),asyncio.Event(),asyncio.Event()
