@@ -1,6 +1,6 @@
-{# Portal read-only: retain the QC table even when no result has been recorded. #}
+{# Portal baca-saja: tabel tetap tampil meski hasil pemeriksaan belum dicatat. #}
 {% macro qc_kosong(pesan) -%}
-<table class="terima-nilai"><thead><tr><th scope="col">Parameter</th><th scope="col">Hasil QC</th></tr></thead><tbody><tr><td colspan="2">{{ pesan }}</td></tr></tbody></table>
+<table class="terima-nilai"><thead><tr><th scope="col">Parameter</th><th scope="col">Hasil QC</th></tr></thead><tbody><tr><td colspan="2"><p class="terima-bantu">{{ pesan }}</p></td></tr></tbody></table>
 {%- endmacro %}
 <section class="terima-panel" aria-labelledby="terima-qc">
  <div class="terima-judul"><h2 id="terima-qc">Hasil QC</h2><span>Mutu penerimaan</span></div>
