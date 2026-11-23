@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 import pytest
-from playwright.async_api import expect
+from playwright.async_api import expect, Error as BrowserError
 from tests.pg.test_konsolidasi_pekerjaan import lengkap, stok_lengkap, sosoh_jasa
 from tests.pg.test_tiket_antrean_produksi import _klien
 from tests.pg.test_halaman_bertahap import _sidik
@@ -128,16 +128,33 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
             await menu(page,'/barang-masuk');await bm_siap(page)
             await menu(page,'/kabar')
             entered,release,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
-            t['gates']['/static/menu-layar.js']=(entered,release)
-            t['completed']['/static/menu-layar.js']=done
+            asset=dict(selected=False,resource=None,delivered=False,cancelled=False)
+            async def tahan_src(route):
+                request=route.request
+                if request.resource_type!='script' or asset['selected']:
+                    await route.fallback();return
+                asset.update(selected=True,resource=request.resource_type,url=request.url)
+                response=await c.request('GET','/static/menu-layar.js?'+request.url.split('?',1)[1])
+                asset['body_sha256']=hashlib.sha256(response.content).hexdigest()
+                entered.set()
+                try:
+                    await release.wait()
+                    await route.fulfill(status=response.status_code,body=response.content,
+                        headers={k:v for k,v in response.headers.items() if k.lower() not in {'content-length','content-encoding','transfer-encoding','set-cookie'}})
+                    asset['delivered']=True
+                except BrowserError:
+                    if not request.failure:raise
+                    asset['cancelled']=True
+                finally:done.set()
+            await page.route('**/static/menu-layar.js*',tahan_src)
             try:
                 await menu(page,'/barang-masuk')
                 await asyncio.wait_for(entered.wait(),15)
                 await frame(page,'[data-bm-page]')
                 await page.evaluate("""()=>{
                   const s=[...document.querySelectorAll('script[src]')].find(n=>new URL(n.src).pathname==='/static/menu-layar.js');
-                  if(!s)throw Error('Asset footer native tidak ditemukan');
-                  __life.oldAsset={loaded:false,error:false,connectedAtLoad:null};
+                  __life.oldAsset={elementFound:!!s,loaded:false,error:false,connectedAtLoad:null};
+                  if(!s)return;
                   s.addEventListener('load',()=>{__life.oldAsset.loaded=true;__life.oldAsset.connectedAtLoad=s.isConnected;},{once:true});
                   s.addEventListener('error',()=>{__life.oldAsset.error=true;},{once:true});
                 }""")
@@ -161,7 +178,7 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
                 await page.set_viewport_size({'width':430,'height':900});await flush(page)
                 await page.set_viewport_size({'width':390,'height':900});await flush(page)
                 resize_after=await page.evaluate("({events:__life.resizeEvents,calls:__life.menuHandlers.filter(r=>r.active&&r.target==='window'&&r.jenis==='resize').reduce((s,r)=>s+r.calls,0)})")
-                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset=await page.evaluate('__life.oldAsset'),reads=reads,active_menu_handlers=active,resize_before=resize_before,resize_after=resize_after,three_full_swaps=True,Escape_current_close_once=True,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
+                observed=dict(control=os.environ.get('OWNER_SOURCE_MODE','candidate'),asset={**asset,**await page.evaluate('__life.oldAsset')},reads=reads,active_menu_handlers=active,resize_before=resize_before,resize_after=resize_after,three_full_swaps=True,Escape_current_close_once=True,all_public_tables_unchanged=await _sidik(pg)==before,business_POSTs=len(t['posts']))
                 simpan('R1-footer',observed)
                 assert observed['all_public_tables_unchanged'] and not t['posts']
                 assert await page.evaluate('__life.pushes.length')==at
@@ -170,7 +187,8 @@ async def test_footer_asli_tiga_swap_dan_json_lama(pg,lengkap):
                 assert resize_after['calls']-resize_before['calls']==resize_after['events']-resize_before['events']
                 assert not any(r['url'].split('?')[0] in {'/barang-masuk','/pekerjaan',BM,WORK} for r in reads[count:]),'Resize murni tidak membaca ulang halaman/data'
             finally:
-                release.set();t['gates'].pop('/static/menu-layar.js',None)
+                release.set()
+                await page.unroute('**/static/menu-layar.js*',tahan_src)
             # A1 -> Berjalan -> A2. Lepaskan A1 hanya setelah A2 sudah ada.
             e1,r1,d1=asyncio.Event(),asyncio.Event(),asyncio.Event()
             eb,rb,db=asyncio.Event(),asyncio.Event(),asyncio.Event()
