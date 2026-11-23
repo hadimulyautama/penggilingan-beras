@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import pytest
+import httpx
 from playwright.async_api import expect
 
 from tests.pg.test_konsolidasi_pekerjaan import lengkap, stok_lengkap, sosoh_jasa
@@ -32,7 +33,7 @@ async def siap(page, jenis):
         await expect(page.locator('nav[aria-label="Tab pekerjaan"]')).to_be_visible()
 
 
-async def kerangka_instans(page, t, reads, trigger, alamat, jenis, kolom, width, gambar):
+async def kerangka_instans(page, t, reads, trigger, alamat, jenis, kolom, width, gambar, gagal=False):
     path = alamat.split('?')[0]
     api = '/api/halaman-bertahap/' + jenis
     html_enter, html_release = asyncio.Event(), asyncio.Event()
@@ -78,7 +79,13 @@ async def kerangka_instans(page, t, reads, trigger, alamat, jenis, kolom, width,
             await page.screenshot(path=str(Path(os.environ['PHASE_OUT'])/(engine+'-'+gambar+'.png')), full_page=True)
         release.set()
         await asyncio.wait_for(done.wait(),15)
+        if gagal:
+            await expect(page.locator('[data-shell-message]')).to_contain_text('Gagal memuat data; ini bukan daftar kosong')
+            await expect(page.locator('thead th')).to_have_count(kolom)
+            await expect(page.locator('[data-shell-table-wrap]')).to_have_attribute('aria-busy','false')
+            await page.locator('[data-shell-retry]').click()
         await siap(page, jenis)
+        assert not any(r['url'].split('?')[0] == path for r in reads[before:])
     finally:
         html_release.set();release.set()
         t['gates'].pop(path,None)
@@ -90,11 +97,15 @@ async def kerangka_instans(page, t, reads, trigger, alamat, jenis, kolom, width,
 async def test_empat_literal_native_sebelum_semua_response(pg,lengkap,role,width):
     async with await _klien(pg,role=role,gudang_id=lengkap['gudang']['g2'] if role=='operator' else None) as c:
         before=await _sidik(pg)
-        reads=[];native=c.request
+        reads=[];native=c.request;fault=dict(next=False)
         async def request(method,url,**kw):
             reads.append(dict(method=method,url=str(url),headers={k:v for k,v in kw.get('headers',{}).items() if k.lower() in {'x-pindah','x-kerangka-halaman','x-barang-masuk-cari','sec-fetch-mode','sec-fetch-dest'}}))
             assert method=='GET', 'Frame/navigation tidak boleh mengirim POST'
-            return await native(method,url,**kw)
+            result=await native(method,url,**kw)
+            if fault['next'] and str(url).split('?')[0]=='/api/halaman-bertahap/pekerjaan':
+                fault['next']=False
+                return httpx.Response(503,json={'detail':'Fixture pembaca belum tersedia'})
+            return result
         c.request=request
         async with peramban(c,width) as (page,t):
             await page.add_init_script("""window.__riwayatPush=[];const push=history.pushState;history.pushState=function(...a){window.__riwayatPush.push(a[2]);return push.apply(this,a);};""")
@@ -108,8 +119,24 @@ async def test_empat_literal_native_sebelum_semua_response(pg,lengkap,role,width
             # membuktikan dua literal status melalui provider SDK, bukan POST.
             for status, columns in [('diterima',7),('belum',6)]:
                 oldroot=await page.locator('[data-bm-page]').element_handle()
-                await page.locator('nav[aria-label="Bagian Barang Masuk"] a[href*="status='+status+'"]').click()
-                await page.wait_for_function('n=>!n.isConnected',arg=oldroot)
+                entered,released,completed=asyncio.Event(),asyncio.Event(),asyncio.Event()
+                t['gates']['/barang-masuk']=(entered,released)
+                t['completed']['/barang-masuk']=completed
+                awal=len(reads);length=await page.evaluate('history.length')
+                try:
+                    await page.locator('nav[aria-label="Bagian Barang Masuk"] a[href*="status='+status+'"]').click()
+                    await asyncio.wait_for(entered.wait(),15)
+                    await expect(page.locator('[data-bm-results] th')).to_have_count(columns)
+                    await expect(page.locator('nav[aria-label="Bagian Barang Masuk"] a[href*="status='+status+'"]')).to_have_attribute('aria-current','page')
+                    await expect(page.locator('.bm-jumlah')).to_contain_text('Jumlah hasil belum tersedia')
+                    await expect(page.locator('[data-bm-results]')).to_have_attribute('aria-busy','true')
+                    actual=[r for r in reads[awal:] if r['url'].split('?')[0]=='/barang-masuk']
+                    assert len(actual)==1 and actual[0]['headers'].get('x-barang-masuk-cari')=='1'
+                    assert await page.evaluate('history.length')==length+1
+                    released.set();await asyncio.wait_for(completed.wait(),15)
+                    await page.wait_for_function('n=>!n.isConnected',arg=oldroot)
+                finally:
+                    released.set();t['gates'].pop('/barang-masuk',None)
                 alamat='/barang-masuk?status='+status
                 await expect(page).to_have_url(BASE+alamat)
                 await (await pintu(page,'/kabar',width)).click()
@@ -124,7 +151,8 @@ async def test_empat_literal_native_sebelum_semua_response(pg,lengkap,role,width
             await expect(page).to_have_url(BASE+'/pekerjaan')
             await expect(page.locator('nav[aria-label="Tab pekerjaan"]')).to_be_visible()
             link=page.locator('nav[aria-label="Tab pekerjaan"] a[href="/pekerjaan?tab=berjalan"]')
-            await kerangka_instans(page,t,reads,lambda:link.click(),'/pekerjaan?tab=berjalan','pekerjaan',5,width,'instant-Berjalan-'+role+'-'+str(width))
+            fault['next']=role=='operator' and width==390
+            await kerangka_instans(page,t,reads,lambda:link.click(),'/pekerjaan?tab=berjalan','pekerjaan',5,width,'instant-Berjalan-'+role+'-'+str(width),gagal=fault['next'])
             assert not t['posts'] and not t['errors'],t['errors']
             assert await _sidik(pg)==before
             if os.environ.get('PHASE_OUT'):
