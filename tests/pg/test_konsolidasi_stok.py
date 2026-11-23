@@ -3,6 +3,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import date
 from html import unescape
 import re
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -82,6 +83,23 @@ def normal(nilai):
     return nilai
 
 
+def _render_native(request):
+    # Registry merender empat frame pada request clone, bukan daftar stok
+    # yang sedang dibandingkan. Jangan menyaring berdasarkan nama template.
+    return getattr(request.state, 'menyusun_kerangka_langsung', False) is not True
+
+
+async def test_capture_native_tidak_menyembunyikan_template_yang_salah():
+    hasil = []
+    for flag, nama in [(False, 'stok.html'),
+                       (True, 'barang_masuk_pencarian.html'),
+                       (False, 'barang_masuk_pencarian.html')]:
+        request = SimpleNamespace(state=SimpleNamespace(menyusun_kerangka_langsung=flag))
+        if _render_native(request):
+            hasil.append(nama)
+    assert hasil == ['stok.html', 'barang_masuk_pencarian.html']
+
+
 def navigasi_stok(html, gudang=frozenset(('', 'g1', 'g2'))):
     from bs4 import BeautifulSoup
     s = BeautifulSoup(html, 'html.parser')
@@ -100,13 +118,16 @@ async def test_enam_alias_saldo_dan_aksi_sama(pg, stok_lengkap, monkeypatch, lam
     asli = tampilan.render
     hasil = []
     def rekam(request, nama, **konteks):
-        hasil.append((nama, konteks))
+        if _render_native(request):
+            hasil.append((nama, konteks))
         return asli(request, nama, **konteks)
     monkeypatch.setattr(tampilan, 'render', rekam)
     async with await _klien(pg, role='admin') as c:
         a = await c.get(lama + ('&' if '?' in lama else '?') + 'buka=pindah_kepemilikan_karung&nilai=laminasi%7C25%7CPenyunesia')
+        assert len(hasil) == 1
         b = await c.get(f'/stok?tab={tab}&pemilik={pemilik}&buka=pindah_kepemilikan_karung&nilai=laminasi%7C25%7CPenyunesia')
         assert a.status_code == b.status_code == 200, b.text
+        assert len(hasil) == 2
     assert hasil[0][0] == hasil[1][0]
     for k in ('lot', 'tempat', 'total', 'kartu', 'beras', 'samping', 'kemasan', 'karung',
               'daftar', 'sisa_beras', 'sisa_samping', 'curah_beras', 'curah_samping',
@@ -130,12 +151,14 @@ async def test_filter_id_pelanggan_bukan_nama_dan_tidak_memindahkan_stok(pg, sto
     from app.web import tampilan
     asli, hasil = tampilan.render, []
     def rekam(request, nama, **k):
-        hasil.append(k)
+        if _render_native(request):
+            hasil.append(k)
         return asli(request, nama, **k)
     monkeypatch.setattr(tampilan, 'render', rekam)
     async with await _klien(pg, role='admin') as c:
         r = await c.get(f'/stok?tab={tab}&pemilik=jasa&pelanggan_id={stok_lengkap["pelanggan_id"]}')
         assert r.status_code == 200, r.text
+        assert len(hasil) == 1
         k = hasil[-1]
         p = k['kelompok_pk'] if tab == 'bahan' else k['daftar']
         assert [x['pelanggan_id'] for x in p] == [stok_lengkap['pelanggan_id']]
@@ -150,6 +173,7 @@ async def test_filter_id_pelanggan_bukan_nama_dan_tidak_memindahkan_stok(pg, sto
         # Kembali ke semua pemilik tidak mengurangi stok karena filter hanya GET.
         semua = await c.get(f'/stok?tab={tab}&pemilik=jasa')
         assert semua.status_code == 200
+        assert len(hasil) == 2
         assert len(hasil[-1]['STOK_NAV']['pelanggan']) == 2
 
 
@@ -272,12 +296,14 @@ async def test_default_semua_pemilik_dan_gudang(pg, stok_lengkap, monkeypatch, t
     asli = tampilan.render
     hasil = []
     def rekam(request, nama, **konteks):
-        hasil.append(konteks)
+        if _render_native(request):
+            hasil.append(konteks)
         return asli(request, nama, **konteks)
     monkeypatch.setattr(tampilan, 'render', rekam)
     async with await _klien(pg, role='admin') as c:
         r = await c.get(f'/stok?tab={tab}')
         assert r.status_code == 200, r.text
+        assert len(hasil) == 1
         konteks = hasil[-1]
         nav = konteks['STOK_NAV']
         assert nav['pemilik'] == 'semua' and nav['gudang'] == ''
@@ -301,6 +327,7 @@ async def test_default_semua_pemilik_dan_gudang(pg, stok_lengkap, monkeypatch, t
         # Pilihan eksplisit tetap terbawa saat berpindah tab.
         r = await c.get(f'/stok?tab={tab}&pemilik=pabrik&gudang=g2')
         assert r.status_code == 200
+        assert len(hasil) == 2
         assert all('pemilik=pabrik' in t['href'] and 'gudang=g2' in t['href']
                    for t in hasil[-1]['STOK_NAV']['tab'])
 

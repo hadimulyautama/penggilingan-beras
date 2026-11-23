@@ -45,6 +45,23 @@ class _Elemen(HTMLParser):
                 and all(a.get(k) == v for k, v in attrs.items())]
 
 
+def _memasang_kerangka(html):
+    # Teks registry JSON bukan elemen yang dipasang. Atribut boolean pada
+    # elemen nyata tetap terdeteksi, termasuk bila nilainya kosong/None.
+    return any('data-halaman-bertahap' in attrs
+               for _, attrs in _Elemen(html).tags)
+
+
+async def test_penjaga_kerangka_membedakan_json_inert_dan_elemen_nyata():
+    host = ('<script type="application/json">'
+            '{"html":"\\u003csection data-halaman-bertahap\\u003e"}'
+            '</script>')
+    assert 'data-halaman-bertahap' in host
+    assert not _memasang_kerangka(host)
+    assert _memasang_kerangka(host + '<section data-halaman-bertahap></section>')
+    assert _memasang_kerangka(host + '<section data-halaman-bertahap=""></section>')
+
+
 class _Struktur(HTMLParser):
     """Baca hubungan kontrol/panel dan sidebar, tanpa menafsirkan JavaScript."""
     VOID = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
@@ -197,7 +214,7 @@ async def test_isi_sama_dengan_native_dan_seluruh_tabel_tetap(
         shell = await c.get('/' + kind + '?' + query, headers={'X-Kerangka-Halaman': '1'})
         native = await c.get('/' + kind + '?' + query, headers={'X-Pindah': '1'})
         raw = await c.get('/' + kind + '?' + query)
-        assert raw.status_code == 200 and 'data-halaman-bertahap' not in raw.text
+        assert raw.status_code == 200 and not _memasang_kerangka(raw.text)
         assert _isi(raw.text) == _isi(native.text)
         response = await c.get('/api/halaman-bertahap/' + kind + '?' + query)
         assert shell.status_code == native.status_code == response.status_code == 200
