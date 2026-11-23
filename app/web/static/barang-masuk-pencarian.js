@@ -28,6 +28,7 @@
    root.querySelector('#bm-cetak-alasan').hidden=ready;
   }
   function tampilkanTabel(state,url){
+   const focus=ambilFokus();
    const q=new URL(url,location.href).searchParams,kind=q.get('status')==='diterima'?'diterima':'belum';
    const box=document.createElement('div');box.className='bm-state-scroll';box.tabIndex=0;box.setAttribute('role','region');box.setAttribute('aria-label','Daftar penerimaan · tabel dapat digulir');
    const t=document.createElement('table');t.className='bm-state-table';const head=t.createTHead().insertRow();
@@ -35,10 +36,11 @@
    const cell=t.createTBody().insertRow().insertCell();cell.colSpan=schemas[kind].length;cell.dataset.bmStateMessage='';
    cell.textContent=state==='loading'?'Memuat daftar penerimaan. Judul kolom dan pilihan tetap tersedia.':'Daftar penerimaan gagal dimuat. Coba lagi hanya membaca data; ini bukan daftar kosong.';
    box.append(t);result.replaceChildren(box);result.setAttribute('aria-busy',String(state==='loading'));
+   if(focus?.region)pulihkanFokus(root,focus);
   }
   function sedangMengisi(){return nilaiIsian()!==baseline||!!root.querySelector('dialog[open]')||root.contains(document.activeElement)&&/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);}
-  function ambilFokus(){const n=document.activeElement;if(!root.contains(n))return null;return {name:n.name,type:n.type,open:n.dataset?.bmBuka,retry:n.hasAttribute('data-bm-retry'),search:n.closest('[data-bm-search]')&&n.type==='submit',start:n.selectionStart,end:n.selectionEnd};}
-  function pulihkanFokus(next,old){if(!old)return;let n;if(old.name)n=Array.from(next.querySelectorAll('input,select,textarea')).find(x=>x.name===old.name&&x.type===old.type);else if(old.open)n=Array.from(next.querySelectorAll('[data-bm-buka]')).find(x=>x.dataset.bmBuka===old.open);else if(old.retry)n=next.querySelector('.bm-jumlah');else if(old.search)n=next.querySelector('[data-bm-search] button[type=submit]');if(n){if(old.retry)n.tabIndex=-1;n.focus({preventScroll:true});if(old.start!=null&&n.setSelectionRange)try{n.setSelectionRange(old.start,old.end);}catch(_){}}}
+  function ambilFokus(){const n=document.activeElement;if(!root.contains(n))return null;return {region:n.matches('.bm-state-scroll')||n===result,name:n.name,type:n.type,open:n.dataset?.bmBuka,retry:n.hasAttribute('data-bm-retry'),search:n.closest('[data-bm-search]')&&n.type==='submit',start:n.selectionStart,end:n.selectionEnd};}
+  function pulihkanFokus(next,old){if(!old)return;let n;if(old.region){n=next.querySelector('[data-bm-results] .bm-state-scroll')||next.querySelector('[data-bm-results]');if(n&&!n.hasAttribute('tabindex'))n.tabIndex=-1;}else if(old.name)n=Array.from(next.querySelectorAll('input,select,textarea')).find(x=>x.name===old.name&&x.type===old.type);else if(old.open)n=Array.from(next.querySelectorAll('[data-bm-buka]')).find(x=>x.dataset.bmBuka===old.open);else if(old.retry)n=next.querySelector('.bm-jumlah');else if(old.search)n=next.querySelector('[data-bm-search] button[type=submit]');if(n){if(old.retry)n.tabIndex=-1;n.focus({preventScroll:true});if(old.start!=null&&n.setSelectionRange)try{n.setSelectionRange(old.start,old.end);}catch(_){}}}
   function pasangHasil(doc,n,url){
    if(!masihBerlaku(n,url))return;const next=doc.querySelector('[data-bm-page]');
    if(!context||!cap||!next||next.dataset.bmContext!==context||next.dataset.bmCap!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==originalToken||version&&doc.documentElement.getAttribute('data-versi')!==version)throw Error('Sesi, gudang atau versi berubah. Muat ulang halaman sebelum membaca cakupan terbaru.');

@@ -112,6 +112,8 @@ async def test_daftar_loading_filter_error_retry_stale_dan_keluar(
     monkeypatch.setattr(barang_masuk_daftar, 'daftar', reader)
     initial_entered, initial_release = asyncio.Event(), asyncio.Event()
     late_entered, late_release = asyncio.Event(), asyncio.Event()
+    search_entered, search_release = asyncio.Event(), asyncio.Event()
+    error_entered, error_release = asyncio.Event(), asyncio.Event()
     async with await _klien(pg, role=role, gudang_id=lengkap['gudang'].get(warehouse)) as c:
         before = await _sidik(pg)
         async with peramban(c, width) as (page, transport):
@@ -141,13 +143,20 @@ async def test_daftar_loading_filter_error_retry_stale_dan_keluar(
                 await expect(root.locator('[data-bm-read-status]')).to_contain_text('Isian pilihan tetap dipertahankan')
                 await expect(search).to_be_focused()
                 await expect(search).to_have_value('Kode tidak ditemukan')
+                transport['gates']['/barang-masuk'] = (search_entered, search_release)
                 await search.press('Enter')
-                await expect(root.locator('[data-bm-read-status]')).to_contain_text('Data siap')
+                await asyncio.wait_for(search_entered.wait(), 15)
                 await expect(search).to_be_focused()
                 await search.press('Tab')
+                # Default WebKit may skip buttons; preserve its actual semantic
+                # destination rather than force Chromium's Tab preference.
+                destination = await page.evaluate("()=>document.activeElement.matches('.bm-state-scroll')?'region':document.activeElement.matches('[data-bm-search] button[type=submit]')?'search':document.activeElement.tagName")
+                assert destination in {'region', 'search'}, destination
+                search_release.set()
                 await expect(root.locator('[data-bm-state-message]')).to_contain_text('Tidak ada penerimaan yang cocok')
                 await expect(root.locator('[data-bm-results] th')).to_have_count(6)
-                await expect(root.locator('[data-bm-search] button[type=submit]')).to_be_focused()
+                target = root.locator('.bm-state-scroll' if destination == 'region' else '[data-bm-search] button[type=submit]')
+                await expect(target).to_be_focused()
                 await search.fill('')
                 await search.press('Enter')
                 await expect(root.locator('[data-bm-read-status]')).to_contain_text('Data siap')
@@ -155,8 +164,18 @@ async def test_daftar_loading_filter_error_retry_stale_dan_keluar(
                 await expect(root.locator('[data-bm-results] .antrian-item').first).to_be_visible()
 
                 fail['next'] = True
+                transport['gates']['/barang-masuk'] = (error_entered, error_release)
                 await page.locator('nav[aria-label="Bagian Barang Masuk"] a[href*="status=diterima"]').click()
+                await asyncio.wait_for(error_entered.wait(), 15)
+                await search.focus()
+                for _ in range(3):
+                    await page.keyboard.press('Tab')
+                    if await page.evaluate("()=>document.activeElement.matches('.bm-state-scroll')"):
+                        break
+                await expect(root.locator('.bm-state-scroll')).to_be_focused()
+                error_release.set()
                 await expect(root.locator('[data-bm-error]')).to_be_visible()
+                await expect(root.locator('.bm-state-scroll')).to_be_focused()
                 await expect(page.locator('nav[aria-label="Bagian Barang Masuk"] a[href*="status=diterima"]')).to_have_attribute('aria-current','page')
                 await expect(root.locator('.bm-jumlah')).to_contain_text('Jumlah hasil belum tersedia')
                 await expect(root.locator('[data-bm-results] th')).to_have_count(7)
@@ -192,6 +211,8 @@ async def test_daftar_loading_filter_error_retry_stale_dan_keluar(
             finally:
                 initial_release.set()
                 late_release.set()
+                search_release.set()
+                error_release.set()
         assert await _sidik(pg) == before
 
 
