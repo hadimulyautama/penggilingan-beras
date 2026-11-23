@@ -21,4 +21,3 @@ async def kerangka(request, akun, konteks):
     response.headers['content-length'] = str(len(response.body))
     response.headers['Cache-Control'] = 'private, no-store'
     return response
-
