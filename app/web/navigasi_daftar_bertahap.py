@@ -14,11 +14,13 @@ def pasang(response, request):
     from app.web.halaman_bertahap import kolom_daftar
     from html import escape
     import json
-    konteks = penanda_konteks(request, request.state.akun)
     data = ''
     extra = ''
     q = request.query_params
     jenis = 'pekerjaan' if request.url.path == '/pekerjaan' and q.get('tab') == 'berjalan' else 'stok' if request.url.path == '/stok' else None
+    # Halaman lain hanya mendaftarkan navigasi; jangan membaca identitas
+    # data B1 atau menambah dependency pada renderer di luar dua alamat.
+    konteks = penanda_konteks(request, request.state.akun) if jenis else ''
     if jenis:
         # Hanya schema kolom dan filter, tidak ada angka transaksi dalam adapter.
         nilai = getattr(response, 'context', {})

@@ -351,3 +351,18 @@ async def test_petunjuk_renderer_tidak_mengubah_pembaca_html_lama(headers, expec
     assert memakai_kerangka(req, 'stok') is expected
     req.state.isi_halaman_bertahap = True
     assert not memakai_kerangka(req, 'stok')
+
+
+async def test_adapter_halaman_lain_tidak_meminta_identitas_data_b1(monkeypatch):
+    from app.web import halaman_bertahap
+    from app.web.navigasi_daftar_bertahap import pasang
+    from fastapi.responses import HTMLResponse
+    def dilarang(*args):
+        pytest.fail('Halaman luar scope tidak perlu identitas pembacaan B1')
+    monkeypatch.setattr(halaman_bertahap, 'penanda_konteks', dilarang)
+    req = Request({'type': 'http', 'method': 'GET', 'scheme': 'http',
+        'path': '/riwayat-retur-supplier', 'query_string': b'', 'headers': [],
+        'state': {'akun': object()}})
+    r = pasang(HTMLResponse('<main><!-- isi-halaman:akhir --></main>'), req)
+    assert b'navigasi-daftar-bertahap.js' in r.body
+    assert b'data-konteks=""' in r.body
