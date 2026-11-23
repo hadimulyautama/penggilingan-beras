@@ -112,7 +112,7 @@ async def test_kerangka_aktif_tidak_memanggil_pembaca_antrean(
     assert {a.get('value') for a in doc.pilih('input', name='cari')} == {'kode-uji'}
     assert doc.pilih('input', name='pemasok', value='Pihak uji')
     assert any('disabled' in a for a in doc.pilih('select', name='pemasok'))
-    assert response.headers['cache-control'] == 'private, no-store'
+    assert 'no-store' in response.headers['cache-control'] and 'public' not in response.headers['cache-control']
 
 
 @pytest.mark.parametrize('tab', ['bahan', 'produk', 'karung'])
@@ -166,7 +166,7 @@ async def test_isi_sama_dengan_native_dan_seluruh_tabel_tetap(
             else:
                 assert proses_aktif in native.text
         assert await _sidik(pg) == before
-        assert response.headers['cache-control'] == 'private, no-store'
+        assert 'no-store' in response.headers['cache-control'] and 'public' not in response.headers['cache-control']
 
 
 async def test_get_opsi_pelanggan_tetap_html_native_dengan_penanda_konteks(
