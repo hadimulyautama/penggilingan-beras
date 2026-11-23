@@ -61,6 +61,18 @@ def _pilihan(nama, label, nilai, opsi, **tambahan):
                 options=[dict(value=k, label=n) for k, n in opsi], **tambahan)
 
 
+def kolom_daftar(jenis: str, mutu: bool = False):
+    if jenis == 'pekerjaan':
+        return ["Kode & proses", "Kepemilikan", "Status / mulai", "Ringkasan", "Tindakan"]
+    if jenis == 'bahan':
+        return (["Lot / kode · tanggal", "Pemilik", "Letak", "Status"]
+                + (["Kadar air", "Broken", "Susut", "Nilai kualitas"] if mutu else [])
+                + ["Kondisi", "Berat tersedia", "Tindakan"])
+    if jenis == 'produk':
+        return ["Produk", "Hasil sosoh", "Keluar", "Dikemas / tercatat", "Curah / belum dikemas", "Sisa di gudang", "Tindakan"]
+    return ["No.", "Merek", "Jenis karung", "Ukuran", "Jumlah", "Status / tindakan"]
+
+
 async def kerangka(request: Request, akun, jenis: str):
     from app.web.tampilan import render
     from app.database import SessionLocal
@@ -103,7 +115,7 @@ async def kerangka(request: Request, akun, jenis: str):
         data.update(
             search=dict(name="cari", label="Cari nama, kode atau plat", value=q.get("cari", "")[:200]),
             reset_url=href(jenis="", kepemilikan="", gudang="", pemasok=""),
-            columns=["Kode & proses", "Kepemilikan", "Status / mulai", "Ringkasan", "Tindakan"],
+            columns=kolom_daftar('pekerjaan'),
             tab="berjalan", scope="Proses dalam cakupan akses dan gudang kerja Anda",
             filtered=any(q.get(k) for k in ("jenis", "kepemilikan", "gudang", "pemasok", "cari", "pelanggan_id", "asal", "kategori", "grup", "informasi")),
             tabs=[dict(label=n, href=href(tab=k, asal="", kategori="", grup="", informasi=""), active=k == "berjalan", boleh=True)
@@ -136,11 +148,7 @@ async def kerangka(request: Request, akun, jenis: str):
         awal = dict(lot=[], tempat=[], daftar=[], karung=[], semua_kepemilikan=pemilik == "semua")
         await siapkan(request, nama, awal)
         nav = awal["STOK_NAV"]
-        columns = (["Lot / kode · tanggal", "Pemilik", "Letak", "Status"]
-                   + (["Kadar air", "Broken", "Susut", "Nilai kualitas"] if mutu else [])
-                   + ["Kondisi", "Berat tersedia", "Tindakan"] if tab == "bahan" else
-                   ["Produk", "Hasil sosoh", "Keluar", "Dikemas / tercatat", "Curah / belum dikemas", "Sisa di gudang", "Tindakan"] if tab == "produk" else
-                   ["No.", "Merek", "Jenis karung", "Ukuran", "Jumlah", "Status / tindakan"])
+        columns = kolom_daftar(tab, mutu)
         from app.web.stok_navigasi import alamat
         data.update(tab=tab, columns=columns, scope=nav["cakupan"] + " · " + nav["lokasi"],
                     search=dict(name="cari", label="Cari nama atau kode stok", value=q.get("cari", "")[:200]),

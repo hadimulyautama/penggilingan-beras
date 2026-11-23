@@ -1,6 +1,7 @@
 /* Adapter Pekerjaan Aktif/Stok saja; paket tampilan bersama tetap utuh. */
 .halaman-bertahap{min-width:0}
 .halaman-bertahap [hidden],[data-halaman-isi] [data-shell-empty-row][hidden]{display:none!important}
+.halaman-bertahap__pesan-grid{padding:20px 14px}
 .halaman-bertahap__kepala{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .halaman-bertahap__kepala h1{margin:0;font-size:1.5rem}
 .halaman-bertahap__filter{margin-block:12px;border:1px solid var(--garis,#d1d5db);border-radius:12px;padding:12px}

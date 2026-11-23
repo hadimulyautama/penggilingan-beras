@@ -7,7 +7,6 @@
  if(!root||root.dataset.ready)return;root.dataset.ready='1';
  const main=document.getElementById('isi-halaman'),status=root.querySelector('[data-shell-status]'),retry=root.querySelector('[data-shell-retry]'),table=root.querySelector('[data-shell-table-wrap]'),message=root.querySelector('[data-shell-message]');
  const address=location.pathname+location.search,token=document.getElementById('formulir-sesi')?.dataset.token||'',stamp=root.dataset.stamp;
- const emptyTable=table.cloneNode(true),filtered=root.dataset.filtered==='1';
  const forms=Array.from(root.querySelectorAll('form')),initialForms=forms.map(f=>new URLSearchParams(new FormData(f)).toString());
  let sequence=0,controller=null,pending=null,finished=false,readFromRetry=false;
  function current(number){return root.isConnected&&number===sequence&&location.pathname+location.search===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
@@ -17,26 +16,6 @@
  function controlsChanged(){return forms.some((f,i)=>new URLSearchParams(new FormData(f)).toString()!==initialForms[i]);}
  function interacting(){return controlsChanged()||!!root.querySelector('details[open],dialog[open]')||root.contains(document.activeElement)&&/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);}
  function markers(element){const nodes=Array.from(element.childNodes);return [nodes.find(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:mulai'),nodes.find(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:akhir')];}
- function emptyText(){return filtered?'Tidak ada hasil pada filter ini. Atur ulang filter untuk memeriksa seluruh cakupan.':root.dataset.kind==='pekerjaan'?'Belum ada proses aktif pada cakupan ini.':'Belum ada stok pada cakupan ini.';}
- function keepEmptyStructure(container){
-  const rows=container.querySelectorAll('.proses-aktif-list__row,.stok-baris__tautan,.stok-mobile-list__baris,.produk-list .tabel-standar__item,.karung-tabel tbody tr');
-  if(rows.length)return;
-  // Pesan native lama tidak menggantikan struktur daftar kosong dua route ini.
-  container.querySelectorAll('.kosong').forEach(n=>n.remove());
-  const blank=emptyTable.cloneNode(true);blank.removeAttribute('data-shell-table-wrap');blank.setAttribute('aria-busy','false');blank.querySelector('[data-shell-message]').textContent=emptyText();
-  const target=container.querySelector('.stok-seragam,.laporan-isi')||container;target.append(blank);
- }
- function filterEmptyRows(container){
-  container.querySelectorAll('table').forEach(t=>{
-   if(!t.getClientRects().length)return;
-   const body=t.tBodies[0];if(!body||!body.querySelector('tr:not([data-shell-empty-row])'))return;
-   const rows=Array.from(body.rows).filter(r=>!r.hasAttribute('data-shell-empty-row'));
-   const empty=rows.length&&!rows.some(r=>!r.hidden);
-   let row=body.querySelector('[data-shell-empty-row]');
-   if(empty&&!row){row=document.createElement('tr');row.dataset.shellEmptyRow='';const cell=row.insertCell();cell.colSpan=Math.max(1,t.tHead?.rows[0]?.cells.length||1);cell.textContent='Tidak ada hasil yang cocok dengan filter ini. Ubah atau atur ulang filter.';body.append(row);}
-   if(row)row.hidden=!empty;
-  });
- }
  async function prepareScripts(container,doc,signal){
   const release=doc.documentElement.getAttribute('data-versi');
   if(release!==document.documentElement.getAttribute('data-versi'))throw Error('Versi aplikasi berubah. Muat ulang halaman sebelum melanjutkan.');
@@ -86,7 +65,6 @@
   }
   const content=document.createElement('div');content.dataset.halamanIsi=root.dataset.kind;
   for(let node=start.nextSibling;node&&node!==end;node=node.nextSibling)content.append(node.cloneNode(true));
-  keepEmptyStructure(content);
   const css=main.querySelector('link[href*="/static/halaman-bertahap.css"]');if(css)content.prepend(css.cloneNode(true));
   // Consumer pilihan pelanggan lama membaca HTML. Tetap memakai route native
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
@@ -105,15 +83,7 @@
   try{
    activateScripts(prepared);if(!valid())return;
    restoreSemanticFocus(previousFocus,content);
-   filterEmptyRows(content);
-   const removeMessages=()=>content.querySelectorAll('[data-shell-empty-row]').forEach(n=>n.remove());
-   content.addEventListener('submit',removeMessages,true);
-   content.addEventListener('search',removeMessages,true);
-   content.addEventListener('keydown',e=>{if(e.key==='Escape')removeMessages();},true);
-   content.addEventListener('submit',()=>queueMicrotask(()=>filterEmptyRows(content)));
-   content.addEventListener('search',()=>queueMicrotask(()=>filterEmptyRows(content)));
-   content.addEventListener('keydown',e=>{if(e.key==='Escape')queueMicrotask(()=>filterEmptyRows(content));});
-   if(window.PINDAH)PINDAH.pasang(window,'resize',()=>filterEmptyRows(content));
+
   }catch(error){if(valid()){const warning=document.createElement('p');warning.setAttribute('role','alert');warning.textContent=error.message;content.prepend(warning);}}
  }
  async function read(){

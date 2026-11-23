@@ -4,6 +4,11 @@
 (function(){
  'use strict';
  const binding=document.currentScript?.dataset.konteks||'';
+ const schema=document.currentScript?.dataset.daftar;
+ if(schema&&!document.querySelector('[data-halaman-bertahap]')){
+  const container=document.querySelector('[data-halaman-isi]')||document.getElementById('isi-halaman');
+  if(window.PadiDaftarKosong)PadiDaftarKosong(container,JSON.parse(schema));
+ }
  function target(a){
   if(!a||a.origin!==location.origin)return false;
   return a.pathname==='/stok'||a.pathname==='/pekerjaan'&&new URL(a.href).searchParams.get('tab')==='berjalan';
