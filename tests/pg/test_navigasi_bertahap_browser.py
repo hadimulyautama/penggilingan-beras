@@ -13,6 +13,39 @@ from hmu_identitas.peran import SUPERADMIN
 pytestmark=pytest.mark.asyncio
 BASE='http://127.0.0.1:59996'
 
+async def _tuntaskan_baca(reads,pending):
+    hasil=await asyncio.wait_for(asyncio.gather(*reads,return_exceptions=True),20) if reads else []
+    assert not pending,'Seluruh request baca ASGI harus selesai sebelum fixture dilepas'
+    # Seluruh job sudah terminal sebelum kegagalan pertama diteruskan. Jangan
+    # meninggalkan job kedua ketika job pertama gagal atau dibatalkan.
+    for nilai in hasil:
+        if isinstance(nilai,BaseException):raise nilai
+
+
+@pytest.mark.parametrize('batal',[False,True])
+async def test_cleanup_menunggu_semua_baca_sebelum_meneruskan_error(batal):
+    loop=asyncio.get_running_loop();gagal=loop.create_future();lambat=loop.create_future()
+    pending={gagal,lambat}
+    for job in pending:job.add_done_callback(pending.discard)
+    selesai=asyncio.create_task(_tuntaskan_baca([gagal,lambat],pending))
+    async def giliran():
+        batas=loop.create_future();loop.call_soon(batas.set_result,None);await batas
+    try:
+        await giliran()
+        if batal:gagal.cancel()
+        else:gagal.set_exception(ValueError('Galat baca sintetis'))
+        # Barrier event-loop, bukan jeda jaringan/waktu yang ditebak.
+        for _ in range(4):await giliran()
+        assert not selesai.done(),'Error pertama tidak boleh melepas job lain yang masih berjalan'
+        lambat.set_result('baca selesai')
+        with pytest.raises(asyncio.CancelledError if batal else ValueError):
+            await selesai
+        assert not pending
+    finally:
+        if not lambat.done():lambat.set_result('cleanup kontrol')
+        await asyncio.gather(selesai,return_exceptions=True)
+
+
 @pytest.mark.parametrize('pelanggan',[False,True])
 @pytest.mark.parametrize('width',[390,1440])
 async def test_ui_datang_sebelum_respons_data(pg,portal,pelanggan,width):
@@ -98,8 +131,6 @@ async def jalankan(pg,portal,pelanggan,width):
                     finally:
                         # Simpan juga job yang sudah selesai: SQL/app error tidak
                         # boleh hilang hanya karena callback browser sudah tutup.
-                        if reads:
-                            await asyncio.wait_for(asyncio.gather(*reads),20)
-                        assert not pending,'Seluruh request baca ASGI harus selesai sebelum fixture dilepas'
+                        await _tuntaskan_baca(reads,pending)
                 finally:
                     await browser.close()
