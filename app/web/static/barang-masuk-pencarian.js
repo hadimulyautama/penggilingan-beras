@@ -84,24 +84,25 @@
   outer=document.querySelector('nav[aria-label="Bagian Barang Masuk"]');if(outer){if(outer.bmReadHandler)outer.removeEventListener('click',outer.bmReadHandler);outer.bmReadHandler=navigasiDaftar;outer.addEventListener('click',navigasiDaftar);}
   function tinggalkanHalaman(e){if(e.defaultPrevented||!root.isConnected||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0)return;const a=e.target.closest('a[href]');if(a&&!a.target&&!a.hash&&!a.hasAttribute('download'))hentikanBaca();}
   document.addEventListener('click',tinggalkanHalaman);
-  // Close native tetap membersihkan dialog. Bila callback fokusnya datang
-  // setelah petugas memilih isian lain, pulihkan hanya pilihan yang benar-
-  // benar digeser kembali ke pemicu filter yang sama pada sesi/halaman ini.
-  const filter=root.querySelector('#bm-filter');let pemicuFilter=null;
+  // Catat pilihan sebelum callback close native, tetapi pulihkan hanya
+  // sesudah callback target itu selesai. Semua pembersihan native tetap jalan.
+  const filter=root.querySelector('#bm-filter');let pemicuFilter=null,niatFokus=null;
   root.addEventListener('click',e=>{const b=e.target.closest('[data-bm-buka="bm-filter"]');if(b&&root.contains(b)&&!b.closest('dialog'))pemicuFilter=b;},true);
   root.addEventListener('close',e=>{
-   const isian=document.activeElement;
-   if(e.target!==filter||filter.open||!pemicuFilter||!root.contains(isian)||filter.contains(isian)||!/^(INPUT|SELECT|TEXTAREA)$/.test(isian.tagName))return;
-   const n=generation,url=location.pathname+location.search,pemicu=pemicuFilter,mulai=isian.selectionStart,akhir=isian.selectionEnd;
-   queueMicrotask(()=>{
-    if(!masihBerlaku(n,url)||!isian.isConnected||isian.matches(':disabled')||document.activeElement!==pemicu||root.querySelector('dialog[open]'))return;
-    isian.focus({preventScroll:true});if(mulai!=null&&isian.setSelectionRange)try{isian.setSelectionRange(mulai,akhir);}catch(_){}
-   });
+   if(e.target!==filter)return;niatFokus=null;const isian=document.activeElement;
+   if(filter.open||!pemicuFilter||!root.contains(isian)||filter.contains(isian)||!/^(INPUT|SELECT|TEXTAREA)$/.test(isian.tagName))return;
+   niatFokus={isian,n:generation,url:location.pathname+location.search,pemicu:pemicuFilter,mulai:isian.selectionStart,akhir:isian.selectionEnd};
   },true);
+  function pulihkanPilihanSetelahTutup(){
+   const niat=niatFokus;niatFokus=null;if(!niat)return;
+   const {isian,n,url,pemicu,mulai,akhir}=niat;
+   if(!masihBerlaku(n,url)||!isian.isConnected||isian.matches(':disabled')||document.activeElement!==pemicu||root.querySelector('dialog[open]'))return;
+   isian.focus({preventScroll:true});if(mulai!=null&&isian.setSelectionRange)try{isian.setSelectionRange(mulai,akhir);}catch(_){}
+  }
   root.addEventListener('close',lanjutkanHasil,true);// Tunggu default perpindahan fokus keyboard selesai sebelum mengganti DOM.
   root.addEventListener('focusout',()=>requestAnimationFrame(lanjutkanHasil));
   root.querySelector('[data-bm-retry]').addEventListener('click',()=>{if(nilaiIsian()!==lastDraft&&lastDraft){status.textContent='Isian pilihan berubah. Tekan Cari atau Terapkan filter agar pilihan terbaru digunakan.';return;}baca(lastURL);});
-  if(window.PADIFLOW_MASUK)PADIFLOW_MASUK(root.querySelector('.bm-kepala'));tandaiPilihan();
+  if(window.PADIFLOW_MASUK){PADIFLOW_MASUK(root.querySelector('.bm-kepala'));filter?.addEventListener('close',pulihkanPilihanSetelahTutup);}tandaiPilihan();
   if(root.hasAttribute('data-bm-shell'))baca(root.dataset.bmUrl,true,false);else aturCetak(!root.querySelector('[data-bm-error]:not([hidden])'));
  }
  pasang(document.querySelector('[data-bm-page]'));
