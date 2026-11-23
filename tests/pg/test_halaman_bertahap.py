@@ -339,6 +339,7 @@ async def test_panduan_tersambung_dan_cetak_belum_aktif_sebelum_data(
     ({'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty'}, False),
     ({'X-Pindah': '1'}, False),
     ({'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}, True),
+    ({'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'empty'}, True),
     ({'X-Pindah': '1', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}, False),
     ({'X-Kerangka-Halaman': '1'}, True),
     ({'X-Pindah': '1', 'X-Kerangka-Halaman': '1'}, True),

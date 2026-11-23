@@ -30,7 +30,7 @@ def memakai_kerangka(request: Request, jenis: str) -> bool:
             and (request.headers.get("X-Kerangka-Halaman") == "1"
                  or request.headers.get("X-Pindah") != "1"
                  and request.headers.get("Sec-Fetch-Mode") == "navigate"
-                 and request.headers.get("Sec-Fetch-Dest") == "document")
+                 and request.headers.get("Sec-Fetch-Dest") in {"document", "empty"})
             and not is_customer_read(request)
             and request.url.path == ALAMAT[jenis]
             and (jenis != "pekerjaan" or request.query_params.get("tab") == "berjalan"))
