@@ -9,6 +9,22 @@
   const container=document.querySelector('[data-halaman-isi]')||document.getElementById('isi-halaman');
   if(window.PadiDaftarKosong)PadiDaftarKosong(container,JSON.parse(schema));
  }
+ // Pendaftaran hanya tersedia pada paket baru. Paket hangat lama tetap
+ // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
+ function memakaiKerangka(alamat){
+  const u=new URL(alamat,location.href);
+  return u.origin===location.origin&&(u.pathname==='/stok'||u.pathname==='/pekerjaan'&&u.searchParams.get('tab')==='berjalan');
+ }
+ if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
+  PINDAH.aturKerangkaHalaman(memakaiKerangka);
+  // Hanya tab halaman native yang sudah direview. Penjaga editor, unduhan,
+  // hash dan kontrol riwayat lain tetap milik PINDAH native.
+  if(!document.querySelector('[data-editor-perintah],[data-kemas-ulang]')){
+   document.querySelectorAll('.laporan-nav a[data-tab-riwayat][data-utuh]').forEach(function(link){
+    if(memakaiKerangka(link.href))link.removeAttribute('data-utuh');
+   });
+  }
+ }
  const controls=document.querySelector('[data-stok-controls]');
  if(controls&&location.pathname==='/stok'){
   const u=new URL(controls.dataset.pelangganUrl,location.href);u.pathname='/api/halaman-bertahap/stok/html';controls.dataset.pelangganUrl=u.pathname+u.search;

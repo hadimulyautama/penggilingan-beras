@@ -24,6 +24,7 @@
   var gagal = {};         // hanya membedakan putus jaringan dari pengalihan sesi
   var bingkai = null;
   var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
+  var pilihKerangkaHalaman = null; // aplikasi memilih sendiri; bawaan tetap native
   var nomorPindah = 0, tujuanPindah = null, nomorSentuhan = 0;
   var dataMenunggu = null, pointerAktif = false;
   document.addEventListener("pointerdown", function () { nomorSentuhan++; pointerAktif = true; }, true);
@@ -46,6 +47,13 @@
      kaki halaman, layar Laporan mati sejak ketukan pertama. */
   var terpasang = [];
   window.PINDAH = {
+    // Kemampuan presentasi saja. Tidak mengganti penjaga editor atau izin server.
+    aturKerangkaHalaman: function (pilih) {
+      if (pilih !== null && typeof pilih !== "function") {
+        throw new TypeError("Pemilih kerangka harus fungsi atau null.");
+      }
+      pilihKerangkaHalaman = pilih;
+    },
     pasang: function (sasaran, jenis, fn) {
       sasaran.addEventListener(jenis, fn);
       terpasang.push([sasaran, jenis, fn]);
@@ -149,18 +157,31 @@
     return a.origin === location.origin;
   }
 
-  /* ── Mengambil, dan hanya sekali untuk alamat yang sama ── */
-  function ambil(alamat) {
-    if (sedang[alamat]) { return sedang[alamat]; }
-    delete gagal[alamat];
-    var bolehSimpan = true;
+  function memakaiKerangkaHalaman(alamat) {
+    if (!pilihKerangkaHalaman) { return false; }
+    try { return pilihKerangkaHalaman(alamat) === true; }
+    catch (e) { return false; } // kontrak opt-in gagal: jalur native tetap ada
+  }
+
+  function kunciBaca(alamat, kerangkaHalaman) {
+    return kerangkaHalaman ? "kerangka:" + alamat : alamat;
+  }
+
+  /* Kerangka foreground tidak berbagi janji/cache HTML dengan pembaca data. */
+  function ambil(alamat, kerangkaHalaman) {
+    var kunci = kunciBaca(alamat, kerangkaHalaman);
+    if (sedang[kunci]) { return sedang[kunci]; }
+    delete gagal[kunci];
+    var bolehSimpan = !kerangkaHalaman;
     var batas = new AbortController();
     var pewaktu = setTimeout(function () { batas.abort(); }, 15000);
     var janji = fetch(alamat, {
       credentials: "same-origin",
       cache: "no-store",
       signal: batas.signal,
-      headers: { "X-Pindah": "1" }
+      headers: kerangkaHalaman
+        ? { "X-Pindah": "1", "X-Kerangka-Halaman": "1" }
+        : { "X-Pindah": "1" }
     }).then(function (r) {
       /* Detail stok dapat habis sesudah kartunya dilihat. Halaman pemulihan
          404 yang ditandai server tetap boleh dipasang, agar refresh setelah
@@ -174,17 +195,17 @@
       if (pulih) { bolehSimpan = false; delete simpan[alamat]; }
       return r.text();
     }).catch(function () {
-      gagal[alamat] = true;
+      gagal[kunci] = true;
       return null;              // jaringan putus — biarkan peramban mencoba
     }).then(function (teks) {
       clearTimeout(pewaktu);
-      delete sedang[alamat];
+      delete sedang[kunci];
       if (teks && bolehSimpan) { simpan[alamat] = teks; }
-      var kunci = Object.keys(simpan);
-      if (kunci.length > 20) { delete simpan[kunci[0]]; }
+      var daftarKunci = Object.keys(simpan);
+      if (daftarKunci.length > 20) { delete simpan[daftarKunci[0]]; }
       return teks;
     });
-    sedang[alamat] = janji;
+    sedang[kunci] = janji;
     return janji;
   }
 
@@ -641,7 +662,9 @@
     var nomor = ++nomorPindah;
     dataMenunggu = null;
     tujuanPindah = alamat;
-    var tersimpan = simpan[alamat];
+    var kerangkaHalaman = memakaiKerangkaHalaman(alamat);
+    // HTML data yang dipanaskan bukan dokumen kerangka konteks terbaru.
+    var tersimpan = kerangkaHalaman ? null : simpan[alamat];
 
     if (tersimpan) {
       sibuk(false);
@@ -679,11 +702,11 @@
     var bertahap = kerangka(alamat, judul);
     if (bertahap && dorong) { history.pushState({ pindah: 1 }, '', alamat); }
     sibuk(true);
-    ambil(alamat).then(function (teks) {
+    ambil(alamat, kerangkaHalaman).then(function (teks) {
       if (nomor !== nomorPindah) { return; }
       if (!teks) {
         sibuk(false); tujuanPindah = null;
-        if (bertahap && gagal[alamat]) { gagalMuat(alamat, judul); }
+        if (bertahap && gagal[kunciBaca(alamat, kerangkaHalaman)]) { gagalMuat(alamat, judul); }
         else { location.href = alamat; }
         return;
       }
@@ -734,6 +757,8 @@
     var a = e.target.closest ? e.target.closest("a") : null;
     if (!bolehDitangani(a)) { return; }
     var alamat = a.pathname + a.search;
+    // Jangan membayar pembaca penuh sebelum navigasi opt-in meminta kerangkanya.
+    if (memakaiKerangkaHalaman(alamat)) { return; }
     if (!simpan[alamat] && !sedang[alamat]) { ambil(alamat); }
   }
   document.addEventListener("touchstart", dahului, { passive: true });
@@ -752,7 +777,7 @@
     Array.prototype.forEach.call(
       document.querySelectorAll(".bilah__tab"), function (t) {
         var alamat = t.pathname + t.search;
-        if (alamat !== location.pathname + location.search && !simpan[alamat]) {
+        if (!memakaiKerangkaHalaman(alamat) && alamat !== location.pathname + location.search && !simpan[alamat]) {
           ambil(alamat);
         }
       });
