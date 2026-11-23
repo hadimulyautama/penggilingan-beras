@@ -81,7 +81,7 @@
    memakai ponselnya sendiri di dalam gudang dan perangkat gudang di luar, dan
    yang menentukan bukan siapa dia melainkan di mana layarnya berada. #}
 <body class="padiflow-ui {{ 'terik' if TERIK }}">
-<div class="bingkai">
+<div class="bingkai"{% if PINDAH_KONTEKS %} data-pindah-konteks="{{ PINDAH_KONTEKS }}" data-pindah-alamat="{{ PINDAH_ALAMAT }}"{% if PINDAH_KERANGKA %} data-pindah-kerangka="1"{% endif %}{% endif %}>
 {% block pita %}
 {# Identitas dan peran cukup di kaki sidebar; pita khusus di bawah tetap
    menyediakan jalan kembali ketika pengguna sedang melihat sebagai. #}

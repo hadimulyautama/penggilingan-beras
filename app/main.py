@@ -207,6 +207,8 @@ async def halaman_jangan_disimpan(request: Request, call_next):
     if jenis.startswith("text/html"):
         balasan.headers["Cache-Control"] = "no-store, must-revalidate"
         balasan.headers["Pragma"] = "no-cache"
+        from app.web.kerangka_langsung import lengkapi_dokumen
+        balasan = await lengkapi_dokumen(request, balasan)
     return balasan
 
 

@@ -24,6 +24,7 @@
   var gagal = {};         // hanya membedakan putus jaringan dari pengalihan sesi
   var bingkai = null;
   var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
+  var penyediaKerangkaLangsung = null; // opt-in presentasi, bawaan tidak memasang apa pun
   var pilihKerangkaHalaman = null; // aplikasi memilih sendiri; bawaan tetap native
   var nomorPindah = 0, tujuanPindah = null, nomorSentuhan = 0;
   var dataMenunggu = null, pointerAktif = false;
@@ -53,6 +54,14 @@
         throw new TypeError("Pemilih kerangka harus fungsi atau null.");
       }
       pilihKerangkaHalaman = pilih;
+    },
+    // Dokumen baru sudah dirender aplikasi dengan konteks native saat ini.
+    // Provider tidak membaca jaringan, izin, data transaksi, atau DOM layar lama.
+    aturKerangkaLangsung: function (penyedia) {
+      if (penyedia !== null && typeof penyedia !== "function") {
+        throw new TypeError("Penyedia kerangka langsung harus fungsi atau null.");
+      }
+      penyediaKerangkaLangsung = penyedia;
     },
     pasang: function (sasaran, jenis, fn) {
       sasaran.addEventListener(jenis, fn);
@@ -163,6 +172,34 @@
     catch (e) { return false; } // kontrak opt-in gagal: jalur native tetap ada
   }
 
+  function rencanaKerangkaLangsung(alamat, dorong) {
+    if (!penyediaKerangkaLangsung || document.querySelector("[data-editor-perintah],[data-kemas-ulang]")) return null;
+    try {
+      var hasil = penyediaKerangkaLangsung({ alamat: alamat, sebab: dorong ? "push" : "pop" });
+      var kini = document.querySelector(".bingkai"), sesi = document.getElementById("formulir-sesi");
+      var cap = document.documentElement.getAttribute("data-versi") || "";
+      if (!hasil || hasil.versi !== 1 || hasil.alamat !== alamat || typeof hasil.html !== "string" || hasil.html.length > 524288
+          || !cap || hasil.cap !== cap || !kini || !sesi || !sesi.dataset.token
+          || !hasil.konteks || hasil.konteks !== kini.dataset.pindahKonteks) return null;
+      var tujuan = new URL(alamat, location.href);
+      if (tujuan.origin !== location.origin || tujuan.hash || tujuan.pathname + tujuan.search !== alamat) return null;
+      var doc = new DOMParser().parseFromString(hasil.html, "text/html");
+      var frame = doc.querySelector(".bingkai"), isi = doc.getElementById("isi-halaman"), sesiBaru = doc.getElementById("formulir-sesi");
+      if (doc.querySelectorAll(".bingkai").length !== 1 || doc.querySelectorAll("#isi-halaman").length !== 1
+          || !frame || !isi || !frame.contains(isi) || !sesiBaru || !frame.contains(sesiBaru)
+          || doc.querySelectorAll("#formulir-sesi").length !== 1 || sesiBaru.dataset.token !== sesi.dataset.token
+          || doc.documentElement.getAttribute("data-versi") !== cap
+          || frame.dataset.pindahKonteks !== hasil.konteks || frame.dataset.pindahAlamat !== alamat
+          || frame.dataset.pindahKerangka !== "1" || frame.querySelector(".halaman-memuat")
+          || !isi.querySelector("h1,section[aria-label],[role=region][aria-label]")) return null;
+      var tanda = Array.prototype.filter.call(isi.childNodes, function (n) { return n.nodeType === 8; });
+      var awal = tanda.findIndex(function (n) { return n.data.trim() === "isi-halaman:mulai"; });
+      var akhir = tanda.findIndex(function (n) { return n.data.trim() === "isi-halaman:akhir"; });
+      if (awal < 0 || akhir <= awal) return null;
+      return hasil;
+    } catch (e) { return null; } // gagal presentasi tidak boleh membuka target lain
+  }
+
   function kunciBaca(alamat, kerangkaHalaman) {
     return kerangkaHalaman ? "kerangka:" + alamat : alamat;
   }
@@ -247,6 +284,12 @@
       if (!ada) { document.head.appendChild(link.cloneNode(true)); }
     });
     document.title = doc.title || document.title;
+    // Bingkai luar dipertahankan native. Marker konteks harus ikut dokumen
+    // baru, agar registry lama tidak hidup melewati perubahan sesi/otoritas.
+    ["data-pindah-konteks", "data-pindah-alamat", "data-pindah-kerangka"].forEach(function (nama) {
+      if (baru.hasAttribute(nama)) bingkai.setAttribute(nama, baru.getAttribute(nama));
+      else bingkai.removeAttribute(nama);
+    });
     bingkai.innerHTML = baru.innerHTML;
     tandaiSegar();
     // Isi yang baru dipasang adalah keadaan sekarang: hitungan pil dimulai
@@ -662,6 +705,20 @@
     var nomor = ++nomorPindah;
     dataMenunggu = null;
     tujuanPindah = alamat;
+    var langsung = rencanaKerangkaLangsung(alamat, dorong);
+    if (langsung) {
+      // Inisialisasi native membaca location; URL harus sudah tepat sebelum
+      // tukar() menjalankan ulang script. Validasi di atas belum mengubah DOM.
+      if (dorong) history.pushState({ pindah: 1 }, "", alamat);
+      tujuanPindah = null; sibuk(false);
+      try { pasang(langsung.html, alamat, false); }
+      catch (e) {
+        // URL sudah menjadi tujuan tervalidasi. Kegagalan kontrol/DOM harus
+        // kembali ke GET native, bukan meninggalkan layar setengah terpasang.
+        location.href = alamat;
+      }
+      return;
+    }
     var kerangkaHalaman = memakaiKerangkaHalaman(alamat);
     // HTML data yang dipanaskan bukan dokumen kerangka konteks terbaru.
     var tersimpan = kerangkaHalaman ? null : simpan[alamat];

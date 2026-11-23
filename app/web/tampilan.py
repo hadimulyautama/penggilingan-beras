@@ -238,7 +238,17 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     # Mode terang adalah bawaan untuk perangkat baru. Cookie "0" berarti
     # pengguna memang memilih tampilan gelap; "1" tetap berarti terang.
     konteks.setdefault("TERIK", request.cookies.get("produksi_terik", "1") == "1")
+    akun_native = getattr(request.state, "akun", None)
+    if (akun_native is not None and konteks.get("akun") is akun_native
+            and getattr(akun_native, "id", None) is not None
+            and getattr(getattr(akun_native, "user", None), "id", None) is not None):
+        from app.web.halaman_bertahap import penanda_konteks
+        konteks.setdefault("PINDAH_KONTEKS", penanda_konteks(request, konteks["akun"]))
+        konteks.setdefault("PINDAH_ALAMAT", request.url.path + ("?" + request.url.query if request.url.query else ""))
+        konteks.setdefault("PINDAH_KERANGKA", bool(getattr(request.state, "frame_kerangka_langsung", False)))
     response = templates.TemplateResponse(request, nama, konteks, status_code=status_code)
+    if status_code == 200 and "PINDAH_KONTEKS" in konteks and b"<!-- isi-halaman:akhir -->" in response.body:
+        request.state.dokumen_native_kerangka = True
     from app.web.navigasi_daftar_bertahap import pasang as pasang_navigasi_daftar
     return pasang_navigasi_daftar(response, request)
 

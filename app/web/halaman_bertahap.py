@@ -78,8 +78,12 @@ def kolom_daftar(jenis: str, mutu: bool = False):
     return ["No.", "Merek", "Jenis karung", "Ukuran", "Jumlah", "Status / tindakan"]
 
 
-async def kerangka(request: Request, akun, jenis: str):
-    from app.web.tampilan import render
+async def konteks_kerangka(request: Request, akun):
+    """Metadata izin/menu yang sama; satu pembacaan untuk beberapa frame.
+
+    Tidak memanggil pembaca daftar, stok atau jumlah. Ini bukan cache data dan
+    bukan perubahan izin; GET isi halaman tetap memeriksa akun saat digunakan.
+    """
     from app.database import SessionLocal
     from app.services.berjalan import Berjalan
     from app.services.setelan import fitur_mutu
@@ -87,10 +91,6 @@ async def kerangka(request: Request, akun, jenis: str):
     from app.web.api import _is_g1_operator
     from app.peran import can_see_financials
 
-    q = request.query_params
-    data = dict(kind=jenis, title="Pekerjaan" if jenis == "pekerjaan" else "Stok",
-                stamp=penanda(request, akun, jenis),
-                data_url="/api/halaman-bertahap/" + jenis + ("?" + request.url.query if request.url.query else ""))
     # Gunakan struktur menu native tanpa membaca koleksi pekerjaan. Daftar
     # kosong hanya menyediakan bentuk; jumlah tab tetap ditandai belum dibaca.
     async with SessionLocal() as db:
@@ -100,7 +100,7 @@ async def kerangka(request: Request, akun, jenis: str):
         navigasi.boleh_riwayat_sosoh = await boleh_jenis(db, akun.user, 'penyosohan')
         navigasi.boleh_riwayat_g1 = (await boleh_jenis(db, akun.user, 'penggilingan')
                                    or await boleh_jenis(db, akun.user, 'pengeringan'))
-    konteks = dict(layar=jenis, SHELL=data, **navigasi.lencana())
+    konteks = navigasi.lencana()
     if getattr(request.state, 'view', 'tamu') == 'tamu':
         from hmu_identitas import peran as P
         if P.operator_saja(akun.user.role):
@@ -109,6 +109,18 @@ async def kerangka(request: Request, akun, jenis: str):
             async with SessionLocal() as db:
                 izin_transfer = await boleh_baca_stok(db, akun.user)
             konteks['AKSES'] = {**hak_view('tamu'), 'transfer': izin_transfer}
+    return konteks
+
+
+async def kerangka(request: Request, akun, jenis: str, *, navigasi=None):
+    from app.web.tampilan import render
+
+    q = request.query_params
+    data = dict(kind=jenis, title="Pekerjaan" if jenis == "pekerjaan" else "Stok",
+                stamp=penanda(request, akun, jenis),
+                data_url="/api/halaman-bertahap/" + jenis + ("?" + request.url.query if request.url.query else ""))
+    konteks = dict(layar=jenis, SHELL=data,
+                   **(await konteks_kerangka(request, akun) if navigasi is None else navigasi))
     if jenis == 'barang-masuk':
         from app.web.barang_masuk_bertahap import kerangka as kerangka_masuk
         return await kerangka_masuk(request, akun, konteks)

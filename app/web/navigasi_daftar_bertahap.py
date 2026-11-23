@@ -35,6 +35,7 @@ def pasang(response, request):
         data = ' data-daftar="'+escape(json.dumps(config,ensure_ascii=True),quote=True)+'"'
         extra = ('<link rel="stylesheet" href="/static/halaman-bertahap.css?v='+CAP_ASET+'">'
                  '<script src="/static/daftar-kosong-bertahap.js?v='+CAP_ASET+'"></script>')
+    extra += '<script src="/static/kerangka-langsung.js?v='+CAP_ASET+'" defer></script>'
     script = ('<script src="/static/navigasi-daftar-bertahap.js?v='
               + CAP_ASET + '" data-konteks="' + konteks + '"'+data+'></script>').encode()
     response.body = response.body.replace(marker, extra.encode() + script + marker, 1)
