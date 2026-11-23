@@ -212,7 +212,7 @@ async def test_navigasi_kerangka_lalu_data_refresh_native_dan_kosong(
             await expect(content).to_be_visible()
             row = content.locator('.stok-mobile-list__baris' if width < 900 else '.stok-baris__tautan', has_text=KODE_BEBAS)
             await expect(row).to_be_visible()
-            await expect(row.locator('.stok-mobile-list__berat' if width < 900 else '.stok-baris__berat')).to_have_text('1.000 kg')
+            await expect(row.locator('.stok-mobile-list__berat' if width < 900 else '.stok-tabel__angka')).to_have_text('1.000 kg')
             assert bridge.html.jumlah == bridge.data.jumlah == 1
             document = next(r for r in bridge.requests if
                             r['path'] == '/barang-masuk')
@@ -230,7 +230,7 @@ async def test_navigasi_kerangka_lalu_data_refresh_native_dan_kosong(
             await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
             row = page.locator('.stok-mobile-list__baris' if width < 900 else '.stok-baris__tautan', has_text=KODE_BEBAS)
             await expect(row).to_be_visible()
-            await expect(row.locator('.stok-mobile-list__berat' if width < 900 else '.stok-baris__berat')).to_have_text('1.000 kg')
+            await expect(row.locator('.stok-mobile-list__berat' if width < 900 else '.stok-tabel__angka')).to_have_text('1.000 kg')
             await expect(page.locator('#sk-filter .sk-form-filter')).to_have_count(1)
 
             # Tab kosong tetap memiliki tabel dan alasan, bukan hilang seluruh
