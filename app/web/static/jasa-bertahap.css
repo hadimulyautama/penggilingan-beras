@@ -5,3 +5,6 @@
 .jasa-pelanggan--memuat h2{margin-top:0}
 .jasa-pelanggan--memuat .jasa-angka strong{font-size:1rem}
 .jasa-pelanggan--memuat small{display:block}
+
+.jasa-baca-tindakan{display:flex;flex-direction:column;gap:8px}
+.jasa-baca-tindakan>small{display:block;margin:0}

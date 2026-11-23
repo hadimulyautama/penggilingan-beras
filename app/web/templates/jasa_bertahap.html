@@ -16,7 +16,7 @@
 {% from '_jasa_bahan.html' import bahan %}{{ bahan({'bahan_titipan':[]},none) }}
 <div class="jasa-angka">{% for label in ['PK tersedia','Beras tersisa','Hasil samping'] %}<div><small>{{ label }}</small><strong>Memuat…</strong></div>{% endfor %}</div>
 <p data-jasa-baca-pesan>Memuat data. Filter tetap dapat digunakan.</p>
-<button class="btn" type="button" disabled aria-describedby="jasa-detail-alasan">Detail pelanggan</button><small id="jasa-detail-alasan">Pilih pelanggan setelah daftar tersedia.</small>
+<div class="jasa-baca-tindakan"><button class="btn" type="button" disabled aria-describedby="jasa-detail-alasan">Detail pelanggan</button><small id="jasa-detail-alasan">Pilih pelanggan setelah daftar tersedia.</small></div>
 </article></div>
 </div>
 <noscript><p>JavaScript diperlukan untuk membaca daftar bertahap. Tidak ada transaksi yang dikirim.</p></noscript>
