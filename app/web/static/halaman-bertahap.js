@@ -15,6 +15,7 @@
  const observer=new MutationObserver(()=>{if(!root.isConnected)stop();});
  observer.observe(document.body,{childList:true,subtree:true});
  function controlsChanged(){return forms.some((f,i)=>new URLSearchParams(new FormData(f)).toString()!==initialForms[i]);}
+ function interacting(){return controlsChanged()||!!root.querySelector('details[open],dialog[open]')||root.contains(document.activeElement)&&/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);}
  function markers(element){const nodes=Array.from(element.childNodes);return [nodes.find(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:mulai'),nodes.find(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:akhir')];}
  function emptyText(){return filtered?'Tidak ada hasil pada filter ini. Atur ulang filter untuk memeriksa seluruh cakupan.':root.dataset.kind==='pekerjaan'?'Belum ada proses aktif pada cakupan ini.':'Belum ada stok pada cakupan ini.';}
  function keepEmptyStructure(container){
@@ -71,7 +72,7 @@
   const doc=new DOMParser().parseFromString(payload.html,'text/html'),source=doc.getElementById('isi-halaman'),session=doc.getElementById('formulir-sesi');
   if(!source||session?.dataset.token!==token)throw Error('Sesi pembacaan berubah. Muat ulang halaman.');
   const [start,end]=markers(source),[from,to]=markers(main);if(!start||!end||!from||!to)throw Error('Struktur daftar belum dapat dibaca. Coba lagi.');
-  if(controlsChanged()||root.querySelector('details[open]')||root.contains(document.activeElement)&&/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)){
+  if(interacting()){
    pending={payload,number};status.textContent='Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
   }
   const content=document.createElement('div');content.dataset.halamanIsi=root.dataset.kind;
@@ -85,7 +86,7 @@
   const prepared=await prepareScripts(content,doc,controller?.signal);
   if(!current(number)||payload.stamp!==stamp)return;
   // Pengguna dapat membuka filter ketika asset masih dibaca.
-  if(controlsChanged()||root.querySelector('details[open]')||root.contains(document.activeElement)&&/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)){
+  if(interacting()){
    pending={payload,number};status.textContent='Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
   }
   observer.disconnect();finished=true;controller=null;
@@ -111,15 +112,30 @@
   try{
    const response=await fetch(root.dataset.url,{credentials:'same-origin',cache:'no-store',signal:active.signal,headers:{'Accept':'application/json'}});
    if(!current(number))return;
-   if(response.redirected||!response.ok)throw Error(response.status===401||response.status===403?'Sesi atau akses berubah. Muat ulang halaman untuk memeriksa akses.':'Data belum dapat dimuat. Coba lagi hanya membaca, tanpa mencatat transaksi.');
+   if(response.redirected||!response.ok){
+    let detail='';if(!response.redirected&&[400,404,409,422].includes(response.status)){try{const body=await response.json();if(typeof body.detail==='string')detail=body.detail;}catch(_){}}
+    throw Error(response.status===401||response.status===403?'Sesi atau akses berubah. Muat ulang halaman untuk memeriksa akses.':detail||'Data belum dapat dimuat. Coba lagi hanya membaca, tanpa mencatat transaksi.');
+   }
    const payload=await response.json();if(current(number))await install(payload,number);
   }catch(error){
-   if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent='Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;
+   failed(error,number);
   }finally{clearTimeout(timeout);if(current(number)){controller=null;table.setAttribute('aria-busy','false');}}
  }
+ function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent='Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
+ async function resume(){
+  if(!pending||interacting())return;
+  const next=pending;pending=null;if(!current(next.number))return;
+  const active=new AbortController();controller=active;const timer=setTimeout(()=>active.abort(),20000);
+  try{await install(next.payload,next.number);}catch(error){failed(error,next.number);}
+  finally{clearTimeout(timer);if(controller===active)controller=null;}
+ }
  retry.addEventListener('click',read);
- root.addEventListener('toggle',()=>{if(pending&&!root.querySelector('details[open]')){const next=pending;pending=null;install(next.payload,next.number).catch(e=>{if(current(next.number)){status.textContent=e.message;retry.hidden=false;}});}},true);
- root.addEventListener('focusout',()=>{if(pending)queueMicrotask(()=>{if(pending){const next=pending;pending=null;install(next.payload,next.number).catch(()=>{});}});});
+ root.addEventListener('toggle',resume,true);
+ root.addEventListener('close',resume,true);
+ root.addEventListener('focusout',()=>queueMicrotask(resume));
+ const guide=root.querySelector('[data-shell-guide-panel]');
+ root.querySelector('[data-shell-guide]')?.addEventListener('click',()=>guide.showModal());
+ root.querySelector('[data-shell-guide-close]')?.addEventListener('click',()=>guide.close());
  const leave=e=>{const a=e.target.closest?.('a[href]');if(!finished&&root.isConnected&&a&&!a.target&&!a.hasAttribute('download')&&!a.hash&&!e.defaultPrevented&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey){stop();}};
  if(window.PINDAH)PINDAH.pasang(document,'click',leave);else document.addEventListener('click',leave,{once:true});
  read();

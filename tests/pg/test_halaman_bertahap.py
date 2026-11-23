@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from html.parser import HTMLParser
 from types import SimpleNamespace
 
@@ -26,7 +27,8 @@ pytestmark = pytest.mark.asyncio
 
 PEMBACA = [(P.OPERATOR, 'Gudang 1'),
            (P.OPERATOR, 'Gudang 2 - Kerangka uji'),
-           (P.ADMIN, 'Gudang 2 - Kerangka uji')]
+           (P.ADMIN, 'Gudang 2 - Kerangka uji'),
+           (P.SUPERADMIN, 'Gudang 2 - Kerangka uji')]
 
 
 class _Elemen(HTMLParser):
@@ -41,6 +43,46 @@ class _Elemen(HTMLParser):
     def pilih(self, tag, **attrs):
         return [a for t, a in self.tags if t == tag
                 and all(a.get(k) == v for k, v in attrs.items())]
+
+
+class _Struktur(HTMLParser):
+    """Baca hubungan kontrol/panel dan sidebar, tanpa menafsirkan JavaScript."""
+    VOID = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'param', 'source', 'track', 'wbr'}
+
+    def __init__(self, html):
+        super().__init__()
+        self.nodes, self.stack, self.sidebar_hrefs = [], [], []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        node = dict(tag=tag, attrs=dict(attrs), text=[])
+        self.nodes.append(node)
+        if tag == 'a' and 'href' in node['attrs'] and any(
+                n['attrs'].get('id') == 'laci' for n in self.stack):
+            self.sidebar_hrefs.append(node['attrs']['href'])
+        if tag not in self.VOID:
+            self.stack.append(node)
+
+    def handle_endtag(self, tag):
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i]['tag'] == tag:
+                del self.stack[i:]
+                break
+
+    def handle_data(self, data):
+        for node in self.stack:
+            node['text'].append(data)
+
+    def named_buttons(self, name):
+        return [n for n in self.nodes if n['tag'] == 'button' and
+                (n['attrs'].get('aria-label') or ' '.join(
+                    ''.join(n['text']).split())) == name]
+
+    def by_id(self, ident):
+        matches = [n for n in self.nodes if n['attrs'].get('id') == ident]
+        assert len(matches) == 1, ('Identitas panel/alasan harus tunggal', ident)
+        return matches[0]
 
 
 def _stamp(html):
@@ -247,3 +289,43 @@ async def test_penanda_membedakan_query_dan_batas_konteks():
     account.user.role = P.OPERATOR
     account.token_version = 2
     assert penanda(request(session=security.buat_token(account)), account, 'pekerjaan') != original
+
+
+@pytest.mark.parametrize('role,warehouse', PEMBACA)
+@pytest.mark.parametrize('path', ['/pekerjaan?tab=berjalan', '/stok?tab=bahan'])
+async def test_sidebar_kerangka_mempertahankan_pintu_native(
+        pg, proses_aktif, role, warehouse, path):
+    """Angka boleh belum ada; alias/pintu yang pensiun tidak boleh muncul lagi."""
+    async with await _klien(pg, peran=role, gudang=warehouse) as c:
+        initial = await c.get(path)
+        native = await c.get(path, headers={'X-Pindah': '1'})
+    assert initial.status_code == native.status_code == 200
+    shell_hrefs = _Struktur(initial.text).sidebar_hrefs
+    native_hrefs = _Struktur(native.text).sidebar_hrefs
+    assert shell_hrefs and native_hrefs
+    assert Counter(shell_hrefs) == Counter(native_hrefs)
+
+
+@pytest.mark.parametrize('path', ['/pekerjaan?tab=berjalan', '/stok?tab=bahan'])
+async def test_panduan_tersambung_dan_cetak_belum_aktif_sebelum_data(
+        pg, proses_aktif, path):
+    async with await _klien(pg, peran=P.OPERATOR, gudang='Gudang 2 - Kerangka uji') as c:
+        response = await c.get(path)
+    assert response.status_code == 200
+    document = _Struktur(response.text)
+    guides = document.named_buttons('Panduan')
+    assert len(guides) == 1
+    attrs = guides[0]['attrs']
+    target = (attrs.get('aria-controls') or attrs.get('data-lk-buka')
+              or attrs.get('data-sk-buka') or attrs.get('data-shell-guide'))
+    assert target, 'Panduan harus menunjuk panel yang benar-benar dirender'
+    panel = document.by_id(target)
+    assert panel['tag'] in {'dialog', 'details', 'section', 'div'}
+    assert len(''.join(panel['text']).strip()) > 40
+    prints = document.named_buttons('Cetak')
+    assert len(prints) == 1, 'Jangan menawarkan Cetak native aktif bersama Cetak shell'
+    assert 'disabled' in prints[0]['attrs']
+    reason_id = prints[0]['attrs'].get('aria-describedby')
+    assert reason_id, 'Cetak nonaktif harus memiliki alasan yang dapat dibaca'
+    reason = document.by_id(reason_id)
+    assert re.search(r'memuat|belum|setelah|tunggu', ''.join(reason['text']), re.I)

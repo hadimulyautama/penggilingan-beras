@@ -3,7 +3,12 @@
 {% block isi %}
 <link rel="stylesheet" href="/static/halaman-bertahap.css?v={{ VERSI }}">
 <section class="halaman-bertahap" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}" data-filtered="{{ '1' if SHELL.filtered else '0' }}">
- <header class="halaman-bertahap__kepala"><h1>{{ SHELL.title }}</h1><button class="btn btn--kecil" type="button" data-shell-print disabled title="Daftar belum dimuat">Cetak</button></header>
+ <header class="halaman-bertahap__kepala"><h1>{{ SHELL.title }}</h1>{% if not LAPORAN_NAV %}<div><button class="btn btn--kecil" type="button" data-shell-guide aria-controls="shell-panduan">Panduan</button> <button class="btn btn--kecil" type="button" data-shell-print disabled aria-describedby="shell-cetak-alasan">Cetak</button></div>{% endif %}</header>
+ <p class="bantu" id="shell-cetak-alasan">Cetak tersedia setelah daftar selesai dibaca.</p>
+ <p class="bantu">{{ SHELL.scope }}</p>
+ {% if SHELL.kind=='pekerjaan' %}{% include '_pekerjaan_panduan.html' %}{% else %}
+ <dialog class="pk-panel" id="shell-panduan" data-shell-guide-panel aria-labelledby="shell-panduan-judul"><h2 id="shell-panduan-judul">Panduan stok</h2><p>Pilih jenis stok dan filter kepemilikan atau gudang. Angka saldo dan tindakan mengikuti data serta akses yang sudah berlaku.</p><p>Memuat data berbeda dari daftar kosong. Coba lagi hanya membaca data; tidak mencatat atau memindahkan stok.</p><button class="btn" type="button" data-shell-guide-close>Tutup panduan</button></dialog>
+ {% endif %}
  {% if not LAPORAN_NAV %}<nav class="kontrol-tab" aria-label="{{ 'Tab pekerjaan' if SHELL.kind=='pekerjaan' else 'Jenis stok' }}">
  {% for tab in SHELL.tabs %}{% if tab.boleh %}<a class="kontrol-tab__item" href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>{% endif %}{% endfor %}
  </nav>{% endif %}
