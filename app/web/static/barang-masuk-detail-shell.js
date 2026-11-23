@@ -9,6 +9,7 @@
  function pilih(key,updateURL=false){
   const selected=tabs.find(t=>t.dataset.bmTab===key);if(!selected)return;
   for(const tab of tabs){const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
+  const rincian=root.querySelector('[data-bm-detail-rincian]');if(rincian)rincian.hidden=key==='ringkasan';
   for(const panel of panels){const active=panel.dataset.bmDetailPanel===key;panel.hidden=!active;if(active&&key!=='ringkasan')panel.querySelector('details')?.setAttribute('open','');}
   if(updateURL){const u=new URL(selected.dataset.url,location.href);if(u.origin===location.origin&&u.pathname===location.pathname)history.replaceState(history.state,'',u.pathname+u.search+u.hash);}
  }

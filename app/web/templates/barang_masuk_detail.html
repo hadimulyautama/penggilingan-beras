@@ -61,7 +61,7 @@
  {% if akses_retur_supplier or retur_supplier_terkait %}<p><a href="/riwayat-retur-supplier?penerimaan={{ tiket.id }}">Riwayat Retur ke Supplier penerimaan ini →</a></p>{% endif %}
 </aside></div>
 </section>
-<section class="terima-panel bm-rincian"><h2>Rincian penerimaan</h2>
+<section class="terima-panel bm-rincian" data-bm-detail-rincian{% if tab_detail=='ringkasan' %} hidden{% endif %}><h2>Rincian penerimaan</h2>
 <section id="bm-panel-tiket" role="tabpanel" aria-labelledby="bm-tab-tiket" data-bm-detail-panel="tiket"{% if tab_detail!='tiket' %} hidden{% endif %}>
 <details id="terima-panel-tiket"{% if tab_detail=='tiket' %} open{% endif %}><summary>Data timbang lengkap</summary>{% with bobot_terbuka=true %}{% include '_penerimaan_timbang.html' %}{% endwith %}{% if not timbang %}<p>Rincian timbang belum tersedia pada catatan ini.</p>{% endif %}</details>
 <details id="terima-identitas"><summary>Identitas & dokumen asal</summary><dl class="bm-valores">{% for label,v in [('Tiket',tiket.kode),('Jenis',nama_jenis),('Pelanggan / pemilik' if tiket.jasa else 'Supplier',tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama),('Pesanan jasa',tiket.jasa_kode),('Armada',tiket.nomor_polisi),('Sopir',tiket.nama_sopir),('Arah',tiket.arah),('Cara timbang',timbang.cara_timbang if timbang else none)] %}<div><dt>{{ label }}</dt><dd>{{ label_tiket(v) if label in ['Arah','Cara timbang'] else v or 'Belum tercatat' }}</dd></div>{% endfor %}</dl>{% if timbang %}{% for m in timbang.muatan %}<p>{{ m.jenis_nama or m.jenis_kode }} · Nota {{ m.nomor_acuan or 'belum tercatat' }}{% if m.catatan %} · {{ m.catatan }}{% endif %}</p>{% endfor %}{% endif %}</details>

@@ -5,7 +5,7 @@
 {% if awal.pending and bentuk and bentuk.boleh %}
 <section class="bm-form" data-bm-form-shell aria-busy="true" aria-describedby="bm-form-shell-status">
  <h2>{{ 'Tentukan tujuan penerimaan' if bentuk.id=='gabah_masuk' else 'Tolak PK luar' if bentuk.id=='tolak_pk_luar' else bentuk.label.split(' ',1)[-1] }}</h2>
- <p id="bm-form-shell-status" class="bm-meta" data-bm-form-shell-status role="status">Menyiapkan isian dan perlindungan pencatatan. Belum ada penerimaan yang dikirim.</p>
+ <p id="bm-form-shell-status" class="bm-meta" data-bm-form-shell-status role="status">Kerangka ini tidak mengirim pencatatan. Isian dan status tersimpan sedang dipulihkan.</p>
  <fieldset disabled>
  {% for field in bentuk.fields if field.name and field.name!='timbangan_transaksi_id' %}
   <label>{{ field.label }}
