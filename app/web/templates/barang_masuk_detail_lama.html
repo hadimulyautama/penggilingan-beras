@@ -53,7 +53,7 @@
  {% if not timbang %}<section class="terima-panel"><h2>Data timbang</h2><p class="terima-bantu">Rincian timbang belum tersedia pada catatan ini.</p></section>{% endif %}
  <section class="terima-panel"><div class="terima-judul"><h2>Bobot penerimaan</h2></div><dl class="terima-fakta"><div><dt>Total diterima</dt><dd>{{ kg(berat_diterima) if berat_diterima is not none else keterangan_berat if catatan else 'Belum diterima' }}</dd></div></dl><p class="terima-bantu">Total berasal dari catatan penerimaan yang sah. Catatan ditolak tidak dihitung; ini bukan saldo stok sekarang.</p></section>
 </section>
-<section id="terima-panel-qc" role="tabpanel" aria-labelledby="terima-tab-qc"{% if tab_detail != 'qc' %} hidden{% endif %}>{% include '_penerimaan_qc.html' %}</section>
+<section id="terima-panel-qc" role="tabpanel" aria-labelledby="terima-tab-qc"{% if tab_detail != 'qc' %} hidden{% endif %}>{% include 'portal/_penerimaan_qc.html' %}</section>
 <section id="terima-panel-riwayat" role="tabpanel" aria-labelledby="terima-tab-riwayat"{% if tab_detail != 'riwayat' %} hidden{% endif %}>
  {% include '_penerimaan_catatan.html' %}{% include '_penerimaan_lokasi.html' %}
  <section class="terima-panel"><div class="terima-judul"><h2>Jejak penerimaan</h2></div><dl class="terima-fakta"><div class="terima-fakta--panjang"><dt>Pihak pada tiket</dt><dd>{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Belum tercatat' }}</dd></div><div class="terima-fakta--panjang"><dt>Pemilik catatan</dt><dd>{{ pemilik_penerimaan or 'Belum ada catatan penerimaan' }}</dd></div></dl><p class="terima-bantu">Waktu dan pencatat setiap penerimaan tercantum pada catatan sumber di atas. Riwayat tetap tersedia setelah bahan diproses atau dipindahkan.</p></section>
