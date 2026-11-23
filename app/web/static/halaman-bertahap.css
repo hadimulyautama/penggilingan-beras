@@ -1,0 +1,20 @@
+/* Adapter Pekerjaan Aktif/Stok saja; paket tampilan bersama tetap utuh. */
+.halaman-bertahap{min-width:0}
+.halaman-bertahap__kepala{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.halaman-bertahap__kepala h1{margin:0;font-size:1.5rem}
+.halaman-bertahap__filter{margin-block:12px;border:1px solid var(--garis,#d1d5db);border-radius:12px;padding:12px}
+.halaman-bertahap__filter>summary{cursor:pointer;font-weight:650}
+.halaman-bertahap__form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px;align-items:end}
+.halaman-bertahap__form label{display:grid;gap:6px;min-width:0}
+.halaman-bertahap__form small{color:var(--redup,#65716b)}
+.halaman-bertahap__status{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-block:12px}
+.halaman-bertahap__status p{margin:0}
+.halaman-bertahap__scroll{overflow:auto;max-width:100%;border:1px solid var(--garis,#d1d5db);border-radius:12px}
+.halaman-bertahap__tabel{border-collapse:collapse;width:100%;min-width:680px}
+.halaman-bertahap__tabel th,.halaman-bertahap__tabel td{padding:14px;text-align:left;border-bottom:1px solid var(--garis,#d1d5db)}
+.halaman-bertahap__tabel th{font-size:.85rem;white-space:nowrap}
+.halaman-bertahap__tabel tbody td{padding-block:24px}
+.halaman-bertahap__kosong td{white-space:normal}
+.halaman-bertahap__row-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-block:12px}
+.halaman-bertahap__row-actions small{color:var(--redup,#65716b)}
+@media(max-width:600px){.halaman-bertahap__form{grid-template-columns:1fr}.halaman-bertahap__scroll{margin-inline:0}.halaman-bertahap__tabel{min-width:640px}}

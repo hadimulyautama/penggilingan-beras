@@ -87,6 +87,9 @@ def daftar_tab_pekerjaan(k, pemilik, gudang, jenis):
 @router.get('/pekerjaan')
 async def halaman_pekerjaan(request: Request, akun=Depends(butuh_akun), *, awal=None):
     if (alih:=tautan_penerimaan_lama(request)) is not None:return alih
+    from app.web.halaman_bertahap import memakai_kerangka, kerangka
+    if memakai_kerangka(request, 'pekerjaan'):
+        return await kerangka(request, akun, 'pekerjaan')
     b, k, pelanggan_saring = await siapkan_daftar_pekerjaan(request, akun.user)
     tab = pilihan(request, 'tab', {'tindakan', 'berjalan'}, awal or 'tindakan')
     pemilik = pilihan(request, 'kepemilikan', {'jasa','pabrik'})

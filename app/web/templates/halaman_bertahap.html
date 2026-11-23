@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block judul %}{{ SHELL.title }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/halaman-bertahap.css?v={{ VERSI }}">
+<section class="halaman-bertahap" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}" data-filtered="{{ '1' if SHELL.filtered else '0' }}">
+ <header class="halaman-bertahap__kepala"><h1>{{ SHELL.title }}</h1><button class="btn btn--kecil" type="button" data-shell-print disabled title="Daftar belum dimuat">Cetak</button></header>
+ {% if not LAPORAN_NAV %}<nav class="kontrol-tab" aria-label="{{ 'Tab pekerjaan' if SHELL.kind=='pekerjaan' else 'Jenis stok' }}">
+ {% for tab in SHELL.tabs %}{% if tab.boleh %}<a class="kontrol-tab__item" href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>{% endif %}{% endfor %}
+ </nav>{% endif %}
+ <form class="kontrol-pencarian__form" method="get" action="{{ request.url.path }}" role="search">
+ {% for key,value in request.query_params.items() %}{% if key not in ('cari','halaman','buka','nilai') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
+ <label class="kontrol-pencarian__field"><span class="sr-only">{{ SHELL.search.label }}</span><input class="kontrol-pencarian__input" type="search" name="cari" value="{{ SHELL.search.value }}" aria-label="{{ SHELL.search.label }}" placeholder="{{ SHELL.search.label }}…" maxlength="200"></label><button type="submit" class="kontrol-pencarian__submit cari-berikon">Cari</button>
+ </form>
+ <details class="halaman-bertahap__filter"><summary>Filter</summary>
+  <form class="halaman-bertahap__form" method="get" action="{{ request.url.path }}" data-shell-filter-form>
+   {% for key,value in SHELL.hidden.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+   <input type="hidden" name="cari" value="{{ SHELL.search.value }}">
+   {% for field in SHELL.filters %}<label>{{ field.label }}
+    {% if field.options is defined %}<select class="fld" name="{{ field.name }}"{% if field.disabled %} disabled aria-describedby="shell-bantu-{{ field.name }}"{% endif %}>
+     {% for option in field.options %}<option value="{{ option.value }}"{% if option.value|string==field.value|string %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+    </select>{% else %}<input class="fld" type="search" name="{{ field.name }}" value="{{ field.value }}" maxlength="200">{% endif %}
+    {% if field.reason %}<small id="shell-bantu-{{ field.name }}">{{ field.reason }}</small>{% endif %}
+   </label>{% endfor %}
+   <button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" href="{{ SHELL.reset_url }}">Atur ulang filter</a>
+  </form>
+ </details>
+ <div class="halaman-bertahap__status"><p role="status" aria-live="polite" data-shell-status>Memuat data…</p><button type="button" class="btn" data-shell-retry hidden>Coba lagi</button></div>
+ <div class="halaman-bertahap__scroll" tabindex="0" role="region" aria-label="{{ SHELL.title }} · tabel dapat digulir" data-shell-table-wrap aria-busy="true">
+  <table class="halaman-bertahap__tabel"><thead><tr>{% for column in SHELL.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead><tbody><tr class="halaman-bertahap__kosong"><td colspan="{{ SHELL.columns|length }}" data-shell-message>Memuat data. Judul kolom dan filter tetap tersedia.</td></tr></tbody></table>
+ </div>
+ <div class="halaman-bertahap__row-actions"><button type="button" class="btn btn--kecil" disabled aria-describedby="shell-baris-alasan">Detail</button><small id="shell-baris-alasan">Pilih baris setelah data tersedia. Tidak ada tindakan yang dikirim selama memuat.</small></div>
+ <noscript><p>JavaScript diperlukan untuk memuat daftar bertahap. Judul dan filter tetap tersedia; tidak ada transaksi yang dikirim.</p></noscript>
+</section>
+<script src="/static/halaman-bertahap.js?v={{ VERSI }}" defer></script>
+{% endblock %}

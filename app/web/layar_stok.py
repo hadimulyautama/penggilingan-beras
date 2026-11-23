@@ -58,6 +58,9 @@ async def _pk_tidak_tersedia(request: Request, pesan: str):
 
 @router.get("/stok")
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
+    from app.web.halaman_bertahap import memakai_kerangka, kerangka
+    if memakai_kerangka(request, 'stok'):
+        return await kerangka(request, akun, 'stok')
     # Satu pintu navigasi, tetapi tetap memakai pembaca dan gerbang lama.
     tab = request.query_params.get("tab", "bahan")
     pemilik = request.query_params.get("pemilik", "semua")

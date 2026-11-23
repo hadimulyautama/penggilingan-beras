@@ -99,6 +99,8 @@ app.include_router(laporan_router)
 app.include_router(laporan_navigasi_router)
 from app.web.layar_pekerjaan import router as pekerjaan_router
 app.include_router(pekerjaan_router)
+from app.web.halaman_bertahap import router as halaman_bertahap_router
+app.include_router(halaman_bertahap_router)
 app.include_router(berjalan_router)
 app.include_router(audit_router)
 from app.web.fasilitas import router as fasilitas_router

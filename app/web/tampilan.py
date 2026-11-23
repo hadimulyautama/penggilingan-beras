@@ -238,7 +238,9 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     # Mode terang adalah bawaan untuk perangkat baru. Cookie "0" berarti
     # pengguna memang memilih tampilan gelap; "1" tetap berarti terang.
     konteks.setdefault("TERIK", request.cookies.get("produksi_terik", "1") == "1")
-    return templates.TemplateResponse(request, nama, konteks, status_code=status_code)
+    response = templates.TemplateResponse(request, nama, konteks, status_code=status_code)
+    from app.web.navigasi_daftar_bertahap import pasang as pasang_navigasi_daftar
+    return pasang_navigasi_daftar(response, request)
 
 
 async def render_laci(request: Request, nama: str, **konteks):
