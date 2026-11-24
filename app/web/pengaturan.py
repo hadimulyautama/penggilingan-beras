@@ -168,6 +168,27 @@ def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
                  if boleh_lihat_gudang(view, GUDANG_PROSES[k]))
 
 
+async def _metadata_menu_native(*, view, peran_asli, tuan, is_super,
+                                sesi_pendek, pemulihan):
+    """Same presentation flags for native HTML and the early read-only shape.
+
+    Caller supplies real account properties and the existing recovery reader;
+    compiling shape does not authorize an operation or derive a new role.
+    """
+    return dict(
+        tuan=tuan, TAMPILAN_INDUK=True, sesi_pendek=sesi_pendek,
+        blok_kelola=view == V_SUPER or (tuan and await pemulihan()),
+        console_url=settings.console_website_url.rstrip('/')+'/console' if settings.console_website_url.startswith('https://') else '',
+        blok_perusahaan=is_super,
+        kelola_darurat=view != V_SUPER,
+        blok_lihat_sebagai=_P.admin_keatas(peran_asli),
+        blok_kerja_gudang=_P.boleh_ganti_gudang(peran_asli),
+        blok_setelan=tuan,
+        blok_mode_uji=settings.mode_uji and view == V_SUPER,
+        mode_uji_tersedia=settings.mode_uji,
+    )
+
+
 @router.get("/pengaturan/akses")
 @router.get("/pengaturan")
 @router.get("/pengaturan/akun")
@@ -204,6 +225,31 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
                           'data_url':'/pengaturan/akun'}
         response=await kerangka(request,akun,konteks)
         if response is not None:return response
+    # Two declared shapes only. Same-URL X-Pindah data reads, query feedback,
+    # and mandatory password changes continue through the native reader.
+    if (request.method == 'GET'
+            and request.url.path in {'/pengaturan', '/pengaturan/sesi'}
+            and not request.url.query and akun.harus_ganti_sandi is False
+            and not getattr(request.state, 'isi_halaman_bertahap', False)
+            and (request.headers.get('X-Kerangka-Halaman') == '1'
+                 or request.headers.get('X-Pindah') != '1'
+                 and request.headers.get('Sec-Fetch-Mode') == 'navigate'
+                 and request.headers.get('Sec-Fetch-Dest') in {'document', 'empty'})):
+        from app.web.pengaturan_menu_kerangka import kerangka as kerangka_menu
+        from app.web.halaman_bertahap import konteks_kerangka, penanda_konteks
+        view_menu = await view_untuk(akun.user)
+        peran_asli_menu = getattr(request.state, 'peran_asli', None) or akun.peran
+        menu = await _metadata_menu_native(view=view_menu, peran_asli=peran_asli_menu,
+            tuan=tuan, is_super=akun.is_super, sesi_pendek=akun.sesi_pendek,
+            pemulihan=pemulihan_lama_diizinkan)
+        konteks = await konteks_kerangka(request, akun)
+        konteks['PENGATURAN_NATIVE_FLAGS'] = menu
+        konteks['console_url'] = menu['console_url']
+        konteks['SHELL'] = {'stamp': penanda_konteks(request, akun)+'|'+request.url.path,
+                            'data_url': request.url.path}
+        response = await kerangka_menu(request, akun, konteks)
+        if response is not None:
+            return response
     async with SessionLocal() as db:
         sebab = await sebab_jeda(db) if tuan else {}
         from app.services.setelan import target_kadar_air
@@ -238,6 +284,9 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     from app.web.lihat_sebagai import NAMA_KUKI
     if bagian == 'peran' and not _P.boleh_ganti_gudang(peran_asli):
         raise HTTPException(403, 'Pilihan tampilan dan gudang tidak tersedia untuk akun ini.')
+    menu_native = await _metadata_menu_native(view=view, peran_asli=peran_asli,
+        tuan=tuan, is_super=akun.is_super, sesi_pendek=akun.sesi_pendek,
+        pemulihan=pemulihan_lama_diizinkan)
     kelompok, judul = HALAMAN.get(bagian, ('', 'Pengaturan'))
     if bagian == 'peran':
         judul = 'Lihat sebagai' if _P.admin_keatas(peran_asli) else 'Kerja di gudang'
@@ -259,15 +308,9 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         err=_PESAN.get(request.query_params.get("err", ""))
             or request.query_params.get("err_teks", ""),
-        tuan=tuan, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
+        **menu_native, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
         kledo=kledo,
         ada_super=ada_super,
-        blok_kelola=view == V_SUPER or (tuan and await pemulihan_lama_diizinkan()),
-        console_url=settings.console_website_url.rstrip('/')+'/console' if settings.console_website_url.startswith('https://') else '',
-        blok_perusahaan=akun.is_super,
-        kelola_darurat=view != V_SUPER,
-        blok_lihat_sebagai=_P.admin_keatas(peran_asli),
-        blok_kerja_gudang=_P.boleh_ganti_gudang(peran_asli),
         # ── Sebab berhenti per proses: DITURUNKAN, bukan diketik ──
         #
         # Dulu tuple ini berisi dua proses dengan alasan tertulis "setelan
@@ -283,9 +326,6 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         # admin ke atas, yang memegang kedua gudang — tetapi aturannya jadi
         # tertulis di tempat yang benar, bukan tersimpan sebagai kebetulan.
         PROSES=_proses_view(V_SUPER), target_umum=target_umum,
-        blok_setelan=tuan,
-        blok_mode_uji=settings.mode_uji and view == V_SUPER,
-        mode_uji_tersedia=settings.mode_uji,
         JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),
     )
 

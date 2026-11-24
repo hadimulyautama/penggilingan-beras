@@ -1,12 +1,12 @@
 # Settings index/session native structure proposal
 
-Base: `d147691f1650d623df2a2f5ebda5b0665e43404f`. New child `remaining-settings/produksi`. Nothing changes in `pengaturan.py`, native writers, shared reader/compiler/registry, core or vendor. This is an unwired two-route proposal, not completed Settings coverage.
+Base: `d147691f1650d623df2a2f5ebda5b0665e43404f`. New child `remaining-settings/produksi`. The local follow-up adds a scoped early document gate in `pengaturan.py` and shares the exact existing presentation-flag expressions with its final native renderer. Native writers, authorization dependencies, shared reader/compiler/registry, core and vendor remain unchanged. Root public integration/runtime acceptance remains pending; this is not completed Settings coverage.
 
 ## Scope / authority boundary
 
 Only GET `/pengaturan` and `/pengaturan/sesi` without query. Root must first run existing `butuh_akun` and the actual native metadata predicates. Builder asserts the same request-state account object, rejects portal/non-GET/forced or unknown password state and queries. It never reads an account record, warehouse, tenant or settings value. Native GET on the same exact URL with `X-Pindah: 1` still owns fresh session/product/role/scope authorization and actual HTML; all POST behavior stays native.
 
-Root integration may call `pengaturan_menu_kerangka.kerangka(request, akun, konteks)` only under normal document/X-Kerangka negotiation. Required `SHELL`: `stamp` nonempty, `data_url` exactly the route. `PENGATURAN_NATIVE_FLAGS` contains booleans from the **same exact native caller**, not request/browser/claimed roles. New pure helper `spesifikasi(path, query, flags)` compiles shape; it is not permission validation.
+The child native handler now calls `pengaturan_menu_kerangka.kerangka(request, akun, konteks)` only under exact two-route normal document/X-Kerangka negotiation, with no query, GET method, no staged-reader bypass and a real false mandatory-password property. Required `SHELL`: `stamp` nonempty, `data_url` exactly the route. `PENGATURAN_NATIVE_FLAGS` contains booleans from the **same exact native caller**, not request/browser/claimed roles. New pure helper `spesifikasi(path, query, flags)` compiles shape; it is not permission validation.
 
 Native metadata inventory in `app/web/pengaturan.py:halaman_pengaturan`:
 
@@ -44,6 +44,6 @@ The five native unconditional read doors remain after `butuh_akun`: own Account,
 
 ## Proof / root next step
 
-Pure Python tests: 30 PASS (strict native flags, no fake account/ORM or configured values, native labels, two-route/query and caller/portal/password/POST decline; plus exact comparison against native vendor macro/group fragments for all enabled hrefs and every anchor/disabled-span label/order/class/title/aria over ten Boolean/ConsoleURL combinations). Pure Node: 2 PASS (explicit route configuration and non-mutating retry focus). No browser/PG/CLI/network/remote/CI/deploy.
+Pure Python tests: 44 PASS (14 new native binding/gate checks plus 30 original shape checks); the shape subset covers strict native flags, no fake account/ORM or configured values, native labels, two-route/query and caller/portal/password/POST decline; plus exact comparison against native vendor macro/group fragments for all enabled hrefs and every anchor/disabled-span label/order/class/title/aria over ten Boolean/ConsoleURL combinations. Pure Node: 2 PASS (explicit route configuration and non-mutating retry focus). No browser/PG/CLI/network/remote/CI/deploy.
 
 Root owns wiring and schedules runtime sequentially: actual Admin/Operator flags and label variant, HTML/data delayed separately, new GET stale after navigation/context, error/retry, desktop/390 keyboard, session-expiry/forced-password/native query feedback, correct final forms/CSRF and zero POST while loading/retry/leaving. Default unknown conditional flags use safe locked spans, but not evidence a complete native menu was presented. Native permission booleans must be computed before acceptance, rather than keeping real allowed controls hidden forever. Inspect resulting no-data geometry before release; pure menu parity does not prove pixel layout. The original 5f4ff324 artifact stays intact; this delta corrects omitted native disabled slots without changing access policy.
