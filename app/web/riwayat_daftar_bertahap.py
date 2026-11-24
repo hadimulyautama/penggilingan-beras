@@ -46,3 +46,31 @@ async def kerangka(request, akun, konteks):
     response.headers['content-length'] = str(len(response.body))
     response.headers['Cache-Control'] = 'private, no-store'
     return response
+
+
+def memakai_dokumen(request):
+    """Negosiasi HTML saja. GET X-Pindah selalu memakai reader native penuh."""
+    return (request.method == 'GET' and request.headers.get('X-Pindah') != '1'
+            and alamat(request.url.path, request.url.query) is not None
+            and (request.headers.get('X-Kerangka-Halaman') == '1'
+                 or request.headers.get('Sec-Fetch-Mode') == 'navigate'
+                 and request.headers.get('Sec-Fetch-Dest') in {'document', 'empty'}))
+
+
+async def dokumen(request, akun):
+    """Family handler opt-in before heavy read; native sameURL reader untouched."""
+    if not memakai_dokumen(request):
+        return None
+    from app.web.portal.scope import is_customer_read
+    if is_customer_read(request) or getattr(request.state, 'portal_scope', None) is not None:
+        return None
+    # Guard precedes metadata/nav even if called outside current native caller.
+    if not await _boleh(akun.user, request.url.path):
+        from fastapi import HTTPException
+        raise HTTPException(403, 'Riwayat ini tidak tersedia untuk peran Anda.')
+    from app.web.laporan_navigasi import siapkan
+    from app.web.halaman_bertahap import konteks_kerangka
+    nav = {}
+    await siapkan(request, nav)
+    context = await konteks_kerangka(request, akun)
+    return await kerangka(request, akun, {**context, **nav})

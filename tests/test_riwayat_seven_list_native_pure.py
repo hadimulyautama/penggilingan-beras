@@ -173,3 +173,14 @@ assert(a.allowed('/riwayat-qc/pk-luar',o));
 for(const p of ['/riwayat','/riwayat-transfer','/riwayat-giling/1','/riwayat-giling?buka=x','/riwayat-qc/pk-luar?cari=x','//evil.invalid/riwayat-giling'])assert(!a.allowed(p,o),p);
 '''],cwd=ROOT,capture_output=True,text=True)
     assert result.returncode==0,result.stderr
+
+
+@pytest.mark.parametrize('headers,expected',[
+    ({},False),({'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'},True),
+    ({'X-Kerangka-Halaman':'1'},True),({'X-Pindah':'1'},False),
+    ({'X-Pindah':'1','X-Kerangka-Halaman':'1'},False),
+    ({'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document','X-Pindah':'1'},False),
+])
+def test_document_negotiation_never_recurses_native_sameurl_reader(headers,expected):
+    r=request();r.scope['headers']=[(k.lower().encode(),v.encode()) for k,v in headers.items()]
+    assert builder.memakai_dokumen(r) is expected

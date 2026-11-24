@@ -82,6 +82,11 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(
             403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
 
+    from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
+    shell = await dokumen_riwayat(request, akun)
+    if shell is not None:
+        return shell
+
     from app.penggilingan.gudang1.services.milling import riwayat_giling
 
     sebelum_id = _sebelum_id(request)
@@ -453,6 +458,11 @@ async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)
         raise HTTPException(
             403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
 
+    from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
+    shell = await dokumen_riwayat(request, akun)
+    if shell is not None:
+        return shell
+
     from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
 
     sebelum_id = _sebelum_id(request)
@@ -760,6 +770,11 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     boleh = await (_is_gabah_operator(akun.user) if jenis in ("gabah-basah","gabah-kering") else _is_jenis_operator(akun.user,"penggilingan") if jenis=="pk-hasil-giling" else _is_jenis_operator(akun.user,"penyosohan") if jenis=="beras-hasil-sosoh" else _is_g2_operator(akun.user))
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
+
+    from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
+    shell = await dokumen_riwayat(request, akun)
+    if shell is not None:
+        return shell
 
     if jenis == "beras-hasil-sosoh":
         from app.web.riwayat_qc_sosoh import halaman
