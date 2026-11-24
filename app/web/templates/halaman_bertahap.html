@@ -7,6 +7,9 @@
  {% include '_pekerjaan_kontrol.html' %}
  <p class="bantu" id="shell-cetak-alasan">Print tersedia setelah daftar selesai dibaca.</p>
  <p class="bantu" data-shell-scope>{{ SHELL.scope }}</p>
+ {% elif SHELL.kind=='stok' %}
+ {% with STOK_NAV=SHELL.stock_nav, BOLEH_KEPEMILIKAN=SHELL.stock_owner_allowed %}{% include '_stok_navigasi.html' %}{% endwith %}
+ <p class="bantu" id="shell-cetak-alasan">Cetak tersedia setelah daftar selesai dibaca.</p>
  {% else %}
  <header class="halaman-bertahap__kepala"><h1>{{ SHELL.title }}</h1>{% if not LAPORAN_NAV %}<div><button class="btn btn--kecil" type="button" data-shell-guide aria-controls="shell-panduan">Panduan</button> <button class="btn btn--kecil" type="button" data-shell-print disabled aria-describedby="shell-cetak-alasan">Cetak</button></div>{% endif %}</header>
  <p class="bantu" id="shell-cetak-alasan">Cetak tersedia setelah daftar selesai dibaca.</p>
@@ -39,7 +42,7 @@
  <div class="halaman-bertahap__scroll" tabindex="0" role="region" aria-label="{{ SHELL.title }} · tabel dapat digulir" data-shell-table-wrap aria-busy="true">
   <table class="halaman-bertahap__tabel"><thead><tr>{% for column in SHELL.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead><tbody><tr class="halaman-bertahap__kosong"><td colspan="{{ SHELL.columns|length }}" data-shell-message>Memuat data. Judul kolom dan filter tetap tersedia.</td></tr></tbody></table>
  </div>
- <div class="halaman-bertahap__row-actions"><button type="button" class="btn btn--kecil" disabled aria-describedby="shell-baris-alasan">Detail</button><small id="shell-baris-alasan">Pilih baris setelah data tersedia. Tidak ada tindakan yang dikirim selama memuat.</small></div>
+ {% if SHELL.kind!='stok' %}<div class="halaman-bertahap__row-actions"><button type="button" class="btn btn--kecil" disabled aria-describedby="shell-baris-alasan">Detail</button><small id="shell-baris-alasan">Pilih baris setelah data tersedia. Tidak ada tindakan yang dikirim selama memuat.</small></div>{% endif %}
  <noscript><p>JavaScript diperlukan untuk memuat daftar bertahap. Judul dan filter tetap tersedia; tidak ada transaksi yang dikirim.</p></noscript>
 </section>
 <script src="/static/halaman-bertahap.js?v={{ VERSI }}" defer></script>

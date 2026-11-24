@@ -332,7 +332,21 @@ async def test_panduan_tersambung_dan_cetak_belum_aktif_sebelum_data(
     async with await _klien(pg, peran=P.OPERATOR, gudang='Gudang 2 - Kerangka uji') as c:
         response = await c.get(path, headers={'X-Kerangka-Halaman': '1'})
     assert response.status_code == 200
-    document = _Struktur(response.text)
+    if path.startswith('/stok'):
+        from bs4 import BeautifulSoup
+        native = BeautifulSoup(response.text, 'html.parser')
+        root = native.select_one('[data-halaman-bertahap]')
+        assert root.select_one('[data-stok-controls]')
+        assert not root.select('h1,.halaman-bertahap__kepala'), 'Tidak ada judul sementara yang hilang setelah data'
+        # Menu tindakan native yang tertutup mempunyai pintu Panduan/Cetak
+        # yang sama. Primary header tetap satu; semua Cetak tetap disabled.
+        menu = root.select_one('#sk-tindakan')
+        assert menu is not None and not menu.has_attr('open')
+        assert all(node.has_attr('disabled') for node in root.select('[data-sk-cetak]'))
+        menu.decompose()
+        document = _Struktur(str(native))
+    else:
+        document = _Struktur(response.text)
     guides = document.named_buttons('Panduan')
     assert len(guides) == 1
     attrs = guides[0]['attrs']

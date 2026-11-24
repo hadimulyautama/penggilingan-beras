@@ -57,6 +57,7 @@
   else if(previous?.hasAttribute('data-lk-buka'))target=content.querySelector('[data-lk-buka="'+CSS.escape(previous.dataset.lkBuka)+'"]');
   else if(previous?.hasAttribute('data-shell-guide'))target=content.querySelector('[data-sk-buka="sk-panduan"]');
   else if(root.dataset.kind==='stok'&&previous?.matches('.kontrol-pencarian__submit'))target=content.querySelector('[data-stok-controls] .kontrol-pencarian__submit');
+  else if(root.dataset.kind==='stok'&&previous?.hasAttribute('data-sk-buka'))target=content.querySelector('[data-sk-buka="'+CSS.escape(previous.dataset.skBuka)+'"]');
   else if(root.dataset.kind==='stok'&&previous===table){target=content.querySelector('[data-daftar-kosong]');if(!target){content.tabIndex=-1;content.setAttribute('aria-label','Daftar Stok');target=content;}}
   else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');
   else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
@@ -140,6 +141,17 @@
  const guide=root.querySelector('[data-shell-guide-panel]');
  root.querySelector('[data-shell-guide]')?.addEventListener('click',()=>guide.showModal());
  root.querySelector('[data-shell-guide-close]')?.addEventListener('click',()=>guide.close());
+ if(root.dataset.kind==='stok'){
+  // Kerangka memakai markup header native yang sama. Controller daftar
+  // native baru aktif setelah data; di sini hanya panel baca yang dibuka.
+  let opener=null;
+  root.addEventListener('click',event=>{
+   const open=event.target.closest('[data-sk-buka]'),close=event.target.closest('[data-sk-tutup]');
+   if(open){const panel=root.querySelector('#'+CSS.escape(open.dataset.skBuka));if(panel?.tagName==='DIALOG'){opener=open;panel.showModal();}}
+   if(close)close.closest('dialog')?.close();
+  });
+  for(const panel of root.querySelectorAll('dialog'))panel.addEventListener('close',()=>{if(opener?.isConnected)opener.focus({preventScroll:true});});
+ }
  const leave=e=>{const a=e.target.closest?.('a[href]');if(!finished&&root.isConnected&&a&&!a.target&&!a.hasAttribute('download')&&!a.hash&&!e.defaultPrevented&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey){stop();}};
  if(window.PINDAH)PINDAH.pasang(document,'click',leave);else document.addEventListener('click',leave,{once:true});
  read();

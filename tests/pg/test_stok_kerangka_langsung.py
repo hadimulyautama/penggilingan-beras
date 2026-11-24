@@ -182,6 +182,9 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                 await asyncio.wait_for(entered.wait(), 20)
                 root = page.locator('[data-halaman-bertahap][data-kind="stok"]')
                 await expect(root).to_be_visible()
+                await expect(root.locator('h1,.halaman-bertahap__kepala')).to_have_count(0)
+                controls=['nav[aria-label="Jenis stok"]','[data-stok-controls] input[type="search"]','[data-stok-controls] .kontrol-pencarian>[data-sk-buka="sk-filter"]','[data-stok-controls] .kontrol-aksi>[data-sk-buka="sk-panduan"]','[data-stok-controls] .kontrol-aksi>[data-sk-cetak]']
+                before_controls={s:await page.locator(s).bounding_box() for s in controls}
                 await expect(root.locator('thead th').first).to_contain_text('Lot')
                 await expect(root.locator('input[type="search"][name="cari"]')).to_be_visible()
                 await expect(page.locator('.halaman-memuat')).to_have_count(0)
@@ -196,6 +199,10 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                 await root.locator('input[type="search"][name="cari"]').press('Tab')
                 await expect(page.locator('[data-stok-controls]')).to_be_visible()
                 await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)
+                for selector,box in before_controls.items():
+                    current_box=await page.locator(selector).bounding_box()
+                    assert box and current_box
+                    assert all(abs(box[key]-current_box[key])<=2 for key in ('x','y','width','height')),(selector,box,current_box)
                 assert await page.evaluate("()=>document.activeElement.matches('[data-stok-controls] .kontrol-pencarian__submit,[data-sk-buka=sk-filter],[data-daftar-kosong],[aria-label=\"Daftar Stok\"]')")
                 search = page.locator('[data-stok-controls] input[type="search"][name="cari"]')
                 await search.fill('Nama baru & uji')

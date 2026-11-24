@@ -185,6 +185,7 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lo
         columns = kolom_daftar(tab, mutu)
         from app.web.stok_navigasi import alamat
         data.update(tab=tab, columns=columns, scope=nav["cakupan"] + " · " + nav["lokasi"],
+                    stock_nav=nav, stock_owner_allowed=awal.get('BOLEH_KEPEMILIKAN', False),
                     search=dict(name="cari", label="Cari nama atau kode stok", value=q.get("cari", "")[:200]),
                     reset_url=alamat(tab, "semua", cari=q.get("cari", "")[:200]),
                     filtered=pemilik != "semua" or any(q.get(k) for k in ("gudang", "cari", "pelanggan_id")),
@@ -200,6 +201,26 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lo
     # saat pengguna mencari sebelum opsi selesai dibaca.
     data["hidden"].update({f["name"]: f["value"] for f in data["filters"] if f.get("disabled") and f["value"]})
     response = render(request, "halaman_bertahap.html", **konteks)
+    if jenis == 'stok':
+        # Header native dipakai dalam root baca, bukan STOK_NAV global yang
+        # akan memasang controller/filter baris sebelum data tersedia.
+        import re
+        from html import escape
+        response.body = response.body.replace(
+            b'data-sk-cetak=""',
+            b'data-sk-cetak="" disabled aria-describedby="shell-cetak-alasan"')
+        response.body = re.sub(
+            rb'(<select class="fld" name="pelanggan_id")(?: disabled)?(>)',
+            rb'\1 disabled aria-describedby="shell-pelanggan-alasan"\2', response.body)
+        response.body = response.body.replace(
+            b'<p class="bantu" data-stok-pelanggan-status role="status" hidden></p>',
+            b'<p class="bantu" id="shell-pelanggan-alasan" data-stok-pelanggan-status role="status">Pilihan pelanggan tersedia setelah stok selesai dibaca.</p>')
+        if nav['pelanggan_id']:
+            marker = b'<form class="sk-form-filter" method="get" action="/stok">'
+            response.body = response.body.replace(marker, marker + (
+                '<input type="hidden" name="pelanggan_id" value="'
+                + escape(str(nav['pelanggan_id']), quote=True) + '">').encode())
+        response.headers['content-length'] = str(len(response.body))
     if jenis == 'pekerjaan':
         response.body = response.body.replace(
             b'data-lk-cetak=""',
