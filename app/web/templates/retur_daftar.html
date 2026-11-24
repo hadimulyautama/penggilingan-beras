@@ -8,9 +8,8 @@
 <div class="keluar-halaman keluar-ringkas">
 {% include "_barang_retur_kontrol.html" %}
 {% if pesan %}<p role="status">{{ pesan }}</p>{% endif %}{% if gagal %}<p role="alert">{{ gagal }}</p>{% endif %}
-<section class="keluar-ringkas__bagian"><h2>Pengajuan retur</h2>
+<section class="keluar-ringkas__bagian" data-retur-applications><h2>Pengajuan retur</h2>
 
-{% if pengajuan %}
 <div class="tabel-standar__scroll">
   <table class="tabel-standar" data-ponsel="ringkas" role="table">
     <thead><tr><th>Pengiriman asal</th><th>Pelanggan</th><th>Tiket timbang</th><th>Pemeriksaan</th></tr></thead>
@@ -21,15 +20,13 @@
         <td data-sel="meta" role="cell">{{ r.kode_tiket or 'Tiket tidak tersedia' }}</td>
         <td data-sel="status" role="cell"><span class="tabel-standar__status">{{ 'Menunggu timbang kedua' if r.status_pemeriksaan == 'menunggu_timbang' else (r.status_pemeriksaan or 'tertahan').replace('_',' ').title() }}</span><small class="tabel-standar__sekunder">Belum masuk stok</small></td>
       </tr>
-    {% endfor %}</tbody>
+    {% else %}<tr><td colspan="4" class="bantu">Tidak ada pengajuan retur menunggu pemeriksaan.</td></tr>{% endfor %}</tbody>
   </table>
 </div>
-{% else %}<p class="bantu">Tidak ada pengajuan retur menunggu pemeriksaan.</p>{% endif %}
 {% if pengajuan_berikut %}<a class="btn" href="/retur?sebelum_pengajuan={{ pengajuan_berikut }}">Pengajuan sebelumnya</a>{% endif %}
 </section>
 {% if lama %}<section class="keluar-ringkas__bagian"><h2>Rincian lama belum terhubung</h2><p>Hubungan pengiriman tidak ditebak. Periksa tiket dan pilih pengiriman asal yang terbukti sebelum mengajukan penerimaan.</p>{% for r in lama %}<p>{{ r.kode_tiket or 'Tiket tidak tersedia' }} · belum masuk stok</p>{% endfor %}</section>{% endif %}
-<section class="keluar-ringkas__bagian"><h2>Riwayat penerimaan retur</h2>
-{% if recent %}
+<section class="keluar-ringkas__bagian" data-retur-receipts><h2>Riwayat penerimaan retur</h2>
     <div class="tabel-standar__scroll">
       <table class="tabel-standar" data-ponsel="ringkas" role="table">
         <thead><tr><th>Penerimaan / tanggal</th><th>Pelanggan</th><th>Nomor polisi</th><th>Tiket timbang</th><th class="tabel-standar__angka">Berat diterima</th><th class="tabel-standar__angka">Selisih</th></tr></thead>
@@ -42,10 +39,9 @@
             <td data-sel="angka" role="cell" class="tabel-standar__angka">{{ kg(r.berat_rincian_kg) }} kg<small class="tabel-standar__sekunder">{{ r.jumlah_jenis }} jenis barang</small></td>
             <td data-sel="tambahan" role="cell" class="tabel-standar__angka">{{ kg(r.selisih_kg) }} kg</td>
           </tr>
-        {% endfor %}</tbody>
+        {% else %}<tr><td colspan="6" class="bantu">Belum ada penerimaan retur.</td></tr>{% endfor %}</tbody>
       </table>
     </div>
-{% else %}<p class="bantu">Belum ada penerimaan retur.</p>{% endif %}
 {% if sebelum_berikut %}<a class="btn" href="/retur?sebelum={{ sebelum_berikut }}">Penerimaan sebelumnya</a>{% endif %}
 </section></div>
 {% endblock %}

@@ -92,7 +92,7 @@ async def halaman_retur(request: Request, akun=Depends(butuh_akun),
               AND r.outgoing_record_id IS NULL AND NOT EXISTS
               (SELECT 1 FROM customer_returns c WHERE c.timbangan_transaksi_id=r.timbangan_transaksi_id)
             ORDER BY r.id DESC'''),{'pid':scope.reader.pelanggan_id if scope else None})).mappings().all()
-    return await render_laci(request, "retur_daftar.html", layar="barang_keluar",
+    response=await render_laci(request, "retur_daftar.html", layar="barang_keluar",
                               pengajuan=pengajuan[:50], lama=lama,
                               pengajuan_berikut=pengajuan[49]['id'] if len(pengajuan)>50 else None,
                               tickets=tickets, katalog=katalog, mutu=mutu,
@@ -101,6 +101,8 @@ async def halaman_retur(request: Request, akun=Depends(butuh_akun),
                               pesan=request.query_params.get("pesan"),
                               gagal=request.query_params.get("gagal"),
                               tiket_terpilih=request.query_params.get("tiket", ""))
+    from app.web.retur_baca_catalog import pasang
+    return pasang(request,akun,response)
 
 
 @router.get("/retur/{retur_id}")
@@ -149,12 +151,14 @@ async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)
         lokasi=dict((await db.execute(select(Warehouse.kode_fungsi,Warehouse.nama_gudang))).all())
         items = [dict(i, pemilik=pemilik.get(i['jasa_id'], 'Milik pabrik'),
             gudang_item=i['gudang_item'] or lokasi.get(GUDANG_ITEM.get(i['tipe_asal']),gudang.nama_gudang if gudang else 'Gudang tidak tercatat')) for i in items]
-    return await render_laci(request, "retur_detail.html", layar="barang_keluar",
+    response=await render_laci(request, "retur_detail.html", layar="barang_keluar",
                              retur=retur, items=items, tiket=tiket,
                              pengajuan_id=rincian.id if rincian else None,
                              penerima=penerima.nama if penerima else "—",
                              pengiriman_asal=rincian.outgoing_record_id if rincian else None,
                              gudang=gudang.nama_gudang if gudang else ('Sesuai gudang asal per item' if rincian and rincian.outgoing_record_id else 'Gudang tidak tercatat'))
+    from app.web.retur_baca_catalog import pasang
+    return pasang(request,akun,response)
 
 
 @router.post("/retur/terima")

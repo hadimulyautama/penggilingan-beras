@@ -41,7 +41,9 @@ async def tiket_retur(tiket_id: int, request: Request, akun=Depends(butuh_akun))
         '''), {'id': tiket_id})).mappings().first()
     if not tiket:
         raise HTTPException(404, 'Tiket retur tidak tersedia.')
-    return await render_laci(request, 'retur_tiket.html', layar='barang_keluar', tiket=tiket)
+    response=await render_laci(request, 'retur_tiket.html', layar='barang_keluar', tiket=tiket)
+    from app.web.retur_baca_catalog import pasang
+    return pasang(request,akun,response)
 
 
 @router.get('/barang-keluar/{pengiriman_id}/retur')
