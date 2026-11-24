@@ -110,7 +110,7 @@
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
   if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat)){
    // Modul opsional tidak boleh menggagalkan kerangka Stok/Barang Masuk.
-   if(['/barang-keluar','/jasa','/pengaturan/akun','/laporan'].includes(pilihan.alamat.split('?')[0])){
+   if(['/barang-keluar','/jasa','/pengaturan/akun','/laporan'].includes(pilihan.alamat.split('?')[0])||pilihan.alamat.startsWith('/proses-aktif/giling/')){
     try{return window.PadiKerangkaUI?.buat?.(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }
    const stock=stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token);if(stock)return stock;

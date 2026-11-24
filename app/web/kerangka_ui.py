@@ -7,7 +7,7 @@ from pathlib import Path
 
 VARIANTS=['pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi']+[
     f'stok-{tab}-{int(mutu)}-{int(owner)}'
-    for tab in ('bahan','produk','karung') for mutu in (False,True) for owner in (False,True)]+['laporan-katalog']
+    for tab in ('bahan','produk','karung') for mutu in (False,True) for owner in (False,True)]+['laporan-katalog','giling-proses']
 
 
 @lru_cache(maxsize=1)
@@ -43,6 +43,9 @@ async def susun(request,akun,registry,*,navigasi,stok):
         tabs=('bahan','produk','karung') if produk else ('bahan',)
         owner=can_see_financials(akun.user)
         varians['stok']={tab:f'stok-{tab}-{int(mutu)}-{int(owner)}' for tab in tabs}
+    from app.web.api import _is_jenis_operator
+    if await _is_jenis_operator(akun.user,'penggilingan'):
+        varians['giling']='giling-proses'
     if not varians:
         return None
     data=aset()

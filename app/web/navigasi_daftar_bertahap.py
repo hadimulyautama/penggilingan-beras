@@ -10,6 +10,35 @@ def pasang(response, request):
     if marker not in response.body:
         return response
     from hmu_tampilan import CAP_ASET
+    if request.url.path in {'/pekerjaan','/berjalan'} and b'proses-aktif-list__row' in response.body:
+        # Exact visible native links only; no per-row DB lookup or data cache.
+        try:
+            from app.web.portal.scope import is_customer_read
+            if not is_customer_read(request):
+                from app.web.giling_work_catalog import catalog
+                from app.web.halaman_bertahap import penanda_konteks
+                from app.web.csrf import untuk_sesi
+                from app.web.security import baca_token,NAMA_COOKIE
+                from app.web import csrf
+                import json
+                from html import escape
+                address=request.url.path+('?' +request.url.query if request.url.query else '')
+                nonce=request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state,'csrf',None)
+                context=penanda_konteks(request,request.state.akun)
+                token=untuk_sesi(nonce,baca_token(request.cookies.get(NAMA_COOKIE)),request.cookies.get('produksi_lihat',''))
+                targets=catalog(response.body.decode('utf-8'),source_address=address,
+                    cap=CAP_ASET,context=context,session=token)
+                if targets and targets['entries']:
+                    from jinja2.utils import htmlsafe_json_dumps
+                    payload=htmlsafe_json_dumps(targets).encode()
+                    if len(payload)<=262144:
+                        tag=('<script type="application/json" data-giling-native-catalog '
+                             'data-source-address="'+escape(address,quote=True)+'" '
+                             'data-source-sha="'+targets['sumber_sha256']+'">').encode()+payload+b'</script>'
+                        response.body=response.body.replace(marker,tag+marker,1)
+        except Exception as error:
+            import logging
+            logging.getLogger(__name__).warning('Katalog struktur Giling belum tersedia (%s)',type(error).__name__)
     # Struktur publik stabil siap sebelum DOM interaktif. Tidak berisi akun,
     # pilihan hak, saldo, draf atau token; pilihan per dokumen tetap no-store.
     asset=('<script src="/static/kerangka-ui.js?v='+CAP_ASET+'"></script>').encode()

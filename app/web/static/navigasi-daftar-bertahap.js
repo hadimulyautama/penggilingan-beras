@@ -13,7 +13,7 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
-  return u.origin===location.origin&&(u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'||u.pathname==='/barang-keluar');
+  return u.origin===location.origin&&(u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||/^\/proses-aktif\/giling\/[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'||u.pathname==='/barang-keluar');
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);
@@ -30,7 +30,7 @@
  function nativeIfUIUnavailable(){
   const uiHost=document.getElementById('padi-kerangka-ui');let uiReady=false;
   try{const ui=JSON.parse(uiHost?.textContent||'null');uiReady=!!(ui&&ui.versi===1&&ui.sumber===window.PadiKerangkaUI?.sumber&&ui.cap===document.documentElement.dataset.versi&&ui.konteks===document.querySelector('.bingkai')?.dataset.pindahKonteks&&ui.sesi===document.getElementById('formulir-sesi')?.dataset.token);}catch(_){}
-  if(!uiReady)document.querySelectorAll('a[href]').forEach(link=>{const u=new URL(link.href,location.href);if(u.origin===location.origin&&(['/barang-keluar','/jasa','/pengaturan/akun','/laporan'].includes(u.pathname)||u.pathname==='/stok'&&!document.getElementById('padi-stok-kerangka')))link.setAttribute('data-utuh','');});
+  if(!uiReady)document.querySelectorAll('a[href]').forEach(link=>{const u=new URL(link.href,location.href);if(u.origin===location.origin&&(['/barang-keluar','/jasa','/pengaturan/akun','/laporan'].includes(u.pathname)||u.pathname.startsWith('/proses-aktif/giling/')||u.pathname==='/stok'&&!document.getElementById('padi-stok-kerangka')))link.setAttribute('data-utuh','');});
  }
  // Parser awal belum mencapai laci/manifest di luar bingkai. Partial swap
  // sudah memiliki DOM lengkap; keduanya memeriksa dokumen yang benar.

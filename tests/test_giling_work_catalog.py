@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("giling_work_catalog", ROOT / "scripts/giling_work_catalog.py")
+spec = importlib.util.spec_from_file_location("giling_work_catalog", ROOT / "app/web/giling_work_catalog.py")
 emitter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(emitter)
 BINDING = dict(source_address="/pekerjaan?tab=berjalan", cap="cap-fixture",

@@ -7,15 +7,17 @@ Never publish this session-bound envelope as an immutable public asset.
 from __future__ import annotations
 
 import hashlib
+from functools import lru_cache
 import importlib.util
 from pathlib import Path
 from urllib.parse import urlsplit
 
 MAX_ROWS = 50
 MAX_BYTES = 8 * 1024 * 1024
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
+@lru_cache(maxsize=1)
 def _descriptor_function():
     # Load pure definitions only; the module imports no app/database runtime.
     spec = importlib.util.spec_from_file_location(

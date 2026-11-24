@@ -84,6 +84,22 @@ def test_label_dan_urutan_tab_tetap_sesuai_native_yang_dipin():
         assert label in (ROOT / "app/web/static/giling-ringkas.js").read_text()
 
 
+def test_qc_labels_are_native_read_only_and_do_not_invent_measurements():
+    from bs4 import BeautifulSoup
+    doc = BeautifulSoup(render("tab_detail=qc"), "html.parser")
+    values = doc.select('[data-gk-qc-grid] .gr-qc-value')
+    assert [node.small.get_text() for node in values] == [
+        'Kadar air', 'Butir patah', 'Susut uji', 'Butir kuning', 'Kandungan gabah', 'Merang']
+    assert all(node.strong.get_text() == 'Menunggu data' for node in values)
+    native = (ROOT / 'app/services/mutu_pk.py').read_text()
+    for label in ['Kadar air', 'Butir patah', 'Susut', 'Butir kuning', 'Gabah', 'Merang']:
+        assert '"' + label + '"' in native
+    qc = doc.select_one('[data-gk-panel=qc]')
+    assert not qc.select('input,select,textarea,button,form')
+    assert doc.select_one('[data-proses-isi] > header')
+    assert doc.select_one('[data-proses-isi] > footer [data-gk-status]')
+
+
 def test_builder_mendelegasikan_izin_dan_tidak_membaca_agregat_atau_commit():
     source = (ROOT / "app/web/giling_native_html.py").read_text()
     ast.parse(source)

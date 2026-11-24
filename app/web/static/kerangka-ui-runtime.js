@@ -32,6 +32,31 @@
   if(!['bahan','produk','karung'].includes(tab)||!['semua','pabrik','jasa'].includes(owner)||search.length>200||warehouse&&!['g1','g2'].includes(warehouse)&&!/^wh:[1-9]\d{0,9}$/.test(warehouse)||warehouse.startsWith('wh:')&&Number(warehouse.slice(3))>2147483647||customer&&(!/^[1-9]\d{0,9}$/.test(customer)||Number(customer)>2147483647||owner!=='jasa'))return null;
   return {u,tab,owner,warehouse,customer,search};
  }
+ function giling(address,context,cap,token){
+  const u=new URL(address,location.href),q=u.searchParams;
+  if(u.origin!==location.origin||!/^\/proses-aktif\/giling\/[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(u.pathname)||u.hash||u.pathname+u.search!==address||u.search.length>3000)return null;
+  if(Array.from(q.keys()).some(k=>!['tab_detail','kembali_kerja','halaman_hasil','halaman_qc','halaman_jeda','buka','nilai'].includes(k)||q.getAll(k).length!==1)||q.get('buka')||q.get('nilai'))return null;
+  const source=location.pathname+location.search,frame=document.querySelector('.bingkai');
+  if(!['/pekerjaan','/berjalan'].includes(location.pathname)||frame?.dataset.pindahAlamat!==source)return null;
+  const hosts=document.querySelectorAll('script[data-giling-native-catalog]');if(hosts.length!==1)return null;
+  const host=hosts[0];let catalog;
+  if(!host.isConnected||host.dataset.sourceAddress!==source||host.textContent.length>262144)return null;
+  try{catalog=JSON.parse(host.textContent);}catch(_){return null;}
+  if(catalog?.versi!==1||catalog.cap!==cap||catalog.konteks!==context||catalog.sesi!==token||catalog.sumber_sha256!==host.dataset.sourceSha||!Array.isArray(catalog.entries)||catalog.entries.length>50)return null;
+  const code=u.pathname.split('/').pop(),entry=catalog.entries.find(e=>e?.alamat===address&&e.kode===code&&e.label==='Penggilingan aktif');
+  if(!entry)return null;
+  // A catalog is not a grant. Require the same currently visible native
+  // Work row; the fresh same-URL GET still runs the real authorization.
+  const visible=Array.from(document.querySelectorAll('section[data-blok][aria-label="Proses aktif"] .proses-aktif-list > .proses-aktif-list__row[data-proses="giling"]')).some(row=>{
+   const shown=node=>node.getClientRects().length&&!['hidden','collapse'].includes(window.getComputedStyle(node).visibility);
+   if(row.closest('[hidden],[inert],[aria-hidden="true"]')||!shown(row)||row.querySelector('strong')?.textContent.trim()!==code)return false;
+   const links=row.matches('a[href]')?[row]:Array.from(row.querySelectorAll('a.proses-aktif-list__detail[href]'));
+   return links.some(link=>link.getAttribute('href')===address&&!link.hasAttribute('target')&&!link.hasAttribute('download')&&link.getAttribute('aria-disabled')!=='true'&&shown(link));
+  });
+  if(!visible)return null;
+  const selected=q.get('tab_detail')||'ringkasan',tab=['ringkasan','bahan','hasil','qc','riwayat'].includes(selected)?selected:'ringkasan';
+  return {u,code,tab};
+ }
  function navigation(doc,path){
   doc.querySelectorAll('#laci summary.pintu').forEach(n=>{n.classList.remove('pintu--kini');n.removeAttribute('aria-current');});
   doc.querySelectorAll('#laci a[href]').forEach(n=>{
@@ -42,17 +67,17 @@
  }
  function buat(address,base,context,cap,token){
   const account=['/pengaturan/akun','/laporan'].includes(address)?{u:new URL(address,location.href)}:null;
-  const state=shipping(address)||jasa(address)||account||stock(address);if(!state)return null;
-  const family=state.u.pathname==='/laporan'?'laporan':state.u.pathname==='/stok'?'stok':state.u.pathname==='/jasa'?'jasa':state.u.pathname==='/pengaturan/akun'?'akun':'pengiriman';
+  const state=shipping(address)||jasa(address)||account||stock(address)||giling(address,context,cap,token);if(!state)return null;
+  const family=state.code?'giling':state.u.pathname==='/laporan'?'laporan':state.u.pathname==='/stok'?'stok':state.u.pathname==='/jasa'?'jasa':state.u.pathname==='/pengaturan/akun'?'akun':'pengiriman';
   const host=document.getElementById('padi-kerangka-ui');let permission;
   if(!host?.isConnected||host.dataset.cap!==cap||host.dataset.konteks!==context||host.textContent.length>4096)return null;
   try{permission=JSON.parse(host.textContent);}catch(_){return null;}
-  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>!['pengiriman','jasa','akun','stok','laporan'].includes(k)))return null;
+  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>!['pengiriman','jasa','akun','stok','laporan','giling'].includes(k)))return null;
   const allowedStock=permission.varians.stok;
   if(family==='stok'&&(!allowedStock||typeof allowedStock!=='object'||Array.isArray(allowedStock)||Object.keys(allowedStock).some(k=>!['bahan','produk','karung'].includes(k))))return null;
   const key=family==='stok'?allowedStock[state.tab]:permission.varians[family];
   if(typeof key!=='string'||!own(data.variants,key))return null;
-  const component=data.variants[key];if(component.path!==state.u.pathname||component.family!==family||typeof base!=='string')return null;
+  const component=data.variants[key];if((family==='giling'?component.path!=='/proses-aktif/giling/':component.path!==state.u.pathname)||component.family!==family||typeof base!=='string')return null;
   const doc=new DOMParser().parseFromString(base,'text/html'),frame=doc.querySelector('.bingkai'),main=doc.getElementById('isi-halaman');
   if(!frame||!main||frame.dataset.pindahKonteks!==context||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
   const comments=Array.from(main.childNodes).filter(n=>n.nodeType===8),from=comments.find(n=>n.data.trim()==='isi-halaman:mulai'),to=comments.find(n=>n.data.trim()==='isi-halaman:akhir');
@@ -65,8 +90,16 @@
    }
   }
 
-  const root=part.content.querySelector(family==='laporan'?'[data-laporan-katalog-kerangka]':family==='akun'?'[data-pengaturan-akun-kerangka]':family==='jasa'?'[data-jasa-bertahap]':'[data-halaman-bertahap][data-kind="'+family+'"]');if(!root)return null;
-  root.dataset.stamp=context+'|'+address;root.dataset.url=['akun','laporan'].includes(family)?state.u.pathname:'/api/halaman-bertahap/'+family+state.u.search;
+  const root=part.content.querySelector(family==='giling'?'[data-giling-native-html]':family==='laporan'?'[data-laporan-katalog-kerangka]':family==='akun'?'[data-pengaturan-akun-kerangka]':family==='jasa'?'[data-jasa-bertahap]':'[data-halaman-bertahap][data-kind="'+family+'"]');if(!root)return null;
+  root.dataset.stamp=context+'|'+address;root.dataset.url=family==='giling'?address:['akun','laporan'].includes(family)?state.u.pathname:'/api/halaman-bertahap/'+family+state.u.search;
+  if(family==='giling'){
+   root.dataset.gkAlamat=address;root.dataset.gkTab=state.tab;
+   root.querySelector('.sr-design-code').textContent=state.code;
+   root.querySelector('.sr-design-back').setAttribute('href',location.pathname+location.search);
+   for(const tab of root.querySelectorAll('[data-gk-tab-pilih]')){const active=tab.dataset.gkTabPilih===state.tab;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
+   for(const panel of root.querySelectorAll('[data-gk-panel]'))panel.hidden=panel.dataset.gkPanel!==state.tab;
+   if(state.tab==='hasil')root.querySelector('[data-gk-panel="hasil"]').prepend(root.querySelector('[data-gk-output]'));
+  }
   if(family==='pengiriman'){
 
   for(const form of root.querySelectorAll('form')){
@@ -120,10 +153,12 @@
    root.dataset.filtered=state.owner!=='semua'||state.warehouse||state.customer||state.search?'1':'0';
   }
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(part.content);
-  frame.dataset.pindahAlamat=address;doc.title=component.title+' · PT Hadi Mulya Utama';
-  const label=main.querySelector('.bar__merek');if(label){label.textContent=component.title;label.setAttribute('aria-label',component.title);}
+  const title=family==='giling'?'Penggilingan '+state.code:component.title;
+  frame.dataset.pindahAlamat=address;doc.title=title+' · PT Hadi Mulya Utama';
+  const label=main.querySelector('.bar__merek');if(label){label.textContent=title;label.setAttribute('aria-label',title);}
   const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const html=doc.createElement('template');html.innerHTML=component.breadcrumb;crumb.replaceChildren(html.content);}
-  navigation(doc,state.u.pathname);
+  if(family==='giling')for(const node of main.querySelectorAll('.desktop-chrome__crumbrow *')){if(node.children.length===0&&node.textContent.includes('PADI_CODE_PLACEHOLDER'))node.textContent=node.textContent.replaceAll('PADI_CODE_PLACEHOLDER',state.code);if(node.hasAttribute('href')&&node.getAttribute('href').includes('PADI_CODE_PLACEHOLDER'))node.setAttribute('href',address);}
+  navigation(doc,family==='giling'?'/pekerjaan':state.u.pathname);
   return {versi:1,alamat:address,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  window.PadiKerangkaUI=Object.freeze({versi:1,sumber:data.sumber,buat});

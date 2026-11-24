@@ -17,6 +17,7 @@
 <main class="sr gr sr-redesign gr-redesign" data-giling-native-html data-editor-perintah
       data-gk-tab="{{ GILING_KERANGKA.tab }}" data-gk-alamat="{{ GILING_KERANGKA.alamat }}"
       data-stamp="{{ GILING_KERANGKA.stamp }}" data-url="{{ GILING_KERANGKA.data_url }}">
+ <div data-proses-isi>
  <header>
   <a class="sr-design-back" href="{{ kembali }}" data-utuh>← Kembali ke Pekerjaan</a>
   <small>PROSES AKTIF · PENGGILINGAN</small>
@@ -25,10 +26,6 @@
   <div class="sr-design-tools"><button class="btn btn--kecil" type="button" data-gk-panduan>ⓘ Panduan</button>
    <button class="btn btn--kecil" type="button" disabled aria-describedby="gk-menunggu">Print detail</button></div>
  </header>
- <p id="gk-menunggu" class="sr-help">Angka, kondisi dan tindakan menunggu pembacaan proses terbaru. Isian belum dapat diubah.</p>
- <p class="sr-help" data-gk-recovery-unknown role="status">Status simpan sebelumnya belum diperiksa. Membaca halaman ini tidak mengirim ulang koreksi. Jika status belum pasti, jangan kirim ulang.</p>
- <p data-gk-status role="status" aria-live="polite">Memuat data proses…</p>
- <button class="btn" type="button" data-gk-retry hidden>Coba lagi</button>
  <nav class="sr-design-tabs" role="tablist" aria-label="Detail penggilingan">
  {% for key, label in GILING_KERANGKA.tabs %}
   <button type="button" role="tab" id="gk-tab-{{ key }}" data-gk-tab-pilih="{{ key }}"
@@ -54,7 +51,16 @@
   {% if GILING_KERANGKA.tab != 'ringkasan' %}{{ output_pending() }}{% endif %}
  </section>
  <section class="sr-design-panel" role="tabpanel" id="gk-panel-qc" aria-labelledby="gk-tab-qc" data-gk-panel="qc"{% if GILING_KERANGKA.tab != 'qc' %} hidden{% endif %}>
-  <section class="sr-card"><h2>QC hasil PK</h2><p role="status">Memuat penilaian dan putaran QC. Pencatatan mengikuti izin dan keadaan proses yang berlaku.</p>
+  <section class="sr-card gr-wide"><h2>QC hasil PK</h2><p class="sr-help">Jenis PK dari sumber · menunggu data · rata-rata seluruh putaran</p>
+   <div><strong>Menunggu penilaian</strong><p class="sr-help">Putaran dan kelengkapan komponen menunggu data</p>
+    <div class="gr-qc-grid" data-gk-qc-grid>
+     {% for label in ['Kadar air','Butir patah','Susut uji','Butir kuning','Kandungan gabah','Merang'] %}
+      <div class="gr-qc-value"><small>{{ label }}</small><strong>Menunggu data</strong><small>Pengukuran dan skor menunggu data</small></div>
+     {% endfor %}
+    </div>
+    <details><summary>Perhitungan mutu</summary><p>Nilai, aturan dan kelas mutu menunggu pembacaan terbaru. Nilai kosong tidak menjadi nol. Susut uji QC berbeda dari rendemen proses.</p></details>
+   </div>
+   <p class="sr-help">Pencatatan mengikuti izin pemeriksa, fitur mutu dan keadaan proses yang berlaku setelah data terbaru diperiksa.</p>
    <details><summary>Seluruh putaran &amp; catatan lab</summary><p>Memuat pemeriksaan QC…</p></details>
   </section>
  </section>
@@ -62,6 +68,13 @@
   <section class="sr-card"><h2>Identitas &amp; waktu proses</h2><dl>{% for label in GILING_KERANGKA.fakta %}<div class="sr-pair"><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}</dl></section>
   <details class="sr-card" open><summary>Riwayat PK, jeda &amp; waktu proses</summary><p role="status">Memuat riwayat proses…</p></details>
  </section>
+ <footer>
+  <p id="gk-menunggu" class="sr-help">Angka, kondisi dan tindakan menunggu pembacaan proses terbaru. Isian belum dapat diubah.</p>
+  <p class="sr-help" data-gk-recovery-unknown role="status">Status simpan sebelumnya belum diperiksa. Membaca halaman ini tidak mengirim ulang koreksi. Jika status belum pasti, jangan kirim ulang.</p>
+  <p data-gk-status role="status" aria-live="polite">Memuat data proses…</p>
+  <button class="btn" type="button" data-gk-retry hidden>Coba lagi</button>
+ </footer>
+ </div>
  {% from '_panduan.html' import panel as panduan %}
  {% call panduan('gk-panduan','Panduan penggilingan aktif',penutup={'data-gk-panduan-tutup':''}) %}
  <p>Hasil PK memakai total kumulatif sejak awal penggilingan, bukan tambahannya. Periksa catatan sebelumnya, total baru dan perubahannya sebelum menyimpan.</p>
