@@ -51,7 +51,7 @@ async def test_sosoh_current_native_work_link_has_layout_before_get(pg,running,g
 @pytest.mark.parametrize('role',['admin','operator'])
 @pytest.mark.parametrize('width',[390,1280])
 @pytest.mark.parametrize('phase',['pengeringan','pendinginan'])
-async def test_dryer_phase_current_link_tabs_and_abandoned_get(pg,pengeringan,dunia,role,width,phase):
+async def test_dryer_phase_current_link_tabs_and_abandoned_get(pg,pengeringan,role,width,phase):
     if phase=='pendinginan':
         from app.models import User
         from app.penggilingan.gudang1.services import drying
@@ -80,9 +80,14 @@ async def test_dryer_phase_current_link_tabs_and_abandoned_get(pg,pengeringan,du
                 assert await root.locator('table thead th').count()>0
                 await shot(page,'dryer-native-'+phase+'-'+role+'-'+str(width))
                 # Native sidebar must remain usable while data is held.
-                if width<900:await page.locator('#buka-laci').click()
-                await page.locator('#laci a[href="/barang-masuk"]').click()
-                await expect(page).to_have_url(BASE+'/barang-masuk')
+                if width<900:
+                    # Native active-process header has Back, not a sidebar
+                    # menu. Exercise that actual visible navigation control.
+                    await page.locator('.bar__balik').click()
+                    await expect(page).to_have_url(BASE+'/pekerjaan?tab=berjalan')
+                else:
+                    await page.locator('#laci a[href="/barang-masuk"]').click()
+                    await expect(page).to_have_url(BASE+'/barang-masuk')
                 release.set();await asyncio.wait_for(done.wait(),20)
                 await page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
                 await expect(page.locator('[data-dryer-native-html],.pengeringan-detail')).to_have_count(0)
