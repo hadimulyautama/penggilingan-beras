@@ -81,6 +81,13 @@ async def test_optional_descriptor_failure_keeps_existing_four_frames(pg, lengka
 async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, lengkap, monkeypatch, role, warehouse, kind, width):
     from app.web import barang_masuk_detail_bertahap as detail
     reader = detail.isi
+    predicate=detail.memakai
+    negotiations=[]
+    def negotiated(request):
+        answer=predicate(request)
+        negotiations.append(dict(path=request.url.path,mode=request.headers.get('sec-fetch-mode'),dest=request.headers.get('sec-fetch-dest'),pindah=request.headers.get('x-pindah'),explicit=request.headers.get('x-kerangka-halaman'),answer=answer))
+        return answer
+    monkeypatch.setattr(detail,'memakai',negotiated)
     fail = {'next':False}
     async def sometimes(*args, **kwargs):
         if fail['next']:
@@ -133,7 +140,11 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             await expect(page.locator('[data-bm-detail-panel=qc]')).to_be_visible()
             fail['next']=True
             await page.goto(BASE+target)
-            await expect(page.locator('[data-shell-retry]')).to_be_visible()
+            try:
+                await expect(page.locator('[data-shell-retry]')).to_be_visible()
+            except AssertionError:
+                print('DETAIL_ERROR_NEGOTIATION',negotiations,transport['gets'],fail)
+                raise
             await expect(page.locator('[data-shell-message]')).to_contain_text('bukan daftar kosong')
             await page.locator('[data-shell-retry]').click()
             await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
