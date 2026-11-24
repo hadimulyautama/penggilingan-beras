@@ -1,11 +1,11 @@
 {
   "versi": 1,
-  "sumber": "34a95d42b457a197c27170ef474ca00a268e17fbd68bec5de6b4c5fcfeb89ec2",
+  "sumber": "3510f57c4157dc74ba10243b86d9a2c35e9421e28f89b15e95b6c39e2305cb76",
   "variants": [
     "pengeringan",
     "pendinginan"
   ],
-  "aset_sha256": "e68589cac83605f72a0fffaa4846d12152260b881a4eb1e18bc779dc6b31adf4",
+  "aset_sha256": "227a4a48a2fb2989a9563700cb3aea2864d2775a4a5b2da1e441a87cb3cfb037",
   "inputs": {
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
@@ -21,8 +21,8 @@
     "app/web/static/riwayat-pengeringan-desain.css": "c26fd598405b2b10d94a3fc8438d16bd43adb92913e01e3e0b0e67551363c2df",
     "app/web/static/riwayat-sosoh-desain.css": "682db7c58286abfa6f085a3270e40a8382cdd70ecab540c9b4e44fde376fad09",
     "app/web/static/riwayat.css": "21fa1ff357afc661b0392e2317182d3338a2938b48d7eb91a7c4e99c2c457071",
-    "app/web/templates/detail_pendinginan_aktif.html": "d8e6d1717685afea95b2f38f1720607ad757824655a9de4eb5be994ffd047634",
-    "app/web/templates/detail_pengeringan.html": "00c3fd66da037762d904eb3fbc94a6247cd66337fb35f86a7436e21e1b7ad13a",
+    "app/web/templates/detail_pendinginan_aktif.html": "44f8f1e8f721d55f0742b193cd030798cf0f8fe59f5da4afbe55f4a61244d86c",
+    "app/web/templates/detail_pengeringan.html": "a7279f1eb3f5955e2ef6fd5d2d401a097e297a479c79d548dcdbaec33f5eb8bd",
     "app/web/templates/pengeringan_native_html.html": "f729bc5823ac97939ce61660138f82d23bebeb3cfe8f1832dea1df0614484216",
     "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
     "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
