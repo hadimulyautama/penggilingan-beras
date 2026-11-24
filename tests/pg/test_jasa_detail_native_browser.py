@@ -14,7 +14,7 @@ from tests.pg.test_barang_masuk_bertahap_browser import peramban,BASE
 pytestmark=pytest.mark.asyncio
 
 @pytest.mark.parametrize('width',[390,1280])
-@pytest.mark.parametrize('role,warehouse',[(P.ADMIN,None),(P.OPERATOR,'g2')])
+@pytest.mark.parametrize('role,warehouse',[(P.ADMIN,None),(P.SUPERADMIN,None)])
 async def test_five_tabs_current_customer_and_old_get_cannot_replace_new_tab(pg,stok_lengkap,width,role,warehouse):
     async with await _klien(pg,role=role,gudang_id=stok_lengkap['gudang'].get(warehouse)) as client:
         before=await _sidik(pg)
@@ -50,4 +50,14 @@ async def test_five_tabs_current_customer_and_old_get_cannot_replace_new_tab(pg,
                 finally:release2.set()
                 assert not t['posts'] and not t['errors'],t
             finally:release.set()
+        assert await _sidik(pg)==before
+
+@pytest.mark.parametrize('warehouse',['g1','g2'])
+async def test_operator_cannot_gain_jasa_detail_from_route_or_public_program(pg,stok_lengkap,warehouse):
+    from bs4 import BeautifulSoup
+    async with await _klien(pg,role=P.OPERATOR,gudang_id=stok_lengkap['gudang'][warehouse]) as client:
+        before=await _sidik(pg)
+        response=await client.get('/jasa/pelanggan/1',headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})
+        assert response.status_code==403
+        assert not BeautifulSoup(response.text,'html.parser').select('[data-jasa-detail-kerangka],#padi-jasa-detail-catalog')
         assert await _sidik(pg)==before
