@@ -1,0 +1,50 @@
+{
+  "baseline_commit": "cafdb911c33a422b984c078c03b72ed568d82912",
+  "functions": {
+    "app/web/fasilitas.py": {
+      "halaman": "9201e73d9e779915323b66c743fcfe5559494169554443b42631173789153c75",
+      "lama": "cb4476565c0a72cbeec0b4ee57256549b543e8a73dcd424db1608b6092aad6b3",
+      "daftar": "c64ac4ae0ded150eb2fa00cfd9a9464086151bf18e99fac461c62328399b307c",
+      "detail_mesin": "6343230626d620c5ee72d60dbeb86356d968629a6aca071964422537b52151ff",
+      "detail_dryer": "45027dc6a071067c7cfd6b00e310f2caf72bb63e4ebf165e99b770efabd1196d",
+      "tujuan": "b6bfe6f805f9ba4f4bfa9d635326e32f09cbbfe8eefdb00412f4421d709c4227",
+      "simpan": "09076d1f65c0dcc12d5c1fc38d753261045bfaae6f06ce190129cc7d9af504c5"
+    },
+    "app/web/pengaturan.py": {
+      "halaman_gudang_pengaturan": "30c8ff721b5871b9e970d50ed03027d7754574ebe4734c1e4cc067bd784a5866",
+      "_halaman_gudang": "ab99200713ccddbc6b0ef18ed054e4493cd6be3583f86e29e4dcec71f4e75413",
+      "_balik_gudang": "6161f7bb400e532d48fdc2d8441071f75d2653900905c6cf7252c9248b84a0dd",
+      "tambah_gudang": "eb514b14790e57a976187725b565acfdf4bf23b9b0561abd0e1b92653f649de3",
+      "edit_gudang": "c4fa1d4ff2782a0ecd7398f43d225626d04297016d0c5e93b2de8e801883cc20",
+      "hapus_gudang": "e8871dcbfce98e5a454a2867473b3d85d5705ed32d175503378ee113120c954f",
+      "_proses_view": "5f9b427ef03be273f5ecb45d403909e20ce4491432b54ac38d2c03ade1fb7ac8",
+      "_metadata_menu_native": "632cf19356b3d445c34ef3d687c632f897fb2e8aa9acc90f5e67021905277414",
+      "halaman_pengaturan": "1fb770d451aef9cbf70c06b76dcc4f8024b6036bfaf9a94817994142adf59f4b",
+      "ubah_target_bawaan": "9c207330285f4287c50654cb49d818b931ab677d05ffa232b0bd53ca936149f7",
+      "ubah_fitur_mutu": "6040680bdc5bc4cd8196beabb01086ff8c48660bca46b4700fe32858d333cbf5",
+      "ubah_sebab_jeda": "13b7d1dff9aa794cfef50b8ad064ad4faf3f746e3c861f1a611bd79bc0a33524",
+      "mulai_sinkron_kledo_kontak": "ccd36a31d51bf12aa2b1dffe6632af62b23e0d88ccd0fbf59e0d40d24b48db55",
+      "ganti_terik": "3446fc6406674b3c4405e11db2c9ec375753325a706d732c23045a2d696e0819",
+      "ganti_nama": "50f12e76dac3b5bd106e508763c18f8fc32bfcef6db91fab3b8517f84e8a1e2a",
+      "halaman_alat": "d68102acc38b6bcb56a119f4e500ec7d9e242348c8ae975cbd91074a824af7f9",
+      "_halaman_alat": "8f20382997d8f4f107298a18a607cb79671506e7239a0ee1d26860ca003e4c34",
+      "_balik_alat": "835247f6b5364dd743d4dfffcdd1caf4ff114de4d4e733ea2edfdd68a4e881d2",
+      "tambah_dryer": "f065d51da56f11d9a2509037d4cca4baae41b1fd07e94bdf7c729173149c46d9",
+      "edit_dryer": "46f9632e173f9055d2e39838400707f9628003d1a15aa46de3eed292c36c6b60",
+      "tambah_silo": "b028997b7601970a3a7c0b1f4e99b281e6052ba0cb34725aad446caaf0bed860",
+      "edit_silo": "1e6b770a2bff3e59724ce2a135e68bc4d90dcee62c21d1835cc0b268838bcbf0",
+      "hapus_silo": "c40af7e6ac4536199dd3519d4ae8d6d3f270f819efe8bf9a331869177663832d",
+      "ubah_status_dryer": "c4c7ca1304b431dbd29ef9bbd10662533a7d64bfae2b4fa23859840f4481110f"
+    },
+    "app/web/security.py": {
+      "butuh_akun": "a267eb5ce22d5aa155dcca929ea60054f04dc768c58b99eae820763c645dff82",
+      "butuh_super": "a00ecaa3a827ee14aa55694796ea758ae3f691caab97cf94704bb5be3fcf9e89"
+    }
+  },
+  "controllers": {
+    "app/web/static/pengaturan-alat.js": "dcd1d954665a715de499d07085b6afc07f7e0c833e9beb649b1f672dbcfb16ba",
+    "hmu_tampilan/static/pengaturan-isian.js": "feb0c1e15311a82d6791e4cbc31aab67be660c5d528355fdbf0eb4753ada7eee",
+    "app/web/templates/_fasilitas_form.html": "946b915a851fec3e5699301fb98cee78ce0edaeefd1d8b85b868c4105505c59b"
+  },
+  "native_template_before_empty_sha256": "61bb10e5c7d2b9db272959bfc61636cdeb93d6dcbc374afa30a28d9523dc7f66"
+}

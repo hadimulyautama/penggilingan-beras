@@ -1,0 +1,32 @@
+{
+  "versi": 1,
+  "sumber": "562d97510c8082c182be3ba43aa912ab1980ebce4f6bfe3b09944c440dbe1c18",
+  "variants": [
+    "/pengaturan/gudang",
+    "/pengaturan/silo",
+    "/pengaturan/mesin",
+    "/pengaturan/jenis-proses"
+  ],
+  "aset_sha256": "f063b6598b888fdaca89d854f56713969a1a7ee14bd1ce520f4e0bd376845e1b",
+  "inputs": {
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/fasilitas.py": "a30dda5e9f84b44ec8847553359245ac087736d199645697acdc713bc54f825d",
+    "app/web/fasilitas_parent_kerangka.py": "5a2c318ee2a1f0a500efeec58fc03eab1104381ffca9f914515b264829df3044",
+    "app/web/pengaturan.py": "5dda92f8aa0e8dc916f23ec51acd192dd661c38d886d7676f1b9baab83cae70c",
+    "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
+    "app/web/static/fasilitas-parent-native.js": "7ddad9d382ac787aab38744eb85e4557da78a96c31c17e408f7c93751149ea4f",
+    "app/web/static/kerangka-fasilitas-parent-ui-runtime.js": "73c6ef5ce9ca9fe5e755e0e2d45b4d581cde2142d7a15276bb798feb09468350",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
+    "app/web/templates/_fasilitas_form.html": "946b915a851fec3e5699301fb98cee78ce0edaeefd1d8b85b868c4105505c59b",
+    "app/web/templates/_fasilitas_parent_empty.html": "fd7eeca2fc875e73af409bb09426c02439191f29aa020bbdc542427439b90299",
+    "app/web/templates/_fasilitas_parent_fields.html": "1aba25aa7b3e005ca0f5c586f0d9455b84f9ddacdc444565f969fc509359b33e",
+    "app/web/templates/fasilitas.html": "f3a94eddac614b51c5c4bdc97bc4b7e99e6fe39989e0d6c771f314da4856f249",
+    "app/web/templates/fasilitas_parent_kerangka.html": "1c91b4bbd064587cfadee60b826faaecff0786c4b2dfed24345f9861a5b297f4",
+    "app/web/templates/silo_pengaturan.html": "ebc4d1fef6b32565118f98a2f1f840a0015059ababae74890894e763e011ef9d",
+    "hmu_tampilan/static/pengaturan.css": "8c75d83897acc331e3076617c46b929dc0da06509726ec058e4f2b3a9200f859",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/gudang_pengaturan.html": "0e51e2c8b633a0bee88fb3fa475c65270c3e1cd17b118e30e5128b91c00ea26a",
+    "scripts/buat_kerangka_fasilitas_parent.py": "c2d0c5b5559b91643a9eac26b71a2b4663ab022f47e012ba3d802ad7de56f2fb",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}
