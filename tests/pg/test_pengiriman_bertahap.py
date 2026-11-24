@@ -64,10 +64,15 @@ async def test_shipping_document_keeps_native_controls_while_data_is_pending(pg,
             entered,release=asyncio.Event(),asyncio.Event()
             transport['gates']['/api/halaman-bertahap/pengiriman']=(entered,release)
             try:
-                await page.goto(BASE+'/barang-keluar',wait_until='load')
-                await asyncio.wait_for(entered.wait(),20)
+                response=await page.goto(BASE+'/barang-keluar',wait_until='load')
+                assert response.status==200
                 root=page.locator('[data-halaman-bertahap][data-kind="pengiriman"]')
                 await expect(root).to_be_visible()
+                assert not transport['errors'],transport['errors']
+                try:
+                    await asyncio.wait_for(entered.wait(),20)
+                except TimeoutError:
+                    pytest.fail('Native shipping GET not reached: '+str(dict(errors=transport['errors'],gets=transport['gets'],root=await root.get_attribute('data-url'))))
                 await expect(root.locator('h1,.halaman-memuat')).to_have_count(0)
                 await expect(root.locator('table')).to_have_count(2)
                 await expect(root.locator('thead th')).to_have_count(11)
