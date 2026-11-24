@@ -60,3 +60,28 @@ Public READS is a closed source regex in `portal/navigation.py`, not an authoriz
 5. Raw/gzip package and private metadata size, query count and elapsed runtime are separate evidence; no production latency/SLA claim.
 
 Pemilik: Flow/root. Bukti terakhir: 66 Python pure tests (28 new contracts +38 existing presentation/detail/beranda/QC regressions) +25 Node tests (7 new +18 existing router), compiler deterministic/check and syntax. Browser/PG have not run in this family. Berikutnya: Root combined native acceptance and remaining deep families. Status rilis: FROZEN LOCAL PROPOSAL, no PR/CI/push/deploy or production change.
+
+## Prepared owner browser acceptance (not executed by child)
+
+New single file: `tests/pg/test_portal_kerangka_browser.py`. `py_compile` and pytest `--collect-only` succeeded: **7 collected**, zero fixture/browser execution. This is preparation evidence, not 7 PASS.
+
+Exact existing recipe is imported unchanged from `tests/pg/test_portal_pelanggan.py::portal` with its existing `qc` dependency from `test_riwayat_qc_detail.py`. It already creates Customer A, Customer B and a no-data customer, their original three `PortalAccount` rows, native `Jasa`/process/QC/notification source records and actual signed portal sessions via its original `client(account)` factory. No new actor, account type, membership/role or access rule is added. These are **different customers/owners in one fixture**, not proof of two company tenants.
+
+The existing staff `peramban` is unsuitable because its forwarding allowlist omits `X-Portal-Navigasi`. The new narrow helper preserves the existing portal client/session and browser profile and forwards actual browser headers (except host/cookie/content-length); the real ASGI `require_customer` and `load_scope` remain active. It records only route/method/phase and nonsecret negotiation headers, not cookies/CSRF/session values.
+
+Coverage prepared:
+
+1. Four browser profiles: Customer A/B ×390/1280. Each profile actually clicks all seven native sidebar menu links. Separate HTML/data holds are armed on each exact target. The structure/labels/columns/GET controls must appear while actual data delivery is held; **no target HTML GET should be needed at all**. X-Portal negotiation is read from the actual browser request, not synthesized. Native data is then released and the persistent native H1 compared. No foreign customer values, POST/action forms, JS errors or fingerprint changes are allowed. Fourteen synthetic screenshots can be saved through the existing `DETAIL_OUT`.
+2. 390/1280: temporary 503 **only after** a genuine successful native auth/read; framework/filter must survive, retry is one explicit GET. A pending search edited before old data returns must retain its input and wait for Cari. Explicit search obtains native filter-empty output. A late response after switching menu cannot restore the old screen; Back must reenter a framework/fresh GET. No POST or table fingerprint changes.
+3. Explicit ASGI HTTP negotiation contract for all seven routes: actual document headers select structure, X-Portal-Navigasi1 still wins when both are present and selects native data. This is protocol evidence, deliberately separate from browser Sec-Fetch claims. Existing Customer A/B foreign process and wrong-customer query guards must return404. Existing no-data customer must retain native true-empty output for history/documents.
+
+Root runs it serially only after **all** shared source is clean/frozen, using the already approved `output/padiflow-stok-first-click-20261124/run_local.py` and a unique run directory/free approved port. Example shape (do not reuse a completed directory or assume the port is free):
+
+```
+produksi/.venv/bin/python output/padiflow-stok-first-click-20261124/run_local.py \
+  --source ../padiflow-all-pages-navigation-20261124/produksi \
+  --out <unique-portal-owner-run> --port <verified-free-approved-loopback-port> \
+  --browser chromium --test tests/pg/test_portal_kerangka_browser.py
+```
+
+Repeat with the approved existing WebKit runtime through the same runner when required. SW remains blocked for deterministic interception; ordinary native HTTP/cold-warm PWA upgrade/rollback, real Safari/iPhone, hosted behavior and production throughput are **not** established by this file. No dependency gap was found in the existing customer fixture. Execution/cleanup receipts are Root's remaining gate.
