@@ -57,7 +57,7 @@ async def test_shipping_shell_and_native_filtered_reader_have_same_columns_and_s
 
 @pytest.mark.parametrize('width',[390,1280])
 @pytest.mark.parametrize('role',['admin','operator'])
-async def test_shipping_document_keeps_native_controls_while_data_is_pending(pg,gudang,width,role,monkeypatch):
+async def test_shipping_explicit_shell_keeps_controls_while_data_is_pending(pg,gudang,width,role,monkeypatch):
     from app.web import halaman_bertahap
     negotiation=[]
     original=halaman_bertahap.memakai_kerangka
@@ -73,6 +73,10 @@ async def test_shipping_document_keeps_native_controls_while_data_is_pending(pg,
     async with await _klien(pg,uid,'shipping-browser-'+role) as client:
         before=await _sidik(pg)
         async with peramban(client,width) as (page,transport):
+            # Intercepted documents do not carry the browser's network-added
+            # Sec-Fetch headers. This checks explicit renderer negotiation;
+            # normal document navigation is covered by the native HTTP probe.
+            await page.set_extra_http_headers({'X-Kerangka-Halaman':'1'})
             entered,release=asyncio.Event(),asyncio.Event()
             transport['gates']['/api/halaman-bertahap/pengiriman']=(entered,release)
             try:
