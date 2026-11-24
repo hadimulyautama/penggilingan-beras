@@ -77,7 +77,7 @@ def automatic_kinds():
 
 
 def metadata(variant, *, mutu=False, jasa=False, beras=False, qc_latest=None,
-             stages=(), incoming='', stock=''):
+             stages=(), incoming='', stock='', warehouse_refs=None):
     if variant not in VARIANTS or not all(type(v) is bool for v in (mutu, jasa, beras)) or qc_latest is not None and type(qc_latest) is not bool:
         return None
     if not isinstance(stages, (tuple, list)) or len(stages) > 8 or not all(type(s) is str and 0 < len(s) <= 128 for s in stages):
@@ -85,7 +85,7 @@ def metadata(variant, *, mutu=False, jasa=False, beras=False, qc_latest=None,
     if not all(type(v) is str and len(v) <= 256 for v in (incoming, stock)):
         return None
     return dict(variant=variant, mutu=mutu, jasa=jasa, beras=beras, qc_latest=qc_latest,
-                stages=list(stages), incoming=incoming, stock=stock)
+                stages=list(stages), incoming=incoming, stock=stock, warehouse_refs=warehouse_refs)
 
 
 @dataclass(frozen=True)
@@ -94,6 +94,7 @@ class Offer:
     meta: dict
     title: str = field(default='', repr=False)
     leaf: str = field(default='', repr=False)
+    body_title: str | None = field(default=None, repr=False)
 
 
 def pk_offers(lot, tempat, *, mutu):
@@ -107,7 +108,8 @@ def pk_offers(lot, tempat, *, mutu):
             variant = 'pk-g1' if warehouse == 'g1' else 'pk-g2-karung' if card.jumlah_karung else 'pk-g2-curah'
             offers.append(Offer(('pk', warehouse, key, '1' if card.jasa_id else '0', owner),
                                 metadata(variant, mutu=mutu, jasa=bool(card.jasa_id)),
-                                title='PK beli luar · '+card.kode if variant == 'pk-g2-karung' else 'Stok', leaf='Detail PK'))
+                                title='PK beli luar · '+card.kode if variant == 'pk-g2-karung' else 'Stok', leaf='Detail PK',
+                                body_title=card.kode.split(' · ', 1)[1] if variant == 'pk-g2-curah' and card.kode.startswith('Giling sendiri') and ' · ' in card.kode else card.kode))
     return offers
 
 
@@ -116,7 +118,7 @@ def product_offer(card, *, customer=None):
     variant = 'product-auto' if card.jenis in automatic_kinds() else 'product-curah' if card.curah_saja else 'product-packed'
     return Offer(('product', card.jenis, str(customer) if customer is not None else ''),
                  metadata(variant, jasa=customer is not None, beras=bool(adalah_beras(card.jenis))),
-                 title='Detail '+card.nama, leaf=card.nama)
+                 title='Detail '+card.nama, leaf=card.nama, body_title=card.nama)
 
 
 def product_offers(context):
@@ -129,13 +131,44 @@ def product_offers(context):
     return result
 
 
+def warehouse_reference(group):
+    """Actual authorized master-reference labels only, never device/stock DTOs.
+
+    Preserve source order and cardinality without IDs, process/status, capacity,
+    balances or dummy device records. Invalid/oversized optional metadata is
+    declined whole; no fabricated empty or truncated warehouse is published.
+    """
+    def label(value, empty=False):
+        return type(value) is str and (empty or bool(value)) and len(value) <= 256
+    try:
+        refs = dict(name=group['nama'], function=group['fungsi'],
+                    steps=[step['nama'] for step in group['langkah']],
+                    dryers=[dict(name=g['nama'], units=[d['nama'] for d in g['dryers']])
+                            for g in group['dryers']],
+                    silos=[s['nama'] for s in group['silos']])
+    except (KeyError, TypeError):
+        return None
+    if (not all(label(refs[k]) for k in ('name', 'function'))
+            or not 1 <= len(refs['steps']) <= 8
+            or not all(label(x) for x in refs['steps'])
+            or len(refs['dryers']) > 16 or len(refs['silos']) > 50
+            or sum(len(g['units']) for g in refs['dryers']) > 50
+            or not all(label(g['name'], empty=True) and all(label(x) for x in g['units']) for g in refs['dryers'])
+            or not all(label(x) for x in refs['silos'])):
+        return None
+    return refs
+
+
 def warehouse_offer(gid, actual_groups):
     group = next((g for g in actual_groups if g['id'] == gid and not g.get('terkunci')), None)
     if group is None or gid not in ('g1', 'g2'):
         return None
+    refs = warehouse_reference(group)
+    if refs is None:
+        return None
     return Offer(('warehouse', gid), metadata('warehouse-' + gid,
-                 stages=[step['nama'] for step in group['langkah']],
-                 incoming=group['masuk']['label'], stock=group['stok']['label']), title=group['nama'])
+                 stages=refs['steps'], incoming=group['masuk']['label'],
+                 stock=group['stok']['label'], warehouse_refs=refs), title=group['nama'])
 
 
 def finish(response, request, *, offers=(), detail=None):
@@ -190,7 +223,7 @@ def finish(response, request, *, offers=(), detail=None):
     if envelope is not None and envelope['entries'] and body.count(b'</body>') == 1:
         from jinja2.utils import htmlsafe_json_dumps
         host = ('<script type="application/json" id="padi-stock-detail-catalog" data-cap="'+escape(cap, quote=True)
-                +'" data-konteks="'+escape(context, quote=True)+'" data-source-address="'+escape(target, quote=True)
+                +'" data-konteks="'+escape(context, quote=True)+'" data-source-sha="'+escape(envelope['asal_sha256'], quote=True)+'" data-source-address="'+escape(target, quote=True)
                 +'">'+str(htmlsafe_json_dumps(envelope))+'</script>').encode()
         body = append_private(body, host)
     if body != response.body:
@@ -200,20 +233,62 @@ def finish(response, request, *, offers=(), detail=None):
     return response
 
 
+@lru_cache(maxsize=1)
+def native_table_headers():
+    """Source-derived invariant headers and exact QC conditional labels.
+
+    This is a presentation contract only. QC table presence depends on native
+    riwayat_qc.rows; first-click offers do not know that fact and must say so.
+    """
+    from bs4 import BeautifulSoup
+    from jinja2 import Environment, nodes
+    def header(name):
+        source = (ROOT/'hmu_tampilan/templates'/name).read_text()
+        match = re.search(r'<thead>.*?</thead>', source, re.S)
+        if match is None:
+            raise ValueError('Native detail header requires review')
+        return match[0]
+    product = header('_produk_kemasan.html')
+    if '{{' in product or '{%' in product:
+        raise ValueError('Product headers are no longer invariant')
+    qc = header('_stok_pk_qc.html')
+    ast_nodes = list(Environment().parse(qc).find_all(nodes.CondExpr))
+    if len(ast_nodes) != 1:
+        raise ValueError('Native QC header condition requires review')
+    expression = ast_nodes[0]
+    if (not isinstance(expression.test, nodes.Getattr)
+            or not isinstance(expression.test.node, nodes.Name)
+            or expression.test.node.name != 'riwayat_qc'
+            or expression.test.attr != 'hasil_terbaru_saja'
+            or not isinstance(expression.expr1, nodes.Const)
+            or not isinstance(expression.expr2, nodes.Const)):
+        raise ValueError('Native QC header predicate requires review')
+    labels = [expression.expr1.value, expression.expr2.value]
+    literal = re.sub(r'{{.*?}}', 'PADI_QC_DYNAMIC', qc, flags=re.S)
+    qc_labels = [n.get_text(' ', strip=True) for n in BeautifulSoup(literal, 'html.parser').select('th')]
+    if qc_labels[-1] != 'PADI_QC_DYNAMIC':
+        raise ValueError('Native QC dynamic header position changed')
+    return dict(product=[n.get_text(' ', strip=True) for n in BeautifulSoup(product, 'html.parser').select('th')],
+                qc=qc_labels[:-1], qc_latest=labels[0], qc_history=labels[1])
+
+
 def structure(meta):
-    """Literal native field/header labels; never call readers with empty rows."""
+    """Native immutable field/header labels; never readers with fake rows."""
+    headers = native_table_headers()
+    qc = headers['qc'] + ['Catatan · menunggu data' if meta['qc_latest'] is None
+                         else headers['qc_latest'] if meta['qc_latest'] else headers['qc_history']]
     variant = meta['variant']
     if variant == 'pk-g1':
-        return dict(title='Detail PK', sections=[('Ringkasan stok', ['Letak', 'Hasil giling', 'Kemasan tersedia', 'Bahan masuk', 'Rendemen', 'Sudah dikirim', 'Status proses', 'Kondisi PK']), ('Batch gabah', ['Catatan asal', 'Bobot', 'Waktu'])], table=[])
+        return dict(title='Detail PK', fields=['Letak', 'Hasil giling', 'Kemasan tersedia', 'Bahan masuk', 'Rendemen', 'Sudah dikirim', 'Status proses', 'Kondisi PK'], table=[], qc=qc)
     if variant == 'pk-g2-curah':
-        return dict(title='Detail PK', sections=[('Ringkasan stok', ['Letak', 'Karung & curah tersedia', 'Berat awal masuk', 'Sudah dipindah ke silo', 'Kondisi PK'])], table=[])
+        return dict(title='Detail PK', fields=['Letak', 'Karung & curah tersedia', 'Berat awal masuk', 'Sudah dipindah ke silo', 'Kondisi PK'], table=[], qc=qc)
     if variant == 'pk-g2-karung':
-        return dict(title='Detail PK beli luar', sections=[('Surat jalan dan timbang', ['Karung & curah tersedia'])], table=[])
+        return dict(title='Detail PK beli luar', fields=[], table=[], qc=qc)
     if variant.startswith('product-'):
         auto = variant == 'product-auto'; curah = variant == 'product-curah'
         fields = ['Hasil sosoh · total', 'Sudah keluar', 'Dikemas otomatis' if auto else 'Tercatat' if curah else 'Dikemas', 'Curah · sisa kemasan' if auto else 'Belum dicatat' if curah else 'Belum dikemas · curah']
         if auto:
             fields.append('Kemasan otomatis')
         fields.append('Pemilik')
-        return dict(title='Detail Stok Produk Jasa' if meta['jasa'] else 'Detail Stok Produk', sections=[('Ringkasan stok', fields), ('Asal stok dan produk kemasan', ['Perkiraan asal stok (FIFO)'])], table=['Bentuk stok / merek', 'Isi kemasan', 'Jumlah', 'Berat', 'Aksi'])
-    return dict(title='Detail gudang', sections=[('Ringkasan gudang', []), ('Dryer / pengering', ['Jumlah alat', 'Terisi'])] if variant == 'warehouse-g1' else [('Ringkasan gudang', [])], table=[])
+        return dict(title='Detail Stok Produk Jasa' if meta['jasa'] else 'Detail Stok Produk', fields=fields, table=headers['product'], qc=[])
+    return dict(title='Detail gudang', fields=[], table=[], qc=[])

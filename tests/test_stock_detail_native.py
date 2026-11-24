@@ -96,7 +96,7 @@ def test_pk_variant_uses_actual_native_dto_never_url_or_stock_math(monkeypatch):
     g2.jumlah_karung=None
     assert ui.pk_offers([], [g2],mutu=False)[0].meta['variant']=='pk-g2-curah'
     for o in offers:
-        assert set(o.meta)=={'variant','mutu','jasa','beras','qc_latest','stages','incoming','stock'}
+        assert set(o.meta)=={'variant','mutu','jasa','beras','qc_latest','stages','incoming','stock','warehouse_refs'}
 
 
 def test_product_variant_and_classification_reuse_native_dto_source(monkeypatch):
@@ -106,6 +106,8 @@ def test_product_variant_and_classification_reuse_native_dto_source(monkeypatch)
     monkeypatch.setitem(sys.modules,'app.services.stok',stock)
     card=dto.KartuProduk(jenis='spek_fixture',nama='PRIVATE PRODUCT NAME',hasil_kg=501,hasil=[],belum_final_kg=201,dikemas_kg=400,curah_kg=101,keluar_kg=50,keluar=[],sisa_kg=451)
     assert ui.product_offer(card).meta['variant']=='product-packed'
+    assert ui.product_offer(card).body_title==card.nama
+    assert ui.product_offer(card).title=='Detail '+card.nama
     card.curah_saja=True
     assert ui.product_offer(card,customer=5).meta['variant']=='product-curah'
     card.jenis=ui.automatic_kinds()[0]
@@ -116,11 +118,12 @@ def test_product_variant_and_classification_reuse_native_dto_source(monkeypatch)
     for kind in ui.automatic_kinds():assert repr(kind) in template
 
 
-def test_warehouse_metadata_requires_actual_read_group_and_discards_counts_names():
-    actual=[dict(id='g1',nama='PRIVATE WAREHOUSE',langkah=[dict(nama='Gabah masuk',href='/barang-masuk?gudang=g1',ket='PRIVATE COUNT')],masuk=dict(label='Gabah masuk',nilai='12345'),stok=dict(label='Stok PK',nilai='98765'),silos=[dict(id=99,nama='PRIVATE SILO')])]
+def test_warehouse_metadata_keeps_actual_reference_labels_but_discards_counts_ids_status():
+    actual=[dict(id='g1',nama='PRIVATE WAREHOUSE',fungsi='Selepan',dryers=[],langkah=[dict(nama='Gabah masuk',href='/barang-masuk?gudang=g1',ket='PRIVATE COUNT')],masuk=dict(label='Gabah masuk',nilai='12345'),stok=dict(label='Stok PK',nilai='98765'),silos=[dict(id=99,nama='PRIVATE SILO')])]
     offer=ui.warehouse_offer('g1',actual)
     assert offer.identity==('warehouse','g1') and offer.meta['stages']==['Gabah masuk']
-    assert 'PRIVATE' not in str(offer) and '12345' not in str(offer) and '98765' not in str(offer)
+    assert offer.meta['warehouse_refs']==dict(name='PRIVATE WAREHOUSE',function='Selepan',steps=['Gabah masuk'],dryers=[],silos=['PRIVATE SILO'])
+    assert '12345' not in str(offer) and '98765' not in str(offer) and '99' not in str(offer)
     assert ui.warehouse_offer('g2',actual) is None
     actual[0]['terkunci']=True
     assert ui.warehouse_offer('g1',actual) is None
@@ -132,7 +135,7 @@ def native_html(href='/stok/pk/detail?gudang=g2&id=42&jasa=0',attrs='',cls='stok
 
 def test_catalog_requires_native_link_and_matching_already_read_offer():
     meta=ui.metadata('pk-g2-karung',mutu=True)
-    offer=ui.Offer(('pk','g2','42','0',''),meta)
+    offer=ui.Offer(('pk','g2','42','0',''),meta,body_title='LOT-FIXTURE')
     c=emitter.catalog(native_html(),offers=[offer],**BIND)
     assert [{k:e[k] for k in ('alamat','metadata')} for e in c['entries']]==[dict(alamat='/stok/pk/detail?gudang=g2&id=42&jasa=0',metadata=meta)]
     assert [i['nama'] for i in c['entries'][0]['chrome']['chain']['items']]==['Beranda','Stok','Detail PK beli luar']
@@ -147,9 +150,10 @@ def test_catalog_requires_native_link_and_matching_already_read_offer():
 
 def test_public_structure_native_labels_without_empty_rows_or_false_empty():
     env=Environment(loader=FileSystemLoader(ROOT/'app/web/templates'),undefined=StrictUndefined,autoescape=True)
+    shapes=compiler().native_shapes(Environment(loader=FileSystemLoader(ROOT/'hmu_tampilan/templates')))
     for key in ui.VARIANTS:
         meta=ui.metadata(key,mutu=key.startswith('pk-'),jasa=True,qc_latest=True)
-        html=env.get_template('stock_detail_native.html').render(STOCK_DETAIL=meta,STOCK_STRUCTURE=ui.structure(meta),DETAIL_URL='/fixture',DETAIL_STAMP='ctx|/fixture',VERSI='fixture',ACTION_LABELS=['Native allowed action'])
+        html=env.get_template('stock_detail_native.html').render(STOCK_DETAIL=meta,STOCK_STRUCTURE=ui.structure(meta),STOCK_SHAPES=shapes,DETAIL_URL='/fixture',DETAIL_STAMP='ctx|/fixture',VERSI='fixture',ACTION_LABELS=['Native allowed action'])
         doc=BeautifulSoup(html,'html.parser')
         assert not doc.select('form,input,select,textarea,script[type="application/json"],a[href]')
         assert all('Belum dibaca'==dd.text for dd in doc.select('dd'))

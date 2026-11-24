@@ -39,7 +39,7 @@ def catalog(html, *, offers, source_address, cap, context, session):
         if not isinstance(offer, Offer) or offer.meta is None:
             continue
         old = by_identity.get(offer.identity)
-        if old is not None and (old.meta, old.title, old.leaf) != (offer.meta, offer.title, offer.leaf):
+        if old is not None and (old.meta, old.title, old.leaf, old.body_title) != (offer.meta, offer.title, offer.leaf, offer.body_title):
             return None
         by_identity[offer.identity] = offer
     entries = []
@@ -56,7 +56,9 @@ def catalog(html, *, offers, source_address, cap, context, session):
         chrome = native_chrome(href, title=offer.title or structure(offer.meta)['title'], leaf=offer.leaf or None)
         if chrome is None:
             continue
-        entries.append(dict(alamat=href, metadata=offer.meta, chrome=chrome))
+        if (offer.body_title is None) != offer.meta['variant'].startswith('warehouse-') or offer.body_title is not None and (type(offer.body_title) is not str or not 0 < len(offer.body_title) <= 512):
+            continue
+        entries.append(dict(alamat=href, metadata=offer.meta, chrome=chrome, body_title=offer.body_title))
         seen.add(href)
     if len(entries) > 50:
         return None
