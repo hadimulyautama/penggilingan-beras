@@ -180,6 +180,8 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
     """One scoped actual record; no success DTO, identity or writer is mocked."""
     client.base_url = BASE
     path = item['path']
+    native_root = next((selector for prefix,selector in [('/riwayat-giling/','[data-riwayat-giling]'),('/riwayat-sosoh/','[data-riwayat-sosoh]'),('/riwayat-pengeringan/','[data-riwayat-pengeringan]'),('/riwayat-qc/','[data-riwayat-qc]')] if path.startswith(prefix)), None)
+    assert native_root
     golden = await native_golden(client, path)
     source_golden = await native_golden(client, item['source'])
     assert item['code'] in source_golden
@@ -327,10 +329,10 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
                 await page.goto(BASE + item['source'], wait_until='load')
                 response = await page.goto(BASE + path, wait_until='load')
                 assert response.status == 200
-                await expect(page.locator(READY)).to_be_visible()
+                await expect(page.locator(native_root)).to_be_visible()
                 await assert_native_parity(page, golden, before_data=False)
                 await page.reload(wait_until='load')
-                await expect(page.locator(READY)).to_be_visible()
+                await expect(page.locator(native_root)).to_be_visible()
                 await assert_native_parity(page, golden, before_data=False)
                 await page.go_back(wait_until='load')
                 await page.wait_for_function('(path)=>location.pathname===path', arg=item['source'])
