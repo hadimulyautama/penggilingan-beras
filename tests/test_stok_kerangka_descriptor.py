@@ -1,6 +1,6 @@
 """Batas struktur murni, tanpa database, akun, saldo atau request jaringan."""
 import pytest
-from app.web.stok_kerangka_langsung import sah_descriptor
+from app.web.stok_kerangka_langsung import sah_descriptor, boleh_sumber
 
 
 def valid():
@@ -28,3 +28,14 @@ def test_struktur_tiga_atau_satu_jenis_dan_escape_bytes_dibatasi():
 ])
 def test_descriptor_tidak_valid_tidak_dipasang(mutate):
     data=valid();mutate(data);assert not sah_descriptor(data)
+
+
+@pytest.mark.parametrize('path', ['/kabar','/pekerjaan','/stok','/jasa','/barang-masuk','/barang-masuk/42'])
+def test_hanya_sumber_operasi_yang_memakai_katalog(path):
+    assert boleh_sumber(path)
+
+
+@pytest.mark.parametrize('path', ['/pengaturan/perusahaan-sendiri/1','/pengaturan/perusahaan-sendiri/1/riwayat',
+    '/pengguna','/console','/riwayat-pengeringan','/laporan','/stok-rahasia','/barang-masuk/42/edit','/barang-masuk/0'])
+def test_administrasi_dan_keluarga_lain_tidak_menerima_metadata_stok(path):
+    assert not boleh_sumber(path)

@@ -162,7 +162,7 @@ async def _browser(client, width):
             await browser.close()
 
 
-async def _buka_stok_dari_menu(page, bridge, width):
+async def _buka_stok_dari_menu(page, bridge, width, *, legacy=False):
     response = await page.goto(BASE + '/barang-masuk')
     assert response and response.status == 200
     await page.wait_for_function(
@@ -174,26 +174,32 @@ async def _buka_stok_dari_menu(page, bridge, width):
     # Fokus keyboard memakai tautan produk yang sama, tanpa memanggil fungsi
     # pindah dari tes atau mengganti fetch milik produk.
     await link.focus()
-    await link.press('Enter')
-    await asyncio.wait_for(bridge.html.mulai.wait(), 10)
+    await link.press('Enter', no_wait_after=True)
+    if legacy:
+        await asyncio.wait_for(bridge.html.mulai.wait(), 10)
+        await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+        assert not bridge.html.lepas.is_set() and not bridge.data.mulai.is_set()
+        bridge.html.lepas.set()
+    await asyncio.wait_for(bridge.data.mulai.wait(), 10)
     await expect(page).to_have_url(BASE + '/stok')
-    await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+    await expect(page.locator('.halaman-memuat')).to_have_count(0)
+    assert bridge.html.jumlah == (1 if legacy else 0)
     await expect(page.locator('#laci a[href="/stok"]').first).to_have_attribute(
         'aria-current', 'page')
-    assert not bridge.html.lepas.is_set()
-    assert not bridge.data.mulai.is_set()
-    bridge.html.lepas.set()
-    await asyncio.wait_for(bridge.data.mulai.wait(), 10)
     root = page.locator('[data-halaman-bertahap][data-kind="stok"]')
-    await expect(root.get_by_role('heading', name='Stok', exact=True)).to_be_visible()
+    await expect(root.locator('h1,.halaman-bertahap__kepala')).to_have_count(0)
+    await expect(root.locator('nav[aria-label="Jenis stok"]')).to_be_visible()
     await expect(root.locator('form[role="search"] input[name="cari"]')).to_be_visible()
-    await expect(root.locator('summary', has_text='Filter')).to_be_visible()
+    await expect(root.locator('.kontrol-pencarian>[data-sk-buka="sk-filter"]')).to_be_visible()
     columns = root.locator('th[scope="col"]')
     assert await columns.count() >= 6
     await expect(columns.filter(has_text='Berat tersedia')).to_have_count(1)
     await expect(root.locator('[data-shell-table-wrap]')).to_have_attribute('aria-busy', 'true')
     await expect(root.locator('[data-shell-message]')).to_contain_text('Memuat data')
-    await expect(root.get_by_role('button', name='Detail', exact=True)).to_be_disabled()
+    prints=root.locator('[data-sk-cetak]')
+    assert await prints.count()==2
+    for button in await prints.all():await expect(button).to_be_disabled()
+    await expect(root.get_by_role('button', name='Detail', exact=True)).to_have_count(0)
     assert not bridge.data.lepas.is_set()
     return root
 
@@ -214,7 +220,7 @@ async def test_navigasi_kerangka_lalu_data_refresh_native_dan_kosong(
             row = content.locator('.stok-mobile-list__baris' if width < 900 else '.stok-baris__tautan', has_text=KODE_BEBAS)
             await expect(row).to_be_visible()
             await expect(row.locator('.stok-mobile-list__berat' if width < 900 else '.stok-tabel__angka')).to_have_text('1.000 kg')
-            assert bridge.html.jumlah == bridge.data.jumlah == 1
+            assert bridge.html.jumlah == 0 and bridge.data.jumlah == 1
             document = next(r for r in bridge.requests if
                             r['path'] == '/barang-masuk')
             # Route interception can omit wire-generated Sec-Fetch headers.
@@ -252,6 +258,28 @@ async def test_navigasi_kerangka_lalu_data_refresh_native_dan_kosong(
             assert not bridge.writes, bridge.writes
             assert not errors, errors
         assert await _sidik(pg) == before
+
+
+@pytest.mark.parametrize('width', [390,1280])
+async def test_fallback_native_tetap_aman_bila_katalog_opsional_tidak_tersedia(pg,stok_navigasi,monkeypatch,width):
+    from app.web import stok_kerangka_langsung
+    async def unavailable(*args,**kwargs):
+        return None
+    monkeypatch.setattr(stok_kerangka_langsung,'susun',unavailable)
+    async with await _klien(pg,peran=P.OPERATOR,gudang=GUDANG) as client:
+        before=await _sidik(pg)
+        async with _browser(client,width) as (page,bridge):
+            await _buka_stok_dari_menu(page,bridge,width,legacy=True)
+            assert bridge.html.jumlah==1 and bridge.data.jumlah==1
+            await expect(page.locator('#padi-kerangka-langsung')).to_have_count(1)
+            await expect(page.locator('#padi-stok-kerangka')).to_have_count(0)
+            bridge.data.lepas.set()
+            await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+            row=page.locator('.stok-mobile-list__baris' if width<900 else '.stok-baris__tautan',has_text=KODE_BEBAS)
+            await expect(row).to_be_visible()
+            await expect(row.locator('.stok-mobile-list__berat' if width<900 else '.stok-tabel__angka')).to_have_text('1.000 kg')
+            assert not bridge.writes
+        assert await _sidik(pg)==before
 
 
 @pytest.mark.parametrize('width', [390, 1280])

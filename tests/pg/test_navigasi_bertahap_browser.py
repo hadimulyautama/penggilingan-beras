@@ -55,7 +55,7 @@ async def jalankan(pg,portal,pelanggan,width):
     c=client(portal.accounts[0]) if pelanggan else await _klien(pg,peran=SUPERADMIN)
     asal='/pelanggan/' if pelanggan else '/barang-masuk'
     tujuan='/pelanggan/barang-masuk' if pelanggan else '/stok'
-    gate=asyncio.Event();started=asyncio.Event();writes=[]
+    gate=asyncio.Event();started=asyncio.Event();writes=[];stock_html=[]
     pending=set();reads=[];closing=False
     async def baca(path,headers):
         # Penutupan browser tidak otomatis menunggu request ASGI in-process.
@@ -84,7 +84,8 @@ async def jalankan(pg,portal,pelanggan,width):
                     if req.method!='GET':writes.append(u.path);await route.abort();return
                     if u.path=='/api/aliran':await route.fulfill(status=204,body='');return
                     if u.path=='/api/keadaan':await route.fulfill(json={'n':'uji','versi':'493'});return
-                    if u.path==tujuan:
+                    if not pelanggan and u.path==tujuan:stock_html.append(u.path)
+                    if u.path==(tujuan if pelanggan else '/api/halaman-bertahap/stok'):
                         started.set();await asyncio.wait_for(gate.wait(),12)
                     response=pages.get(u.path) if not u.query else None
                     if response is None:response=await baca(u.path+('?' + u.query if u.query else ''),headers={k:v for k,v in req.headers.items() if k.lower() in ('x-pindah','x-portal-navigasi','accept')})
@@ -98,11 +99,21 @@ async def jalankan(pg,portal,pelanggan,width):
                 await page.goto(BASE+asal)
                 if width<900:
                     await page.locator('.portal-menu-bawah' if pelanggan else '#buka-laci').click()
-                await page.evaluate("""() => {window.clickAt=0;document.addEventListener('click',()=>{window.clickAt=performance.now()},true);new MutationObserver(()=>{if(document.querySelector('.halaman-memuat') && !window.shellMs)requestAnimationFrame(()=>{window.shellMs=performance.now()-window.clickAt})}).observe(document.body,{childList:true,subtree:true});}""")
+                await page.evaluate("""portal => {window.clickAt=0;const selector=portal?'.halaman-memuat':'[data-halaman-bertahap][data-kind="stok"]';document.addEventListener('click',()=>{window.clickAt=performance.now()},true);new MutationObserver(()=>{if(document.querySelector(selector) && !window.shellMs)requestAnimationFrame(()=>{window.shellMs=performance.now()-window.clickAt})}).observe(document.body,{childList:true,subtree:true});}""",pelanggan)
                 menu='.portal-sidebar' if pelanggan else '#laci'
                 await page.locator(menu+' a[href="'+tujuan+'"]').first.click()
                 await asyncio.wait_for(started.wait(),5)
-                await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+                if pelanggan:
+                    await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+                else:
+                    root=page.locator('[data-halaman-bertahap][data-kind="stok"]')
+                    await expect(root).to_be_visible(timeout=700)
+                    await expect(root.locator('h1,.halaman-bertahap__kepala')).to_have_count(0)
+                    await expect(root.locator('nav[aria-label="Jenis stok"]')).to_be_visible()
+                    await expect(root.locator('.kontrol-pencarian>[data-sk-buka="sk-filter"]')).to_be_visible()
+                    assert await root.locator('th[scope="col"]').count()>=6
+                    await expect(page.locator('.halaman-memuat')).to_have_count(0)
+                    assert not stock_html,'Kerangka spesifik harus ada tanpa meminta HTML tujuan'
                 await expect(page).to_have_url(BASE+tujuan)
                 await expect(page.locator(menu+' a[href="'+tujuan+'"]')).to_have_attribute('aria-current','page')
                 assert not gate.is_set()
@@ -115,6 +126,9 @@ async def jalankan(pg,portal,pelanggan,width):
                 await page.screenshot(path=str(out/(name+'.png')))
                 gate.set()
                 await expect(page.locator('.halaman-memuat')).to_have_count(0,timeout=15000)
+                if not pelanggan:
+                    await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0,timeout=15000)
+                    await expect(page.locator('[data-stok-controls]')).to_be_visible()
                 assert not writes,writes
                 assert not errors,errors
                 if pelanggan:assert 'Rahasia Pelanggan B' not in await page.locator('main').inner_text()
