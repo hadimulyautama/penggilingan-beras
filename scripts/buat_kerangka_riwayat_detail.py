@@ -31,6 +31,10 @@ def build():
     navigation = module('public_native_history_navigation', ROOT / 'scripts/buat_kerangka_riwayat.py')
     breadcrumb = module('public_detail_breadcrumb', ROOT / 'app/web/breadcrumb.py')
     inputs.add(ROOT / 'app/web/laporan_navigasi.py')
+    chrome = module('detail_chrome_source', ROOT / 'app/web/native_detail_chrome.py')
+    base_path = ROOT / 'hmu_tampilan/templates/base.html'
+    inputs.add(base_path)
+    bar_control = chrome.kontrol_bar(base_path.read_text(), laporan=True)
     literals = navigation.native_navigation_literals()
     roots = [ROOT / 'app/web', ROOT / 'hmu_tampilan']
 
@@ -104,7 +108,7 @@ def build():
             parent += '#giling-1'
         crumb = env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(
             address, dict(kembali=parent, breadcrumb_detail='PADI-KODE'), meta['title']))
-        variants[variant] = dict(title=meta['title'], html=str(doc), breadcrumb=crumb)
+        variants[variant] = dict(title_parts=meta['document_parts'], bar_control=bar_control, html=str(doc), breadcrumb=crumb)
     styles, scripts, sr, jr = {}, {}, {}, {}
     for value in variants.values():
         doc = BeautifulSoup(value['html'], 'html.parser')

@@ -32,8 +32,9 @@
   if(pairs.some(([k,v])=>k.startsWith('halaman_')&&!/^[1-9][0-9]{0,8}$/.test(v)))return null;
   return {u,variant,kind,tab,parent,family,ref:c?.[2]||null};
  }
+ function nativeTitle(parts,code){return Array.isArray(parts)&&parts.length>0&&parts.length<=16&&parts.every(p=>p===null||typeof p==='string'&&p.length<=256)&&typeof code==='string'&&code.length<=80?parts.map(p=>p===null?code:p).join(''):null;}
  function validData(data){
-  return exact(data,['versi','sumber','variants','styles','scripts'])&&data.versi===1&&/^[a-f0-9]{64}$/.test(data.sumber)&&exact(data.variants,variants)&&variants.every(v=>exact(data.variants[v],['html','title','breadcrumb'])&&typeof data.variants[v].title==='string'&&typeof data.variants[v].html==='string'&&data.variants[v].html.length<=262144&&typeof data.variants[v].breadcrumb==='string'&&data.variants[v].breadcrumb.length<=65536)&&['styles','scripts'].every(k=>obj(data[k])&&Object.keys(data[k]).length<=32&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=524288));
+  return exact(data,['versi','sumber','variants','styles','scripts'])&&data.versi===1&&/^[a-f0-9]{64}$/.test(data.sumber)&&exact(data.variants,variants)&&variants.every(v=>exact(data.variants[v],['html','title_parts','bar_control','breadcrumb'])&&nativeTitle(data.variants[v].title_parts,'PADI-KODE')!==null&&typeof data.variants[v].bar_control==='string'&&data.variants[v].bar_control.length<=8192&&typeof data.variants[v].html==='string'&&data.variants[v].html.length<=262144&&typeof data.variants[v].breadcrumb==='string'&&data.variants[v].breadcrumb.length<=65536)&&['styles','scripts'].every(k=>obj(data[k])&&Object.keys(data[k]).length<=32&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=524288));
  }
  function backContext(selected,origin){
   if(selected.variant==='riwayat-giling'){
@@ -113,8 +114,11 @@
   for(const p of root.querySelectorAll('[data-rdn-panel]'))p.hidden=p.dataset.rdnPanel!==selected.tab;
   try{pruneNavigation(part.content,selected,permission.menu);}catch(_){return null;}
   while(start[0].nextSibling&&start[0].nextSibling!==end[0])start[0].nextSibling.remove();end[0].before(part.content);
-  main.querySelectorAll('.desktop-back').forEach(n=>n.remove());const title=data.variants[selected.variant].title;
-  const bar=main.querySelector('.bar__merek');if(bar){bar.textContent=selected.family==='qc'?'Riwayat QC':'Riwayat proses';bar.setAttribute('aria-label',bar.textContent);}
+  main.querySelectorAll('.desktop-back').forEach(n=>n.remove());const title=nativeTitle(data.variants[selected.variant].title_parts,entry?.kode||'');
+  const bar=main.querySelector('.bar__merek');if(bar){bar.textContent=title;bar.setAttribute('aria-label',bar.textContent);}
+  const control=doc.createElement('template');control.innerHTML=data.variants[selected.variant].bar_control;
+  if(control.content.querySelectorAll('button.bar__menu').length!==1||control.content.querySelector('a,script,form,input'))return null;
+  main.querySelectorAll('.bar__menu,.bar__balik').forEach(n=>n.remove());main.querySelector('header.bar')?.prepend(control.content);
   const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){
    const template=doc.createElement('template');template.innerHTML=data.variants[selected.variant].breadcrumb;
    const nav=template.content.querySelector('nav.desktop-breadcrumb'),leaf=nav?.querySelector('[aria-current="page"]');
@@ -130,6 +134,6 @@
   frame.dataset.pindahAlamat=address;doc.title=title+' · PT Hadi Mulya Utama';
   return {versi:1,alamat:address,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
- if(typeof module==='object'&&module.exports){module.exports={state,validData,validCatalog,menuValid,backContext,visibleLink};return;}
+ if(typeof module==='object'&&module.exports){module.exports={nativeTitle,state,validData,validCatalog,menuValid,backContext,visibleLink};return;}
  global.PadiKerangkaRiwayatDetailUI=Object.freeze({versi:1,sumber:data?.sumber,buat,currentCatalog:(context,cap,token)=>validData(data)?currentCatalog(data,context,cap,token):null,visibleLink});
 })(typeof window==='undefined'?globalThis:window);

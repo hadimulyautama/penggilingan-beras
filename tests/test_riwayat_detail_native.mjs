@@ -2,12 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {state,validData,validCatalog,menuValid,backContext,visibleLink}=require('../app/web/static/kerangka-riwayat-detail-ui-runtime.js');
+const {nativeTitle,state,validData,validCatalog,menuValid,backContext,visibleLink}=require('../app/web/static/kerangka-riwayat-detail-ui-runtime.js');
 const {anchorHandler,summaryHandler}=require('../app/web/static/riwayat-detail-katalog.js');
 const {restoreNative}=require('../app/web/static/riwayat-detail-native.js');
 const origin='https://fixture.invalid',source='a'.repeat(64),digest='b'.repeat(64);
 const variants=['riwayat-giling','riwayat-sosoh','riwayat-pengeringan','qc-gabah-basah','qc-gabah-kering','qc-pk-luar','qc-pk-hasil-giling','qc-beras-hasil-sosoh','qc-beras-daftar'];
-const data={versi:1,sumber:source,variants:Object.fromEntries(variants.map(v=>[v,{html:'',title:v,breadcrumb:''}])),styles:{},scripts:{}};
+const data={versi:1,sumber:source,variants:Object.fromEntries(variants.map(v=>[v,{html:'',title_parts:[v],bar_control:'',breadcrumb:''}])),styles:{},scripts:{}};
 const binding={context:'context',cap:'cap',token:'session',source,digest};
 function envelope(){return {versi:1,sumber:source,cap:'cap',konteks:'context',sesi:'session',sumber_sha256:digest,batas:30,boleh_catat_qc:false,entries:[{alamat:'/riwayat-giling/1',kode:'GL-1',variant:'riwayat-giling',boleh_koreksi:false}]};}
 for(const path of ['/riwayat-giling/1','/riwayat-sosoh/2','/riwayat-pengeringan/3','/riwayat-qc/gabah-basah/GB-1','/riwayat-qc/gabah-kering/GK-1','/riwayat-qc/pk-luar/PK-1','/riwayat-qc/pk-hasil-giling/GL-1','/riwayat-qc/beras-hasil-sosoh/SH-1','/riwayat-qc/beras-hasil-sosoh'])test('narrow native route '+path,()=>assert.ok(state(path,origin)));
@@ -61,4 +61,18 @@ test('matching href alone outside a currently visible native row is insufficient
   rowPresent=false;assert.equal(visibleLink(entry),null); // Kontrol negatif: href/kode sama di luar baris native.
   rowPresent=true;rowVisible=false;assert.equal(visibleLink(entry),null);
  }finally{if(oldDocument===undefined)delete global.document;else global.document=oldDocument;if(oldStyle===undefined)delete global.getComputedStyle;else global.getComputedStyle=oldStyle;}
+});
+
+test('native title slot uses exact verified code without changing body H1',()=>{
+ assert.equal(nativeTitle(['Detail QC ',null],'QC-A'), 'Detail QC QC-A');
+ assert.equal(nativeTitle(['QC beras hasil sosoh'],'QC-A'),'QC beras hasil sosoh');
+ assert.equal(nativeTitle(['Riwayat penggilingan ',null],'<LOT>'),'Riwayat penggilingan <LOT>');
+ assert.equal(nativeTitle([{user:1}],'LOT'),null);
+});
+test('hydrated native editor hrefs load complete native controller only on explicit click',()=>{
+ const {nativeActions}=require('../app/web/static/riwayat-detail-native.js');
+ const hrefs=['?buka=qc_sosoh','/riwayat-pengeringan/1/bobot','/riwayat-giling/1?tab_detail=hasil','https://other.invalid/?buka=x'];
+ const links=hrefs.map(href=>({href,mark:false,getAttribute:()=>href,setAttribute(k){if(k==='data-utuh')this.mark=true;}}));
+ nativeActions({querySelectorAll:()=>links},origin);
+ assert.deepEqual(links.map(x=>x.mark),[true,true,false,false]);
 });

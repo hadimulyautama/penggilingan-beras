@@ -83,6 +83,14 @@ def deskripsi(path, query=''):
                 referensi=reference, tab=selected, alamat=address, data_url=address)
 
 
+def _chrome():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('native_detail_chrome_pure', ROOT / 'app/web/native_detail_chrome.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _tabs(text, expected):
     for node in Environment().parse(text).find_all(nodes.For):
         if not isinstance(node.iter, nodes.List):
@@ -163,7 +171,10 @@ def metadata(variant):
                     raise ValueError('Kolom QC beras native berubah')
                 tables.append(columns)
         family = 'qc'
-    return dict(variant=variant, family=family, title=title, tabs=tabs,
+    slots = {('k', 'kode'): None, ('d', 'kode'): None, ('k', 'ref'): None}
+    document_parts = _chrome().bagian_judul(text, slots)
+    paths.append(ROOT / 'app/web/native_detail_chrome.py')
+    return dict(variant=variant, family=family, title=title, document_parts=document_parts, tabs=tabs,
                 native_titles=list(dict.fromkeys(titles)), tables=tables, extra_tables=extra_tables,
                 inputs={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths})
 
@@ -251,7 +262,7 @@ async def kerangka(request, akun):
     await siapkan(request, values)
     if values.get('LAPORAN_NAV'):
         values['LAPORAN_NAV'] = {**values['LAPORAN_NAV'], 'panduan': 'rdn-panduan'}
-    spec.update(meta=shape, kode=code,
+    spec.update(meta=shape, kode=code, document_title=_chrome().judul(shape['document_parts'], code),
                 stamp=penanda_konteks(request, akun) + '|' + spec['alamat'],
                 boleh_koreksi=bool(akun.is_admin and kind in ('giling', 'sosoh')),
                 boleh_qc=bool(akun.is_admin and values.get('MUTU_AKTIF') is True
@@ -287,7 +298,7 @@ async def kerangka(request, akun):
     template = ('riwayat_detail_native.html' if spec['variant'].startswith('riwayat-') else
                 'qc_beras_native.html' if kind == 'beras-hasil-sosoh' else 'qc_detail_native.html')
     response = render(request, template, **{**values, 'DETAIL_RIWAYAT': spec,
-        'kembali': parent, 'layar': 'laporan_riwayat', 'breadcrumb_detail': code or spec['meta']['title']})
+        'kembali': parent, 'layar': ('riwayat_' + kind if spec['variant'].startswith('riwayat-') else 'riwayat_qc' if kind == 'beras-hasil-sosoh' else 'riwayat_qc_detail'), 'breadcrumb_detail': code or spec['meta']['title']})
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Vary'] = 'Cookie'
     # Tombol Cetak di bilah native juga tidak boleh mencetak placeholder.

@@ -51,6 +51,14 @@ def fase_aktif(fase, status, selesai_pendinginan, dryer_id):
             and status == ("proses" if fase == "pengeringan" else "selesai"))
 
 
+def _chrome():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('native_detail_chrome_pure', ROOT / 'app/web/native_detail_chrome.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 @lru_cache(maxsize=1)
 def metadata():
     """Hanya konstanta label/kolom dari source; tidak memanggil penyusun data."""
@@ -84,7 +92,13 @@ def metadata():
              "Mulai proses", "Mulai fase ini", "Dicatat oleh", "Waktu berlalu", "Selesai pengeringan")
     if any(label not in "\n".join(texts) for label in facts):
         raise ValueError("Label fakta dryer native berubah")
-    return dict(tables=tables, fakta=facts,
+    labels = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+                  and any(isinstance(t, ast.Name) and t.id == 'JENIS' for t in node.targets))
+    document_parts = {phase: _chrome().bagian_judul(text, {('d', 'judul'): labels[phase], ('d', 'kode'): None})
+                      for text, phase in zip(texts[1:], FASE)}
+    paths.append(ROOT / 'app/web/native_detail_chrome.py')
+    texts.append(paths[-1].read_text())
+    return dict(tables=tables, fakta=facts, document_parts=document_parts,
                 inputs={str(p.relative_to(ROOT)): hashlib.sha256(t.encode()).hexdigest()
                         for p, t in zip(paths, texts)})
 
@@ -125,6 +139,7 @@ async def kerangka(request, akun, *, jenis, lot, db):
     from app.web.tampilan import render
     context = await konteks_kerangka(request, akun)
     spec.update(metadata())
+    spec["document_title"] = _chrome().judul(spec["document_parts"][jenis], spec["kode"])
     spec["stamp"] = penanda_konteks(request, akun) + "|" + spec["alamat"]
     response = render(request, "pengeringan_native_html.html", **{
         **context, "DRYER_KERANGKA": spec, "layar": "pekerjaan",

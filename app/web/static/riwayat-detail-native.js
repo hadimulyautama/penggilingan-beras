@@ -9,6 +9,14 @@
   for(const panel of root.querySelectorAll('[data-rdn-panel]'))panel.hidden=panel.dataset.rdnPanel!==key;
   return buttons.find(b=>b.dataset.rdnTab===key);
  }
+ function nativeActions(content,origin){
+  for(const link of content.querySelectorAll('a[href]')){
+   let u;try{u=new URL(link.getAttribute('href'),origin);}catch(_){continue;}
+   // Hanya href yang memang dirender native. Footer editor tidak diadopsi:
+   // klik eksplisit memuat dokumen lengkap beserta controller asli.
+   if(u.origin===origin&&(u.searchParams.has('buka')||u.searchParams.has('nilai')||/^\/riwayat-(?:giling|sosoh|pengeringan)\/[1-9][0-9]*\/(?:koreksi|bobot)$/.test(u.pathname)))link.setAttribute('data-utuh','');
+  }
+ }
  function restoreNative(content,key,variant){
   const root=content.querySelector(variant==='riwayat-pengeringan'?'[data-riwayat-pengeringan]':variant.startsWith('riwayat-')?'[data-riwayat-'+variant.slice(8)+']':'[data-riwayat-qc]');
   if(!root)return null; // Renderer redirect/missing tidak dipaksa jadi detail.
@@ -19,7 +27,7 @@
   if(variant.startsWith('qc-'))root.dataset.rqdSelected=key;
   return chosen; // Tidak klik tab native: controller QC dapat mengganti URL.
  }
- if(typeof module==='object'&&module.exports){module.exports={selectedTabs,restoreNative};return;}
+ if(typeof module==='object'&&module.exports){module.exports={selectedTabs,restoreNative,nativeActions};return;}
  const root=document.querySelector('[data-riwayat-detail-native]'),core=global.PADI_BACA_NATIVE;
  if(!root||!core||root.dataset.rdnReady)return;
  const address=root.dataset.url;
@@ -41,7 +49,7 @@
  for(const b of document.querySelectorAll('[data-lk-cetak]')){b.disabled=true;b.setAttribute('aria-describedby','rdn-menunggu');}
  let restored=null;
  core.mount({address,rootSelector:'[data-riwayat-detail-native]',statusSelector:'[data-rdn-status]',retrySelector:'[data-rdn-retry]',shellSelector:'[data-riwayat-detail-native],.halaman-memuat',contentAttribute:'data-riwayat-detail-native-isi',messages:{loading:'Memuat catatan terbaru…'},
-  afterInstall({content}){restored=restoreNative(content,root.dataset.rdnTab,root.dataset.rdnVariant);},
+  afterInstall({content}){nativeActions(content,location.origin);restored=restoreNative(content,root.dataset.rdnTab,root.dataset.rdnVariant);},
   restoreFocus({focus,retry,content}){
    if(focus===retry||focus.hasAttribute('data-rdn-tab')||focus.hasAttribute('data-rdn-go')){
     if(restored)restored.focus({preventScroll:true});else{content.tabIndex=-1;content.focus({preventScroll:true});}

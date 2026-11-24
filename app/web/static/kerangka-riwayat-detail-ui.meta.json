@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "b0e7c2cc17c4e35c460e0da42cd2cb728088e9cb3762716e969e562965d215b7",
+  "sumber": "891d35ee42192363879d8dc66fdc76b733364ca16ad57b034b24997f0a219bbe",
   "variants": [
     "riwayat-giling",
     "riwayat-sosoh",
@@ -12,20 +12,21 @@
     "qc-beras-hasil-sosoh",
     "qc-beras-daftar"
   ],
-  "aset_sha256": "ec1596a68732d9640c38d8ffad7ea855a3d6a357d5e559aa39f92fee2813634d",
+  "aset_sha256": "931c4ce935d4f74a6dbc8f8a53bf58db622296a3014955660fb67d85286052a4",
   "inputs": {
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
     "app/web/layar_riwayat.py": "3793634b304de2001022264d5dfea5b6f9ae38b258b6c45f8bee6cac2f590afa",
-    "app/web/riwayat_detail_native.py": "5ae41ebce052870acc4b69861da6742b60346ee88b3bf68ea6d0b76207859445",
+    "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
+    "app/web/riwayat_detail_native.py": "c5aa9c6170e45363d162db4846881a1dd55b92f888b3d1d3a08be3723ee60957",
     "app/web/static/detail_pendinginan.css": "23670e14c034b9f4ed3cfe64388044718cfe279e97327fbfa67b86a8e2f081fd",
     "app/web/static/detail_pengeringan.css": "3513da10fa157ee9bac229be0872fc1fbc3d86c5fb7077c9eb944bc7c9a8737f",
-    "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "cec60b0ea6db86030269b7591e3d375d9096603e3627fd54f3019b13e2d5bb96",
+    "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "8d0d5fd1d51a1a434994f274521d2715bd6afa080c0c72be2ccf58d8a5f9259d",
     "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
     "app/web/static/proses_aktif.css": "ca762b696a8a55220e7e171bbbe7416850bfa71f63e436e3334a035154907dd8",
     "app/web/static/qc-detail.css": "2dfe236e7bccbd5c2626097e2cbf95f201436381d6d11edf1fa267bf086e5eb1",
-    "app/web/static/riwayat-detail-native.js": "5a7b8f4d92d7b6c83aab528e6151720aad2102faf845fdf21a73b2813214c302",
+    "app/web/static/riwayat-detail-native.js": "cb404f6443e550ef0dd51d2773ed2be7158134e688f9199b3bac723db448bf4b",
     "app/web/static/riwayat-navigasi-native.js": "3423d67f932e78c81e9151b67769cbe79c5910b9811e77eb019200fdc5a7fe69",
     "app/web/static/riwayat-pengeringan-desain.css": "c26fd598405b2b10d94a3fc8438d16bd43adb92913e01e3e0b0e67551363c2df",
     "app/web/static/riwayat-qc-desain.css": "0f185a046924ffc1c0c143b9c38a4f8262be55da221063c1ac814101cf2b8d08",
@@ -34,10 +35,10 @@
     "app/web/templates/_qc_sosoh.html": "b1cb8c57e13b5f554f7d0b047a8d0375778b62c0952a0e268d91bc21257e5e2d",
     "app/web/templates/_riwayat_detail_native_alat.html": "a2c0c6c83a189e9906993f0df483ca88a570ab68c242e2b8019d86d828331157",
     "app/web/templates/laporan_katalog_blueprint.html": "ff4b17628b3b5c2967c3abe4f96f09c06a1eb895a5bf4b5c006be97dd66122e2",
-    "app/web/templates/qc_beras_native.html": "b04b71bff72b466c47f16d65ca8804786b242aea92e70a4f06deaa26b4dc6259",
-    "app/web/templates/qc_detail_native.html": "92353babee3adebeea503f0807b9b15a8675e57f7e9ae4511020a6a7db057587",
+    "app/web/templates/qc_beras_native.html": "b54a46b214eea38ec9486c262fd622d597ad72161cd10cbdb06df7425d594c33",
+    "app/web/templates/qc_detail_native.html": "d64f48ab91fc1e5dba85a35645f596cfa2062695fa763a98f5fbc4662239c1c0",
     "app/web/templates/qc_sosoh_riwayat.html": "d6c6be28cbd0a8cec73e081ed4273c7bf51753a803c852b7b735f5889fbdde49",
-    "app/web/templates/riwayat_detail_native.html": "3a173b851eba57a8e3c852c31b8b615f4104b49a6a8abf393e96ef69877d2205",
+    "app/web/templates/riwayat_detail_native.html": "345399f3c36dd1bdc28051d0bc94188f4ea525877f68a51ae82df3ad37293423",
     "app/web/templates/riwayat_giling_detail.html": "3feb8db918897afd29e0bd348d1d47cb23eda71ee217e1ccfdd2f24e66e37f16",
     "app/web/templates/riwayat_pengeringan_detail.html": "6f08af809fe9b8988124698955a73671df4b59beb681f0cadc76a4514a10a10c",
     "app/web/templates/riwayat_qc_detail.html": "ac645f2885e4988e47c569807892e60b68f0fcf01149d99226e1e23cfea3e379",
@@ -51,8 +52,9 @@
     "hmu_tampilan/templates/_laporan_kontrol.html": "a3e19c3b16b1d90b5e30bd917643a38bd5e0452606c3a47c97797e701f658243",
     "hmu_tampilan/templates/_laporan_navigasi.html": "4dacb95d9e4f8419be4f197d12c85574b0ccd19afd2a8b5e17b423a8ba7dd1f2",
     "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
     "scripts/buat_kerangka_riwayat.py": "a30730eef29b283924fbf575d787df82316e84086aad1a3390e44a05001e7d82",
-    "scripts/buat_kerangka_riwayat_detail.py": "6ac186f7e246267ccea8cff8a98e481435fab3d08d5bea7bb9ef96a71bcf6dcf",
+    "scripts/buat_kerangka_riwayat_detail.py": "f5bc2ce3bfafc9a6550f1dfeded520471d118f6dbccff1bb81ab62c2e1dfa946",
     "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
   }
 }

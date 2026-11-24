@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from starlette.requests import Request
 
 from app.web.riwayat_detail_native import VARIANTS, deskripsi, kerangka, metadata
 from app.web.riwayat_detail_catalog import katalog
+from app.web.native_detail_chrome import judul, kontrol_bar, bagian_judul
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,7 +28,7 @@ def path_for(variant):
 def html_for(variant, tab=None, admin=True):
     query = '' if not tab else ('tab_detail=' if variant.startswith('riwayat-') else 'tab_qc=') + tab
     value = deskripsi(path_for(variant), query)
-    value.update(meta=metadata(variant), kode='KODE-FIKTIF', stamp='fixture-stamp', boleh_koreksi=admin, boleh_qc=admin)
+    value.update(meta=metadata(variant), document_title=judul(metadata(variant)['document_parts'], 'KODE-FIKTIF'), kode='KODE-FIKTIF', stamp='fixture-stamp', boleh_koreksi=admin, boleh_qc=admin)
     template = ('riwayat_detail_native.html' if variant.startswith('riwayat-') else
                 'qc_beras_native.html' if variant in ('qc-beras-daftar', 'qc-beras-hasil-sosoh') else 'qc_detail_native.html')
     env = Environment(loader=ChoiceLoader([DictLoader({'base.html': '{% block isi %}{% endblock %}'}),
@@ -164,3 +166,35 @@ def test_public_compiler_reproducible_native_source_and_no_records():
     for name in ('riwayat-detail-native.js','riwayat-detail-katalog.js'):
         code=(ROOT/'app/web/static'/name).read_text()
         assert not any(x in code for x in ('fetch(', 'localStorage', 'sessionStorage', 'history.pushState', 'history.replaceState', 'beforeunload', 'location.assign'))
+
+
+@pytest.mark.parametrize('variant', VARIANTS)
+def test_document_title_native_block_and_mobile_menu_not_generic(variant):
+    meta=metadata(variant)
+    native=('riwayat_'+variant.removeprefix('riwayat-')+'_detail.html' if variant.startswith('riwayat-')
+            else 'qc_sosoh_riwayat.html' if variant in ('qc-beras-daftar','qc-beras-hasil-sosoh')
+            else 'riwayat_qc_detail.html')
+    own=('riwayat_detail_native.html' if variant.startswith('riwayat-') else
+         'qc_beras_native.html' if variant in ('qc-beras-daftar','qc-beras-hasil-sosoh') else 'qc_detail_native.html')
+    env=Environment(loader=ChoiceLoader([FileSystemLoader(str(ROOT/'app/web/templates')),FileSystemLoader(str(ROOT/'hmu_tampilan/templates'))]),autoescape=True)
+    # Hanya nilai judul skalar; bukan objek domain/DTO pengganti.
+    block=re.search(r'{% block judul %}.*?{% endblock %}',(ROOT/'app/web/templates'/native).read_text(),re.S)[0]
+    source=env.from_string(block).render(k={'kode':'LOT-17','ref':'LOT-17'},d={'kode':'LOT-17'})
+    title=judul(meta['document_parts'],'LOT-17')
+    assert title==source
+    shell=env.get_template(own)
+    assert ''.join(shell.blocks['judul'](shell.new_context(dict(DETAIL_RIWAYAT={'document_title':title}))))==source
+    control=BeautifulSoup(kontrol_bar((ROOT/'hmu_tampilan/templates/base.html').read_text(),laporan=True),'html.parser')
+    assert control.select_one('button#buka-laci[aria-label="Buka menu"]')
+    assert not control.select('.bar__balik')
+    if variant.startswith('riwayat-') or variant not in ('qc-beras-daftar','qc-beras-hasil-sosoh'):
+        assert 'LOT-17' in title
+    else:
+        assert title=='QC beras hasil sosoh'
+
+
+def test_title_source_expression_drift_declines_instead_of_generic_fallback():
+    with pytest.raises(ValueError):
+        bagian_judul('{% block judul %}{{ akun.nama }}{% endblock %}',{('k','ref'):None})
+    with pytest.raises(ValueError):
+        bagian_judul('{% block judul %}{{ k.ref|upper }}{% endblock %}',{('k','ref'):None})

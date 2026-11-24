@@ -6,8 +6,9 @@
  const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
  const object=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
  const exact=(v,keys)=>object(v)&&Object.keys(v).length===keys.length&&keys.every(k=>own(v,k));
+ function nativeTitle(parts,code){return Array.isArray(parts)&&parts.length>0&&parts.length<=16&&parts.every(p=>p===null||typeof p==='string'&&p.length<=256)&&typeof code==='string'&&code.length<=80?parts.map(p=>p===null?code:p).join(''):null;}
  function validPackage(p){
-  return exact(p,['versi','sumber','variants'])&&p.versi===1&&/^[a-f0-9]{64}$/.test(p.sumber)&&exact(p.variants,phases)&&phases.every(k=>exact(p.variants[k],['html','breadcrumb'])&&typeof p.variants[k].html==='string'&&p.variants[k].html.length<=262144&&typeof p.variants[k].breadcrumb==='string'&&p.variants[k].breadcrumb.length<=65536);
+  return exact(p,['versi','sumber','variants'])&&p.versi===1&&/^[a-f0-9]{64}$/.test(p.sumber)&&exact(p.variants,phases)&&phases.every(k=>exact(p.variants[k],['html','breadcrumb','title_parts','bar_control'])&&nativeTitle(p.variants[k].title_parts,'PADI-KODE')!==null&&typeof p.variants[k].bar_control==='string'&&p.variants[k].bar_control.length<=8192&&typeof p.variants[k].html==='string'&&p.variants[k].html.length<=262144&&typeof p.variants[k].breadcrumb==='string'&&p.variants[k].breadcrumb.length<=65536);
  }
  function backContext(value,origin){
   const fallback='/pekerjaan?tab=berjalan';
@@ -55,8 +56,12 @@
   for(const panel of root.querySelectorAll('[data-dryer-panel]'))panel.hidden=panel.dataset.dryerPanel!==selected.tab;
   while(starts[0].nextSibling&&starts[0].nextSibling!==ends[0])starts[0].nextSibling.remove();ends[0].before(part.content);
   main.querySelectorAll('.desktop-back').forEach(n=>n.remove());
-  const title=selected.phase[0].toUpperCase()+selected.phase.slice(1)+' aktif';
+  const title=nativeTitle(data.variants[selected.phase].title_parts,selected.code);
   const bar=main.querySelector('.bar__merek');if(bar){bar.textContent=title;bar.setAttribute('aria-label',title);}
+  const control=doc.createElement('template');control.innerHTML=data.variants[selected.phase].bar_control;
+  if(control.content.querySelectorAll('a.bar__balik').length!==1||control.content.querySelector('button,script,form,input'))return null;
+  control.content.querySelector('a.bar__balik').setAttribute('href',back.body);
+  main.querySelectorAll('.bar__menu,.bar__balik').forEach(n=>n.remove());main.querySelector('header.bar')?.prepend(control.content);
   const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){
    const template=doc.createElement('template');template.innerHTML=data.variants[selected.phase].breadcrumb;
    const nav=template.content.querySelector('nav.desktop-breadcrumb'),leaf=nav?.querySelector('[aria-current="page"]');
@@ -69,6 +74,6 @@
   frame.dataset.pindahAlamat=address;doc.title=title+' · PT Hadi Mulya Utama';
   return {versi:1,alamat:address,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
- if(typeof module==='object'&&module.exports){module.exports={validPackage,validCatalog,state,backContext};return;}
+ if(typeof module==='object'&&module.exports){module.exports={nativeTitle,validPackage,validCatalog,state,backContext};return;}
  global.PadiKerangkaPengeringanUI=Object.freeze({versi:1,buat});
 })(typeof window==='undefined'?globalThis:window);

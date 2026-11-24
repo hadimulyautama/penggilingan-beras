@@ -28,6 +28,14 @@ def build():
     spec = importlib.util.spec_from_file_location('drying_native_breadcrumb', crumb_path)
     breadcrumb = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(breadcrumb)
+    chrome_path = ROOT / 'app/web/native_detail_chrome.py'
+    inputs.add(chrome_path)
+    spec = importlib.util.spec_from_file_location('dryer_detail_chrome', chrome_path)
+    chrome = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(chrome)
+    base_path = ROOT / 'hmu_tampilan/templates/base.html'
+    inputs.add(base_path)
+    bar_control = chrome.kontrol_bar(base_path.read_text(), laporan=False)
     meta = native.metadata()
     inputs.update(ROOT / path for path in meta["inputs"])
     roots = [ROOT / "app/web", ROOT / "hmu_tampilan"]
@@ -79,7 +87,7 @@ def build():
             node.string = text.replace("</script", "<\\/script")
         crumb = env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(
             state['alamat'], dict(kembali='/pekerjaan?tab=berjalan', breadcrumb_detail='PADI-KODE'), phase.title() + ' aktif'))
-        variants[phase] = dict(html=str(doc), breadcrumb=crumb)
+        variants[phase] = dict(html=str(doc), breadcrumb=crumb, title_parts=meta["document_parts"][phase], bar_control=bar_control)
         if len(variants[phase]["html"].encode()) > 262144:
             raise ValueError("Blueprint fase dryer melebihi batas")
     hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}

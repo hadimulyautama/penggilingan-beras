@@ -131,3 +131,21 @@ def test_generated_package_exact_data_free_and_bounded():
         assert len(crumb.select('.nav-rantai__pemisah'))==2 and crumb.select_one('a.desktop-back')
     js=(ROOT/'app/web/static/pengeringan-native-html.js').read_text()
     assert all(k not in js for k in ('fetch(', 'localStorage', 'sessionStorage', 'history.pushState', 'history.replaceState', 'beforeunload'))
+
+
+@pytest.mark.parametrize('phase',FASE)
+def test_document_title_mobile_back_and_body_heading_match_native_phase(phase):
+    from app.web.native_detail_chrome import judul, kontrol_bar
+    source='detail_pengeringan.html' if phase=='pengeringan' else 'detail_pendinginan_aktif.html'
+    env=Environment(loader=ChoiceLoader([FileSystemLoader(str(ROOT/'app/web/templates')),FileSystemLoader(str(ROOT/'hmu_tampilan/templates'))]),autoescape=True)
+    native=env.get_template(source)
+    expected=''.join(native.blocks['judul'](native.new_context(dict(d={'judul':'Pengeringan','kode':'LOT-17'}))))
+    title=judul(metadata()['document_parts'][phase],'LOT-17')
+    assert title==expected==('Detail Pengeringan' if phase=='pengeringan' else 'Pendinginan aktif LOT-17')
+    shell=env.get_template('pengeringan_native_html.html')
+    assert ''.join(shell.blocks['judul'](shell.new_context(dict(DRYER_KERANGKA={'document_title':title}))))==expected
+    control=BeautifulSoup(kontrol_bar((ROOT/'hmu_tampilan/templates/base.html').read_text(),laporan=False),'html.parser')
+    assert control.select_one('a.bar__balik[aria-label="Kembali"]')['href']=='__PADI_KEMBALI__'
+    assert not control.select('.bar__menu')
+    body=(ROOT/'app/web/templates'/source).read_text()
+    assert '<h1>'+phase.title()+' aktif</h1>' in body

@@ -13,6 +13,14 @@
   let tab=q.get('tab_detail');if(!tabs.includes(tab))tab=q.get('halaman_ukur')?'pengukuran':q.get('halaman_dingin')||q.get('halaman_jeda')?'riwayat':'ringkasan';
   return {address:u.pathname+u.search,phase:match[1],code:match[2],tab};
  }
+ function nativeActions(content,origin){
+  for(const link of content.querySelectorAll('a[href]')){
+   let u;try{u=new URL(link.getAttribute('href'),origin);}catch(_){continue;}
+   // Hanya href yang memang dirender native. Footer editor tidak diadopsi:
+   // klik eksplisit memuat dokumen lengkap beserta controller asli.
+   if(u.origin===origin&&(u.searchParams.has('buka')||u.searchParams.has('nilai')||/^\/riwayat-(?:giling|sosoh|pengeringan)\/[1-9][0-9]*\/(?:koreksi|bobot)$/.test(u.pathname)))link.setAttribute('data-utuh','');
+  }
+ }
  function restoreTab(content,key,phase){
   const native=content.querySelector('.pengeringan-detail');
   // Peralihan fase/riwayat native tidak dipaksa kembali menjadi halaman aktif.
@@ -23,7 +31,7 @@
   for(const tab of all){const active=tab===chosen;tab.setAttribute('aria-selected',String(active));const panel=native.querySelector('#'+tab.getAttribute('aria-controls'));if(panel)panel.hidden=!active;}
   return chosen;
  }
- if(typeof module==='object'&&module.exports){module.exports={descriptor,restoreTab};return;}
+ if(typeof module==='object'&&module.exports){module.exports={descriptor,restoreTab,nativeActions};return;}
  const root=document.querySelector('[data-dryer-native-html]');
  if(!root||root.dataset.dryerNativeReady||!core)return;
  const state=descriptor(root.dataset.url,location.origin);
@@ -48,7 +56,7 @@
  guide?.addEventListener('close',()=>{if(guideSource?.isConnected)(guideSource.getClientRects().length?guideSource:root.querySelector('[data-dryer-menu]'))?.focus({preventScroll:true});});
  show(state.tab);let nativeTab=null;
  core.mount({address:state.address,rootSelector:'[data-dryer-native-html]',statusSelector:'[data-dryer-status]',retrySelector:'[data-dryer-retry]',shellSelector:'[data-dryer-native-html],.halaman-memuat',contentAttribute:'data-dryer-native-isi',messages:{loading:'Memuat data proses terbaru…'},
-  afterInstall({content}){nativeTab=restoreTab(content,root.dataset.tab,state.phase);},
+  afterInstall({content}){nativeActions(content,location.origin);nativeTab=restoreTab(content,root.dataset.tab,state.phase);},
   restoreFocus({focus,retry,content}){
    if(focus===retry||focus.hasAttribute('data-dryer-tab'))nativeTab?.focus({preventScroll:true});
    else if(focus.hasAttribute('data-dryer-menu'))content.querySelector('summary[aria-label="Tindakan proses"],summary[aria-label="Tindakan riwayat"]')?.focus({preventScroll:true});

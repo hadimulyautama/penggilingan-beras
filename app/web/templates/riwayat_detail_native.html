@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block judul %}{{ DETAIL_RIWAYAT.meta.title }}{% endblock %}
+{% block judul %}{{ DETAIL_RIWAYAT.document_title }}{% endblock %}
 {% block isi %}
 {% set D=DETAIL_RIWAYAT %}{% from '_riwayat_detail_native_alat.html' import nilai,tabel,alat,tunggu,skrip with context %}
 <link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
