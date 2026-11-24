@@ -119,7 +119,11 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
                 await expect(tab).to_be_focused()
             await shell.locator('[data-bm-tab=qc]').click()
             release.set()
-            await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+            try:
+                await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+            except AssertionError:
+                print('DETAIL_READ_DIAGNOSTIC', await page.locator('[data-shell-status]').all_text_contents(), transport['errors'])
+                raise
             await expect(page.locator('[data-bm-detail-panel=qc]')).to_be_visible()
             # Native full data is installed with the tab chosen while waiting.
             await expect(page.locator('[data-bm-tab=qc]')).to_be_focused()
