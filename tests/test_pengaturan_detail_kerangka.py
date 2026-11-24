@@ -1,6 +1,9 @@
 """Pure native source/shape tests only, no DB/browser/config/identity writes."""
 import ast
+import copy
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -165,23 +168,80 @@ async def test_direct_document_render_keeps_native_generic_blocktitle_and_no_inv
     assert 'kembali' not in seen[0][1] and set(context)=={'SHELL'}
 
 
-def test_shared_caller_keeps_all_original_guards_readers_and_writers_except_declared_get_block():
-    path='app/web/pengaturan.py';new=ast.parse((ROOT/path).read_text())
-    old=ast.parse(subprocess.run(['git','show','HEAD:'+path],cwd=ROOT,text=True,capture_output=True,check=True).stdout)
-    funcs=lambda tree:{n.name:n for n in tree.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
-    before,after=funcs(old),funcs(new)
-    for name in before:
-        if name!='halaman_pengaturan':assert ast.dump(before[name],include_attributes=False)==ast.dump(after[name],include_attributes=False)
+def _ast_shape(value):
+    """Semantic fields only; keep nonempty generic parameters on newer Python."""
+    if isinstance(value,ast.AST):
+        return [type(value).__name__,[[key,_ast_shape(item)] for key,item in ast.iter_fields(value)
+            if key not in {'lineno','end_lineno','col_offset','end_col_offset'} and not (key=='type_params' and not item)]]
+    if isinstance(value,list):return [_ast_shape(item) for item in value]
+    if value is Ellipsis:return ['literal','Ellipsis']
+    if isinstance(value,bytes):return ['literal-bytes',value.hex()]
+    if isinstance(value,complex):return ['literal-complex',repr(value)]
+    return value
+
+
+def _ast_fingerprint(node):
+    return hashlib.sha256(json.dumps(_ast_shape(node),ensure_ascii=True,separators=(',',':')).encode()).hexdigest()
+
+
+def _native_functions(tree):
+    nodes=[n for n in tree.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))]
+    functions={n.name:n for n in nodes}
+    assert len(nodes)==len(functions), 'Duplicate native function definition'
+    return functions
+
+
+def _native_envelope(tree):
+    return ast.Module(body=[n for n in tree.body if not isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))],type_ignores=tree.type_ignores)
+
+
+def _baseline():
+    receipt=json.loads((ROOT/'tests/fixtures/pengaturan_detail_prechange/baseline.json').read_text())
+    assert receipt['version']==1 and receipt['module']=='app/web/pengaturan.py'
+    assert receipt['baseline_commit']=='144d5f17bcca6eb8c2c0cf2d278246548310529a'
+    assert receipt['baseline_git_blob']=='e8ed57ce6913fff0fe09d7700c970a2214cb52d7'
+    assert receipt['baseline_source_sha256']=='49bce60991dccf0faedae57d7f1687e9113ef245a7daabfef60ad16ef70eaae6'
+    assert receipt['adopted_commit']=='7cddbb56aad9141631b09adcb2a9b99a8378d5eb'
+    return receipt
+
+
+def test_shared_caller_keeps_all_original_guards_readers_and_writers_except_declared_get_block(monkeypatch):
+    # Works in a sealed source export or shallow CI checkout. A command here
+    # would be an error: baseline provenance was verified once and recorded.
+    def no_command(*_,**__):raise AssertionError('Native baseline proof must not call Git or any command')
+    monkeypatch.setattr(subprocess,'run',no_command)
+    receipt=_baseline();new=ast.parse((ROOT/receipt['module']).read_text())
+    after=_native_functions(new)
+    assert set(after)==set(receipt['functions'])
+    assert _ast_fingerprint(_native_envelope(new))==receipt['module_envelope_sha256']
+    for name,function in after.items():
+        if name!='halaman_pengaturan':assert _ast_fingerprint(function)==receipt['functions'][name], name
     caller=after['halaman_pengaturan']
     assert 'Depends(butuh_akun)' in ast.unparse(caller.args)
     remove=[n for n in caller.body if isinstance(n,ast.ImportFrom) and n.module=='app.web.pengaturan_detail_kerangka' or isinstance(n,ast.If) and ast.unparse(n.test)=='permintaan_kerangka(request)']
     assert len(remove)==2
     added=remove[1];source=ast.unparse(added)
+    assert _ast_fingerprint(ast.Module(body=remove,type_ignores=[]))==receipt['declared_get_block_sha256']
     assert "bagian == 'peran' and (not _P.boleh_ganti_gudang(peran_asli_detail))" in source
     assert 'Pilihan tampilan dan gudang tidak tersedia untuk akun ini.' in source
     assert caller.body.index(added)>next(i for i,n in enumerate(caller.body) if isinstance(n,ast.If) and "'sebab-berhenti'" in ast.unparse(n.test))
     caller.body=[n for n in caller.body if n not in remove]
-    assert ast.dump(before['halaman_pengaturan'],include_attributes=False)==ast.dump(caller,include_attributes=False)
+    assert _ast_fingerprint(caller)==receipt['functions']['halaman_pengaturan']
+
+
+def test_fixed_baseline_oracle_detects_writer_commit_or_declared_guard_changes():
+    receipt=_baseline();tree=ast.parse((ROOT/receipt['module']).read_text());functions=_native_functions(tree)
+    writer=copy.deepcopy(functions['tambah_gudang'])
+    commits=[n for n in ast.walk(writer) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='commit']
+    assert commits, 'Control must exercise an actual native writer commit'
+    commits[0].func.attr='rollback' # AST-only negative control, never executed
+    assert _ast_fingerprint(writer)!=receipt['functions']['tambah_gudang']
+    caller=functions['halaman_pengaturan']
+    block=[n for n in caller.body if isinstance(n,ast.ImportFrom) and n.module=='app.web.pengaturan_detail_kerangka' or isinstance(n,ast.If) and ast.unparse(n.test)=='permintaan_kerangka(request)']
+    assert len(block)==2
+    altered=copy.deepcopy(block)
+    altered[1].body.append(ast.Pass())
+    assert _ast_fingerprint(ast.Module(body=altered,type_ignores=[]))!=receipt['declared_get_block_sha256']
 
 
 def test_public_source_only_compiler_and_current_native_breadcrumbs():
