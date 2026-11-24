@@ -159,7 +159,12 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
             if method == 'GET' and urlsplit(str(url)).path == api and fail['next']:
                 fail['next'] = False
                 return httpx.Response(503, json={'detail': 'Fixture read unavailable'})
-            return await native(method, url, **kwargs)
+            response = await native(method, url, **kwargs)
+            if method=='GET' and urlsplit(str(url)).path==api and fail.get('stamp'):
+                fail['stamp']=False
+                payload=response.json();payload['stamp']='fixture-wrong-context'
+                return httpx.Response(200,json=payload)
+            return response
         c.request = request
         async with peramban(c, width) as (page, transport):
             await page.goto(BASE + '/kabar')
@@ -207,16 +212,51 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                     await expect(root.locator('input[type="search"][name="cari"]')).to_have_value('Nama baru & uji')
                     await expect(page.locator('.halaman-memuat')).to_have_count(0)
                     assert not html_entered.is_set()
+                    if os.environ.get('DETAIL_OUT'):
+                        await page.screenshot(path=str(Path(os.environ['DETAIL_OUT']) / (role + '-' + str(width) + '-before-data.png')))
                     release2.set()
                     await expect(root.locator('[data-shell-retry]')).to_be_visible()
+                    fail['stamp']=True
                     await root.locator('[data-shell-retry]').focus()
                     await page.keyboard.press('Enter')
+                    await expect(root.locator('[data-shell-status]')).to_contain_text('Konteks sesi atau gudang berubah')
+                    await expect(root.locator('[data-shell-retry]')).to_be_visible()
+                    await root.locator('[data-shell-retry]').click()
                     await expect(page.locator('[data-stok-controls]')).to_be_visible()
                     await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)
                     await expect(page.locator('[data-shell-retry]')).to_have_count(0)
                     assert not transport['posts'] and not transport['errors'], transport
                 finally:
                     release2.set()
+                transport['gates'].pop('/stok',None)
+                html_release.set()
+                old_entered,old_release,old_done=asyncio.Event(),asyncio.Event(),asyncio.Event()
+                transport['gates'][api]=(old_entered,old_release)
+                transport['completed'][api]=old_done
+                try:
+                    await page.locator('nav[aria-label="Jenis stok"] a').filter(has_text='Karung').click()
+                    await asyncio.wait_for(old_entered.wait(),20)
+                    await expect(root.locator('thead th').first).to_have_text('No.')
+                    await root.locator('input[type="search"][name="cari"]').fill('Belum diterapkan')
+                    link=page.locator('a[href="/pekerjaan"]:visible').first
+                    if not await link.count():
+                        await page.locator('#buka-laci').click()
+                        link=page.locator('#laci a[href="/pekerjaan"]').first
+                    await link.click()
+                    await expect(page).to_have_url(BASE+'/pekerjaan')
+                    await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+                    current=await page.locator('.bingkai').element_handle()
+                    old_release.set();await asyncio.wait_for(old_done.wait(),20)
+                    await page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
+                    assert await current.evaluate('node=>node.isConnected')
+                    await page.go_back()
+                    await expect(page.locator('[data-stok-controls]')).to_be_visible()
+                    await expect(page.locator('[data-stok-controls] input[type="search"][name="cari"]')).to_have_value('Nama baru & uji')
+                    await page.reload()
+                    await expect(page.locator('[data-stok-controls]')).to_be_visible()
+                    await expect(page.locator('[data-stok-controls] input[type="search"][name="cari"]')).to_have_value('Nama baru & uji')
+                finally:
+                    old_release.set()
                 if os.environ.get('DETAIL_OUT'):
                     await page.screenshot(path=str(Path(os.environ['DETAIL_OUT']) / (role + '-' + str(width) + '-stock.png')))
             finally:
