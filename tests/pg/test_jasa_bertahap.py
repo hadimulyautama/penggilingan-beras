@@ -156,6 +156,34 @@ def _tanpa_host_registry(html):
         assert len(matches)==1 and matches[0].start()==end
         assert json.loads(matches[0][1])==shape
         end=matches[0].end()
+    document_hosts=doc.select('#padi-dokumen-kerangka')
+    assert len(document_hosts)<=1
+    if document_hosts:
+        document=document_hosts[0]
+        assert document.name=='script' and document.get('type')=='application/json'
+        assert set(document.attrs)=={'type','id','data-konteks','data-cap'}
+        assert not document.find_parent(class_='bingkai')
+        shape=json.loads(document.string)
+        assert set(shape)=={'versi','sumber','cap','konteks','sesi','laporan'}
+        assert shape['versi']==1 and all(shape[k]==registry[k] for k in ('cap','konteks','sesi'))
+        assert shape['konteks']==document['data-konteks'] and shape['cap']==document['data-cap']
+        assert set(shape['laporan'])=={'targets','choices','rentang'}
+        from app.web.dokumen_kerangka_langsung import aset
+        meta=aset();assert shape['sumber']==meta['sumber']
+        assert len(set(shape['laporan']['targets']))==len(shape['laporan']['targets'])>0
+        assert set('/laporan/'+code for code in shape['laporan']['targets'])<=set(meta['variants'])
+        assert set(shape['laporan']['targets'])<=set(shape['laporan']['choices'])
+        from app.web.laporan import _daftar,PERIODE
+        assert set(shape['laporan']['choices'])<=set(l.kode.removeprefix('tahap_') for l in _daftar())
+        assert set(shape['laporan']['rentang'])=={key for key,_ in PERIODE if key!='khusus'}
+        from datetime import date
+        for value in shape['laporan']['rentang'].values():
+            assert set(value)=={'dari','sampai'} and date.fromisoformat(value['dari'])<=date.fromisoformat(value['sampai'])
+        matches=list(re.finditer(
+            r'\n<script type="application/json" id="padi-dokumen-kerangka" '
+            r'data-konteks="[^\"]+" data-cap="[^\"]+">([^<]*)</script>',html))
+        assert len(matches)==1 and matches[0].start()==end and json.loads(matches[0][1])==shape
+        end=matches[0].end()
     assert html.count('</body>') == 1 and html[end:].startswith('\n</body>')
     return html[:start] + html[end + 1:]
 

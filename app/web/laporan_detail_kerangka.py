@@ -82,7 +82,7 @@ def _source():
     return catalog, isi, groups, sosoh, pins
 
 
-def metadata(kode):
+def metadata(kode, *, kepala=None):
     """Fixed columns are native. Sosoh retains only genuinely invariant leaves."""
     catalog, isi, groups, sosoh, pins = _source()
     if kode not in catalog or kode == 'transfer_pk':
@@ -99,9 +99,10 @@ def metadata(kode):
             for column in columns:
                 if column['kunci'] in ('bahan_basah', 'bahan_kering', 'bahan'):
                     column['subkelompok'] = 'Gabah terpakai'
-    from app.services.laporan_kepala import susun
+    if kepala is None:
+        from app.services.laporan_kepala import susun as kepala
     return dict(kode=kode, nama=catalog[kode][0], dasar=catalog[kode][1].replace('_', ' '),
-                kolom=columns, kepala_tabel=susun(columns), dinamis=kode == 'penyosohan',
+                kolom=columns, kepala_tabel=kepala(columns), dinamis=kode == 'penyosohan',
                 source_pins=dict(pins))
 
 

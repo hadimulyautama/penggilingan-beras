@@ -1,0 +1,41 @@
+{
+  "versi": 1,
+  "sumber": "9976c07047f53a5e8216c44457cc1939acfbf06dfd4459834c0222bfb361d279",
+  "variants": [
+    "/laporan/gabah_masuk",
+    "/laporan/pk_masuk",
+    "/laporan/penyosohan",
+    "/laporan/penggilingan",
+    "/laporan/pengeringan",
+    "/laporan/pemasukan_pk",
+    "/laporan/pindah_pk",
+    "/laporan/pengemasan",
+    "/laporan/kemas_ulang",
+    "/laporan/barang_keluar",
+    "/laporan/retur_pelanggan",
+    "/laporan/retur_pk"
+  ],
+  "aset_sha256": "64b3333457d373d5229b46e058b6fcc2798f56c6b743df63e52d4c6fcdba0fa7",
+  "inputs": {
+    "app/services/laporan_isi_tahap.py": "a36b9c275e388d6621ce6330d09cdcfc6e61a1187549a40973f297e6b0752610",
+    "app/services/laporan_kepala.py": "b5b5059144db49168299a27733732ed694b6632b062725963510d6f45f187092",
+    "app/services/laporan_periode.py": "98493d2491b1ba8552fb5d1c2481de12aad67c428c5dcaabf4c2d521c0b31514",
+    "app/web/laporan.py": "59cfb5ab83450df63053094531e673b932e38f1901d364a01a3848d023a3f165",
+    "app/web/laporan_detail_kerangka.py": "bf3dc82fb3ade15a82174ff1234fea09c08bd57e11777c782f60dd1c2831118f",
+    "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
+    "app/web/static/kerangka-dokumen-ui-runtime.js": "8162cf34d214e7ec8d4809f8e09981ed280cafa341c77cc2c903d75fc25f5795",
+    "app/web/static/laporan-detail-native.js": "6371ea253f1c4dbe7521b23e90cb95e47cc30148c0983e526501d7ca5ac18155",
+    "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
+    "app/web/templates/laporan_detail_kerangka.html": "7a491ad1e3fcdfefb3d44e08067e64525f671620b35bff9b42f5684e041057c2",
+    "app/web/templates/laporan_katalog_blueprint.html": "ff4b17628b3b5c2967c3abe4f96f09c06a1eb895a5bf4b5c006be97dd66122e2",
+    "hmu_tampilan/templates/_laporan_kontrol.html": "a3e19c3b16b1d90b5e30bd917643a38bd5e0452606c3a47c97797e701f658243",
+    "hmu_tampilan/templates/_laporan_navigasi.html": "4dacb95d9e4f8419be4f197d12c85574b0ccd19afd2a8b5e17b423a8ba7dd1f2",
+    "hmu_tampilan/templates/_laporan_periode_gaya.html": "ab599e133d0b424be830c915874fd744b967d5e8fb5013b2f5e8d75286fd3b8c",
+    "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
+    "hmu_tampilan/templates/laporan.html": "c92a2889c8f0f83e916f87a78b42b97ac97c1ad7fbea278b43073c378430b7a4",
+    "scripts/buat_kerangka_dokumen.py": "27b75fe43d40c7eb3d36d4a29aa10d86df9ca4a3df05f5adccdadf70c012ee48",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621",
+    "scripts/kerangka_laporan_katalog.py": "83c609ed00bed0c87bae6910d934312863c3a679ad887070250600e04454b86b"
+  }
+}

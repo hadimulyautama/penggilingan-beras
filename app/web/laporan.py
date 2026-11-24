@@ -165,6 +165,9 @@ async def detail_laporan(request: Request, kode: str, periode: str = "bulan_ini"
     if periode not in {k for k, _ in PERIODE}:
         raise HTTPException(422, "Periode tidak dikenal.")
     awal, akhir = _rentang(periode, dari, sampai)
+    from app.web.laporan_detail_kerangka import dokumen as dokumen_detail
+    shell=await dokumen_detail(request,akun,kode,periode,dari,sampai)
+    if shell is not None:return shell
     async with SessionLocal() as db:
         data = await ambil(db, kode, awal, akhir)
     parameter = dict(periode=periode)

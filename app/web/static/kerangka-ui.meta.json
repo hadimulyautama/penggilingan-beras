@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "4cd568a1987bf1de57e9ea362403130f73794ba4e32182f753470a2bf308faaa",
-  "aset_sha256": "9b770f77eb6cb2603b7d5f316bfc4fee1b6916fb860ed184895c19df77c6ceb5",
+  "sumber": "4b05530926524402fadf3dfa1c9734408315947788eda9a222e1a364694da109",
+  "aset_sha256": "47fbec4e187f785adf4af6cc22a13fec528cdecf1325b80970e9a55072afce46",
   "variants": [
     "pengiriman-admin",
     "pengiriman-operator",
@@ -28,7 +28,7 @@
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/giling_native_html.py": "837a1252881b72d354740ad44c333fb759258cc4b43351da4a40c2fa9a3b632b",
     "app/web/halaman_bertahap.py": "e37d1d06a8eb49c277aa9eb1f5428f1be91bcc0ce9bcab51ab4ac89981c64db6",
-    "app/web/laporan.py": "cb5cf3681df1d5cc3a9f9002bf3ceedbdb3d81c964715d9bc55e569d1bf3d2da",
+    "app/web/laporan.py": "59cfb5ab83450df63053094531e673b932e38f1901d364a01a3848d023a3f165",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
     "app/web/static/bantuan_pengiriman.js": "9a2c5b7335519710fb397d473d80f812bf7695c914ee3913bd90737aa69cbe2b",
     "app/web/static/daftar_pengiriman.css": "d4eae5812f6f15bd23c3cbf53cbd39b056e63a1f4be018b97c73e2fdfda12c3b",
