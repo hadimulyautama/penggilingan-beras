@@ -21,7 +21,9 @@ PADI_BACA_NATIVE.mount({
 
 The declaration is an allowlist entry owned by root, **not authorization**. It must never be built from arbitrary links/request IDs, role claims, URL parameters or storage. Each server native GET must still authenticate and authorize scope/row fresh. A new family's native scripts must be reviewed to avoid auto-transactions; this core does not invent transaction policy or auto-adopt controllers.
 
-The shell supplies immutable `data-stamp` + exact `data-url`, native frame/main/session metadata and a loading structure whose actions requiring data are unavailable. Core compares current exact address/root/CAP/frame-context/session, then verifies fresh 200 nonredirected HTML and one frame/main/session, ordered content markers, matching fresh metadata and absence of shell/generic loading. CSS/JS are prepared by same-origin versioned GET before a final current check. DOM swap and native script activation run without another await. URL equality and stamp are correlation only; they do not create access.
+The shell supplies immutable `data-stamp` + exact `data-url`, native frame/main/session metadata and a loading structure whose actions requiring data are unavailable. Core compares current exact address/root/CAP/frame-context/session, then verifies fresh 200 nonredirected HTML and one frame/main/session, ordered content markers inside the fresh frame, fresh session inside the same frame, an 8 MiB UTF-8 HTML cap before DOMParser, matching fresh metadata and absence of shell/generic loading. CSS/JS are prepared by same-origin versioned GET before a final current check. DOM swap and native script activation run without another await. URL equality and stamp are correlation only; they do not create access.
+
+If prepared control activation fails after swap, the fresh content gets a role=alert and explicit data-utuh GET reload link; form controls stay unavailable, with no automatic resend or ready claim. Synchronous script navigation stops remaining activation. This does not claim to handle every future asynchronous controller error.
 
 Leaving/pagehide aborts optional reads and disposes listener/observer; late responses cannot install. Retry uses GET `X-Pindah: 1`, no-store and same-origin credentials. No cache, persistence, business ID, actor/role, permission inference, POST or policy state belongs to the core. Read failure retains the disabled shell and retry explanation.
 
@@ -34,7 +36,7 @@ Only template change: versioned core script precedes versioned Account adapter. 
 ## Proof and remaining gate
 
 - Six original Account Node tests unchanged and PASS through the thin adapter.
-- Eight new pure core tests PASS: explicit same-origin/canonical URL, expected-address requirement, cross-origin/undeclared factory refusal, one install on a declared second synthetic route, cross-address response refusal before assets, CAP/context/session mismatch refusal, late prepared response ignored and stopped reader inert.
+- Eleven new pure core tests PASS: explicit same-origin/canonical URL, expected-address requirement, cross-origin/undeclared factory refusal, one install on a declared second synthetic route, cross-address response refusal before assets, CAP/context/session mismatch refusal, late prepared response ignored stopped reader inert, UTF-8 HTML cap, activation failure reported on a fresh target and synchronous script navigation cutoff.
 - Existing 22 Python Account structure tests PASS. Diff whitespace check and JS syntax checks PASS.
 - Used the existing Node bundled with approved Playwright environment; no installation or browser/PG/network execution.
 

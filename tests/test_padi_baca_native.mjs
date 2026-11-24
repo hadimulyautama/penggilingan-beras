@@ -49,3 +49,26 @@ test('navigation during asset preparation prevents native script activation',asy
 test('leaving before first read is inert; after stop no retry can fetch',async()=>{
  const f=fixture();f.reader.stop();await f.reader.read();assert.equal(f.calls.read,0);assert.equal(f.calls.install,0);
 });
+test('native HTML cap counts UTF-8 bytes before a DOM parser is used',()=>{
+ const limit=8*1024*1024;
+ assert.equal(core.htmlWithinLimit('x'.repeat(limit)),true);
+ assert.equal(core.htmlWithinLimit('x'.repeat(limit+1)),false);
+ assert.equal(core.htmlWithinLimit('é'.repeat(limit/2+1)),false);
+ assert.equal(core.htmlWithinLimit(null),false);
+});
+test('prepared activation failure reports on current fresh target and stops later scripts',()=>{
+ const events=[];let oldRootConnected=false;
+ const ok=core.activatePrepared(['style','bad-script','later-script'],{
+  current:()=>true, // fresh target; detached old root is deliberately irrelevant
+  activate(item){events.push(item);if(item==='bad-script')throw Error('synthetic activation failure');},
+  failed(){assert.equal(oldRootConnected,false);events.push('fresh-target-warning');}
+ });
+ assert.equal(ok,false);assert.deepEqual(events,['style','bad-script','fresh-target-warning']);
+});
+test('native script navigation stops subsequent prepared scripts without warning on stale target',()=>{
+ const events=[];let active=true;
+ const ok=core.activatePrepared(['script-navigates','must-not-run'],{
+  current:()=>active,activate(item){events.push(item);active=false;},failed(){events.push('must-not-warn');}
+ });
+ assert.equal(ok,false);assert.deepEqual(events,['script-navigates']);
+});

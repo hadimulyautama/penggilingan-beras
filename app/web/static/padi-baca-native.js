@@ -3,6 +3,15 @@
  * business IDs/roles, transaction policy, POST or persistence. */
 (function (global) {
  'use strict';
+ const HTML_LIMIT=8*1024*1024;
+ function htmlWithinLimit(html){return typeof html==='string'&&html.length<=HTML_LIMIT&&new TextEncoder().encode(html).byteLength<=HTML_LIMIT;}
+ function activatePrepared(items,ops){
+  for(const item of items){
+   if(!ops.current())return false;
+   try{ops.activate(item);}catch(error){if(ops.current())ops.failed(error);return false;}
+  }
+  return true;
+ }
  function sameOriginAddress(value,origin){
   if(typeof value!=='string'||typeof origin!=='string'||!value.startsWith('/')||value.startsWith('//'))return false;
   try{const url=new URL(value,origin);return url.origin===new URL(origin).origin&&!url.hash&&url.pathname+url.search===value;}catch(_){return false;}
@@ -52,9 +61,11 @@
  }
  async function parse(response){
   if(response.redirected||!response.ok||(response.headers.get('content-type')||'').split(';')[0].trim()!=='text/html')throw Error((config.messages?.response||'Data belum dapat dibaca. Muat ulang halaman bila sesi atau akses berubah.'));
-  const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+  const html=await response.text();if(!htmlWithinLimit(html))throw Error('Dokumen terlalu besar untuk dibaca bertahap. Muat ulang halaman.');
+  const doc=new DOMParser().parseFromString(html,'text/html');
   if(doc.querySelectorAll('.bingkai').length!==1||doc.querySelectorAll('#formulir-sesi').length!==1||doc.querySelectorAll('#isi-halaman').length!==1||doc.querySelector('.halaman-memuat')||doc.querySelector(config.shellSelector||config.rootSelector))throw Error((config.messages?.native||'Halaman native belum tersedia. Coba lagi tanpa mengirim perubahan.'));
-  const source=doc.getElementById('isi-halaman'),freshFrame=doc.querySelector('.bingkai');
+  const source=doc.getElementById('isi-halaman'),freshFrame=doc.querySelector('.bingkai'),freshSession=doc.getElementById('formulir-sesi');
+  if(!freshFrame.contains(source)||!freshFrame.contains(freshSession))throw Error('Struktur sesi halaman tidak sesuai. Muat ulang halaman.');
   const [first,last]=markers(source),content=document.createElement('div');content.dataset.padiBacaNativeIsi='';if(config.contentAttribute)content.setAttribute(config.contentAttribute,'');
   for(let node=first.nextSibling;node&&node!==last;node=node.nextSibling)content.append(node.cloneNode(true));
   return {doc,content,identity:{cap:doc.documentElement.dataset.versi||'',context:freshFrame.dataset.pindahKonteks||'',token:doc.getElementById('formulir-sesi').dataset.token||'',address:freshFrame.dataset.pindahAlamat||''}};
@@ -91,12 +102,30 @@
    if(!current())return;const [start,end]=markers(main),focus=document.activeElement,inside=root.contains(focus);
    // Seluruh GET aset sudah selesai. Tidak ada await setelah pemeriksaan akhir.
    observer.disconnect();lifecycle.abort();while(start.nextSibling&&start.nextSibling!==end)start.nextSibling.remove();end.before(fresh.content);document.title=fresh.doc.title||document.title;
-   for(const item of prepared){
-    const replacement=document.createElement(item.type==='style'?'style':'script');
-    for(const attr of item.node.attributes)if(!['src','href','rel','defer','async'].includes(attr.name))replacement.setAttribute(attr.name,attr.value);
-    replacement.textContent=item.text;item.node.replaceWith(replacement);
-   }
-   if(inside&&document.activeElement===document.body)config.restoreFocus?.({focus,retry,content:fresh.content});
+   const installedCurrent=()=>fresh.content.isConnected&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);
+   const activated=activatePrepared(prepared,{current:installedCurrent,
+    activate(item){
+     const replacement=document.createElement(item.type==='style'?'style':'script');
+     for(const attr of item.node.attributes)if(!['src','href','rel','defer','async'].includes(attr.name))replacement.setAttribute(attr.name,attr.value);
+     replacement.textContent=item.text;
+     let scriptError=false;const failedScript=()=>{scriptError=true;};
+     if(item.type==='script')window.addEventListener('error',failedScript);
+     try{item.node.replaceWith(replacement);if(scriptError)throw Error('Kontrol halaman gagal disiapkan.');}
+     finally{if(item.type==='script')window.removeEventListener('error',failedScript);}
+    },
+    failed(){
+     // The old shell is already detached: report on the fresh content,
+     // hold form controls, and offer one explicit native GET reload only.
+     fresh.content.dataset.nativeReadState='failed';
+     for(const form of fresh.content.querySelectorAll('form'))for(const field of form.querySelectorAll('input,select,textarea,button'))field.disabled=true;
+     const warning=document.createElement('section');warning.setAttribute('role','alert');
+     const text=document.createElement('p');text.textContent='Kontrol halaman belum dapat disiapkan. Muat ulang halaman untuk membaca data terbaru; tidak ada pengiriman ulang otomatis.';
+     const reload=document.createElement('a');reload.className='btn';reload.href=ADDRESS;reload.setAttribute('data-utuh','');reload.textContent='Muat ulang halaman';
+     warning.append(text,reload);fresh.content.prepend(warning);
+    }
+   });
+   if(!activated)return;
+   if(installedCurrent()&&inside&&document.activeElement===document.body)config.restoreFocus?.({focus,retry,content:fresh.content});
   }
  });
  observer.observe(document.body,{childList:true,subtree:true});
@@ -104,7 +133,7 @@
  window.addEventListener('pagehide',()=>{reader.stop();observer.disconnect();lifecycle.abort();},{once:true,signal:lifecycle.signal});
  reader.read();return reader;
  }
- const api={sameOriginAddress,sameIdentity,createReader,mount};
+ const api={sameOriginAddress,sameIdentity,createReader,mount,htmlWithinLimit,activatePrepared};
  if(typeof module==='object'&&module.exports){module.exports=api;return;}
  global.PADI_BACA_NATIVE=api;
 })(typeof window==='undefined'?globalThis:window);
