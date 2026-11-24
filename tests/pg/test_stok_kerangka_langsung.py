@@ -101,6 +101,22 @@ async def test_filter_pelanggan_gudang_dan_input_terserialisasi_saat_tab_ditahan
                 assert len(forms)==2
                 for values in forms:
                     assert values==dict(tab='produk',pemilik='jasa',gudang='g2',pelanggan_id=pid,cari='Baru & nilai')
+                await root.locator('[data-sk-buka="sk-filter"]').first.click()
+                owner=root.locator('.sk-form-filter select[name="pemilik"]')
+                customer=root.locator('.sk-form-filter select[name="pelanggan_id"]')
+                await owner.select_option('pabrik')
+                await expect(root.locator('[data-stok-pelanggan]')).to_be_hidden()
+                await owner.select_option('jasa')
+                await expect(root.locator('[data-stok-pelanggan]')).to_be_visible()
+                await expect(customer).to_be_enabled()
+                await customer.select_option(str(lengkap['pelanggan_id']))
+                actual=await root.locator('.sk-form-filter').evaluate("f=>new FormData(f).getAll('pelanggan_id')")
+                assert actual==[str(lengkap['pelanggan_id'])], 'PID lama tidak boleh dikirim bersama pilihan baru'
+                # Restore the original draft before accepting its pending read.
+                await customer.select_option(pid)
+                await page.keyboard.press('Escape')
+                await expect(root.locator('[data-sk-buka="sk-filter"]').first).to_be_focused()
+                await expect(customer).to_be_enabled()
                 assert not transport['posts'] and not transport['errors']
                 release.set()
                 await expect(page.locator('[data-stok-controls]')).to_be_visible()

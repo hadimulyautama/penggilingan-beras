@@ -9,13 +9,14 @@
  const detail=root.dataset.kind==='barang-masuk-detail';
  function addressNow(){const u=new URL(location.href);if(detail)u.searchParams.delete('tab_detail');return u.pathname+u.search;}
  const address=addressNow(),token=document.getElementById('formulir-sesi')?.dataset.token||'',stamp=root.dataset.stamp;
- const forms=Array.from(root.querySelectorAll('form')),initialForms=forms.map(f=>new URLSearchParams(new FormData(f)).toString());
+ function formState(form){const values=new URLSearchParams(new FormData(form));if(root.dataset.kind==='stok')values.sort();return values.toString();}
+ const forms=Array.from(root.querySelectorAll('form')),initialForms=forms.map(formState);
  let sequence=0,controller=null,pending=null,finished=false,readFromRetry=false;
  function current(number){return root.isConnected&&number===sequence&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
  function stop(){++sequence;pending=null;if(controller)controller.abort();controller=null;observer.disconnect();}
  const observer=new MutationObserver(()=>{if(!root.isConnected)stop();});
  observer.observe(document.body,{childList:true,subtree:true});
- function controlsChanged(){return forms.some((f,i)=>new URLSearchParams(new FormData(f)).toString()!==initialForms[i]);}
+ function controlsChanged(){return forms.some((f,i)=>formState(f)!==initialForms[i]);}
  function interacting(){return controlsChanged()||!!root.querySelector('details[open],dialog[open]')||root.contains(document.activeElement)&&/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);}
  function markers(element){const nodes=Array.from(element.childNodes);return [nodes.find(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:mulai'),nodes.find(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:akhir')];}
  async function prepareScripts(container,doc,signal){

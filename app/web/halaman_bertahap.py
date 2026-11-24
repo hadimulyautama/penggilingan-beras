@@ -206,9 +206,9 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lo
         # akan memasang controller/filter baris sebelum data tersedia.
         import re
         from html import escape
-        response.body = response.body.replace(
-            b'data-sk-cetak=""',
-            b'data-sk-cetak="" disabled aria-describedby="shell-cetak-alasan"')
+        response.body = re.sub(
+            rb'\bdata-sk-cetak(?:="")?(?=[\s>])',
+            b'data-sk-cetak="" disabled aria-describedby="shell-cetak-alasan"', response.body)
         response.body = re.sub(
             rb'(<select class="fld" name="pelanggan_id")(?: disabled)?(>)',
             rb'\1 disabled aria-describedby="shell-pelanggan-alasan"\2', response.body)

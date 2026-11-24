@@ -36,11 +36,13 @@
   const owner=form.querySelector('[name=pemilik]'),warehouse=form.querySelector('[name=gudang]'),label=form.querySelector('[data-stok-pelanggan]'),select=label?.querySelector('select'),status=form.querySelector('[data-stok-pelanggan-status]');
   if(!owner||!warehouse||!select||!status)return;
   const token=document.getElementById('formulir-sesi')?.dataset.token||'';let sequence=0,load=null;
+  function syncHidden(){const hidden=form.querySelector('input[type="hidden"][name="pelanggan_id"]');if(hidden){hidden.disabled=owner.value!=='jasa'||!select.disabled;if(!hidden.disabled)hidden.value=select.value;}}
+  syncHidden();
   function valid(n){return root.isConnected&&n===sequence&&location.pathname==='/stok'&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
   async function read(){
    if(load)load.abort();const n=++sequence;label.hidden=owner.value!=='jasa';select.disabled=owner.value!=='jasa';status.hidden=true;
-   if(owner.value!=='jasa')return;
-   load=new AbortController();const current=load;select.disabled=true;status.hidden=false;status.textContent='Memuat pelanggan…';
+   syncHidden();if(owner.value!=='jasa')return;
+   load=new AbortController();const current=load;select.disabled=true;syncHidden();status.hidden=false;status.textContent='Memuat pelanggan…';
    const timer=setTimeout(()=>current.abort(),20000);
    try{
     const url=new URL(root.dataset.pelangganUrl,location.href);url.searchParams.set('gudang',warehouse.value);
@@ -50,8 +52,8 @@
     const doc=new DOMParser().parseFromString(await response.text(),'text/html'),source=doc.querySelector('.sk-form-filter [name=pelanggan_id]');
     if(!valid(n))return;
     if(!source||doc.getElementById('formulir-sesi')?.dataset.token!==token)throw Error('Pilihan pelanggan belum dapat dibaca untuk sesi ini. Muat ulang halaman.');
-    const value=select.value;select.replaceChildren(...Array.from(source.options).map(o=>o.cloneNode(true)));select.value=value;if(select.selectedIndex<0)select.value='';select.disabled=false;status.hidden=true;
-   }catch(e){if(valid(n)){select.disabled=true;status.textContent=e.name==='AbortError'?'Pembacaan pelanggan terlalu lama. Terapkan filter untuk membaca titipan tanpa memilih pelanggan.':e.message;}}
+    const value=select.value;select.replaceChildren(...Array.from(source.options).map(o=>o.cloneNode(true)));select.value=value;if(select.selectedIndex<0)select.value='';select.disabled=false;syncHidden();status.hidden=true;
+   }catch(e){if(valid(n)){select.disabled=true;syncHidden();status.textContent=e.name==='AbortError'?'Pembacaan pelanggan terlalu lama. Terapkan filter untuk membaca titipan tanpa memilih pelanggan.':e.message;}}
    finally{clearTimeout(timer);if(load===current)load=null;}
   }
   // Listener capture menggantikan consumer pilihan pada dua route saja;
