@@ -67,3 +67,16 @@ test('browser bootstrap marks unknown checkbox before mounting the GET reader',(
  vm.runInNewContext(readFileSync(new URL('../app/web/static/fasilitas-parent-native.js',import.meta.url),'utf8'),context);
  assert.equal(checkbox.indeterminate,false);assert.deepEqual(events,['GET mount']);
 });
+test('fixed private BM prototype and current document have separate strict addresses',()=>{
+ const main={},session={dataset:{token:p.sesi}},frame={dataset:{pindahAlamat:'/barang-masuk',pindahKonteks:p.konteks},contains:n=>n===main||n===session};
+ const doc={documentElement:{dataset:{versi:p.cap}},querySelector:()=>frame,querySelectorAll:()=>[{}],getElementById:id=>id==='isi-halaman'?main:session};
+ const valid=()=>api.prototypeBound(doc,p.konteks,p.cap,p.sesi);assert.equal(valid(),true);
+ assert.equal(api.frameBound(doc,p.konteks,p.cap,p.sesi,'/pengaturan'),false);
+ for(const address of ['/pengaturan','/barang-masuk?tab=lama','/pengaturan/mesin','']){frame.dataset.pindahAlamat=address;assert.equal(valid(),false);}
+ frame.dataset.pindahAlamat='/barang-masuk';
+ for(const [key,owner] of [['pindahKonteks',frame.dataset],['token',session.dataset],['versi',doc.documentElement.dataset]]){const old=owner[key];owner[key]='old';assert.equal(valid(),false);owner[key]=old;}
+ frame.contains=()=>false;assert.equal(valid(),false);frame.contains=n=>n===main||n===session;
+ doc.querySelectorAll=()=>[{},{}];assert.equal(valid(),false);
+ const source=readFileSync(new URL('../app/web/static/kerangka-fasilitas-parent-ui-runtime.js',import.meta.url),'utf8');
+ assert.ok(source.includes('frameBound(document,ctx,cap,token,location.pathname+location.search)'));assert.ok(source.includes('if(!prototypeBound(doc,ctx,cap,token))return null'));
+});

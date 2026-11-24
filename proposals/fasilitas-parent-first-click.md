@@ -107,3 +107,17 @@ No release readiness is claimed. Root owns global integration, runtime
 coverage, final regeneration, official CI, rollback and eventual website gate.
 Remaining direct-document waiting and per-row identity-dependent controls
 are explicitly held to native fresh reading, not represented as completed.
+
+## Fixed Root prototype contract (source correction)
+
+Root provider passes its decoded `/barang-masuk` registry frame, not a snapshot
+of `/pengaturan`. Factory therefore validates the parsed private prototype's
+address as exactly `/barang-masuk`, retaining unique frame/main/session
+containment and matching CAP/context/session. Separately the **current live
+document** must still match `location.pathname + location.search`, and the
+connected private family descriptor is checked there. The target remains one
+of the four allowlisted bare URLs; its root/frame address and stamp are set
+to that destination before SDK mount. A different prototype address, stale
+identity or uncontained session declines. This changes no server target guard
+or native GET. Browser acceptance barriers are unchanged; source checks are
+not a runtime PASS.

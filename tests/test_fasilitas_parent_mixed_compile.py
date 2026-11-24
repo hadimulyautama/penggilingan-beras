@@ -32,6 +32,22 @@ assert "input[type=checkbox][aria-checked=mixed]:disabled" in source
 assert 'input.indeterminate=true' in source
 assert 'preparePending(root);core.mount(config)' in source
 assert 'input.checked=' not in source
+for target,variant in data['variants'].items():
+ doc=BeautifulSoup(variant['html'],'html.parser')
+ roots=doc.select('[data-fasilitas-parent-kerangka]')
+ assert len(roots)==1
+ root=roots[0]
+ assert root['data-url']==target and root['data-stamp']=='__PADI_STAMP__'
+ assert root['data-record-ready']=='0'
+ status=root.select_one('[data-fp-status]');retry=root.select_one('[data-fp-retry]')
+ assert status is not None and status['role']=='status' and status['aria-live']=='polite'
+ assert retry is not None and retry['type']=='button' and retry.has_attr('hidden')
+ refs=doc.select('script[data-facility-parent-script]')
+ assert len(refs)==2 and all(n['data-facility-parent-script'] in data['scripts'] for n in refs)
+runtime=Path('app/web/static/kerangka-fasilitas-parent-ui-runtime.js').read_text()
+assert "frameBound(document,ctx,cap,token,location.pathname+location.search)" in runtime
+assert "frameBound(doc,ctx,cap,token,'/barang-masuk')" in runtime
+assert "root.dataset.stamp=ctx+'|'+target" in runtime
 for target in ('/pengaturan/mesin','/pengaturan/jenis-proses'):
  doc=BeautifulSoup(data['variants'][target]['html'],'html.parser')
  boxes=doc.select('input[type=checkbox]')

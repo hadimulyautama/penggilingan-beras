@@ -17,7 +17,10 @@
   return !!frame&&!!main&&!!session&&doc.querySelectorAll('.bingkai').length===1&&doc.querySelectorAll('#isi-halaman').length===1&&doc.querySelectorAll('#formulir-sesi').length===1
    &&frame.contains(main)&&frame.contains(session)&&frame.dataset.pindahKonteks===ctx&&doc.documentElement.dataset.versi===cap&&session.dataset.token===token&&(address===undefined||frame.dataset.pindahAlamat===address);
  }
- if(typeof module==='object'&&module.exports){module.exports={valid,frameBound,TARGETS,TITLES};return;}
+ // Root supplies its private native /barang-masuk registry prototype, not
+ // a snapshot of the current Settings page. Its identity still must match.
+ function prototypeBound(doc,ctx,cap,token){return frameBound(doc,ctx,cap,token,'/barang-masuk');}
+ if(typeof module==='object'&&module.exports){module.exports={valid,frameBound,prototypeBound,TARGETS,TITLES};return;}
  const data=global.PadiKerangkaFasilitasParentData;
  function construct(target,base,ctx,cap,token){
   if(!TARGETS.includes(target)||typeof base!=='string'||base.length>8388608||!frameBound(document,ctx,cap,token,location.pathname+location.search))return null;
@@ -25,7 +28,7 @@
   const hosts=document.querySelectorAll('#'+HOST);if(hosts.length!==1)return null;
   const host=hosts[0];if(!host.isConnected||host.dataset.cap!==cap||host.dataset.konteks!==ctx||host.textContent.length>4096)return null;
   let p;try{p=JSON.parse(host.textContent);}catch(_){return null;}if(!valid(data,p,ctx,cap,token))return null;
-  const doc=new DOMParser().parseFromString(base,'text/html');if(!frameBound(doc,ctx,cap,token,location.pathname+location.search))return null;
+  const doc=new DOMParser().parseFromString(base,'text/html');if(!prototypeBound(doc,ctx,cap,token))return null;
   const frame=doc.querySelector('.bingkai'),main=doc.getElementById('isi-halaman'),nodes=[...main.childNodes],starts=nodes.filter(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:mulai'),ends=nodes.filter(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:akhir');
   if(starts.length!==1||ends.length!==1||!(starts[0].compareDocumentPosition(ends[0])&Node.DOCUMENT_POSITION_FOLLOWING))return null;
   const part=doc.createElement('template');part.innerHTML=data.variants[target].html;

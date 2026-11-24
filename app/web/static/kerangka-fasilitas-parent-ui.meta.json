@@ -1,13 +1,13 @@
 {
   "versi": 1,
-  "sumber": "9a1ca24167de6c035a7b7eb63384dc17cb8524e856c030c7fd743fb86f2380a9",
+  "sumber": "a98de8265c1c0dc6a965a557881ff9d3b6225bcaf1a9e728c1d7fb8668565495",
   "variants": [
     "/pengaturan/gudang",
     "/pengaturan/silo",
     "/pengaturan/mesin",
     "/pengaturan/jenis-proses"
   ],
-  "aset_sha256": "ffc09fd5c45d91ae7814a427e4adc746a224f6a5b874543f91880ef4a8ef7cf5",
+  "aset_sha256": "66f759cb29bae14ae58a913858d9ee0add1b1da3cd10029aa5fdb10d5eb0229d",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/fasilitas.py": "a30dda5e9f84b44ec8847553359245ac087736d199645697acdc713bc54f825d",
@@ -15,7 +15,7 @@
     "app/web/pengaturan.py": "e2c8ba8f5262abe646c9a9115570be010ce483a83a26923d3819acf9fbae4f82",
     "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
     "app/web/static/fasilitas-parent-native.js": "f38bcb0c409e0122fbf849e624c16ebd70df90495c794bd4c5b6490979e81b3c",
-    "app/web/static/kerangka-fasilitas-parent-ui-runtime.js": "73c6ef5ce9ca9fe5e755e0e2d45b4d581cde2142d7a15276bb798feb09468350",
+    "app/web/static/kerangka-fasilitas-parent-ui-runtime.js": "7cfe4555cad5e52f2b425b2fe1eb60557fd8b024b71e325f6ee198286502099f",
     "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
     "app/web/templates/_fasilitas_form.html": "946b915a851fec3e5699301fb98cee78ce0edaeefd1d8b85b868c4105505c59b",
     "app/web/templates/_fasilitas_parent_empty.html": "fd7eeca2fc875e73af409bb09426c02439191f29aa020bbdc542427439b90299",
