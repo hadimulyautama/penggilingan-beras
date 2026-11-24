@@ -7,6 +7,7 @@ from playwright.async_api import expect
 from bs4 import BeautifulSoup
 from tests.pg.test_barang_masuk_bertahap_browser import peramban,BASE
 from tests.pg.test_koreksi_bahan_berjalan import running,dunia
+from tests.pg.test_tambah_silo_berjalan import g1
 from tests.pg.test_proses_aktif_detail import pengeringan,dryer_pabrik
 from tests.pg.test_riwayat_giling import _klien
 from tests.pg.test_halaman_bertahap import _sidik
@@ -18,7 +19,7 @@ async def shot(page,name):
 
 @pytest.mark.parametrize('role',['admin','operator'])
 @pytest.mark.parametrize('width',[390,1280])
-async def test_sosoh_current_native_work_link_has_layout_before_get(pg,running,role,width):
+async def test_sosoh_current_native_work_link_has_layout_before_get(pg,running,g1,role,width):
     _,code,_,_=running
     path='/proses-aktif/sosoh/'+code
     async with await _klien(pg,peran=role,gudang='Gudang 2') as client:
