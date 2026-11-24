@@ -6,6 +6,8 @@ import logging
 from fastapi import HTTPException, Request
 
 log = logging.getLogger(__name__)
+BATAS_DOKUMEN_NATIVE = 8 * 1024 * 1024
+BATAS_POTONGAN_NATIVE = 4096
 LITERAL = ('/barang-masuk', '/barang-masuk?status=belum',
            '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
            '/pekerjaan', '/pekerjaan?tab=tindakan')
@@ -116,6 +118,29 @@ async def susun_registry(request: Request, akun, *, navigasi=None) -> dict | Non
                 sesi=sesi, **kemas_frame(frames))
 
 
+async def baca_native_terbatas(response):
+    """Buffer hanya dokumen renderer native; oversize diteruskan byte-utuh.
+
+    Monitoring boleh menghapus Content-Length untuk menambah skrip pada ekor
+    dokumen. Header itu bukan bukti apakah TemplateResponse telah lengkap.
+    Batas ini tidak mengubah isi atau menelan sisa iterator saat tidak cocok.
+    """
+    iterator = response.body_iterator
+    potongan, ukuran = [], 0
+    async for bagian in iterator:
+        potongan.append(bagian)
+        ukuran += len(bagian.encode() if isinstance(bagian, str) else bagian)
+        if ukuran > BATAS_DOKUMEN_NATIVE or len(potongan) > BATAS_POTONGAN_NATIVE:
+            async def teruskan():
+                for awal in potongan:
+                    yield awal
+                async for sisa in iterator:
+                    yield sisa
+            response.body_iterator = teruskan()
+            return None
+    return b''.join(p.encode() if isinstance(p, str) else p for p in potongan)
+
+
 async def lengkapi_dokumen(request: Request, response):
     """Hanya dokumen HTML native penuh; stream/partial/API tidak disentuh.
 
@@ -135,12 +160,15 @@ async def lengkapi_dokumen(request: Request, response):
             or not response.headers.get('content-type', '').startswith('text/html')
             or response.headers.get('content-encoding')):
         return response
-    # TemplateResponse sudah lengkap. call_next membungkusnya sebagai iterator;
-    # jangan mengonsumsi stream lain yang tidak mempunyai ukuran dokumen native.
-    if not response.headers.get('content-length'):
+    # Marker state berasal dari render() dokumen native yang sudah lengkap,
+    # bukan dari request/header pengguna. Stream/API/SSE tidak mendapat marker.
+    # Content-Length boleh hilang sesudah transformasi MonitoringHTTP.
+    panjang = response.headers.get('content-length')
+    if panjang and (not panjang.isdecimal() or int(panjang) > BATAS_DOKUMEN_NATIVE):
         return response
-    chunks = [part async for part in response.body_iterator]
-    body = b''.join(part.encode() if isinstance(part, str) else part for part in chunks)
+    body = await baca_native_terbatas(response)
+    if body is None:
+        return response
     if b'<!-- isi-halaman:akhir -->' in body and b'data-pindah-konteks=' in body:
         try:
             from app.web.halaman_bertahap import konteks_kerangka
@@ -167,6 +195,8 @@ async def lengkapi_dokumen(request: Request, response):
                     # wajib. Tidak mencetak parameter atau meniru frame sukses.
                     log.warning('Kerangka Stok belum tersedia (%s)', type(error).__name__)
                 host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok).encode()
+                if len(body) + len(host) + 1 > BATAS_DOKUMEN_NATIVE:
+                    raise ValueError('Dokumen native melampaui batas registry')
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
                 body = siap
         except Exception as e:
