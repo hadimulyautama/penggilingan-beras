@@ -343,7 +343,7 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
                 # This checks preservation through read-only guide interaction,
                 # not adoption of new correction rules or unsaved-nav policy.
                 await page.goto(BASE + path, wait_until='load')
-                await expect(page.locator(READY)).to_be_visible()
+                await expect(page.locator(native_root)).to_be_visible()
                 editor = page.locator('[data-rhs-edit]:visible').first
                 await editor.click()
                 field = page.locator('[name=hasil_pk]')
