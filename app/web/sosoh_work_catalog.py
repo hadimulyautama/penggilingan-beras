@@ -44,7 +44,11 @@ def catalog(html, *, source_address, cap, context, session):
                 spec = None
             if spec is None or spec['kode'] != code or href in seen:
                 continue
-            entries.append(dict(alamat=href, kode=code, label='Penyosohan aktif'))
+            from app.web.stock_sosoh_chrome import sosoh as native_chrome
+            chrome = native_chrome(href, code)
+            if chrome is None:
+                continue
+            entries.append(dict(alamat=href, kode=code, label='Penyosohan aktif', chrome=chrome))
             seen.add(href)
             break
     return dict(versi=1, cap=cap, konteks=context, sesi=session,

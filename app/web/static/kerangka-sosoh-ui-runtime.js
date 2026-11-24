@@ -15,7 +15,7 @@
  }
  function validData(data){
   return exact(data,['versi','sumber','variants','styles','scripts'])&&data.versi===1&&typeof data.sumber==='string'&&/^[a-f0-9]{64}$/.test(data.sumber)
-   &&exact(data.variants,['admin','operator'])&&['admin','operator'].every(k=>exact(data.variants[k],['html'])&&typeof data.variants[k].html==='string'&&data.variants[k].html.length<=131072)
+   &&exact(data.variants,['admin','operator'])&&['admin','operator'].every(k=>exact(data.variants[k],['html','breadcrumb','back_markup'])&&['html','breadcrumb','back_markup'].every(f=>typeof data.variants[k][f]==='string'&&data.variants[k][f].length<=131072))
    &&['styles','scripts'].every(k=>object(data[k])&&Object.keys(data[k]).length<=32&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=524288));
  }
  function validPermission(p,data,context,cap,token){
@@ -24,10 +24,26 @@
    &&Array.isArray(p.hasil)&&p.hasil.length>0&&p.hasil.length<=64&&new Set(p.hasil.map(h=>h?.jenis)).size===p.hasil.length
    &&p.hasil.every(h=>exact(h,['jenis','nama','beras'])&&typeof h.jenis==='string'&&h.jenis.length>0&&h.jenis.length<=128&&typeof h.nama==='string'&&h.nama.length>0&&h.nama.length<=256&&typeof h.beras==='boolean');
  }
+ function validChrome(c,origin){
+  const local=v=>{if(typeof v!=='string'||!v.startsWith('/')||v.startsWith('//')||v.length>4096||/[\\\u0000-\u001f]/.test(v))return false;try{return new URL(v,origin).origin===origin;}catch(_){return false;}};
+  return exact(c,['title','back','chain'])&&typeof c.title==='string'&&c.title&&c.title.length<=512&&local(c.back)&&exact(c.chain,['items','kembali'])&&Array.isArray(c.chain.items)&&c.chain.items.length>=2&&c.chain.items.length<=6&&c.chain.items.every((n,i)=>exact(n,['nama','alamat'])&&typeof n.nama==='string'&&n.nama&&n.nama.length<=512&&(i===c.chain.items.length-1?n.alamat===null:local(n.alamat)))&&c.chain.kembali===c.chain.items[c.chain.items.length-2].alamat;
+ }
+ function installChrome(doc,main,component,chrome,origin){
+  if(!validChrome(chrome,origin))throw Error('Native breadcrumb metadata changed');
+  const part=doc.createElement('template');part.innerHTML=component.breadcrumb;
+  const rows=[...part.content.querySelectorAll('.nav-rantai>li')];if(rows.length!==chrome.chain.items.length)throw Error('Native breadcrumb shape changed');
+  for(let i=0;i<rows.length;i++){const item=chrome.chain.items[i],node=rows[i].querySelector('a,[aria-current="page"]');if(!node||!!item.alamat!==(node.tagName==='A'))throw Error('Native breadcrumb node changed');node.textContent=item.nama;if(item.alamat)node.setAttribute('href',item.alamat);}
+  const desktop=part.content.querySelector('.desktop-back');if(!desktop)throw Error('Native Back missing');desktop.setAttribute('href',chrome.chain.kembali);
+  for(const old of main.querySelectorAll('.desktop-back'))old.remove();
+  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(!crumb)throw Error('Native breadcrumb host missing');crumb.replaceChildren(part.content);
+  const mobile=doc.createElement('template');mobile.innerHTML=component.back_markup;
+  const back=mobile.content.querySelector('a.bar__balik'),bar=main.querySelector('.bar');if(!back||!bar)throw Error('Native mobile Back missing');back.setAttribute('href',chrome.back);
+  const old=bar.querySelector('.bar__menu,.bar__balik');if(old)old.replaceWith(mobile.content);else bar.prepend(mobile.content);
+ }
  function validCatalog(c,address,code,context,cap,token,sourceSha){
   return exact(c,['versi','cap','konteks','sesi','sumber_sha256','entries'])&&c.versi===1&&c.cap===cap&&c.konteks===context&&c.sesi===token&&typeof sourceSha==='string'&&/^[a-f0-9]{64}$/.test(sourceSha)&&c.sumber_sha256===sourceSha
    &&Array.isArray(c.entries)&&c.entries.length>0&&c.entries.length<=50
-   &&c.entries.every(e=>exact(e,['alamat','kode','label'])&&typeof e.alamat==='string'&&typeof e.kode==='string'&&e.label==='Penyosohan aktif')
+   &&c.entries.every(e=>exact(e,['alamat','kode','label','chrome'])&&typeof e.alamat==='string'&&typeof e.kode==='string'&&e.label==='Penyosohan aktif'&&validChrome(e.chrome,'https://native-relative.invalid'))
    &&c.entries.some(e=>e.alamat===address&&e.kode===code);
  }
  function visibleRow(doc,address,code,shown){
@@ -44,7 +60,7 @@
   const main=layout==='operator'?schema.filter(h=>h.beras):schema.slice(0,6);
   return {main,more:schema.filter(h=>!main.includes(h))};
  }
- const api={address,validData,validPermission,validCatalog,visibleRow,fieldGroups};
+ const api={address,validData,validPermission,validCatalog,validChrome,installChrome,visibleRow,fieldGroups};
  if(typeof module==='object'&&module.exports){module.exports=api;return;}
  const data=global.PadiKerangkaSosohData;if(!validData(data))return;
  for(const variant of Object.values(data.variants))Object.freeze(variant);
@@ -82,15 +98,15 @@
   }
   prototype.remove();root.dataset.url=target;root.dataset.stamp=context+'|'+target;root.dataset.snTab=state.tab;
   root.querySelector('.sr-design-code').textContent=state.code;
-  const back=root.querySelector('.sr-design-back');if(back)back.setAttribute('href',source);
+  const entry=catalog.entries.find(e=>e.alamat===target&&e.kode===state.code);
+  const back=root.querySelector('.sr-design-back');if(back)back.setAttribute('href',entry.chrome.back);
   for(const tab of root.querySelectorAll('[data-sn-tab-pilih]')){const selected=tab.dataset.snTabPilih===state.tab;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;}
   for(const panel of root.querySelectorAll('[data-sn-panel]'))panel.hidden=panel.dataset.snPanel!==state.tab;
   const qc=root.querySelector('[data-sn-fold="qc"]');if(qc)qc.open=state.tab==='qc';
   const [first,last]=[starts[0],ends[0]];while(first.nextSibling&&first.nextSibling!==last)first.nextSibling.remove();last.before(part.content);
   const title='Penyosohan '+state.code;doc.title=title+' · PT Hadi Mulya Utama';
   const heading=main.querySelector('.bar__merek');if(heading){heading.textContent=title;heading.setAttribute('aria-label',title);}
-  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const a=doc.createElement('a'),strong=doc.createElement('strong');a.href='/pekerjaan';a.textContent='Pekerjaan';strong.textContent=state.code;crumb.replaceChildren(a,doc.createTextNode(' › '),strong);}
-  for(const a of main.querySelectorAll('a.bar__balik,a.desktop-back'))a.setAttribute('href',source);
+  try{installChrome(doc,main,data.variants[p.layout],entry.chrome,location.origin);}catch(_){return null;}
   for(const summary of doc.querySelectorAll('#laci summary.pintu')){summary.classList.remove('pintu--kini');summary.removeAttribute('aria-current');}
   for(const a of doc.querySelectorAll('#laci a[href]')){const u=new URL(a.getAttribute('href'),location.href),active=u.origin===location.origin&&u.pathname==='/pekerjaan';a.classList.toggle('pintu--kini',active&&a.classList.contains('pintu'));a.classList.toggle('pintu-sub__satu--kini',active&&a.classList.contains('pintu-sub__satu'));if(active){a.setAttribute('aria-current','page');const group=a.closest('details');if(group){group.open=true;group.querySelector('summary')?.classList.add('pintu--kini');}}else a.removeAttribute('aria-current');}
   frame.dataset.pindahAlamat=target;

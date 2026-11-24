@@ -99,7 +99,8 @@ def test_native_gate_and_schema_reads_do_not_use_process_or_stock_reader():
 
 def test_catalog_requires_actual_native_work_row_and_carries_no_data():
     value = catalog(row() + row(kind='giling') + '<a href="/proses-aktif/sosoh/OUTSIDE">outside</a>', **BINDING)
-    assert value['entries'] == [dict(alamat='/proses-aktif/sosoh/SOSOH-FIXTURE', kode='SOSOH-FIXTURE', label='Penyosohan aktif')]
+    assert [{k:e[k] for k in ('alamat','kode','label')} for e in value['entries']] == [dict(alamat='/proses-aktif/sosoh/SOSOH-FIXTURE', kode='SOSOH-FIXTURE', label='Penyosohan aktif')]
+    assert [n['nama'] for n in value['entries'][0]['chrome']['chain']['items']] == ['Beranda','Pekerjaan','SOSOH-FIXTURE']
     assert set(value) == {'versi', 'cap', 'konteks', 'sesi', 'sumber_sha256', 'entries'}
     assert 'PRIVATE' not in str(value) and '4567' not in str(value)
     assert value['sumber_sha256'] == hashlib.sha256(BINDING['source_address'].encode()).hexdigest()

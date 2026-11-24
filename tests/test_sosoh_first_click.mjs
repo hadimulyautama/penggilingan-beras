@@ -5,10 +5,10 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),ui=require('../app/web/static/kerangka-sosoh-ui-runtime.js');
 const origin='https://fixture.invalid',ctx='ctx',cap='cap',token='token';
 const schema=[{jenis:'spek_fixture_z',nama:'Label uji Z',beras:true},{jenis:'samping_fixture_x',nama:'Label uji X',beras:false}];
-function data(){return {versi:1,sumber:'a'.repeat(64),variants:{admin:{html:'<section></section>'},operator:{html:'<section></section>'}},styles:{},scripts:{}};}
+function data(){return {versi:1,sumber:'a'.repeat(64),variants:{admin:{html:'<section></section>',breadcrumb:'',back_markup:''},operator:{html:'<section></section>',breadcrumb:'',back_markup:''}},styles:{},scripts:{}};}
 function permission(){return {versi:1,sumber:'a'.repeat(64),cap,konteks:ctx,sesi:token,layout:'operator',hasil:structuredClone(schema)};}
 const address='/proses-aktif/sosoh/S-FIXTURE?tab_detail=hasil';
-function catalog(){return {versi:1,cap,konteks:ctx,sesi:token,sumber_sha256:'b'.repeat(64),entries:[{alamat:address,kode:'S-FIXTURE',label:'Penyosohan aktif'}]};}
+function catalog(){return {versi:1,cap,konteks:ctx,sesi:token,sumber_sha256:'b'.repeat(64),entries:[{alamat:address,kode:'S-FIXTURE',label:'Penyosohan aktif',chrome:{title:'Penyosohan S-FIXTURE',back:'/pekerjaan?tab=berjalan',chain:{items:[{nama:'Beranda',alamat:'/'},{nama:'Pekerjaan',alamat:'/pekerjaan?tab=berjalan'},{nama:'S-FIXTURE',alamat:null}],kembali:'/pekerjaan?tab=berjalan'}}}]};}
 test('exact sameURL native GET only',()=>{
  assert.equal(ui.address(address,origin).tab,'hasil');
  assert.equal(ui.address('/proses-aktif/sosoh/S?tab_detail=unknown',origin).tab,'ringkasan');
@@ -25,6 +25,10 @@ test('catalog needs exact code/address and same private binding',()=>{
  for(const mutate of [c=>c.konteks='other',c=>c.sesi='old',c=>c.cap='old',c=>c.sumber_sha256='x',c=>c.entries=[],c=>c.entries[0].alamat='/proses-aktif/sosoh/OTHER',c=>c.entries[0].kode='OTHER',c=>c.entries[0].label='Penggilingan aktif',c=>c.entries[0].kg=0]){
   const c=catalog();mutate(c);assert.equal(ui.validCatalog(c,address,'S-FIXTURE',ctx,cap,token,'b'.repeat(64)),false);
  }
+});
+test('native chrome metadata denies external or mismatched Back',()=>{
+ const c=catalog().entries[0].chrome;assert(ui.validChrome(c,origin));
+ for(const mutate of [x=>x.back='//outside.invalid/',x=>x.chain.items[1].alamat='https://outside.invalid/',x=>x.chain.kembali='/other',x=>x.chain.items[2].alamat='/unexpected']){const copy=structuredClone(c);mutate(copy);assert.equal(ui.validChrome(copy,origin),false);}
 });
 test('schema splitting equals native operator rice / admin first six, no values',()=>{
  assert.deepEqual(ui.fieldGroups(schema,'operator'),{main:[schema[0]],more:[schema[1]]});

@@ -27,6 +27,7 @@ def build():
     roots = [ROOT/'app/web', ROOT/'hmu_tampilan']
     env = Environment(loader=ChoiceLoader([helper.SourceLoader(p/'templates', inputs) for p in roots]),
                       autoescape=True, undefined=StrictUndefined)
+    chrome = module('sosoh_public_native_chrome', ROOT/'scripts/stock_sosoh_native_chrome.py').load(ROOT, env, inputs)
 
     def asset(address):
         u = urlsplit(address)
@@ -74,7 +75,9 @@ def build():
                 raise ValueError('Native script context requires review')
             script.attrs.clear()
             script.string = text.replace('</script', '<\\/script')
-        variants[layout] = dict(html=str(doc))
+        variants[layout] = dict(html=str(doc), **chrome('/proses-aktif/sosoh/PADI_CODE_PLACEHOLDER',
+            dict(kembali='/pekerjaan?tab=berjalan', breadcrumb_detail='PADI_CODE_PLACEHOLDER'),
+            'Penyosohan PADI_CODE_PLACEHOLDER'))
     styles, scripts, style_refs, script_refs = {}, {}, {}, {}
     for variant in variants.values():
         doc = BeautifulSoup(variant['html'], 'html.parser')

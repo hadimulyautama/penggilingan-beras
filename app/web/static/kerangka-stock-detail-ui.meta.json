@@ -1,0 +1,35 @@
+{
+  "versi": 1,
+  "sumber": "60317d03570b84c70e287581d76a7ac6574988660dd4ae1b65e7c0c3bf3bf4f2",
+  "variants": [
+    "pk-g1",
+    "pk-g2-curah",
+    "pk-g2-karung",
+    "product-auto",
+    "product-curah",
+    "product-packed",
+    "warehouse-g1",
+    "warehouse-g2"
+  ],
+  "aset_sha256": "175e7a7794c9f0ac206a54cda6aafdac45111aee7544e68b39e5597eca602e1f",
+  "inputs": {
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/static/kerangka-stock-detail-ui-runtime.js": "baf3119fd9466cb238b4e42a9f7289f938036007a365375b5f45274cbf85b6eb",
+    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/stock-detail-native.js": "304b8e0abaf050815f150a616fb3e05291964eaa22b5f72006a9f6bf507daba3",
+    "app/web/stock_detail_native.py": "dd47fd158d4a3e8720fc619f9e471e9128074fdf6da6e64e154f901683a2a205",
+    "app/web/templates/stock_detail_native.html": "84fa7830f3557cfe883d75d97a2c12cf3861f6b09a99a13861aa57981588becb",
+    "app/web/templates/stok_pk_karung.html": "d010a07b7e1eac56837c1d0dd1bf19ffb5c4dfd5786b3b23b016c765dc753a92",
+    "hmu_tampilan/templates/_beranda_alur.html": "572b825a8d1a500ab2f8aa1bbcd190ade269081299d9c8243baa9b7028a58e88",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/_produk_kemasan.html": "dcca2fd9868e68af6d4d0028929cffe2980c40ec557cf293b48c3fb7249db288",
+    "hmu_tampilan/templates/_stok_pk_detail.html": "adfd912695cef50023c31bcbbcc737a8656fdfa24a863c17b22af9013f087385",
+    "hmu_tampilan/templates/_stok_pk_qc.html": "83d93d6a9cd10c47fded3d9d2ef812ab832928b61b3e71cc2855b3b1779bd4d5",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
+    "hmu_tampilan/templates/gudang.html": "c2c6dd10636a04bd097ef79240c05db073279e8129f82645b36e612f4db65c87",
+    "hmu_tampilan/templates/stok_produk_detail.html": "9c2254d6ae9f6b9898b52349b17c4d6005f781daacaf63badb1805d000352b8a",
+    "scripts/buat_kerangka_stock_detail.py": "ddeb6f3cfd17101ff3cbe649535fdc543afb5419b9fe035cbf33be65deaa30d3",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621",
+    "scripts/stock_sosoh_native_chrome.py": "8a1c7f47422c8d3f75373bfa2e8a7996bdd32a9675f267f0ee97d51b3d446d4e"
+  }
+}

@@ -149,7 +149,7 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # membuat penyaringnya berbohong (kalimat yang sama di Meja).
         bj = (await svc.barang_jadi_g2(db, user=baca_user) if await boleh_baca_stok(db,baca_user)
               else svc.BarangJadiG2(produk=[], samping=[]))
-    return await render_laci(
+    response = await render_laci(
         request, "stok_dengan_koreksi.html", template_stok_asal="stok.html", layar="stok", sisa_koreksi_g1=sisa_koreksi_g1,
         semua_kepemilikan=pemilik == 'semua',
         lot=lot, tempat=tempat,
@@ -198,6 +198,8 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
+    from app.web.stock_detail_native import finish, pk_offers
+    return finish(response, request, offers=pk_offers(lot, tempat, mutu=mutu_aktif))
 
 
 @router.get("/stok-pk-jasa")
@@ -256,7 +258,7 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         from app.services.koreksi_bahan_berjalan import sumber_bebas_g1
         from app.web.stok_navigasi import pelanggan_diminta
         sisa_koreksi_g1=await sumber_bebas_g1(db,jasa=True,pelanggan_id=pelanggan_diminta(request),user=baca_user) if gudang1(view) else []
-    return await render_laci(
+    response = await render_laci(
         request, "stok_dengan_koreksi.html", template_stok_asal="stok_pk_jasa.html", layar="stok_pk_jasa", sisa_koreksi_g1=sisa_koreksi_g1,
         lot=lot, tempat=tempat,
         SARING_GUDANG=saring, gudang=gudang,
@@ -280,6 +282,8 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         # irisan, bukan daftar utuh.
         JASA_SAJA=True,
     )
+    from app.web.stock_detail_native import finish, pk_offers
+    return finish(response, request, offers=pk_offers(lot, tempat, mutu=mutu_aktif))
 
 
 @router.get("/stok/pk/detail")
@@ -354,7 +358,7 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         params_detail["gudang_filter"] = gudang_filter
     detail_href = "/stok/pk/detail?" + urlencode(params_detail)
     template_stok_lama = "stok_pk_karung.html" if gudang == "g2" and kartu.jumlah_karung else ("stok_pk_jasa.html" if jasa_saja else "stok.html")
-    return await render_laci(
+    response = await render_laci(
         request, "stok_pk_dengan_qc_asal.html", template_stok_lama=template_stok_lama,
         qc_gabah_asal=qc_gabah_asal,
         layar="stok_pk_jasa" if jasa_saja else "stok",
@@ -371,3 +375,7 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         breadcrumb_detail="Detail PK", kembali=kembali,
         detail_href=detail_href,
     )
+    from app.web.stock_detail_native import finish, pk_offers
+    offer = pk_offers([kartu] if gudang == 'g1' else [], [kartu] if gudang == 'g2' else [], mutu=mutu_aktif)[0]
+    offer.meta['qc_latest'] = bool(riwayat_qc.get('hasil_terbaru_saja'))
+    return finish(response, request, detail=offer.meta)
