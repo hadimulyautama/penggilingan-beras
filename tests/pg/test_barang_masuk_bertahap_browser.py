@@ -25,7 +25,7 @@ BASE = 'https://uji'
 async def peramban(client, width):
     """Browser supplies Sec-Fetch; ASGI and native fixture supply all data."""
     gates, posts, errors = {}, [], []
-    transport = dict(gates=gates, posts=posts, errors=errors, gets=[], completed={}, corrupt_context=False, fail_asset=False)
+    transport = dict(gates=gates, gate_headers={}, posts=posts, errors=errors, gets=[], completed={}, corrupt_context=False, fail_asset=False)
     pending = set()
     closing = False
     async with async_playwright() as pw:
@@ -64,7 +64,8 @@ async def peramban(client, width):
             gate = None
             try:
                 response = await asyncio.wait_for(asyncio.shield(job), 60)
-                gate = gates.pop(u.path, None)
+                required=transport['gate_headers'].get(u.path,{})
+                gate = gates.pop(u.path,None) if all(headers.get(key)==value for key,value in required.items()) else None
                 if gate:
                     gate[0].set()
                     await gate[1].wait()

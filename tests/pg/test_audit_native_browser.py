@@ -65,9 +65,11 @@ async def test_audit_first_click_dirty_filter_empty_and_abandoned_get(pg,stok_le
                 # restore audit or expose an undo form on the new page.
                 entered2,release2,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
                 t['gates']['/audit']=(entered2,release2);t['completed']['/audit']=done
+                t['gate_headers']['/audit']={'x-pindah':'1'}
                 await page.locator('input[type=search]').fill('')
                 await page.locator('input[type=search]').press('Enter',no_wait_after=True)
                 await asyncio.wait_for(entered2.wait(),20)
+                await expect(page.locator('[data-audit-native]')).to_be_visible()
                 if width<900:await page.locator('#buka-laci').click()
                 await page.locator('#laci a[href="/barang-masuk"]').click()
                 await expect(page).to_have_url(BASE+'/barang-masuk')
