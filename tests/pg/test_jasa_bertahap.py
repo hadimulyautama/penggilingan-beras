@@ -94,7 +94,11 @@ def _tanpa_host_registry(html):
         assert shape['konteks']==ui['data-konteks']==registry['konteks']
         assert shape['cap']==ui['data-cap']==registry['cap']
         assert shape['sesi']==registry['sesi']
-        assert shape['varians'] in ({'pengiriman':'pengiriman-admin','jasa':'jasa-admin','akun':'akun-pribadi','laporan':'laporan-katalog'},{'pengiriman':'pengiriman-operator','akun':'akun-pribadi','laporan':'laporan-katalog'},{'akun':'akun-pribadi','laporan':'laporan-katalog'})
+        # This helper verifies the data-free manifest's finite shape. The
+        # role/facility oracle is test_kerangka_ui_manifest's explicit matrix.
+        variants=dict(shape['varians'])
+        if 'giling' in variants:assert variants.pop('giling')=='giling-proses'
+        assert variants in ({'pengiriman':'pengiriman-admin','jasa':'jasa-admin','akun':'akun-pribadi','laporan':'laporan-katalog'},{'pengiriman':'pengiriman-operator','akun':'akun-pribadi','laporan':'laporan-katalog'},{'akun':'akun-pribadi','laporan':'laporan-katalog'})
         from app.web.kerangka_ui import aset
         assert shape['sumber']==aset()['sumber']
         ui_matches=list(re.finditer(
