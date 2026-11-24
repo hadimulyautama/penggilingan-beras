@@ -133,3 +133,26 @@ def test_compiler_is_deterministic_and_invariant_markup_is_not_fake_data():
  assert doc.select_one('[data-home-native-retry]')['type']=='button'
  assert doc.select_one('[data-home-native-retry]').has_attr('hidden')
  for script in data['scripts'].values():assert "method:'POST'" not in script and 'sessionStorage' not in script
+
+
+def test_native_home_footer_controller_is_inside_reader_markers_and_keeps_binding_attrs():
+ # The native footer is NOT outside the reader region. This locks the actual
+ # source boundary instead of introducing a redundant full-navigation rule.
+ from jinja2 import Environment,FileSystemLoader,StrictUndefined
+ base=(ROOT/'hmu_tampilan/templates/base.html').read_text()
+ start=base.index('<!-- isi-halaman:mulai -->');end=base.index('<!-- isi-halaman:akhir -->')
+ assert start<base.index('{% block isi %}')<base.index('{% block kaki %}')<end
+ env=Environment(loader=FileSystemLoader([ROOT/'app/web/templates',ROOT/'hmu_tampilan/templates']),autoescape=True,undefined=StrictUndefined)
+ native=env.get_template('beranda.html')
+ footer=''.join(native.blocks['kaki'](native.new_context(dict(akun=NS(sesi_pendek=False),VERSI='cap-native',buka='',nilai=''))))
+ script=BeautifulSoup(footer,'html.parser').select_one('script[src="/static/aksi.js?v=cap-native"]')
+ assert script is not None and script['data-buka']=='' and script['data-nilai']==''
+ reader=(ROOT/'app/web/static/padi-baca-native.js').read_text()
+ assert "for(let node=first.nextSibling;node&&node!==last;node=node.nextSibling)content.append(node.cloneNode(true))" in reader
+ assert "fresh.content.querySelectorAll('script')" in reader
+ assert "for(const attr of item.node.attributes)if(!['src','href','rel','defer','async'].includes(attr.name))replacement.setAttribute(attr.name,attr.value)" in reader
+ controller=(ROOT/'hmu_tampilan/static/aksi.js').read_text()
+ assert 'document.currentScript' not in controller
+ assert 'document.querySelector("script[data-nilai]")' in controller
+ # Runtime behavior, async menu readiness and duplicate listener lifetime
+ # still require Root's real native browser check; this is only source proof.

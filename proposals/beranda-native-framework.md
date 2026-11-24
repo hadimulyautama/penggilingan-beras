@@ -73,3 +73,16 @@ header and action activation after native data; no POST/mutation. Include cold/
 warm PWA upgrade/rollback and invalid session. Do not claim all cards complete
 from this invariant-region implementation. Dynamic layout height remains a
 runtime measurement gap. Final official CI/release/Website gate belongs Root.
+
+### Footer boundary review (source-only delta)
+
+`base.html` places `block kaki` after `block isi` but before
+`<!-- isi-halaman:akhir -->`. Home's versioned `aksi.js` footer is therefore
+cloned by the native reader and included in its preparation/activation. Its
+`data-buka`/`data-nilai` attributes survive the reader's attribute copy (only
+src/href/rel/defer/async are removed). It does not depend on currentScript.
+A focused pure test renders the real footer and locks these source boundaries.
+No new `data-utuh` rule was added on the incorrect outside-markers premise.
+This does not prove runtime menu readiness, action behavior or listener lifetime;
+the Root browser/native-controller check is still required. Existing other-family
+fallback marks are out of scope and were not removed or expanded.
