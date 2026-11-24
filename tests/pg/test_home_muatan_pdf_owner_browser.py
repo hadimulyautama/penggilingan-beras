@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -252,7 +253,18 @@ async def test_muatan_operator_actual_menu_inert_fields_then_native_controller(p
                 await expect(page.locator('[data-lembar-muatan]')).to_be_visible()
                 assert chrome(await page.content()) == expected
                 await expect(page.locator('#lembar-awal')).to_have_count(1)
-                assert await page.locator('script[src*="/muat-ringkas.js"]').count() == 1
+                # The native reader deliberately validates the versioned GET
+                # before replacing src scripts with prepared inline code.
+                # A retained src is therefore the wrong hydration oracle.
+                assert transport['gets'].count('/static/muat-ringkas.js')==1
+                controller=(Path(__file__).resolve().parents[2]/'app/web/static/muat-ringkas.js').read_bytes()
+                expected_hash=hashlib.sha256(controller).hexdigest()
+                installed=await page.locator('#isi-halaman script:not([type="application/json"])').evaluate_all('''async nodes=>Promise.all(nodes.map(async n=>{
+                  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(n.textContent));
+                  return Array.from(new Uint8Array(b),v=>v.toString(16).padStart(2,'0')).join('');
+                }))''')
+                assert installed.count(expected_hash)==1
+                await expect(page.locator('[data-lembar-muatan]')).to_have_attribute('data-ready','1')
                 await evidence(page, 'muatan-operator-' + str(width), native=native.text, phase='after-data')
                 # A delayed second native read must not restore the editor or
                 # consume pending/draft keys after a currently visible menu
