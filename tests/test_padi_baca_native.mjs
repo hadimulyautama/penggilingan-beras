@@ -93,3 +93,10 @@ test('interaction subscription is cleaned on close or abort, including synchrono
   await wait;assert.equal(cleaned,1,action);
  }
 });
+test('focus moving to another editable control rechecks before the final swap',async()=>{
+ let checks=0,eligible=false;const waiting=deferred(),release=deferred();
+ const f=fixture('/laporan',{canInstall:()=>eligible,async beforeInstall(){if(++checks===1)return;waiting.resolve();await release.promise;}});
+ const read=f.reader.read();await waiting.promise;
+ assert.equal(f.calls.install,0);assert.equal(f.calls.read,1);
+ eligible=true;release.resolve();await read;assert.equal(f.calls.install,1);
+});

@@ -44,7 +44,10 @@
     if(!sameIdentity(ops.identity,fresh.identity,ops.address))throw Error(ops.identityError||'Sesi atau cakupan halaman berubah. Muat ulang halaman untuk memeriksa akses.');
     const prepared=await ops.prepare(fresh,active.signal);if(!current(number))return;
     clearTimeout(timeout); // Optional UI interaction is not a network timeout.
-    if(ops.beforeInstall)await ops.beforeInstall(active.signal);
+    if(ops.beforeInstall){
+     do{await ops.beforeInstall(active.signal);if(!current(number))return;}
+     while(ops.canInstall&&!ops.canInstall());
+    }
     if(!current(number))return;
     ops.install(fresh,prepared);controller=null;live=false;++generation;
    }catch(error){if(current(number))ops.failed(error);}
@@ -78,9 +81,11 @@
   }
   await waitForInteraction({signal,current,busy:interaction,subscribe(check){
    const events=['close','cancel','focusout'];
-   for(const name of events)main.addEventListener(name,check,true);
-   const observer=new MutationObserver(check);observer.observe(main,{childList:true,subtree:true,attributes:true,attributeFilter:['open']});
-   return ()=>{observer.disconnect();for(const name of events)main.removeEventListener(name,check,true);};
+   let frame=0;
+   const settled=()=>{if(!frame)frame=requestAnimationFrame(()=>{frame=0;check();});};
+   for(const name of events)main.addEventListener(name,settled,true);
+   const observer=new MutationObserver(settled);observer.observe(main,{childList:true,subtree:true,attributes:true,attributeFilter:['open']});
+   return ()=>{observer.disconnect();if(frame)cancelAnimationFrame(frame);for(const name of events)main.removeEventListener(name,settled,true);};
   }});
  }
  function markers(parent){
@@ -124,7 +129,7 @@
   return prepared;
  }
  const observer=new MutationObserver(()=>{if(!root.isConnected){reader.stop();observer.disconnect();lifecycle.abort();}});
- const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','X-Kerangka-Halaman':'0','Accept':'text/html'}}),parse,prepare,beforeInstall,
+ const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','X-Kerangka-Halaman':'0','Accept':'text/html'}}),parse,prepare,beforeInstall,canInstall:()=>!interaction(),
   loading(){retry.hidden=true;status.setAttribute('role','status');status.textContent=(config.messages?.loading||'Memuat data…');},
   failed(error){status.setAttribute('role','alert');status.textContent=error.name==='AbortError'?(config.messages?.timeout||'Pembacaan terlalu lama. Coba lagi hanya membaca data.'):error.message;retry.hidden=false;},
   install(fresh,prepared){
@@ -149,8 +154,7 @@
      }finally{if(executable)window.removeEventListener('error',failedScript);}
     },
     failed(){
-     // The old shell is already detached: report on the fresh content,
-     // hold form controls, and offer one explicit native GET reload only.
+     // Keep the new target inert and offer an explicit native GET reload.
      fresh.content.dataset.nativeReadState='failed';fresh.content.inert=true;
      for(const field of fresh.content.querySelectorAll('input,select,textarea,button'))field.disabled=true;
      const warning=document.createElement('section');warning.setAttribute('role','alert');

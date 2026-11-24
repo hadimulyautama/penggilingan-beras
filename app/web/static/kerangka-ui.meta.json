@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "388674431feea6088e60f0257774efb4fe1d9aef26b5e3b5111703ae785a1de1",
-  "aset_sha256": "a768f866302e2b216f47c5cf32a172a286b63058e37dee6cf6a26f36a77c8a9b",
+  "sumber": "4cd568a1987bf1de57e9ea362403130f73794ba4e32182f753470a2bf308faaa",
+  "aset_sha256": "9b770f77eb6cb2603b7d5f316bfc4fee1b6916fb860ed184895c19df77c6ceb5",
   "variants": [
     "pengiriman-admin",
     "pengiriman-operator",
@@ -42,7 +42,7 @@
     "app/web/static/kerangka-stok-controls.js": "b880e9c9908e3efc3ec84471d44b2b451edaed7e81d2d6d930a366424fec6e7d",
     "app/web/static/kerangka-ui-runtime.js": "fc9bc8c244d8ede6879e4d70c2bac1a01e29022af6d304beed2da835e7002210",
     "app/web/static/laporan-katalog-native.js": "9505f0ccaf0317c70e8477b2f8d51e5f5b66fc348c68a6828e35f1053ee7d60a",
-    "app/web/static/padi-baca-native.js": "4174ed37b5589ac872090ab692609314d7451590c6e2c9e534f95307959620dd",
+    "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
     "app/web/static/pengaturan-akun-native.js": "557a87718e34ac4053ad0cf7e4edd6b72443560d1bc88b22d8098c7488c882e7",
     "app/web/static/sosoh-desain.css": "4f9a78fa32b14bb93609bc6fd8e0b3cc5088d21990ecfa48a45b1f6b23e91dcf",
     "app/web/static/sosoh-ringkas.css": "dc9f265d6dd6847e1b00f23132af624319b83f72e80f576a56e5d42c341e6032",
