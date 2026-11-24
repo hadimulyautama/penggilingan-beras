@@ -1,0 +1,22 @@
+{
+  "versi": 1,
+  "sumber": "acabf695bdaba81c3ef53ca9eade3c6331b9dd3521fa29ff2c09455f522b5c2b",
+  "variants": [
+    "/pengaturan",
+    "/pengaturan/sesi"
+  ],
+  "aset_sha256": "2c0f766e9a69a192933c4c2d0fe51f8d24e6fc524075ee7959ea406cb621eb99",
+  "inputs": {
+    "app/web/pengaturan_menu_kerangka.py": "655350f8291fb9e843a79c7491e67ccf8ae6a3c53cce302c52ae7ac3666fc4aa",
+    "app/web/static/kerangka-pengaturan-ui-runtime.js": "b0a0d7413666382cecd20eac8e2ba41654184e8e6a27d6cdffcc776df791958b",
+    "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
+    "app/web/static/pengaturan-menu-native.js": "7fbccf5b85bf63a39a14ff90313ba441cd87c9f1c5344c42561289a839bf6db8",
+    "app/web/templates/_kata_pengaturan.html": "95cc45fbf6500b9a97ba0367c1e0f2f409ff08398de835e8019e364b3cba2745",
+    "app/web/templates/_pengaturan_menu_kerangka_isi.html": "0b5932ecffc449d26178c93ee679d69ae6a1ef6eacc154d7870a6aed630f4f57",
+    "app/web/templates/pengaturan_menu_kerangka.html": "cddbf7d34d967f9116411971d7fa4074a08393ec1d9156ac0d280af51b1a83cb",
+    "hmu_tampilan/static/pengaturan.css": "8c75d83897acc331e3076617c46b929dc0da06509726ec058e4f2b3a9200f859",
+    "hmu_tampilan/templates/_pengaturan_ikon.html": "1acece1e2700b4263c10887a8d735a8d94e1444cba6ec5140e0c6e67f058954c",
+    "scripts/buat_kerangka_pengaturan.py": "e850ac9466c01e807bbfef5a6d787d521a24024d2113e1954680c51c9a2a7d16",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

@@ -3,3 +3,5 @@
 <script type="application/json" id="padi-stok-kerangka" data-konteks="{{ stok.konteks }}" data-cap="{{ stok.cap }}">{{ stok|tojson }}</script>{% endif %}{% if ui %}
 <script type="application/json" id="padi-kerangka-ui" data-konteks="{{ ui.konteks }}" data-cap="{{ ui.cap }}">{{ ui|tojson }}</script>{% endif %}{% if riwayat %}
 <script type="application/json" id="padi-riwayat-kerangka" data-konteks="{{ riwayat.konteks }}" data-cap="{{ riwayat.cap }}">{{ riwayat|tojson }}</script>{% endif %}
+{% if pengaturan %}
+<script type="application/json" id="padi-pengaturan-kerangka" data-konteks="{{ pengaturan.konteks }}" data-cap="{{ pengaturan.cap }}">{{ pengaturan|tojson }}</script>{% endif %}
