@@ -7,7 +7,7 @@ const {anchorHandler,summaryHandler}=require('../app/web/static/riwayat-detail-k
 const {restoreNative}=require('../app/web/static/riwayat-detail-native.js');
 const origin='https://fixture.invalid',source='a'.repeat(64),digest='b'.repeat(64);
 const variants=['riwayat-giling','riwayat-sosoh','riwayat-pengeringan','qc-gabah-basah','qc-gabah-kering','qc-pk-luar','qc-pk-hasil-giling','qc-beras-hasil-sosoh','qc-beras-daftar'];
-const data={versi:1,sumber:source,variants:Object.fromEntries(variants.map(v=>[v,{html:'',title_parts:[v],bar_control:'',breadcrumb:''}])),styles:{},scripts:{}};
+const data={versi:1,sumber:source,variants:Object.fromEntries(variants.map(v=>[v,{html:'',title_parts:[v],breadcrumb_parts:[v],bar_control:'',breadcrumb:''}])),styles:{},scripts:{}};
 const binding={context:'context',cap:'cap',token:'session',source,digest};
 function envelope(){return {versi:1,sumber:source,cap:'cap',konteks:'context',sesi:'session',sumber_sha256:digest,batas:30,boleh_catat_qc:false,entries:[{alamat:'/riwayat-giling/1',kode:'GL-1',variant:'riwayat-giling',boleh_koreksi:false}]};}
 for(const path of ['/riwayat-giling/1','/riwayat-sosoh/2','/riwayat-pengeringan/3','/riwayat-qc/gabah-basah/GB-1','/riwayat-qc/gabah-kering/GK-1','/riwayat-qc/pk-luar/PK-1','/riwayat-qc/pk-hasil-giling/GL-1','/riwayat-qc/beras-hasil-sosoh/SH-1','/riwayat-qc/beras-hasil-sosoh'])test('narrow native route '+path,()=>assert.ok(state(path,origin)));
@@ -98,4 +98,13 @@ test('drying native Back label uses presence of raw return query, not invented s
  const foreign=state('/riwayat-pengeringan/12?kembali_kerja=https%3A%2F%2Fother.invalid',origin);
  assert.equal(backContext(foreign,origin),'/riwayat-pengeringan');
  assert.equal(contextualBack(foreign,backContext(foreign,origin)),true);
+});
+
+test('breadcrumb identity parts distinguish History code from native QC title',()=>{
+ assert.equal(nativeTitle([null],'LOT-17'),'LOT-17');
+ assert.equal(nativeTitle(['Detail QC ',null],'LOT-17'),'Detail QC LOT-17');
+ assert.equal(nativeTitle(['QC beras hasil sosoh'],'LOT-17'),'QC beras hasil sosoh');
+ const missing={...data,variants:{...data.variants,'qc-gabah-basah':{...data.variants['qc-gabah-basah']}}};
+ delete missing.variants['qc-gabah-basah'].breadcrumb_parts;
+ assert.equal(validData(missing),false);
 });

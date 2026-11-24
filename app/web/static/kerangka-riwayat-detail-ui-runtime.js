@@ -34,7 +34,7 @@
  }
  function nativeTitle(parts,code){return Array.isArray(parts)&&parts.length>0&&parts.length<=16&&parts.every(p=>p===null||typeof p==='string'&&p.length<=256)&&typeof code==='string'&&code.length<=80?parts.map(p=>p===null?code:p).join(''):null;}
  function validData(data){
-  return exact(data,['versi','sumber','variants','styles','scripts'])&&data.versi===1&&/^[a-f0-9]{64}$/.test(data.sumber)&&exact(data.variants,variants)&&variants.every(v=>exact(data.variants[v],['html','title_parts','bar_control','breadcrumb'])&&nativeTitle(data.variants[v].title_parts,'PADI-KODE')!==null&&typeof data.variants[v].bar_control==='string'&&data.variants[v].bar_control.length<=8192&&typeof data.variants[v].html==='string'&&data.variants[v].html.length<=262144&&typeof data.variants[v].breadcrumb==='string'&&data.variants[v].breadcrumb.length<=65536)&&['styles','scripts'].every(k=>obj(data[k])&&Object.keys(data[k]).length<=32&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=524288));
+  return exact(data,['versi','sumber','variants','styles','scripts'])&&data.versi===1&&/^[a-f0-9]{64}$/.test(data.sumber)&&exact(data.variants,variants)&&variants.every(v=>exact(data.variants[v],['html','title_parts','breadcrumb_parts','bar_control','breadcrumb'])&&nativeTitle(data.variants[v].title_parts,'PADI-KODE')!==null&&nativeTitle(data.variants[v].breadcrumb_parts,'PADI-KODE')!==null&&typeof data.variants[v].bar_control==='string'&&data.variants[v].bar_control.length<=8192&&typeof data.variants[v].html==='string'&&data.variants[v].html.length<=262144&&typeof data.variants[v].breadcrumb==='string'&&data.variants[v].breadcrumb.length<=65536)&&['styles','scripts'].every(k=>obj(data[k])&&Object.keys(data[k]).length<=32&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=524288));
  }
  function backContext(selected,origin){
   if(selected.variant==='riwayat-giling'){
@@ -140,7 +140,7 @@
    const template=doc.createElement('template');template.innerHTML=data.variants[selected.variant].breadcrumb;
    const nav=template.content.querySelector('nav.desktop-breadcrumb'),leaf=nav?.querySelector('[aria-current="page"]');
    if(template.content.querySelectorAll('nav.desktop-breadcrumb').length!==1||!leaf)return null;
-   if(entry)leaf.textContent=entry.kode;
+   if(entry)leaf.textContent=nativeTitle(data.variants[selected.variant].breadcrumb_parts,entry.kode);
    for(const a of template.content.querySelectorAll('a[href]')){
     const u=new URL(a.getAttribute('href'),location.href);
     if(u.pathname===selected.parent&&(selected.variant==='riwayat-giling'||selected.variant==='riwayat-pengeringan'&&new URL(back,location.href).pathname===selected.parent))a.setAttribute('href',back);

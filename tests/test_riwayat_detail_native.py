@@ -160,7 +160,7 @@ def test_public_compiler_reproducible_native_source_and_no_records():
         else:path=path.replace('KODE-FIKTIF','PADI-KODE')
         parent=path.rsplit('/',1)[0] if variant!='qc-beras-daftar' else path
         if variant=='riwayat-giling':parent+='#giling-1'
-        expected=env.get_template('_breadcrumb.html').render(rantai=susun(path,dict(kembali=parent,breadcrumb_detail='PADI-KODE'),metadata(variant)['title']))
+        expected=env.get_template('_breadcrumb.html').render(rantai=susun(path,dict(kembali=parent,breadcrumb_detail=judul(metadata(variant)['breadcrumb_parts'],'PADI-KODE')),metadata(variant)['title']))
         assert d['variants'][variant]['breadcrumb']==expected
         crumb=BeautifulSoup(expected,'html.parser')
         assert crumb.select_one('a[href="/"]').get_text()=='Beranda'
@@ -285,3 +285,33 @@ def test_public_history_navigation_is_inert_until_private_menu_validation():
         doc=BeautifulSoup(component['html'],'html.parser')
         controls=doc.select('input,select,textarea')
         assert all(node.has_attr('disabled') and not node.has_attr('name') and not node.has_attr('value') for node in controls)
+
+
+@pytest.mark.parametrize('variant',VARIANTS)
+def test_breadcrumb_leaf_uses_actual_native_identity_contract(variant):
+    from app.web.breadcrumb import susun
+    meta=metadata(variant)
+    path=path_for(variant)
+    # Only identity scalars. Native QC references are k.ref or qc_kode,
+    # neither is a breadcrumb kode. No rounds/results DTO is fabricated.
+    ctx=({'breadcrumb_detail':'LOT-17'} if variant.startswith('riwayat-') else
+         {'qc_kode':'LOT-17'} if 'beras' in variant else {'k':{'ref':'LOT-17'}})
+    native_title=judul(meta['document_parts'],'LOT-17')
+    native=susun(path,ctx,native_title)
+    own=susun(path,{'breadcrumb_detail':judul(meta['breadcrumb_parts'],'LOT-17')},native_title)
+    assert own['items'][-1]==native['items'][-1]
+    if variant.startswith('riwayat-'):assert native['items'][-1]['nama']=='LOT-17'
+    elif variant!='qc-beras-daftar':assert native['items'][-1]['nama']==native_title
+
+def test_native_qc_callers_do_not_override_breadcrumb_reference_as_kode():
+    paths=[ROOT/'app/web/layar_riwayat.py',ROOT/'app/web/riwayat_qc_sosoh.py']
+    calls=[]
+    for path in paths:
+        for call in ast.walk(ast.parse(path.read_text())):
+            if (isinstance(call,ast.Call) and isinstance(call.func,ast.Name) and call.func.id=='render_laci'
+                and len(call.args)>1 and isinstance(call.args[1],ast.Constant)
+                and call.args[1].value in {'riwayat_qc_detail.html','qc_sosoh_riwayat.html'}):
+                assert 'breadcrumb_detail' not in {keyword.arg for keyword in call.keywords}
+                calls.append(call.args[1].value)
+    assert calls.count('riwayat_qc_detail.html')==1
+    assert calls.count('qc_sosoh_riwayat.html')==2

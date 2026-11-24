@@ -179,7 +179,11 @@ def metadata(variant):
     if not back:
         raise ValueError('Tautan kembali native berubah')
     paths.append(ROOT / 'app/web/native_detail_chrome.py')
-    return dict(back_source=back[0], variant=variant, family=family, title=title, document_parts=document_parts, tabs=tabs,
+    # History callers pass breadcrumb_detail=kode. QC callers do not: their
+    # native identity is k.ref/qc_kode, so breadcrumb.kode falls back to the
+    # document title instead of treating that reference as k.kode.
+    breadcrumb_parts = [None] if variant.startswith('riwayat-') else document_parts
+    return dict(back_source=back[0], variant=variant, family=family, title=title, document_parts=document_parts, breadcrumb_parts=breadcrumb_parts, tabs=tabs,
                 native_titles=list(dict.fromkeys(titles)), tables=tables, extra_tables=extra_tables,
                 inputs={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths})
 
@@ -318,7 +322,7 @@ async def kerangka(request, akun):
     template = ('riwayat_detail_native.html' if spec['variant'].startswith('riwayat-') else
                 'qc_beras_native.html' if kind == 'beras-hasil-sosoh' else 'qc_detail_native.html')
     response = render(request, template, **{**values, 'DETAIL_RIWAYAT': spec,
-        'kembali': parent, 'layar': ('riwayat_' + kind if spec['variant'].startswith('riwayat-') else 'riwayat_qc' if kind == 'beras-hasil-sosoh' else 'riwayat_qc_detail'), 'breadcrumb_detail': code or spec['meta']['title']})
+        'kembali': parent, 'layar': ('riwayat_' + kind if spec['variant'].startswith('riwayat-') else 'riwayat_qc' if kind == 'beras-hasil-sosoh' else 'riwayat_qc_detail'), 'breadcrumb_detail': _chrome().judul(shape['breadcrumb_parts'], code)})
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['Vary'] = 'Cookie'
     # Tombol Cetak di bilah native juga tidak boleh mencetak placeholder.

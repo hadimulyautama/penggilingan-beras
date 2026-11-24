@@ -116,8 +116,8 @@ def build():
         program.string = asset('/static/riwayat-navigasi-native.js').replace('</script', '<\\/script')
         doc.append(program)
         crumb = env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(
-            address, dict(kembali=parent, breadcrumb_detail='PADI-KODE'), meta['title']))
-        variants[variant] = dict(title_parts=meta['document_parts'], bar_control=bar_control, html=str(doc), breadcrumb=crumb)
+            address, dict(kembali=parent, breadcrumb_detail=chrome.judul(meta['breadcrumb_parts'], 'PADI-KODE')), meta['title']))
+        variants[variant] = dict(title_parts=meta['document_parts'], breadcrumb_parts=meta['breadcrumb_parts'], bar_control=bar_control, html=str(doc), breadcrumb=crumb)
     styles, scripts, sr, jr = {}, {}, {}, {}
     for value in variants.values():
         doc = BeautifulSoup(value['html'], 'html.parser')

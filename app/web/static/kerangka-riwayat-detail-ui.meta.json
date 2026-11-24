@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "12f43df0c611d43440602a6bed8f04f8ec766383ca5f1f4b3e2bf49f6d0f8405",
+  "sumber": "b182481c3b451176b5df0f0371df0263593144914a095d32416e424b7fdbd36d",
   "variants": [
     "riwayat-giling",
     "riwayat-sosoh",
@@ -12,19 +12,19 @@
     "qc-beras-hasil-sosoh",
     "qc-beras-daftar"
   ],
-  "aset_sha256": "60c605d69513ad09fe84171a6164ea8757451461c753e8ac0521988eaef1cb40",
+  "aset_sha256": "d15055b54f7edaac1c9fb6921e5c38e5ef29f435fe0cc567679760186b81b329",
   "inputs": {
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/detail_qc.py": "579d333adbb80689c66d3a7208df6f86b7e110048a872c583662ae9b160a5459",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
-    "app/web/layar_riwayat.py": "3793634b304de2001022264d5dfea5b6f9ae38b258b6c45f8bee6cac2f590afa",
+    "app/web/layar_riwayat.py": "5df9c83645622de444baef9c4c7996c5d3b6a58fdc5d4735a21fba78b232a640",
     "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
-    "app/web/riwayat_detail_native.py": "ef22472b6ad408197305e7c79d10fd794337879dca0b7e3a1dc83412acc87a3d",
+    "app/web/riwayat_detail_native.py": "83d786b87aeffe41f7b0c8c7059afdb27f9c3dac593382ea50846ddb82a961df",
     "app/web/static/detail_pendinginan.css": "23670e14c034b9f4ed3cfe64388044718cfe279e97327fbfa67b86a8e2f081fd",
     "app/web/static/detail_pengeringan.css": "3513da10fa157ee9bac229be0872fc1fbc3d86c5fb7077c9eb944bc7c9a8737f",
-    "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "67e26c3231bc0e2f7fc21bbad2f13d14de42f16637345808d94c7fd6f01b0b00",
-    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
+    "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "2fb2c0e31ff74eca398ea4f995ca8451f21b1ec9ea4eb19805e83d169f425547",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
     "app/web/static/proses_aktif.css": "ca762b696a8a55220e7e171bbbe7416850bfa71f63e436e3334a035154907dd8",
     "app/web/static/qc-detail.css": "2dfe236e7bccbd5c2626097e2cbf95f201436381d6d11edf1fa267bf086e5eb1",
     "app/web/static/riwayat-detail-native.js": "cb404f6443e550ef0dd51d2773ed2be7158134e688f9199b3bac723db448bf4b",
@@ -55,7 +55,7 @@
     "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
     "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
     "scripts/buat_kerangka_riwayat.py": "a30730eef29b283924fbf575d787df82316e84086aad1a3390e44a05001e7d82",
-    "scripts/buat_kerangka_riwayat_detail.py": "adc62e93b4c29d71c899fae40c585c2a9f6f374a746fb4a42d276735bbd5070c",
+    "scripts/buat_kerangka_riwayat_detail.py": "6786c6b582c23f1e7d1bf9554e096919a1c8a0bae7ec4fb97411fc2c32d80f92",
     "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
   }
 }
