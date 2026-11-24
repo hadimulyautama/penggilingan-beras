@@ -64,10 +64,14 @@ async def test_audit_first_click_dirty_filter_empty_and_abandoned_get(pg,stok_le
                 # Start one different read and leave; late data must never
                 # restore audit or expose an undo form on the new page.
                 entered2,release2,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
+                # The intercepted ASGI transport is not document-negotiation
+                # proof (Sec-Fetch can be absent). Use a real native menu
+                # click that enters the explicit same-URL GET reader instead.
+                await page.locator('[data-tab-riwayat="proses"]').click()
+                await expect(page.locator('[data-riwayat-daftar-native]')).to_have_count(0)
                 t['gates']['/audit']=(entered2,release2);t['completed']['/audit']=done
                 t['gate_headers']['/audit']={'x-pindah':'1'}
-                await page.locator('input[type=search]').fill('')
-                await page.locator('input[type=search]').press('Enter',no_wait_after=True)
+                await page.locator('[data-tab-riwayat="audit"]').click()
                 await asyncio.wait_for(entered2.wait(),20)
                 await expect(page.locator('[data-audit-native]')).to_be_visible()
                 if width<900:await page.locator('#buka-laci').click()
