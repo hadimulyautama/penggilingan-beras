@@ -1,3 +1,3 @@
 {# Di luar bingkai; render frame tidak memasang host ini secara rekursif. #}
-<script type="application/json" id="padi-kerangka-langsung" data-konteks="{{ registry.konteks }}" data-cap="{{ registry.cap }}">{{ registry|tojson }}</script>
-{% if stok %}<script type="application/json" id="padi-stok-kerangka" data-konteks="{{ stok.konteks }}" data-cap="{{ stok.cap }}">{{ stok|tojson }}</script>{% endif %}
+<script type="application/json" id="padi-kerangka-langsung" data-konteks="{{ registry.konteks }}" data-cap="{{ registry.cap }}">{{ registry|tojson }}</script>{% if stok %}
+<script type="application/json" id="padi-stok-kerangka" data-konteks="{{ stok.konteks }}" data-cap="{{ stok.cap }}">{{ stok|tojson }}</script>{% endif %}

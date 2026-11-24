@@ -71,6 +71,43 @@ async def test_prototype_native_izin_dan_tanpa_saldo(pg, lengkap, monkeypatch, r
         assert await _sidik(pg) == before
 
 
+@pytest.mark.parametrize('role', ['operator', 'admin'])
+@pytest.mark.parametrize('width', [390, 1280])
+async def test_filter_pelanggan_gudang_dan_input_terserialisasi_saat_tab_ditahan(pg, lengkap, role, width):
+    pid = str(lengkap['lain'])
+    query = 'tab=bahan&pemilik=jasa&gudang=g2&pelanggan_id=' + pid
+    async with await _klien(pg, role=role, gudang_id=lengkap['gudang']['g2'] if role=='operator' else None) as c:
+        before = await _sidik(pg)
+        async with peramban(c, width) as (page, transport):
+            await page.goto(BASE + '/stok?' + query)
+            await expect(page.locator('[data-halaman-isi="stok"]')).to_be_visible()
+            search = page.locator('[data-stok-controls] input[type="search"][name="cari"]')
+            await search.fill('Baru & nilai')
+            await search.press('Enter', no_wait_after=True)
+            await page.wait_for_function("()=>new URL(location.href).searchParams.get('cari')==='Baru & nilai'")
+            entered, release = asyncio.Event(), asyncio.Event()
+            transport['gates']['/api/halaman-bertahap/stok'] = (entered, release)
+            try:
+                await page.locator('nav[aria-label="Jenis stok"] a').filter(has_text='Produk').click()
+                await asyncio.wait_for(entered.wait(), 20)
+                root=page.locator('[data-halaman-bertahap][data-kind="stok"]')
+                await expect(root.locator('input[type="search"][name="cari"]')).to_have_value('Baru & nilai')
+                await expect(root.locator('select[name="pemilik"]')).to_have_value('jasa')
+                await expect(root.locator('select[name="gudang"]')).to_have_value('g2')
+                await expect(root.locator('select[name="pelanggan_id"]')).to_have_value(pid)
+                await expect(root.locator('select[name="pelanggan_id"]')).to_be_disabled()
+                forms=await root.locator('form').evaluate_all('(forms)=>forms.map(f=>Object.fromEntries(new FormData(f)))')
+                assert len(forms)==2
+                for values in forms:
+                    assert values==dict(tab='produk',pemilik='jasa',gudang='g2',pelanggan_id=pid,cari='Baru & nilai')
+                assert not transport['posts'] and not transport['errors']
+                release.set()
+                await expect(page.locator('[data-halaman-isi="stok"]')).to_be_visible()
+            finally:
+                release.set()
+        assert await _sidik(pg)==before
+
+
 @pytest.mark.parametrize('status', [503, 403])
 async def test_descriptor_opsional_gagal_tidak_menyamarkan_izin(pg, lengkap, monkeypatch, status):
     from fastapi import HTTPException
@@ -154,7 +191,7 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                 search = page.locator('[data-stok-controls] input[type="search"][name="cari"]')
                 await search.fill('Nama baru & uji')
                 await search.press('Enter', no_wait_after=True)
-                await expect(page).to_have_url(__import__('re').compile('.*cari=.*'))
+                await page.wait_for_function("()=>new URL(location.href).searchParams.get('cari')==='Nama baru & uji'")
                 entered2, release2 = asyncio.Event(), asyncio.Event()
                 transport['gates'][api] = (entered2, release2)
                 fail['next'] = True
@@ -162,6 +199,7 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                     await page.locator('nav[aria-label="Jenis stok"] a').filter(has_text='Produk').click()
                     await asyncio.wait_for(entered2.wait(), 20)
                     await expect(root.locator('thead th').first).to_have_text('Produk')
+                    assert urlsplit(await root.get_attribute('data-url')).query
                     await expect(root.locator('input[type="search"][name="cari"]')).to_have_value('Nama baru & uji')
                     await expect(page.locator('.halaman-memuat')).to_have_count(0)
                     assert not html_entered.is_set()

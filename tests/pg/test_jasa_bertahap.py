@@ -49,6 +49,38 @@ def _tanpa_host_registry(html):
         r'data-konteks="[^"]+" data-cap="[^"]+">([^<]*)</script>', html))
     assert len(matches) == 1 and json.loads(matches[0][1]) == registry
     start, end = matches[0].span()
+    stocks = doc.select('#padi-stok-kerangka')
+    assert len(stocks) <= 1
+    if stocks:
+        stock = stocks[0]
+        assert stock.name == 'script' and stock.get('type') == 'application/json'
+        assert set(stock.attrs) == {'type', 'id', 'data-konteks', 'data-cap'}
+        assert not stock.find_parent(class_='bingkai')
+        shape = json.loads(stock.string)
+        assert set(shape) == {'versi','penyandian','konteks','cap','sesi','potongan','frames'}
+        assert shape['versi'] == 1 and shape['penyandian'] == 'baris-1'
+        assert shape['konteks'] == stock['data-konteks'] == registry['konteks']
+        assert shape['cap'] == stock['data-cap'] == registry['cap']
+        assert shape['sesi'] == registry['sesi']
+        assert set(shape['frames']) in ({'bahan'},{'bahan','produk','karung'})
+        assert isinstance(shape['potongan'],list) and 0<len(shape['potongan'])<=16384
+        assert all(isinstance(p,str) and p for p in shape['potongan'])
+        for tab,refs in shape['frames'].items():
+            assert isinstance(refs,list) and 0<len(refs)<=16384
+            assert all(type(i) is int and 0<=i<len(shape['potongan']) for i in refs)
+            assert sum(len(shape['potongan'][i]) for i in refs)<=524288
+            frame=BeautifulSoup(''.join(shape['potongan'][i] for i in refs),'html.parser')
+            assert frame.select_one('.bingkai')['data-pindah-alamat']=='/stok?tab='+tab+'&pemilik=semua'
+            assert frame.select_one('.bingkai')['data-pindah-konteks']==registry['konteks']
+            assert frame.select_one('#formulir-sesi')['data-token']==registry['sesi']
+            assert frame.html['data-versi']==registry['cap']
+            assert frame.select_one('[data-halaman-bertahap][data-kind="stok"]')
+        stock_matches=list(re.finditer(
+            r'\n<script type="application/json" id="padi-stok-kerangka" '
+            r'data-konteks="[^"]+" data-cap="[^"]+">([^<]*)</script>',html))
+        assert len(stock_matches)==1 and stock_matches[0].start()==end
+        assert json.loads(stock_matches[0][1])==shape
+        end=stock_matches[0].end()
     assert html.count('</body>') == 1 and html[end:].startswith('\n</body>')
     return html[:start] + html[end + 1:]
 

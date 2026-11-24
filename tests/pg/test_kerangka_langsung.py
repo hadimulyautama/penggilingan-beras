@@ -32,7 +32,7 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
     monkeypatch.setattr(s, 'kemas_frame', simpan_frame)
     def dilarang(*a, **kw):
         pytest.fail('Registry tidak boleh membaca daftar operasional')
-    async def susun(request, akun):
+    async def susun(request, akun, **kwargs):
         sql = []
         def rekam(*args):
             sql.append(args[2].split(None, 1)[0])
@@ -45,7 +45,7 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
                 m.setattr(berjalan, 'untuk', dilarang)
                 m.setattr(barang_masuk_daftar, 'daftar', dilarang)
                 m.setattr(layar_pekerjaan, 'siapkan_daftar_pekerjaan', dilarang)
-                data = await asli(request, akun)
+                data = await asli(request, akun, **kwargs)
         finally:
             event.remove(engine.sync_engine, 'before_cursor_execute', rekam)
         assert request.scope.get('state', {}) == asal_state

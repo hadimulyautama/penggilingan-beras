@@ -74,7 +74,7 @@ def sah_rujukan(registry: dict) -> bool:
     return True
 
 
-async def susun_registry(request: Request, akun) -> dict | None:
+async def susun_registry(request: Request, akun, *, navigasi=None) -> dict | None:
     from hmu_tampilan import CAP_ASET
     from app.web import csrf
     from app.web.halaman_bertahap import konteks_kerangka, kerangka, penanda_konteks
@@ -87,7 +87,8 @@ async def susun_registry(request: Request, akun) -> dict | None:
     state = dict(request.scope.get('state', {}))
     state.update(menyusun_kerangka_langsung=True, frame_kerangka_langsung=True)
     nav_request = Request({**request.scope, 'state': dict(state)})
-    navigasi = await konteks_kerangka(nav_request, akun)
+    if navigasi is None:
+        navigasi = await konteks_kerangka(nav_request, akun)
     frames = {}
     for alamat in dict.fromkeys((*LITERAL, *alamat_pekerjaan(request))):
         path, _, query = alamat.partition('?')
@@ -142,7 +143,10 @@ async def lengkapi_dokumen(request: Request, response):
     body = b''.join(part.encode() if isinstance(part, str) else part for part in chunks)
     if b'<!-- isi-halaman:akhir -->' in body and b'data-pindah-konteks=' in body:
         try:
-            registry = await susun_registry(request, akun)
+            from app.web.halaman_bertahap import konteks_kerangka
+            nav_request = Request({**request.scope, 'state': dict(request.scope.get('state', {}))})
+            navigasi = await konteks_kerangka(nav_request, akun)
+            registry = await susun_registry(request, akun, navigasi=navigasi)
             if registry:
                 # Penyusunan opsional harus selesai utuh sebelum badan native
                 # diubah. Kegagalan template/shape pun tetap default-off.
@@ -155,9 +159,7 @@ async def lengkapi_dokumen(request: Request, response):
                 stok = None
                 try:
                     from app.web.stok_kerangka_langsung import susun as susun_stok
-                    from app.web.halaman_bertahap import konteks_kerangka
-                    stok = await susun_stok(request, akun,
-                                            navigasi=await konteks_kerangka(request, akun))
+                    stok = await susun_stok(request, akun, navigasi=navigasi)
                 except Exception as error:
                     if isinstance(error, HTTPException) and error.status_code in (401, 403):
                         raise

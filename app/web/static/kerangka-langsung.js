@@ -9,7 +9,7 @@
   if(u.origin!==location.origin||u.pathname!=='/stok'||u.hash||u.search.length>3000)return null;
   const names=['tab','pemilik','gudang','pelanggan_id','cari'];
   if(Array.from(q.keys()).some(k=>!names.includes(k)||q.getAll(k).length!==1))return null;
-  const tab=q.get('tab')||'bahan',owner=q.get('pemilik')||'semua',warehouse=q.get('gudang')||'',customer=q.get('pelanggan_id')||'',search=q.get('cari')||'';
+  const tab=q.has('tab')?q.get('tab'):'bahan',owner=q.has('pemilik')?q.get('pemilik'):'semua',warehouse=q.get('gudang')||'',customer=q.get('pelanggan_id')||'',search=q.get('cari')||'';
   if(!['bahan','produk','karung'].includes(tab)||!['semua','pabrik','jasa'].includes(owner)||search.length>200||customer&&(!/^[1-9]\d{0,9}$/.test(customer)||Number(customer)>2147483647)||customer&&owner!=='jasa')return null;
   const host=document.getElementById('padi-stok-kerangka');let data;
   if(!host?.isConnected||host.dataset.konteks!==context||host.dataset.cap!==cap)return null;
@@ -29,13 +29,16 @@
   customerSelect.disabled=true;
   for(const form of root.querySelectorAll('form')){
    for(const input of form.querySelectorAll('input[type="hidden"]'))input.remove();
-   for(const input of form.querySelectorAll('input[name="cari"]'))input.value=search;
+   for(const input of form.querySelectorAll('input[name="cari"]'))input.setAttribute('value',search);
    const fields=new Set(Array.from(form.elements).filter(e=>e.name&&!e.disabled).map(e=>e.name));
    for(const [key,value] of [['tab',tab],['pemilik',owner],['gudang',warehouse],['pelanggan_id',customer],['cari',search]]){
     if(fields.has(key)||key==='pelanggan_id'&&!customer)continue;
-    const input=doc.createElement('input');input.type='hidden';input.name=key;input.value=value;form.append(input);
+    const input=doc.createElement('input');input.type='hidden';input.name=key;input.setAttribute('value',value);form.append(input);
    }
   }
+  // PINDAH mem-parse outerHTML lagi. Current value property tidak cukup:
+  // atribut terpilih harus mengikuti filter sebelum serialisasi dokumen.
+  for(const select of root.querySelectorAll('select'))for(const option of select.options)option.toggleAttribute('selected',option.selected);
   for(const link of main.querySelectorAll('.laporan-nav a[href],.kontrol-tab a[href]')){
    const target=new URL(link.getAttribute('href'),location.href);
    if(target.origin!==location.origin||target.pathname!=='/stok')continue;
