@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "5e38bba68952394702775f09bf741286d27a688e71786c598d072b81ca670d45",
-  "aset_sha256": "896237c10a6dbb8aacaed61e65cf07bec915ece8c5de2e7c23156f9393f4dcab",
+  "sumber": "0aa9fe6aad95094e5a026c24472f3c5b54344fe7414243b62efb130782094d5d",
+  "aset_sha256": "36f7106ad1278dcc424028e0fa7e0a4b286d93475a27a711805cf4ad2e3e9dea",
   "variants": [
     "pengiriman-admin",
     "pengiriman-operator",
@@ -21,7 +21,7 @@
     "app/web/static/pengaturan-akun-native.js": "5ca6bf444c53cc6897f6d9cdca777405b619d5369416892bd703130da3a9149c",
     "app/web/templates/_barang_keluar_kontrol.html": "2492802850c7048de0b80d542cd30b24ec1856e56ed82af281352c25caf1fb40",
     "app/web/templates/_kata_pengaturan.html": "95cc45fbf6500b9a97ba0367c1e0f2f409ff08398de835e8019e364b3cba2745",
-    "app/web/templates/_pengaturan_akun_kerangka_isi.html": "e61f896de450f5a7f707428ecc5c1b0f0c57dc3fa6114c0a3a70b4b62da7e647",
+    "app/web/templates/_pengaturan_akun_kerangka_isi.html": "c2220389bba644b58e536c535395eae53590ce1b6cde53fbf89f766266bc49b4",
     "app/web/templates/_pengiriman_bantuan.html": "4378858a777923c6a3551dc925c05144e0d37deb4514ec8def724cf27471ed3b",
     "app/web/templates/_pengiriman_daftar_keadaan.html": "f94c345d6ec2870a80f2db5faa10c8b781e7096929de76e4f106d85dc647f586",
     "app/web/templates/_pengiriman_riwayat_daftar.html": "550d505da037c833c92c14c1343b1c0d4faaf71c55d9839599eaf574cab7ac35",
