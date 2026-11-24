@@ -120,16 +120,8 @@ def _tanpa_host_registry(html):
         assert shape['konteks']==history['data-konteks']==registry['konteks']
         assert shape['cap']==history['data-cap']==registry['cap']
         assert shape['sesi']==registry['sesi']
-        for path,refs in shape['frames'].items():
-            frame=BeautifulSoup(''.join(shape['potongan'][n] for n in refs),'html.parser')
-            assert frame.select_one('.bingkai')['data-pindah-alamat']==path
-            assert frame.select_one('.bingkai')['data-pindah-konteks']==registry['konteks']
-            assert frame.select_one('.bingkai')['data-pindah-kerangka']=='1'
-            assert frame.select_one('#formulir-sesi')['data-token']==registry['sesi']
-            assert frame.html['data-versi']==registry['cap']
-            root=frame.select_one('[data-riwayat-daftar-native]')
-            assert root and root['data-url']==path
-            assert not root.select('a[href],input,form')
+        assert set(shape)=={'versi','cap','konteks','sesi','sumber','targets','menu'}
+        assert not any(key in shape for key in ('html','frames','potongan','rows','totals'))
         history_matches=list(re.finditer(
             r'\n<script type="application/json" id="padi-riwayat-kerangka" '
             r'data-konteks="[^"]+" data-cap="[^"]+">([^<]*)</script>',html))

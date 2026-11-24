@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {resolve}=require('../app/web/static/riwayat-navigasi-native.js');
-const frames={'/riwayat-sosoh':[], '/riwayat-giling':[], '/riwayat-qc/pk-luar':[]};
+const frames=['/riwayat-sosoh','/riwayat-giling','/riwayat-qc/pk-luar'];
 const menu={default:'/riwayat-sosoh',tabs:{
  proses:{first:'/riwayat-sosoh',allowed:['/riwayat-sosoh','/riwayat-giling']},
  qc:{first:'/riwayat-qc/pk-luar',allowed:['/riwayat-qc/pk-luar']},
@@ -21,7 +21,7 @@ test('only a remembered native allowed address is reused',()=>{
 });
 test('unadopted doors and missing frames fall back to native navigation',()=>{
  assert.equal(resolve(menu,frames,'/kabar','audit','/audit'),null);
- assert.equal(resolve(menu,{},'/kabar',null,null),null);
+ assert.equal(resolve(menu,[],'/kabar',null,null),null);
  assert.equal(resolve(null,frames,'/kabar',null,null),null);
  assert.equal(resolve({default:'/riwayat-transfer',tabs:{}},frames,'/kabar',null,null),null);
 });

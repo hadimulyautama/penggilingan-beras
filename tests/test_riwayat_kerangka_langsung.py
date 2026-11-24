@@ -1,50 +1,43 @@
-"""Finite presentation descriptor tests; no actor/DB/permission claim."""
+"""Finite metadata only; no actor, DB, template or permission claim."""
 from pathlib import Path
 import pytest
-from app.web.riwayat_kerangka_langsung import valid, _style, inline_styles
+from app.web.riwayat_kerangka_langsung import valid
 
 
 def descriptor():
-    return dict(versi=1,cap='fixture',konteks='fixture-context',sesi='fixture-session',
-                penyandian='baris-1',potongan=['<section>native labels only</section>'],
+    return dict(versi=1,cap='fixture',konteks='fixture-context',sesi='fixture-session',sumber='a'*64,
                 menu=dict(default='/riwayat-giling',tabs=dict(proses=dict(first='/riwayat-giling',allowed=['/riwayat-giling']))),
-                frames={'/riwayat-giling':[0]})
+                targets=['/riwayat-giling'])
 
 
-def test_finite_shape_accepts_native_list_but_not_arbitrary_detail_or_transfer():
+def test_finite_native_list_metadata_does_not_contain_cross_family_html():
     assert valid(descriptor())
     for path in ['/riwayat-giling/1','/riwayat-transfer','/riwayat-qc/beras-hasil-sosoh','/riwayat-giling?sebelum=1','/audit','https://foreign.invalid/riwayat-giling']:
-        data=descriptor();data['frames']={path:[0]};assert not valid(data)
+        data=descriptor();data['targets']=[path];assert not valid(data)
 
 
 @pytest.mark.parametrize('patch',[
-    {'versi':2},{'penyandian':'raw'},{'cap':''},{'sesi':''},
-    {'konteks':None},{'frames':{}},{'frames':[]},{'potongan':[]},
-    {'potongan':['']},{'potongan':[1]},{'frames':{'/riwayat-giling':[-1]}},
-    {'frames':{'/riwayat-giling':[True]}},{'frames':{'/riwayat-giling':[1]}},
-    {'frames':{'/riwayat-giling':[]}},{'potongan':['x'*524289]},
+    {'versi':2},{'cap':''},{'sesi':''},{'konteks':None},{'cap':'x'*513},
+    {'sumber':'a'*63},{'sumber':'g'*64},{'targets':[]},{'targets':{}},
+    {'targets':[1]},{'targets':['/riwayat-giling','/riwayat-giling']},
+    {'menu':{}},{'menu':{'default':'/riwayat-giling','tabs':{}}},
+    {'menu':{'default':'https://foreign.invalid','tabs':{}}},
+    {'menu':{'default':'/riwayat-giling','tabs':{'proses':{'first':'/audit','allowed':['/riwayat-giling']}}}},
+    {'menu':{'default':'/riwayat-giling','tabs':{'qc':{'first':'/riwayat-giling','allowed':['/riwayat-giling']}}}},
+    {'menu':{'default':'/riwayat-sosoh','tabs':{'proses':{'first':'/riwayat-sosoh','allowed':['/riwayat-sosoh']}}}},
 ])
-def test_invalid_or_oversize_descriptor_declines(patch):
+def test_invalid_metadata_declines(patch):
     assert not valid({**descriptor(),**patch})
 
 
-def test_extra_data_fields_cannot_enter_the_presentation_envelope():
-    data=descriptor();data['rows']=[{'private':'not allowed'}]
-    assert not valid(data)
+@pytest.mark.parametrize('key', ['html','frames','potongan','rows','totals','data'])
+def test_html_records_and_values_cannot_enter_the_envelope(key):
+    data=descriptor();data[key]='not allowed';assert not valid(data)
 
 
-def test_only_native_local_versioned_styles_are_inlined_without_editing_css():
-    from bs4 import BeautifulSoup
-    html='<html><body><main id="isi-halaman"><link rel="stylesheet" href="/static/riwayat.css?v=fixture"></main></body></html>'
-    result=BeautifulSoup(inline_styles(html,'fixture'),'html.parser')
-    assert result.select_one('[data-history-native-style]').string==_style('riwayat.css')
-    assert not result.select('link')
-    with pytest.raises(ValueError):inline_styles(html,'other-cap')
-
-
-def test_authorization_and_original_native_readers_stay_in_the_call_path():
+def test_real_authority_decides_targets_without_rendering_or_transaction_reads():
     source=(Path(__file__).parents[1]/'app/web/riwayat_kerangka_langsung.py').read_text()
-    assert source.index('if not await _boleh(akun.user, path)')<source.index('response = await kerangka(')
-    assert 'options = await pilihan(akun)' in source
-    for forbidden in ['.commit(','.flush(','.add(','.delete(','create_all','SimpleNamespace','CustomerReader(']:
+    assert source.index('not await _boleh(akun.user,path)')<source.index('targets.append(path)')
+    assert 'options=await pilihan(akun)' in source
+    for forbidden in ['.commit(','.flush(','.add(','.delete(','create_all','SimpleNamespace','BeautifulSoup','await kerangka(','render(']:
         assert forbidden not in source

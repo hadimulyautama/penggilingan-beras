@@ -65,10 +65,12 @@
   const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(current+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
   event.preventDefault();show(tabs[next].dataset.gkTabPilih);tabs[next].focus();
  });
- const guide=root.querySelector('#gk-panduan'),open=root.querySelector('[data-gk-panduan]');
- open?.addEventListener('click',()=>guide?.showModal());
+ const guide=root.querySelector('#gk-panduan');let guideSource=null;
+ for(const open of root.querySelectorAll('[data-gk-panduan]'))open.addEventListener('click',()=>{
+  guideSource=open;open.closest('details')?.removeAttribute('open');guide?.showModal();
+ });
  root.querySelector('[data-gk-panduan-tutup]')?.addEventListener('click',()=>guide?.close());
- guide?.addEventListener('close',()=>{if(open?.isConnected)open.focus({preventScroll:true});});
+ guide?.addEventListener('close',()=>{if(guideSource?.isConnected)(guideSource.getClientRects().length?guideSource:root.querySelector('[data-gk-menu]'))?.focus({preventScroll:true});});
  show(tabFromAddress(address,location.origin));
  let restoredTab=null;
  core.mount({address,rootSelector:'[data-giling-native-html]',
@@ -86,6 +88,8 @@
   },
   restoreFocus({focus,retry,content}){
    if(focus===retry||focus.hasAttribute('data-gk-tab-pilih'))restoredTab?.focus({preventScroll:true});
+   else if(focus.hasAttribute('data-gk-menu'))content.querySelector('summary[aria-label="Tindakan proses"]')?.focus({preventScroll:true});
+   else if(focus.hasAttribute('data-gk-panduan'))content.querySelector('.sr-design-tools>button')?.focus({preventScroll:true});
   }
  });
 })(typeof window==='undefined'?globalThis:window);

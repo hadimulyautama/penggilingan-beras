@@ -1,134 +1,91 @@
-"""Seven native history structures for this authenticated document only.
+"""History layout choices for the current document; never HTML or records.
 
-This is presentation, not a data/permission cache. Native GET repeats its own
-authorization. No rows, totals, transaction defaults or identity options are
-read here. Transfer, rice QC, detail and portal are outside this finite adapter.
+Public structure lives in versioned program assets. Fresh native GET still
+authorizes each destination and reads its real data. No transaction cache.
 """
 from functools import lru_cache
+import hashlib
+import json
 from pathlib import Path
-from urllib.parse import urlsplit
 
-from fastapi import Request
-
-MAX_JSON_BYTES = 1572864
-
-
-def navigation(path, options):
-    """Same native navigation metadata, with actual choices from pilihan()."""
-    from app.web.laporan_navigasi import TAB, PROSES, QC
-    from app.web.riwayat_daftar_metadata import PROCESS
-    family = 'proses' if path in PROCESS else 'qc'
-    kind = next((row[0] for row in options[family] if row[2] == path), None)
-    return dict(aktif=family, judul='Riwayat proses' if family == 'proses' else 'Riwayat QC',
-        jenis=kind, detail=False, panduan='rpd-panduan' if family == 'proses' else 'rqd-panduan',
-        tab=[dict(kunci=key, nama=name, href=options[key][0][2] if options[key] else '',
-                  boleh=bool(options[key]), alamat=[row[2] for row in options[key]])
-             for key, name in TAB if key != 'laporan'],
-        pilihan=list(PROSES if family == 'proses' else QC),
-        boleh_alamat=[row[2] for row in options[family]])
+MAX_JSON_BYTES = 8192
+GROUPS={
+    'proses':{'/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan'},
+    'qc':{'/riwayat-qc/'+kind for kind in ('gabah-basah','gabah-kering','pk-hasil-giling','pk-luar','beras-hasil-sosoh')},
+    'laporan':{'/laporan'},'audit':{'/audit'},
+}
 
 
-@lru_cache(maxsize=16)
-def _style(name):
-    # Only immutable program text; never cache a document, actor or decision.
-    roots = (Path(__file__).parent / 'static', Path(__file__).parents[2] / 'hmu_tampilan/static')
-    source = next((root / name for root in roots if (root / name).is_file()), None)
-    if source is None:
-        raise ValueError('Native history stylesheet unavailable')
-    text = source.read_text()
-    if '@import' in text or '</style' in text.lower():
-        raise ValueError('History stylesheet needs an explicit source review')
-    return text
+def paths():
+    from app.web.riwayat_daftar_metadata import PROCESS, QC
+    return (*PROCESS, *('/riwayat-qc/'+kind for kind in sorted(QC)))
 
 
-def inline_styles(html, cap):
-    from bs4 import BeautifulSoup
-    doc = BeautifulSoup(html, 'html.parser')
-    allowed = {'riwayat.css', 'riwayat-sosoh-desain.css', 'riwayat-giling-daftar.css',
-               'riwayat-daftar-proses.css', 'riwayat-qc-desain.css',
-               'laporan-riwayat.css', 'laporan-kontrol.css'}
-    main = doc.select_one('#isi-halaman')
-    for link in main.select('link[rel=stylesheet][href]'):
-        target = urlsplit(link['href'])
-        if target.path.removeprefix('/static/') not in allowed:
-            continue  # Other native shared styles retain their original load.
-        if target.scheme or target.netloc or not target.path.startswith('/static/'):
-            raise ValueError('Native style must be local')
-        from urllib.parse import parse_qs
-        if parse_qs(target.query).get('v') != [cap]:
-            raise ValueError('Native history style version mismatch')
-        style = doc.new_tag('style', attrs={'data-history-native-style': target.path})
-        style.string = _style(target.path.removeprefix('/static/'))
-        link.replace_with(style)
-    return str(doc)  # BeautifulSoup already preserves an existing native doctype.
+@lru_cache(maxsize=1)
+def aset():
+    folder=Path(__file__).parent/'static'
+    data=json.loads((folder/'kerangka-riwayat-ui.meta.json').read_text())
+    if (data.get('versi')!=1 or set(data.get('variants',()))!=set(paths())
+            or hashlib.sha256((folder/'kerangka-riwayat-ui.js').read_bytes()).hexdigest()!=data.get('aset_sha256')):
+        raise ValueError('Native history program package mismatch')
+    return data
 
 
 def valid(data):
     from jinja2.utils import htmlsafe_json_dumps
-    from app.web.riwayat_daftar_metadata import PROCESS, QC
-    allowed = set(PROCESS) | {'/riwayat-qc/' + key for key in QC}
-    if (not isinstance(data, dict)
-            or set(data) != {'versi', 'cap', 'konteks', 'sesi', 'penyandian', 'potongan', 'frames', 'menu'}
-            or data['versi'] != 1 or data['penyandian'] != 'baris-1'
-            or not all(isinstance(data[key], str) and data[key] for key in ('cap', 'konteks', 'sesi'))):
+    allowed=set(paths())
+    if (not isinstance(data,dict)
+            or set(data)!={'versi','cap','konteks','sesi','sumber','targets','menu'}
+            or data['versi']!=1
+            or not all(type(data[key]) is str and 0<len(data[key])<=512 for key in ('cap','konteks','sesi'))
+            or type(data['sumber']) is not str or len(data['sumber'])!=64
+            or any(c not in '0123456789abcdef' for c in data['sumber'])
+            or not isinstance(data['targets'],list) or not data['targets'] or len(data['targets'])>7
+            or not all(type(path) is str and path in allowed for path in data['targets'])
+            or len(set(data['targets']))!=len(data['targets'])):
         return False
-    menu=data['menu']
-    targets=allowed|{'/laporan','/audit','/riwayat-qc/beras-hasil-sosoh'}
+    menu=data['menu'];destinations=allowed|{'/laporan','/audit','/riwayat-qc/beras-hasil-sosoh'}
     if (not isinstance(menu,dict) or set(menu)!={'default','tabs'}
-            or menu['default'] not in targets or not isinstance(menu['tabs'],dict)
-            or not menu['tabs'] or not set(menu['tabs']) <= {'proses','qc','laporan','audit'}):
+            or type(menu['default']) is not str or menu['default'] not in destinations
+            or not isinstance(menu['tabs'],dict) or not menu['tabs']
+            or not set(menu['tabs']) <= {'proses','qc','laporan','audit'}):
         return False
-    for tab in menu['tabs'].values():
+    for key,tab in menu['tabs'].items():
         if (not isinstance(tab,dict) or set(tab)!={'first','allowed'}
                 or not isinstance(tab['allowed'],list) or not tab['allowed']
-                or len(tab['allowed'])>5 or not all(type(path) is str and path in targets for path in tab['allowed'])
+                or len(tab['allowed'])>5
+                or not all(type(path) is str and path in GROUPS[key] for path in tab['allowed'])
+                or len(set(tab['allowed']))!=len(tab['allowed'])
                 or tab['first']!=tab['allowed'][0]):
             return False
-    frames, parts = data['frames'], data['potongan']
-    if (not isinstance(frames, dict) or not frames or not set(frames) <= allowed
-            or not isinstance(parts, list) or not 0 < len(parts) <= 16384
-            or not all(isinstance(part, str) and part for part in parts)):
+    first=next(key for key in GROUPS if key in menu['tabs'])
+    if menu['default']!=menu['tabs'][first]['first']:
         return False
-    for refs in frames.values():
-        if (not isinstance(refs, list) or not 0 < len(refs) <= 16384
-                or not all(type(n) is int and 0 <= n < len(parts) for n in refs)
-                or sum(len(parts[n].encode()) for n in refs) > 524288):
+    for path in data['targets']:
+        family='proses' if path in GROUPS['proses'] else 'qc'
+        if path not in menu['tabs'].get(family,{}).get('allowed',()):
             return False
-    return len(htmlsafe_json_dumps(data).encode()) <= MAX_JSON_BYTES
+    return len(htmlsafe_json_dumps(data).encode())<=MAX_JSON_BYTES
 
 
-async def susun(request, akun, *, navigasi, registry):
+async def susun(request,akun,*,navigasi,registry):
     from app.web.portal.scope import is_customer_read
-    if is_customer_read(request) or getattr(request.state, 'portal_scope', None) is not None:
+    if is_customer_read(request) or getattr(request.state,'portal_scope',None) is not None:
         return None
-    from app.web.laporan_navigasi import pilihan
-    from app.web.riwayat_daftar_metadata import PROCESS, QC
-    from app.web.riwayat_daftar_bertahap import _boleh, kerangka
-    from app.web.kerangka_langsung import kemas_frame
-    options = await pilihan(akun)
-    from app.web.laporan_navigasi import TAB
+    from app.web.laporan_navigasi import TAB, pilihan
+    from app.web.riwayat_daftar_bertahap import _boleh
+    from app.web.riwayat_daftar_metadata import PROCESS
+    options=await pilihan(akun)
     tabs={key:dict(first=options[key][0][2],allowed=[row[2] for row in options[key]])
           for key,_ in TAB if options[key]}
-    menu=dict(default=next(tabs[key]['first'] for key,_ in TAB if key in tabs),tabs=tabs)
-    state = dict(request.scope.get('state', {}))
-    state.update(menyusun_kerangka_langsung=True, frame_kerangka_langsung=True)
-    frames = {}
-    for path in (*PROCESS, *('/riwayat-qc/' + key for key in sorted(QC))):
-        if not await _boleh(akun.user, path):
+    targets=[]
+    for path in paths():
+        family='proses' if path in PROCESS else 'qc'
+        if path not in tabs.get(family,{}).get('allowed',()) or not await _boleh(akun.user,path):
             continue
-        native = Request({**request.scope, 'path': path, 'raw_path': path.encode(),
-                          'query_string': b'', 'state': dict(state)})
-        context = {**navigasi, 'LAPORAN_NAV': navigation(path, options),
-                   'MENU_AKTIF': 'laporan_riwayat'}
-        response = await kerangka(native, akun, context)
-        if response is None or response.status_code != 200:
-            continue
-        html = inline_styles(response.body.decode(), registry['cap'])
-        if len(html.encode()) > 524288:
-            return None
-        frames[path] = html
-    if not frames:
-        return None
-    result = dict(versi=1, cap=registry['cap'], konteks=registry['konteks'],
-                  sesi=registry['sesi'], menu=menu, **kemas_frame(frames))
-    return result if valid(result) else None
+        targets.append(path)
+    if not targets:return None
+    data=dict(versi=1,cap=registry['cap'],konteks=registry['konteks'],sesi=registry['sesi'],
+              sumber=aset()['sumber'],targets=targets,
+              menu=dict(default=next(tabs[key]['first'] for key,_ in TAB if key in tabs),tabs=tabs))
+    return data if valid(data) else None

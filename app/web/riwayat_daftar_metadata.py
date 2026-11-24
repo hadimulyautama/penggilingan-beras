@@ -72,7 +72,7 @@ def metadata(path: str) -> dict:
             if not isinstance(item, nodes.Tuple) or not isinstance(item.items[2], nodes.Const):
                 raise ValueError('Label ringkasan bukan metadata statis.')
             # Never consume the value expression or format a record/number.
-            stats.append((item.items[0].value, 'Belum dibaca', item.items[2].value))
+            stats.append((item.items[0].value, '—', item.items[2].value))
         if kind == 'giling':
             head, labels = _head(source, r'<thead>.*?</thead>')
         else:

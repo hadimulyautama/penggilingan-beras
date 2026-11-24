@@ -4,20 +4,7 @@
  if(!window.PINDAH||typeof PINDAH.aturKerangkaLangsung!=='function')return;
  let hostLama=null,registry=null;
  function riwayatLangsung(address,context,cap,token){
-  const u=new URL(address,location.href),q=u.searchParams;
-  const process=['/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan'],qc=['gabah-basah','gabah-kering','pk-luar','pk-hasil-giling'].map(k=>'/riwayat-qc/'+k);
-  if(u.origin!==location.origin||u.hash||u.pathname+u.search!==address||u.search.length>2049||!process.includes(u.pathname)&&!qc.includes(u.pathname))return null;
-  if(qc.includes(u.pathname)&&u.search||process.includes(u.pathname)&&u.search&&([...q].length!==1||[...q][0][0]!=='sebelum'))return null;
-  const host=document.getElementById('padi-riwayat-kerangka');let data;
-  if(!host?.isConnected||host.dataset.cap!==cap||host.dataset.konteks!==context||host.textContent.length>1572864)return null;
-  try{data=JSON.parse(host.textContent);}catch(_){return null;}
-  const allowed=process.concat(qc);
-  if(data?.versi!==1||data.penyandian!=='baris-1'||data.cap!==cap||data.konteks!==context||data.sesi!==token||!data.frames||Array.isArray(data.frames)||Object.keys(data.frames).some(k=>!allowed.includes(k)))return null;
-  const html=decodeFrame(data,u.pathname);if(!html)return null;
-  const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),main=doc.getElementById('isi-halaman'),root=main?.querySelector('[data-riwayat-daftar-native]');
-  if(!frame||!root||frame.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==u.pathname||root.dataset.url!==u.pathname||root.dataset.stamp!==context+'|'+u.pathname||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
-  frame.dataset.pindahAlamat=address;root.dataset.url=address;root.dataset.stamp=context+'|'+address;
-  return {versi:1,alamat:address,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
+  try{return window.PadiKerangkaRiwayatUI?.buat(address,decodeFrame(registry,'/barang-masuk'),context,cap,token)||null;}catch(_){return null;}
  }
  function stokLangsung(pilihan,context,cap,token){
   if(!pilihan.alamat.startsWith('/stok'))return null;

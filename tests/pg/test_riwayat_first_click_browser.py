@@ -34,25 +34,19 @@ async def test_history_publisher_matches_native_scope_and_navigation(pg,stok_len
         host=document.select_one('#padi-riwayat-kerangka')
         assert host and not host.find_parent(class_='bingkai')
         data=json.loads(host.string);assert valid(data)
-        assert set(data['frames'])=={path for path in PATHS if allowed(warehouse,path)}
+        assert set(data['targets'])=={path for path in PATHS if allowed(warehouse,path)}
+        assert not any(key in data for key in ('html','frames','potongan','rows','totals'))
         for path in PATHS:
             native=await client.get(path,headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})
             if not allowed(warehouse,path):
                 assert native.status_code==403
                 continue
             assert native.status_code==200
-            frame=BeautifulSoup(''.join(data['potongan'][n] for n in data['frames'][path]),'html.parser')
             fresh=BeautifulSoup(native.text,'html.parser')
-            def choices(doc):
-                nav=doc.select_one('[data-laporan-kontrol]')
-                return [(n.name,n.get_text(' ',strip=True),n.get('href'),n.get('value'),n.has_attr('disabled'),n.get('aria-current'))
-                        for n in nav.select('a,option,span.akses-terkunci')]
-            assert choices(frame)==choices(fresh),path
-            root=frame.select_one('[data-riwayat-daftar-native]')
-            assert root and root['data-url']==path
-            assert frame.select_one('.bingkai')['data-pindah-kerangka']=='1'
-            assert not root.select('input,form,a[href]')
-            assert frame.select('[data-history-native-style]')
+            nav=json.loads(fresh.select_one('[data-laporan-kontrol]')['data-tujuan-tab'])
+            expected={tab['kunci']:dict(first=tab['href'],allowed=tab['alamat']) for tab in nav if tab['boleh']}
+            assert {key:tab for key,tab in data['menu']['tabs'].items() if key!='laporan'}==expected
+            assert fresh.select_one('[data-riwayat-daftar-native]')
         assert await _sidik(pg)==before
 
 
@@ -108,7 +102,7 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
                     await expect(page.locator('.halaman-memuat')).to_have_count(0)
                     await expect(root).to_have_attribute('data-url',path)
                     assert transport['gets'].count(path)==before_gets+1
-                    assert await page.locator('[data-history-native-style]').count()>0
+                    assert await page.locator('[data-history-ui-style]').count()>0
                     probe=await page.evaluate("()=>({path:__historyUiProbe.path,ui_ms:__historyUiProbe.ready,generic_insertions:__historyUiProbe.generic})")
                     assert probe['ui_ms'] is not None and probe['generic_insertions']==0
                     observations.append(probe)
@@ -118,13 +112,18 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
                     for label in metadata(path)['columns']:
                         if label:await expect(root).to_contain_text(label)
                     await expect(page.locator('[data-laporan-kontrol]')).to_be_visible()
+                    await expect(page.locator('#laci a.pintu[aria-current=page]')).to_have_count(1)
+                    await expect(page.locator('#laci a.pintu[aria-current=page]')).to_have_attribute('href',path)
                     guide=page.locator('[data-lk-buka]').first
                     await guide.focus();await page.keyboard.press('Enter')
                     dialog=page.locator('dialog[open]')
                     await expect(dialog).to_be_visible()
-                    await page.keyboard.press('Escape');await expect(guide).to_be_focused()
                     release.set()
+                    await expect(root).to_have_attribute('data-padi-baca-native-state','waiting-interaction')
+                    await expect(dialog).to_be_visible()
+                    await page.keyboard.press('Escape')
                     await expect(page.locator('[data-riwayat-daftar-native]')).to_have_count(0)
+                    await expect(page.locator('[data-lk-buka]').first).to_be_focused()
                     assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
                     assert not transport['posts'] and not transport['errors']
                 finally:release.set()

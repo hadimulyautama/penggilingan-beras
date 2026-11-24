@@ -24,7 +24,11 @@
   <h1>Penggilingan aktif</h1><p class="sr-design-code">{{ GILING_KERANGKA.kode }}</p>
   <div class="sr-context"><span>Pemilik · menunggu data</span><span>Gudang · menunggu data</span><span>Status proses · menunggu data</span></div>
   <div class="sr-design-tools"><button class="btn btn--kecil" type="button" data-gk-panduan>ⓘ Panduan</button>
-   <button class="btn btn--kecil" type="button" disabled aria-describedby="gk-menunggu">Print detail</button></div>
+   <details class="sr-design-menu"><summary class="btn" aria-label="Tindakan proses" data-gk-menu>⋮</summary>
+    <div class="sr-design-menu-body"><button class="btn" type="button" data-gk-panduan>ⓘ Panduan</button>
+     <button class="btn" type="button" disabled aria-describedby="gk-menunggu">Baca status terbaru</button>
+     <button class="btn" type="button" disabled aria-describedby="gk-menunggu">Print detail</button></div>
+   </details></div>
  </header>
  <nav class="sr-design-tabs" role="tablist" aria-label="Detail penggilingan">
  {% for key, label in GILING_KERANGKA.tabs %}

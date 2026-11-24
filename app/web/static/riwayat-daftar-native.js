@@ -18,6 +18,9 @@
    response:'Catatan belum dapat dibaca. Muat ulang bila sesi atau akses berubah.',
    native:'Daftar native belum tersedia. Coba lagi hanya membaca data.',
    timeout:'Pembacaan daftar terlalu lama. Coba lagi hanya membaca data.'},
-  restoreFocus({focus,retry,content}){if(focus===retry)content.querySelector('[data-lk-buka]')?.focus({preventScroll:true});}
+  restoreFocus({focus,retry,content}){
+   if(focus===retry||focus.hasAttribute('data-lk-buka'))content.querySelector('[data-lk-buka]')?.focus({preventScroll:true});
+   else if(focus.hasAttribute('data-jenis-riwayat'))content.querySelector('[data-jenis-riwayat]')?.focus({preventScroll:true});
+  }
  });
 })(typeof window==='undefined'?globalThis:window);

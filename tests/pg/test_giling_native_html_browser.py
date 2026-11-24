@@ -49,7 +49,14 @@ async def test_work_detail_structure_latest_tab_and_no_post(pg, hasil, role, wid
                 # Focus elsewhere while the chosen VIEW tab must survive the read.
                 await shell.locator('h1').click()
                 assert transport['gets'].count(path) == 1  # data GET only; no destination HTML first
+                if width<650:await shell.locator('[data-gk-menu]').click()
+                guide=shell.get_by_role('button',name='ⓘ Panduan',exact=True).filter(visible=True)
+                await guide.click()
+                await expect(shell.locator('#gk-panduan')).to_be_visible()
                 release.set()
+                await expect(shell).to_have_attribute('data-padi-baca-native-state','waiting-interaction')
+                await expect(shell.locator('#gk-panduan')).to_be_visible()
+                await page.keyboard.press('Escape')
                 native = page.locator('[data-giling-ringkas]')
                 await expect(native.locator('[data-sr-tab=qc]')).to_have_attribute('aria-selected', 'true')
                 await expect(native.locator('#qc .gr-qc-value')).to_have_count(6)

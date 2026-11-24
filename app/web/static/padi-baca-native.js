@@ -19,6 +19,16 @@
  function sameIdentity(a,b,address){
   return !!a&&!!b&&['cap','context','token','address'].every(k=>typeof a[k]==='string'&&a[k]&&a[k]===b[k])&&typeof address==='string'&&a.address===address;
  }
+ function waitForInteraction(ops){
+  if(ops.signal.aborted||!ops.current()||!ops.busy())return Promise.resolve();
+  return new Promise(resolve=>{
+   let settled=false,cleanup=()=>{};
+   const finish=()=>{if(settled)return;settled=true;cleanup();ops.signal.removeEventListener('abort',finish);resolve();};
+   const check=()=>{if(ops.signal.aborted||!ops.current()||!ops.busy())finish();};
+   ops.signal.addEventListener('abort',finish,{once:true});
+   cleanup=ops.subscribe(check);if(settled)cleanup();else check();
+  });
+ }
  function createReader(ops){
   if(!sameOriginAddress(ops.address,ops.origin))throw TypeError('Alamat GET native harus eksplisit dan satu origin.');
   let generation=0,controller=null,live=true;
@@ -33,6 +43,9 @@
     const fresh=await ops.parse(response);if(!current(number))return;
     if(!sameIdentity(ops.identity,fresh.identity,ops.address))throw Error(ops.identityError||'Sesi atau cakupan halaman berubah. Muat ulang halaman untuk memeriksa akses.');
     const prepared=await ops.prepare(fresh,active.signal);if(!current(number))return;
+    clearTimeout(timeout); // Optional UI interaction is not a network timeout.
+    if(ops.beforeInstall)await ops.beforeInstall(active.signal);
+    if(!current(number))return;
     ops.install(fresh,prepared);controller=null;live=false;++generation;
    }catch(error){if(current(number))ops.failed(error);}
    finally{clearTimeout(timeout);if(number===generation)controller=null;}
@@ -54,6 +67,22 @@
  if(!main||!frame?.contains(main)||!main.contains(root)||!sameIdentity(identity,identity,ADDRESS)||address()!==ADDRESS||root.dataset.url!==ADDRESS||!stamp||!status||!retry)return;
  const lifecycle=new AbortController();
  function current(){return root.isConnected&&root.dataset.stamp===stamp&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);}
+ function interaction(){
+  const focus=document.activeElement;
+  return !!main.querySelector('dialog[open]')||!!(focus&&main.contains(focus)&&focus.matches('select:not(:disabled),textarea:not(:disabled):not([readonly]),input:not(:disabled):not([readonly])'));
+ }
+ async function beforeInstall(signal){
+  if(interaction()){
+   root.dataset.padiBacaNativeState='waiting-interaction';
+   status.textContent='Data sudah dibaca. Selesaikan pilihan atau tutup dialog untuk menampilkan data terbaru.';
+  }
+  await waitForInteraction({signal,current,busy:interaction,subscribe(check){
+   const events=['close','cancel','focusout'];
+   for(const name of events)main.addEventListener(name,check,true);
+   const observer=new MutationObserver(check);observer.observe(main,{childList:true,subtree:true,attributes:true,attributeFilter:['open']});
+   return ()=>{observer.disconnect();for(const name of events)main.removeEventListener(name,check,true);};
+  }});
+ }
  function markers(parent){
   const nodes=Array.from(parent.childNodes),starts=nodes.filter(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:mulai'),ends=nodes.filter(n=>n.nodeType===8&&n.data.trim()==='isi-halaman:akhir');
   if(starts.length!==1||ends.length!==1||!(starts[0].compareDocumentPosition(ends[0])&Node.DOCUMENT_POSITION_FOLLOWING))throw Error((config.messages?.structure||'Struktur halaman belum dapat dibaca. Coba lagi.'));
@@ -95,11 +124,11 @@
   return prepared;
  }
  const observer=new MutationObserver(()=>{if(!root.isConnected){reader.stop();observer.disconnect();lifecycle.abort();}});
- const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','X-Kerangka-Halaman':'0','Accept':'text/html'}}),parse,prepare,
+ const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','X-Kerangka-Halaman':'0','Accept':'text/html'}}),parse,prepare,beforeInstall,
   loading(){retry.hidden=true;status.setAttribute('role','status');status.textContent=(config.messages?.loading||'Memuat data…');},
   failed(error){status.setAttribute('role','alert');status.textContent=error.name==='AbortError'?(config.messages?.timeout||'Pembacaan terlalu lama. Coba lagi hanya membaca data.'):error.message;retry.hidden=false;},
   install(fresh,prepared){
-   if(!current())return;const [start,end]=markers(main),focus=document.activeElement,inside=root.contains(focus);
+   if(!current())return;const [start,end]=markers(main),focus=document.activeElement,inside=main.contains(focus);
    // Seluruh GET aset sudah selesai. Tidak ada await setelah pemeriksaan akhir.
    observer.disconnect();lifecycle.abort();while(start.nextSibling&&start.nextSibling!==end)start.nextSibling.remove();end.before(fresh.content);document.title=fresh.doc.title||document.title;
    const installedCurrent=()=>fresh.content.isConnected&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);
@@ -139,7 +168,7 @@
  window.addEventListener('pagehide',()=>{reader.stop();observer.disconnect();lifecycle.abort();},{once:true,signal:lifecycle.signal});
  reader.read();return reader;
  }
- const api={sameOriginAddress,sameIdentity,createReader,mount,htmlWithinLimit,activatePrepared};
+ const api={sameOriginAddress,sameIdentity,createReader,mount,htmlWithinLimit,activatePrepared,waitForInteraction};
  if(typeof module==='object'&&module.exports){module.exports=api;return;}
  global.PADI_BACA_NATIVE=api;
 })(typeof window==='undefined'?globalThis:window);

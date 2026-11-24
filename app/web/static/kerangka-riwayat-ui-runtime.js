@@ -72,6 +72,17 @@
    if(path===state.path)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   }
  }
+ function markNavigation(doc,path){
+  for(const summary of doc.querySelectorAll('#laci summary.pintu')){summary.classList.remove('pintu--kini');summary.removeAttribute('aria-current');}
+  for(const link of doc.querySelectorAll('#laci a[href]')){
+   const url=new URL(link.getAttribute('href'),location.href);
+   const active=url.origin===location.origin&&(url.pathname===path||['/riwayat','/laporan-riwayat'].includes(url.pathname));
+   link.classList.toggle('pintu--kini',active&&link.classList.contains('pintu'));
+   link.classList.toggle('pintu-sub__satu--kini',active&&link.classList.contains('pintu-sub__satu'));
+   if(active){link.setAttribute('aria-current','page');const group=link.closest('details');if(group){group.open=true;group.querySelector('summary')?.classList.add('pintu--kini');}}
+   else link.removeAttribute('aria-current');
+  }
+ }
  if(typeof module==='object'&&module.exports){module.exports={address,validData,validPermission,pruneNavigation};return;}
  const data=global.PadiKerangkaRiwayatData;if(!validData(data))return;
  for(const variant of Object.values(data.variants))Object.freeze(variant);
@@ -109,6 +120,7 @@
   // only the already validated metadata host from this current document.
   for(const old of doc.querySelectorAll('#padi-riwayat-kerangka'))old.remove();
   if(!doc.body)return null;doc.body.append(doc.importNode(host,true));
+  markNavigation(doc,state.path);
   frame.dataset.pindahAlamat=target;doc.title=component.title+' · PT Hadi Mulya Utama';
   return {versi:1,alamat:target,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }

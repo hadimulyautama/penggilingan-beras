@@ -32,6 +32,9 @@
  function nativeIfUIUnavailable(){
   const uiHost=document.getElementById('padi-kerangka-ui');let uiReady=false;
   try{const ui=JSON.parse(uiHost?.textContent||'null');uiReady=!!(ui&&ui.versi===1&&ui.sumber===window.PadiKerangkaUI?.sumber&&ui.cap===document.documentElement.dataset.versi&&ui.konteks===document.querySelector('.bingkai')?.dataset.pindahKonteks&&ui.sesi===document.getElementById('formulir-sesi')?.dataset.token);}catch(_){}
+  let historyReady=false;
+  try{const host=document.getElementById('padi-riwayat-kerangka'),data=JSON.parse(host?.textContent||'null');historyReady=!!(host?.isConnected&&data?.versi===1&&data.sumber===window.PadiKerangkaRiwayatUI?.sumber&&data.cap===document.documentElement.dataset.versi&&data.konteks===document.querySelector('.bingkai')?.dataset.pindahKonteks&&data.sesi===document.getElementById('formulir-sesi')?.dataset.token);}catch(_){}
+  if(!historyReady)document.querySelectorAll('.laporan-nav a[href]').forEach(link=>{const u=new URL(link.href,location.href);if(u.origin===location.origin&&/^\/riwayat-(giling|sosoh|pengeringan|qc\/)/.test(u.pathname))link.setAttribute('data-utuh','');});
   if(!uiReady)document.querySelectorAll('a[href]').forEach(link=>{const u=new URL(link.href,location.href);if(u.origin===location.origin&&(['/barang-keluar','/jasa','/pengaturan/akun','/laporan'].includes(u.pathname)||u.pathname.startsWith('/proses-aktif/giling/')||u.pathname==='/stok'&&!document.getElementById('padi-stok-kerangka')))link.setAttribute('data-utuh','');});
  }
  // Parser awal belum mencapai laci/manifest di luar bingkai. Partial swap

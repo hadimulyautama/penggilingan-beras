@@ -72,3 +72,24 @@ test('native script navigation stops subsequent prepared scripts without warning
  });
  assert.equal(ok,false);assert.deepEqual(events,['script-navigates']);
 });
+test('a prepared read waits for a live dialog without another fetch',async()=>{
+ const entered=deferred(),release=deferred();
+ const f=fixture('/laporan',{async beforeInstall(){entered.resolve();await release.promise;}});
+ const read=f.reader.read();await entered.promise;
+ assert.equal(f.calls.read,1);assert.equal(f.calls.install,0);
+ release.resolve();await read;assert.equal(f.calls.install,1);
+});
+test('navigation during a dialog hold cannot install the old response',async()=>{
+ const entered=deferred(),release=deferred();let current=true;
+ const f=fixture('/laporan',{current:()=>current,async beforeInstall(){entered.resolve();await release.promise;}});
+ const read=f.reader.read();await entered.promise;current=false;f.reader.stop();release.resolve();await read;
+ assert.equal(f.calls.install,0);assert.deepEqual(f.calls.fail,[]);
+});
+test('interaction subscription is cleaned on close or abort, including synchronous close',async()=>{
+ for(const action of ['close','abort','synchronous-close']){
+  const controller=new AbortController();let busy=true,check,cleaned=0;
+  const wait=core.waitForInteraction({signal:controller.signal,current:()=>true,busy:()=>busy,subscribe(fn){check=fn;if(action==='synchronous-close'){busy=false;fn();}return()=>cleaned++;}});
+  if(action==='close'){busy=false;check();}else if(action==='abort')controller.abort();
+  await wait;assert.equal(cleaned,1,action);
+ }
+});
