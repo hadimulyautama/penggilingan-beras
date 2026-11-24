@@ -17,7 +17,7 @@ def isi():
     env = Environment(loader=FileSystemLoader(str(ROOT/'app/web/templates')),
                       undefined=StrictUndefined, autoescape=True)
     spec = {**spesifikasi('/pengaturan/akun'), 'stamp': 'fixture-stamp',
-            'data_url': '/api/halaman-bertahap/pengaturan-akun'}
+            'data_url': '/pengaturan/akun'}
     return env.get_template('_pengaturan_akun_kerangka_isi.html').render(AKUN_KERANGKA=spec)
 
 
@@ -59,7 +59,7 @@ def test_only_integrator_owned_read_address_is_accepted(url):
 
 
 def test_exact_pure_model_has_no_actor_values():
-    assert data_url_sah('/api/halaman-bertahap/pengaturan-akun')
+    assert data_url_sah('/pengaturan/akun')
     assert set(spesifikasi('/pengaturan/akun')) == {'kind', 'title', 'alamat', 'kembali', 'sandi'}
 
 
@@ -84,10 +84,10 @@ async def test_renderer_receives_structure_and_keeps_private_headers(monkeypatch
         seen.append((name, context))
         return HTMLResponse('<section>pure renderer double</section>')
     monkeypatch.setitem(sys.modules, 'app.web.tampilan', SimpleNamespace(render=render))
-    account = object()
+    account = SimpleNamespace(harus_ganti_sandi=False)
     request = Request(dict(type='http', method='GET', scheme='https', server=('uji', 443),
                            path='/pengaturan/akun', query_string=b'', headers=[], state={'akun': account}))
-    context = {'SHELL': {'stamp': 'ctx-fixture', 'data_url': '/api/halaman-bertahap/pengaturan-akun'}}
+    context = {'SHELL': {'stamp': 'ctx-fixture', 'data_url': '/pengaturan/akun'}}
     result = await kerangka(request, account, context)
     assert result.headers['cache-control'] == 'private, no-store'
     assert result.headers['vary'] == 'Cookie'
@@ -98,3 +98,12 @@ async def test_renderer_receives_structure_and_keeps_private_headers(monkeypatch
     request.scope['method'] = 'POST'
     assert await kerangka(request, account, context) is None
     assert len(seen) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('account', [SimpleNamespace(harus_ganti_sandi=True), SimpleNamespace()])
+async def test_forced_or_unknown_password_state_stays_native(account):
+    request = Request(dict(type='http', method='GET', scheme='https', server=('uji', 443),
+                           path='/pengaturan/akun', query_string=b'', headers=[], state={'akun': account}))
+    context = {'SHELL': {'stamp': 'ctx-fixture', 'data_url': '/pengaturan/akun'}}
+    assert await kerangka(request, account, context) is None

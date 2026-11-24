@@ -29,8 +29,7 @@ def data_url_sah(url: str) -> bool:
         u = urlsplit(url)
     except ValueError:
         return False
-    return not (u.scheme or u.netloc or u.query or u.fragment) and u.path == (
-        '/api/halaman-bertahap/' + JENIS)
+    return not (u.scheme or u.netloc or u.query or u.fragment) and u.path == ALAMAT
 
 
 async def kerangka(request, akun, konteks):
@@ -43,7 +42,8 @@ async def kerangka(request, akun, konteks):
     if (spec is None or request.method != 'GET'
             or getattr(request.state, 'portal_scope', None) is not None
             or getattr(request.state, 'akun', None) is not akun
-            or akun is None):
+            or akun is None
+            or getattr(akun, 'harus_ganti_sandi', None) is not False):
         return None
     shell = konteks.get('SHELL', {})
     if (not isinstance(shell.get('stamp'), str) or not shell['stamp']
