@@ -23,6 +23,17 @@
   const view=plan.views.find(v=>v.href===current.href&&v.full===current.locationHref&&v.controls===current.selectedControls);
   return view?.address||null;
  }
+ function receiptAnchorViews(plan,currentLinks,freshLinks){
+  if(!plan||!Array.isArray(currentLinks)||!Array.isArray(freshLinks)||currentLinks.length!==freshLinks.length)return null;
+  const captured=[];
+  for(let i=0;i<currentLinks.length;i++){
+   const current=currentLinks[i],fresh=freshLinks[i],keys=['href','target','download','ariaDisabled'];
+   if(!exact(current,keys)||!exact(fresh,keys)||typeof current.href!=='string'||!['target','download','ariaDisabled'].every(k=>typeof current[k]==='boolean')||keys.some(k=>current[k]!==fresh[k]))return null;
+   const viewIndex=plan.views.findIndex(v=>v.href===current.href);
+   if(viewIndex>=0&&!current.target&&!current.download&&!current.ariaDisabled)captured.push(Object.freeze({index:i,viewIndex,href:current.href}));
+  }
+  return Object.freeze(captured);
+ }
  function adoptReceiptTabs(content,doc){
   const describe=global.PadiKerangkaReturBacaUI?.address;
   if(!content?.isConnected||!doc||typeof describe!=='function')return false;
@@ -36,20 +47,23 @@
   if(nativeTabs.length!==4||sourceTabs.length!==4||nativeTabs.some((t,i)=>t.tagName!=='A'||t.getAttribute('href')!==sourceTabs[i].getAttribute('href')||t.getAttribute('aria-controls')!==sourceTabs[i].getAttribute('aria-controls')))return false;
   const identity={address:freshFrame.dataset.pindahAlamat||'',cap:doc.documentElement.dataset.versi||'',context:freshFrame.dataset.pindahKonteks||'',token:freshSession.dataset.token||''},plan=receiptTabPlan(identity,sourceTabs.map(t=>({href:t.getAttribute('href'),controls:t.getAttribute('aria-controls')})),location.origin,describe);
   if(!plan||location.pathname+location.search!==plan.address||frame.dataset.pindahAlamat!==plan.address||document.documentElement.dataset.versi!==plan.cap||frame.dataset.pindahKonteks!==plan.context||session.dataset.token!==plan.token)return false;
+  const links=[...root.querySelectorAll('a')],freshLinks=[...freshRoot.querySelectorAll('a')],linkShape=a=>({href:a.getAttribute('href')||'',target:a.hasAttribute('target'),download:a.hasAttribute('download'),ariaDisabled:a.hasAttribute('aria-disabled')}),captured=receiptAnchorViews(plan,links.map(linkShape),freshLinks.map(linkShape));
+  if(!captured||nativeTabs.some(tab=>!captured.some(c=>links[c.index]===tab)))return false;
+  const capturedLinks=new Map(captured.map(c=>[links[c.index],c]));
   let last=plan.address;root.dataset.returReadTabs='1';
   // Registered AFTER the unchanged native controller. It owns the URL,
   // selected tab and panel; this listener only follows a captured native href.
   root.addEventListener('click',event=>{
-   const tab=event.target.closest?.('a');if(!nativeTabs.includes(tab)||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||tab.target)return;
+   const tab=event.target.closest?.('a'),binding=capturedLinks.get(tab);if(!binding||tab.getAttribute('href')!==binding.href||tab.hasAttribute('target')||tab.hasAttribute('download')||tab.hasAttribute('aria-disabled')||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
    try{
     const selected=root.querySelector('[role=tab][aria-selected=true]'),controls=selected?.getAttribute('aria-controls'),panel=controls?root.querySelector('#'+CSS.escape(controls)):null;
-    const next=nextReceiptAddress(plan,last,{cap:document.documentElement.dataset.versi||'',context:frame.dataset.pindahKonteks||'',token:session.dataset.token||'',frameAddress:frame.dataset.pindahAlamat||'',href:tab.getAttribute('href'),locationHref:location.href,selectedControls:controls||'',panelVisible:!!panel&&!panel.hidden,connected:root.isConnected&&frame.isConnected&&session.isConnected,sameRoot:document.querySelectorAll('.bingkai').length===1&&document.querySelectorAll('#isi-halaman').length===1&&document.querySelectorAll('#formulir-sesi').length===1&&document.querySelector('.bingkai')===frame&&document.getElementById('isi-halaman')===main&&document.getElementById('formulir-sesi')===session&&frame.contains(root)&&main.contains(content)&&!root.matches(unsafe)&&!root.querySelector(unsafe),sessionCurrent:!global.SESIFORM||global.SESIFORM.periksa(),nativeHandled:event.defaultPrevented&&selected===tab});
+    const next=nextReceiptAddress(plan,last,{cap:document.documentElement.dataset.versi||'',context:frame.dataset.pindahKonteks||'',token:session.dataset.token||'',frameAddress:frame.dataset.pindahAlamat||'',href:tab.getAttribute('href'),locationHref:location.href,selectedControls:controls||'',panelVisible:!!panel&&!panel.hidden,connected:root.isConnected&&frame.isConnected&&session.isConnected,sameRoot:document.querySelectorAll('.bingkai').length===1&&document.querySelectorAll('#isi-halaman').length===1&&document.querySelectorAll('#formulir-sesi').length===1&&document.querySelector('.bingkai')===frame&&document.getElementById('isi-halaman')===main&&document.getElementById('formulir-sesi')===session&&frame.contains(root)&&main.contains(content)&&!root.matches(unsafe)&&!root.querySelector(unsafe),sessionCurrent:!global.SESIFORM||global.SESIFORM.periksa(),nativeHandled:event.defaultPrevented&&selected===nativeTabs[binding.viewIndex]&&selected.getAttribute('href')===plan.views[binding.viewIndex].href});
     if(next){frame.dataset.pindahAlamat=next;last=next;}
    }catch(_){/* Optional read-view adapter declines; native URL/tabs remain. */}
   });
   return true;
  }
- if(typeof module==='object'&&module.exports){module.exports={receiptTabPlan,nextReceiptAddress};return;}
+ if(typeof module==='object'&&module.exports){module.exports={receiptTabPlan,nextReceiptAddress,receiptAnchorViews};return;}
  const root=document.querySelector('[data-retur-baca-native]');
  if(!root||!global.PadiKerangkaReturBacaUI?.address(root.dataset.url,location.origin))return;
  global.PADI_BACA_NATIVE?.mount({address:root.dataset.url,rootSelector:'[data-retur-baca-native]',statusSelector:'[data-retur-baca-status]',retrySelector:'[data-retur-baca-retry]',shellSelector:'[data-retur-baca-native]',contentAttribute:'data-retur-baca-isi',afterInstall({content,doc}){adoptReceiptTabs(content,doc);},messages:{loading:'Memuat catatan terbaru. Kerangka tetap tersedia.',response:'Catatan retur belum dapat dibaca. Periksa konteks lalu coba baca lagi; tidak ada transaksi yang dikirim.',native:'Dokumen retur belum tersedia. Tidak ada penerimaan atau pengiriman ulang.',timeout:'Pembacaan terlalu lama. Coba lagi hanya membaca data.'}});

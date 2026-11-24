@@ -1,12 +1,12 @@
 {
   "versi": 1,
-  "sumber": "b33386fd422d130949c8dc411910848178944465701a1111f080b1278d788c6f",
+  "sumber": "1a5ded45555eee2c0b61378496dfa2366cff88f67afed2a5bd3100680c6af76c",
   "variants": [
     "list",
     "receipt",
     "ticket"
   ],
-  "aset_sha256": "e6a4555b8fab20b762c0f1d76ae0c85d069b5222f087d23db313710557e7c6f2",
+  "aset_sha256": "be989ea80ae742ce6fa3b632ab85f38366c51c9d7abc2179b1ad56d72f99deb5",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/layar_retur.py": "c6533fd9e0e91643f73a822f78ccf02bcedcca4661e0714576ebe66c51dcdb23",
@@ -17,7 +17,7 @@
     "app/web/static/detail_kirim_retur.css": "7000e9cfb2ff8e127818e515847e3facd3bee1947a6b9681bc35e175b1717278",
     "app/web/static/kerangka-retur-baca-ui-runtime.js": "32c8268fcbbcc0c6d1d5c061abc8c210f1658dfad7392073244ff4b2c4dad2f8",
     "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
-    "app/web/static/retur-baca-native.js": "58b128721cf8da2911b94e71d2bcea7ca4fbd104cd7bcf56e8c92773fe7bd84a",
+    "app/web/static/retur-baca-native.js": "c91423529ff014852aa6d9eb3ef33bf7d7d3968c2bf0dfd459e52368ea3680ac",
     "app/web/static/riwayat.css": "21fa1ff357afc661b0392e2317182d3338a2938b48d7eb91a7c4e99c2c457071",
     "app/web/templates/_barang_retur_kontrol.html": "3695f2861fa004413af466c7fcb15192559abc594eed0b1f47b0989e73db6cbc",
     "app/web/templates/_detail_kirim_tabs.html": "5dd4dc840ce32dd2ac05976e8dd61e6bb2416af2884a6a4a047dfeaf2cb92a37",

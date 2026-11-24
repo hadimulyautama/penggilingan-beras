@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {createHash}=require('node:crypto');
-const {receiptTabPlan,nextReceiptAddress}=require('../app/web/static/retur-baca-native.js');
+const {receiptTabPlan,nextReceiptAddress,receiptAnchorViews}=require('../app/web/static/retur-baca-native.js');
 const {address}=require('../app/web/static/kerangka-retur-baca-ui-runtime.js');
 const origin='https://fixture.invalid',identity={address:'/retur/7',cap:'fixture-cap',context:'fixture-context',token:'fixture-session'};
 const tabs=['ringkasan','barang','tiket','riwayat'].map(t=>({href:origin+'/retur/7?tab_detail='+t+'#panel-'+t,controls:'panel-'+t}));
@@ -38,4 +38,36 @@ test('native shared tab controller and URL owner remain byte-identical to1a9672a
  const adapter=readFileSync(require.resolve('../app/web/static/retur-baca-native.js'),'utf8');
  assert.doesNotMatch(adapter,/history\.(?:replaceState|pushState)|fetch\(|sessionStorage|localStorage|method\s*:\s*['"]POST['"]/);
  assert.match(adapter,/afterInstall\(/);assert.match(adapter,/frame\.dataset\.pindahAlamat=next/);
+});
+
+const linkShape=href=>({href,target:false,download:false,ariaDisabled:false});
+const nativeLinks=()=>[...tabs.map(t=>linkShape(t.href)),linkShape('/barang-keluar/12'),linkShape(tabs[2].href)];
+test('inline native tiket link binds only to its existing native tab view',()=>{
+ const links=nativeLinks(),captured=receiptAnchorViews(plan(),links,nativeLinks());
+ assert.deepEqual(captured.map(c=>[c.index,c.viewIndex]),[[0,0],[1,1],[2,2],[3,3],[5,2]]);
+ assert.ok(Object.isFrozen(captured));assert.ok(captured.every(Object.isFrozen));
+ const inline=captured.at(-1),state={...current(2),href:links[inline.index].href};
+ assert.equal(nextReceiptAddress(plan(),identity.address,state),plan().views[2].address);
+});
+for(const field of ['target','download','ariaDisabled'])test('ineligible native inline anchor is not captured: '+field,()=>{
+ const links=nativeLinks();links[5][field]=true;
+ const captured=receiptAnchorViews(plan(),links,links.map(x=>({...x})));
+ assert.equal(captured.some(c=>c.index===5),false);assert.equal(captured.length,4);
+});
+test('injected or mutated current anchors do not acquire a native binding',()=>{
+ const injected=nativeLinks();injected.push(linkShape(tabs[2].href));assert.equal(receiptAnchorViews(plan(),injected,nativeLinks()),null);
+ for(const change of [x=>{x[5].href=tabs[1].href},x=>{x[5].target=true},x=>{x.reverse()}]){
+  const links=nativeLinks();change(links);assert.equal(receiptAnchorViews(plan(),links,nativeLinks()),null);
+ }
+});
+test('uncaptured href and changed native tuple cannot reuse inline binding',()=>{
+ const links=nativeLinks(),captured=receiptAnchorViews(plan(),links,nativeLinks());
+ assert.equal(captured.some(c=>c.index===4),false);
+ for(const change of [{href:'/barang-keluar/12'},{href:tabs[1].href},{selectedControls:'panel-barang'},{context:'new-context'},{token:'new-session'},{frameAddress:'/retur/7?tab_detail=riwayat'}])assert.equal(nextReceiptAddress(plan(),identity.address,{...current(2),...change}),null);
+});
+test('inline support never captures newly inferred queries or resource hrefs',()=>{
+ for(const href of [tabs[2].href.replace('/7?','/8?'),tabs[2].href.replace('#','&other=1#'),tabs[2].href.replace('panel-tiket','panel-barang')]){
+  const links=nativeLinks();links[5].href=href;
+  assert.equal(receiptAnchorViews(plan(),links,links.map(x=>({...x}))).some(c=>c.index===5),false);
+ }
 });
