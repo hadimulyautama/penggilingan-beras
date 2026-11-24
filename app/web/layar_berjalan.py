@@ -88,6 +88,14 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
         elif p.status != "proses":
             raise HTTPException(404, "Proses ini sudah tidak aktif.")
 
+        if jenis in ("pengeringan", "pendinginan") and not is_customer_read(request):
+            # Hanya struktur baca sesudah izin row serta pengalihan fase
+            # native. X-Pindah:1 tetap meneruskan seluruh pembaca di bawah.
+            from app.web.pengeringan_native_html import kerangka as kerangka_dryer
+            shell = await kerangka_dryer(request, akun, jenis=jenis, lot=p, db=db)
+            if shell is not None:
+                return shell
+
         if jenis == "sosoh":
             daftar = await svc._kartu_penyosohan_g2(db, None, kode_proses=kode, lengkap=True)
         else:
