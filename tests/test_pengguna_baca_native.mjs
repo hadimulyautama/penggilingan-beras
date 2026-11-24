@@ -3,9 +3,25 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 const require=createRequire(import.meta.url),{state,validData,validPermission,validCatalog,stripNative}=require('../app/web/static/kerangka-pengguna-ui-runtime.js');
-const {configuration,emptyPeopleCase}=require('../app/web/static/pengguna-baca-native.js');
+const {configuration,emptyPeopleCase,updateBreadcrumb}=require('../app/web/static/pengguna-baca-native.js');
 const origin='https://fixture.invalid',source='a'.repeat(64),ctx='context',cap='cap',token='session';
 const variants=['staf','staf-super','staf-detail','pelanggan','pelanggan-detail'];
+
+test('fresh native breadcrumb preserves only its unique focused equivalent',()=>{
+ function run({outside=false,href='/pengaturan',duplicates=1,focusDuringReplace=false,unsafe=false}={}){
+  const body={},other={},document={body,activeElement:null,importNode:n=>n};let focused=0,replaced=0;
+  const old={getAttribute:()=>'/pengaturan',matches:s=>s==='a[href]'||s==='.desktop-back'};
+  const next={getAttribute:()=>href,matches:s=>s==='.desktop-back',focus:options=>{assert.deepEqual(options,{preventScroll:true});focused++;document.activeElement=next;}};
+  document.activeElement=outside?other:old;
+  const source={querySelector:()=>unsafe?{}:null,childNodes:[next]};
+  const target={contains:n=>n===old,replaceChildren:()=>{replaced++;if(!outside)document.activeElement=focusDuringReplace?other:body;},querySelectorAll:()=>Array(duplicates).fill(next)};
+  updateBreadcrumb(source,target,document);
+  return {focused,replaced};
+ }
+ assert.deepEqual(run(),{focused:1,replaced:1});
+ for(const options of [{outside:true},{href:'/pengguna'},{duplicates:2},{focusDuringReplace:true}])assert.deepEqual(run(options),{focused:0,replaced:1});
+ assert.deepEqual(run({unsafe:true}),{focused:0,replaced:0});
+});
 const data={versi:1,sumber:source,variants:Object.fromEntries(variants.map(v=>[v,{title:v,html:'',breadcrumb:'',bar:'',kembali:'/pengaturan'}])),styles:{},scripts:{}};
 function permission(){return {versi:1,sumber:source,cap,konteks:ctx,sesi:token,targets:{'/pengguna':'staf-super','/pengguna/pelanggan':'pelanggan'}};}
 function catalog(){return {versi:1,sumber:source,source_address:'/pengguna',source_sha256:'b'.repeat(64),cap,konteks:ctx,sesi:token,entries:[{alamat:'/pengguna/12',variant:'staf-detail',title:'Nama fixture'}]};}

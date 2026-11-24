@@ -29,6 +29,18 @@
   if(!customer||customer[1]&&Number(customer[1])>2147483647)return false;
   const q=[...u.searchParams];return new Set(q.map(x=>x[0])).size===q.length&&q.every(([k,v])=>['cari_akun','halaman_akun'].includes(k)&&(k!=='halaman_akun'||/^[0-9]{1,9}$/.test(v)));
  }
+ function updateBreadcrumb(source,target,doc){
+  if(!source||!target||source.querySelector('script,form,input'))return;
+  const focus=doc.activeElement,anchor=target.contains(focus)&&focus.matches('a[href]')?focus:null;
+  const href=anchor?.getAttribute('href'),back=anchor?.matches('.desktop-back');
+  target.replaceChildren(...Array.from(source.childNodes,n=>doc.importNode(n,true)));
+  // Replacing fresh native names must not drop a user's current keyboard
+  // position. Restore only its unique equivalent inside this same breadcrumb.
+  if(anchor&&doc.activeElement===doc.body){
+   const matches=Array.from(target.querySelectorAll('a[href]')).filter(a=>a.getAttribute('href')===href&&a.matches('.desktop-back')===back);
+   if(matches.length===1)matches[0].focus({preventScroll:true});
+  }
+ }
  function refreshChrome(doc){
   // Only the fresh, identity-checked native document knows whether the name
   // changed or its missing-resource fallback rendered the list instead.
@@ -37,7 +49,7 @@
   const back=doc.querySelector('header.bar a.bar__balik'),current=document.querySelector('header.bar a.bar__balik');
   if(back&&current&&['/pengaturan','/pengguna'].includes(back.getAttribute('href')))current.setAttribute('href',back.getAttribute('href'));
   const source=doc.querySelector('.desktop-chrome__crumbrow'),target=document.querySelector('.desktop-chrome__crumbrow');
-  if(source&&target&&!source.querySelector('script,form,input'))target.replaceChildren(...Array.from(source.childNodes,n=>document.importNode(n,true)));
+  updateBreadcrumb(source,target,document);
  }
  function configuration(address,origin){
   if(!validAddress(address,origin))return null;
@@ -46,7 +58,7 @@
    restoreFocus({focus,retry,content}){if(focus===retry){content.tabIndex=-1;content.focus({preventScroll:true});}else{const href=focus.closest('a[href]')?.getAttribute('href');if(href)Array.from(content.querySelectorAll('a[href]')).find(a=>a.getAttribute('href')===href)?.focus({preventScroll:true});}}
   };
  }
- if(typeof module==='object'&&module.exports){module.exports={configuration,emptyPeopleCase,validAddress};return;}
+ if(typeof module==='object'&&module.exports){module.exports={configuration,emptyPeopleCase,validAddress,updateBreadcrumb};return;}
  const root=document.querySelector('[data-pengguna-baca-native]');
  const config=root?configuration(root.dataset.url,location.origin):null;
  if(core&&config)core.mount(config);
