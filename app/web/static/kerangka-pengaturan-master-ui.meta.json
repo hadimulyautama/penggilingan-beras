@@ -1,0 +1,23 @@
+{
+  "versi": 1,
+  "sumber": "e02dee8ce33c3c1d7abfd86d1de1e369402f2f88d49f3ed40275849f7c8fb4c4",
+  "variants": [
+    "/pengaturan/spesifikasi-beras",
+    "/pengaturan/hasil-samping"
+  ],
+  "aset_sha256": "bc340a6b29662728751952ee5eeeeb31fa9504b547e2ef0f3a7f92a1e141fe9f",
+  "inputs": {
+    "app/web/jenis_hasil_samping.py": "bd6de27630c4e5c5ecae16351b812cc06fc25e89ca8d158f7daa27fe6991d5e3",
+    "app/web/pengaturan_master_kerangka.py": "beb65ade31eabc680c9118132cea25d268fbd687840cf56f6feef9d8e73298c6",
+    "app/web/spesifikasi_beras.py": "c2dd858c9f0ca73019566f37ea21f848a3ae175284ae3a50349b77c71855e8a8",
+    "app/web/static/kerangka-pengaturan-master-ui-runtime.js": "251aba8c2e91216d07c12eb3ec345d69532d3a5750100c37e2d1de3d7878b7c6",
+    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/pengaturan-master-native.js": "2e9216c3e4dbf295bcfaeb680ba32e847b1620874962fa0d83531146822dd361",
+    "app/web/static/spesifikasi-beras.css": "00847f99512c69b747d7514363260e1ac924a557a8963afa330f55dc1dc74631",
+    "app/web/templates/jenis_hasil_samping.html": "682e088a06482c8837960d0a5693891e77a46b930db3438fb921d0ec212e2528",
+    "app/web/templates/pengaturan_master_kerangka.html": "bfdec36fd559d5f5f25e1ce6c00060addfc499db7bd2e7fba99e85c356a626aa",
+    "app/web/templates/spesifikasi_beras.html": "bb2b943ab098fcf1711e78a52383f75d69deb4be5263047ff1e8bce7af539090",
+    "scripts/buat_kerangka_pengaturan_master.py": "d145259bb045ca545dfecbe47fda162421bb071c205af5836fe042f615571fcd",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

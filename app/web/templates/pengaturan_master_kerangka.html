@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block judul %}{{ PG_MASTER_SHELL.title }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/spesifikasi-beras.css?v={{ VERSI }}">
+<section class="spek-beras" aria-labelledby="pg-master-judul" data-pengaturan-master-kerangka data-url="{{ PG_MASTER_SHELL.alamat }}" data-stamp="{{ PG_MASTER_SHELL.stamp }}" data-record-ready="0">
+<a href="/pengaturan">← Pengaturan</a><p class="bantu">Pengaturan / Operasional</p>
+<h1 id="pg-master-judul">{{ PG_MASTER_SHELL.title }}</h1>
+<p>{{ PG_MASTER_SHELL.description }}</p>
+<details class="kartu"><summary class="spek-ringkas">{{ PG_MASTER_SHELL.add_summary }}</summary>
+<div class="grup" aria-describedby="pg-master-pending">
+{% if PG_MASTER_SHELL.jenis == 'beras' %}
+<label for="pg-master-nama">Nama jenis / spesifikasi</label>
+<input class="fld" id="pg-master-nama" disabled placeholder="Belum dimuat" autocomplete="off">
+<div class="spek-angka"><div><label for="pg-master-broken">Kadar broken acuan (%)</label><input class="fld" id="pg-master-broken" inputmode="decimal" disabled placeholder="Belum dimuat"></div>
+<div><label for="pg-master-sosoh">Derajat sosoh acuan (%)</label><input class="fld" id="pg-master-sosoh" inputmode="decimal" disabled placeholder="Belum dimuat"></div></div>
+{% else %}
+<label for="pg-master-nama">Nama hasil samping</label>
+<input class="fld" id="pg-master-nama" disabled placeholder="Belum dimuat" autocomplete="off">
+<label for="pg-master-bentuk">Bentuk stok</label><select class="fld" id="pg-master-bentuk" disabled><option>Belum dimuat</option></select>
+<label for="pg-master-kg">Kapasitas karung (kg)</label><input class="fld" id="pg-master-kg" inputmode="numeric" disabled placeholder="Belum dimuat">
+<p class="bantu">Wajib untuk stok berkarung. Kosongkan untuk curah.</p>
+{% endif %}
+<button class="btn btn--utama" type="button" disabled aria-describedby="pg-master-pending">{{ PG_MASTER_SHELL.add_button }}</button>
+</div></details>
+<h2>{{ PG_MASTER_SHELL.list_title }} <span class="bantu">(belum dibaca)</span></h2>
+<div class="kartu" aria-busy="true" data-master-records-pending><p class="bantu">Daftar dan status penggunaan menunggu pembacaan data terbaru.</p></div>
+<p class="bantu" id="pg-master-pending">Isian dan tindakan tersedia setelah data serta akses terbaru selesai dibaca. Tidak ada perubahan selama memuat.</p>
+<p role="status" aria-live="polite" data-master-native-status>Memuat data master…</p>
+<button class="btn" type="button" data-master-native-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca data bertahap. Tidak ada perubahan yang dikirim selama memuat.</p></noscript>
+</section>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/pengaturan-master-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}
