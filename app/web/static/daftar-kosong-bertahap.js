@@ -6,10 +6,10 @@ window.PadiDaftarKosong=function(container,config){
  let queued=false,last=[],lastMessage=null;
  const loads=[];
  const area=container.querySelector('.stok-seragam,.laporan-isi')||container;
- const rowSelector='.proses-aktif-list__row,.stok-baris__tautan,.stok-mobile-list__baris,.produk-list .tabel-standar__item,.karung-tabel tbody tr:not([data-daftar-pesan])';
+ const rowSelector=(config.kind==='pekerjaan'?'.benda[data-cari],':'')+'.proses-aktif-list__row,.stok-baris__tautan,.stok-mobile-list__baris,.produk-list .tabel-standar__item,.karung-tabel tbody tr:not([data-daftar-pesan])';
  function rows(node){return Array.from(node.querySelectorAll(rowSelector));}
  function visible(node){return !node.hidden&&!!node.getClientRects().length;}
- function message(){const q=new URLSearchParams(location.search);return q.get('cari')?.trim()||config.scopeFiltered?'Tidak ada hasil pada filter ini. Atur ulang filter untuk memeriksa seluruh cakupan.':config.kind==='pekerjaan'?'Belum ada proses aktif pada cakupan ini.':'Belum ada stok pada cakupan ini.';}
+ function message(){const q=new URLSearchParams(location.search);return q.get('cari')?.trim()||config.scopeFiltered?'Tidak ada hasil pada filter ini. Atur ulang filter untuk memeriksa seluruh cakupan.':config.kind==='pekerjaan'?(config.tab==='tindakan'?'Tidak ada pekerjaan perlu tindakan pada cakupan ini.':'Belum ada proses aktif pada cakupan ini.'):'Belum ada stok pada cakupan ini.';}
  function clear(){area.querySelectorAll('[data-daftar-pesan],[data-daftar-kosong]').forEach(n=>n.remove());}
  function table(text){
   const box=document.createElement('div');box.className='halaman-bertahap__scroll';box.dataset.daftarKosong='';box.tabIndex=0;box.setAttribute('role','region');box.setAttribute('aria-label','Daftar · tabel dapat digulir');

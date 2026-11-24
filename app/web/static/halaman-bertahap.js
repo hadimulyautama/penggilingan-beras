@@ -53,6 +53,7 @@
   let target=null;
   if(detail&&previous?.hasAttribute('data-bm-tab'))target=content.querySelector('[data-bm-tab="'+CSS.escape(previous.dataset.bmTab)+'"]');
   else if(detail&&previous?.matches('.bm-table-scroll'))target=content.querySelector('.bm-table-scroll')||content.querySelector('[data-bm-tab][aria-selected="true"]');
+  else if(previous?.hasAttribute('data-pk-buka'))target=content.querySelector('[data-pk-buka="'+CSS.escape(previous.dataset.pkBuka)+'"]');
   else if(previous?.hasAttribute('data-lk-buka'))target=content.querySelector('[data-lk-buka="'+CSS.escape(previous.dataset.lkBuka)+'"]');
   else if(previous?.hasAttribute('data-shell-guide'))target=content.querySelector('[data-sk-buka="sk-panduan"]');
   else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');

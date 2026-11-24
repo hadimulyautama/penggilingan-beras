@@ -3,6 +3,11 @@
 {% block isi %}
 <link rel="stylesheet" href="/static/halaman-bertahap.css?v={{ VERSI }}">
 <section class="halaman-bertahap" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}" data-filtered="{{ '1' if SHELL.filtered else '0' }}">
+ {% if SHELL.kind=='pekerjaan' %}
+ {% include '_pekerjaan_kontrol.html' %}
+ <p class="bantu" id="shell-cetak-alasan">Print tersedia setelah daftar selesai dibaca.</p>
+ <p class="bantu">{{ SHELL.scope }}</p>
+ {% else %}
  <header class="halaman-bertahap__kepala"><h1>{{ SHELL.title }}</h1>{% if not LAPORAN_NAV %}<div><button class="btn btn--kecil" type="button" data-shell-guide aria-controls="shell-panduan">Panduan</button> <button class="btn btn--kecil" type="button" data-shell-print disabled aria-describedby="shell-cetak-alasan">Cetak</button></div>{% endif %}</header>
  <p class="bantu" id="shell-cetak-alasan">Cetak tersedia setelah daftar selesai dibaca.</p>
  <p class="bantu">{{ SHELL.scope }}</p>
@@ -29,6 +34,7 @@
    <button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" href="{{ SHELL.reset_url }}">Atur ulang filter</a>
   </form>
  </details>
+ {% endif %}
  <div class="halaman-bertahap__status"><p role="status" aria-live="polite" data-shell-status>Memuat data…</p><button type="button" class="btn" data-shell-retry hidden>Coba lagi</button></div>
  <div class="halaman-bertahap__scroll" tabindex="0" role="region" aria-label="{{ SHELL.title }} · tabel dapat digulir" data-shell-table-wrap aria-busy="true">
   <table class="halaman-bertahap__tabel"><thead><tr>{% for column in SHELL.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead><tbody><tr class="halaman-bertahap__kosong"><td colspan="{{ SHELL.columns|length }}" data-shell-message>Memuat data. Judul kolom dan filter tetap tersedia.</td></tr></tbody></table>

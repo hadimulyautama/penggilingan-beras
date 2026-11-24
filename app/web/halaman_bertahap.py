@@ -33,8 +33,7 @@ def memakai_kerangka(request: Request, jenis: str) -> bool:
                  and request.headers.get("Sec-Fetch-Dest") in {"document", "empty"})
             and not is_customer_read(request)
             and not (jenis == "barang-masuk" and request.headers.get("X-Barang-Masuk-Cari") == "1")
-            and request.url.path == ALAMAT[jenis]
-            and (jenis != "pekerjaan" or request.query_params.get("tab") == "berjalan"))
+            and request.url.path == ALAMAT[jenis])
 
 
 def penanda_konteks(request: Request, akun) -> str:
@@ -67,6 +66,8 @@ def _pilihan(nama, label, nilai, opsi, **tambahan):
 
 
 def kolom_daftar(jenis: str, mutu: bool = False):
+    if jenis == 'tindakan':
+        return ["Kode & pekerjaan", "Kepemilikan", "Status", "Ringkasan", "Tindakan"]
     if jenis == 'pekerjaan':
         return ["Kode & proses", "Kepemilikan", "Status / mulai", "Ringkasan", "Tindakan"]
     if jenis == 'bahan':
@@ -133,16 +134,17 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None):
         from app.web.layar import GUDANG
 
         href = lambda **p: tautan(request, "/pekerjaan", **p)
+        tab = pilihan(request, "tab", {"tindakan", "berjalan"}, "tindakan")
         tipe = pilihan(request, "jenis", dict(JENIS_KERJA))
         gudang = pilihan(request, "gudang", {g for g, _, _ in GUDANG})
         pemilik = pilihan(request, "kepemilikan", {"jasa", "pabrik"})
         data.update(
             search=dict(name="cari", label="Cari nama, kode atau plat", value=q.get("cari", "")[:200]),
             reset_url=href(jenis="", kepemilikan="", gudang="", pemasok=""),
-            columns=kolom_daftar('pekerjaan'),
-            tab="berjalan", scope="Proses dalam cakupan akses dan gudang kerja Anda",
+            columns=kolom_daftar('pekerjaan' if tab == 'berjalan' else 'tindakan'),
+            tab=tab, scope="Pekerjaan dalam cakupan akses dan gudang kerja Anda",
             filtered=any(q.get(k) for k in ("jenis", "kepemilikan", "gudang", "pemasok", "cari", "pelanggan_id", "asal", "kategori", "grup", "informasi")),
-            tabs=[dict(label=n, href=href(tab=k, asal="", kategori="", grup="", informasi=""), active=k == "berjalan", boleh=True)
+            tabs=[dict(label=n, href=href(tab=k, asal="", kategori="", grup="", informasi=""), active=k == tab, boleh=True)
                   for k, n in [("tindakan", "Perlu tindakan"), ("berjalan", "Berjalan")]]
                  + [dict(label="Pekerjaan lain", href="/pekerjaan/catat-lain?" + urlencode({"kembali": href()}), active=False, boleh=True)],
             filters=[_pilihan("jenis", "Jenis pekerjaan", tipe, [("", "Semua jenis"), *JENIS_KERJA]),
@@ -152,7 +154,10 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None):
                               disabled=True, reason="Pilihan nama tersedia setelah daftar selesai dibaca.")])
         # Navigasi Pekerjaan memakai helper existing, tetapi jumlah belum
         # diketahui; jangan menggambar nol sebagai hasil pembacaan.
-        konteks.update(tab="berjalan", href=href, total_tindakan="…", total_jalan="…")
+        konteks.update(tab=tab, href=href, total_tindakan="…", total_jalan="…",
+                       jenis=tipe, gudang=gudang, nama_saring=[], pelanggan_saring="",
+                       per_jenis=[(key, nama, "…") for key, nama in JENIS_KERJA],
+                       kerangka_pekerjaan=True)
     else:
         from app.database import SessionLocal
         from app.services.cakupan_fasilitas import boleh_baca_stok
@@ -205,8 +210,6 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None):
 async def _isi(request: Request, akun, jenis: str):
     if jenis not in ALAMAT:
         raise HTTPException(404, "Halaman tidak dikenal.")
-    if jenis == "pekerjaan" and request.query_params.get("tab") != "berjalan":
-        raise HTTPException(422, "Pilih tab Berjalan.")
     if jenis == 'barang-masuk':
         from app.web.portal.scope import is_customer_read
         if is_customer_read(request):

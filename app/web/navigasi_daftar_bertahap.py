@@ -17,7 +17,7 @@ def pasang(response, request):
     data = ''
     extra = ''
     q = request.query_params
-    jenis = 'pekerjaan' if request.url.path == '/pekerjaan' and q.get('tab') == 'berjalan' else 'stok' if request.url.path == '/stok' else None
+    jenis = 'pekerjaan' if request.url.path == '/pekerjaan' else 'stok' if request.url.path == '/stok' else None
     # Halaman lain hanya mendaftarkan navigasi; jangan membaca identitas
     # data B1 atau menambah dependency pada renderer di luar dua alamat.
     konteks = penanda_konteks(request, request.state.akun) if jenis else ''
@@ -25,9 +25,9 @@ def pasang(response, request):
         # Hanya schema kolom dan filter, tidak ada angka transaksi dalam adapter.
         nilai = getattr(response, 'context', {})
         nav = nilai.get('STOK_NAV') or {}
-        tab = 'pekerjaan' if jenis == 'pekerjaan' else q.get('tab', 'bahan')
+        tab = ('pekerjaan' if nilai.get('tab') == 'berjalan' else 'tindakan') if jenis == 'pekerjaan' else q.get('tab', 'bahan')
         config = dict(
-            kind=jenis, columns=kolom_daftar(tab, bool(nilai.get('mutu_aktif', False))),
+            kind=jenis, tab=nilai.get('tab', ''), columns=kolom_daftar(tab, bool(nilai.get('mutu_aktif', False))),
             scopeFiltered=bool(any(q.get(k) for k in (
                 'jenis', 'gudang', 'pemasok', 'pelanggan_id', 'asal', 'kategori',
                 'grup', 'informasi', 'kepemilikan')) or nav.get('pemilik', 'semua') != 'semua'),

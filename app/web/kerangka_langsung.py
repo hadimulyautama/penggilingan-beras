@@ -7,7 +7,8 @@ from fastapi import Request
 
 log = logging.getLogger(__name__)
 LITERAL = ('/barang-masuk', '/barang-masuk?status=belum',
-           '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan')
+           '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
+           '/pekerjaan', '/pekerjaan?tab=tindakan')
 
 
 def kemas_frame(frames: dict[str, str]) -> dict:
@@ -26,13 +27,43 @@ def kemas_frame(frames: dict[str, str]) -> dict:
     return dict(penyandian='baris-1', potongan=potongan, frames=rujukan)
 
 
+def alamat_pekerjaan(request: Request) -> tuple[str, ...]:
+    """Dua tautan tab native pada filter saat ini, tanpa baca koleksi/aksi.
+
+    Katalog bukan wildcard URL atau data transaksi. Formulir filter yang baru
+    diketik tetap mengikuti negosiasi HTML native sebelum GET isi. Tautan ini
+    hanya membuat pindah TAB dengan filter yang sudah tampil lebih dini.
+    """
+    sah = {'tab', 'jenis', 'kepemilikan', 'gudang', 'pemasok', 'cari',
+           'pelanggan_id', 'kembali_jasa', 'asal', 'kategori', 'grup', 'informasi',
+           'halaman', 'buka', 'nilai'}
+    if (request.url.path != '/pekerjaan' or len(request.url.query) > 3000
+            or any(k not in sah for k in request.query_params)):
+        return ()
+    from app.web.layar_pekerjaan import tautan
+    return tuple(tautan(request, '/pekerjaan', tab=tab, asal='', kategori='', grup='', informasi='')
+                 for tab in ('tindakan', 'berjalan'))
+
+
 def sah_rujukan(registry: dict) -> bool:
     potongan, frames = registry.get('potongan'), registry.get('frames')
     if (registry.get('versi') != 2 or registry.get('penyandian') != 'baris-1'
             or not isinstance(potongan, list) or not 0 < len(potongan) <= 16384
             or not all(isinstance(s, str) and s for s in potongan)
-            or not isinstance(frames, dict) or set(frames) != set(LITERAL)):
+            or not isinstance(frames, dict) or not set(LITERAL).issubset(frames)
+            or len(frames) > len(LITERAL) + 2):
         return False
+    from urllib.parse import urlsplit, parse_qs
+    for alamat in set(frames) - set(LITERAL):
+        try:
+            u = urlsplit(alamat)
+            q = parse_qs(u.query, keep_blank_values=True)
+        except (TypeError, ValueError):
+            return False
+        if (len(alamat) > 4096 or u.scheme or u.netloc or u.fragment
+                or u.path != '/pekerjaan' or q.get('tab') not in (['tindakan'], ['berjalan'])
+                or any(k in q for k in ('buka', 'nilai', 'halaman'))):
+            return False
     for refs in frames.values():
         if (not isinstance(refs, list) or not 0 < len(refs) <= 16384
                 or not all(type(i) is int and 0 <= i < len(potongan) for i in refs)
@@ -56,7 +87,7 @@ async def susun_registry(request: Request, akun) -> dict | None:
     nav_request = Request({**request.scope, 'state': dict(state)})
     navigasi = await konteks_kerangka(nav_request, akun)
     frames = {}
-    for alamat in LITERAL:
+    for alamat in dict.fromkeys((*LITERAL, *alamat_pekerjaan(request))):
         path, _, query = alamat.partition('?')
         native = Request({**request.scope, 'path': path, 'raw_path': path.encode(),
                           'query_string': query.encode(), 'state': dict(state)})
