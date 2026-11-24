@@ -370,7 +370,10 @@ async def test_ringkasan_stok_memakai_sisa_curah_otomatis_jenis_baru(pg,dunia,mo
         db.add(proc);await db.commit()
         await p.catat_output(db,user=user,kode=proc.kode_proses,jenis=kode,berat_kumulatif=95)
     async def render(request,template,**ctx):
-        return {'sisa':ctx['sisa_samping'],'curah':ctx['curah_samping']}
+        # Renderer native mengembalikan Response. Tetap baca konteks hasil
+        # yang sama lewat JSON agar adapter HTML opsional tidak ikut diuji.
+        from fastapi.responses import JSONResponse
+        return JSONResponse({'sisa':ctx['sisa_samping'],'curah':ctx['curah_samping']})
     monkeypatch.setattr(layar_produk,'render_laci',render)
     result=await c.get('/stok-produk',params={'jenis':kode})
     assert result.status_code==200,result.text
