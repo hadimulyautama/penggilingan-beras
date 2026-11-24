@@ -56,7 +56,7 @@
   else if(previous?.hasAttribute('data-lk-buka'))target=content.querySelector('[data-lk-buka="'+CSS.escape(previous.dataset.lkBuka)+'"]');
   else if(previous?.hasAttribute('data-shell-guide'))target=content.querySelector('[data-sk-buka="sk-panduan"]');
   else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');
-  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label','Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
+  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
   target?.focus({preventScroll:true});
  }
  async function install(payload,number){
@@ -69,14 +69,6 @@
   }
   const content=document.createElement('div');content.dataset.halamanIsi=root.dataset.kind;
   for(let node=start.nextSibling;node&&node!==end;node=node.nextSibling)content.append(node.cloneNode(true));
-  if(detail){
-   // Tab boleh berubah selama pembacaan tanpa mengubah draf/controller.
-   // Pilih tab TERKINI sebelum script native dipasang, bukan tab GET lama.
-   const key=new URL(location.href).searchParams.get('tab_detail')||'ringkasan';
-   for(const tab of content.querySelectorAll('[data-bm-tab]')){const active=tab.dataset.bmTab===key;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
-   for(const panel of content.querySelectorAll('[data-bm-detail-panel]')){panel.hidden=panel.dataset.bmDetailPanel!==key;if(!panel.hidden&&key!=='ringkasan')panel.querySelector('details')?.setAttribute('open','');}
-   const rincian=content.querySelector('[data-bm-detail-rincian]');if(rincian)rincian.hidden=key==='ringkasan';
-  }
   const css=main.querySelector('link[href*="/static/halaman-bertahap.css"]');if(css)content.prepend(css.cloneNode(true));
   // Consumer pilihan pelanggan lama membaca HTML. Tetap memakai route native
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
@@ -87,6 +79,15 @@
   // Pengguna dapat membuka filter ketika asset masih dibaca.
   if(interacting()){
    pending={payload,number};status.textContent='Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
+  }
+  if(detail){
+   // Tab boleh berubah selama pembacaan tanpa mengubah draf/controller.
+   // Aset sudah selesai dibaca. Pilih tab TERKINI tepat sebelum swap;
+   // tidak ada await lagi yang dapat membekukan pilihan selama GET aset.
+   const key=new URL(location.href).searchParams.get('tab_detail')||'ringkasan';
+   for(const tab of content.querySelectorAll('[data-bm-tab]')){const active=tab.dataset.bmTab===key;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
+   for(const panel of content.querySelectorAll('[data-bm-detail-panel]')){panel.hidden=panel.dataset.bmDetailPanel!==key;if(!panel.hidden&&key!=='ringkasan')panel.querySelector('details')?.setAttribute('open','');}
+   const rincian=content.querySelector('[data-bm-detail-rincian]');if(rincian)rincian.hidden=key==='ringkasan';
   }
   const previousFocus=document.activeElement;
   observer.disconnect();finished=true;controller=null;

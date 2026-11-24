@@ -186,6 +186,8 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             await expect(page.locator('[data-shell-message]')).to_contain_text('bukan penerimaan kosong')
             await page.locator('[data-shell-retry]').click()
             await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+            await expect(page.locator('[data-halaman-isi=barang-masuk-detail]')).to_have_attribute('aria-label','Detail penerimaan')
+            await expect(page.locator('[data-halaman-isi=barang-masuk-detail]')).to_be_focused()
             # Hold another read, leave before release, and prove no stale swap.
             entered,release=asyncio.Event(),asyncio.Event()
             transport['gates'][api]=(entered,release)
@@ -199,3 +201,32 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             await expect(page.locator('[data-bm-detail-shell]')).to_have_count(0)
             assert not transport['posts'] and not transport['errors']
         assert await _sidik(pg)==before
+
+
+@pytest.mark.parametrize('role,warehouse',[('operator','g1'),('admin',None)])
+@pytest.mark.parametrize('width',[390,1280])
+async def test_selected_tab_survives_slow_asset_after_data(pg,lengkap,role,warehouse,width):
+ tid=lengkap['tiket']['GABAH_KERING'];path='/barang-masuk/'+str(tid);api='/api/halaman-bertahap/barang-masuk-detail/'+str(tid)
+ async with await _klien(pg,role=role,gudang_id=lengkap['gudang'].get(warehouse)) as c:
+  before=await _sidik(pg)
+  async with peramban(c,width) as (page,transport):
+   await page.goto(BASE+'/barang-masuk');await expect(page.locator('[data-bm-page]:not([data-bm-shell])')).to_be_visible()
+   link=page.locator('a[href^="'+path+'?"]');parent=link.locator('xpath=ancestor::details[1]')
+   if await parent.count() and await parent.get_attribute('open') is None:await parent.locator(':scope > summary').click()
+   data_enter,data_release=asyncio.Event(),asyncio.Event();asset_enter,asset_release=asyncio.Event(),asyncio.Event()
+   transport['gates'][api]=(data_enter,data_release)
+   transport['gates']['/static/koreksi-gudang-penerimaan.js']=(asset_enter,asset_release)
+   try:
+    await link.click();await asyncio.wait_for(data_enter.wait(),30)
+    shell=page.locator('[data-halaman-bertahap][data-kind=barang-masuk-detail]');await expect(shell).to_be_visible()
+    await shell.locator('[data-bm-tab=qc]').click();data_release.set()
+    await asyncio.wait_for(asset_enter.wait(),30)
+    await shell.locator('[data-bm-tab=riwayat]').focus();await shell.locator('[data-bm-tab=riwayat]').press('Enter')
+    await expect(shell.locator('[data-bm-detail-panel=riwayat]')).to_be_visible();assert 'tab_detail=riwayat' in page.url
+    asset_release.set();await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+    await expect(page.locator('[data-bm-detail-panel=riwayat]')).to_be_visible()
+    await expect(page.locator('[data-bm-tab=riwayat]')).to_have_attribute('aria-selected','true')
+    await expect(page.locator('[data-bm-tab=riwayat]')).to_be_focused()
+    assert 'tab_detail=riwayat' in page.url and not transport['posts']
+   finally:data_release.set();asset_release.set()
+  assert await _sidik(pg)==before
