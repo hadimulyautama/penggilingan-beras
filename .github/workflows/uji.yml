@@ -89,6 +89,10 @@ jobs:
       - name: Periksa selisih model ↔ migrasi
         run: alembic check
 
+      - name: Uji regresi pembaca UI JavaScript
+        if: matrix.profil == 'satuan'
+        run: node --test tests/*.mjs tests/*.cjs
+
       - name: Uji satu aplikasi tanpa mengurangi cakupan
         env:
           PROFIL_CI: ${{ matrix.profil }}
