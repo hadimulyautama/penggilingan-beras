@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "6c050d5906fc1dfb333bb4c42a49c411c0793ec70d812e55f3bb1a6b5e24dae6",
-  "aset_sha256": "81ee2d542dceda3578768df027c66f3de7a99e15259ffe380778b7d070d626d5",
+  "sumber": "5a48bf726fca3a721e54366f6b658ce3019a9a7c5ecb71c9670943aa9508d82c",
+  "aset_sha256": "d0d694db3ba0d173b1c1a9d1ab3f38f6b79cb015089c061b415018ff1788d2b8",
   "variants": [
     "/riwayat-giling",
     "/riwayat-sosoh",
@@ -33,7 +33,7 @@
     "app/web/static/riwayat.css": "21fa1ff357afc661b0392e2317182d3338a2938b48d7eb91a7c4e99c2c457071",
     "app/web/templates/_daftar_riwayat_proses.html": "3a5adb5fb85aabf52e953748738423f3c231aa499b6d0780fad4cff0a53ca998",
     "app/web/templates/_riwayat.html": "bc2bf51c7722dd1efbbe891ac7b6752a4f39eef1c1efd1eb7c8c3bbb1eb2aa86",
-    "app/web/templates/_riwayat_daftar_kerangka_isi.html": "a3710d238ed1be340cea2eb727d85c2c85bfaa1b49cbe5f1e065c924887320c0",
+    "app/web/templates/_riwayat_daftar_kerangka_isi.html": "7c69c1d7be8a3f23a6cc7dc2778d22121275c6d53621aadb2cf662ff8f98b318",
     "app/web/templates/_riwayat_daftar_kerangka_mobile.html": "d23be11b9c53e08928df032fcfedd5645a5655b4f74fea5d4fcf2e05eaf38601",
     "app/web/templates/_riwayat_daftar_kerangka_script.html": "d1d7294d8e8f7e71552ae96b952105367b2de460a93d0937d2b3edbf419cfac6",
     "app/web/templates/_riwayat_qc_alat.html": "94145100f7304cc33bbf33cc73d6656ed744b18104c5045f47e9c320a14fb037",

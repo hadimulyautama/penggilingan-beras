@@ -40,6 +40,28 @@ def test_actual_native_pk_body_title_differs_from_document_title(monkeypatch,cod
     assert offer.title != offer.body_title
 
 
+def assert_native_reference_shape(document, kind):
+    template = document.select_one('template[data-stock-' + kind + '-reference]')
+    assert template is not None, 'Native reference template is missing'
+    fragment = BeautifulSoup(template.decode_contents(), 'html.parser')
+    shape = fragment.select('.alur-' + kind)
+    assert len(shape) == 1, 'Native reference equipment shape is missing or duplicated'
+    assert not fragment.select('.alur-alat--terisi,[data-silo-id],[data-dryer-id]')
+    return fragment
+
+
+def test_reference_shape_guard_rejects_missing_or_duplicate_native_shape():
+    # Synthetic negative controls: the compatibility adjustment must still
+    # catch a genuinely missing prototype, not merely accept any template.
+    for html in (
+        '<div></div>',
+        '<template data-stock-silo-reference><details></details></template>',
+        '<template data-stock-silo-reference><span class="alur-silo"></span><span class="alur-silo"></span></template>',
+    ):
+        with pytest.raises(AssertionError):
+            assert_native_reference_shape(BeautifulSoup(html, 'html.parser'), 'silo')
+
+
 def test_public_warehouse_uses_actual_native_classes_and_no_pk_hero_or_h1():
     data,manifest=public()
     for variant in ('warehouse-g1','warehouse-g2'):
@@ -49,7 +71,10 @@ def test_public_warehouse_uses_actual_native_classes_and_no_pk_hero_or_h1():
             assert doc.select(selector),selector
         assert len(doc.select('[data-blok].daftar-standar'))==2
         assert bool(doc.select('.alur-pengering'))==(variant=='warehouse-g1')
-        assert doc.select('template[data-stock-silo-reference] .alur-silo')
+        # Template contents are an inert DocumentFragment in a browser. Inspect
+        # the exact emitted fragment independently of document-level selector
+        # traversal, just as the runtime clones template.content below.
+        assert_native_reference_shape(doc, 'silo')
         assert not doc.select('[data-silo-id],[data-dryer-id],.alur-alat--terisi')
         assert not doc.select('a[href]')
         assert doc.select_one('style[data-stock-detail-style][data-stock-detail-style-ref]')
