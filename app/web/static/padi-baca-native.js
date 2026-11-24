@@ -95,7 +95,7 @@
   return prepared;
  }
  const observer=new MutationObserver(()=>{if(!root.isConnected){reader.stop();observer.disconnect();lifecycle.abort();}});
- const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','Accept':'text/html'}}),parse,prepare,
+ const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','X-Kerangka-Halaman':'0','Accept':'text/html'}}),parse,prepare,
   loading(){retry.hidden=true;status.setAttribute('role','status');status.textContent=(config.messages?.loading||'Memuat data…');},
   failed(error){status.setAttribute('role','alert');status.textContent=error.name==='AbortError'?(config.messages?.timeout||'Pembacaan terlalu lama. Coba lagi hanya membaca data.'):error.message;retry.hidden=false;},
   install(fresh,prepared){
@@ -103,25 +103,31 @@
    // Seluruh GET aset sudah selesai. Tidak ada await setelah pemeriksaan akhir.
    observer.disconnect();lifecycle.abort();while(start.nextSibling&&start.nextSibling!==end)start.nextSibling.remove();end.before(fresh.content);document.title=fresh.doc.title||document.title;
    const installedCurrent=()=>fresh.content.isConnected&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);
-   const activated=activatePrepared(prepared,{current:installedCurrent,
+   const actions=config.afterInstall?prepared.concat([{type:'after-install'}]):prepared;
+   const activated=activatePrepared(actions,{current:installedCurrent,
     activate(item){
-     const replacement=document.createElement(item.type==='style'?'style':'script');
-     for(const attr of item.node.attributes)if(!['src','href','rel','defer','async'].includes(attr.name))replacement.setAttribute(attr.name,attr.value);
-     replacement.textContent=item.text;
      let scriptError=false;const failedScript=()=>{scriptError=true;};
-     if(item.type==='script')window.addEventListener('error',failedScript);
-     try{item.node.replaceWith(replacement);if(scriptError)throw Error('Kontrol halaman gagal disiapkan.');}
-     finally{if(item.type==='script')window.removeEventListener('error',failedScript);}
+     const executable=item.type==='script'||item.type==='after-install';
+     if(executable)window.addEventListener('error',failedScript);
+     try{
+      if(item.type==='after-install')config.afterInstall({content:fresh.content,doc:fresh.doc,previousRoot:root});
+      else{
+       const replacement=document.createElement(item.type==='style'?'style':'script');
+       for(const attr of item.node.attributes)if(!['src','href','rel','defer','async'].includes(attr.name))replacement.setAttribute(attr.name,attr.value);
+       replacement.textContent=item.text;item.node.replaceWith(replacement);
+      }
+      if(scriptError)throw Error('Kontrol halaman gagal disiapkan.');
+     }finally{if(executable)window.removeEventListener('error',failedScript);}
     },
     failed(){
      // The old shell is already detached: report on the fresh content,
      // hold form controls, and offer one explicit native GET reload only.
-     fresh.content.dataset.nativeReadState='failed';
-     for(const form of fresh.content.querySelectorAll('form'))for(const field of form.querySelectorAll('input,select,textarea,button'))field.disabled=true;
+     fresh.content.dataset.nativeReadState='failed';fresh.content.inert=true;
+     for(const field of fresh.content.querySelectorAll('input,select,textarea,button'))field.disabled=true;
      const warning=document.createElement('section');warning.setAttribute('role','alert');
      const text=document.createElement('p');text.textContent='Kontrol halaman belum dapat disiapkan. Muat ulang halaman untuk membaca data terbaru; tidak ada pengiriman ulang otomatis.';
      const reload=document.createElement('a');reload.className='btn';reload.href=ADDRESS;reload.setAttribute('data-utuh','');reload.textContent='Muat ulang halaman';
-     warning.append(text,reload);fresh.content.prepend(warning);
+     warning.append(text,reload);fresh.content.before(warning);
     }
    });
    if(!activated)return;

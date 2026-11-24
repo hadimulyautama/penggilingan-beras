@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "facefa36773882d858427c1ea07a8fa26043aa09d105ef24a727b95542cabb95",
-  "aset_sha256": "6a0a27656ba21779b8012e640e9fce883b84f3df7a549de56ba716516ddd2ac6",
+  "sumber": "19dc37b961d425dab4953bfdfd69cb50bdce870f231d8133a392e57307873ee0",
+  "aset_sha256": "e93fae2768f7808addb7e4489c6553d4423ad62b6f8882e7e256972f6b09be7d",
   "variants": [
     "pengiriman-admin",
     "pengiriman-operator",
@@ -37,7 +37,7 @@
     "app/web/static/kerangka-stok-controls.js": "b880e9c9908e3efc3ec84471d44b2b451edaed7e81d2d6d930a366424fec6e7d",
     "app/web/static/kerangka-ui-runtime.js": "48c6cbdadc7c67e4fd70917ded2dc0a358cb3a7de016599bb21bf6c64e79aea1",
     "app/web/static/laporan-katalog-native.js": "9505f0ccaf0317c70e8477b2f8d51e5f5b66fc348c68a6828e35f1053ee7d60a",
-    "app/web/static/padi-baca-native.js": "edfd5249853deb7848f1e1c78ea66a822393874ba7f2a1aaa4b008de2b5c09c4",
+    "app/web/static/padi-baca-native.js": "90fc6e20e8fa9d4bf742a35f3127d84dce199cb25083b35dfc53e84909eef7c4",
     "app/web/static/pengaturan-akun-native.js": "557a87718e34ac4053ad0cf7e4edd6b72443560d1bc88b22d8098c7488c882e7",
     "app/web/templates/_barang_keluar_kontrol.html": "2492802850c7048de0b80d542cd30b24ec1856e56ed82af281352c25caf1fb40",
     "app/web/templates/_kata_pengaturan.html": "95cc45fbf6500b9a97ba0367c1e0f2f409ff08398de835e8019e364b3cba2745",
