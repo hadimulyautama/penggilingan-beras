@@ -80,7 +80,8 @@ async def test_filter_pelanggan_gudang_dan_input_terserialisasi_saat_tab_ditahan
         before = await _sidik(pg)
         async with peramban(c, width) as (page, transport):
             await page.goto(BASE + '/stok?' + query)
-            await expect(page.locator('[data-halaman-isi="stok"]')).to_be_visible()
+            await expect(page.locator('[data-stok-controls]')).to_be_visible()
+            await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)
             search = page.locator('[data-stok-controls] input[type="search"][name="cari"]')
             await search.fill('Baru & nilai')
             await search.press('Enter', no_wait_after=True)
@@ -102,7 +103,8 @@ async def test_filter_pelanggan_gudang_dan_input_terserialisasi_saat_tab_ditahan
                     assert values==dict(tab='produk',pemilik='jasa',gudang='g2',pelanggan_id=pid,cari='Baru & nilai')
                 assert not transport['posts'] and not transport['errors']
                 release.set()
-                await expect(page.locator('[data-halaman-isi="stok"]')).to_be_visible()
+                await expect(page.locator('[data-stok-controls]')).to_be_visible()
+            await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)
             finally:
                 release.set()
         assert await _sidik(pg)==before
@@ -187,7 +189,8 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                 # harus membawa filter ini tanpa menunggu HTML tujuan.
                 await root.locator('input[type="search"][name="cari"]').fill('')
                 await page.locator('header.bar').click()
-                await expect(page.locator('[data-halaman-isi="stok"]')).to_be_visible()
+                await expect(page.locator('[data-stok-controls]')).to_be_visible()
+            await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)
                 search = page.locator('[data-stok-controls] input[type="search"][name="cari"]')
                 await search.fill('Nama baru & uji')
                 await search.press('Enter', no_wait_after=True)
@@ -207,7 +210,8 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                     await expect(root.locator('[data-shell-retry]')).to_be_visible()
                     await root.locator('[data-shell-retry]').focus()
                     await page.keyboard.press('Enter')
-                    await expect(page.locator('[data-halaman-isi="stok"]')).to_be_visible()
+                    await expect(page.locator('[data-stok-controls]')).to_be_visible()
+            await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)
                     await expect(page.locator('[data-shell-retry]')).to_have_count(0)
                     assert not transport['posts'] and not transport['errors'], transport
                 finally:
