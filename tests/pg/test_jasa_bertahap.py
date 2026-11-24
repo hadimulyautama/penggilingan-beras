@@ -242,8 +242,100 @@ def _tanpa_host_registry(html):
             r'data-konteks="[^\"]+" data-cap="[^\"]+">([^<]*)</script>',html))
         assert len(matches)==1 and matches[0].start()==end and json.loads(matches[0][1])==shape
         end=matches[0].end()
+    end = _akhir_host_registry_lengkap(doc, html, start, registry)
     assert html.count('</body>') == 1 and html[end:].startswith('\n</body>')
     return html[:start] + html[end + 1:]
+
+
+def _akhir_host_registry_lengkap(doc, html, start, registry):
+    """Validasi keluarga tambahan yang finite; lepaskan byte host render asli saja."""
+    from app.web.tampilan import templates
+    identity = {k: registry[k] for k in ('cap', 'konteks', 'sesi')}
+    existing = {
+        'stok': 'padi-stok-kerangka', 'ui': 'padi-kerangka-ui',
+        'riwayat': 'padi-riwayat-kerangka', 'pengaturan': 'padi-pengaturan-kerangka',
+        'dokumen': 'padi-dokumen-kerangka', 'sosoh': 'padi-sosoh-kerangka',
+        'master': 'padi-pengaturan-master-kerangka', 'alat': 'padi-pengaturan-alat-kerangka',
+    }
+    values = {'registry': registry}
+    for key, id_ in existing.items():
+        nodes = doc.select('#' + id_)
+        assert len(nodes) <= 1
+        if nodes:
+            values[key] = json.loads(nodes[0].string)  # sudah divalidasi di atas
+    families = [
+        ('pengaturan_detail', 'padi-pengaturan-detail-kerangka', {'targets', 'columns', 'processes'}),
+        ('pengguna', 'padi-pengguna-kerangka', {'targets'}),
+        ('beranda', 'padi-beranda-kerangka', {'references'}),
+        ('muatan', 'padi-muatan-kerangka', {'permission'}),
+        ('fasilitas_parent', 'padi-fasilitas-parent-kerangka', {'targets'}),
+        ('retur_baca', 'padi-retur-baca-kerangka', {'targets'}),
+    ]
+    common = {'versi', 'sumber', 'cap', 'konteks', 'sesi'}
+    for key, id_, extra in families:
+        nodes = doc.select('#' + id_)
+        assert len(nodes) <= 1
+        if not nodes:
+            continue
+        node = nodes[0]
+        assert node.name == 'script' and node.get('type') == 'application/json'
+        assert set(node.attrs) == {'type', 'id', 'data-konteks', 'data-cap'}
+        assert not node.find_parent(class_='bingkai')
+        value = json.loads(node.string)
+        assert set(value) == common | extra and type(value['versi']) is int and value['versi'] == 1
+        assert all(value[k] == identity[k] for k in identity)
+        assert node['data-konteks'] == identity['konteks'] and node['data-cap'] == identity['cap']
+        if key == 'pengaturan_detail':
+            from app.web.pengaturan_detail_kerangka import aset
+            meta = aset()
+            assert value['sumber'] == meta['sumber']
+            assert value['columns'] == meta['references']['columns']
+            assert value['processes'] == meta['references']['processes']
+            variants = {'peran': {'peran-lihat', 'peran-gudang'}, 'akses': {'akses'},
+                'sebab-berhenti': {'sebab-berhenti'}, 'mutu': {'mutu'}, 'kledo': {'kledo'},
+                'sistem': {'sistem-admin', 'sistem-umum'}}
+            assert isinstance(value['targets'], dict) and value['targets']
+            for path, variant in value['targets'].items():
+                assert path.startswith('/pengaturan/') and path.removeprefix('/pengaturan/') in variants
+                assert variant in variants[path.removeprefix('/pengaturan/')]
+        elif key == 'pengguna':
+            from app.web.pengguna_baca_native import _bound_permission
+            assert _bound_permission(value, identity)
+        elif key == 'beranda':
+            from app.web.beranda_kerangka import asset, descriptor
+            assert value['sumber'] == asset()['sumber']
+            assert descriptor(value['references'], registry=identity, source=value['sumber']) == value
+        elif key == 'muatan':
+            from app.web.muatan_kerangka import asset, descriptor
+            assert value['sumber'] == asset()['sumber']
+            assert descriptor(value['permission'], registry=identity, source=value['sumber']) == value
+        elif key == 'fasilitas_parent':
+            from app.web.fasilitas_parent_kerangka import aset, TARGETS
+            assert value['sumber'] == aset()['sumber'] and value['targets'] == list(TARGETS)
+            assert 'alat' in values  # guard sumber yang sama wajib hadir
+        elif key == 'retur_baca':
+            from app.web.retur_baca_kerangka import aset
+            assert value['sumber'] == aset()['sumber'] and value['targets'] == ['/retur']
+        values[key] = value
+    catalogs = doc.select('[data-pengguna-native-catalog]')
+    assert len(catalogs) <= 1
+    if catalogs:
+        node = catalogs[0]
+        assert node.name == 'script' and node.get('type') == 'application/json'
+        assert set(node.attrs) == {'type', 'data-pengguna-native-catalog', 'data-source-address', 'data-source-sha'}
+        assert not node.find_parent(class_='bingkai') and 'pengguna' in values
+        value = json.loads(node.string)
+        assert node['data-source-address'] == value['source_address'] == doc.select_one('.bingkai')['data-pindah-alamat']
+        assert node['data-source-sha'] == value['source_sha256']
+        from app.web.pengguna_baca_native import katalog
+        assert katalog(html[:start], source_address=value['source_address'], permission=values['pengguna']) == value
+        values['pengguna_catalog'] = value
+    # Template ini memiliki whitespace finite antarkeluarga. Cocokkan seluruh
+    # byte suffix, termasuk urutan, atribut dan newline; jangan trim/serialize
+    # ulang HTML native atau melepas script yang tidak diketahui.
+    rendered = templates.get_template('_kerangka_langsung_registry.html').render(**values)
+    assert html[start:start + len(rendered)] == rendered
+    return start + len(rendered)
 
 
 def _dokumen_registry_uji():
@@ -261,7 +353,7 @@ def _dokumen_registry_uji():
     templates = Jinja2Templates(directory=str(
         Path(__file__).resolve().parents[2] / 'app/web/templates'))
     host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry)
-    assert host.startswith('\n<script') and host.endswith('</script>')
+    assert host.startswith('\n<script') and host.count('<script') == 1
     return native, native.replace('</body>', host + '\n</body>'), host
 
 
@@ -286,7 +378,7 @@ async def test_oracle_menolak_host_di_luar_kontrak(kasus):
     elif kasus == 'shape-salah':
         full = full.replace('"versi": 2', '"versi": 1')
     else:
-        full = full.replace('</script>\n</body>', '</script>\n\n</body>')
+        full = full.replace(host, host + '\n')
     with pytest.raises(AssertionError):
         _tanpa_host_registry(full)
 
