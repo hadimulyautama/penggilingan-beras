@@ -1,6 +1,8 @@
 """First-click owner tests, distinct from native document-negotiation proof."""
 import asyncio
 import json
+import os
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 import pytest
@@ -76,6 +78,7 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
     async with await _klien(pg,role=role,gudang_id=stok_lengkap['gudang'].get(warehouse)) as client:
         before=await _sidik(pg)
         async with peramban(client,width) as (page,transport):
+            observations=[]
             await page.goto(BASE+'/kabar')
             await page.wait_for_function("()=>document.getElementById('padi-riwayat-kerangka')&&window.PINDAH")
             default=await page.evaluate("()=>JSON.parse(document.getElementById('padi-riwayat-kerangka').textContent).menu.default")
@@ -87,6 +90,17 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
                 transport['gates'][path]=entered,release
                 before_gets=transport['gets'].count(path)
                 try:
+                    await page.evaluate("""path=>{
+                     window.__historyUiProbe?.observer.disconnect();
+                     const p={path,started:performance.now(),ready:null,generic:0};
+                     p.observer=new MutationObserver(records=>{
+                      for(const r of records)for(const node of r.addedNodes)if(node.nodeType===1&&(node.matches('.halaman-memuat')||node.querySelector('.halaman-memuat')))p.generic++;
+                      const root=document.querySelector('[data-riwayat-daftar-native]');
+                      if(p.ready===null&&root?.dataset.url===path&&root.getClientRects().length)p.ready=performance.now()-p.started;
+                     });
+                     p.observer.observe(document.getElementById('isi-halaman'),{childList:true,subtree:true});
+                     window.__historyUiProbe=p;
+                    }""",path)
                     await door(page,path,width)
                     await asyncio.wait_for(entered.wait(),20)
                     root=page.locator('[data-riwayat-daftar-native]')
@@ -95,6 +109,12 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
                     await expect(root).to_have_attribute('data-url',path)
                     assert transport['gets'].count(path)==before_gets+1
                     assert await page.locator('[data-history-native-style]').count()>0
+                    probe=await page.evaluate("()=>({path:__historyUiProbe.path,ui_ms:__historyUiProbe.ready,generic_insertions:__historyUiProbe.generic})")
+                    assert probe['ui_ms'] is not None and probe['generic_insertions']==0
+                    observations.append(probe)
+                    if os.getenv('DETAIL_OUT'):
+                        out=Path(os.environ['DETAIL_OUT'])/'first-click';out.mkdir(exist_ok=True)
+                        await page.screenshot(path=str(out/(role+'-'+str(warehouse)+'-'+str(width)+'-'+path.strip('/').replace('/','-')+'-pending.png')),full_page=True)
                     for label in metadata(path)['columns']:
                         if label:await expect(root).to_contain_text(label)
                     await expect(page.locator('[data-laporan-kontrol]')).to_be_visible()
@@ -108,4 +128,7 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
                     assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
                     assert not transport['posts'] and not transport['errors']
                 finally:release.set()
+            await page.evaluate('()=>window.__historyUiProbe?.observer.disconnect()')
+            if os.getenv('DETAIL_OUT'):
+                (Path(os.environ['DETAIL_OUT'])/(role+'-'+str(warehouse)+'-'+str(width)+'-first-click.json')).write_text(json.dumps(observations,indent=2)+'\n')
         assert await _sidik(pg)==before
