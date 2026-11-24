@@ -212,10 +212,15 @@ async def test_home_actual_menu_first_paint_native_parity_and_late_leave(pg, gud
 
 
 @pytest.mark.parametrize('width', [390, 1280])
-async def test_muatan_operator_actual_menu_inert_fields_then_native_controller(pg, gudang, width):
+async def test_muatan_operator_actual_menu_inert_fields_then_native_controller(pg, gudang, g1, width):
     # Existing perintah recipe; no muat/finish/verify POST is sent in the test.
     await _perintah(pg, gudang, karung=40)
-    async with await existing_client(pg, gudang['op'], 'owner-frame-muatan', mode='operator') as client:
+    # Native navigation offers /muatan specifically to the G1 view. The
+    # ordinary G2 operator recipe above offers /barang-keluar instead; a
+    # successful direct GET is not evidence of a sidebar offer.
+    # Reuse the existing G1 warehouse recipe and native role client, without
+    # changing another actor's warehouse/role or fabricating a menu link.
+    async with await role_client(pg, peran='operator', gudang='Gudang 1') as client:
         native = await client.get('/muatan', headers=NATIVE)
         assert native.status_code == 200
         expected = chrome(native.text)
