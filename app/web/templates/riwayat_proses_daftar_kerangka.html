@@ -1,0 +1,11 @@
+{% extends '_daftar_riwayat_proses.html' %}
+{% import '_riwayat.html' as rh with context %}
+{% block judul %}{{ RIWAYAT_META.title }}{% endblock %}
+{% block daftar_isi %}
+{% if RIWAYAT_META.kind=='giling' %}<link rel="stylesheet" href="/static/riwayat-giling-daftar.css?v={{ VERSI }}">{% endif %}
+<section aria-label="{{ RIWAYAT_META.title }}" data-riwayat-daftar-native data-stamp="{{ RIWAYAT_STAMP }}" data-url="{{ RIWAYAT_URL }}">
+{{ rh.header(RIWAYAT_META.label,RIWAYAT_META.title,RIWAYAT_META.description,RIWAYAT_META.stats) }}
+{% include '_riwayat_daftar_kerangka_isi.html' %}
+</section>
+{% endblock %}
+{% block daftar_skrip %}{% include '_riwayat_daftar_kerangka_script.html' %}{% endblock %}
