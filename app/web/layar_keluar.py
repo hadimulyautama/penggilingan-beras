@@ -106,12 +106,25 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             navigasi=getattr(request.state,'navigasi_kerangka_langsung',None))
     from app.models import OutgoingRecord
     customer_scope={'allowed_ids':request.state.portal_scope.ids(OutgoingRecord)} if is_customer_read(request) else {}
+    from app.web.pengiriman_detail_kerangka import kerangka as detail_kerangka,memakai_dokumen as detail_dokumen
+    dokumen_baris = None
+    if transaksi_id is not None and not is_customer_read(request) and detail_dokumen(request):
+        # The original exact row/items reader owns resource identity. Release
+        # its connection before optional navigation metadata opens another one.
+        async with SessionLocal() as db:
+            dokumen_baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1, **customer_scope)
+        if not dokumen_baris:
+            raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
+        shell=await detail_kerangka(request,akun,dokumen_baris[0][0],dokumen_baris[0][1],
+            boleh_perintah=boleh_perintah,boleh_muat=boleh_muat)
+        if shell is not None:return shell
     async with SessionLocal() as db:
         if boleh_perintah and transaksi_id is None and not pid:
             from app.web.draf_keluar import daftar_draf
             draf_saya = await daftar_draf(db, akun.user)
         if transaksi_id is not None:
-            baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1, **customer_scope)
+            baris = (dokumen_baris if dokumen_baris is not None else
+                     await svc.daftar(db, transaksi_id=transaksi_id, batas=1, **customer_scope))
             if not baris:
                 raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
             sebelum_berikut = None
@@ -285,7 +298,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         })
     kartu.sort(key=lambda k: k["urut"])
 
-    return await render_laci(
+    response = await render_laci(
         request, "pengiriman.html", layar="barang_keluar", kartu=kartu,
         detail=transaksi_id is not None,
         verifikasi_detail=verifikasi_detail,
@@ -331,6 +344,8 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         STATUS_SARING=status, n_perintah=sum(1 for k in kartu if k["rec"].status == OUT_PERINTAH),
         n_dimuat=sum(1 for k in kartu if k["rec"].status == OUT_DIMUAT),
     )
+    from app.web.pengiriman_detail_catalog import pasang as pasang_detail_catalog
+    return pasang_detail_catalog(request,akun,response)
 
 
 def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "", cepat: bool = False) -> list[tuple]:
