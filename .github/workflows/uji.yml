@@ -354,6 +354,15 @@ jobs:
             tests/pg/test_safari_portal.py \
             tests/pg/test_browser_izolasi.py \
             tests/pg/test_pengaturan_organisasi_browser.py \
+            tests/pg/test_pengiriman_detail_owner_acceptance.py \
+            tests/pg/test_history_detail_owner_browser.py \
+            tests/pg/test_stock_detail_owner_browser.py \
+            tests/pg/test_portal_deep_owner_browser.py \
+            tests/pg/test_facility_parent_owner_browser.py \
+            tests/pg/test_home_muatan_pdf_owner_browser.py \
+            tests/pg/test_users_read_owner_browser.py \
+            tests/pg/test_retur_read_owner_browser.py \
+            tests/pg/test_history_pending_reader_boundary_browser.py \
             --junitxml=bukti/safari.xml
       - uses: actions/upload-artifact@v4
         if: always()
