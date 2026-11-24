@@ -156,7 +156,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
     from app.services.penghalang_koreksi import daftar
     async with SessionLocal() as db:
         catatan_penghalang = await daftar(db, "sosoh", process_id) if akun.is_admin else []
-    return await render_laci(
+    response = await render_laci(
         request, "riwayat_sosoh_detail.html", jenis="sosoh", k=kartu[0],
         qc_sosoh=qc_sosoh, qc_kode=kartu[0].kode,
         catatan_penghalang=catatan_penghalang,
@@ -172,6 +172,8 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         isian_koreksi=getattr(request.state, "koreksi_form", {}),
         jeda_riwayat=jeda_riwayat,
     )
+    from app.web.proses_pdf_catalog import pasang
+    return pasang(request, akun, response)
 
 
 @router.post("/riwayat-sosoh/{process_id}/koreksi")
@@ -256,8 +258,10 @@ async def halaman_pdf_riwayat_sosoh(request: Request, process_id: int,
         process = await db.get(PolishingProcess, process_id)
     if process is None or process.status != "selesai":
         raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
-    return await render_laci(
+    response = await render_laci(
         request, "laporan_sosoh.html",
         kode=process.kode_proses,
         pdf_url=f"/riwayat-sosoh/{process_id}/laporan.pdf",
     )
+    from app.web.proses_pdf_kerangka import native_response
+    return native_response(request, akun, response)

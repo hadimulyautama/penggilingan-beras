@@ -1,0 +1,32 @@
+{
+  "versi": 1,
+  "sumber": "f6bdc7d399f541615e9f38a6056f3c355d196271c95165f5d63232863f01fb1c",
+  "variants": [
+    "giling",
+    "sosoh",
+    "pengeringan"
+  ],
+  "aset_sha256": "f8a25c78d1d0af11143f966059b6bfb093ca5b864e6ef4611221412a0ba14f58",
+  "inputs": {
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/layar_riwayat.py": "5df9c83645622de444baef9c4c7996c5d3b6a58fdc5d4735a21fba78b232a640",
+    "app/web/layar_sosoh.py": "978456e565aa2549a1f7508f062365ca59df815bcdb78c852aa9a2dc92b9ee28",
+    "app/web/proses_pdf_catalog.py": "de67aa3e503b759f324d68cedbf6066b101e06b10e6057a747e454382be5f120",
+    "app/web/proses_pdf_kerangka.py": "8ee404531b8e6c82b1cb048fe5e24c70a9720308c7e01e6f68a0da12877af70f",
+    "app/web/static/kerangka-proses-pdf-ui-runtime.js": "c13bc0efedc173d3e2a5e04694f9e1b142f4d37c944666ecbded049482be614e",
+    "app/web/static/padi-baca-native.js": "ee14bd0d9a31622c51b714ef700a3e2d03db8c166bca5b88f922c733b78bf9e8",
+    "app/web/static/proses-pdf-native.js": "d68bd840dd7efad4c435f666927ab02d05db8dbe29291d83f1f3ff21f49abe69",
+    "app/web/templates/laporan_giling.html": "976f5db935de1b4cffccd4b1f6eb06eb8711b6338cd8640f1b29c08ce124e801",
+    "app/web/templates/laporan_pengeringan.html": "fc4fbd89ecb7db8d7a6ed58a9abd70bf4a2b5ff3e1fdaa0fe7949c230e01e9e9",
+    "app/web/templates/laporan_sosoh.html": "422f3a5a67323a51181eb4b60d92f46494be6be8398eb97becebe5fd5dc351b7",
+    "app/web/templates/proses_pdf_kerangka.html": "9fc7cee0c5b2abfb7eb13e62cab9ae76a3441f8a05a0d64fa46de64c09035c79",
+    "hmu_tampilan/static/laporan-kontrol.css": "4a96a8b3189bf3bf16b9202c64f358b4fa1243781e403c1d363a806a2ece9dba",
+    "hmu_tampilan/static/laporan-kontrol.js": "827fbb63b62bef101e4970f80785a2eb07e61ea5eeb24c36f8b7c6368d3f49ba",
+    "hmu_tampilan/static/laporan-riwayat.css": "3a220d7f9d0360968cba48710a82b22157ab0d15b47037162092ffa70dbc127e",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/_laporan_navigasi.html": "4dacb95d9e4f8419be4f197d12c85574b0ccd19afd2a8b5e17b423a8ba7dd1f2",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
+    "scripts/buat_kerangka_proses_pdf.py": "7354a484806c8c167cc3cd00768c42ab9fbf809d4c9b5df2a14878fe67133d2a",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}
