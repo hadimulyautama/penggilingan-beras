@@ -14,6 +14,16 @@
   return changed;
  }
  if(typeof module==='object'&&module.exports){module.exports={themeReturn};return;}
+ function pendingVisibility(doc){
+  const roots=doc.getElementById('isi-halaman')?.querySelectorAll('[data-url][data-stamp]');
+  if(!roots?.length)return;
+  for(const root of roots)root.setAttribute('data-kerangka-native-ui','');
+  for(const old of doc.querySelectorAll('style[data-kerangka-native-visibility]'))old.remove();
+  const style=doc.createElement('style');style.setAttribute('data-kerangka-native-visibility','');
+  style.textContent='#isi-halaman [data-kerangka-native-ui] [hidden]{display:none!important}';
+  // SDK swaps the frame body, not inline head styles.
+  roots[0].prepend(style);
+ }
  function currentChrome(result,address){
   if(!result)return null;
   // The source frame is a private native prototype. Correlation is already
@@ -21,6 +31,7 @@
   // the selected destination. No form action, CSRF or submission is changed.
   const doc=new DOMParser().parseFromString(result.html,'text/html');
   themeReturn(doc,address,location.origin);
+  pendingVisibility(doc);
   return {...result,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  if(!window.PINDAH||typeof PINDAH.aturKerangkaLangsung!=='function')return;
@@ -134,6 +145,8 @@
   if(host!==hostLama){try{registry=JSON.parse(host.textContent);hostLama=host;}catch(_){return null;}}
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
   if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat)){
+   const top=pilihan.alamat==='/'?window.PadiKerangkaBerandaUI:pilihan.alamat==='/muatan'?window.PadiKerangkaMuatanUI:null;
+   if(top){try{return top.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}}
    if(['/barang-masuk','/pekerjaan'].includes(pilihan.alamat.split('?')[0])){
     try{
      const program=window.PadiFilterDaftarNative,prototype=program?.baseAddress(pilihan.alamat,location.origin);
@@ -144,6 +157,7 @@
    const history=riwayatLangsung(pilihan.alamat,registry.konteks,cap,sesi.dataset.token);if(history)return history;
    if(pilihan.alamat.startsWith('/riwayat-')){
     try{const detail=window.PadiKerangkaRiwayatDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(detail)return detail;}catch(_){return null;}
+    try{const viewer=window.PadiKerangkaProsesPDFUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(viewer)return viewer;}catch(_){return null;}
    }
    if(pilihan.alamat.split('?')[0]==='/stok/karung/detail'){
     try{return window.PadiKerangkaKarungDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
@@ -169,6 +183,12 @@
    }
    if(pilihan.alamat.startsWith('/laporan/')||pilihan.alamat.split('?')[0]==='/kabar'){
     try{return window.PadiKerangkaDokumenUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(/^\/pengaturan\/mesin\/[1-9]\d*$/.test(pilihan.alamat)){
+    try{return window.PadiKerangkaFasilitasDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(pilihan.alamat.split('?')[0]==='/pengguna'||pilihan.alamat.startsWith('/pengguna/')){
+    try{return window.PadiKerangkaPenggunaUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }
    if(['/pengaturan/peran','/pengaturan/akses','/pengaturan/sebab-berhenti','/pengaturan/mutu','/pengaturan/kledo','/pengaturan/sistem'].includes(pilihan.alamat)){
     try{return window.PadiKerangkaPengaturanDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}

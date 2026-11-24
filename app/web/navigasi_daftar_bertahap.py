@@ -96,7 +96,8 @@ def pasang(response, request):
         logging.getLogger(__name__).warning('Katalog detail native belum tersedia (%s)',type(error).__name__)
     # Struktur publik stabil siap sebelum DOM interaktif. Tidak berisi akun,
     # pilihan hak, saldo, draf atau token; pilihan per dokumen tetap no-store.
-    asset=('<script src="/static/padi-baca-native.js?v='+CAP_ASET+'"></script>'
+    asset=('<style data-native-pending-visibility>#isi-halaman [data-url][data-stamp] [hidden]{display:none!important}</style>'
+           '<script src="/static/padi-baca-native.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/filter-daftar-native.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-riwayat-ui.js?v='+CAP_ASET+'"></script>'
@@ -112,7 +113,12 @@ def pasang(response, request):
            '<script src="/static/kerangka-stock-detail-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-pengaturan-detail-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-riwayat-pengiriman-ui.js?v='+CAP_ASET+'"></script>'
-           '<script src="/static/kerangka-karung-detail-ui.js?v='+CAP_ASET+'"></script>').encode()
+           '<script src="/static/kerangka-karung-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengguna-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-beranda-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-muatan-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-proses-pdf-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-fasilitas-detail-ui.js?v='+CAP_ASET+'"></script>').encode()
     if response.body.count(b'</head>')==1:
         response.body=response.body.replace(b'</head>',asset+b'\n</head>',1)
     from app.web.halaman_bertahap import penanda_konteks

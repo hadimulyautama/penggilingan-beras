@@ -5,6 +5,7 @@
  function configuration(address){
   if(!ADDRESSES.includes(address))return null;
   return {address,rootSelector:'[data-pengaturan-menu-kerangka]',statusSelector:'[data-pengaturan-menu-status]',retrySelector:'[data-pengaturan-menu-retry]',shellSelector:'[data-pengaturan-menu-kerangka]',contentAttribute:'data-pengaturan-menu-isi',messages:{loading:'Memuat pengaturan…'},
+   afterInstall({doc}){global.PadiKerangkaPenggunaUI?.adoptNative(doc);},
    restoreFocus({focus,retry,content}){
     let next;
     if(focus===retry){content.tabIndex=-1;next=content;}

@@ -436,3 +436,30 @@ async def test_native_wrong_warehouse_detail_gate_does_not_emit_shell_or_catalog
             assert native.status_code == document.status_code == 403
             assert not BeautifulSoup(document.text, 'html.parser').select(SHELL + ',[data-riwayat-detail-catalog]')
         assert await _sidik(pg) == before
+
+
+async def test_native_read_does_not_install_after_opening_nonce_changes(pg,giling_selesai,monkeypatch):
+    """Client binding proof, not login/tenant/role impersonation or auth proof.
+
+    The real A response is already held. Only this disposable browser's
+    opening nonce changes; the source actor and ASGI fixture stay unchanged.
+    """
+    _,process=giling_selesai
+    item=dict(name='nonce-change',path='/riwayat-giling/'+str(process.id),
+              code=process.kode_proses,source='/riwayat-giling',family='history')
+    async with await _klien(pg,peran='operator',gudang='Gudang 1') as client:
+        client.base_url=BASE
+        before=await _sidik(pg)
+        async with peramban(client,390) as (page,transport):
+            release,completed=await open_from_actual_row(page,transport,client,item)
+            try:
+                await page.context.add_cookies([dict(name='produksi_csrf',value='fixture-opening-nonce-changed',url=BASE)])
+                release.set()
+                await asyncio.wait_for(completed.wait(),20)
+                await expect(page.locator('#sesi-berubah')).to_be_visible()
+                await two_frames(page)
+                await expect(page.locator(SHELL)).to_be_visible()
+                await expect(page.locator(READY)).to_have_count(0)
+                assert not transport['posts'] and not transport['errors']
+            finally:release.set()
+        assert await _sidik(pg)==before

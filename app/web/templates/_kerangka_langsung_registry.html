@@ -9,3 +9,9 @@
 <script type="application/json" id="padi-pengaturan-master-kerangka" data-konteks="{{ master.konteks }}" data-cap="{{ master.cap }}">{{ master|tojson }}</script>{% endif %}{% if alat %}
 <script type="application/json" id="padi-pengaturan-alat-kerangka" data-konteks="{{ alat.konteks }}" data-cap="{{ alat.cap }}">{{ alat|tojson }}</script>{% endif %}
 {% if pengaturan_detail %}<script type="application/json" id="padi-pengaturan-detail-kerangka" data-konteks="{{ pengaturan_detail.konteks }}" data-cap="{{ pengaturan_detail.cap }}">{{ pengaturan_detail|tojson }}</script>{% endif %}
+
+{% if pengguna %}<script type="application/json" id="padi-pengguna-kerangka" data-cap="{{ pengguna.cap }}" data-konteks="{{ pengguna.konteks }}">{{ pengguna|tojson }}</script>{% endif %}
+{% if pengguna_catalog %}<script type="application/json" data-pengguna-native-catalog data-source-address="{{ pengguna_catalog.source_address }}" data-source-sha="{{ pengguna_catalog.source_sha256 }}">{{ pengguna_catalog|tojson }}</script>{% endif %}
+
+{% if beranda %}<script type="application/json" id="padi-beranda-kerangka" data-konteks="{{ beranda.konteks }}" data-cap="{{ beranda.cap }}">{{ beranda|tojson }}</script>{% endif %}
+{% if muatan %}<script type="application/json" id="padi-muatan-kerangka" data-konteks="{{ muatan.konteks }}" data-cap="{{ muatan.cap }}">{{ muatan|tojson }}</script>{% endif %}

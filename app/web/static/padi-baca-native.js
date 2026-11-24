@@ -1,6 +1,3 @@
-/* Explicit opt-in native HTML reader. URL equality is correlation, never authorization.
- * Server native guards remain authoritative; this module has no route discovery,
- * business IDs/roles, transaction policy, POST or persistence. */
 (function (global) {
  'use strict';
  const HTML_LIMIT=8*1024*1024;
@@ -70,12 +67,11 @@
  if(!main||!frame?.contains(main)||!main.contains(root)||!sameIdentity(identity,identity,ADDRESS)||address()!==ADDRESS||root.dataset.url!==ADDRESS||!stamp||!status||!retry)return;
  const lifecycle=new AbortController();
  let focusEpoch=0,retryOrigin=null;
- // Hiding the focused retry button moves focus to body before install.
- // Remember that intent only until a later user interaction supersedes it.
  for(const type of ['pointerdown','keydown','focusin'])document.addEventListener(type,event=>{
   if(type!=='focusin'||event.target!==document.body)focusEpoch++;
  },{capture:true,signal:lifecycle.signal});
- function current(){return root.isConnected&&root.dataset.stamp===stamp&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);}
+ const sessionCurrent=()=>!global.SESIFORM||global.SESIFORM.periksa();
+ function current(){return root.isConnected&&root.dataset.stamp===stamp&&address()===ADDRESS&&sessionCurrent()&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);}
  function interaction(){
   const focus=document.activeElement;
   return !!main.querySelector('dialog[open]')||!!(focus&&main.contains(focus)&&focus.matches('select:not(:disabled),textarea:not(:disabled):not([readonly]),input:not(:disabled):not([readonly])'));
@@ -142,9 +138,8 @@
    if(!current())return;const [start,end]=markers(main);
    const retryFocused=retryOrigin&&retryOrigin.epoch===focusEpoch&&document.activeElement===document.body;
    const focus=retryFocused?retry:document.activeElement,inside=retryFocused||main.contains(focus);
-   // Seluruh GET aset sudah selesai. Tidak ada await setelah pemeriksaan akhir.
    observer.disconnect();lifecycle.abort();while(start.nextSibling&&start.nextSibling!==end)start.nextSibling.remove();end.before(fresh.content);document.title=fresh.doc.title||document.title;
-   const installedCurrent=()=>fresh.content.isConnected&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);
+   const installedCurrent=()=>fresh.content.isConnected&&address()===ADDRESS&&sessionCurrent()&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);
    const actions=config.afterInstall?prepared.concat([{type:'after-install'}]):prepared;
    const activated=activatePrepared(actions,{current:installedCurrent,
     activate(item){
@@ -162,7 +157,6 @@
      }finally{if(executable)window.removeEventListener('error',failedScript);}
     },
     failed(){
-     // Keep the new target inert and offer an explicit native GET reload.
      fresh.content.dataset.nativeReadState='failed';fresh.content.inert=true;
      for(const field of fresh.content.querySelectorAll('input,select,textarea,button'))field.disabled=true;
      const warning=document.createElement('section');warning.setAttribute('role','alert');

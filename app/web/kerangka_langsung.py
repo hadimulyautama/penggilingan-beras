@@ -258,7 +258,32 @@ async def lengkapi_dokumen(request: Request, response):
                     if isinstance(error,HTTPException) and error.status_code in (401,403):
                         raise
                     log.warning('Kerangka rincian Pengaturan belum tersedia (%s)',type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat,pengaturan=pengaturan,dokumen=dokumen,sosoh=sosoh,master=master,alat=alat,pengaturan_detail=pengaturan_detail).encode()
+                beranda=muatan=None
+                try:
+                    from app.web.beranda_kerangka import susun as susun_beranda
+                    beranda=await susun_beranda(request,akun,registry=registry,navigasi=navigasi)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):raise
+                    log.warning('Kerangka Beranda belum tersedia (%s)',type(error).__name__)
+                try:
+                    from app.web.muatan_kerangka import susun as susun_muatan
+                    muatan=await susun_muatan(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):raise
+                    log.warning('Kerangka Muatan belum tersedia (%s)',type(error).__name__)
+                pengguna=pengguna_catalog=None
+                try:
+                    from app.web.pengguna_baca_native import susun as susun_pengguna, katalog as katalog_pengguna
+                    pengguna=await susun_pengguna(request,akun,registry=registry)
+                    if pengguna is not None:
+                        address=request.url.path+('?' +request.url.query if request.url.query else '')
+                        pengguna_catalog=katalog_pengguna(body.decode('utf-8'),source_address=address,permission=pengguna)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    pengguna=pengguna_catalog=None
+                    log.warning('Kerangka pengguna belum tersedia (%s)',type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat,pengaturan=pengaturan,dokumen=dokumen,sosoh=sosoh,master=master,alat=alat,pengaturan_detail=pengaturan_detail,pengguna=pengguna,pengguna_catalog=pengguna_catalog,beranda=beranda,muatan=muatan).encode()
                 if len(body) + len(host) + 1 > BATAS_DOKUMEN_NATIVE:
                     raise ValueError('Dokumen native melampaui batas registry')
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)

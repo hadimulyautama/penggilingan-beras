@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "c95f340cced9b5d0b1ce6ec13931d63bb5d56128178e376f446970ab417bb69f",
+  "sumber": "8a3dd0478bcbbdb0e38659774c4512f7037a5f691b0ff71f5fe960efbd64d1cd",
   "variants": [
     "staf",
     "staf-super",
@@ -8,7 +8,7 @@
     "pelanggan",
     "pelanggan-detail"
   ],
-  "aset_sha256": "fc03405b0f7bbb5e7afe01df8ae61e24baf8b3ea9b6dafb20bcee743e3c2abdc",
+  "aset_sha256": "1d5aa03aa7fa72ccadd5f827b5b76fc30a8e4e99fe2612995156cf97e6b1a4a4",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
@@ -19,7 +19,7 @@
     "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
     "app/web/static/akun-pelanggan.css": "1b69d333f8dd70561aba1528b6e023d449ecffceef2ea0c41cffcf13b921801c",
     "app/web/static/kerangka-pengguna-ui-runtime.js": "3dc373fc75de7527793ee858dc06aa864c774500c2ac5c3cba99369419e508fa",
-    "app/web/static/padi-baca-native.js": "ee14bd0d9a31622c51b714ef700a3e2d03db8c166bca5b88f922c733b78bf9e8",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
     "app/web/static/pengguna-baca-native.js": "457298749e67654dfbc6b5fa4ff28b48ef5b201479a2285b19bbae7e6bb5c721",
     "app/web/templates/_pengguna_jenis.html": "3c643169a3e4171b816f757e2ce4fd7c276cb87f91d26ea520bb6543c6de2885",
     "app/web/templates/pengguna_baca_native.html": "09bb1c89bc226a0ce5a03d93eb3fa065d7adf4f1cbd6de79231e3b342cbdeab1",

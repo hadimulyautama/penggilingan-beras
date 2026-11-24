@@ -173,6 +173,8 @@ async def exercise(page, transport, client, source, wanted, *, out, label):
         await expect(page.locator(SHELL)).to_be_visible()
         assert transport['gets'].count(path) - read_start == 1, 'First-click made duplicate native reads'
         await expect(page.locator('.halaman-memuat')).to_have_count(0)
+        for hidden in await page.locator(SHELL+' [hidden]').all():
+            await expect(hidden).to_be_hidden()
         assert await page.locator(SHELL+' form,'+SHELL+' input,'+SHELL+' textarea').count() == 0
         assert await page.locator(SHELL+' [data-kirim],'+SHELL+' [data-post],'+SHELL+' script[type="application/json"]').count() == 0
         assert await page.locator(SHELL+' button:not(:disabled):not([data-stock-detail-retry])').count() == 0

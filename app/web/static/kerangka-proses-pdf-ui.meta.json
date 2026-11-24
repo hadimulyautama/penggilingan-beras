@@ -1,12 +1,12 @@
 {
   "versi": 1,
-  "sumber": "f6bdc7d399f541615e9f38a6056f3c355d196271c95165f5d63232863f01fb1c",
+  "sumber": "cdda88ce2f4f96a8b0a92dd997c8033f34c768a4a3ea078c5ed77d27e8312e68",
   "variants": [
     "giling",
     "sosoh",
     "pengeringan"
   ],
-  "aset_sha256": "f8a25c78d1d0af11143f966059b6bfb093ca5b864e6ef4611221412a0ba14f58",
+  "aset_sha256": "628dc2ebca06a239a87cb1a00c8738b197a75451b140cb94fc21367ceed6b00e",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/layar_riwayat.py": "5df9c83645622de444baef9c4c7996c5d3b6a58fdc5d4735a21fba78b232a640",
@@ -14,7 +14,7 @@
     "app/web/proses_pdf_catalog.py": "de67aa3e503b759f324d68cedbf6066b101e06b10e6057a747e454382be5f120",
     "app/web/proses_pdf_kerangka.py": "8ee404531b8e6c82b1cb048fe5e24c70a9720308c7e01e6f68a0da12877af70f",
     "app/web/static/kerangka-proses-pdf-ui-runtime.js": "c13bc0efedc173d3e2a5e04694f9e1b142f4d37c944666ecbded049482be614e",
-    "app/web/static/padi-baca-native.js": "ee14bd0d9a31622c51b714ef700a3e2d03db8c166bca5b88f922c733b78bf9e8",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
     "app/web/static/proses-pdf-native.js": "d68bd840dd7efad4c435f666927ab02d05db8dbe29291d83f1f3ff21f49abe69",
     "app/web/templates/laporan_giling.html": "976f5db935de1b4cffccd4b1f6eb06eb8711b6338cd8640f1b29c08ce124e801",
     "app/web/templates/laporan_pengeringan.html": "fc4fbd89ecb7db8d7a6ed58a9abd70bf4a2b5ff3e1fdaa0fe7949c230e01e9e9",

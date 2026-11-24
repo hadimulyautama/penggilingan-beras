@@ -209,7 +209,20 @@ def test_caller_adopts_after_native_positive_guard_and_actual_row_and_before_enr
         current=parent[current]
     assert 'baris = (dokumen_baris if dokumen_baris is not None else' in source
     assert source.index('if not dokumen_baris:') < source.index('shell=await detail_kerangka')
-    assert 'return pasang_detail_catalog(request,akun,response)' in source
+    # The final-shipping read family now decorates the same native response
+    # after the active-shipping catalogue. Neither may replace/drop the other.
+    caller=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef)
+                and any(isinstance(c,ast.Call) and isinstance(c.func,ast.Name)
+                        and c.func.id=='pasang_detail_catalog' for c in ast.walk(n)))
+    decorators=[]
+    for statement in caller.body:
+        value=statement.value if isinstance(statement,(ast.Assign,ast.Return)) else None
+        if isinstance(value,ast.Call) and isinstance(value.func,ast.Name) and value.func.id in {'pasang_detail_catalog','pasang_final_catalog'}:
+            decorators.append((type(statement).__name__,ast.unparse(statement)))
+    assert decorators==[
+        ('Assign','response = pasang_detail_catalog(request, akun, response)'),
+        ('Return','return pasang_final_catalog(request, akun, response)'),
+    ]
     # No direct-row replacement or ledger read hidden in family helpers.
     own=(ROOT/'app/web/pengiriman_detail_kerangka.py').read_text()+(ROOT/'app/web/pengiriman_detail_catalog.py').read_text()
     assert 'SessionLocal' not in own and 'db.' not in own and 'commit(' not in own

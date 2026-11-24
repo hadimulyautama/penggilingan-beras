@@ -1,10 +1,10 @@
 {
   "versi": 1,
-  "sumber": "0585d3db13263082a06ed6d52145c15c3c21a584a8e1d8de42e5eb3157f3b1ea",
+  "sumber": "b344c56de412130191a0032e4977e06552364627f78569883c8da383dc4233b8",
   "variants": [
     "/"
   ],
-  "aset_sha256": "7f7de2f98af8af06bdc72e52cdfb46c2acd86ce00b56b6883e15e158b8d47e8b",
+  "aset_sha256": "053a5efbc64d28fbeddce926513271bb2268a505b695971339a0daddf88d71c1",
   "inputs": {
     "app/main.py": "c315737e30a48a5d1caaecab56bc662c4621026cedce40bd0ef8f4c231c2c19c",
     "app/services/beranda.py": "bc6565fff38acb6956e3ca3614353130daf2eb652ae46fd8a1fbb4dbfe656e89",
@@ -13,7 +13,7 @@
     "app/web/layar.py": "f6965aacbd3f53c358a0dbc19b57a72f93c1bf60c9e502146a12a167cc5f3c27",
     "app/web/static/beranda-native.js": "b9b438071b910649218ee99ee0e0c043b96dc66bacd4219d90b7521cb765ec67",
     "app/web/static/kerangka-beranda-ui-runtime.js": "33dcb4ed9a65f7ba68e0f87f8a7c6811683e1833a4bdb55e2deb849ea824c21d",
-    "app/web/static/padi-baca-native.js": "ee14bd0d9a31622c51b714ef700a3e2d03db8c166bca5b88f922c733b78bf9e8",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
     "app/web/templates/beranda_kerangka.html": "22378c42c63ca9be8a83043e60a692ee16e73cb37d251b9bf67940fd475de757",
     "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
     "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",

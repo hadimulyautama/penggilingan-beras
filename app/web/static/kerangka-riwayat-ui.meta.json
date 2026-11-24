@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "ae27d09c67f22883944e3ba374aca95a12ebb161b32a50745b1ec8c823c55a57",
-  "aset_sha256": "17008a778363b671c932a532ec684689e82b0cca07503cca2c284aee1bd2a9db",
+  "sumber": "6c050d5906fc1dfb333bb4c42a49c411c0793ec70d812e55f3bb1a6b5e24dae6",
+  "aset_sha256": "81ee2d542dceda3578768df027c66f3de7a99e15259ffe380778b7d070d626d5",
   "variants": [
     "/riwayat-giling",
     "/riwayat-sosoh",
@@ -17,11 +17,11 @@
     "app/web/audit_kerangka.py": "613562afe88170023a6c1e7f81af487fd8381ff866b545810c8536786856af40",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
-    "app/web/layar_riwayat.py": "3793634b304de2001022264d5dfea5b6f9ae38b258b6c45f8bee6cac2f590afa",
+    "app/web/layar_riwayat.py": "5df9c83645622de444baef9c4c7996c5d3b6a58fdc5d4735a21fba78b232a640",
     "app/web/riwayat_daftar_metadata.py": "54a0662ef1d848e2b6e5c54be3cba7d7c1be55aa89b873732dbec2d498fdd7d6",
     "app/web/static/audit-native.js": "df3256162e629c36604a314638e5071b3ff8657039180e7e7ad4a7a7fd017dac",
     "app/web/static/kerangka-riwayat-ui-runtime.js": "bb0a1d664cff151f700e4416df3298688d7f314733b843d6da04efcdd2e14834",
-    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
     "app/web/static/riwayat-daftar-native.js": "6695eb675073a8169386f0aab7d783ba37c9be9bc56a3639dd514e95f1d233d9",
     "app/web/static/riwayat-daftar-proses.css": "beb450a127ddb01278ca7ade3bfefe444ebd1e9d401c781ca8fac6eb1575947f",
     "app/web/static/riwayat-daftar-proses.js": "6d48099e3474882bbd25c48a678ceed7e08fb48ef172748f8853303a5820c5ec",
