@@ -375,6 +375,8 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         breadcrumb_detail="Detail PK", kembali=kembali,
         detail_href=detail_href,
     )
+    from app.web.stock_qc_empty_html import finish as finish_qc_empty
+    response = finish_qc_empty(response, request, qc=riwayat_qc, mutu=mutu_aktif)
     from app.web.stock_detail_native import finish, pk_offers
     offer = pk_offers([kartu] if gudang == 'g1' else [], [kartu] if gudang == 'g2' else [], mutu=mutu_aktif)[0]
     offer.meta['qc_latest'] = bool(riwayat_qc.get('hasil_terbaru_saja'))

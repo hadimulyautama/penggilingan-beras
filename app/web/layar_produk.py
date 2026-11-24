@@ -524,7 +524,9 @@ async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
     konteks = await _halaman_stok_karung(request, akun=akun)
     if not isinstance(konteks, dict):
         return konteks
-    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+    response = await render_laci(request, "stok_kepemilikan.html", **konteks)
+    from app.web.karung_detail_native import finish, references
+    return finish(response, request, offers=references(konteks))
 
 
 async def _halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
@@ -565,7 +567,9 @@ async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
     konteks = await _halaman_stok_karung_jasa(request, akun=akun)
     if not isinstance(konteks, dict):
         return konteks
-    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+    response = await render_laci(request, "stok_kepemilikan.html", **konteks)
+    from app.web.karung_detail_native import finish, references
+    return finish(response, request, offers=references(konteks))
 
 
 async def _halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
@@ -637,5 +641,8 @@ async def halaman_stok_semua(request: Request, akun, tab):
     await siapkan(request, titipan["template_kepemilikan_asal"], titipan)
     pabrik.update(semua_kepemilikan=True, stok_jasa=titipan)
     response = await render_laci(request, "stok_semua.html", **pabrik)
+    if tab == 'karung':
+        from app.web.karung_detail_native import finish as finish_karung, references
+        return finish_karung(response, request, offers=references(pabrik))
     from app.web.stock_detail_native import finish, product_offers
     return finish(response, request, offers=product_offers(pabrik) if tab == 'produk' else ())
