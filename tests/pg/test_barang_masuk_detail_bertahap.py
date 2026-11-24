@@ -135,6 +135,10 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             # Native full data is installed with the tab chosen while waiting.
             await expect(page.locator('[data-bm-tab=qc]')).to_be_focused()
             assert 'tab_detail=qc' in page.url
+            # The in-process route adapter does not expose browser-generated
+            # Sec-Fetch headers. Exercise the explicit renderer negotiation
+            # here; genuine document headers are covered by native HTTP.
+            await page.set_extra_http_headers({'X-Kerangka-Halaman':'1'})
             await page.reload()
             await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
             await expect(page.locator('[data-bm-detail-panel=qc]')).to_be_visible()
