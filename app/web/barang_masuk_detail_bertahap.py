@@ -91,7 +91,8 @@ async def katalog(request, akun, targets, *, navigasi):
         assert 0 < len(entries) <= 25
         path = '/barang-masuk/0'
         native = Request({**request.scope, 'path': path, 'raw_path': path.encode(), 'query_string': b'',
-                          'state': {**request.scope.get('state', {}), 'frame_kerangka_langsung': True}})
+                          'state': {**request.scope.get('state', {}), 'frame_kerangka_langsung': True,
+                                    'menyusun_kerangka_langsung': True}})
         response = await kerangka(0, native, akun, navigasi=navigasi)
         if response.status_code != 200:
             return None
