@@ -190,6 +190,9 @@
    if(/^\/pengaturan\/mesin\/[1-9]\d*$/.test(pilihan.alamat)){
     try{return window.PadiKerangkaFasilitasDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }
+   if(pilihan.alamat.split('?')[0]==='/retur'||/^\/retur\/(?:[1-9]\d*|tiket\/[1-9]\d*)(?:\?|$)/.test(pilihan.alamat)){
+    try{return window.PadiKerangkaReturBacaUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
    if(pilihan.alamat.split('?')[0]==='/pengguna'||pilihan.alamat.startsWith('/pengguna/')){
     try{return window.PadiKerangkaPenggunaUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }

@@ -265,6 +265,13 @@ async def lengkapi_dokumen(request: Request, response):
                     if isinstance(error,HTTPException) and error.status_code in (401,403):
                         raise
                     log.warning('Kerangka rincian Pengaturan belum tersedia (%s)',type(error).__name__)
+                retur_baca=None
+                try:
+                    from app.web.retur_baca_kerangka import susun as susun_retur_baca
+                    retur_baca=await susun_retur_baca(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):raise
+                    log.warning('Kerangka baca retur belum tersedia (%s)',type(error).__name__)
                 beranda=muatan=None
                 try:
                     from app.web.beranda_kerangka import susun as susun_beranda
@@ -290,7 +297,7 @@ async def lengkapi_dokumen(request: Request, response):
                         raise
                     pengguna=pengguna_catalog=None
                     log.warning('Kerangka pengguna belum tersedia (%s)',type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat,pengaturan=pengaturan,dokumen=dokumen,sosoh=sosoh,master=master,alat=alat,pengaturan_detail=pengaturan_detail,pengguna=pengguna,pengguna_catalog=pengguna_catalog,beranda=beranda,muatan=muatan,fasilitas_parent=fasilitas_parent).encode()
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat,pengaturan=pengaturan,dokumen=dokumen,sosoh=sosoh,master=master,alat=alat,pengaturan_detail=pengaturan_detail,pengguna=pengguna,pengguna_catalog=pengguna_catalog,beranda=beranda,muatan=muatan,fasilitas_parent=fasilitas_parent,retur_baca=retur_baca).encode()
                 if len(body) + len(host) + 1 > BATAS_DOKUMEN_NATIVE:
                     raise ValueError('Dokumen native melampaui batas registry')
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
