@@ -33,22 +33,23 @@
   });
  }
  function buat(address,base,context,cap,token){
-  const state=shipping(address)||jasa(address);if(!state)return null;
-  const family=state.u.pathname==='/jasa'?'jasa':'pengiriman';
+  const account=address==='/pengaturan/akun'?{u:new URL(address,location.href)}:null;
+  const state=shipping(address)||jasa(address)||account;if(!state)return null;
+  const family=state.u.pathname==='/jasa'?'jasa':state.u.pathname==='/pengaturan/akun'?'akun':'pengiriman';
   const host=document.getElementById('padi-kerangka-ui');let permission;
   if(!host?.isConnected||host.dataset.cap!==cap||host.dataset.konteks!==context||host.textContent.length>4096)return null;
   try{permission=JSON.parse(host.textContent);}catch(_){return null;}
-  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>!['pengiriman','jasa'].includes(k)))return null;
+  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>!['pengiriman','jasa','akun'].includes(k)))return null;
   const key=permission.varians[family];
-  if(!['pengiriman-admin','pengiriman-operator','jasa-admin'].includes(key)||!own(data.variants,key))return null;
+  if(!['pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi'].includes(key)||!own(data.variants,key))return null;
   const component=data.variants[key];if(component.path!==state.u.pathname||component.family!==family||typeof base!=='string')return null;
   const doc=new DOMParser().parseFromString(base,'text/html'),frame=doc.querySelector('.bingkai'),main=doc.getElementById('isi-halaman');
   if(!frame||!main||frame.dataset.pindahKonteks!==context||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
   const comments=Array.from(main.childNodes).filter(n=>n.nodeType===8),from=comments.find(n=>n.data.trim()==='isi-halaman:mulai'),to=comments.find(n=>n.data.trim()==='isi-halaman:akhir');
   if(!from||!to||!(from.compareDocumentPosition(to)&Node.DOCUMENT_POSITION_FOLLOWING))return null;
   const part=doc.createElement('template');part.innerHTML=component.html;
-  const root=part.content.querySelector(family==='jasa'?'[data-jasa-bertahap]':'[data-halaman-bertahap][data-kind="pengiriman"]');if(!root)return null;
-  root.dataset.stamp=context+'|'+address;root.dataset.url='/api/halaman-bertahap/'+family+state.u.search;
+  const root=part.content.querySelector(family==='akun'?'[data-pengaturan-akun-kerangka]':family==='jasa'?'[data-jasa-bertahap]':'[data-halaman-bertahap][data-kind="pengiriman"]');if(!root)return null;
+  root.dataset.stamp=context+'|'+address;root.dataset.url=family==='akun'?'/pengaturan/akun':'/api/halaman-bertahap/'+family+state.u.search;
   if(family==='pengiriman'){
 
   for(const form of root.querySelectorAll('form')){
@@ -64,7 +65,7 @@
   const statusChip=root.querySelector('[data-ui-status]');if(statusChip){statusChip.hidden=!state.status;statusChip.textContent=root.querySelector('select[name=status]')?.selectedOptions[0].textContent||'';}
   const dateChip=root.querySelector('[data-ui-date]');if(dateChip){dateChip.hidden=!state.since;dateChip.textContent='Sejak '+state.since;}
   const reset=root.querySelector('.bk-form-filter>a[href]');if(reset){const next=new URL('/barang-keluar',location.href);next.searchParams.set('q',state.search);if(state.customer)next.searchParams.set('pelanggan_id',state.customer);reset.setAttribute('href',next.pathname+next.search);}
-  }else{
+  }else if(family==='jasa'){
    root.dataset.filtered=state.search||state.status?'1':'0';
    for(const input of root.querySelectorAll('[name=cari]'))value(input,state.search);
    for(const input of root.querySelectorAll('input[name=status]'))value(input,state.status);

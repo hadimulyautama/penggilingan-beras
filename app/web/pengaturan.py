@@ -190,6 +190,20 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     bagian = bagian if bagian in HALAMAN else ''
     if bagian in ('sebab-berhenti', 'mutu', 'kledo') and not tuan:
         raise HTTPException(403, 'Pengaturan ini hanya tersedia untuk Admin ke atas.')
+    # Hanya presentasi Akun tanpa query. Hasil POST, sandi wajib, dan seluruh
+    # pengaturan otoritas tetap dilayani alur native yang sama.
+    if (bagian=='akun' and not request.url.query
+            and (request.headers.get('X-Kerangka-Halaman')=='1'
+                 or request.headers.get('X-Pindah')!='1'
+                 and request.headers.get('Sec-Fetch-Mode')=='navigate'
+                 and request.headers.get('Sec-Fetch-Dest') in {'document','empty'})):
+        from app.web.pengaturan_akun_kerangka import kerangka
+        from app.web.halaman_bertahap import konteks_kerangka,penanda_konteks
+        konteks=await konteks_kerangka(request,akun)
+        konteks['SHELL']={'stamp':penanda_konteks(request,akun)+'|/pengaturan/akun',
+                          'data_url':'/pengaturan/akun'}
+        response=await kerangka(request,akun,konteks)
+        if response is not None:return response
     async with SessionLocal() as db:
         sebab = await sebab_jeda(db) if tuan else {}
         from app.services.setelan import target_kadar_air

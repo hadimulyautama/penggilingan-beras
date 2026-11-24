@@ -18,12 +18,17 @@ def test_compiler_is_deterministic_and_committed_asset_is_current():
 def test_blueprints_use_native_columns_and_only_authorized_layout_variants():
     script,meta=compiler.build()
     data=json.loads(script.decode().split('window.PadiKerangkaUIData=',1)[1].split(';\n',1)[0])
-    assert set(data['variants'])=={'pengiriman-admin','pengiriman-operator','jasa-admin'}
+    assert set(data['variants'])=={'pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi'}
     columns=[]
     for name,variant in data['variants'].items():
         doc=BeautifulSoup(variant['html'],'html.parser')
-        assert not doc.select('h1,.halaman-memuat,[data-detail-keluar],input[name=_csrf],form[method=post]')
+        assert not doc.select('.halaman-memuat,[data-detail-keluar],input[name=_csrf],form[method=post]')
+        if name!='akun-pribadi':assert not doc.select('h1')
         assert not doc.select('script[src],link[rel=stylesheet]')
+        if name=='akun-pribadi':
+            assert doc.select_one('[data-pengaturan-akun-kerangka]')
+            assert not doc.select('input[name],input[value],form[action],form[method],input[type=password]')
+            continue
         assert all(form.get('method')=='get' for form in doc.select('form'))
         if name=='jasa-admin':
             assert doc.select_one('[data-jasa-bertahap][aria-label="Pesanan Jasa"]')

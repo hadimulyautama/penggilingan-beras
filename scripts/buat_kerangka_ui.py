@@ -110,6 +110,25 @@ def build():
     crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/jasa',{},'Pesanan Jasa'))
     variants['jasa-admin']=dict(family='jasa',path='/jasa',title='Pesanan Jasa',html=str(doc),breadcrumb=crumb,
         statuses=[key for key,_ in statuses])
+    # Account values/form tokens are intentionally absent from this block.
+    context=dict(VERSI=CAP,AKUN_KERANGKA=dict(kind='pengaturan-akun',
+        title='Nama & kata sandi',alamat='/pengaturan/akun',kembali='/pengaturan',
+        sandi='/ganti-sandi?kembali_pengaturan=/pengaturan/akun',
+        stamp='__PADI_STAMP__',data_url='/pengaturan/akun'))
+    template=env.get_template('pengaturan_akun_kerangka.html')
+    doc=BeautifulSoup(''.join(template.blocks['isi'](template.new_context(context))),'html.parser')
+    root=doc.select_one('[data-pengaturan-akun-kerangka]');assert root
+    css=[]
+    for link in doc.select('link[rel="stylesheet"]'):
+        text=asset(link['href']);assert '@import' not in text and '</style' not in text.lower()
+        css.append(text);link.decompose()
+    style=doc.new_tag('style',attrs={'data-kerangka-ui-style':'akun'});style.string='\n'.join(css);root.insert(0,style)
+    for node in doc.select('script[src]'):
+        text=asset(node['src']);assert 'document.currentScript' not in text
+        node.attrs.clear();node.string=text.replace('</script','<\\/script')
+    assert not root.select('input[name],input[value],form[action],form[method],input[type=password]')
+    crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/pengaturan/akun',{},'Pengaturan'))
+    variants['akun-pribadi']=dict(family='akun',path='/pengaturan/akun',title='Pengaturan',html=str(doc),breadcrumb=crumb)
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     digest=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
     data=dict(versi=1,sumber=digest,variants=variants)

@@ -21,12 +21,12 @@ async def test_manifest_uses_native_permission_and_read_context(pg,stok_lengkap,
         head=doc.select('head script[src^="/static/kerangka-ui.js?v="]')
         assert len(head)==1 and not head[0].has_attr('defer') and not head[0].has_attr('async')
         ui=doc.select_one('#padi-kerangka-ui')
-        assert bool(ui)==bool(variant)
+        assert ui is not None
         if ui:
             registry=json.loads(doc.select_one('#padi-kerangka-langsung').string)
             data=json.loads(ui.string)
             assert set(data)=={'versi','sumber','cap','konteks','sesi','varians'}
-            assert data['varians']==({'pengiriman':variant,'jasa':'jasa-admin'} if variant=='pengiriman-admin' else {'pengiriman':variant})
+            assert data['varians']==({'pengiriman':variant,'jasa':'jasa-admin','akun':'akun-pribadi'} if variant=='pengiriman-admin' else {'pengiriman':variant,'akun':'akun-pribadi'} if variant else {'akun':'akun-pribadi'})
             assert all(data[k]==registry[k] for k in ('cap','konteks','sesi'))
             _tanpa_host_registry(response.text)
         assert await _sidik(pg)==before

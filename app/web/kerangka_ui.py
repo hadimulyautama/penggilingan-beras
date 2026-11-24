@@ -10,7 +10,7 @@ def aset():
     # Cache hanya metadata berkas program yang tetap untuk proses rilis ini.
     folder=Path(__file__).parent/'static'
     data=json.loads((folder/'kerangka-ui.meta.json').read_text())
-    if (data.get('versi')!=1 or data.get('variants')!=['pengiriman-admin','pengiriman-operator','jasa-admin']
+    if (data.get('versi')!=1 or data.get('variants')!=['pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi']
             or hashlib.sha256((folder/'kerangka-ui.js').read_bytes()).hexdigest()!=data.get('aset_sha256')):
         raise ValueError('Paket kerangka UI tidak cocok')
     return data
@@ -24,6 +24,8 @@ async def susun(request,akun,registry):
         varians['pengiriman']='pengiriman-admin' if can_see_financials(akun.user) else 'pengiriman-operator'
     if can_see_financials(akun.user):
         varians['jasa']='jasa-admin'
+    if getattr(akun,'harus_ganti_sandi',None) is False:
+        varians['akun']='akun-pribadi'
     if not varians:
         return None
     data=aset()
