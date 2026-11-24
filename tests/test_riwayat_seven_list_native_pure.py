@@ -15,6 +15,7 @@ from app.web import riwayat_daftar_metadata as meta
 from app.web import riwayat_daftar_bertahap as builder
 
 ROOT=Path(__file__).parents[1]
+from tests.native_source_oracle import baseline,digest
 PATHS=tuple(meta.PROCESS)+tuple('/riwayat-qc/'+q for q in sorted(meta.QC))
 BASE='d147691f1650d623df2a2f5ebda5b0665e43404f'
 
@@ -133,19 +134,21 @@ def test_builder_exact_sameurl_context_and_print_remain_readonly(monkeypatch):
     assert ctx==old
 
 
-def test_qc_override_preserves_actual_row_branch_and_original_headers():
-    # Git blob is a source fixture, no application/database is imported.
-    before=subprocess.check_output(['git','show',BASE+':app/web/templates/riwayat_qc.html'],cwd=ROOT,text=True)
+def test_qc_override_preserves_actual_row_branch_and_original_headers(monkeypatch):
+    monkeypatch.setattr(subprocess,'check_output',lambda *a,**k:(_ for _ in ()).throw(AssertionError('No Git/command in native baseline proof')))
+    receipt=baseline('qc');assert receipt['baseline_commit']==BASE
     after=(ROOT/'app/web/templates/riwayat_qc.html').read_text()
     # The last delimiter changes position as outer condition moves; compare
     # complete unchanged loop through its explicit final closing marker.
     marker='      {% for row in rows %}'
     end='      {% endfor %}'
-    b=before[before.index(marker):before.rindex(end)+len(end)]
     a=after[after.index(marker):after.rindex(end)+len(end)]
-    assert a==b
+    assert digest(a)==receipt['row_branch_sha256']
+    assert digest(a.replace('row.','row.changed_',1))!=receipt['row_branch_sha256']
     head=r'<div class="tabel-standar__kepala"[^>]*>.*?</div>'
-    assert meta._head(before,head)==meta._head(after,head)
+    native_header=meta._head(after,head)[0]
+    assert digest(native_header)==receipt['header_sha256']
+    assert digest(native_header.replace('span','th',1))!=receipt['header_sha256']
     assert 'app.services' not in after
 
 

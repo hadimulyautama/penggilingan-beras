@@ -1,5 +1,6 @@
 """Pure native-DTO/presentation/build protocol, no PG/browser/permission proof."""
 import ast
+import copy
 from dataclasses import dataclass, field
 import gzip
 import hashlib
@@ -17,6 +18,7 @@ from app.web import stock_detail_native as ui
 from app.web import stock_detail_catalog as emitter
 
 ROOT=Path(__file__).resolve().parents[1]
+from tests.native_source_oracle import baseline,fingerprint,functions,native_render_boundary
 BIND=dict(source_address='/stok?tab=bahan', cap='fixture-cap', context='fixture-ctx', session='fixture-session')
 
 
@@ -170,18 +172,17 @@ def test_public_structure_native_labels_without_empty_rows_or_false_empty():
     ('layar_produk.py',['halaman_stok_produk','halaman_stok_produk_jasa','_detail_produk','halaman_stok_semua']),
     ('layar_gudang.py',['halaman_gudang']),
 ])
-def test_original_guard_reader_and_native_render_arguments_unchanged(file,names):
-    old=subprocess.check_output(['git','show','88560d9:app/web/'+file],cwd=ROOT,text=True)
-    new=(ROOT/'app/web'/file).read_text()
-    def presentation_boundary(text,name):
-        func=next(n for n in ast.parse(text).body if isinstance(n,ast.AsyncFunctionDef) and n.name==name)
-        for i,node in enumerate(func.body):
-            value=node.value if isinstance(node,(ast.Return,ast.Assign)) else None
-            if isinstance(value,ast.Await):value=value.value
-            if isinstance(value,ast.Call) and isinstance(value.func,ast.Name) and value.func.id in ('render','render_laci'):
-                return [ast.dump(n,include_attributes=False) for n in func.body[:i]],ast.dump(value,include_attributes=False)
-        raise AssertionError('Native render boundary not found')
-    for name in names:assert presentation_boundary(old,name)==presentation_boundary(new,name)
+def test_original_guard_reader_and_native_render_arguments_unchanged(file,names,monkeypatch):
+    monkeypatch.setattr(subprocess,'check_output',lambda *a,**k:(_ for _ in ()).throw(AssertionError('No Git/command in native baseline proof')))
+    receipt=baseline('stock')[file]
+    assert receipt['baseline_commit']=='88560d962f61f027c9b2c77cbda3d19f53104384'
+    current=functions((ROOT/receipt['module']).read_text())
+    for name in names:
+        expected=receipt['native_render_boundaries'][name]
+        assert native_render_boundary(current[name])==expected
+        # A real guarded read is part of the prefix, not just the render name.
+        changed=copy.deepcopy(current[name]);changed.body.insert(0,ast.Raise(exc=ast.Constant(value='changed'),cause=None))
+        assert native_render_boundary(changed)!=expected
 
 
 def test_adapters_have_no_readers_writers_storage_or_editor_data():

@@ -12,6 +12,7 @@ from starlette.requests import Request
 from app.web.pengaturan_alat_kerangka import ALAMAT,guard_native,kerangka,permintaan_kerangka,susun
 
 ROOT=Path(__file__).parents[1]
+from tests.native_source_oracle import baseline,fingerprint,functions,remove_declared_shape
 
 
 def request(path=ALAMAT,query=b'',headers=(),state=None,method='GET'):
@@ -107,15 +108,26 @@ async def test_scoped_shape_render_only_after_exact_native_guard_and_bound_shell
     assert set(context)=={'SHELL'}
 
 
-def test_only_native_get_wrapper_changes_not_stock_readers_or_any_writer():
-    path='app/web/pengaturan.py';new=ast.parse((ROOT/path).read_text())
-    old=ast.parse(subprocess.run(['git','show','HEAD:'+path],cwd=ROOT,text=True,capture_output=True,check=True).stdout)
-    functions=lambda t:{n.name:ast.dump(n,include_attributes=False) for n in t.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
-    before,after=functions(old),functions(new);assert before.keys()==after.keys()
-    assert all(after[name]==body for name,body in before.items() if name!='halaman_alat')
-    caller=next(n for n in new.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='halaman_alat')
+def test_only_native_get_wrapper_changes_not_stock_readers_or_any_writer(monkeypatch):
+    monkeypatch.setattr(subprocess,'run',lambda *a,**k:(_ for _ in ()).throw(AssertionError('No Git/command in native baseline proof')))
+    receipt=baseline('alat')
+    assert receipt['baseline_commit']=='59a15198fda21a6e0afc0a7732aa2e856d2b4eed'
+    after=functions((ROOT/receipt['module']).read_text());assert after.keys()==receipt['functions'].keys()
+    caller=after['halaman_alat']
     assert 'Depends(butuh_super)' in ast.unparse(caller.args)
     assert ast.unparse(caller.body[-1])=='return await _halaman_alat(request, akun)'
+    remove_declared_shape(caller,'app.web.pengaturan_alat_kerangka',receipt['declared_alat_block_sha256'])
+    # The separately tested six-settings presentation was adopted later.
+    # Strip only its pinned two-node block; native reads/writers stay compared.
+    remove_declared_shape(after['halaman_pengaturan'],'app.web.pengaturan_detail_kerangka',receipt['declared_detail_block_sha256'])
+    for name,node in after.items():assert fingerprint(node)==receipt['functions'][name],name
+    changed=copy.deepcopy(after['tambah_gudang'])
+    commit=next(n for n in ast.walk(changed) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='commit')
+    commit.func.attr='rollback';assert fingerprint(changed)!=receipt['functions']['tambah_gudang']
+    changed=copy.deepcopy(caller)
+    guard=next(n for n in ast.walk(changed.args) if isinstance(n,ast.Name) and n.id=='butuh_super')
+    guard.id='butuh_akun'
+    assert fingerprint(changed)!=receipt['functions']['halaman_alat']
     helper=(ROOT/'app/web/pengaturan_alat_kerangka.py').read_text()
     assert not any(s in helper for s in ('SessionLocal','from app.models','stok','is_admin','pemulihan_lama_diizinkan'))
     assert 'await butuh_super(akun)' in helper

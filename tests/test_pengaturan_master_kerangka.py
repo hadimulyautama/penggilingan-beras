@@ -1,5 +1,6 @@
 """Pure/source only: no PostgreSQL, browser, server or identity fixture."""
 import ast
+import copy
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ from starlette.requests import Request
 from app.web.pengaturan_master_kerangka import PATHS,akun_native,kerangka,permintaan_kerangka,spesifikasi,susun
 
 ROOT=Path(__file__).parents[1]
+from tests.native_source_oracle import baseline,fingerprint,functions,remove_declared_shape
 
 
 def request(path=PATHS[0],query=b'',headers=(),state=None,method='GET'):
@@ -100,15 +102,27 @@ async def test_render_context_is_shape_only_and_metadata_requires_same_verified_
     assert await susun(req,account,registry=registry) is None
 
 
-def test_actual_get_dependency_preserved_writers_and_heavy_readers_unchanged():
+def test_actual_get_dependency_preserved_writers_and_heavy_readers_unchanged(monkeypatch):
+    monkeypatch.setattr(subprocess,'run',lambda *a,**k:(_ for _ in ()).throw(AssertionError('No Git/command in native baseline proof')))
     for name in ('spesifikasi_beras.py','jenis_hasil_samping.py'):
-        path='app/web/'+name;new=ast.parse((ROOT/path).read_text())
-        old=ast.parse(subprocess.run(['git','show','HEAD:'+path],cwd=ROOT,text=True,capture_output=True,check=True).stdout)
-        get=lambda tree:{n.name:ast.dump(n,include_attributes=False) for n in tree.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
-        before,after=get(old),get(new)
-        assert 'Depends(butuh_admin)' in ast.unparse(next(n for n in new.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='lihat').args)
-        assert all(after[k]==v for k,v in before.items() if k!='lihat')
-        assert ast.unparse(next(n for n in new.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='lihat').body[-1])=='return await halaman(request)'
+        receipt=baseline('master')[name]
+        assert receipt['baseline_commit']=='fc039feff813b6d27949bca98f81626774a6076c'
+        after=functions((ROOT/receipt['module']).read_text())
+        assert after.keys()==receipt['functions'].keys()
+        caller=after['lihat']
+        assert 'Depends(butuh_admin)' in ast.unparse(caller.args)
+        remove_declared_shape(caller,'app.web.pengaturan_master_kerangka',receipt['declared_get_block_sha256'])
+        assert ast.unparse(caller.body[-1])=='return await halaman(request)'
+        for key,node in after.items():assert fingerprint(node)==receipt['functions'][key],key
+        # Nonexecuted control proves a real native writer/guard change fails.
+        changed=copy.deepcopy(after['ubah'])
+        commit=next(n for n in ast.walk(changed) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='commit')
+        commit.func.attr='rollback'
+        assert fingerprint(changed)!=receipt['functions']['ubah']
+        changed=copy.deepcopy(caller)
+        guard=next(n for n in ast.walk(changed.args) if isinstance(n,ast.Name) and n.id=='butuh_admin')
+        guard.id='butuh_akun'
+        assert fingerprint(changed)!=receipt['functions']['lihat']
 
 
 def test_helper_uses_no_database_orm_or_role_catalog():

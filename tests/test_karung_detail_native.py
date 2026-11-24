@@ -1,5 +1,5 @@
 """Pure current-native DTO/link/structure protocol, not runtime authorization."""
-import ast,hashlib,importlib.util,json,subprocess,sys
+import ast,copy,hashlib,importlib.util,json,subprocess,sys
 from pathlib import Path
 from types import ModuleType
 from bs4 import BeautifulSoup
@@ -8,6 +8,7 @@ from starlette.responses import HTMLResponse
 import pytest
 from app.web import karung_detail_native as ui
 ROOT=Path(__file__).resolve().parents[1]
+from tests.native_source_oracle import baseline,digest,functions,native_render_boundary
 BIND=dict(source='/stok?tab=karung',cap='fixture-cap',context='fixture-ctx',session='fixture-token')
 URL='/stok/karung/detail?material=biasa&ukuran=50&merk=&pemilik=pabrik'
 
@@ -78,20 +79,22 @@ def test_catalog_requires_actual_visible_native_link_plus_matching_read_dto():
     assert '98765' not in str(catalog) and 'Gudang fixture' not in str(catalog)
 
 
-def test_native_guard_and_editor_source_not_changed_by_presentation():
-    source=(ROOT/'app/web/kepemilikan_detail.py').read_bytes()
-    assert source==subprocess.check_output(['git','show','e7f6370:app/web/kepemilikan_detail.py'],cwd=ROOT)
-    editor=(ROOT/'app/web/static/kepemilikan-detail.js').read_bytes()
-    assert editor==subprocess.check_output(['git','show','e7f6370:app/web/static/kepemilikan-detail.js'],cwd=ROOT)
+def test_native_guard_and_editor_source_not_changed_by_presentation(monkeypatch):
+    monkeypatch.setattr(subprocess,'check_output',lambda *a,**k:(_ for _ in ()).throw(AssertionError('No Git/command in native baseline proof')))
+    receipts=baseline('karung')
+    for path in ['app/web/kepemilikan_detail.py','app/web/static/kepemilikan-detail.js']:
+        receipt=receipts[path]
+        assert receipt['baseline_commit']=='e7f6370af0c0620d040cd16de10897a43dc3e5fc'
+        source=(ROOT/path).read_bytes()
+        assert digest(source)==receipt['baseline_source_sha256']
+        assert digest(source+b'\n# nonexecuted negative control')!=receipt['baseline_source_sha256']
+    receipt=receipts['app/web/layar_produk.py']
+    current=functions((ROOT/receipt['module']).read_text())
     for name in ['halaman_stok_karung','halaman_stok_karung_jasa','halaman_stok_semua']:
-        def prefix(text):
-            func=next(n for n in ast.parse(text).body if isinstance(n,ast.AsyncFunctionDef) and n.name==name)
-            for i,node in enumerate(func.body):
-                call=node.value if isinstance(node,(ast.Assign,ast.Return)) else None
-                if isinstance(call,ast.Await):call=call.value
-                if isinstance(call,ast.Call) and isinstance(call.func,ast.Name) and call.func.id=='render_laci':return [ast.dump(n,include_attributes=False) for n in func.body[:i]],ast.dump(call,include_attributes=False)
-            raise AssertionError('Native render boundary missing')
-        assert prefix((ROOT/'app/web/layar_produk.py').read_text())==prefix(subprocess.check_output(['git','show','e7f6370:app/web/layar_produk.py'],cwd=ROOT,text=True))
+        expected=receipt['native_render_boundaries'][name]
+        assert native_render_boundary(current[name])==expected
+        changed=copy.deepcopy(current[name]);changed.body.insert(0,ast.Raise(exc=ast.Constant(value='changed'),cause=None))
+        assert native_render_boundary(changed)!=expected
 
 
 def test_catalog_decoration_preserves_complete_native_and_marker_boundary(monkeypatch):
