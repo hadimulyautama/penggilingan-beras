@@ -96,8 +96,15 @@ async def katalog(request, akun, targets, *, navigasi):
         response = await kerangka(0, native, akun, navigasi=navigasi)
         if response.status_code != 200:
             return None
+        # Chrome/menu yang sama sudah ada dalam registry empat tujuan.
+        # Kirim hanya wilayah isi native: jangan menggandakannya per daftar.
+        start, end = b'<!-- isi-halaman:mulai -->', b'<!-- isi-halaman:akhir -->'
+        body = response.body
+        if body.count(start) != 1 or body.count(end) != 1:
+            return None
+        content = body.split(start, 1)[1].split(end, 1)[0]
         return dict(versi=1, konteks=penanda_konteks(request, akun), cap=CAP_ASET,
-                    targets=entries, html=response.body.decode('utf-8'))
+                    penyandian='isi-1', targets=entries, html=content.decode('utf-8'))
     except HTTPException as e:
         # Sesi tidak sah bukan kegagalan descriptor opsional.
         if e.status_code not in {403, 404}:

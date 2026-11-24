@@ -92,11 +92,9 @@
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
   if(detail){
    document.title=doc.title||document.title;
-   const label=main.querySelector('.bar__merek'),freshLabel=doc.querySelector('#isi-halaman .bar__merek');
-   if(label&&freshLabel){label.textContent=freshLabel.textContent;label.setAttribute('aria-label',freshLabel.getAttribute('aria-label')||freshLabel.textContent);}
-   const crumbs=main.querySelector('.desktop-breadcrumb'),freshCrumbs=doc.querySelector('#isi-halaman .desktop-breadcrumb');
-   if(crumbs&&freshCrumbs)crumbs.replaceChildren(...Array.from(freshCrumbs.childNodes,n=>n.cloneNode(true)));
-   for(const selector of ['a.bar__balik','a.desktop-back']){const old=main.querySelector(selector),fresh=doc.querySelector('#isi-halaman '+selector);if(old&&fresh)old.setAttribute('href',fresh.getAttribute('href'));}
+   // Header/title native berada di luar marker isi. Pasang hanya setelah
+   // sesi/CAP/stamp cocok; controller halaman dipasang sesudahnya.
+   for(const selector of ['header.bar','.desktop-chrome__crumbrow']){const old=main.querySelector(selector),fresh=doc.querySelector('#isi-halaman '+selector);if(old&&fresh)old.replaceWith(fresh.cloneNode(true));}
   }
   const valid=()=>content.isConnected&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
   try{

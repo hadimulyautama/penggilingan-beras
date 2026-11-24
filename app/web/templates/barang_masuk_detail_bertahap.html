@@ -15,8 +15,15 @@
  {% for key,label in tabs %}
  <section class="terima-panel" id="bm-panel-{{ key }}" role="tabpanel" aria-labelledby="bm-tab-{{ key }}" data-bm-detail-panel="{{ key }}"{% if key!=tab_detail %} hidden{% endif %}>
   <h2>{{ label }}</h2>
-  {% set kolom={'ringkasan':['Catatan','Bobot','Status','Waktu / petugas'], 'tiket':['Data timbang','Nilai','Sumber'], 'qc':['Pemeriksaan','Hasil','Waktu / petugas'], 'riwayat':['Catatan','Lokasi','Hubungan barang']}[key] %}
-  <div style="overflow-x:auto"><table class="terima-catatan"><thead><tr>{% for label in kolom %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="{{ kolom|length }}">Data belum tersedia. Memuat bagian {{ label|lower }}…</td></tr></tbody></table></div>
+  {% if key=='riwayat' %}
+  <h3>Catatan penerimaan</h3>
+  <div style="overflow-x:auto"><table class="terima-catatan"><thead><tr>{% for label in ['Catatan','Bobot','Status','Waktu / petugas'] %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="4">Memuat catatan penerimaan…</td></tr></tbody></table></div>
+  <h3>Lokasi & proses terkait</h3><p>Memuat hubungan barang…</p>
+  {% else %}
+  {% set labels={'ringkasan':['Bobot penerimaan','Sumber / kepastian','Gudang penerima','Pemilik stok','Status catatan'], 'tiket':['Pihak pada tiket','Status transaksi','Bruto · bermuatan','Tara · truk kosong','Netto timbangan','Jumlah karung','Total potongan tara','Berat barang','Berat nota / acuan'], 'qc':['QC · seluruh putaran & rata-rata','Pemeriksaan','Waktu / petugas']}[key] %}
+  <dl class="bm-valores">{% for label in labels %}<div><dt>{{ label }}</dt><dd>Menunggu data…</dd></div>{% endfor %}</dl>
+  {% if key=='ringkasan' %}<h3>Konteks penerimaan</h3><p>Pilihan dan tindakan muncul setelah sumber serta izin diperiksa.</p><fieldset disabled><button class="btn" type="button" aria-describedby="bm-pdf-menunggu">Unduh PDF</button><button class="btn" type="button" aria-describedby="bm-pdf-menunggu">Lihat PDF</button></fieldset><p id="bm-pdf-menunggu">Dokumen tersedia setelah detail berhasil dibaca.</p>{% endif %}
+  {% endif %}
  </section>
  {% endfor %}
  </div>

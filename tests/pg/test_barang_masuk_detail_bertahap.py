@@ -32,8 +32,10 @@ async def test_detail_gate_shell_dan_data_native(pg, lengkap, monkeypatch, role,
         assert shell.status_code == 200
         doc = BeautifulSoup(shell.text, 'html.parser')
         root = doc.select_one('[data-halaman-bertahap]')
-        assert root and len(root.select('[role=tab]')) == len(root.select('table')) == 4
+        assert root and len(root.select('[role=tab]')) == 4
+        assert len(root.select('table')) == 1 and len(root.select('dl')) == 3
         assert not root.select('form,input,select,textarea,[data-editor-perintah]')
+        assert all(b.has_attr('disabled') or b.find_parent('fieldset',disabled=True) for b in root.select('fieldset button'))
         assert not root.select('[data-status-baca],[data-kgp-buka]')
         data = await c.get('/api/halaman-bertahap/barang-masuk-detail/' + str(tid))
         native = await c.get(path, headers={'X-Pindah':'1'})
@@ -118,12 +120,12 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             shell=page.locator('[data-halaman-bertahap][data-kind=barang-masuk-detail]')
             await expect(shell).to_be_visible()
             assert path not in transport['gets'][first:]
-            assert await page.locator('.bar__balik').get_attribute('href')=='/barang-masuk' or 'status=belum' in await page.locator('.bar__balik').get_attribute('href')
+            assert await page.locator('[data-bm-back]').get_attribute('href')=='/barang-masuk'
             await expect(shell.locator('[role=tab]')).to_have_count(4)
             for key in ('tiket','qc','riwayat','ringkasan'):
                 tab=shell.locator('[data-bm-tab='+key+']')
                 await tab.focus();await tab.press('Enter')
-                await expect(shell.locator('[data-bm-detail-panel='+key+'] table')).to_be_visible()
+                await expect(shell.locator('[data-bm-detail-panel='+key+']' )).to_be_visible()
                 await expect(tab).to_be_focused()
             await shell.locator('[data-bm-tab=qc]').click()
             release.set()
