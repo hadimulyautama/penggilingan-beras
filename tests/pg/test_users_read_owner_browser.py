@@ -218,6 +218,7 @@ async def no_mutation_ui(page, transport):
 
 
 async def open_held(page, phases, target, link, expected, shell=SHELL):
+    probe=None
     if shell==SHELL:
         # Read-only diagnostic of the actual current bindings. No token,
         # name, HTML, role grant or fabricated success DTO is returned.
@@ -243,7 +244,11 @@ async def open_held(page, phases, target, link, expected, shell=SHELL):
     await link.press('Enter')
     # A fallback HTML-first request would remain held and this assertion must
     # fail. Do not change the barrier headers just to make a fallback pass.
-    await asyncio.wait_for(data.entered.wait(), 20)
+    try:
+        await asyncio.wait_for(data.entered.wait(), 20)
+    except TimeoutError:
+        raise AssertionError(dict(factory_probe=probe,html_requested=html.entered.is_set(),
+                                  data_requested=data.entered.is_set())) from None
     root = page.locator(shell)
     await expect(root).to_be_visible()
     await expect(page.locator('.halaman-memuat')).to_have_count(0)
