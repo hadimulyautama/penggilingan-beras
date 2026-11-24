@@ -76,7 +76,7 @@ async def test_optional_descriptor_failure_keeps_existing_four_frames(pg, lengka
         assert await _sidik(pg) == before
 
 
-@pytest.mark.parametrize('role,warehouse,kind', [('operator','g1','GABAH_KERING'), ('admin',None,'GABAH_KERING')])
+@pytest.mark.parametrize('role,warehouse,kind', [('operator','g1','GABAH_KERING'), ('operator','g2','BERAS_PK'), ('admin',None,'GABAH_KERING')])
 @pytest.mark.parametrize('width', [390,1280])
 async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, lengkap, monkeypatch, role, warehouse, kind, width):
     from app.web import barang_masuk_detail_bertahap as detail
@@ -118,6 +118,7 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             shell=page.locator('[data-halaman-bertahap][data-kind=barang-masuk-detail]')
             await expect(shell).to_be_visible()
             assert path not in transport['gets'][first:]
+            assert await page.locator('.bar__balik').get_attribute('href')=='/barang-masuk' or 'status=belum' in await page.locator('.bar__balik').get_attribute('href')
             await expect(shell.locator('[role=tab]')).to_have_count(4)
             for key in ('tiket','qc','riwayat','ringkasan'):
                 tab=shell.locator('[data-bm-tab='+key+']')
@@ -135,6 +136,8 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             # Native full data is installed with the tab chosen while waiting.
             await expect(page.locator('[data-bm-tab=qc]')).to_be_focused()
             assert 'tab_detail=qc' in page.url
+            await expect(page.locator('.bar__merek')).to_contain_text('Penerimaan TRX-391-')
+            assert 'Penerimaan TRX-391-' in await page.title()
             # The in-process route adapter does not expose browser-generated
             # Sec-Fetch headers. Exercise the explicit renderer negotiation
             # here; genuine document headers are covered by native HTTP.

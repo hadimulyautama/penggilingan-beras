@@ -23,6 +23,7 @@
   const back=root.querySelector('[data-bm-back]'),link=source.querySelector('a[href="'+CSS.escape(target.alamat)+'"]');
   if(!link)return null;
   if(back){back.href=location.pathname+location.search;back.textContent='Kembali ke Barang Masuk';}
+  for(const anchor of frame.querySelectorAll('a.bar__balik,a.desktop-back'))if(anchor.getAttribute('href')==='/barang-masuk')anchor.href=location.pathname+location.search;
   return {versi:1,alamat:target.alamat,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  PINDAH.aturKerangkaLangsung(function(pilihan){

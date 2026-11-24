@@ -90,6 +90,14 @@
   const previousFocus=document.activeElement;
   observer.disconnect();finished=true;controller=null;
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
+  if(detail){
+   document.title=doc.title||document.title;
+   const label=main.querySelector('.bar__merek'),freshLabel=doc.querySelector('#isi-halaman .bar__merek');
+   if(label&&freshLabel){label.textContent=freshLabel.textContent;label.setAttribute('aria-label',freshLabel.getAttribute('aria-label')||freshLabel.textContent);}
+   const crumbs=main.querySelector('.desktop-breadcrumb'),freshCrumbs=doc.querySelector('#isi-halaman .desktop-breadcrumb');
+   if(crumbs&&freshCrumbs)crumbs.replaceChildren(...Array.from(freshCrumbs.childNodes,n=>n.cloneNode(true)));
+   for(const selector of ['a.bar__balik','a.desktop-back']){const old=main.querySelector(selector),fresh=doc.querySelector('#isi-halaman '+selector);if(old&&fresh)old.setAttribute('href',fresh.getAttribute('href'));}
+  }
   const valid=()=>content.isConnected&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
   try{
    activateScripts(prepared);if(!valid())return;
