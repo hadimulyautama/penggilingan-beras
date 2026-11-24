@@ -1,12 +1,12 @@
 {
   "versi": 1,
-  "sumber": "b5d1d4d6a598bd300e66f814ff05053fc9efb294030c3c5620e135ce14404293",
+  "sumber": "fb755cac30c28b5f5e4fad3f041b06497321fca944d770275b90e645378c2a8c",
   "variants": [
     "list",
     "receipt",
     "ticket"
   ],
-  "aset_sha256": "aa4607dca6578d6136d4517d84d95ef0e44c5e1a4ca86393ccff4402eef2b58b",
+  "aset_sha256": "dfbea03e824cbcef4252f284808b92421b8ed6b19a0c42137137944570f78d49",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/layar_retur.py": "c6533fd9e0e91643f73a822f78ccf02bcedcca4661e0714576ebe66c51dcdb23",
@@ -24,7 +24,7 @@
     "app/web/templates/_retur_tiket_fakta.html": "8821ee2f7323caa0fe17e6d0199b2044680bfb38fc1c8a766e327e83a532f8c9",
     "app/web/templates/retur_baca_kerangka.html": "c0100ddffb358261201635498397177285935def2cff05be9b1ceca3e5fa9de7",
     "app/web/templates/retur_daftar.html": "e8d2980780720aa4a666ac82286165dd8d6c026af4aa482dd1e1ba1127c55167",
-    "app/web/templates/retur_detail.html": "87bcfb2ca0bbf23ded8dccc9dc1ad82d9dcf3be335010a1b7e4b55b6476eb1cc",
+    "app/web/templates/retur_detail.html": "3282bf728c2cd286affbb6757e8f88866574ed5af3bec77a9db4ded1d710c78a",
     "app/web/templates/retur_tiket.html": "071136bd8215594026615c962591c0b67f8356287107f4f267c6f860186916fc",
     "hmu_tampilan/static/pengiriman-kontrol.css": "4875b2fb270e6604adc8e23008adbffdf2235bc67ce2fc771a1b390993f63961",
     "hmu_tampilan/static/pengiriman-retur.css": "e48dcdf3f27cfb7a5382924538d31eafb39f50366719dd04456ace70d88afc71",

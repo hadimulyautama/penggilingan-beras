@@ -2,7 +2,7 @@
 {% import '_detail_kirim_tabs.html' as dt with context %}
 {% import '_stok.html' as st with context %}{% set kg=st.kg %}
 {% block judul %}Detail retur {{ retur.kode }}{% endblock %}
-{% block isi %}<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}"><style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/detail_kirim_retur.css?v=2');</style>
+{% block isi %}<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/detail_kirim_retur.css?v={{ VERSI }}">
 <div class="riwayat-detail" data-detail-tab>
 {% set tab_pengiriman='retur' %}{% include "_pengiriman_tabs.html" %}
 <a class="detail-kirim-kembali" href="{{ dt.kembali('/retur') }}">← Kembali ke Barang Retur</a>
@@ -66,4 +66,4 @@
     </dl>{% endif %}
     {% if not tiket %}<p class="bantu">Tiket tidak dapat ditemukan. Data timbang saat penerimaan tetap tersimpan di atas.</p>{% endif %}
   </section>
-</div>{{ dt.buka('riwayat') }}<section class="riwayat-detail__card"><h2>Identitas penerimaan</h2><dl class="detail-kirim-fakta"><div><dt>Kode</dt><dd>{{ retur.kode }}</dd></div><div><dt>Penerima</dt><dd>{{ penerima }}</dd></div><div><dt>Waktu</dt><dd>{{ retur.waktu|jam }}</dd></div><div><dt>Gudang</dt><dd>{{ gudang }}</dd></div><div><dt>Catatan</dt><dd>{{ retur.catatan or 'Tidak ada catatan' }}</dd></div></dl>{% if pengajuan_id %}<a class="btn" href="/retur/pengajuan/{{ pengajuan_id }}?tab_detail=riwayat">Riwayat pemeriksaan, koreksi dan bukti Pos Timbang</a>{% else %}<p>Pengajuan asal belum tercatat pada data lama ini.</p>{% endif %}</section></div></div><script src="/static/detail_kirim_retur.js?v=1" defer></script>{% endblock %}
+</div>{{ dt.buka('riwayat') }}<section class="riwayat-detail__card"><h2>Identitas penerimaan</h2><dl class="detail-kirim-fakta"><div><dt>Kode</dt><dd>{{ retur.kode }}</dd></div><div><dt>Penerima</dt><dd>{{ penerima }}</dd></div><div><dt>Waktu</dt><dd>{{ retur.waktu|jam }}</dd></div><div><dt>Gudang</dt><dd>{{ gudang }}</dd></div><div><dt>Catatan</dt><dd>{{ retur.catatan or 'Tidak ada catatan' }}</dd></div></dl>{% if pengajuan_id %}<a class="btn" href="/retur/pengajuan/{{ pengajuan_id }}?tab_detail=riwayat">Riwayat pemeriksaan, koreksi dan bukti Pos Timbang</a>{% else %}<p>Pengajuan asal belum tercatat pada data lama ini.</p>{% endif %}</section></div></div><script src="/static/detail_kirim_retur.js?v={{ VERSI }}" defer></script>{% endblock %}

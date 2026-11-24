@@ -91,6 +91,21 @@ def test_native_empty_list_keeps_both_tables_and_existing_single_messages():
         assert not table.select('a,button,input,form')
 
 
+def test_receipt_native_assets_use_release_cap_and_prepare_styles_before_install():
+    source=(ROOT/'app/web/templates/retur_detail.html').read_text()
+    opening=source.split('{% block isi %}',1)[1].split('<div class="riwayat-detail"',1)[0]
+    env=Environment(undefined=StrictUndefined,autoescape=True)
+    styles=BeautifulSoup(env.from_string(opening).render(VERSI='fixture-release-cap'),'html.parser')
+    assert [n['href'] for n in styles.select('link[rel=stylesheet]')]==[
+        '/static/pengiriman-retur.css?v=fixture-release-cap',
+        '/static/riwayat.css?v=fixture-release-cap',
+        '/static/detail_kirim_retur.css?v=fixture-release-cap']
+    assert not styles.select('style') # No hidden @import can outlive the prepared read.
+    script=source[source.index('<script src="/static/detail_kirim_retur.js'):].split('</script>',1)[0]+'</script>'
+    native=BeautifulSoup(env.from_string(script).render(VERSI='fixture-release-cap'),'html.parser')
+    assert native.script['src']=='/static/detail_kirim_retur.js?v=fixture-release-cap'
+
+
 def test_optional_metadata_uses_actual_predicate_same_actor_and_default_deny(monkeypatch):
     native,_=fake_native(monkeypatch);monkeypatch.setattr(ui,'aset',lambda:dict(sumber=PROGRAM))
     actor=SimpleNamespace(harus_ganti_sandi=False);req=request(state={'akun':actor})
@@ -183,6 +198,15 @@ def test_fixed_native_baseline_preserves_all_guards_readers_writers_and_mutable_
         assert fingerprint(altered)!=baseline['functions'][writer.name]
     for path,sha in receipt['untouched_sha256'].items():
         text=(ROOT/path).read_text()
+        if path.endswith('retur_detail.html'):
+            # Only the reviewed asset transport change is exempted from the
+            # old whole-template hash. All field/status/tab/data markup remains
+            # compared to the original immutable baseline below.
+            links='<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}"><link rel="stylesheet" href="/static/detail_kirim_retur.css?v={{ VERSI }}">'
+            script='/static/detail_kirim_retur.js?v={{ VERSI }}'
+            assert text.count(links)==1 and text.count(script)==1
+            text=text.replace(links,"<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/detail_kirim_retur.css?v=2');</style>",1)
+            text=text.replace(script,'/static/detail_kirim_retur.js?v=1',1)
         if path.endswith('retur_daftar.html'):
             text=text.replace(' data-retur-applications','').replace(' data-retur-receipts','')
             text=text.replace('<div class="tabel-standar__scroll">','{% if pengajuan %}\n<div class="tabel-standar__scroll">',1)

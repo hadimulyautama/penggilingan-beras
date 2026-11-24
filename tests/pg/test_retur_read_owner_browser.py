@@ -153,7 +153,12 @@ async def receipt_link(page,client,rid):
 
 
 async def read_ready(page):
-    await expect(page.locator(SHELL)).to_have_count(0,timeout=20000)
+    try:
+        await expect(page.locator(SHELL)).to_have_count(0,timeout=20000)
+    except AssertionError as error:
+        # Only the read-status text; never dump secret-bearing native HTML.
+        status=await page.locator(SHELL+' [data-retur-baca-status]').inner_text()
+        raise AssertionError('Retur native read not installed: '+status) from error
     await expect(page.locator(READY)).to_be_visible()
 
 
