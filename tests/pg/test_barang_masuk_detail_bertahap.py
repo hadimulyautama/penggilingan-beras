@@ -95,8 +95,11 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
         async with peramban(c,width) as (page,transport):
             await page.goto(BASE+'/barang-masuk')
             await expect(page.locator('[data-bm-page]:not([data-bm-shell])')).to_be_visible()
-            link=page.locator('a.masuk-baris[href^="'+path+'?"]')
+            link=page.locator('a[href^="'+path+'?"]')
             await expect(link).to_have_count(1)
+            parent=link.locator('xpath=ancestor::details[1]')
+            if await parent.count() and not await parent.get_attribute('open') is not None:
+                await parent.locator(':scope > summary').click()
             target=await link.get_attribute('href')
             entered,release=asyncio.Event(),asyncio.Event()
             transport['gates'][api]=(entered,release)
