@@ -53,6 +53,8 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     path='/'+path
     if not READS.fullmatch(path):missing()
     scope=await load_scope(reader)
+    # Presentation correlation only; native ownership is still checked below.
+    request.state.portal_native_address=request.url.path+("?"+request.url.query if request.url.query else "")
     req=native_request(request,path,scope)
     account=req.state.akun
     q=req.query_params

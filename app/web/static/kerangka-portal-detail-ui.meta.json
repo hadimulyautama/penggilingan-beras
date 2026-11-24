@@ -1,0 +1,20 @@
+{
+  "versi": 1,
+  "sumber": "bde42f4184fa1c54777a98d1c095880c117f85c76a66f10446a2d4d3b109737b",
+  "aset_sha256": "f8062fb5da53077670658f1e660b1f0c48914c7e75c7203d57334c5c6aac6393",
+  "inputs": {
+    "app/web/portal/detail_kerangka.py": "f70912c793b5f0fb8c72b3078464af2db141386c3007e30688f6361f5823b283",
+    "app/web/portal/detail_catalog.py": "d14d9f22ddc94bdc5d995213466ab52ac54c3fb664e7e123c9ea6396e32bab1a",
+    "app/web/static/portal-detail-kerangka.js": "ae332ed894ff2c6c5241edc40149aef89f6e9c317e5fe9302bb6ea19a3711017",
+    "app/web/templates/portal/detail_kerangka.html": "79f3bf55c2ec836cfd9ae433806c3e8f6177dac4637f6569ded66e36a688135b",
+    "scripts/buat_kerangka_portal_detail.py": "4e2e9b8e46fa854c538e2b82fb6aa77c9efdc14663a2ad47b7a9351b7cf03cd2",
+    "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
+    "app/web/templates/detail_giling.html": "b4e51584f43ccb892c269cbd7d678fc20c7c5115965b69ed6988eee2d53991e1",
+    "app/web/templates/barang_masuk_detail_lama.html": "148ed7d0c2398d8fe6850e2058b0c6f1872eb1de60a4efc87556ce95de36ed64",
+    "app/web/portal/detail.py": "f25e70e5e7b6a2d5858ddc861f977ccfdcbb879d80025db9ad465617ea1abeb3",
+    "app/web/portal/transaksi_detail.py": "52fe4cf27d215746bbf4990a720f6f9e3f952a6849576051b5e856b2ea069943",
+    "app/web/portal/proses_ringkas.py": "373849265bd6609a6bfb17d620539791b9b8bdfde9b2da64435b10c402bb2741",
+    "app/web/templates/portal/_inti_proses_ringkas.html": "457d0687ab76fa85ba5aa83b059809a6c738d85d60efa544fe7637173d3bb159",
+    "app/web/templates/portal/_penerimaan_qc.html": "07b5db8cb88d0a97415cc2e5ec3d96d7c76b892dce94162d3aa0e7a8b198f986"
+  }
+}

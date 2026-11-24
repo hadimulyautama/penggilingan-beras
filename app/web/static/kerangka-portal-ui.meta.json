@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "90105085815a02894e68f76878d082b949b365dbacc8d8fa24be869a34972dd3",
+  "sumber": "8423b0f5400788ec9caf29512182e74a06bc0061844fb0c776f21acde79b8b59",
   "schemas": {
     "/ringkasan": {
       "labels": {
@@ -210,13 +210,13 @@
       "css": ""
     }
   },
-  "aset_sha256": "8f1a2e6f594c5f0057cd6b300b4cf28212fbcf7763eb95d043c9d10d2eabe986",
+  "aset_sha256": "f6e25e8ffffde3151c1530e197999dcbee20d41a73211cfa477969a7d3f6ea66",
   "inputs": {
     "app/services/kelompok_kerja.py": "7414e41a711bdce7bf907854eb7b30b71aecaa499c84796f64142365db627509",
     "app/web/portal/beranda.py": "c706a77e17270fcdea6e5084dc04613edfa89d82b4e4ee5c81fb2b5fef6bd903",
     "app/web/portal/kerangka.py": "f6f031cedbcd0fc238a6d520a201ee3d07b2975d816299810d78e590d65ff814",
     "app/web/portal/navigation.py": "4bc588e5d5b4cd99fad0bb3d8ec5a9b8c493a4a1fae3d589f6d53859c13221ee",
-    "app/web/portal/routes.py": "a37e4e0aa0e7d91cebfa638a277db20686fa55aa638bbf1d241d406662b8109b",
+    "app/web/portal/routes.py": "d7409291109d51633010804632a41a84c89a0ff9cd0b78cccbe3e72ea032326c",
     "app/web/static/daftar_pengiriman.css": "d4eae5812f6f15bd23c3cbf53cbd39b056e63a1f4be018b97c73e2fdfda12c3b",
     "app/web/static/portal-kerangka.js": "6f2a69260405121687a51342a592e56426c262958b3ca1101025a71c18b59100",
     "app/web/templates/_pengiriman_riwayat_daftar.html": "550d505da037c833c92c14c1343b1c0d4faaf71c55d9839599eaf574cab7ac35",

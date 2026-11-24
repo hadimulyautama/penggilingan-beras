@@ -276,6 +276,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
     content=read_only(body,path,origin=str(request.base_url),report_available=report_available)
     from .identitas_proses import tampilkan_detail
     content=tampilkan_detail(content,ctx,env)
+    from .detail_catalog import dekorasi as detail_catalog
+    content=detail_catalog(request,name,ctx,content)
     return shell(request,content,status_code=status_code,title=ctx.get('page_title') or ctx.get('breadcrumb_detail') or 'Portal pelanggan')
 
 
