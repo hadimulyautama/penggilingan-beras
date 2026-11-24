@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "9c40ec93bfbb0d45ddc2a8e718d59f2b9d5c13b0800c9e278b0e578ea0a31a62",
-  "aset_sha256": "1297db255e5df1a481af969d8938672933d910ada21341f2cf93f6111563930f",
+  "sumber": "4b31e3880566925e20b5ca660961c8dae11ddcc0d42859a66c4775863b6d1387",
+  "aset_sha256": "0432fea6156a2d1b4058e0fca44e3126a6fe79e80a647e39d29d890e7f28d322",
   "variants": [
     "/riwayat-giling",
     "/riwayat-sosoh",
@@ -16,12 +16,13 @@
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
     "app/web/layar_riwayat.py": "c721fa123d94696047e16cfc0dd8ad4a1d9202bdbdf49efe8e7d7c1c2ad6e5a8",
     "app/web/riwayat_daftar_metadata.py": "54a0662ef1d848e2b6e5c54be3cba7d7c1be55aa89b873732dbec2d498fdd7d6",
-    "app/web/static/kerangka-riwayat-ui-runtime.js": "2daf5545812f5ee79ffb913366eee6f353f1c4404114e35c2bba150e985a582f",
+    "app/web/static/kerangka-riwayat-ui-runtime.js": "fc474eb828d57cd76ebe91b06683a5fd862842263e79a13f11044a09a0919d2c",
     "app/web/static/padi-baca-native.js": "4174ed37b5589ac872090ab692609314d7451590c6e2c9e534f95307959620dd",
     "app/web/static/riwayat-daftar-native.js": "6695eb675073a8169386f0aab7d783ba37c9be9bc56a3639dd514e95f1d233d9",
     "app/web/static/riwayat-daftar-proses.css": "beb450a127ddb01278ca7ade3bfefe444ebd1e9d401c781ca8fac6eb1575947f",
     "app/web/static/riwayat-daftar-proses.js": "6d48099e3474882bbd25c48a678ceed7e08fb48ef172748f8853303a5820c5ec",
     "app/web/static/riwayat-giling-daftar.css": "03b1149f6d158e28cbd6a8295aba75d0a9e5b71755f3a77651f64dd893544a0d",
+    "app/web/static/riwayat-navigasi-native.js": "bf8a819d8d731dbbce11b9947ab47793e8cde5a1ec0c4415a601d4c14fb1ba6b",
     "app/web/static/riwayat-qc-desain.css": "0f185a046924ffc1c0c143b9c38a4f8262be55da221063c1ac814101cf2b8d08",
     "app/web/static/riwayat-qc-desain.js": "3727d1fc3372ba9f1502724c916f3bc3d3e746a0c2be8f55929046de0f979696",
     "app/web/static/riwayat-sosoh-desain.css": "682db7c58286abfa6f085a3270e40a8382cdd70ecab540c9b4e44fde376fad09",
@@ -47,7 +48,7 @@
     "hmu_tampilan/templates/_laporan_kontrol.html": "a3e19c3b16b1d90b5e30bd917643a38bd5e0452606c3a47c97797e701f658243",
     "hmu_tampilan/templates/_laporan_navigasi.html": "4dacb95d9e4f8419be4f197d12c85574b0ccd19afd2a8b5e17b423a8ba7dd1f2",
     "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
-    "scripts/buat_kerangka_riwayat.py": "394ff395b09e0b156add3ea6529a413dccf589e2d9fa0119dc07aaee05067f7a",
+    "scripts/buat_kerangka_riwayat.py": "1e7b868ad3c216ccc00c2aec453da3994991572a122aec7ce2bdc02cd03bc65e",
     "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
   }
 }

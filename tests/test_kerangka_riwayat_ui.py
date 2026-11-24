@@ -109,6 +109,21 @@ def test_parent_inheritance_and_native_navigation_are_source_derived_without_row
     assert all("@import" not in text for text in data["styles"].values())
 
 
+def test_each_public_history_restores_app_navigation_adapter_after_family_scripts():
+    _, meta, data = built()
+    path = "app/web/static/riwayat-navigasi-native.js"
+    source = (ROOT / path).read_text()
+    assert "document.currentScript" not in source
+    assert meta["inputs"][path] == hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+    expected = source.replace("</script", "<\\/script")
+    for variant in data["variants"].values():
+        doc = BeautifulSoup(variant["html"], "html.parser")
+        scripts = doc.select("script[data-history-script-ref]")
+        adapters = doc.select("script[data-history-navigation-adapter]")
+        assert len(adapters) == 1 and adapters[0] is scripts[-1]
+        assert data["scripts"][adapters[0]["data-history-script-ref"]] == expected
+
+
 def test_runtime_schema_uri_and_tenant_session_negative_contracts_are_pure():
     node = shutil.which("node")
     assert node, "Node is required for the pure runtime contract test"

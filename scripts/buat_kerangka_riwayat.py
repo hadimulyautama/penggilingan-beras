@@ -140,6 +140,16 @@ def build():
                 raise ValueError("Readonly History script requires review")
             node.attrs.clear()
             node.string = program.replace("</script", "<\\/script")
+        # Replacing BM's content markers also removes its app-level History
+        # navigation adapter. Restore it AFTER the native family scripts so
+        # pending tab/select changes keep using current metadata/provider;
+        # the original native location.assign remains its guarded fallback.
+        navigation = asset("/static/riwayat-navigasi-native.js")
+        if "document.currentScript" in navigation:
+            raise ValueError("History navigation adapter requires explicit script binding")
+        adapter = doc.new_tag("script", attrs={"data-history-navigation-adapter": ""})
+        adapter.string = navigation.replace("</script", "<\\/script")
+        doc.append(adapter)
         crumb = env.get_template("_breadcrumb.html").render(rantai=breadcrumb.susun(
             path, {"LAPORAN_NAV": context["LAPORAN_NAV"]}, meta["title"]))
         variants[path] = dict(title=meta["title"], html=str(doc), breadcrumb=crumb)
