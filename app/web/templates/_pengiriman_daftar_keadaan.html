@@ -8,5 +8,6 @@
 {% else %}
 {% set body_row %}<tr><td colspan="4"><strong>Belum ada pengiriman berjalan</strong><p>Perintah yang menunggu pengeluaran atau verifikasi akan tampil di sini.</p></td></tr>{% endset %}
 {% endif %}
-{{ native_table|replace('<tbody>', '<tbody>' ~ body_row)|safe }}
+{% set replacement %}<tbody>{{ body_row }}{% endset %}
+{{ native_table|replace('<tbody>', replacement) }}
 {% endif %}

@@ -29,6 +29,7 @@ async def test_shipping_shell_and_native_filtered_reader_have_same_columns_and_s
                 shell=await client.get('/barang-keluar'+query,headers=DOCUMENT)
                 assert shell.status_code==200
                 doc=BeautifulSoup(shell.text,'html.parser')
+                assert '&lt;tbody&gt;' not in shell.text
                 root=doc.select_one('[data-halaman-bertahap][data-kind="pengiriman"]')
                 assert root and not root.select('h1,.halaman-memuat,[data-detail-keluar]')
                 assert [len(x) for x in columns(root)]==[4,7]
@@ -56,7 +57,18 @@ async def test_shipping_shell_and_native_filtered_reader_have_same_columns_and_s
 
 @pytest.mark.parametrize('width',[390,1280])
 @pytest.mark.parametrize('role',['admin','operator'])
-async def test_shipping_document_keeps_native_controls_while_data_is_pending(pg,gudang,width,role):
+async def test_shipping_document_keeps_native_controls_while_data_is_pending(pg,gudang,width,role,monkeypatch):
+    from app.web import halaman_bertahap
+    negotiation=[]
+    original=halaman_bertahap.memakai_kerangka
+    def observed(request,kind):
+        value=original(request,kind)
+        if kind=='pengiriman':negotiation.append(dict(path=request.url.path,
+            mode=request.headers.get('sec-fetch-mode'),dest=request.headers.get('sec-fetch-dest'),
+            requested=request.headers.get('x-kerangka-halaman'),
+            reading=getattr(request.state,'isi_halaman_bertahap',False),result=value))
+        return value
+    monkeypatch.setattr(halaman_bertahap,'memakai_kerangka',observed)
     uid=gudang['adm'] if role=='admin' else gudang['op']
     async with await _klien(pg,uid,'shipping-browser-'+role) as client:
         before=await _sidik(pg)
@@ -67,7 +79,7 @@ async def test_shipping_document_keeps_native_controls_while_data_is_pending(pg,
                 response=await page.goto(BASE+'/barang-keluar',wait_until='load')
                 assert response.status==200
                 root=page.locator('[data-halaman-bertahap][data-kind="pengiriman"]')
-                await expect(root).to_be_visible()
+                await expect(root,'Native shipping negotiation: '+str(negotiation)).to_be_visible()
                 assert not transport['errors'],transport['errors']
                 try:
                     await asyncio.wait_for(entered.wait(),20)
