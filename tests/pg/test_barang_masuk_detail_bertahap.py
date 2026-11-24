@@ -127,6 +127,7 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
                 await tab.focus();await tab.press('Enter')
                 await expect(shell.locator('[data-bm-detail-panel='+key+']' )).to_be_visible()
                 await expect(tab).to_be_focused()
+            await shell.locator('[data-bm-tab=riwayat]').click()
             await expect(shell.locator('[data-bm-detail-panel=riwayat] th').first).to_be_visible()
             assert (await shell.locator('[data-bm-detail-panel=riwayat] th').first.bounding_box())['width']>10
             await shell.locator('[data-bm-tab=qc]').click()
