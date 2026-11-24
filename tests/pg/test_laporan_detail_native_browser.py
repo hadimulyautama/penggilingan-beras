@@ -55,7 +55,7 @@ async def test_report_catalog_first_click_structure_before_html_and_data(pg,stok
                     await expect(page.locator('.bar__balik')).to_have_attribute('href','/laporan')
                     release.set();await expect(root).to_have_count(0)
                     await expect(page.locator('[data-laporan-detail]')).to_be_visible()
-                    await expect(page.locator('.lp-panel-aksi a.lp-pdf-utama')).to_have_attribute('href',__import__('re').compile('^/laporan-periode/'+code+'\.pdf'))
+                    await expect(page.locator('.lp-panel-aksi a.lp-pdf-utama')).to_have_attribute('href',__import__('re').compile('^/laporan-periode/'+code+r'\.pdf'))
                     # Data-dependent Sosoh columns come from its fresh DTO;
                     # true empty still has actual headers + one message row.
                     data=json.loads(await page.locator('#laporan-data').text_content())
@@ -87,7 +87,7 @@ async def test_report_custom_filter_draft_and_abandoned_get_never_post(pg,stok_l
                 await expect(root.locator('[data-detail-native-status]')).to_contain_text('Pilihan periode berubah')
                 await expect(root.locator('input[name=dari]')).to_have_value('2026-11-01')
                 await root.locator('.lp-tampilkan').click()
-                await expect(page).to_have_url(__import__('re').compile('/laporan/penggilingan\?periode=khusus&dari=2026-11-01&sampai=2026-11-24'))
+                await expect(page).to_have_url(__import__('re').compile(r'/laporan/penggilingan\?periode=khusus&dari=2026-11-01&sampai=2026-11-24'))
                 # Full document uses the same small native framework first.
                 await expect(page.locator('[data-laporan-detail]')).to_be_visible()
                 assert not t['posts'] and not t['errors'],t

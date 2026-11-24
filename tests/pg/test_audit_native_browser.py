@@ -56,7 +56,7 @@ async def test_audit_first_click_dirty_filter_empty_and_abandoned_get(pg,stok_le
                 await expect(root.locator('[data-audit-native-status]')).to_contain_text('Pilihan berubah')
                 await expect(search).to_have_value('EXACT-NO-MATCH-FIXTURE')
                 await search.press('Enter')
-                await expect(page).to_have_url(__import__('re').compile('/audit\?.*cari=EXACT-NO-MATCH-FIXTURE'))
+                await expect(page).to_have_url(__import__('re').compile(r'/audit\?.*cari=EXACT-NO-MATCH-FIXTURE'))
                 await expect(root).to_have_count(0)
                 await expect(page.locator('table.audit-table thead th')).to_have_count(4)
                 await expect(page.locator('table.audit-table tbody tr')).to_have_count(1)
@@ -66,7 +66,7 @@ async def test_audit_first_click_dirty_filter_empty_and_abandoned_get(pg,stok_le
                 entered2,release2,done=asyncio.Event(),asyncio.Event(),asyncio.Event()
                 t['gates']['/audit']=(entered2,release2);t['completed']['/audit']=done
                 await page.locator('input[type=search]').fill('')
-                await page.locator('input[type=search]').press('Enter')
+                await page.locator('input[type=search]').press('Enter',no_wait_after=True)
                 await asyncio.wait_for(entered2.wait(),20)
                 if width<900:await page.locator('#buka-laci').click()
                 await page.locator('#laci a[href="/barang-masuk"]').click()
