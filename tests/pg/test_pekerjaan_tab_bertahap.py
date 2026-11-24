@@ -29,12 +29,13 @@ async def test_dua_tab_kerangka_tanpa_antrean_dan_isi_setara_native(pg,lengkap,m
             assert shell.status_code==200
             doc=BeautifulSoup(shell.text,'html.parser');root=doc.select_one('[data-halaman-bertahap]')
             assert root and len(root.select('thead th'))==5
-            selected=root.select_one('nav[aria-label="Tab pekerjaan"] [aria-current="page"]')
-            assert selected and ('Perlu tindakan' if tab=='tindakan' else 'Berjalan') in selected.get_text(), (query, [str(n) for n in root.select('nav')])
+            selected=doc.select_one('nav[aria-label="Tab pekerjaan"] [aria-current="page"]')
+            assert selected and ('Perlu tindakan' if tab=='tindakan' else 'Berjalan') in selected.get_text(), (query, [str(n) for n in doc.select('nav[aria-label="Tab pekerjaan"]')])
             assert root.select_one('input[name=cari]') is not None
             assert len(root.select('select[name=jenis]'))==1
             assert root.select_one('select[name=pemasok]').has_attr('disabled')
-            assert all(x.has_attr('disabled') for x in root.select('[data-pk-cetak]'))
+            prints=doc.select('[data-lk-cetak], [data-pk-cetak]')
+            assert prints and all(x.has_attr('disabled') for x in prints)
             assert not root.select('[data-post],[data-kirim],.benda[data-cari],.proses-aktif-list__row')
             native=await c.get(path,headers={'X-Pindah':'1'})
             data=await c.get('/api/halaman-bertahap/pekerjaan'+('?' +query if query else ''))
