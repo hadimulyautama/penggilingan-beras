@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader, select_autoescape
 from starlette.requests import Request
 
-from app.web.riwayat_detail_native import VARIANTS, deskripsi, kerangka, metadata, back_html
+from app.web.riwayat_detail_native import VARIANTS, deskripsi, kerangka, metadata, back_html, kembali_qc
 from app.web.riwayat_detail_catalog import katalog
 from app.web.native_detail_chrome import judul, kontrol_bar, bagian_judul
 
@@ -241,3 +241,37 @@ def test_back_href_autoescapes_and_source_empty_qc_tables_are_not_changed():
     native=BeautifulSoup(source,'html.parser')
     assert len(native.select('table thead'))==3
     assert all(head.select('th') for head in native.select('table thead'))
+
+
+@pytest.mark.parametrize('query,referer,expected', [
+    ({},'https://uji/pekerjaan?tab=berjalan','/pekerjaan?tab=berjalan'),
+    ({'kembali_qc':'/riwayat-qc/pk-luar'},'https://uji/pekerjaan?tab=berjalan','/pekerjaan?tab=berjalan'),
+    ({'kembali_qc':'/stok?tab=produk'},'https://uji/pekerjaan','/stok?tab=produk'),
+    ({'kembali_qc':'/riwayat-qc/pk-luar'},'https://other.invalid/pekerjaan','/riwayat-qc/pk-luar'),
+    ({'kembali_qc':'/pengaturan','kembali_jasa':'/jasa?cari=contoh'},'https://uji/pekerjaan','/jasa?cari=contoh'),
+    ({},'https://uji/pengaturan','/riwayat-qc/pk-luar'),
+    ({},'https://uji/pelanggan/pekerjaan','/riwayat-qc/pk-luar'),
+    ({},'https://uji/riwayat-qc/pk-luar/PK-1','/riwayat-qc/pk-luar'),
+    ({},'https://[broken','/riwayat-qc/pk-luar'),
+])
+def test_qc_return_referer_matches_exact_native_navigation_ast(query,referer,expected):
+    from urllib.parse import urlencode, urlsplit
+    from app.web.detail_qc import ASAL
+    request=Request(dict(type='http',scheme='https',method='GET',path='/riwayat-qc/pk-luar/PK-1',
+                         query_string=urlencode(query).encode(),headers=[(b'host',b'uji'),(b'referer',referer.encode())]))
+    # Execute only the exact native navigation AST. No synthetic kartu/rounds
+    # DTO is fabricated just to call unrelated mean/selection code.
+    tree=ast.parse((ROOT/'app/web/detail_qc.py').read_text())
+    native=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='konteks')
+    q=next(n for n in native.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='q' for t in n.targets))
+    start=next(i for i,n in enumerate(native.body) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='kembali' for t in n.targets))
+    body=native.body[start:start+3]
+    assert [type(n) for n in body]==[ast.Assign,ast.For,ast.If]
+    function=ast.FunctionDef(name='native_back',args=ast.arguments(posonlyargs=[],args=[ast.arg(arg='request'),ast.arg(arg='jenis')],kwonlyargs=[],kw_defaults=[],defaults=[]),body=[q,*body,ast.Return(value=ast.Name(id='kembali',ctx=ast.Load()))],decorator_list=[])
+    program=ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[]))
+    scope={'re':re,'urlsplit':urlsplit,'ASAL':ASAL}
+    exec(compile(program,'native_detail_qc_navigation','exec'),scope)
+    actual=kembali_qc(request,'pk-luar')
+    assert actual==expected==scope['native_back'](request,'pk-luar')
+    label=BeautifulSoup(back_html(metadata('qc-pk-luar'),actual,'pk-luar'),'html.parser').a.get_text()
+    assert label==('← Kembali ke Riwayat QC PK Luar' if actual=='/riwayat-qc/pk-luar' else '← Kembali ke halaman asal')

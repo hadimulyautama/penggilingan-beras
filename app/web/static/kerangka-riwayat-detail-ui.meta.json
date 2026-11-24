@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "2a55feed163352ba3058b1cbf46a86af87cb3f52c291a44becc89aa6945c920e",
+  "sumber": "e585dc5f355de66a6d7201f3bb4749cf293f97d2d00db88af6c02fb719423dd2",
   "variants": [
     "riwayat-giling",
     "riwayat-sosoh",
@@ -12,14 +12,15 @@
     "qc-beras-hasil-sosoh",
     "qc-beras-daftar"
   ],
-  "aset_sha256": "da423294df99e3b4286cea24afef62c73bf687cc9a7ac8e5c203b44ffae13e20",
+  "aset_sha256": "8ad191069fbf5cad97fa0cd77b7db255c0ceb4a0bc72b0a48042e7b2f2e04ea8",
   "inputs": {
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/detail_qc.py": "579d333adbb80689c66d3a7208df6f86b7e110048a872c583662ae9b160a5459",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
     "app/web/layar_riwayat.py": "3793634b304de2001022264d5dfea5b6f9ae38b258b6c45f8bee6cac2f590afa",
     "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
-    "app/web/riwayat_detail_native.py": "d7a9cbc7db6dce7a2c1a9f6cc7ee05c0d54acbef53340e19c7b325776ad0f77f",
+    "app/web/riwayat_detail_native.py": "ef22472b6ad408197305e7c79d10fd794337879dca0b7e3a1dc83412acc87a3d",
     "app/web/static/detail_pendinginan.css": "23670e14c034b9f4ed3cfe64388044718cfe279e97327fbfa67b86a8e2f081fd",
     "app/web/static/detail_pengeringan.css": "3513da10fa157ee9bac229be0872fc1fbc3d86c5fb7077c9eb944bc7c9a8737f",
     "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "7bfa34b91d849bfbb564922ba40f09630fa0e36145e70b80ef190bc9fd47ca55",

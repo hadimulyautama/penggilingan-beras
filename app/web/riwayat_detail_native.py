@@ -171,6 +171,8 @@ def metadata(variant):
                     raise ValueError('Kolom QC beras native berubah')
                 tables.append(columns)
         family = 'qc'
+        if not rice:
+            paths.append(ROOT / 'app/web/detail_qc.py')
     slots = {('k', 'kode'): None, ('d', 'kode'): None, ('k', 'ref'): None}
     document_parts = _chrome().bagian_judul(text, slots)
     back = re.search(r'<a\b[^>]*class=[\"\'][^\"\']*\b(?:rhs-back|riwayat-detail__back)\b[^\"\']*[\"\'][^>]*>.*?</a>', text, re.S)
@@ -187,6 +189,32 @@ def back_html(shape, kembali, jenis, kembali_kerja=None):
     return Environment(autoescape=True, undefined=StrictUndefined).from_string(shape['back_source']).render(
         kembali=kembali, jenis=jenis, judul=shape['title'], dari_riwayat=True,
         request={'query_params': {'kembali_kerja': kembali_kerja}})
+
+
+def kembali_qc(request, jenis):
+    """Subset navigasi detail_qc.konteks; tidak membaca putaran atau angka QC."""
+    from urllib.parse import urlsplit
+    from app.web.detail_qc import ASAL
+    parent = default = '/riwayat-qc/' + jenis
+    for key in KEMBALI_QC:
+        value = request.query_params.get(key, '')
+        try:
+            target = urlsplit(value)
+        except ValueError:
+            continue
+        if not target.scheme and not target.netloc and re.fullmatch(ASAL, target.path):
+            parent = value
+            break
+    # Native masih memeriksa Referer ketika return eksplisit sama dengan
+    # parent default. Ini berbeda dari for/else yang hanya melihat ada key.
+    if parent == default:
+        try:
+            target = urlsplit(request.headers.get('referer', ''))
+        except ValueError:
+            target = None
+        if target and target.netloc == request.url.netloc and re.fullmatch(ASAL, target.path):
+            parent = target.path + ('?' + target.query if target.query else '')
+    return parent
 
 
 def memakai_dokumen(request):
@@ -285,26 +313,7 @@ async def kerangka(request, akun):
         from app.web.layar_pekerjaan import konteks_aman
         parent = konteks_aman(request.query_params.get('kembali_kerja')) or parent
     elif spec['variant'].startswith('qc-') and kind != 'beras-hasil-sosoh':
-        # Sama dengan bagian navigasi detail_qc.konteks, tanpa membuat kartu
-        # kosong demi menghitung putaran/catatan yang belum dibaca.
-        from urllib.parse import urlsplit
-        from app.web.detail_qc import ASAL
-        for key in KEMBALI_QC:
-            value = request.query_params.get(key, '')
-            try:
-                target = urlsplit(value)
-            except ValueError:
-                continue
-            if not target.scheme and not target.netloc and re.fullmatch(ASAL, target.path):
-                parent = value
-                break
-        else:
-            try:
-                target = urlsplit(request.headers.get('referer', ''))
-            except ValueError:
-                target = None
-            if target and target.netloc == request.url.netloc and re.fullmatch(ASAL, target.path):
-                parent = target.path + ('?' + target.query if target.query else '')
+        parent = kembali_qc(request, kind)
     spec['back_html'] = back_html(shape, parent, kind, request.query_params.get('kembali_kerja'))
     template = ('riwayat_detail_native.html' if spec['variant'].startswith('riwayat-') else
                 'qc_beras_native.html' if kind == 'beras-hasil-sosoh' else 'qc_detail_native.html')
