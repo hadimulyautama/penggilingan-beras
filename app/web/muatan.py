@@ -65,6 +65,9 @@ async def papan(db, perintah=None):
 async def halaman(request:Request,perintah:int|None=None,akun=Depends(butuh_akun)):
     boleh=await boleh_catat(akun.user)
     wajib(boleh or can_see_financials(akun.user))
+    from app.web.muatan_kerangka import kerangka as kerangka_muatan
+    shell=await kerangka_muatan(request,akun,boleh=boleh)
+    if shell is not None:return shell
     async with SessionLocal() as db:
         from app.web.selesai_muatan import papan_selesai
         data=await papan_selesai(db,perintah)

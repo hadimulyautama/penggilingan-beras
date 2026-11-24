@@ -1,0 +1,30 @@
+{% extends 'base.html' %}{% block judul %}Catat muatan{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/muat-ringkas.css?v={{ VERSI }}&amp;mr=20261107.2">
+<style>@media(max-width:600px){[data-muatan-native] .mr-table{display:table}[data-muatan-native] .mr-table thead{display:table-header-group}[data-muatan-native] .mr-table tbody{display:table-row-group}[data-muatan-native] .mr-table tr{display:table-row}[data-muatan-native] .mr-table th,[data-muatan-native] .mr-table td{display:table-cell;padding:.5rem .25rem}[data-muatan-native] .mr-table th:first-child{width:28%}}</style>
+<section class="mr" data-muatan-native data-url="{{ MUAT_SHELL.alamat }}" data-stamp="{{ MUAT_SHELL.stamp }}">
+<h1 id="judul-muatan">Muat pengiriman</h1>
+<p>Setelah selesai dimuat secara fisik, pilih Muat semua sesuai perintah.</p>
+<p class="mr-help">Sekali klik mencatat seluruh muatan perintah sekaligus Selesai muat. Ringkasan tersedia setelah berhasil. Jika aktual berbeda, gunakan Muatan berbeda dari perintah.</p>
+<section aria-labelledby="muat-pilih" aria-busy="true"><h2 id="muat-pilih">Pilih kiriman</h2>
+<p class="mr-help" data-muat-unread>Armada, pelanggan dan perintah belum dibaca. Belum ada kiriman yang dipilih.</p>
+<button class="btn" type="button" disabled aria-describedby="muat-tunggu">Buka lembar kiriman</button></section>
+<div class="mr-layout" aria-describedby="muat-tunggu">
+<section class="mr-card" aria-label="Rincian barang menunggu kiriman" aria-busy="true">
+<table class="mr-table"><thead><tr><th scope="col">Barang</th><th scope="col">Perintah</th><th scope="col">Total dimuat</th><th scope="col" data-muat-status-column>Status sisa belum dibaca</th></tr></thead>
+<tbody><tr><td colspan="4"><span data-muat-unread>Rincian, satuan dan status menunggu kiriman terbaru. Kolom terakhir mengikuti status: Sisa atau Tidak terkirim.</span></td></tr></tbody></table>
+{% if MUAT_SHELL.can_record %}<div class="mr-actions"><button class="btn btn--utama" type="button" disabled aria-describedby="muat-tunggu">Muat semua sesuai perintah</button><button class="btn" type="button" disabled aria-describedby="muat-tunggu">Muatan berbeda dari perintah</button></div>{% endif %}
+</section>
+<aside class="mr-summary" aria-label="Ringkasan kiriman" aria-busy="true"><h2>Ringkasan kiriman</h2><dl>
+<div class="mr-pair"><dt>Pelanggan selesai muat</dt><dd>Belum dibaca</dd></div>
+<div class="mr-pair"><dt>Total perintah</dt><dd>Belum dibaca</dd></div>
+<div class="mr-pair"><dt>Aktual tercatat</dt><dd>Belum dibaca</dd></div>
+<div class="mr-pair"><dt>Tidak terkirim (ditutup)</dt><dd>Belum dibaca</dd></div>
+</dl><p class="mr-help">Selesai muat belum merupakan verifikasi pengiriman.</p></aside></div>
+{% if not MUAT_SHELL.can_record %}<p class="mr-note">Akses baca saja sesuai peran efektif. Pencatatan dan penyelesaian tidak tersedia.</p>{% endif %}
+<p class="mr-help" id="muat-tunggu">Pilihan dan tindakan menunggu data serta akses terbaru. Draf perangkat dan status permintaan sebelumnya baru diperiksa oleh lembar native setelah data siap. Membuka halaman tidak mencatat muatan atau mengubah stok.</p>
+<p class="mr-help" role="status" aria-live="polite" data-muat-native-status>Memuat kiriman…</p><button class="btn" type="button" data-muat-native-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca muatan bertahap. Tidak ada pencatatan selama memuat.</p></noscript>
+</section>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script><script src="/static/muatan-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}
