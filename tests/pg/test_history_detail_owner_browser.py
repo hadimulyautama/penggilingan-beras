@@ -184,6 +184,25 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
     source_golden = await native_golden(client, item['source'])
     assert item['code'] in source_golden
     trace, fault = [], {'next': None, 'count': 0}
+    from app.web import riwayat_detail_native as native_shell
+    original_shell = native_shell.kerangka
+    original_source = native_shell._sumber
+    shell_diagnostics = []
+    async def traced_source(db,user,spec):
+        value = await original_source(db,user,spec)
+        shell_diagnostics.append(dict(stage='source',variant=spec['variant'],found=value is not None))
+        return value
+    async def traced_shell(request,akun):
+        eligible=native_shell.memakai_dokumen(request)
+        result=await original_shell(request,akun)
+        shell_diagnostics.append(dict(stage='shell',eligible=eligible,returned=result is not None,
+            document=request.headers.get('sec-fetch-dest'),mode=request.headers.get('sec-fetch-mode'),
+            pindah=request.headers.get('x-pindah'),shape=request.headers.get('x-kerangka-halaman'),
+            state_data=getattr(request.state,'isi_halaman_bertahap',False),
+            current=getattr(request.state,'akun',None) is akun,forced=getattr(akun,'harus_ganti_sandi',None)))
+        return result
+    monkeypatch.setattr(native_shell,'_sumber',traced_source)
+    monkeypatch.setattr(native_shell,'kerangka',traced_shell)
     original_request = client.request
 
     async def request(method, url, **kwargs):
@@ -298,6 +317,7 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
                 releases.append(release)
                 response = await page.goto(BASE + path, wait_until='domcontentloaded')
                 assert response.status == 200
+                assert await page.locator(SHELL).count() == 1, shell_diagnostics[-8:]
                 await expect(page.locator(SHELL)).to_be_visible()
                 try:
                     await asyncio.wait_for(entered.wait(), 20)
@@ -339,6 +359,8 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
                 assert not transport['posts']
             assert not transport['posts'] and not transport['errors'], transport
         finally:
+            if out:
+                (out / 'native-shell-diagnostic.json').write_text(json.dumps(dict(shell=shell_diagnostics,trace=trace,errors=transport['errors']),indent=2))
             for release in releases:
                 release.set()
     assert await _sidik(pg) == before
