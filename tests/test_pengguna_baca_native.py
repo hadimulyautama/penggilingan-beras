@@ -59,7 +59,7 @@ def test_native_fields_disabled_unknown_values_not_false_empty_or_one_time_crede
         explicit=doc.find_all('label',attrs={'for':field.get('id')}) if field.has_attr('id') else []
         assert (1 if wraps else 0)+len(explicit)==1, str(field)
         label=wraps or explicit[0]
-        assert label.get_text(' ',strip=True), 'Every disabled field still needs an actual accessible label' 
+        assert label.get_text(' ',strip=True), 'Every disabled field still needs an actual accessible label'
     assert bool(doc.select('nav[aria-label="Jenis pengguna"] a[href="/pengguna/pelanggan"]'))==(variant!='staf' and variant!='staf-detail')
     if kind.startswith('pelanggan'):
         assert [n.get_text() for n in doc.select('thead th')]==shape['columns']
