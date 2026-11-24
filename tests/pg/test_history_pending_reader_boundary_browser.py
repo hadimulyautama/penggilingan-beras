@@ -179,20 +179,68 @@ async def native_editor_veto_control(page, transport, releases, actions, ledger,
     transport['completed'][TARGET] = completed
     releases.append(release)
     action=None
+    observed,request_seen=asyncio.Event(),asyncio.Event()
+    snapshots,requests=[],[]
+    prefix='owner-history-native-veto:'
+    def console_snapshot(message):
+        if not message.text.startswith(prefix):return
+        value=json.loads(message.text[len(prefix):])
+        assert type(value) is dict and set(value)=={
+            'oldRoot','editorMarker','draftEntry','form','values','storage','bmAbsent'}
+        assert all(type(v) is bool for v in value.values())
+        snapshots.append(value);observed.set()
+    async def classify_request(request):
+        headers=await request.all_headers()
+        requests.append(dict(
+            get=request.method=='GET',document=request.resource_type=='document',
+            navigation=request.is_navigation_request(),
+            exactAddress=request.url==BASE+TARGET,
+            nativeDoc=headers.get('sec-fetch-dest')=='document',
+            nativeMode=headers.get('sec-fetch-mode')=='navigate',
+            noPindah='x-pindah' not in headers,
+            noShape='x-kerangka-halaman' not in headers))
+        request_seen.set()
+    def request_snapshot(request):
+        if urlsplit(request.url).path==TARGET:
+            actions.append(asyncio.create_task(classify_request(request)))
+    page.on('console',console_snapshot)
+    page.on('request',request_snapshot)
     try:
         link = await menu_link(page)
+        # Capture only booleans synchronously on the REAL anchor, before its
+        # default document navigation. Never stop, replace or cancel the event.
+        # DOM RPC after a provisional native navigation can wait for new HTML;
+        # the externally retained snapshot avoids that fixture-only deadlock.
+        await link.evaluate("""(link,prefix)=>link.addEventListener('click',()=>{
+          const s=window.__historyPendingOwner,
+           keys=Object.keys(sessionStorage).filter(k=>/koreksi|draft|draf|pending/i.test(k));
+          console.info(prefix+JSON.stringify({
+            oldRoot:!!s&&s.root.isConnected,
+            editorMarker:!!s&&s.root.hasAttribute('data-editor-perintah'),
+            draftEntry:!!s&&s.memory[s.key]===s.entry,
+            form:!!s&&(!s.form||s.form.isConnected),
+            values:!!s&&s.values.every(([node,value])=>node.isConnected&&node.value===value),
+            storage:!!s&&keys.length===s.storage.length&&s.storage.every(([key,value])=>sessionStorage.getItem(key)===value),
+            bmAbsent:document.querySelectorAll('[data-bm-page]').length===0
+          }));
+        },{capture:true,once:true,passive:true})""",prefix)
+        ledger.phase('native-veto.capture-ready')
         action=asyncio.create_task(link.press('Enter',no_wait_after=True,timeout=30000))
         actions.append(action)
         ledger.phase('native-veto.press-started')
         await asyncio.wait_for(entered.wait(),20)
         ledger.phase('native-veto.html-held')
-        assert await page.locator('[data-riwayat-giling][data-editor-perintah],[data-riwayat-sosoh][data-editor-perintah]').count() == 1
-        assert await page.locator('[data-bm-page]').count() == 0
-        await assert_native_identity_preserved(page)
+        await asyncio.wait_for(observed.wait(),20)
+        await asyncio.wait_for(request_seen.wait(),20)
+        assert not release.is_set()
+        assert len(snapshots)==1 and all(snapshots[0].values()),snapshots
+        assert len(requests)==1 and all(requests[0].values()),requests
         ledger.phase('native-veto.before-html-asserted')
     finally:
-        # Before-HTML assertions run while release is still unset.
+        # No DOM RPC runs while full document HTML remains withheld.
         release.set()
+        page.remove_listener('console',console_snapshot)
+        page.remove_listener('request',request_snapshot)
         ledger.phase('native-veto.html-released')
     if action is not None:
         await asyncio.wait_for(asyncio.shield(action),20)
