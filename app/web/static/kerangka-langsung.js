@@ -144,7 +144,8 @@
    const history=riwayatLangsung(pilihan.alamat,registry.konteks,cap,sesi.dataset.token);if(history)return history;
    // Resource identity comes from the currently visible native source, never
    // from a route-shaped ID. Factories decline stale/hidden/foreign catalogs.
-   const families=[['/proses-aktif/sosoh/',window.PadiKerangkaSosohUI],
+   const families=[['/barang-keluar/',window.PadiKerangkaPengirimanDetailUI],
+                   ['/proses-aktif/sosoh/',window.PadiKerangkaSosohUI],
                    ['/proses-aktif/pengeringan/',window.PadiKerangkaPengeringanUI],
                    ['/proses-aktif/pendinginan/',window.PadiKerangkaPengeringanUI],
                    ['/jasa/pelanggan/',window.PadiKerangkaJasaDetailUI]];
