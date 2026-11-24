@@ -7,7 +7,7 @@ from pathlib import Path
 
 VARIANTS=['pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi']+[
     f'stok-{tab}-{int(mutu)}-{int(owner)}'
-    for tab in ('bahan','produk','karung') for mutu in (False,True) for owner in (False,True)]
+    for tab in ('bahan','produk','karung') for mutu in (False,True) for owner in (False,True)]+['laporan-katalog']
 
 
 @lru_cache(maxsize=1)
@@ -46,6 +46,9 @@ async def susun(request,akun,registry,*,navigasi,stok):
     if not varians:
         return None
     data=aset()
+    from app.web.laporan import daftar_untuk
+    if [l.kode for l in daftar_untuk(akun.user)]==data.get('laporan_codes'):
+        varians['laporan']='laporan-katalog'
     return dict(versi=1,sumber=data['sumber'],
         konteks=registry['konteks'],cap=registry['cap'],sesi=registry['sesi'],
         varians=varians)

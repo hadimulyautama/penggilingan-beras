@@ -156,6 +156,31 @@ def build():
             node.attrs.clear();node.string=text.replace('</script','<\\/script')
         crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/stok?tab='+tab,{},'Stok'))
         variants[f'stok-{tab}-{int(mutu)}-{int(owner)}']=dict(family='stok',path='/stok',title='Stok',html=str(doc),breadcrumb=crumb,tab=tab)
+    spec=importlib.util.spec_from_file_location('public_catalog',ROOT/'scripts/kerangka_laporan_katalog.py')
+    catalog=importlib.util.module_from_spec(spec);spec.loader.exec_module(catalog)
+    public=catalog.metadata(ROOT);inputs.update(ROOT/name for name in catalog.source_pins(ROOT))
+    # Pending means no sidebar history choice is resolved from source/storage.
+    # Native fresh GET supplies the actual actor's navigation. The catalog's
+    # thirteen metadata-only links follow the verified uang=False contract.
+    pending=dict(aktif='laporan',judul='Laporan periode',jenis='laporan',detail=False,
+        panduan='lk-panduan',pilihan=[],boleh_alamat=['/laporan'],tab=[])
+    context=dict(VERSI=CAP,KATALOG_STAMP='__PADI_STAMP__',KATALOG_NAV=pending,
+                 KATALOG_NATIVE=''.join(env.get_template('laporan.html').blocks['isi'](
+                     env.get_template('laporan.html').new_context(public))),TAMPILAN_INDUK=True)
+    template=env.get_template('laporan_katalog_bertahap.html')
+    doc=BeautifulSoup(''.join(template.blocks['isi'](template.new_context(context))),'html.parser')
+    root=doc.select_one('[data-laporan-katalog-kerangka]');assert root and not root.select('h1,table,form')
+    css=[]
+    for link in doc.select('link[rel="stylesheet"]'):
+        text=asset(link['href']);assert '@import' not in text and '</style' not in text.lower()
+        css.append(text);link.decompose()
+    style=doc.new_tag('style',attrs={'data-kerangka-ui-style':'laporan'});style.string='\n'.join(css);root.insert(0,style)
+    for node in doc.select('script[src]'):
+        text=asset(node['src']);assert 'document.currentScript' not in text
+        node.attrs.clear();node.string=text.replace('</script','<\\/script')
+    crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/laporan',{},'Laporan periode'))
+    catalog_codes=[row['kode'] for row in public['daftar']]
+    variants['laporan-katalog']=dict(family='laporan',path='/laporan',title='Laporan periode',html=str(doc),breadcrumb=crumb,codes=catalog_codes)
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     digest=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
     # Intern the actual CSS/readonly JS once, not once per layout variant.
@@ -175,7 +200,7 @@ def build():
              +runtime).encode()
     assert len(payload)<=1572864
     metadata=dict(versi=1,sumber=digest,aset_sha256=hashlib.sha256(payload).hexdigest(),
-                  variants=list(variants),inputs=hashes)
+                  variants=list(variants),inputs=hashes,laporan_codes=catalog_codes)
     return payload,(json.dumps(metadata,ensure_ascii=False,indent=2)+'\n').encode()
 
 

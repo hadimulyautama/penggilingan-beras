@@ -41,13 +41,13 @@
   });
  }
  function buat(address,base,context,cap,token){
-  const account=address==='/pengaturan/akun'?{u:new URL(address,location.href)}:null;
+  const account=['/pengaturan/akun','/laporan'].includes(address)?{u:new URL(address,location.href)}:null;
   const state=shipping(address)||jasa(address)||account||stock(address);if(!state)return null;
-  const family=state.u.pathname==='/stok'?'stok':state.u.pathname==='/jasa'?'jasa':state.u.pathname==='/pengaturan/akun'?'akun':'pengiriman';
+  const family=state.u.pathname==='/laporan'?'laporan':state.u.pathname==='/stok'?'stok':state.u.pathname==='/jasa'?'jasa':state.u.pathname==='/pengaturan/akun'?'akun':'pengiriman';
   const host=document.getElementById('padi-kerangka-ui');let permission;
   if(!host?.isConnected||host.dataset.cap!==cap||host.dataset.konteks!==context||host.textContent.length>4096)return null;
   try{permission=JSON.parse(host.textContent);}catch(_){return null;}
-  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>!['pengiriman','jasa','akun','stok'].includes(k)))return null;
+  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>!['pengiriman','jasa','akun','stok','laporan'].includes(k)))return null;
   const allowedStock=permission.varians.stok;
   if(family==='stok'&&(!allowedStock||typeof allowedStock!=='object'||Array.isArray(allowedStock)||Object.keys(allowedStock).some(k=>!['bahan','produk','karung'].includes(k))))return null;
   const key=family==='stok'?allowedStock[state.tab]:permission.varians[family];
@@ -65,8 +65,8 @@
    }
   }
 
-  const root=part.content.querySelector(family==='akun'?'[data-pengaturan-akun-kerangka]':family==='jasa'?'[data-jasa-bertahap]':'[data-halaman-bertahap][data-kind="'+family+'"]');if(!root)return null;
-  root.dataset.stamp=context+'|'+address;root.dataset.url=family==='akun'?'/pengaturan/akun':'/api/halaman-bertahap/'+family+state.u.search;
+  const root=part.content.querySelector(family==='laporan'?'[data-laporan-katalog-kerangka]':family==='akun'?'[data-pengaturan-akun-kerangka]':family==='jasa'?'[data-jasa-bertahap]':'[data-halaman-bertahap][data-kind="'+family+'"]');if(!root)return null;
+  root.dataset.stamp=context+'|'+address;root.dataset.url=['akun','laporan'].includes(family)?state.u.pathname:'/api/halaman-bertahap/'+family+state.u.search;
   if(family==='pengiriman'){
 
   for(const form of root.querySelectorAll('form')){

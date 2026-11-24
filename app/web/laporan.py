@@ -130,6 +130,14 @@ def ke_html(teks: str) -> str:
 
 @router.get("/laporan")
 async def halaman_laporan(request: Request, akun=Depends(butuh_akun)):
+    if (not request.url.query
+            and (request.headers.get('X-Kerangka-Halaman')=='1'
+                 or request.headers.get('X-Pindah')!='1'
+                 and request.headers.get('Sec-Fetch-Mode')=='navigate'
+                 and request.headers.get('Sec-Fetch-Dest') in {'document','empty'})):
+        from app.web.laporan_katalog_bertahap import kerangka
+        response=await kerangka(request,akun)
+        if response is not None:return response
     from app.web.nav import lencana
     from app.web.laporan_navigasi import siapkan
     konteks = {}

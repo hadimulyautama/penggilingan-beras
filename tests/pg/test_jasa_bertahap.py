@@ -94,7 +94,7 @@ def _tanpa_host_registry(html):
         assert shape['konteks']==ui['data-konteks']==registry['konteks']
         assert shape['cap']==ui['data-cap']==registry['cap']
         assert shape['sesi']==registry['sesi']
-        assert shape['varians'] in ({'pengiriman':'pengiriman-admin','jasa':'jasa-admin','akun':'akun-pribadi'},{'pengiriman':'pengiriman-operator','akun':'akun-pribadi'},{'akun':'akun-pribadi'})
+        assert shape['varians'] in ({'pengiriman':'pengiriman-admin','jasa':'jasa-admin','akun':'akun-pribadi','laporan':'laporan-katalog'},{'pengiriman':'pengiriman-operator','akun':'akun-pribadi','laporan':'laporan-katalog'},{'akun':'akun-pribadi','laporan':'laporan-katalog'})
         from app.web.kerangka_ui import aset
         assert shape['sumber']==aset()['sumber']
         ui_matches=list(re.finditer(
