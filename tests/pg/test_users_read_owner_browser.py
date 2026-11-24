@@ -218,6 +218,27 @@ async def no_mutation_ui(page, transport):
 
 
 async def open_held(page, phases, target, link, expected, shell=SHELL):
+    if shell==SHELL:
+        # Read-only diagnostic of the actual current bindings. No token,
+        # name, HTML, role grant or fabricated success DTO is returned.
+        probe=await page.evaluate('''target=>{
+          const frame=document.querySelector('.bingkai'),cap=document.documentElement.dataset.versi,
+            token=document.getElementById('formulir-sesi')?.dataset.token,
+            registry=document.getElementById('padi-kerangka-langsung'),host=document.getElementById('padi-pengguna-kerangka');
+          const result={registry:!!registry,host:!!host,program:!!window.PadiKerangkaPenggunaUI,
+            marked:!!document.querySelector('[data-editor-perintah],[data-kemas-ulang]'),
+            frameAddress:frame?.dataset.pindahAlamat===location.pathname+location.search};
+          try{
+            const p=host?JSON.parse(host.textContent):null,d=window.PadiKerangkaPenggunaData;
+            result.permissionBound=!!p&&p.cap===cap&&p.konteks===frame?.dataset.pindahKonteks&&p.sesi===token&&p.sumber===d?.sumber;
+            const r=registry?JSON.parse(registry.textContent):null,base=r?.frames?.['/barang-masuk']?.map(i=>r.potongan[i]).join('');
+            result.registryBound=!!r&&r.cap===cap&&r.konteks===frame?.dataset.pindahKonteks&&r.sesi===token;
+            result.factory=!!window.PadiKerangkaPenggunaUI?.buat(target,base,frame?.dataset.pindahKonteks,cap,token);
+          }catch(e){result.errorType=e.name;}
+          return result;
+        }''',target)
+        assert probe.get('factory'),probe
+        await expect(link).to_be_visible()
     html, data = phases.arm(target)
     await link.press('Enter')
     # A fallback HTML-first request would remain held and this assertion must
