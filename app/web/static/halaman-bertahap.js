@@ -6,10 +6,12 @@
  const root=document.querySelector('[data-halaman-bertahap]');
  if(!root||root.dataset.ready)return;root.dataset.ready='1';
  const main=document.getElementById('isi-halaman'),status=root.querySelector('[data-shell-status]'),retry=root.querySelector('[data-shell-retry]'),table=root.querySelector('[data-shell-table-wrap]'),message=root.querySelector('[data-shell-message]');
- const address=location.pathname+location.search,token=document.getElementById('formulir-sesi')?.dataset.token||'',stamp=root.dataset.stamp;
+ const detail=root.dataset.kind==='barang-masuk-detail';
+ function addressNow(){const u=new URL(location.href);if(detail)u.searchParams.delete('tab_detail');return u.pathname+u.search;}
+ const address=addressNow(),token=document.getElementById('formulir-sesi')?.dataset.token||'',stamp=root.dataset.stamp;
  const forms=Array.from(root.querySelectorAll('form')),initialForms=forms.map(f=>new URLSearchParams(new FormData(f)).toString());
  let sequence=0,controller=null,pending=null,finished=false,readFromRetry=false;
- function current(number){return root.isConnected&&number===sequence&&location.pathname+location.search===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
+ function current(number){return root.isConnected&&number===sequence&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
  function stop(){++sequence;pending=null;if(controller)controller.abort();controller=null;observer.disconnect();}
  const observer=new MutationObserver(()=>{if(!root.isConnected)stop();});
  observer.observe(document.body,{childList:true,subtree:true});
@@ -49,7 +51,8 @@
  function restoreSemanticFocus(previous,content){
   if(document.activeElement!==document.body)return;
   let target=null;
-  if(previous?.hasAttribute('data-lk-buka'))target=content.querySelector('[data-lk-buka="'+CSS.escape(previous.dataset.lkBuka)+'"]');
+  if(detail&&previous?.hasAttribute('data-bm-tab'))target=content.querySelector('[data-bm-tab="'+CSS.escape(previous.dataset.bmTab)+'"]');
+  else if(previous?.hasAttribute('data-lk-buka'))target=content.querySelector('[data-lk-buka="'+CSS.escape(previous.dataset.lkBuka)+'"]');
   else if(previous?.hasAttribute('data-shell-guide'))target=content.querySelector('[data-sk-buka="sk-panduan"]');
   else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');
   else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label','Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
@@ -65,6 +68,14 @@
   }
   const content=document.createElement('div');content.dataset.halamanIsi=root.dataset.kind;
   for(let node=start.nextSibling;node&&node!==end;node=node.nextSibling)content.append(node.cloneNode(true));
+  if(detail){
+   // Tab boleh berubah selama pembacaan tanpa mengubah draf/controller.
+   // Pilih tab TERKINI sebelum script native dipasang, bukan tab GET lama.
+   const key=new URL(location.href).searchParams.get('tab_detail')||'ringkasan';
+   for(const tab of content.querySelectorAll('[data-bm-tab]')){const active=tab.dataset.bmTab===key;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
+   for(const panel of content.querySelectorAll('[data-bm-detail-panel]')){panel.hidden=panel.dataset.bmDetailPanel!==key;if(!panel.hidden&&key!=='ringkasan')panel.querySelector('details')?.setAttribute('open','');}
+   const rincian=content.querySelector('[data-bm-detail-rincian]');if(rincian)rincian.hidden=key==='ringkasan';
+  }
   const css=main.querySelector('link[href*="/static/halaman-bertahap.css"]');if(css)content.prepend(css.cloneNode(true));
   // Consumer pilihan pelanggan lama membaca HTML. Tetap memakai route native
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
@@ -79,7 +90,7 @@
   const previousFocus=document.activeElement;
   observer.disconnect();finished=true;controller=null;
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
-  const valid=()=>content.isConnected&&location.pathname+location.search===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
+  const valid=()=>content.isConnected&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
   try{
    activateScripts(prepared);if(!valid())return;
    restoreSemanticFocus(previousFocus,content);

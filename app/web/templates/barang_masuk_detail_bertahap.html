@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block judul %}Detail Barang Masuk{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/detail_penerimaan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/penerimaan-ringkas.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/barang-masuk-detail-shell.css?v={{ VERSI }}">
+<main class="penerimaan-detail bm" data-bm-detail-shell data-halaman-bertahap data-kind="barang-masuk-detail" data-stamp="{{ detail_stamp }}" data-url="{{ detail_data_url }}">
+ <header class="bm-kepala"><p class="bm-meta">Barang Masuk</p><h1>Detail penerimaan</h1><p>Identitas, bobot dan status sedang dibaca.</p></header>
+ <nav class="bm-detail-tabs" role="tablist" aria-label="Bagian detail penerimaan">
+ {% for key,label in tabs %}<button class="btn" type="button" id="bm-tab-{{ key }}" role="tab" data-bm-tab="{{ key }}" data-url="{{ tab_href(key) }}" aria-selected="{{ 'true' if tab_detail==key else 'false' }}" aria-controls="bm-panel-{{ key }}" tabindex="{{ 0 if tab_detail==key else -1 }}">{{ label }}</button>{% endfor %}
+ </nav>
+ <p data-shell-status role="status">Memuat detail penerimaan…</p>
+ <button class="btn" type="button" data-shell-retry hidden>Coba baca lagi</button>
+ <div data-shell-table-wrap aria-busy="true">
+ {% for key,label in tabs %}
+ <section class="terima-panel" id="bm-panel-{{ key }}" role="tabpanel" aria-labelledby="bm-tab-{{ key }}" data-bm-detail-panel="{{ key }}"{% if key!=tab_detail %} hidden{% endif %}>
+  <h2>{{ label }}</h2>
+  {% set kolom={'ringkasan':['Catatan','Bobot','Status','Waktu / petugas'], 'tiket':['Data timbang','Nilai','Sumber'], 'qc':['Pemeriksaan','Hasil','Waktu / petugas'], 'riwayat':['Catatan','Lokasi','Hubungan barang']}[key] %}
+  <div style="overflow-x:auto"><table class="terima-catatan"><thead><tr>{% for label in kolom %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="{{ kolom|length }}">Data belum tersedia. Memuat bagian {{ label|lower }}…</td></tr></tbody></table></div>
+ </section>
+ {% endfor %}
+ </div>
+ <p data-shell-message>Belum ada data yang dapat ditampilkan. Tindakan dan pilihan penerimaan menunggu pemeriksaan terbaru.</p>
+ <p><a class="btn" data-bm-back href="{{ kembali }}">Kembali ke Barang Masuk</a></p>
+</main>
+<script src="/static/barang-masuk-detail-shell.js?v={{ VERSI }}" defer></script>
+<script src="/static/halaman-bertahap.js?v={{ VERSI }}" defer></script>
+{% endblock %}

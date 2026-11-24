@@ -6,6 +6,7 @@
 {% import '_stok.html' as st %}
 {% import '_kerja_navigasi.html' as nav with context %}
 <section data-bm-page data-cari-tertampil="{{ cari }}" data-pemasok-tertampil="{{ pemasok }}" data-bm-context="{{ BM_CONTEXT }}" data-bm-cap="{{ BM_CAP }}" data-bm-status="{{ status }}" data-bm-schemas='{{ BM_SCHEMAS|tojson }}'{% if bm_loading %} data-bm-shell data-bm-stamp="{{ BM_STAMP }}" data-bm-url="{{ BM_DATA_URL }}"{% endif %}>
+{% if detail_catalog %}<script type="application/json" data-bm-detail-catalog>{{ detail_catalog|tojson }}</script>{% endif %}
 {% set filter_jumlah = (1 if jenis else 0) + (1 if gudang else 0) + (1 if request.query_params.get('kepemilikan') else 0) + (1 if request.query_params.get('pemasok') else 0) %}
 <link rel="stylesheet" href="/static/barang-masuk.css?v={{ VERSI }}">
 <header class="kerja-kepala bm-kepala">

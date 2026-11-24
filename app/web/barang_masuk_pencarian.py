@@ -41,11 +41,19 @@ async def halaman(request, akun):
     q.update(status=status,cari=cari)
     konteks='/barang-masuk?'+urlencode(q)
     def detail(tid):return '/barang-masuk/'+str(tid)+'?'+urlencode(dict(kembali_kerja=konteks))
+    from app.web.barang_masuk_detail_bertahap import katalog
+    # Gunakan hanya hasil halaman yang telah digate reader native. Tiket
+    # produk tanpa sumber aktif bisa beralih menjadi arsip: jangan ditebak.
+    targets = ([detail(v['id']) for v in d['meta_tiket'].values()
+                if v.get('jenis') in {'gabah_basah', 'gabah_kering', 'pk'}]
+               if status == 'belum' else
+               [detail(t['id']) for t in d['riwayat'] if not t.get('historis')])
+    catalog = await katalog(request, akun, targets, navigasi=b.lencana()) if b and not gagal else None
     # Satu pembaca/satu template untuk navigasi biasa maupun permintaan Cari.
     response = render(request,'barang_masuk_pencarian.html',status_code=503 if gagal else 200,
         layar='barang_masuk',status=status,jenis=jenis,pemilik=pemilik,gudang=gudang,
         jenis_barang=JENIS_BARANG,cari=cari,pemasok=pemasok,gagal=gagal,pelanggan_saring=pelanggan_saring,
         detail_tiket=detail,detail_penerimaan={k:detail(v['id']) for k,v in d['meta_tiket'].items()},
         href=lambda **p:tautan(request,'/barang-masuk',**p),lama=berjalan._lama,buka='',nilai='',
-        **d,**metadata(request,akun),**(b.lencana() if b else {}))
+        detail_catalog=catalog,**d,**metadata(request,akun),**(b.lencana() if b else {}))
     return selesai(response,gagal)

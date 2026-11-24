@@ -290,6 +290,18 @@ async def konteks_barang_masuk(tid,request,akun):
 @router.get('/barang-masuk/{tid:int}')
 async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
     from app.web.penerimaan_ringkas import keadaan,AKSI_PENERIMAAN
+    from app.web.barang_masuk_detail_bertahap import memakai, kerangka
+    if memakai(request):
+        # Gate sumber native tetap mendahului kerangka. Jangan menebak varian
+        # arsip atau menawarkan empat tab untuk catatan historis/portal.
+        async with SessionLocal() as db:
+            data, tiket, jenis = await sumber_detail_barang_masuk(db, tid, request, akun)
+            arsip = []
+            if not data and jenis in ('beras', 'broken'):
+                from app.services.penerimaan_historis import baca
+                arsip = await baca(db, [tid])
+        if not arsip:
+            return await kerangka(tid, request, akun)
     ctx,b=await konteks_barang_masuk(tid,request,akun)
     if not is_customer_read(request) and not ctx['catatan'] and ctx['jenis'] in ('beras','broken'):
         from app.services.penerimaan_historis import baca
@@ -308,6 +320,12 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
         lama=svc._lama,buka=buka,nilai=request.query_params.get('nilai',''),
         buka_lama=buka if buka not in AKSI_PENERIMAAN else '',
         awal=None if portal else await keadaan(ctx,b,akun.user),**b.lencana())
+
+
+@router.get('/api/halaman-bertahap/barang-masuk-detail/{tid:int}')
+async def isi_detail_barang_masuk(tid:int, request:Request, akun=Depends(butuh_akun)):
+    from app.web.barang_masuk_detail_bertahap import isi
+    return await isi(tid, request, akun)
 
 
 async def alias_keputusan(request, akun, asal):
