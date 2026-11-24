@@ -147,6 +147,9 @@
    if(pilihan.alamat.startsWith('/laporan/')||pilihan.alamat.split('?')[0]==='/kabar'){
     try{return window.PadiKerangkaDokumenUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }
+   if(['/pengaturan/spesifikasi-beras','/pengaturan/hasil-samping'].includes(pilihan.alamat)){
+    try{return window.PadiKerangkaPengaturanMasterUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
    if(['/pengaturan','/pengaturan/sesi'].includes(pilihan.alamat)){
     try{return window.PadiKerangkaPengaturanUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }

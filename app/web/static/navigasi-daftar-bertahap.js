@@ -15,7 +15,7 @@
   const u=new URL(alamat,location.href);
   const histories=['/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan','/riwayat-qc/gabah-basah','/riwayat-qc/gabah-kering','/riwayat-qc/pk-luar','/riwayat-qc/pk-hasil-giling'];
   if(u.origin===location.origin&&histories.includes(u.pathname))return true;
-  return u.origin===location.origin&&(['/audit','/kabar','/pengaturan','/pengaturan/sesi'].includes(u.pathname)||u.pathname.startsWith('/laporan/')||/^\/jasa\/pelanggan\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||/^\/proses-aktif\/(?:giling|sosoh|pengeringan|pendinginan)\/[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'||u.pathname==='/barang-keluar');
+  return u.origin===location.origin&&(['/audit','/kabar','/pengaturan','/pengaturan/sesi','/pengaturan/spesifikasi-beras','/pengaturan/hasil-samping'].includes(u.pathname)||u.pathname.startsWith('/laporan/')||/^\/jasa\/pelanggan\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||/^\/proses-aktif\/(?:giling|sosoh|pengeringan|pendinginan)\/[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'||u.pathname==='/barang-keluar');
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);
