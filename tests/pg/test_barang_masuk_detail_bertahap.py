@@ -127,6 +127,8 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
                 await tab.focus();await tab.press('Enter')
                 await expect(shell.locator('[data-bm-detail-panel='+key+']' )).to_be_visible()
                 await expect(tab).to_be_focused()
+            await expect(shell.locator('[data-bm-detail-panel=riwayat] th').first).to_be_visible()
+            assert (await shell.locator('[data-bm-detail-panel=riwayat] th').first.bounding_box())['width']>10
             await shell.locator('[data-bm-tab=qc]').click()
             release.set()
             try:
@@ -154,7 +156,7 @@ async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, len
             except AssertionError:
                 print('DETAIL_ERROR_NEGOTIATION',negotiations,transport['gets'],fail)
                 raise
-            await expect(page.locator('[data-shell-message]')).to_contain_text('bukan daftar kosong')
+            await expect(page.locator('[data-shell-message]')).to_contain_text('bukan penerimaan kosong')
             await page.locator('[data-shell-retry]').click()
             await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
             # Hold another read, leave before release, and prove no stale swap.

@@ -6,4 +6,12 @@
 [data-bm-form-shell] fieldset{border:0;padding:0;margin:0;min-width:0}
 [data-bm-detail-shell] .bm-rincian{padding:0;border:0;background:transparent}
 [data-bm-detail-panel]:not([hidden])>details{border:1px solid var(--bm-line);border-radius:10px;padding:.8rem 1rem;background:var(--panel);margin:0 0 1rem}
+[data-bm-detail-shell] .bm-table-scroll{max-width:100%;overflow-x:auto}
+/* Empty/loading retain their real columns on phones. Populated native cards
+   and portal tables retain the existing responsive presentation. */
+.penerimaan-detail[data-bm-detail-shell] .terima-catatan[data-bm-table-state]{display:table;width:100%;min-width:480px}
+.penerimaan-detail[data-bm-detail-shell] .terima-catatan[data-bm-table-state] thead{display:table-header-group}
+.penerimaan-detail[data-bm-detail-shell] .terima-catatan[data-bm-table-state] tbody{display:table-row-group}
+.penerimaan-detail[data-bm-detail-shell] .terima-catatan[data-bm-table-state] tr{display:table-row;border:0;padding:0}
+.penerimaan-detail[data-bm-detail-shell] .terima-catatan[data-bm-table-state] :is(th,td){display:table-cell;padding:12px 8px;border-bottom:1px solid var(--garis)}
 @media(max-width:600px){[data-bm-detail-shell] .bm-detail-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}

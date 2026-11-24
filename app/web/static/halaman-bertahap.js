@@ -106,7 +106,7 @@
  async function read(){
   readFromRetry=document.activeElement===retry;
   if(controller)controller.abort();const number=++sequence;controller=new AbortController();const active=controller;pending=null;
-  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent='Memuat data…';message.textContent='Memuat data. Judul kolom dan filter tetap tersedia.';
+  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=detail?'Memuat detail penerimaan…':'Memuat data…';message.textContent=detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':'Memuat data. Judul kolom dan filter tetap tersedia.';
   const timeout=setTimeout(()=>active.abort(),20000);
   try{
    const response=await fetch(root.dataset.url,{credentials:'same-origin',cache:'no-store',signal:active.signal,headers:{'Accept':'application/json'}});
@@ -120,7 +120,7 @@
    failed(error,number);
   }finally{clearTimeout(timeout);if(current(number)){controller=null;table.setAttribute('aria-busy','false');}}
  }
- function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent='Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
+ function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
  async function resume(){
   if(!pending||interacting())return;
   const next=pending;pending=null;if(!current(next.number))return;
