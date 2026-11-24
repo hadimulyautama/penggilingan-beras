@@ -1,7 +1,8 @@
-"""Pemasangan adapter aplikasi; tidak menyalin atau menyunting base paket.
+"""App-owned native first-click structures and bounded source catalogues.
 
-Script berada di wilayah isi agar dokumen lama yang memakai PINDAH juga
-memasangnya. Efeknya dibatasi ke dua alamat daftar, bukan navigasi global.
+Public versioned programs contain layout only. Per-document scope, session
+and actual visible resource links remain private; native GET owns all data
+and action authorization.
 """
 def pasang(response, request):
     if response.status_code != 200 or not getattr(request.state, "akun", None):
@@ -54,7 +55,9 @@ def pasang(response, request):
             logging.getLogger(__name__).warning('Katalog struktur Giling belum tersedia (%s)',type(error).__name__)
     # Struktur publik stabil siap sebelum DOM interaktif. Tidak berisi akun,
     # pilihan hak, saldo, draf atau token; pilihan per dokumen tetap no-store.
-    asset=('<script src="/static/kerangka-ui.js?v='+CAP_ASET+'"></script>'
+    asset=('<script src="/static/padi-baca-native.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/filter-daftar-native.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-riwayat-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-pengaturan-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-dokumen-ui.js?v='+CAP_ASET+'"></script>'

@@ -1,6 +1,5 @@
-/* Bukan pengganti PINDAH: hanya dua daftar memakai dokumen kerangka cepat.
- * Pembacaan ulang X-Pindah tetap renderer native, termasuk filter pelanggan.
- */
+/* Native structures register before data. Read filters, current context and
+ * action/draft guards keep their native owners; this adapter never posts. */
 (function(){
  'use strict';
  const binding=document.currentScript?.dataset.konteks||'';

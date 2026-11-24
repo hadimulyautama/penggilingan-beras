@@ -134,6 +134,13 @@
   if(host!==hostLama){try{registry=JSON.parse(host.textContent);hostLama=host;}catch(_){return null;}}
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
   if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat)){
+   if(['/barang-masuk','/pekerjaan'].includes(pilihan.alamat.split('?')[0])){
+    try{
+     const program=window.PadiFilterDaftarNative,prototype=program?.baseAddress(pilihan.alamat,location.origin);
+     const base=prototype&&decodeFrame(registry,prototype);
+     if(base)return program.buat(pilihan.alamat,base,registry.konteks,cap,sesi.dataset.token)||null;
+    }catch(_){return null;}
+   }
    const history=riwayatLangsung(pilihan.alamat,registry.konteks,cap,sesi.dataset.token);if(history)return history;
    // Resource identity comes from the currently visible native source, never
    // from a route-shaped ID. Factories decline stale/hidden/foreign catalogs.
