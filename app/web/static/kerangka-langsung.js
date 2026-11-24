@@ -113,7 +113,11 @@
    if(['/barang-keluar','/jasa','/pengaturan/akun'].includes(pilihan.alamat.split('?')[0])){
     try{return window.PadiKerangkaUI?.buat?.(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }
-   return stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||detailLangsung(pilihan,registry.konteks,cap);
+   const stock=stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token);if(stock)return stock;
+   if(pilihan.alamat.split('?')[0]==='/stok'){
+    try{return window.PadiKerangkaUI?.buat?.(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   return detailLangsung(pilihan,registry.konteks,cap);
   }
   // Validasi seluruh indeks dan ukuran sebelum join. Versi/rujukan rusak
   // kembali ke navigasi native, bukan HTML parsial atau alamat tebakan.

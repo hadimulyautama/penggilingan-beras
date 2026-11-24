@@ -18,7 +18,7 @@ def test_compiler_is_deterministic_and_committed_asset_is_current():
 def test_blueprints_use_native_columns_and_only_authorized_layout_variants():
     script,meta=compiler.build()
     data=json.loads(script.decode().split('window.PadiKerangkaUIData=',1)[1].split(';\n',1)[0])
-    assert set(data['variants'])=={'pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi'}
+    assert set(data['variants'])=={'pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi'}|{f'stok-{tab}-{mutu}-{owner}' for tab in ('bahan','produk','karung') for mutu in (0,1) for owner in (0,1)}
     columns=[]
     for name,variant in data['variants'].items():
         doc=BeautifulSoup(variant['html'],'html.parser')
@@ -30,6 +30,16 @@ def test_blueprints_use_native_columns_and_only_authorized_layout_variants():
             assert not doc.select('input[name],input[value],form[action],form[method],input[type=password]')
             continue
         assert all(form.get('method')=='get' for form in doc.select('form'))
+        for style in doc.select('[data-ui-style-ref]'):
+            assert style['data-ui-style-ref'] in data['styles'] and not style.get_text()
+        for script in doc.select('[data-ui-script-ref]'):
+            assert script['data-ui-script-ref'] in data['scripts'] and not script.get_text()
+        if name.startswith('stok-'):
+            assert doc.select_one('[data-ui-stock-public]')
+            assert all(n.has_attr('disabled') for n in doc.select('[data-sk-cetak],select[name=gudang],select[name=pelanggan_id]'))
+            assert not doc.select('select[name=gudang] option:not([value=""]),select[name=pelanggan_id] option:not([value=""])')
+            assert all(not n.has_attr('href') for n in doc.select('[data-ui-stock-tab]'))
+            continue
         if name=='jasa-admin':
             assert doc.select_one('[data-jasa-bertahap][aria-label="Pesanan Jasa"]')
             assert all(n.has_attr('disabled') for n in doc.select('[data-js-cetak]'))

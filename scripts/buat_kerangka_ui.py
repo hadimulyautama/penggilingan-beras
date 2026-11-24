@@ -129,9 +129,46 @@ def build():
     assert not root.select('input[name],input[value],form[action],form[method],input[type=password]')
     crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/pengaturan/akun',{},'Pengaturan'))
     variants['akun-pribadi']=dict(family='akun',path='/pengaturan/akun',title='Pengaturan',html=str(doc),breadcrumb=crumb)
+    spec=importlib.util.spec_from_file_location('public_stock_blueprint',ROOT/'scripts/stock_ui_blueprint.py')
+    stock=importlib.util.module_from_spec(spec);spec.loader.exec_module(stock)
+    inputs.update(stock.compiler_inputs())
+    request=Request({'type':'http','method':'GET','path':'/stok',
+        'scheme':'http','server':('ui.invalid',80),'headers':[],
+        'query_string':urlencode({'cari':'__PADI_SEARCH__'}).encode()})
+    for tab in ('bahan','produk','karung'):
+      for mutu in (False,True):
+       for owner in (False,True):
+        context=stock.context(tab,mutu=mutu,ownership_layout=owner)
+        context.update(request=request,VERSI=CAP)
+        template=env.get_template('halaman_bertahap.html')
+        html=''.join(template.blocks['isi'](template.new_context(context)))
+        doc=BeautifulSoup(stock.prepare_markup(html),'html.parser')
+        root=doc.select_one('[data-halaman-bertahap][data-kind="stok"]');root['data-ui-stock-public']=''
+        css=[]
+        for link in doc.select('link[rel="stylesheet"]'):
+            text=asset(link['href']);assert '@import' not in text and '</style' not in text.lower()
+            css.append(text);link.decompose()
+        style=doc.new_tag('style',attrs={'data-kerangka-ui-style':'stok'});style.string='\n'.join(css);root.insert(0,style)
+        control=doc.new_tag('script');control.string=asset('/static/kerangka-stok-controls.js').replace('</script','<\\/script')
+        doc.select_one('script[src]').insert_before(control)
+        for node in doc.select('script[src]'):
+            text=asset(node['src']);assert 'document.currentScript' not in text
+            node.attrs.clear();node.string=text.replace('</script','<\\/script')
+        crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/stok?tab='+tab,{},'Stok'))
+        variants[f'stok-{tab}-{int(mutu)}-{int(owner)}']=dict(family='stok',path='/stok',title='Stok',html=str(doc),breadcrumb=crumb,tab=tab)
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     digest=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
-    data=dict(versi=1,sumber=digest,variants=variants)
+    # Intern the actual CSS/readonly JS once, not once per layout variant.
+    # Restore synchronously from this already-loaded public asset before swap.
+    styles,scripts={},{}
+    for component in variants.values():
+        doc=BeautifulSoup(component['html'],'html.parser')
+        for selector,pool,attribute in [('style',styles,'data-ui-style-ref'),('script:not([type])',scripts,'data-ui-script-ref')]:
+            for node in doc.select(selector):
+                text=node.string or '';key=hashlib.sha256(text.encode()).hexdigest()
+                pool[key]=text;node.clear();node[attribute]=key
+        component['html']=str(doc)
+    data=dict(versi=1,sumber=digest,variants=variants,styles=styles,scripts=scripts)
     runtime=(ROOT/'app/web/static/kerangka-ui-runtime.js').read_text()
     payload=('/* Generated native UI only. Regenerate with scripts/buat_kerangka_ui.py. */\n'
              +'window.PadiKerangkaUIData='+json.dumps(data,ensure_ascii=False,separators=(',',':'))+';\n'

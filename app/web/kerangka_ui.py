@@ -5,18 +5,23 @@ import json
 from pathlib import Path
 
 
+VARIANTS=['pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi']+[
+    f'stok-{tab}-{int(mutu)}-{int(owner)}'
+    for tab in ('bahan','produk','karung') for mutu in (False,True) for owner in (False,True)]
+
+
 @lru_cache(maxsize=1)
 def aset():
     # Cache hanya metadata berkas program yang tetap untuk proses rilis ini.
     folder=Path(__file__).parent/'static'
     data=json.loads((folder/'kerangka-ui.meta.json').read_text())
-    if (data.get('versi')!=1 or data.get('variants')!=['pengiriman-admin','pengiriman-operator','jasa-admin','akun-pribadi']
+    if (data.get('versi')!=1 or data.get('variants')!=VARIANTS
             or hashlib.sha256((folder/'kerangka-ui.js').read_bytes()).hexdigest()!=data.get('aset_sha256')):
         raise ValueError('Paket kerangka UI tidak cocok')
     return data
 
 
-async def susun(request,akun,registry):
+async def susun(request,akun,registry,*,navigasi,stok):
     from app.web.pengiriman_bertahap import boleh_baca
     from app.peran import can_see_financials
     varians={}
@@ -26,6 +31,18 @@ async def susun(request,akun,registry):
         varians['jasa']='jasa-admin'
     if getattr(akun,'harus_ganti_sandi',None) is False:
         varians['akun']='akun-pribadi'
+    if stok is None:
+        # Hanya flag dari predicate native. Nama/ID/opsi gudang tidak dibawa
+        # keluar dari allowlist descriptor privat yang sudah diaudit.
+        from app.database import SessionLocal
+        from app.services.cakupan_fasilitas import boleh_baca_stok
+        async with SessionLocal() as db:
+            produk=await boleh_baca_stok(db,akun.user)
+        mutu=navigasi.get('MUTU_AKTIF')
+        if type(mutu) is not bool:raise ValueError('Flag kolom Stok belum tersedia')
+        tabs=('bahan','produk','karung') if produk else ('bahan',)
+        owner=can_see_financials(akun.user)
+        varians['stok']={tab:f'stok-{tab}-{int(mutu)}-{int(owner)}' for tab in tabs}
     if not varians:
         return None
     data=aset()

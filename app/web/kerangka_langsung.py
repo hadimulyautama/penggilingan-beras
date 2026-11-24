@@ -197,7 +197,7 @@ async def lengkapi_dokumen(request: Request, response):
                 ui=None
                 try:
                     from app.web.kerangka_ui import susun as susun_ui
-                    ui=await susun_ui(request,akun,registry)
+                    ui=await susun_ui(request,akun,registry,navigasi=navigasi,stok=stok)
                 except Exception as error:
                     if isinstance(error,HTTPException) and error.status_code in (401,403):
                         raise

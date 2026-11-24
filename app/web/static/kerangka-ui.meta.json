@@ -1,23 +1,37 @@
 {
   "versi": 1,
-  "sumber": "0aa9fe6aad95094e5a026c24472f3c5b54344fe7414243b62efb130782094d5d",
-  "aset_sha256": "36f7106ad1278dcc424028e0fa7e0a4b286d93475a27a711805cf4ad2e3e9dea",
+  "sumber": "a6437731e0588b0035c8cac4f05fcc732c993372e9aa546fbc5a2fba685a9659",
+  "aset_sha256": "8c8a813d4e1360de6f47f47dd8049da7e3b5567060e55e873b312ef834fb3da6",
   "variants": [
     "pengiriman-admin",
     "pengiriman-operator",
     "jasa-admin",
-    "akun-pribadi"
+    "akun-pribadi",
+    "stok-bahan-0-0",
+    "stok-bahan-0-1",
+    "stok-bahan-1-0",
+    "stok-bahan-1-1",
+    "stok-produk-0-0",
+    "stok-produk-0-1",
+    "stok-produk-1-0",
+    "stok-produk-1-1",
+    "stok-karung-0-0",
+    "stok-karung-0-1",
+    "stok-karung-1-0",
+    "stok-karung-1-1"
   ],
   "inputs": {
     "app/services/jasa_pelanggan.py": "48b3d45c316aced8df279d398ce62c136c54417f000934eff85ecb48481ff6e6",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/halaman_bertahap.py": "e37d1d06a8eb49c277aa9eb1f5428f1be91bcc0ce9bcab51ab4ac89981c64db6",
     "app/web/static/bantuan_pengiriman.js": "9a2c5b7335519710fb397d473d80f812bf7695c914ee3913bd90737aa69cbe2b",
     "app/web/static/daftar_pengiriman.css": "d4eae5812f6f15bd23c3cbf53cbd39b056e63a1f4be018b97c73e2fdfda12c3b",
     "app/web/static/halaman-bertahap.css": "8f6d0a7adaa7a955c35f555fb008b0ee105352152be995421190a0e75762090f",
     "app/web/static/halaman-bertahap.js": "3fb3a23bdb3ca9a7e30edd677cbb70aeaaafa758c7660c23ca0313db7deeea47",
     "app/web/static/jasa-bertahap.css": "f3eb551f624343af3504f33dac2f3f8b9d42be0e19358e5d8d55f907b16a510c",
     "app/web/static/jasa-bertahap.js": "f90977e4da6b35fc78b76d13d25783b6fa1a3cec06c590baec8b7bbf57af0059",
-    "app/web/static/kerangka-ui-runtime.js": "87952cd4ab3eea6965c76a30a2cedd7ba0f3d5ce6250c9018f91ce761a5f9078",
+    "app/web/static/kerangka-stok-controls.js": "b880e9c9908e3efc3ec84471d44b2b451edaed7e81d2d6d930a366424fec6e7d",
+    "app/web/static/kerangka-ui-runtime.js": "84d76086300ddf4f02b3a55c6bf4c18bd81562bf2571a789e0cd77185b57f425",
     "app/web/static/pengaturan-akun-native.js": "5ca6bf444c53cc6897f6d9cdca777405b619d5369416892bd703130da3a9149c",
     "app/web/templates/_barang_keluar_kontrol.html": "2492802850c7048de0b80d542cd30b24ec1856e56ed82af281352c25caf1fb40",
     "app/web/templates/_kata_pengaturan.html": "95cc45fbf6500b9a97ba0367c1e0f2f409ff08398de835e8019e364b3cba2745",
@@ -25,6 +39,7 @@
     "app/web/templates/_pengiriman_bantuan.html": "4378858a777923c6a3551dc925c05144e0d37deb4514ec8def724cf27471ed3b",
     "app/web/templates/_pengiriman_daftar_keadaan.html": "f94c345d6ec2870a80f2db5faa10c8b781e7096929de76e4f106d85dc647f586",
     "app/web/templates/_pengiriman_riwayat_daftar.html": "550d505da037c833c92c14c1343b1c0d4faaf71c55d9839599eaf574cab7ac35",
+    "app/web/templates/halaman_bertahap.html": "ef4e83b50e2dbe525a04dc22705a14905aa59be618f49ae22ca3b44b61a3f443",
     "app/web/templates/jasa_bertahap.html": "989eca817a9e3e5e0428d037fb3458d79326fac643bec4388e7695b2725ff116",
     "app/web/templates/pengaturan_akun_kerangka.html": "6ad795f97f5ee4001f702a30237e10cb072592b0901d2f21b6ab477e9ae534ab",
     "app/web/templates/pengiriman_bertahap.html": "71038c64768ce00073ae568a7f909d2cb578409607dabe2b6e3ffc5c9eef82dd",
@@ -35,6 +50,7 @@
     "hmu_tampilan/static/pengiriman-kontrol.css": "4875b2fb270e6604adc8e23008adbffdf2235bc67ce2fc771a1b390993f63961",
     "hmu_tampilan/static/pengiriman-kontrol.js": "8fd8335c1dc7ddab9effe9b4955bd85f1b18978c5f13bbb61af0eff3c5075e35",
     "hmu_tampilan/static/pengiriman-retur.css": "e48dcdf3f27cfb7a5382924538d31eafb39f50366719dd04456ace70d88afc71",
+    "hmu_tampilan/static/stok-seragam.css": "9eae798939900b6c80672b21020394b704ecfcab7c6784f777caaf8b5dac5ee6",
     "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
     "hmu_tampilan/templates/_jasa_kontrol.html": "6ea1d228b38d1f0dfb10942f12d10a93134ac5877d76a452c86d61285ef5c76e",
     "hmu_tampilan/templates/_kontrol_halaman.html": "162d5616ed892ccb15d36d2408cc710abbbc2ac0605588a243cd2796c200d7d4",
@@ -43,6 +59,8 @@
     "hmu_tampilan/templates/_pengiriman_kontrol.html": "963d299aba104da9c1547db92b20c287b292d0e5c25e8ce6d968be178b9a77a3",
     "hmu_tampilan/templates/_pengiriman_tabs.html": "3dc44c5834a284dad40d79de4ef9831dff5aa51c087e4dfb8c642c44979b2724",
     "hmu_tampilan/templates/_stok.html": "c7ed60e7801638cf94660385f7354d7cbf54947e959d1068bda8abc345d3b577",
-    "scripts/buat_kerangka_ui.py": "c84e1b2de6586718995d2fa58c2aabcac2f1960c8479a5fa8c20b03d931ec5ba"
+    "hmu_tampilan/templates/_stok_navigasi.html": "9c58a74931b972807ea0bbeb0ae55e8a03dc130830943c1a1638fc62cfbefcb4",
+    "scripts/buat_kerangka_ui.py": "40a2d8ec5317a1560c6d4da9476c77c7c56aea8132aa0a4815b956ba7551b217",
+    "scripts/stock_ui_blueprint.py": "b97f6b8db9eefb4be8480235fdb31a04e5896fb148dcfc65de19c5a7fab42af0"
   }
 }
