@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% block judul %}{{ PENGGUNA_BACA.title }}{% endblock %}
 {% block isi %}
 {% set S=PENGGUNA_BACA %}
-{% macro field(label,kind='text',ident='') %}<div><label class="lbl"{% if ident %} for="{{ ident }}"{% endif %}>{{ label }}</label><input class="fld"{% if ident %} id="{{ ident }}"{% endif %} type="{{ kind }}" disabled aria-describedby="pengguna-baca-pending"></div>{% endmacro %}
+{% macro field(label,kind='text',ident='') %}{% if ident %}<div><label class="lbl" for="{{ ident }}">{{ label }}</label><input class="fld" id="{{ ident }}" type="{{ kind }}" disabled aria-describedby="pengguna-baca-pending"></div>{% else %}<label>{{ label }}<input class="fld" type="{{ kind }}" disabled aria-describedby="pengguna-baca-pending"></label>{% endif %}{% endmacro %}
 {% macro roles() %}<div><label class="lbl" for="peran">Peran</label><select class="fld" id="peran" disabled aria-describedby="pengguna-baca-pending"><option selected>Peran belum dibaca</option>{% for key,label,help in S.roles %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select><p class="bantu" style="margin-top:6px" id="arti-peran">Pilihan berlaku setelah data terbaru dibaca.</p></div>{% endmacro %}
 {% macro kindtabs(customer=false) %}<nav class="pilihan" aria-label="Jenis pengguna" style="margin-bottom:20px"><a class="btn" href="/pengguna"{% if not customer %} aria-current="page"{% endif %}>Pengguna staf</a>{% if S.customer %}<a class="btn" href="/pengguna/pelanggan"{% if customer %} aria-current="page"{% endif %}>Pelanggan</a>{% endif %}</nav>{% endmacro %}
 <section data-pengguna-baca-native data-url="{{ S.alamat }}" data-stamp="{{ S.stamp }}" data-pengguna-variant="{{ S.variant }}">

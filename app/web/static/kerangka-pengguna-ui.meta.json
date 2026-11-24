@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "0dced65ce1101b7a69f7c06b4c8fc40420694be3b30429455a62e6b7736bc902",
+  "sumber": "c95f340cced9b5d0b1ce6ec13931d63bb5d56128178e376f446970ab417bb69f",
   "variants": [
     "staf",
     "staf-super",
@@ -8,7 +8,7 @@
     "pelanggan",
     "pelanggan-detail"
   ],
-  "aset_sha256": "70dc91217b6d96276f6517459499038bc30f00acd8021c9846255c2b0bcd27e5",
+  "aset_sha256": "fc03405b0f7bbb5e7afe01df8ae61e24baf8b3ea9b6dafb20bcee743e3c2abdc",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
@@ -19,10 +19,10 @@
     "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
     "app/web/static/akun-pelanggan.css": "1b69d333f8dd70561aba1528b6e023d449ecffceef2ea0c41cffcf13b921801c",
     "app/web/static/kerangka-pengguna-ui-runtime.js": "3dc373fc75de7527793ee858dc06aa864c774500c2ac5c3cba99369419e508fa",
-    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
+    "app/web/static/padi-baca-native.js": "ee14bd0d9a31622c51b714ef700a3e2d03db8c166bca5b88f922c733b78bf9e8",
     "app/web/static/pengguna-baca-native.js": "457298749e67654dfbc6b5fa4ff28b48ef5b201479a2285b19bbae7e6bb5c721",
     "app/web/templates/_pengguna_jenis.html": "3c643169a3e4171b816f757e2ce4fd7c276cb87f91d26ea520bb6543c6de2885",
-    "app/web/templates/pengguna_baca_native.html": "19863944b400c6a4341a923c03a5e748fb7e4b68107d1b81ceb998cb7b5ecbad",
+    "app/web/templates/pengguna_baca_native.html": "09bb1c89bc226a0ce5a03d93eb3fa065d7adf4f1cbd6de79231e3b342cbdeab1",
     "app/web/templates/pengguna_kelola.html": "c90e10f8206e5334460c4f1cd131d2bfc6de0de07ceb795b528aa1886e44a13a",
     "app/web/templates/pengguna_pelanggan.html": "60343a504ace0068c194c75d71d2a701e41ea82b74a7424f8f77aacee88ef91e",
     "app/web/templates/pengguna_ubah.html": "9c471eda306dbaf4baab8370aba4cf025bac8545c99211e710dd786dde000d44",
@@ -30,7 +30,7 @@
     "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
     "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
     "hmu_tampilan/templates/pengguna.html": "746afa45f9565b5eed76fccd79188ebf212c9fc123e2a60030cc3e3785bf783b",
-    "scripts/buat_kerangka_pengguna.py": "80513ccffc746288f664e192b349a0b5a543a0c5d5ea152178ea1a157bdcb51d",
+    "scripts/buat_kerangka_pengguna.py": "c8e14bb66968cc6227737a07ea69eaa830c64408f1a5aa11980c4cab03fb9ac8",
     "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
   }
 }

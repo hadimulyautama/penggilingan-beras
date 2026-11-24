@@ -9,6 +9,17 @@ from jinja2 import ChoiceLoader,Environment,StrictUndefined
 ROOT=Path(__file__).resolve().parents[1]
 
 
+def validate_fields(doc):
+    ids=[n['id'] for n in doc.select('[id]')]
+    if len(ids)!=len(set(ids)):raise ValueError('ID field pengguna ganda')
+    for field in doc.select('input,select,textarea'):
+        wrapped=field.find_parent('label')
+        explicit=doc.find_all('label',attrs={'for':field.get('id')}) if field.has_attr('id') else []
+        if (1 if wrapped else 0)+len(explicit)!=1:raise ValueError('Field pengguna memerlukan satu label native')
+        label=wrapped or explicit[0]
+        if not label.get_text(' ',strip=True):raise ValueError('Nama field pengguna tidak tersedia')
+
+
 def build():
     inputs={Path(__file__).resolve(),ROOT/'app/web/static/kerangka-pengguna-ui-runtime.js',ROOT/'app/web/pengguna.py',ROOT/'app/web/portal/admin.py',ROOT/'app/web/security.py'}
     def module(name,path):
@@ -35,6 +46,7 @@ def build():
         template=env.get_template('pengguna_baca_native.html')
         raw=''.join(template.blocks['isi'](template.new_context(dict(PENGGUNA_BACA=spec,VERSI='__PADI_CAP__'))))
         doc=BeautifulSoup(raw,'html.parser')
+        validate_fields(doc)
         if doc.select('form,[name],input[type=hidden],[data-post],[data-kirim]'):raise ValueError('Bentuk pengguna tidak boleh berisi penulis/kunci akun')
         if any(not n.has_attr('disabled') or n.has_attr('value') for n in doc.select('input,select,textarea') if not n.has_attr('data-pengguna-cari')):raise ValueError('Nilai pengguna belum diketahui')
         for node in doc.select('link[rel=stylesheet]'):

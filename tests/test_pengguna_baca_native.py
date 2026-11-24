@@ -52,6 +52,14 @@ def test_native_fields_disabled_unknown_values_not_false_empty_or_one_time_crede
     assert 'Semua orang yang aktif sudah punya akun' not in html
     assert 'Belum ada akun pelanggan' not in html
     assert not doc.select('.sandi-awal,[name=_csrf]')
+    ids=[n['id'] for n in doc.select('[id]')]
+    assert len(ids)==len(set(ids)), 'Pending structure may not duplicate native field IDs'
+    for field in doc.select('input,select,textarea'):
+        wraps=field.find_parent('label')
+        explicit=doc.find_all('label',attrs={'for':field.get('id')}) if field.has_attr('id') else []
+        assert (1 if wraps else 0)+len(explicit)==1, str(field)
+        label=wraps or explicit[0]
+        assert label.get_text(' ',strip=True), 'Every disabled field still needs an actual accessible label' 
     assert bool(doc.select('nav[aria-label="Jenis pengguna"] a[href="/pengguna/pelanggan"]'))==(variant!='staf' and variant!='staf-detail')
     if kind.startswith('pelanggan'):
         assert [n.get_text() for n in doc.select('thead th')]==shape['columns']
@@ -190,3 +198,14 @@ def test_catalog_overbudget_declines_without_truncating_or_guessing_rows():
     row=lambda i:'<div class="daftar-standar__baris"><div class="baris__nama">'+('&lt;'*200)+'</div><a href="/pengguna/'+str(i)+'">Ubah</a></div>'
     body='<div class="daftar-standar">'+''.join(row(i) for i in range(1,201))+'</div>'
     assert katalog(body,source_address='/pengguna',permission=permission()) is None
+
+
+@pytest.mark.parametrize('html',[
+    '<label>Username</label><input disabled>',
+    '<label for="x">Nama</label><input id="x" disabled><input id="x" disabled>',
+    '<label for="x">Nama</label><label for="x">Nama kedua</label><input id="x" disabled>',
+    '<label><input disabled></label>',
+])
+def test_compiler_declines_missing_ambiguous_or_duplicate_field_labels(html):
+    spec=importlib.util.spec_from_file_location('users_a11y_compiler',ROOT/'scripts/buat_kerangka_pengguna.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    with pytest.raises(ValueError):module.validate_fields(BeautifulSoup(html,'html.parser'))
