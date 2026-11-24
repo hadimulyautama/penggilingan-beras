@@ -187,6 +187,8 @@ async def test_actual_links_four_tabs_native_chrome_race_retry_and_leave(
                     # First response remains held; a real keyboard tab target
                     # starts a second native GET. Old completion must not win.
                     entered2, release2 = native_read_gate(transport, item["path"])
+                    faults['next'] = True
+                    faults['path'] = item['path']
                     releases.append(release2)
                     tab = shell.locator('#tab-barang')
                     target2 = address(await tab.get_attribute("href"))
@@ -199,6 +201,10 @@ async def test_actual_links_four_tabs_native_chrome_race_retry_and_leave(
                     await expect(shell.locator('#tab-barang')).to_have_attribute("aria-selected", "true")
                     await assert_chrome(page, client, target2, item["code"])
                     release2.set()
+                    retry = shell.locator('[data-pd-retry]')
+                    await expect(retry).to_be_visible()
+                    await expect(shell.locator('[data-pd-status]')).to_contain_text('Detail belum dapat dibaca')
+                    await retry.press('Enter')
                     await expect(shell).to_have_count(0, timeout=20000)
                     await expect(page.locator('[data-detail-tab] #tab-barang')).to_have_attribute("aria-selected", "true")
                     native = await assert_chrome(page, client, target2, item["code"])
@@ -206,27 +212,19 @@ async def test_actual_links_four_tabs_native_chrome_race_retry_and_leave(
                     await expect(page.locator('[data-detail-tab] table thead th')).to_have_text(expected_headers)
                     if out:
                         await page.screenshot(path=str(out / (state + "-after-data.png")), full_page=True)
-                    # Traverse remaining actual native tab links, including a
-                    # recoverable 503 and explicit GET retry from keyboard.
+                    # Native detail_kirim_retur.js switches already authorized
+                    # panels locally (preventDefault + replaceState), with no
+                    # additional GET. Preserve that existing efficient contract.
                     for key in ("tiket", "riwayat", "ringkasan"):
-                        faults["next"] = key == "tiket"
-                        faults["path"] = item["path"]
-                        entered3, release3 = native_read_gate(transport, item["path"])
-                        releases.append(release3)
+                        count = len(transport['gets'])
                         tab = page.locator('[data-detail-tab] #tab-' + key)
                         target3 = address(await tab.get_attribute("href"))
                         await tab.press("Enter")
-                        await asyncio.wait_for(entered3.wait(), 20)
-                        await expect(shell).to_be_visible()
-                        await assert_chrome(page, client, target3, item["code"])
-                        release3.set()
-                        if key == "tiket":
-                            retry = shell.locator('[data-pd-retry]')
-                            await expect(retry).to_be_visible()
-                            await expect(shell.locator('[data-pd-status]')).to_contain_text("Detail belum dapat dibaca")
-                            await retry.press("Enter")
-                        await expect(shell).to_have_count(0, timeout=20000)
                         await expect(page.locator('[data-detail-tab] #tab-' + key)).to_have_attribute("aria-selected", "true")
+                        await expect(page.locator('#panel-' + key)).to_be_visible()
+                        await two_frames(page)
+                        assert len(transport['gets']) == count
+                        await expect(shell).to_have_count(0)
                         await assert_chrome(page, client, target3, item["code"])
                     results.append(dict(state=state, native_link=target, four_tabs=True, race=True, retry=True))
 
