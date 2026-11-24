@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "29b3faf382463a2a3f624a922e6ffd1953e7d8a175ff7e1e1b077c2721cf46d3",
+  "sumber": "114b814b516db418c7c7fe20faeffc3c790419d9445662f363d4b444258aa368",
   "schemas": {
     "/ringkasan": {
       "labels": {
@@ -210,7 +210,7 @@
       "css": ""
     }
   },
-  "aset_sha256": "eb54ca11e3673d17e9c6c61d9c1fccb8be63ec472e839d04a486ae5da0a0902c",
+  "aset_sha256": "78450db99ee72884bdd658448a50474606d88847e7fe9dcd63933cf14b6554a4",
   "inputs": {
     "app/services/kelompok_kerja.py": "7414e41a711bdce7bf907854eb7b30b71aecaa499c84796f64142365db627509",
     "app/web/portal/beranda.py": "c706a77e17270fcdea6e5084dc04613edfa89d82b4e4ee5c81fb2b5fef6bd903",
@@ -224,7 +224,7 @@
     "app/web/templates/portal/barang.html": "176951c71bc7dd942bf1fd129fc74348fd0c1c6d25a6c780f5eb50cc8d43f60d",
     "app/web/templates/portal/beranda.html": "deff9342e9c7766e6e0c03fdd5581779b5b87f19a00e8e855f23b3bdae0ecdce",
     "app/web/templates/portal/jasa.html": "612bad6c386f217a51569c67b68a8ad53dc9558ec6f6d65fbbe267dc3937fc54",
-    "app/web/templates/portal/kerangka.html": "2918893a0fd69b354099daa7dc771af6bb0126e10c9f1ca719e81b5eb36419ad",
+    "app/web/templates/portal/kerangka.html": "e85cbece32873c5e17501dd58b1f4a09be718b10ea8fd09086ae766b140ff21c",
     "app/web/templates/portal/masuk.html": "21bf1621093a12bd553093a91cbf37709a6e9f9e6cfcca828a28f6662d048250",
     "app/web/templates/portal/pengambilan.html": "4d3d8ac1c7f76a39f961748b6682b3900d4a1d265f95e1c0f41c8cc515e0f16e",
     "app/web/templates/portal/reports.html": "486fad38dbfdc935ba3e9bb6a1c4caf8227d6c8333b19492491bcdae5e659d86",

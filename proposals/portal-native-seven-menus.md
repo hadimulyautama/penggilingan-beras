@@ -85,3 +85,12 @@ produksi/.venv/bin/python output/padiflow-stok-first-click-20261124/run_local.py
 ```
 
 Repeat with the approved existing WebKit runtime through the same runner when required. SW remains blocked for deterministic interception; ordinary native HTTP/cold-warm PWA upgrade/rollback, real Safari/iPhone, hosted behavior and production throughput are **not** established by this file. No dependency gap was found in the existing customer fixture. Execution/cleanup receipts are Root's remaining gate.
+
+
+## Hidden control cascade delta after owner run15
+
+Root run `ui-portal-seven-chromium-15` exact92f2369 passed four normal customer/width profiles but failed the pending retry visual assertion: the native button already had `hidden`, yet remained visible. Source `hmu_tampilan/static/app.css:420` gives `.btn` author `display:flex`, overriding the UA hidden default. This is a real presentation failure, not a reason to weaken `to_be_hidden()` into an attribute assertion.
+
+The local delta adds only `[data-portal-native-frame] [hidden]{display:none!important}` **inside** the new portal frame so direct documents and `root.outerHTML` soft-navigation both carry it. It does not alter global component CSS, role/access, reader state, retry logic, forms or writers. Existing pure contracts now assert the rule is in the returned root. Root must rerun the unfinished error/retry/draft/Back and protocol cases; no child PG/browser execution or claim they passed.
+
+Separate observed source gap, not silently folded into this delta: Shipping `C.css` is before the root element while its factory serializes only `root.outerHTML`; that CSS is therefore retained on direct document rendering but not necessarily first-click soft-navigation. A distinct styling review/test is needed before claiming all portal first-frame geometry is equivalent.
