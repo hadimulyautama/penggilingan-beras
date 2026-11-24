@@ -53,7 +53,7 @@
     if(!valid(n))return;
     if(!source||doc.getElementById('formulir-sesi')?.dataset.token!==token)throw Error('Pilihan pelanggan belum dapat dibaca untuk sesi ini. Muat ulang halaman.');
     const value=select.value;select.replaceChildren(...Array.from(source.options).map(o=>o.cloneNode(true)));select.value=value;if(select.selectedIndex<0)select.value='';select.disabled=false;syncHidden();status.hidden=true;
-   }catch(e){if(valid(n)){select.disabled=true;syncHidden();status.textContent=e.name==='AbortError'?'Pembacaan pelanggan terlalu lama. Terapkan filter untuk membaca titipan tanpa memilih pelanggan.':e.message;}}
+   }catch(e){if(valid(n)){select.disabled=true;syncHidden();status.textContent=e.name==='AbortError'?'Pembacaan pelanggan terlalu lama. Pilihan pelanggan tetap dipertahankan; periksa kembali sebelum menerapkan filter.':e.message;}}
    finally{clearTimeout(timer);if(load===current)load=null;}
   }
   // Listener capture menggantikan consumer pilihan pada dua route saja;
