@@ -38,8 +38,11 @@ def spesifikasi(path,query=''):
 
 
 def permintaan(request):
-    return request.method=='GET' and request.headers.get('X-Pindah')!='1' and (
-        request.headers.get('X-Kerangka-Halaman')=='1' or request.headers.get('Sec-Fetch-Mode')=='navigate'
+    # Native SDK explicitly requests X1/1 for a document fallback. Only the
+    # explicit document header wins; X1/0 and plain X1 remain native data.
+    return request.method=='GET' and (
+        request.headers.get('X-Kerangka-Halaman')=='1' or request.headers.get('X-Pindah')!='1'
+        and request.headers.get('Sec-Fetch-Mode')=='navigate'
         and request.headers.get('Sec-Fetch-Dest') in {'document','empty'})
 
 

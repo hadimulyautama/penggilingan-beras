@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 from bs4 import BeautifulSoup
@@ -125,6 +126,110 @@ def test_note_is_request_object_bound_not_an_id_or_role_inference():
 def test_data_get_declines_before_actor_queries_or_metadata():
     req=request(headers=[(b'x-pindah',b'1')])
     assert asyncio.run(kerangka(req,None,jenis='staf')) is None
+
+
+@pytest.mark.parametrize('method,headers,expected',[
+    ('GET',[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'1')],True),
+    ('GET',[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'0')],False),
+    ('GET',[(b'x-pindah',b'1')],False),
+    ('GET',[(b'x-kerangka-halaman',b'1')],True),
+    ('GET',[],False),
+    ('GET',[(b'x-kerangka-halaman',b'true')],False),
+    ('GET',[(b'sec-fetch-mode',b'navigate'),(b'sec-fetch-dest',b'document')],True),
+    ('GET',[(b'x-pindah',b'1'),(b'sec-fetch-mode',b'navigate'),(b'sec-fetch-dest',b'document')],False),
+    ('POST',[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'1')],False),
+])
+def test_named_native_sdk_document_data_and_plain_x1_protocol(method,headers,expected):
+    from app.web.pengguna_baca_native import permintaan
+    req=request(headers=headers);req.scope['method']=method
+    assert permintaan(req) is expected
+
+
+def test_existing_settings_get_already_honors_the_same_explicit_document_protocol():
+    from tests.test_pengaturan_menu_native_binding import eligible
+    assert eligible('/pengaturan',headers=[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'1')])
+    assert not eligible('/pengaturan',headers=[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'0')])
+    assert not eligible('/pengaturan',headers=[(b'x-pindah',b'1')])
+    assert not eligible('/pengaturan',headers=[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'1')],method='POST')
+
+
+@pytest.mark.parametrize('path,jenis',[
+    ('/pengguna','staf'),('/pengguna/12','staf'),
+    ('/pengguna/pelanggan','pelanggan'),('/pengguna/pelanggan/12','pelanggan'),
+])
+@pytest.mark.parametrize('method,headers',[
+    ('GET',[(b'x-pindah',b'1')]),
+    ('GET',[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'0')]),
+    ('POST',[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'1')]),
+])
+def test_data_or_post_cannot_enter_document_metadata_or_any_resource_read(monkeypatch,path,jenis,method,headers):
+    import app.web.pengguna_baca_native as module
+    async def forbidden(*args,**kwargs):raise AssertionError('Data request entered optional document work')
+    monkeypatch.setattr(module,'pintu_native',forbidden)
+    monkeypatch.setattr(module,'metadata',lambda:(_ for _ in ()).throw(AssertionError('Data read entered source metadata')))
+    actor=PrincipalMarker();req=request(actor,path,headers=headers);req.scope['method']=method
+    catat_guard(req,actor,jenis)
+    assert asyncio.run(kerangka(req,actor,jenis=jenis,staff_row=SimpleNamespace(id=12,nama='Fixture'),customer_id=12)) is None
+
+
+@pytest.mark.parametrize('case',['unknown-actor','portal','forced-password','feedback-query','foreign-route'])
+def test_explicit_document_does_not_bypass_native_actor_or_route_boundaries(monkeypatch,case):
+    import app.web.pengguna_baca_native as module
+    async def forbidden(*args,**kwargs):raise AssertionError('Rejected document entered a native guard/read')
+    monkeypatch.setattr(module,'pintu_native',forbidden)
+    actor=PrincipalMarker();req=request(actor,headers=[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'1')])
+    catat_guard(req,actor,'staf')
+    if case=='unknown-actor':req.state.akun=PrincipalMarker()
+    elif case=='portal':req.state.portal_scope={}
+    elif case=='forced-password':actor.harus_ganti_sandi=True
+    elif case=='feedback-query':req.scope['query_string']=b'ok=1'
+    else:req.scope['path']='/pengguna/reset'
+    assert asyncio.run(kerangka(req,actor,jenis='staf')) is None
+
+
+@pytest.mark.parametrize('path,jenis,row',[
+    ('/pengguna','staf',None),('/pengguna/12','staf',SimpleNamespace(id=12,nama='Fixture')),
+    ('/pengguna/pelanggan','pelanggan',None),
+])
+def test_sdk_x1_document_enters_existing_admitted_shell_without_extra_business_reader(monkeypatch,path,jenis,row):
+    import sys
+    import app.web.pengguna_baca_native as module
+    from starlette.responses import HTMLResponse
+    seen=[]
+    async def doors(req,actor):seen.append('existing-native-door-boundary');return dict(staf=True,pelanggan=True)
+    async def context(req,actor):seen.append('existing-light-context-boundary');return {}
+    def render(req,name,**values):seen.append((name,values['PENGGUNA_BACA']));return HTMLResponse('pure fixture shell')
+    monkeypatch.setattr(module,'pintu_native',doors)
+    monkeypatch.setitem(sys.modules,'app.web.halaman_bertahap',SimpleNamespace(konteks_kerangka=context,penanda_konteks=lambda *args:'fixture-context'))
+    monkeypatch.setitem(sys.modules,'app.web.tampilan',SimpleNamespace(render=render))
+    actor=PrincipalMarker();req=request(actor,path,headers=[(b'x-pindah',b'1'),(b'x-kerangka-halaman',b'1')]);catat_guard(req,actor,jenis)
+    response=asyncio.run(kerangka(req,actor,jenis=jenis,staff_row=row))
+    assert response.status_code==200 and response.headers['Cache-Control']=='private, no-store'
+    assert seen[:2]==['existing-native-door-boundary','existing-light-context-boundary']
+    assert seen[2][0]=='pengguna_baca_native.html' and seen[2][1]['alamat']==path
+    # Customer detail deliberately is not replaced by an ORM stub here: its
+    # pre-shell native existence join stays covered by the fixed source proof
+    # below, and requires Root's real PG browser Back case for runtime proof.
+
+
+def test_document_protocol_delta_keeps_existing_resource_guards_and_reader_functions_exact():
+    from tests.native_source_oracle import fingerprint
+    nodes={n.name:n for n in ast.parse((ROOT/'app/web/pengguna_baca_native.py').read_text()).body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
+    unchanged={
+        'spesifikasi':'72cf5ec487137fd16c4b091ae36986f93c80719890cd7fd7a70b34174bd87323',
+        'catat_guard':'4e82c99f002fbd565d7f2233095996b4b18d31b88e3d9edc33f9dff713476fd7',
+        'pintu_native':'6d08e7047a0d5f6eb9c326a2c2496ebcb623b211bed4a88de0a9ff1d7f81ac2a',
+        'kerangka':'39743c6e05512ec325482b5a872360c30120b52338f0ae0330c4447db85f2344',
+        'susun':'33405064cbb89922c2b3b317ee6bf1ea6a4d7598008f9e86b9c6215b5c5319b4',
+        '_native_binding':'c87d4ae8c03e8dcc6b4d525f7df7e5241ff599f67ee5cb808fbddc318cfd0c3e',
+        'pasang_native':'e89e8f74b27a9253d932436f14ff41ed88897745a74fc74d8a8dec94f057cb48',
+    }
+    for name,digest in unchanged.items():assert fingerprint(nodes[name])==digest,name
+    # Exact installed SDK sends both headers for the document fallback. No
+    # SDK/popstate/resource guard is changed to accommodate the application.
+    sdk=(ROOT/'hmu_tampilan/static/pindah.js').read_text()
+    assert '? { "X-Pindah": "1", "X-Kerangka-Halaman": "1" }' in sdk
+    assert ': { "X-Pindah": "1" }' in sdk
 
 
 def test_actual_guard_functions_are_reused_and_wrong_marker_not_accepted(monkeypatch):

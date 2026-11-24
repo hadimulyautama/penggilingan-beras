@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "7b971fa3973cf27b830a1f5fd322811bbd7eaa82a877b71eaaf6a401099aa26f",
+  "sumber": "7ddbc3e94739da682b22752e8bab4bfa4693724fb5a2f5780a82733c468cc679",
   "variants": [
     "staf",
     "staf-super",
@@ -8,12 +8,12 @@
     "pelanggan",
     "pelanggan-detail"
   ],
-  "aset_sha256": "2354a1b254f0043925018c5f0aa9cccfee86f078d829278b30daa4761545462f",
+  "aset_sha256": "d5bd489f184afa0a2fe17b4311da2bd8d495a63e62a953e2509648738a63f2f5",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
     "app/web/pengguna.py": "323667ea1a1a087430346f9f558fd1272a5aa48ca2e86c98440541c5cf66aa34",
-    "app/web/pengguna_baca_native.py": "e6e32574c5db10997db4d769dfe44cb69df5f62d5556d3c00071113228a27c99",
+    "app/web/pengguna_baca_native.py": "4924249be9cf770acdb8a3899c5f76ad8c5a0ffbbf58710932fe06cf273c765a",
     "app/web/pengguna_baca_schema.py": "a52ba3b3639a191188edd19041bc87178664b3676fe46d0d3b664dc3c7083d2c",
     "app/web/portal/admin.py": "39a1f88717b2b62aae2b85ffd50435adf37e77f17fc1607651ff8c749e0632a7",
     "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
