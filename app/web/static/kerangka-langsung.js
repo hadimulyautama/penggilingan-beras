@@ -142,6 +142,12 @@
     }catch(_){return null;}
    }
    const history=riwayatLangsung(pilihan.alamat,registry.konteks,cap,sesi.dataset.token);if(history)return history;
+   if(pilihan.alamat.startsWith('/riwayat-')){
+    try{const detail=window.PadiKerangkaRiwayatDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(detail)return detail;}catch(_){return null;}
+   }
+   if(['/stok/pk/detail','/stok-produk/detail','/stok-produk-jasa/detail'].includes(pilihan.alamat.split('?')[0])||pilihan.alamat.startsWith('/gudang/')){
+    try{return window.PadiKerangkaStockDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
    // Resource identity comes from the currently visible native source, never
    // from a route-shaped ID. Factories decline stale/hidden/foreign catalogs.
    const families=[['/barang-keluar/',window.PadiKerangkaPengirimanDetailUI],

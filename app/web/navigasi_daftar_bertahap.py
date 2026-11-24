@@ -53,6 +53,47 @@ def pasang(response, request):
         except Exception as error:
             import logging
             logging.getLogger(__name__).warning('Katalog struktur Giling belum tersedia (%s)',type(error).__name__)
+    # Optional resource references come only from the just-authorized native
+    # result. Neither publisher issues another lookup or invents a row.
+    try:
+        from app.web.portal.scope import is_customer_read
+        if not is_customer_read(request):
+            values=getattr(response,'context',{})
+            groups=values.get('alur_gudang')
+            if isinstance(groups,(list,tuple)):
+                from app.web.stock_detail_native import finish,warehouse_offer
+                offers=tuple(o for group in groups if isinstance(group,dict)
+                    and (o:=warehouse_offer(group.get('id'),groups)) is not None)
+                if offers:response=finish(response,request,offers=offers)
+            path=request.url.path
+            histories={'/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan'}
+            checks={'/riwayat-qc/'+kind for kind in ('gabah-basah','gabah-kering','pk-hasil-giling','pk-luar','beras-hasil-sosoh')}
+            if path in histories|checks:
+                from app.web.riwayat_detail_catalog import katalog
+                from app.web.halaman_bertahap import penanda_konteks
+                from app.web.csrf import untuk_sesi
+                from app.web.security import baca_token,NAMA_COOKIE
+                from app.web import csrf
+                from jinja2.utils import htmlsafe_json_dumps
+                from html import escape
+                address=path+('?' +request.url.query if request.url.query else '')
+                nonce=request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state,'csrf',None)
+                context=penanda_konteks(request,request.state.akun)
+                token=untuk_sesi(nonce,baca_token(request.cookies.get(NAMA_COOKIE)),request.cookies.get('produksi_lihat',''))
+                native_admin=request.state.akun.is_admin is True
+                targets=katalog(response.body.decode('utf-8'),source_address=address,cap=CAP_ASET,
+                    context=context,session=token,boleh_koreksi=native_admin,
+                    boleh_catat_qc=native_admin and values.get('MUTU_AKTIF') is True)
+                if targets is not None:
+                    payload=htmlsafe_json_dumps(targets).encode()
+                    if len(payload)<=262144:
+                        tag=('<script type="application/json" data-riwayat-detail-catalog '
+                             'data-source-address="'+escape(address,quote=True)+'" '
+                             'data-source-sha="'+targets['sumber_sha256']+'">').encode()+payload+b'</script>'
+                        response.body=response.body.replace(marker,tag+marker,1)
+    except Exception as error:
+        import logging
+        logging.getLogger(__name__).warning('Katalog detail native belum tersedia (%s)',type(error).__name__)
     # Struktur publik stabil siap sebelum DOM interaktif. Tidak berisi akun,
     # pilihan hak, saldo, draf atau token; pilihan per dokumen tetap no-store.
     asset=('<script src="/static/padi-baca-native.js?v='+CAP_ASET+'"></script>'
@@ -66,7 +107,9 @@ def pasang(response, request):
            '<script src="/static/kerangka-jasa-detail-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-pengaturan-master-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-pengaturan-alat-ui.js?v='+CAP_ASET+'"></script>'
-           '<script src="/static/kerangka-pengiriman-detail-ui.js?v='+CAP_ASET+'"></script>').encode()
+           '<script src="/static/kerangka-pengiriman-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-riwayat-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-stock-detail-ui.js?v='+CAP_ASET+'"></script>').encode()
     if response.body.count(b'</head>')==1:
         response.body=response.body.replace(b'</head>',asset+b'\n</head>',1)
     from app.web.halaman_bertahap import penanda_konteks
@@ -96,6 +139,7 @@ def pasang(response, request):
                  '<script src="/static/daftar-kosong-bertahap.js?v='+CAP_ASET+'"></script>')
     extra += '<script src="/static/kerangka-langsung.js?v='+CAP_ASET+'" defer></script>'
     extra += '<script src="/static/riwayat-navigasi-native.js?v='+CAP_ASET+'" defer></script>'
+    extra += '<script src="/static/riwayat-detail-katalog.js?v='+CAP_ASET+'" defer></script>'
     script = ('<script src="/static/navigasi-daftar-bertahap.js?v='
               + CAP_ASET + '" data-konteks="' + konteks + '"'+data+'></script>').encode()
     response.body = response.body.replace(marker, extra.encode() + script + marker, 1)
