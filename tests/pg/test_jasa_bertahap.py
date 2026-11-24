@@ -223,6 +223,25 @@ def _tanpa_host_registry(html):
             r'data-konteks="[^\"]+" data-cap="[^\"]+">([^<]*)</script>',html))
         assert len(matches)==1 and matches[0].start()==end and json.loads(matches[0][1])==shape
         end=matches[0].end()
+    alat_hosts=doc.select('#padi-pengaturan-alat-kerangka')
+    assert len(alat_hosts)<=1
+    if alat_hosts:
+        host=alat_hosts[0]
+        assert host.name=='script' and host.get('type')=='application/json'
+        assert set(host.attrs)=={'type','id','data-konteks','data-cap'}
+        assert not host.find_parent(class_='bingkai')
+        shape=json.loads(host.string)
+        assert set(shape)=={'versi','sumber','cap','konteks','sesi','targets'}
+        assert shape['versi']==1 and shape['targets']==['/pengaturan/alat']
+        assert all(shape[k]==registry[k] for k in ('cap','konteks','sesi'))
+        assert shape['konteks']==host['data-konteks'] and shape['cap']==host['data-cap']
+        from app.web.pengaturan_alat_kerangka import aset
+        assert shape['sumber']==aset()['sumber']
+        matches=list(re.finditer(
+            r'\n<script type="application/json" id="padi-pengaturan-alat-kerangka" '
+            r'data-konteks="[^\"]+" data-cap="[^\"]+">([^<]*)</script>',html))
+        assert len(matches)==1 and matches[0].start()==end and json.loads(matches[0][1])==shape
+        end=matches[0].end()
     assert html.count('</body>') == 1 and html[end:].startswith('\n</body>')
     return html[:start] + html[end + 1:]
 
