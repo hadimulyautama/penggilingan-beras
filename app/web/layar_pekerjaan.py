@@ -256,11 +256,14 @@ async def sumber_detail_barang_masuk(db, tid, request, akun):
     return data, t, jenis
 
 
-async def konteks_barang_masuk(tid,request,akun):
+async def konteks_barang_masuk(tid,request,akun,*,sumber=None):
     """Pembaca yang sama untuk HTML dan pemeriksaan status; tidak menerima barang."""
     from app.peran import can_see_financials
     async with SessionLocal() as db:
-        data, t, jenis = await sumber_detail_barang_masuk(db, tid, request, akun)
+        # Hanya tuple dari gate pada permintaan INI yang boleh dipakai ulang
+        # bila negosiasi ternyata memilih arsip. GET data berikutnya tetap
+        # membaca gate baru; tidak ada cache lintas permintaan atau sesi.
+        data, t, jenis = sumber if sumber is not None else await sumber_detail_barang_masuk(db, tid, request, akun)
         b = await svc.untuk(db,akun.user,read_scope=getattr(request.state,'portal_scope',None))
         pending = [x for x in bagi(b).masuk if x.kode==t['kode']]
         catatan = data[0]['catatan'] if data else []
@@ -291,6 +294,7 @@ async def konteks_barang_masuk(tid,request,akun):
 async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
     from app.web.penerimaan_ringkas import keadaan,AKSI_PENERIMAAN
     from app.web.barang_masuk_detail_bertahap import memakai, kerangka
+    sumber_awal=arsip_awal=None
     if memakai(request):
         # Gate sumber native tetap mendahului kerangka. Jangan menebak varian
         # arsip atau menawarkan empat tab untuk catatan historis/portal.
@@ -302,10 +306,14 @@ async def detail_barang_masuk(tid:int,request:Request,akun=Depends(butuh_akun)):
                 arsip = await baca(db, [tid])
         if not arsip:
             return await kerangka(tid, request, akun)
-    ctx,b=await konteks_barang_masuk(tid,request,akun)
+        sumber_awal=(data,tiket,jenis);arsip_awal=arsip
+    ctx,b=(await konteks_barang_masuk(tid,request,akun,sumber=sumber_awal)
+           if sumber_awal is not None else await konteks_barang_masuk(tid,request,akun))
     if not is_customer_read(request) and not ctx['catatan'] and ctx['jenis'] in ('beras','broken'):
         from app.services.penerimaan_historis import baca
-        async with SessionLocal() as db:arsip=await baca(db,[tid])
+        if arsip_awal is None:
+            async with SessionLocal() as db:arsip=await baca(db,[tid])
+        else:arsip=arsip_awal
         if arsip:
             from app.peran import can_see_financials
             return render(request,'barang_masuk_historis.html',layar='barang_masuk',arsip=arsip[0],boleh_audit=can_see_financials(akun.user),
