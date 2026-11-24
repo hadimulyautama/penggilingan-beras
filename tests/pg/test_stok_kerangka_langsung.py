@@ -188,9 +188,10 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                 # Filter baru tidak ada di katalog alamat awal. Tautan tab
                 # harus membawa filter ini tanpa menunggu HTML tujuan.
                 await root.locator('input[type="search"][name="cari"]').fill('')
-                await page.locator('header.bar').click()
+                await root.locator('input[type="search"][name="cari"]').press('Tab')
                 await expect(page.locator('[data-stok-controls]')).to_be_visible()
                 await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)
+                assert await page.evaluate("()=>document.activeElement.matches('[data-stok-controls] .kontrol-pencarian__submit,[data-sk-buka=sk-filter],[data-daftar-kosong],[aria-label=\"Daftar Stok\"]')")
                 search = page.locator('[data-stok-controls] input[type="search"][name="cari"]')
                 await search.fill('Nama baru & uji')
                 await search.press('Enter', no_wait_after=True)
