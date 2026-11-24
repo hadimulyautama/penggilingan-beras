@@ -1,0 +1,36 @@
+# Jasa pelanggan: five-tab first-click integration handoff
+
+Family-only follow-up to proposal `4c14cfcfd16dd23cd2ee470f0f82caee93b09cad` in the existing Root review checkout. Root HEAD at final pure checks: `c4a4a4385a1fa60e469fb2b8f59905e9d2ae9658`. This is local implementation evidence, not browser, PostgreSQL, official CI or release evidence. Existing native staff financial-read and resource/namespace guards remain authoritative. Portal, focused order aliases, actions and editors remain native.
+
+## Root integration points
+
+1. The native caller `layar_jasa.halaman_jasa` and `detail_pelanggan` now decorate their **already rendered** native response with `jasa_detail_catalog.pasang(request, akun, response)`. The existing `kartu`/`d` context is reused; no per-row DB query is introduced. Catalog program loading happens through an explicit versioned script included with the private native host.
+2. Customer detail early-document negotiation runs only after `Depends(butuh_akun)`, the native staff/portal reader check, and the native five-tab check. The existing `jasa_detail_kerangka.kerangka` performs its own fresh native scope/resource check. `X-Pindah: 1` **always declines shell**, including inherited `X-Kerangka-Halaman: 1`; the same URL GET therefore returns native data. Explicit X-Kerangka without X-Pindah, or document navigation, may request a light shell. Action/malformed/focused/portal URLs decline to native.
+3. The global first-click provider is intentionally not edited here. Root can call:
+
+   `window.PadiKerangkaJasaDetailUI.buat(target, baseHTML, context, CAP, sessionToken)`
+
+   Result is `null` (native fallback) or `{versi: 1, alamat, konteks, cap, html}`. Inputs must come from Root's current bound navigation context, not request-supplied authority. `target` is an explicit relative same-origin customer read URL. `baseHTML` is the existing bound frame, at most 8 MiB; no response data or capability is minted by this factory. The target address is correlation, never authorization. Root should register only this declared family, preserve GET-only hydration and abort/stale behavior, and not reuse it for transaction controllers.
+4. The pre-existing thin `jasa-detail-native.js` delegates fresh GET `X-Pindah: 1` to `PADI_BACA_NATIVE`. Native HTML/asset preparation, fresh context checks and data activation remain there; no GET implies saved or authorized business state.
+
+## Catalog source contract
+
+`jasa_detail_catalog.susun_data(source, nativeHTMLBytes, responseContext, *, cap, konteks, sesi, sumber)` is pure. `pasang` is the narrow caller adapter. Catalog sources are only native `/jasa` list context `kartu` (at most 25) or one `/jasa/pelanggan/PID` detail context `d`. Every record requires actual integer `id`, exact native `nama`, and actual integer `pesanan_jumlah`; missing metadata declines the catalog. The `more than 20 orders` Boolean comes from that count, never displayed text or array length. Catalog names and targets must also match the source native links/heading. The adapter checks the same request-state account, no forced password, no portal, actual financial-read predicate, response account, status 200, and bound frame/context/session/CAP.
+
+Private host `#padi-jasa-detail-catalog` contains `{versi, cap, konteks, sesi, sumber, source_address, sumber_sha256, mode, entries}`; each entry has `{id, label, filter, targets}`. `sumber_sha256` is SHA-256 of the original native source address, and `sumber` pins the public program inputs. The host stays inside the native content markers so hydration carries it. It is private/no-store, escaped inert JSON, never public program/cache/storage. Public package contains only five native layout/control variants and interned styles/scripts; no customers, counts, live values, fabricated IDs, forms or POST controls.
+
+The factory requires the original host's context/CAP/session/program-source/address/SHA, a unique connected current frame/main/session, exact current frame address, and a currently visible exact native link. Native list provenance admits only the cataloged link. Native detail provenance admits its five actual native tab links. Unknown/mismatched catalog, hidden/detached source, pending root outside current main, focused hash, portal/editor, wrong PID, action or malformed target declines.
+
+## Pending same-customer tab chaining
+
+Before native data returns, the factory may chain only the same PID from the original authorized native link. It carries the **original catalog unchanged**, retaining original source address/SHA, original label/filter metadata and original clicked target. The pending root stamp is `context|currentTarget|PID|originSHA`; its URL/PID/origin target/SHA must match the current frame/address and original host. A next tab target must be a currently visible link generated inside that current pending root and remain the same PID. Another PID is rejected even if present in the original list catalog. No fresh catalog is fabricated from a pending root. Every eventual same-URL native GET rechecks resource authority; native 403/404/error is not replaced with a successful data claim.
+
+## Final local proof and remaining gates
+
+- 51 Python pure/source/template tests PASS across original shell, bounded catalog, public source-only compiler and caller gate checks.
+- 11 Node pure/DOM-protocol-double tests PASS across the original thin adapter and new first-click runtime. They cover five tabs, same-PID chaining, preserved original provenance, wrong context/session/CAP/source/root/stamp/PID, hidden/disconnected/outside-main source, portal/editor/focused/action/malformed routes and GET retry semantics. These doubles are not browser rendering evidence.
+- Public compiler regeneration and `--check`, JS syntax and `git diff --check` PASS. Payload: 77,255 bytes; metadata: 2,083 bytes. Generated package SHA-256 `c800a3f46e86170467fb246900de4c7bce5c82f0c7f0ec73b842d2a177363e84`; program input digest `bb9fd684d29ca92bed2387a8f4cdf9335837d8d07b47bca130d7cc2fd0664a2e`.
+- At freeze, Root-owned `padi-baca-native.js` is separately dirty and its exact current SHA-256 `ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23` is included in this generated package. Root must commit that SDK delta and regenerate all packages against the final integrated tree; this family-only commit does not claim an isolated all-tree build independent of Root's pending SDK change.
+- Still Root-owned: provider wiring; real sequential native PG/HTTP/Chromium/WebKit checks, actual authorized/denied roles, per-namespace isolation, desktop/390 geometry/keyboard, delayed HTML vs data, pending five-tab chains/Back/deep links, error/retry/stale/navigation with zero POST, cold/warm/PWA upgrade and rollback; program input freshness at final tree; CI/release gates.
+- Direct-document light guard still returns only one customer ID and at most 21 order IDs (ticket EXISTS fallback), but bounded returned rows is not a proven query-plan/runtime bound. Full-history PID indexing and scan/stage timing remain to measure on Root's synthetic fixture. No index/schema/permission/writer/financial policy change is included.
+- `/jasa/{id}` focused redirect, nota/PDF, portal, order actions/editors and other Jasa families are not claimed complete.
