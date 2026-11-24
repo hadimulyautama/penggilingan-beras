@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import httpx
@@ -104,9 +105,15 @@ async def test_empat_literal_native_sebelum_semua_response(pg,lengkap,role,width
         async def request(method,url,**kw):
             reads.append(dict(method=method,url=str(url),headers={k:v for k,v in kw.get('headers',{}).items() if k.lower() in {'x-pindah','x-kerangka-halaman','x-barang-masuk-cari','sec-fetch-mode','sec-fetch-dest'}}))
             assert method=='GET', 'Frame/navigation tidak boleh mengirim POST'
+            target=urlsplit(str(url))
+            # Default kini juga membaca asinkron. Ikat fault ke GET Berjalan
+            # sebelum await, agar respons default yang terlambat tidak mencuri
+            # kegagalan yang justru hendak diuji pada langkah berikutnya.
+            unavailable=(fault['next'] and target.path=='/api/halaman-bertahap/pekerjaan'
+                         and parse_qs(target.query).get('tab')==['berjalan'])
+            if unavailable:fault['next']=False
             result=await native(method,url,**kw)
-            if fault['next'] and str(url).split('?')[0]=='/api/halaman-bertahap/pekerjaan':
-                fault['next']=False
+            if unavailable:
                 return httpx.Response(503,json={'detail':'Fixture pembaca belum tersedia'})
             return result
         c.request=request
@@ -153,6 +160,9 @@ async def test_empat_literal_native_sebelum_semua_response(pg,lengkap,role,width
                 assert await page.evaluate('window.__riwayatPush.length') == pushes
             await (await pintu(page,'/pekerjaan',width)).click()
             await expect(page).to_have_url(BASE+'/pekerjaan')
+            # Selesaikan kontrol setup default sebelum memasang barrier khusus
+            # empat literal lama. Cancel default tertunda diuji terpisah.
+            await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
             await expect(page.locator('nav[aria-label="Tab pekerjaan"]')).to_be_visible()
             link=page.locator('nav[aria-label="Tab pekerjaan"] a[href="/pekerjaan?tab=berjalan"]')
             fault['next']=role=='operator' and width==390
