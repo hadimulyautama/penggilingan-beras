@@ -121,5 +121,13 @@ def test_generated_package_exact_data_free_and_bounded():
         doc=BeautifulSoup(part['html'],'html.parser')
         assert not doc.select('form,input,select,textarea,[name],script[src],link[rel=stylesheet]')
         assert doc.select_one('[data-dryer-native-html]')
+    from app.web.breadcrumb import susun
+    env=Environment(loader=ChoiceLoader([FileSystemLoader(str(ROOT/'app/web/templates')),FileSystemLoader(str(ROOT/'hmu_tampilan/templates'))]),autoescape=select_autoescape())
+    for phase in FASE:
+        expected=env.get_template('_breadcrumb.html').render(rantai=susun('/proses-aktif/'+phase+'/PADI-KODE',dict(kembali='/pekerjaan?tab=berjalan',breadcrumb_detail='PADI-KODE'),phase.title()+' aktif'))
+        assert data['variants'][phase]['breadcrumb']==expected
+        crumb=BeautifulSoup(expected,'html.parser')
+        assert [n.get_text(strip=True).lstrip('›') for n in crumb.select('li')]==['Beranda','Pekerjaan','PADI-KODE']
+        assert len(crumb.select('.nav-rantai__pemisah'))==2 and crumb.select_one('a.desktop-back')
     js=(ROOT/'app/web/static/pengeringan-native-html.js').read_text()
     assert all(k not in js for k in ('fetch(', 'localStorage', 'sessionStorage', 'history.pushState', 'history.replaceState', 'beforeunload'))

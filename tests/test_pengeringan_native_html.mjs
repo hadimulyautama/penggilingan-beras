@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {descriptor,restoreTab}=require('../app/web/static/pengeringan-native-html.js');
-const {validPackage,validCatalog,state}=require('../app/web/static/kerangka-pengeringan-ui-runtime.js');
+const {validPackage,validCatalog,state,backContext}=require('../app/web/static/kerangka-pengeringan-ui-runtime.js');
 const origin='https://fixture.invalid',source='a'.repeat(64),digest='b'.repeat(64);
-const data={versi:1,sumber:source,variants:{pengeringan:{html:''},pendinginan:{html:''}}};
+const data={versi:1,sumber:source,variants:{pengeringan:{html:'',breadcrumb:''},pendinginan:{html:'',breadcrumb:''}}};
 function envelope(){return {versi:1,cap:'cap',konteks:'context',sesi:'session',sumber:source,sumber_sha256:digest,entries:[{alamat:'/proses-aktif/pengeringan/LOT',kode:'LOT',fase:'pengeringan',label:'Pengeringan aktif'}]};}
 const binding={cap:'cap',context:'context',token:'session',source,digest};
 for(const phase of ['pengeringan','pendinginan'])test('exact '+phase+' address and native default tab',()=>{
@@ -40,4 +40,10 @@ test('finished or redirected native page does not restore active tabs',()=>{
  assert.equal(restoreTab({querySelector:()=>null},'bahan','pengeringan'),null);
  const pending={classList:{contains:()=>true},hasAttribute:()=>true};
  assert.equal(restoreTab({querySelector:()=>pending},'bahan','pengeringan'),null);
+});
+test('breadcrumb parent matches native Work family without foreign return URL',()=>{
+ assert.deepEqual(backContext('/pekerjaan?tab=berjalan&gudang=g1',origin),{body:'/pekerjaan?tab=berjalan&gudang=g1',crumb:'/pekerjaan?tab=berjalan&gudang=g1'});
+ assert.deepEqual(backContext('/kabar?sebelum=9',origin),{body:'/kabar?sebelum=9',crumb:'/pekerjaan?tab=berjalan'});
+ assert.deepEqual(backContext('/pekerjaan',origin),{body:'/pekerjaan',crumb:'/pekerjaan?tab=berjalan'});
+ for(const value of ['https://other.invalid/pekerjaan','//other.invalid/pekerjaan','/pengaturan','/berjalan'])assert.deepEqual(backContext(value,origin),{body:'/pekerjaan?tab=berjalan',crumb:'/pekerjaan?tab=berjalan'});
 });

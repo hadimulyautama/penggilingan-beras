@@ -23,6 +23,11 @@ def build():
     spec = importlib.util.spec_from_file_location("drying_native_public_metadata", module_path)
     native = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(native)
+    crumb_path = ROOT / 'app/web/breadcrumb.py'
+    inputs.add(crumb_path)
+    spec = importlib.util.spec_from_file_location('drying_native_breadcrumb', crumb_path)
+    breadcrumb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(breadcrumb)
     meta = native.metadata()
     inputs.update(ROOT / path for path in meta["inputs"])
     roots = [ROOT / "app/web", ROOT / "hmu_tampilan"]
@@ -72,7 +77,9 @@ def build():
                 raise ValueError("Binding skrip dryer perlu review")
             node.attrs.clear()
             node.string = text.replace("</script", "<\\/script")
-        variants[phase] = dict(html=str(doc))
+        crumb = env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(
+            state['alamat'], dict(kembali='/pekerjaan?tab=berjalan', breadcrumb_detail='PADI-KODE'), phase.title() + ' aktif'))
+        variants[phase] = dict(html=str(doc), breadcrumb=crumb)
         if len(variants[phase]["html"].encode()) > 262144:
             raise ValueError("Blueprint fase dryer melebihi batas")
     hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}

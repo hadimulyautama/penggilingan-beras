@@ -7,7 +7,14 @@
  const object=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
  const exact=(v,keys)=>object(v)&&Object.keys(v).length===keys.length&&keys.every(k=>own(v,k));
  function validPackage(p){
-  return exact(p,['versi','sumber','variants'])&&p.versi===1&&/^[a-f0-9]{64}$/.test(p.sumber)&&exact(p.variants,phases)&&phases.every(k=>exact(p.variants[k],['html'])&&typeof p.variants[k].html==='string'&&p.variants[k].html.length<=262144);
+  return exact(p,['versi','sumber','variants'])&&p.versi===1&&/^[a-f0-9]{64}$/.test(p.sumber)&&exact(p.variants,phases)&&phases.every(k=>exact(p.variants[k],['html','breadcrumb'])&&typeof p.variants[k].html==='string'&&p.variants[k].html.length<=262144&&typeof p.variants[k].breadcrumb==='string'&&p.variants[k].breadcrumb.length<=65536);
+ }
+ function backContext(value,origin){
+  const fallback='/pekerjaan?tab=berjalan';
+  if(typeof value!=='string'||!value.startsWith('/')||value.startsWith('//')||value.includes('\\')||/[\x00-\x1f]/.test(value))return {body:fallback,crumb:fallback};
+  let u;try{u=new URL(value,origin);}catch(_){return {body:fallback,crumb:fallback};}
+  if(u.origin!==origin||!['/barang-masuk','/pekerjaan','/kabar'].includes(u.pathname))return {body:fallback,crumb:fallback};
+  return {body:value,crumb:u.pathname==='/pekerjaan'&&u.search?value:fallback};
  }
  function validCatalog(p,{cap,context,token,source,digest}){
   return exact(p,['versi','cap','konteks','sesi','sumber','sumber_sha256','entries'])&&p.versi===1&&p.cap===cap&&p.konteks===context&&p.sesi===token&&p.sumber===source&&p.sumber_sha256===digest&&/^[a-f0-9]{64}$/.test(digest)&&Array.isArray(p.entries)&&p.entries.length<=50&&p.entries.every(e=>exact(e,['alamat','kode','fase','label'])&&typeof e.alamat==='string'&&e.alamat.length<=4096&&typeof e.kode==='string'&&phases.includes(e.fase)&&e.label===e.fase[0].toUpperCase()+e.fase.slice(1)+' aktif');
@@ -42,18 +49,26 @@
   const roots=part.content.querySelectorAll('[data-dryer-native-html]');if(roots.length!==1||part.content.querySelector('form,input,select,textarea,[name],[data-post],[data-kirim],script[src],link[rel=stylesheet]'))return null;
   const root=roots[0];root.dataset.fase=selected.phase;root.dataset.url=address;root.dataset.stamp=context+'|'+address;root.dataset.tab=selected.tab;
   root.querySelector('.dr-code,.rhs-code').textContent=selected.code;
-  root.querySelector('.riwayat-detail__back').href=source;
+  const back=backContext(selected.u.searchParams.get('kembali_kerja'),location.origin);
+  root.querySelector('.riwayat-detail__back').href=back.body;
   for(const tab of root.querySelectorAll('[data-dryer-tab]')){const active=tab.dataset.dryerTab===selected.tab;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
   for(const panel of root.querySelectorAll('[data-dryer-panel]'))panel.hidden=panel.dataset.dryerPanel!==selected.tab;
   while(starts[0].nextSibling&&starts[0].nextSibling!==ends[0])starts[0].nextSibling.remove();ends[0].before(part.content);
   main.querySelectorAll('.desktop-back').forEach(n=>n.remove());
   const title=selected.phase[0].toUpperCase()+selected.phase.slice(1)+' aktif';
   const bar=main.querySelector('.bar__merek');if(bar){bar.textContent=title;bar.setAttribute('aria-label',title);}
-  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const back=doc.createElement('a');back.href=source;back.textContent='Pekerjaan';const current=doc.createElement('span');current.textContent=selected.code;crumb.replaceChildren(back,current);}
+  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){
+   const template=doc.createElement('template');template.innerHTML=data.variants[selected.phase].breadcrumb;
+   const nav=template.content.querySelector('nav.desktop-breadcrumb'),leaf=nav?.querySelector('[aria-current="page"]');
+   if(template.content.querySelectorAll('nav.desktop-breadcrumb').length!==1||!leaf||template.content.querySelectorAll('a.desktop-back').length!==1)return null;
+   leaf.textContent=selected.code;
+   for(const a of template.content.querySelectorAll('a[href="/pekerjaan?tab=berjalan"]'))a.setAttribute('href',back.crumb);
+   crumb.replaceChildren(template.content);
+  }
   for(const link of doc.querySelectorAll('#laci a[href]')){const active=link.getAttribute('href')==='/pekerjaan';link.classList.toggle('pintu--kini',active&&link.classList.contains('pintu'));link.classList.toggle('pintu-sub__satu--kini',active&&link.classList.contains('pintu-sub__satu'));if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
   frame.dataset.pindahAlamat=address;doc.title=title+' · PT Hadi Mulya Utama';
   return {versi:1,alamat:address,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
- if(typeof module==='object'&&module.exports){module.exports={validPackage,validCatalog,state};return;}
+ if(typeof module==='object'&&module.exports){module.exports={validPackage,validCatalog,state,backContext};return;}
  global.PadiKerangkaPengeringanUI=Object.freeze({versi:1,buat});
 })(typeof window==='undefined'?globalThis:window);
