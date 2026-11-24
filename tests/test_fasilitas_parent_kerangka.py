@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 from bs4 import BeautifulSoup
 from starlette.requests import Request
+from tests.native_source_oracle import legacy_dump_fingerprint
 from app.web.fasilitas_parent_kerangka import TARGETS,TITLES,blueprint,susun
 
 ROOT=Path(__file__).parents[1]
@@ -108,7 +109,7 @@ def test_each_shape_has_native_title_breadcrumb_fields_but_no_config_or_mutation
         assert len(doc.select('input[type=checkbox]'))==1 and not doc.select('select')
 
 
-def digest(node):return hashlib.sha256(ast.dump(node,include_attributes=False).encode()).hexdigest()
+def digest(node):return legacy_dump_fingerprint(node)
 
 
 def test_immutable_native_guard_reader_and_writer_baseline_no_git_runtime():

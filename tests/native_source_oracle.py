@@ -4,6 +4,7 @@ Baseline provenance is recorded once, not read from mutable HEAD at test time.
 No application module, Git, database or command is imported by this helper.
 """
 import ast
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -26,6 +27,20 @@ def _shape(value):
 
 def fingerprint(value):
     return digest(json.dumps(_shape(value),ensure_ascii=True,separators=(',',':')))
+
+
+def legacy_dump_fingerprint(node):
+    """Keep fixed Python 3.11 dump hashes portable without replacing baselines.
+
+    Python 3.12 adds empty type_params to function/class nodes. Strip only
+    that empty field on a copy; actual generic parameters remain significant.
+    The existing ast-fields-json-v1 fingerprint above is unchanged.
+    """
+    normalized=copy.deepcopy(node)
+    for item in ast.walk(normalized):
+        if hasattr(item,'type_params') and not item.type_params:
+            delattr(item,'type_params')
+    return digest(ast.dump(normalized,include_attributes=False))
 
 
 def baseline(group):

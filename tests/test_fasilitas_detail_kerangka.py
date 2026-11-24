@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from jinja2 import ChoiceLoader,Environment,FileSystemLoader,StrictUndefined
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
+from tests.native_source_oracle import legacy_dump_fingerprint
 from app.web.fasilitas_detail_kerangka import PARENT,VARIANTS,blueprint,deskripsi,valid_entry
 from app.web.fasilitas_detail_catalog import HOST,LIMIT,pasang,susun_data
 
@@ -161,7 +162,7 @@ def test_decoration_requires_actual_native_parent_endpoint_not_admin_boolean(mon
     req.state.portal_scope=object();assert pasang(req,account,response()).body==body
 
 
-def _digest(node):return hashlib.sha256(ast.dump(node,include_attributes=False).encode()).hexdigest()
+def _digest(node):return legacy_dump_fingerprint(node)
 
 
 def test_fixed_native_baseline_no_direct_shortcut_guard_change_or_writer_and_no_git(monkeypatch):
