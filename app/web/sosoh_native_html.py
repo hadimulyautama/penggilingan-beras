@@ -1,4 +1,4 @@
-"""Unwired Sosoh active structure proposal; native data and writers untouched."""
+"""Sosoh active structure; native data and writers remain authoritative."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -33,11 +33,10 @@ def deskripsi(path: str, query: str = "") -> dict | None:
 
 
 def active_schema(active, historical, labels, rice):
-    """Metadata only. Decline the legacy tail rather than invent its order.
+    """Validate ordered reference metadata; common active schema has no tail.
 
-    Native fields are active kinds followed by historical-only output kinds.
-    That historical aggregate currently has no ORDER BY; this narrow adapter
-    supports exactly the native active order and declines any extra kind.
+    This helper never supplies values or decides whether a kind is writable.
+    A caller with historical keys must first obtain the native display order.
     """
     active = tuple(active)
     if (not active or not all(type(code) is str and code for code in active)
@@ -68,18 +67,23 @@ async def baca_schema_aktif(db):
 
 
 async def baca_schema_hasil(db, process_id):
-    """Reuse actual native master/labels; probe type presence, never quantities."""
-    from sqlalchemy import select
-    from app.penggilingan.gudang2.polishing import jenis_hasil, adalah_spek
-    from app.penggilingan.gudang2.models import PolishingOutputLog
-    from app.services.stok import nama_produk
+    """Direct document only: reuse the actual native aggregate's key order.
 
-    active = await jenis_hasil(db)
-    historical = (await db.scalars(select(PolishingOutputLog.jenis).where(
-        PolishingOutputLog.polishing_process_id == process_id).distinct())).all()
-    # Do not call output_sosoh/ringkasan: they aggregate weights and balances.
-    return active_schema(active, historical, {kind: nama_produk(kind) for kind in active},
-                         {kind for kind in active if adalah_spek(kind) or kind == "beras_b"})
+    form_selesai_penyosohan.ringkasan reads output_sosoh FIRST, then active
+    kinds, then displays active kinds plus historical-only keys in that
+    reader's iteration order. Do exactly that; do not add SQL/order policy.
+    Quantities are read internally by the original aggregate but are NEVER
+    returned here. Full native fresh data alone supplies boleh_catat/values.
+    The common first-click active schema above never invokes this reader.
+    """
+    from app.penggilingan.gudang2 import polishing as p
+    from app.services.stok import output_sosoh, nama_produk
+
+    historical = await output_sosoh(db, process_id)
+    active = await p.jenis_hasil(db)
+    ordered = [*active, *(kind for kind in historical if kind not in active)]
+    return active_schema(ordered, (), {kind: nama_produk(kind) for kind in ordered},
+                         {kind for kind in ordered if p.adalah_spek(kind) or kind == "beras_b"})
 
 
 @lru_cache(maxsize=1)
@@ -114,9 +118,11 @@ def memakai_dokumen(request):
 
 
 async def kerangka(request, akun, konteks):
-    """Positive native permission precedes scoped process/schema-only reads.
+    """Positive native permission precedes scoped process/direct-schema reads.
 
-    None means original renderer, including historical-only field order.
+    None means original renderer for unsupported negotiation/status/metadata.
+    Direct historical fields use the original aggregate's key order only.
+    The aggregate reads quantities internally; only reference metadata leaves.
     X-Pindah:1 is always full native GET; this module registers no route.
     """
     spec = deskripsi(request.url.path, request.url.query)

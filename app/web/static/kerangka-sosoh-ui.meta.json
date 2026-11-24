@@ -1,13 +1,13 @@
 {
   "versi": 1,
-  "sumber": "0ef7c87323bfdeb99c7e168f51ac562ed99df34816eb8f39bb07816899f79d14",
+  "sumber": "9f01e5d53a51a4630939fa5d5a2bf1946fa495c2b793d8379ceadf7f8af875ad",
   "variants": [
     "admin",
     "operator"
   ],
-  "aset_sha256": "7d1b037880bfcdbf8e9184e8f18f7e9bdfb5de51aec87444060a4027c24323ab",
+  "aset_sha256": "34651d46524b086572b052199611a6167edfe4ecd6bf202c746e2aef8ec2c0c7",
   "inputs": {
-    "app/web/sosoh_native_html.py": "436a262333c9c9b1af92cf325bbe0f245e8cfaf1e36c7dde46eb530e7a0572c8",
+    "app/web/sosoh_native_html.py": "f681919d28648fb2d0ccedebf05ba20f32424488d46449c63bfa7b7989bc674b",
     "app/web/static/kerangka-sosoh-ui-runtime.js": "9d06523f38b901ee4854490f025d6538df52365595dd182a1ccd93c73784491f",
     "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
     "app/web/static/riwayat.css": "21fa1ff357afc661b0392e2317182d3338a2938b48d7eb91a7c4e99c2c457071",

@@ -83,7 +83,7 @@ def test_native_active_order_dynamic_labels_without_values():
     (['a'], ['inactive'], {'a': 'A'}), (['a'], ['unknown'], {'a': 'A'}),
     (['a'], [], {}), (['a'], [], {'a': ''}),
 ])
-def test_legacy_tail_or_invalid_master_fail_closed(active, historical, labels):
+def test_common_active_metadata_rejects_unmerged_tail_or_invalid_master(active, historical, labels):
     assert active_schema(active, historical, labels, []) is None
 
 
@@ -127,18 +127,105 @@ def test_qc_headers_exact_native_and_read_only():
         assert label in native
 
 
-def test_light_schema_query_and_native_scope_before_read():
+def test_native_direct_schema_read_and_scope_preserve_boundary():
     source = (ROOT / 'app/web/sosoh_native_html.py').read_text()
     ast.parse(source)
     assert source.index('await izin(akun.user, spec["kode"])') < source.index('select(PolishingProcess.id, PolishingProcess.status)')
     assert 'batas(akun.user, PolishingProcess)' in source
     assert 'process.status != "proses"' in source
-    assert 'PolishingOutputLog.polishing_process_id == process_id).distinct()' in source
+    direct = source[source.index('async def baca_schema_hasil'):source.index('@lru_cache')]
+    assert direct.index('historical = await output_sosoh(db, process_id)') < direct.index('active = await p.jenis_hasil(db)')
+    assert 'ordered = [*active, *(kind for kind in historical if kind not in active)]' in direct
+    assert 'select(' not in direct and 'order_by' not in direct and 'PolishingOutputLog' not in direct
     assert 'active = await jenis_hasil(db)' in source
     assert 'nama_produk(kind)' in source and 'adalah_spek(kind)' in source
     for forbidden in ['.berat_kg', 'await baca(', 'await db.commit(', 'await db.flush(',
                       'SimpleNamespace', 'create_all', 'APIRouter', 'sidik(', 'ringkasan(']:
         assert forbidden not in source
+
+
+def test_direct_schema_injected_native_reader_order_labels_and_no_values(monkeypatch):
+    """Function spies, not fake ORM: native result keys alone cross boundary."""
+    import sys
+    from types import ModuleType
+    from decimal import Decimal
+    from app.web.sosoh_native_html import baca_schema_hasil
+
+    calls, db, pid = [], object(), 712
+    labels = {'active_b': 'Aktif B', 'active_a': 'Aktif A',
+              'legacy_z': 'Historis Z', 'legacy_y': 'Historis Y'}
+
+    class KeysOnly(dict):
+        def get(self, *args):
+            raise AssertionError('Schema must not read a quantity')
+        def values(self):
+            raise AssertionError('Schema must not read quantities')
+        def items(self):
+            raise AssertionError('Schema must not read quantities')
+
+    original = KeysOnly([('legacy_z', Decimal('312.45')), ('active_a', Decimal('18.50')),
+                         ('legacy_y', Decimal('6.25'))])
+
+    async def output(session, process_id):
+        assert session is db and process_id == pid
+        calls.append('native-output')
+        return original
+
+    async def active(session):
+        assert session is db
+        calls.append('native-active')
+        return ['active_b', 'active_a']
+
+    def name(kind):
+        calls.append(('native-label', kind))
+        return labels[kind]
+
+    def rice(kind):
+        calls.append(('native-classification', kind))
+        return kind in ('active_a', 'legacy_y')
+
+    polishing = ModuleType('app.penggilingan.gudang2.polishing')
+    polishing.jenis_hasil, polishing.adalah_spek = active, rice
+    package = ModuleType('app.penggilingan.gudang2')
+    package.polishing = polishing
+    stock = ModuleType('app.services.stok')
+    stock.output_sosoh, stock.nama_produk = output, name
+    monkeypatch.setitem(sys.modules, 'app.penggilingan.gudang2', package)
+    monkeypatch.setitem(sys.modules, 'app.penggilingan.gudang2.polishing', polishing)
+    monkeypatch.setitem(sys.modules, 'app.services.stok', stock)
+    rows = asyncio.run(baca_schema_hasil(db, pid))
+    assert calls[:2] == ['native-output', 'native-active']
+    assert [r['jenis'] for r in rows] == ['active_b', 'active_a', 'legacy_z', 'legacy_y']
+    assert [r['nama'] for r in rows] == ['Aktif B', 'Aktif A', 'Historis Z', 'Historis Y']
+    assert [r['beras'] for r in rows] == [False, True, False, True]
+    assert all(set(r) == {'jenis', 'nama', 'beras'} for r in rows)
+    assert all('kg' not in r and 'aktif' not in r and 'boleh_catat' not in r for r in rows)
+    assert all(('native-label', r['jenis']) in calls and ('native-classification', r['jenis']) in calls for r in rows)
+    spec = deskripsi('/proses-aktif/sosoh/SOSOH-FIXTURE')
+    spec.update(layout_schema(rows, False), stamp='fixture-only', qc=qc_headers())
+    env = Environment(loader=ChoiceLoader([
+        DictLoader({'base.html': '{% block isi %}{% endblock %}',
+                    '_panduan.html': '{% macro panel(id,judul,penutup) %}<dialog>{{caller()}}</dialog>{% endmacro %}'}),
+        FileSystemLoader(str(ROOT/'app/web/templates')),
+    ]), autoescape=select_autoescape())
+    html = env.get_template('sosoh_native_html.html').render(SOSOH_KERANGKA=spec, VERSI='fixture-cap', kembali='/pekerjaan')
+    tags = Tags();tags.feed(html)
+    fields = [attrs for tag, attrs in tags.tags if tag == 'input']
+    assert len(fields) == 4 and all('disabled' in f and 'value' not in f for f in fields)
+    assert 'Historis Z' in html and 'Historis Y' in html and '312.45' not in html and '0 kg' not in html
+
+
+def test_original_output_aggregate_dependency_is_readonly_and_shared_native_order():
+    stock = (ROOT/'app/services/stok.py').read_text()
+    many = stock[stock.index('async def output_sosoh_banyak'):stock.index('async def output_sosoh(', stock.index('async def output_sosoh_banyak'))]
+    single = stock[stock.index('async def output_sosoh('):stock.index('async def _dipindah_silo_proc')]
+    assert 'return (await output_sosoh_banyak(db, [proc_id])).get(proc_id, {})' in single
+    assert 'await db.execute(q)' in many and 'q = (select(' in many
+    for forbidden in ['db.add(', 'db.delete(', 'db.commit(', 'db.flush(', 'pg_advisory', 'for_update', 'insert(', 'update(', 'delete(']:
+        assert forbidden not in many + single
+    native = (ROOT/'app/web/form_selesai_penyosohan.py').read_text()
+    assert native.index('hasil = await output_sosoh(db, proc.id)') < native.index('pilihan_aktif = await p.jenis_hasil(db)')
+    assert 'pilihan = [*pilihan_aktif, *(j for j in hasil if j not in pilihan_aktif)]' in native
 
 
 def test_native_get_declines_before_actor_database():
