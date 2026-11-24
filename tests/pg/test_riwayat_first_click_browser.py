@@ -55,6 +55,14 @@ async def test_history_publisher_matches_native_scope_and_navigation(pg,stok_len
 
 
 async def door(page,path,width):
+    controls=page.locator('[data-laporan-kontrol]')
+    if await controls.count():
+        picker=controls.locator('[data-jenis-riwayat]')
+        if await picker.count() and await picker.is_visible() and await picker.locator('option[value="'+path+'"]').count():
+            await picker.select_option(path);return
+        link=controls.locator('a[href="'+path+'"]').first
+        if await link.count() and await link.is_visible():
+            await link.click();return
     link=page.locator('#laci a[href="'+path+'"]').first
     if width<900 and not await link.is_visible():await page.locator('#buka-laci').click()
     summary=link.locator('xpath=ancestor::details[not(@open)][1]/summary')
@@ -70,7 +78,10 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
         async with peramban(client,width) as (page,transport):
             await page.goto(BASE+'/kabar')
             await page.wait_for_function("()=>document.getElementById('padi-riwayat-kerangka')&&window.PINDAH")
-            for path in PATHS:
+            default=await page.evaluate("()=>JSON.parse(document.getElementById('padi-riwayat-kerangka').textContent).menu.default")
+            await expect(page.locator('#laci a[data-riwayat-alias-native]')).to_have_attribute('href',default)
+            ordered=(default,)+tuple(path for path in PATHS if path!=default)
+            for path in ordered:
                 if not allowed(warehouse,path):continue
                 entered,release=asyncio.Event(),asyncio.Event()
                 transport['gates'][path]=entered,release

@@ -68,10 +68,22 @@ def valid(data):
     from app.web.riwayat_daftar_metadata import PROCESS, QC
     allowed = set(PROCESS) | {'/riwayat-qc/' + key for key in QC}
     if (not isinstance(data, dict)
-            or set(data) != {'versi', 'cap', 'konteks', 'sesi', 'penyandian', 'potongan', 'frames'}
+            or set(data) != {'versi', 'cap', 'konteks', 'sesi', 'penyandian', 'potongan', 'frames', 'menu'}
             or data['versi'] != 1 or data['penyandian'] != 'baris-1'
             or not all(isinstance(data[key], str) and data[key] for key in ('cap', 'konteks', 'sesi'))):
         return False
+    menu=data['menu']
+    targets=allowed|{'/laporan','/audit','/riwayat-qc/beras-hasil-sosoh'}
+    if (not isinstance(menu,dict) or set(menu)!={'default','tabs'}
+            or menu['default'] not in targets or not isinstance(menu['tabs'],dict)
+            or not menu['tabs'] or not set(menu['tabs']) <= {'proses','qc','laporan','audit'}):
+        return False
+    for tab in menu['tabs'].values():
+        if (not isinstance(tab,dict) or set(tab)!={'first','allowed'}
+                or not isinstance(tab['allowed'],list) or not tab['allowed']
+                or len(tab['allowed'])>5 or not all(type(path) is str and path in targets for path in tab['allowed'])
+                or tab['first']!=tab['allowed'][0]):
+            return False
     frames, parts = data['frames'], data['potongan']
     if (not isinstance(frames, dict) or not frames or not set(frames) <= allowed
             or not isinstance(parts, list) or not 0 < len(parts) <= 16384
@@ -94,6 +106,10 @@ async def susun(request, akun, *, navigasi, registry):
     from app.web.riwayat_daftar_bertahap import _boleh, kerangka
     from app.web.kerangka_langsung import kemas_frame
     options = await pilihan(akun)
+    from app.web.laporan_navigasi import TAB
+    tabs={key:dict(first=options[key][0][2],allowed=[row[2] for row in options[key]])
+          for key,_ in TAB if options[key]}
+    menu=dict(default=next(tabs[key]['first'] for key,_ in TAB if key in tabs),tabs=tabs)
     state = dict(request.scope.get('state', {}))
     state.update(menyusun_kerangka_langsung=True, frame_kerangka_langsung=True)
     frames = {}
@@ -114,5 +130,5 @@ async def susun(request, akun, *, navigasi, registry):
     if not frames:
         return None
     result = dict(versi=1, cap=registry['cap'], konteks=registry['konteks'],
-                  sesi=registry['sesi'], **kemas_frame(frames))
+                  sesi=registry['sesi'], menu=menu, **kemas_frame(frames))
     return result if valid(result) else None

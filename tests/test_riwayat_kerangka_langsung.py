@@ -7,6 +7,7 @@ from app.web.riwayat_kerangka_langsung import valid, _style, inline_styles
 def descriptor():
     return dict(versi=1,cap='fixture',konteks='fixture-context',sesi='fixture-session',
                 penyandian='baris-1',potongan=['<section>native labels only</section>'],
+                menu=dict(default='/riwayat-giling',tabs=dict(proses=dict(first='/riwayat-giling',allowed=['/riwayat-giling']))),
                 frames={'/riwayat-giling':[0]})
 
 
