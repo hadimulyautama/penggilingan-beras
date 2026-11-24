@@ -123,6 +123,10 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         await _izin_lokasi(akun.user,PolishingProcess,process_id)
     if not is_customer_read(request):
         await _pastikan_akses_sosoh(akun.user)
+    from app.web.riwayat_detail_native import kerangka as kerangka_detail
+    shell = await kerangka_detail(request, akun)
+    if shell is not None:
+        return shell
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.gudang2.polishing import (
         jenis_hasil, alasan_koreksi_hasil, riwayat_sosoh,

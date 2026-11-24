@@ -109,6 +109,10 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     from app.web.api import _is_jenis_operator
     if not is_customer_read(request) and not await _is_jenis_operator(akun.user,"penggilingan"):
         raise HTTPException(403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
+    from app.web.riwayat_detail_native import kerangka as kerangka_detail
+    shell = await kerangka_detail(request, akun)
+    if shell is not None:
+        return shell
     from app.penggilingan.gudang1.services.milling import (
         alasan_koreksi_hasil_giling, riwayat_giling,
     )
@@ -497,6 +501,10 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
         if lot.waktu_selesai_pendinginan is None:
             fase = "pengeringan" if lot.status == "proses" else "pendinginan"
             return await _alih_proses(request, f"/proses-aktif/{fase}/{lot.kode_lot}")
+        from app.web.riwayat_detail_native import kerangka as kerangka_detail
+        shell = await kerangka_detail(request, akun)
+        if shell is not None:
+            return shell
         kartu, _ = await riwayat_pengeringan(db, batas=1, lot_id=lot_id, user=None if is_customer_read(request) else akun.user)
         if not kartu:
             raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
@@ -770,6 +778,11 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     boleh = await (_is_gabah_operator(akun.user) if jenis in ("gabah-basah","gabah-kering") else _is_jenis_operator(akun.user,"penggilingan") if jenis=="pk-hasil-giling" else _is_jenis_operator(akun.user,"penyosohan") if jenis=="beras-hasil-sosoh" else _is_g2_operator(akun.user))
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
+
+    from app.web.riwayat_detail_native import kerangka as kerangka_detail
+    shell = await kerangka_detail(request, akun)
+    if shell is not None:
+        return shell
 
     from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
     shell = await dokumen_riwayat(request, akun)
