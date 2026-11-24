@@ -98,7 +98,7 @@ async def test_history_structure_before_target_html_and_data(pg,stok_lengkap,rol
                       const root=document.querySelector('[data-riwayat-daftar-native]');
                       if(p.ready===null&&root?.dataset.url===path&&root.getClientRects().length)p.ready=performance.now()-p.started;
                      });
-                     p.observer.observe(document.getElementById('isi-halaman'),{childList:true,subtree:true});
+                     p.observer.observe(document.body,{childList:true,subtree:true});
                      window.__historyUiProbe=p;
                     }""",path)
                     await door(page,path,width)
