@@ -239,6 +239,21 @@ async def test_actual_accepted_receipt_row_four_tabs_native_chrome_back_and_docu
                 await page.locator(READY+' #tab-ringkasan').focus();await page.keyboard.press('ArrowRight')
                 await expect(page.locator(READY+' #tab-barang')).to_be_focused();await expect(page.locator(READY+' #tab-barang')).to_have_attribute('aria-selected','true')
                 await page.keyboard.press('Home');await expect(page.locator(READY+' #tab-ringkasan')).to_be_focused()
+                # Native inline shortcut uses the same already-authorized view
+                # as the tablist. It must keep the strict frame binding too.
+                inline=page.locator(READY+' #panel-ringkasan a').filter(has_text='Lihat tiket & bobot')
+                await expect(inline).to_have_count(1)
+                inline_href=await inline.get_attribute('href')
+                assert inline_href==await page.locator(READY+' #tab-tiket').get_attribute('href')
+                reads_before=transport['gets'].count(path)
+                if width==390:
+                    await inline.focus();await page.keyboard.press('Enter')
+                else:
+                    await inline.click()
+                await expect(page.locator(READY+' #tab-tiket')).to_have_attribute('aria-selected','true')
+                await expect(page.locator(READY+' #panel-tiket')).to_be_visible()
+                await expect(page).to_have_url(inline_href)
+                assert transport['gets'].count(path)==reads_before
                 back=page.locator(READY+' .detail-kirim-kembali');destination=address(await back.get_attribute('href'))
                 assert destination==expected['body_back']['href']
                 probe=await page.evaluate("""target=>{

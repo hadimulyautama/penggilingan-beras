@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 from playwright.async_api import expect
 from sqlalchemy import select
 
-from app.models import MillingProcess
+from app.models import MillingProcess, Warehouse
 from tests.pg.test_halaman_bertahap import _sidik
 from tests.pg.test_history_detail_owner_browser import (
     BASE, READY, SHELL, _klien, gate, native_golden, actual_link, source_ready,
@@ -451,6 +451,17 @@ async def test_giling_pending_reader_can_leave_but_real_editor_keeps_its_boundar
 @pytest.mark.parametrize('width,role', [(1280, 'admin'), (390, 'operator')], ids=['admin-desktop','operator-390'])
 @pytest.mark.parametrize('mode', ['navigate', 'penanda-refresh'])
 async def test_sosoh_pending_reader_can_leave_but_real_editor_keeps_its_boundary(pg, sosoh_selesai, width, role, mode, monkeypatch):
+    # The native Admin destination reads both canonical warehouses. The Sosoh
+    # fixture supplies only G2. Add only the missing canonical master row from
+    # the product seed recipe BEFORE fingerprints; no actor, role, binding,
+    # stock, silo, process or existing G2 row is changed.
+    from app.services.seed import _WAREHOUSES
+    async with pg() as db:
+        existing=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g1'))
+        if existing is None:
+            code,name=next(pair for pair in _WAREHOUSES if pair[0]=='g1')
+            db.add(Warehouse(kode_fungsi=code,nama_gudang=name))
+            await db.commit()
     item = dict(name='sosoh-' + role, kind='sosoh', path='/riwayat-sosoh/' + str(sosoh_selesai['id']),
                 code=sosoh_selesai['kode'], source='/riwayat-sosoh', family='history')
     async with await _klien(pg, peran=role, gudang='Gudang 2') as client:
