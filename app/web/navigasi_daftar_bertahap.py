@@ -118,7 +118,8 @@ def pasang(response, request):
            '<script src="/static/kerangka-beranda-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-muatan-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-proses-pdf-ui.js?v='+CAP_ASET+'"></script>'
-           '<script src="/static/kerangka-fasilitas-detail-ui.js?v='+CAP_ASET+'"></script>').encode()
+           '<script src="/static/kerangka-fasilitas-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-fasilitas-parent-ui.js?v='+CAP_ASET+'"></script>').encode()
     if response.body.count(b'</head>')==1:
         response.body=response.body.replace(b'</head>',asset+b'\n</head>',1)
     from app.web.halaman_bertahap import penanda_konteks
