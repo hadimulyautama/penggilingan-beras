@@ -128,6 +128,34 @@ def _tanpa_host_registry(html):
         assert len(history_matches)==1 and history_matches[0].start()==end
         assert json.loads(history_matches[0][1])==shape
         end=history_matches[0].end()
+    settings_hosts=doc.select('#padi-pengaturan-kerangka')
+    assert len(settings_hosts)<=1
+    if settings_hosts:
+        settings=settings_hosts[0]
+        assert settings.name=='script' and settings.get('type')=='application/json'
+        assert set(settings.attrs)=={'type','id','data-konteks','data-cap'}
+        assert not settings.find_parent(class_='bingkai')
+        shape=json.loads(settings.string)
+        assert set(shape)=={'versi','cap','konteks','sesi','sumber','groups','advanced','recovery','short','console'}
+        assert shape['versi']==1
+        assert all(shape[k]==registry[k] for k in ('cap','konteks','sesi'))
+        assert shape['konteks']==settings['data-konteks'] and shape['cap']==settings['data-cap']
+        assert all(type(shape[k]) is bool for k in ('advanced','recovery','short'))
+        assert set(shape['groups'])<={'akun','fasilitas','operasional','pengguna','sistem'}
+        assert {'akun','fasilitas','pengguna','sistem'}<=set(shape['groups'])
+        for group,flags in shape['groups'].items():
+            assert isinstance(flags,list) and len(flags) in {'akun':{3},'fasilitas':{5,6},'operasional':{4},'pengguna':{2},'sistem':{3,4}}[group]
+            assert all(type(flag) is bool for flag in flags)
+        from app.web.pengaturan_kerangka_langsung import aset,valid_console
+        assert shape['sumber']==aset()['sumber']
+        assert shape['console']=='' or valid_console(shape['console'])
+        assert len(shape['groups']['fasilitas'])==(6 if shape['console'] else 5)
+        matches=list(re.finditer(
+            r'\n<script type="application/json" id="padi-pengaturan-kerangka" '
+            r'data-konteks="[^\"]+" data-cap="[^\"]+">([^<]*)</script>',html))
+        assert len(matches)==1 and matches[0].start()==end
+        assert json.loads(matches[0][1])==shape
+        end=matches[0].end()
     assert html.count('</body>') == 1 and html[end:].startswith('\n</body>')
     return html[:start] + html[end + 1:]
 
