@@ -1,0 +1,8 @@
+{% extends 'audit.html' %}
+{% block isi %}
+{{ super() }}
+{% if LAPORAN_NAV and not catatan %}
+<template data-audit-empty-table><div class="audit-table-wrap"><table class="audit-table"><caption class="sr-only">Catatan audit</caption>{{ AUDIT_META.header|safe }}<tbody><tr><td colspan="4">{{ 'Tidak ada catatan yang cocok dengan filter ini.' if cari or rentang!='semua' or kelompok!='semua' else 'Belum ada catatan audit.' }}</td></tr></tbody></table></div></template>
+<script src="/static/audit-empty-native.js?v={{ VERSI }}" defer></script>
+{% endif %}
+{% endblock %}

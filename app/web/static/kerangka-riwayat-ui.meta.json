@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "340b7a29664219b41deed5e2da1dea4cf60112caf4e8efdfab13bf1044f02dcc",
-  "aset_sha256": "ac9fafe2311c6741be99214d6146498ff89a6de0f8cd2d48d10a668f37c817ea",
+  "sumber": "3c65c2e9f8421938200a462672479d51bd84ded8d5e5e838758473fda58b6096",
+  "aset_sha256": "c94cdb135f2f8cbc95b1c6f4d1301c4e0cb6b6673a11d31cba104fa23670f989",
   "variants": [
     "/riwayat-giling",
     "/riwayat-sosoh",
@@ -9,20 +9,24 @@
     "/riwayat-qc/gabah-basah",
     "/riwayat-qc/gabah-kering",
     "/riwayat-qc/pk-hasil-giling",
-    "/riwayat-qc/pk-luar"
+    "/riwayat-qc/pk-luar",
+    "/audit"
   ],
   "inputs": {
+    "app/services/audit.py": "da4ab6770eb488227800516e7a8a3f113ca44eff6c7d130a8e297c0c73b1342f",
+    "app/web/audit_kerangka.py": "613562afe88170023a6c1e7f81af487fd8381ff866b545810c8536786856af40",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
     "app/web/layar_riwayat.py": "c721fa123d94696047e16cfc0dd8ad4a1d9202bdbdf49efe8e7d7c1c2ad6e5a8",
     "app/web/riwayat_daftar_metadata.py": "54a0662ef1d848e2b6e5c54be3cba7d7c1be55aa89b873732dbec2d498fdd7d6",
-    "app/web/static/kerangka-riwayat-ui-runtime.js": "fc474eb828d57cd76ebe91b06683a5fd862842263e79a13f11044a09a0919d2c",
+    "app/web/static/audit-native.js": "df3256162e629c36604a314638e5071b3ff8657039180e7e7ad4a7a7fd017dac",
+    "app/web/static/kerangka-riwayat-ui-runtime.js": "bb0a1d664cff151f700e4416df3298688d7f314733b843d6da04efcdd2e14834",
     "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
     "app/web/static/riwayat-daftar-native.js": "6695eb675073a8169386f0aab7d783ba37c9be9bc56a3639dd514e95f1d233d9",
     "app/web/static/riwayat-daftar-proses.css": "beb450a127ddb01278ca7ade3bfefe444ebd1e9d401c781ca8fac6eb1575947f",
     "app/web/static/riwayat-daftar-proses.js": "6d48099e3474882bbd25c48a678ceed7e08fb48ef172748f8853303a5820c5ec",
     "app/web/static/riwayat-giling-daftar.css": "03b1149f6d158e28cbd6a8295aba75d0a9e5b71755f3a77651f64dd893544a0d",
-    "app/web/static/riwayat-navigasi-native.js": "aa528ef29b6d8a259a7d732d825a463035767bd4fe3272d8a68a6917b2a43812",
+    "app/web/static/riwayat-navigasi-native.js": "3423d67f932e78c81e9151b67769cbe79c5910b9811e77eb019200fdc5a7fe69",
     "app/web/static/riwayat-qc-desain.css": "0f185a046924ffc1c0c143b9c38a4f8262be55da221063c1ac814101cf2b8d08",
     "app/web/static/riwayat-qc-desain.js": "3727d1fc3372ba9f1502724c916f3bc3d3e746a0c2be8f55929046de0f979696",
     "app/web/static/riwayat-sosoh-desain.css": "682db7c58286abfa6f085a3270e40a8382cdd70ecab540c9b4e44fde376fad09",
@@ -33,6 +37,7 @@
     "app/web/templates/_riwayat_daftar_kerangka_mobile.html": "d23be11b9c53e08928df032fcfedd5645a5655b4f74fea5d4fcf2e05eaf38601",
     "app/web/templates/_riwayat_daftar_kerangka_script.html": "d1d7294d8e8f7e71552ae96b952105367b2de460a93d0937d2b3edbf419cfac6",
     "app/web/templates/_riwayat_qc_alat.html": "94145100f7304cc33bbf33cc73d6656ed744b18104c5045f47e9c320a14fb037",
+    "app/web/templates/audit_kerangka.html": "7a6d52ec40086a5e9dec872f050e2e228e01b70c0ba737c82a71eb4fcc10c5f2",
     "app/web/templates/laporan_katalog_blueprint.html": "ff4b17628b3b5c2967c3abe4f96f09c06a1eb895a5bf4b5c006be97dd66122e2",
     "app/web/templates/riwayat_giling.html": "63830e43d658475678ea38905119b383452b22c504cd21a78bd1999e2fb98844",
     "app/web/templates/riwayat_pengeringan.html": "8aa11e74c64b0cb78893ad73219df6aebc7e13763dfb343a8f3722f88c42e5b8",
@@ -45,10 +50,12 @@
     "hmu_tampilan/static/laporan-riwayat.css": "3a220d7f9d0360968cba48710a82b22157ab0d15b47037162092ffa70dbc127e",
     "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
     "hmu_tampilan/templates/_kontrol_halaman.html": "162d5616ed892ccb15d36d2408cc710abbbc2ac0605588a243cd2796c200d7d4",
+    "hmu_tampilan/templates/_laporan_audit_kontrol.html": "9b0f38f015072143e715222d0b89a3bca33704d37fea6661fca18481108fbecd",
     "hmu_tampilan/templates/_laporan_kontrol.html": "a3e19c3b16b1d90b5e30bd917643a38bd5e0452606c3a47c97797e701f658243",
     "hmu_tampilan/templates/_laporan_navigasi.html": "4dacb95d9e4f8419be4f197d12c85574b0ccd19afd2a8b5e17b423a8ba7dd1f2",
     "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
-    "scripts/buat_kerangka_riwayat.py": "1e7b868ad3c216ccc00c2aec453da3994991572a122aec7ce2bdc02cd03bc65e",
+    "hmu_tampilan/templates/audit.html": "d085ce7fde607380003fd19e9372d05d7eccbb7cf45b3dad418e607c5992b64a",
+    "scripts/buat_kerangka_riwayat.py": "a30730eef29b283924fbf575d787df82316e84086aad1a3390e44a05001e7d82",
     "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
   }
 }

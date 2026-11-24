@@ -18,7 +18,7 @@ GROUPS={
 
 def paths():
     from app.web.riwayat_daftar_metadata import PROCESS, QC
-    return (*PROCESS, *('/riwayat-qc/'+kind for kind in sorted(QC)))
+    return (*PROCESS, *('/riwayat-qc/'+kind for kind in sorted(QC)), '/audit')
 
 
 @lru_cache(maxsize=1)
@@ -40,7 +40,7 @@ def valid(data):
             or not all(type(data[key]) is str and 0<len(data[key])<=512 for key in ('cap','konteks','sesi'))
             or type(data['sumber']) is not str or len(data['sumber'])!=64
             or any(c not in '0123456789abcdef' for c in data['sumber'])
-            or not isinstance(data['targets'],list) or not data['targets'] or len(data['targets'])>7
+            or not isinstance(data['targets'],list) or not data['targets'] or len(data['targets'])>8
             or not all(type(path) is str and path in allowed for path in data['targets'])
             or len(set(data['targets']))!=len(data['targets'])):
         return False
@@ -62,7 +62,7 @@ def valid(data):
     if menu['default']!=menu['tabs'][first]['first']:
         return False
     for path in data['targets']:
-        family='proses' if path in GROUPS['proses'] else 'qc'
+        family='audit' if path=='/audit' else 'proses' if path in GROUPS['proses'] else 'qc'
         if path not in menu['tabs'].get(family,{}).get('allowed',()):
             return False
     return len(htmlsafe_json_dumps(data).encode())<=MAX_JSON_BYTES
@@ -80,8 +80,8 @@ async def susun(request,akun,*,navigasi,registry):
           for key,_ in TAB if options[key]}
     targets=[]
     for path in paths():
-        family='proses' if path in PROCESS else 'qc'
-        if path not in tabs.get(family,{}).get('allowed',()) or not await _boleh(akun.user,path):
+        family='audit' if path=='/audit' else 'proses' if path in PROCESS else 'qc'
+        if path not in tabs.get(family,{}).get('allowed',()) or not (akun.is_admin if path=='/audit' else await _boleh(akun.user,path)):
             continue
         targets.append(path)
     if not targets:return None

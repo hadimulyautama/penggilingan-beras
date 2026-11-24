@@ -20,6 +20,7 @@ async def test_settings_first_click_native_permissions_session_and_abandoned_rea
         native=await client.get('/pengaturan',headers={'X-Pindah':'1'})
         assert native.status_code==200
         expected=BeautifulSoup(native.text,'html.parser')
+        expected_subtitles=[n.get_text() for n in expected.select('.pg-grup>header p')]
         expected_doors=[(n.name,n.select_one('strong').get_text(),n.get('href'),n.get('aria-disabled')) for n in expected.select('.pg-pintu')]
         async with peramban(client,width) as (page,t):
             await page.goto(BASE+'/barang-masuk',wait_until='load')
@@ -33,6 +34,7 @@ async def test_settings_first_click_native_permissions_session_and_abandoned_rea
                 await expect(page.locator('.halaman-memuat')).to_have_count(0)
                 actual=await root.locator('.pg-pintu').evaluate_all("nodes=>nodes.map(n=>[n.tagName.toLowerCase(),n.querySelector('strong').textContent,n.getAttribute('href'),n.getAttribute('aria-disabled')])")
                 assert actual==[list(row) for row in expected_doors]
+                assert await root.locator('.pg-grup>header p').all_text_contents()==expected_subtitles
                 await expect(root.locator('.pg-terik button')).to_be_disabled()
                 release.set();await expect(root).to_have_count(0)
                 # Session shell must keep logout controls disabled until the

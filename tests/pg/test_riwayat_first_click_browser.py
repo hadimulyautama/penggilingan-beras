@@ -34,7 +34,7 @@ async def test_history_publisher_matches_native_scope_and_navigation(pg,stok_len
         host=document.select_one('#padi-riwayat-kerangka')
         assert host and not host.find_parent(class_='bingkai')
         data=json.loads(host.string);assert valid(data)
-        assert set(data['targets'])=={path for path in PATHS if allowed(warehouse,path)}
+        assert set(data['targets'])==({path for path in PATHS if allowed(warehouse,path)}|({'/audit'} if warehouse is None else set()))
         assert not any(key in data for key in ('html','frames','potongan','rows','totals'))
         for path in PATHS:
             native=await client.get(path,headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})

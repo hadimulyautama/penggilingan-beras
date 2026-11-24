@@ -33,6 +33,7 @@
    if(consoleDoor){if(p.console)consoleDoor.setAttribute('href',p.console);else{consoleDoor.remove();doors=doors.filter(a=>a!==consoleDoor);}}
    if(group.dataset.settingsGroup==='sistem'&&flags.length===3){doors.pop().remove();}
    if(doors.length!==flags.length)throw Error('Settings native slots changed');
+   if(group.dataset.settingsGroup==='sistem'&&!flags[1])group.querySelector('header p').textContent='Informasi aplikasi';
    doors.forEach((node,i)=>{if(!flags[i])lock(doc,node);});
   }
   const advanced=root.querySelector('.pg-lanjutan .pg-pintu');if(advanced&&!p.advanced)lock(doc,advanced);

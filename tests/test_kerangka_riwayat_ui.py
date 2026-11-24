@@ -105,7 +105,7 @@ def test_parent_inheritance_and_native_navigation_are_source_derived_without_row
     assert "app/web/templates/laporan_katalog_blueprint.html" in meta["inputs"]
     assert "hmu_tampilan/templates/_laporan_navigasi.html" in meta["inputs"]
     assert set(data) == {"versi", "sumber", "variants", "styles", "scripts"}
-    assert set(data["variants"]) == set(PATHS)
+    assert set(data["variants"]) == {*PATHS,"/audit"}
     assert all("@import" not in text for text in data["styles"].values())
 
 
@@ -225,3 +225,17 @@ console.log('History buat metadata/base identity negatives PASS');
     }), text=True, capture_output=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "base identity negatives PASS" in result.stdout
+
+
+def test_native_audit_variant_has_only_read_filters_and_actual_four_headers():
+    _,meta,data=built()
+    doc=BeautifulSoup(data['variants']['/audit']['html'],'html.parser')
+    root=doc.select_one('.laporan-isi [data-audit-native]')
+    assert root and len(root.select('thead th'))==4
+    assert [n.get_text() for n in root.select('thead th')]==['Waktu / nomor','Aktivitas','Rincian','Pelaksana / status']
+    assert len(root.select('tbody tr'))==1 and 'Memuat' in root.select_one('tbody').get_text()
+    assert all(f['method']=='get' and f['action']=='/audit' for f in root.select('form'))
+    assert {n['name'] for n in root.select('input[name],select[name]')}=={'rentang','kelompok','cari'}
+    assert not root.select('input[name=log_id],input[name=_csrf],form[method=post],button[data-post]')
+    assert 'hmu_tampilan/templates/audit.html' in meta['inputs']
+    assert 'app/services/audit.py' in meta['inputs']

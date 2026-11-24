@@ -37,7 +37,14 @@ def test_html_records_and_values_cannot_enter_the_envelope(key):
 
 def test_real_authority_decides_targets_without_rendering_or_transaction_reads():
     source=(Path(__file__).parents[1]/'app/web/riwayat_kerangka_langsung.py').read_text()
-    assert source.index('not await _boleh(akun.user,path)')<source.index('targets.append(path)')
+    assert source.index("akun.is_admin if path=='/audit' else await _boleh(akun.user,path)")<source.index('targets.append(path)')
     assert 'options=await pilihan(akun)' in source
     for forbidden in ['.commit(','.flush(','.add(','.delete(','create_all','SimpleNamespace','BeautifulSoup','await kerangka(','render(']:
         assert forbidden not in source
+
+
+def test_audit_target_requires_explicit_native_audit_menu_membership():
+    data=descriptor();data['targets']=['/audit']
+    assert not valid(data)
+    data['menu']['tabs']['audit']={'first':'/audit','allowed':['/audit']}
+    assert valid(data)

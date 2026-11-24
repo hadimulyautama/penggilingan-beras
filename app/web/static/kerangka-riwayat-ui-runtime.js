@@ -4,7 +4,7 @@
  'use strict';
  const PROCESS=['/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan'];
  const QC=['gabah-basah','gabah-kering','pk-luar','pk-hasil-giling'].map(k=>'/riwayat-qc/'+k);
- const PATHS=[...PROCESS,...QC];
+ const PATHS=[...PROCESS,...QC,'/audit'];
  const MENU={proses:['/riwayat-sosoh','/riwayat-giling','/riwayat-pengeringan'],
   qc:['/riwayat-qc/gabah-basah','/riwayat-qc/gabah-kering','/riwayat-qc/pk-hasil-giling','/riwayat-qc/pk-luar','/riwayat-qc/beras-hasil-sosoh'],
   laporan:['/laporan'],audit:['/audit']};
@@ -16,12 +16,13 @@
   let u;try{u=new URL(value,origin);}catch(_){return null;}
   if(u.origin!==origin||u.hash||u.pathname+u.search!==value||!PATHS.includes(u.pathname)||u.search.length>2049)return null;
   const pairs=[...u.searchParams];
+  if(u.pathname==='/audit'){if(pairs.length>3||new Set(pairs.map(x=>x[0])).size!==pairs.length||pairs.some(x=>!['rentang','kelompok','cari'].includes(x[0])))return null;return {path:'/audit',family:'audit',kind:'audit',query:u.searchParams};}
   if(QC.includes(u.pathname)&&u.search||PROCESS.includes(u.pathname)&&u.search&&(pairs.length!==1||pairs[0][0]!=='sebelum'))return null;
   return {path:u.pathname,family:PROCESS.includes(u.pathname)?'proses':'qc',kind:PROCESS.includes(u.pathname)?({'/riwayat-giling':'giling','/riwayat-sosoh':'sosoh','/riwayat-pengeringan':'pengeringan'}[u.pathname]):u.pathname.split('/').pop()};
  }
  function validData(data){
   return exact(data,['versi','sumber','variants','styles','scripts'])&&data.versi===1&&typeof data.sumber==='string'&&/^[a-f0-9]{64}$/.test(data.sumber)
-   &&object(data.variants)&&Object.keys(data.variants).length===7&&PATHS.every(path=>exact(data.variants[path],['title','html','breadcrumb'])
+   &&object(data.variants)&&Object.keys(data.variants).length===8&&PATHS.every(path=>exact(data.variants[path],['title','html','breadcrumb'])
     &&['title','html','breadcrumb'].every(k=>typeof data.variants[path][k]==='string')&&data.variants[path].html.length<=524288&&data.variants[path].breadcrumb.length<=65536)
    &&['styles','scripts'].every(k=>object(data[k])&&Object.keys(data[k]).length<=64&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=524288));
  }
@@ -29,7 +30,7 @@
   if(!validData(data)||!exact(permission,['versi','cap','konteks','sesi','sumber','targets','menu'])||permission.versi!==1
     ||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||permission.sumber!==data.sumber
     ||![context,cap,token].every(v=>typeof v==='string'&&v)
-    ||!Array.isArray(permission.targets)||!permission.targets.length||permission.targets.length>7
+    ||!Array.isArray(permission.targets)||!permission.targets.length||permission.targets.length>8
     ||new Set(permission.targets).size!==permission.targets.length||permission.targets.some(p=>typeof p!=='string'||!PATHS.includes(p))
     ||!exact(permission.menu,['default','tabs'])||!object(permission.menu.tabs)||!Object.keys(permission.menu.tabs).length
     ||Object.keys(permission.menu.tabs).some(k=>!own(MENU,k)))return false;
@@ -40,7 +41,7 @@
   }
   const first=Object.keys(MENU).find(k=>own(permission.menu.tabs,k));
   if(permission.menu.default!==permission.menu.tabs[first].first)return false;
-  return permission.targets.every(path=>permission.menu.tabs[PROCESS.includes(path)?'proses':'qc']?.allowed.includes(path));
+  return permission.targets.every(path=>permission.menu.tabs[path==='/audit'?'audit':PROCESS.includes(path)?'proses':'qc']?.allowed.includes(path));
  }
  function pruneNavigation(doc,root,state,menu){
   const nav=root.querySelector('[data-laporan-kontrol]');if(!nav)throw Error('Native navigation missing');
@@ -106,8 +107,19 @@
     node.textContent=pool[key];node.removeAttribute(attribute);
    }
   }
-  const root=part.content.querySelector('.laporan-riwayat'),reader=part.content.querySelector('[data-riwayat-daftar-native]');
-  if(!root||!reader||!root.contains(reader)||part.content.querySelectorAll('.laporan-riwayat').length!==1||part.content.querySelectorAll('[data-riwayat-daftar-native]').length!==1||part.content.querySelector('form,input,[data-post],[data-kirim],script[src],link[rel="stylesheet"]'))return null;
+  const root=part.content.querySelector('.laporan-riwayat'),reader=part.content.querySelector(state.family==='audit'?'[data-audit-native]':'[data-riwayat-daftar-native]');
+  if(!root||!reader||!root.contains(reader)||part.content.querySelectorAll('.laporan-riwayat').length!==1||part.content.querySelectorAll('[data-riwayat-daftar-native],[data-audit-native]').length!==1||part.content.querySelector('[data-post],[data-kirim],script[src],link[rel="stylesheet"]'))return null;
+  if(state.family==='audit'){
+   if([...part.content.querySelectorAll('form')].some(f=>f.getAttribute('method')!=='get'||f.getAttribute('action')!=='/audit')||[...part.content.querySelectorAll('input,select')].some(i=>!['rentang','kelompok','cari'].includes(i.name)))return null;
+   for(const field of reader.querySelectorAll('input[name],select[name]')){
+    const value=state.query.get(field.name)??({rentang:'48j',kelompok:'semua',cari:''}[field.name]);
+    if(field.tagName==='SELECT'){if(![...field.options].some(o=>o.value===value))return null;for(const o of field.options)o.toggleAttribute('selected',o.value===value);}
+    else field.setAttribute('value',value);
+    field.value=value;
+   }
+   const reset=reader.querySelector('[data-lk-reset]');if(reset){const u=new URL(reset.href,location.href);u.searchParams.set('cari',state.query.get('cari')||'');reset.href=u.pathname+u.search;}
+   const label=reader.querySelector('.lk-cakupan');if(label)label.textContent=[...reader.querySelectorAll('select[name]')].map(n=>n.selectedOptions[0]?.textContent||'').join(' · ');
+  }else if(part.content.querySelector('form,input,[name]'))return null;
   try{pruneNavigation(doc,root,state,permission.menu);}catch(_){return null;}
   reader.dataset.url=target;reader.dataset.stamp=context+'|'+target;
   for(const button of root.querySelectorAll('[data-lk-cetak],[data-rpd-print]')){button.disabled=true;button.setAttribute('disabled','');button.setAttribute('aria-describedby','riwayat-native-cetak-alasan');}

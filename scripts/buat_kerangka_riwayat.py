@@ -45,12 +45,12 @@ def public_navigation(path, meta, literals):
     allowed = {"proses": [row[2] for row in literals["PROSES"]],
                "qc": [row[2] for row in literals["QC"]],
                "laporan": ["/laporan"], "audit": ["/audit"]}
-    return dict(aktif=family, judul="Riwayat proses" if family == "proses" else "Riwayat QC",
-                jenis=meta["kind"], detail=False, panduan="rpd-panduan" if family == "proses" else "rqd-panduan",
+    return dict(aktif=family, judul="Audit aktivitas" if family=="audit" else "Riwayat proses" if family == "proses" else "Riwayat QC",
+                jenis=meta["kind"], detail=False, panduan="lk-panduan" if family=="audit" else "rpd-panduan" if family == "proses" else "rqd-panduan",
                 pakai_jumlah=False,
                 tab=[dict(kunci=key, nama=name, href=first[key], boleh=True, alamat=allowed[key])
                      for key, name in literals["TAB"] if key != "laporan"],
-                pilihan=literals["PROSES"] if family == "proses" else literals["QC"],
+                pilihan=[] if family=="audit" else literals["PROSES"] if family == "proses" else literals["QC"],
                 boleh_alamat=allowed[family])
 
 
@@ -68,6 +68,8 @@ def build():
               ROOT / "app/web/laporan_navigasi.py"}
     primary = pure_module("public_history_compiler_helpers", ROOT / "scripts/buat_kerangka_ui.py", inputs)
     metadata = pure_module("public_history_list_metadata", ROOT / "app/web/riwayat_daftar_metadata.py", inputs)
+    audit = pure_module("public_audit_metadata", ROOT / "app/web/audit_kerangka.py", inputs)
+    inputs.update({ROOT / 'app/services/audit.py',ROOT / 'hmu_tampilan/templates/audit.html'})
     breadcrumb = pure_module("public_history_breadcrumb", ROOT / "app/web/breadcrumb.py", inputs)
     literals = native_navigation_literals()
     roots = [ROOT / "app/web", ROOT / "hmu_tampilan"]
@@ -92,10 +94,10 @@ def build():
         return path.read_text()
 
     variants = {}
-    paths = [*metadata.PROCESS, *sorted("/riwayat-qc/" + kind for kind in metadata.QC)]
+    paths = [*metadata.PROCESS, *sorted("/riwayat-qc/" + kind for kind in metadata.QC), "/audit"]
     for path in paths:
-        meta = metadata.metadata(path)
-        inputs.add(ROOT / "app/web/templates" / meta["source_template"])
+        meta = audit.metadata() if path=="/audit" else metadata.metadata(path)
+        if path!="/audit":inputs.add(ROOT / "app/web/templates" / meta["source_template"])
         if meta["family"] == "qc":
             inputs.add(ROOT / "app/web/layar_riwayat.py")
         request = Request(dict(type="http", method="GET", path=path, raw_path=path.encode(),
@@ -104,7 +106,11 @@ def build():
                        TAMPILAN_INDUK=True, RIWAYAT_META=meta, RIWAYAT_STATE=metadata.keadaan("loading"),
                        RIWAYAT_URL=path, RIWAYAT_STAMP="__PADI_STAMP__",
                        LAPORAN_NAV=public_navigation(path, meta, literals), jenis=meta["kind"])
-        if meta["family"] == "proses":
+        if path=="/audit":
+            template=env.get_template('audit_kerangka.html')
+            context.update(AUDIT_META=meta,AUDIT_URL=path,AUDIT_STAMP='__PADI_STAMP__',RENTANG=meta['RENTANG'],KELOMPOK=meta['KELOMPOK'],rentang='48j',kelompok='semua',cari='')
+            native=''.join(template.blocks['isi'](template.new_context(context)))
+        elif meta["family"] == "proses":
             # Render the REAL parent's isi with exactly the child's two
             # metadata-only overrides. Do not render native row loops with
             # invented/empty ORM records and fabricate "zero" summaries.
@@ -121,9 +127,14 @@ def build():
         wrapper = env.get_template("laporan_katalog_blueprint.html")
         html = wrapper.render(**context, KATALOG_NATIVE=native)
         doc = BeautifulSoup(html, "html.parser")
-        if (not doc.select_one(".laporan-riwayat > .laporan-isi [data-riwayat-daftar-native]")
-                or doc.select("form,input,[name],[data-post],[data-kirim],#formulir-sesi")):
-            raise ValueError("Public History structure must contain no transaction/identity input")
+        reader_selector='[data-audit-native]' if path=='/audit' else '[data-riwayat-daftar-native]'
+        if not doc.select_one('.laporan-riwayat > .laporan-isi '+reader_selector) or doc.select('[data-post],[data-kirim],#formulir-sesi'):
+            raise ValueError('Public History structure must contain no transaction/identity input')
+        if path=='/audit':
+            if any(f.get('method')!='get' or f.get('action')!='/audit' for f in doc.select('form')) or any(i.get('name') not in {'rentang','kelompok','cari'} for i in doc.select('input,select')):
+                raise ValueError('Audit blueprint accepts native GET filters only')
+        elif doc.select('form,input,[name]'):
+            raise ValueError('Public list must contain no transaction/identity input')
         for button in doc.select("[data-lk-cetak],[data-rpd-print]"):
             button["disabled"] = ""
             button["aria-describedby"] = "riwayat-native-cetak-alasan"

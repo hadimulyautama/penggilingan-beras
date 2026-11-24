@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block judul %}Audit aktivitas{% endblock %}
+{% block isi %}
+<section data-audit-native data-url="{{ AUDIT_URL }}" data-stamp="{{ AUDIT_STAMP }}">
+{% include '_laporan_audit_kontrol.html' %}
+<div class="hitungan">Jumlah catatan belum dibaca</div>
+<div class="audit-table-wrap"><table class="audit-table"><caption class="sr-only">Catatan audit</caption>{{ AUDIT_META.header|safe }}<tbody><tr><td colspan="4" role="status">Memuat catatan audit…</td></tr></tbody></table></div>
+<p class="bantu">Status dan syarat pembatalan catatan diperiksa setelah data terbaru selesai dibaca. Membaca ulang tidak membatalkan transaksi.</p>
+<p data-audit-native-status role="status" aria-live="polite">Memuat catatan audit…</p>
+<button type="button" class="btn" data-audit-native-retry hidden>Coba lagi</button>
+</section>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/audit-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}
