@@ -249,7 +249,7 @@
   }
   var router = pengarah({ waktu: Date.now, sentuhan: function () { return sentuhan; }, ambil: ambil,
     pasang: pasang, kerangka: kerangka, gagal: gagal, status: status, siap: siapSegar,
-    freshOnly: adopted,
+    freshOnly: function(url){return adopted(url)||!!window.PadiKerangkaPortalDetailUI&&PadiKerangkaPortalDetailUI.freshOnly(url);},
     draf: function(){return !!window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.filterDirty(main.querySelector('[data-portal-native-frame]'));}, utuh: function (url) { location.assign(url); } });
   window.PORTAL_NAV = { buka: function (url, judul) {
     var u = new URL(url, location.href);

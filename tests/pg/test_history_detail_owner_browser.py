@@ -296,8 +296,18 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
                 await page.goto(BASE + item['source'], wait_until='load')
                 entered, release, completed = gate(transport, path)
                 releases.append(release)
-                await page.goto(BASE + path, wait_until='domcontentloaded')
-                await asyncio.wait_for(entered.wait(), 20)
+                response = await page.goto(BASE + path, wait_until='domcontentloaded')
+                assert response.status == 200
+                await expect(page.locator(SHELL)).to_be_visible()
+                try:
+                    await asyncio.wait_for(entered.wait(), 20)
+                except TimeoutError:
+                    diagnostic = await page.evaluate("""()=>{
+                        const root=document.querySelector('[data-riwayat-detail-native]'),frame=document.querySelector('.bingkai'),token=document.getElementById('formulir-sesi')?.dataset.token;
+                        return {url:location.pathname+location.search,root:!!root,rdnReady:root?.dataset.rdnReady,mountReady:root?.dataset.padiBacaNativeReady,state:root?.dataset.padiBacaNativeState,urlMatches:root?.dataset.url===location.pathname+location.search,frameMatches:frame?.dataset.pindahAlamat===location.pathname+location.search,context:!!frame?.dataset.pindahKonteks,token:!!token,bodyFocus:document.activeElement===document.body,status:root?.querySelector('[data-rdn-status]')?.textContent};
+                    }""")
+                    raise AssertionError(dict(direct_read=diagnostic,errors=transport['errors'],trace=trace[-8:]))
+
                 await assert_native_parity(page, golden, before_data=True)
                 release.set()
                 await expect(page.locator(SHELL)).to_have_count(0, timeout=20000)

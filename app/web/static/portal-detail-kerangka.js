@@ -52,5 +52,7 @@
   const inert=document.createElement('script');inert.type='application/json';inert.id='padi-portal-detail-catalog';inert.textContent=JSON.stringify({...s.c,entries:[s.e]});root.append(inert);
   return{html:root.outerHTML,title:s.e.title,address:s.a.address,hash:s.a.hash};
  }
- global.PadiKerangkaPortalDetailUI=Object.freeze({buat,siap:value=>!!state(value)});
+ // Cache policy only: recognizing a read URL never grants its framework or
+ // resource. Exact catalog + visible-link proof remains mandatory in state.
+ global.PadiKerangkaPortalDetailUI=Object.freeze({buat,siap:value=>!!state(value),freshOnly:value=>!!address(value,location.origin)});
 })(typeof window==='undefined'?globalThis:window);

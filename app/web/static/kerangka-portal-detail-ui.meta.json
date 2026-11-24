@@ -1,11 +1,11 @@
 {
   "versi": 1,
-  "sumber": "bde42f4184fa1c54777a98d1c095880c117f85c76a66f10446a2d4d3b109737b",
-  "aset_sha256": "f8062fb5da53077670658f1e660b1f0c48914c7e75c7203d57334c5c6aac6393",
+  "sumber": "9b9093b9595ab3bed241e3c3b28173088ae5e74437638bab6538f7ec4d07bf52",
+  "aset_sha256": "35ad1bd5d16710e13616c67747042f39dab470b069f208d7d6513e464d8c4dfd",
   "inputs": {
     "app/web/portal/detail_kerangka.py": "f70912c793b5f0fb8c72b3078464af2db141386c3007e30688f6361f5823b283",
     "app/web/portal/detail_catalog.py": "d14d9f22ddc94bdc5d995213466ab52ac54c3fb664e7e123c9ea6396e32bab1a",
-    "app/web/static/portal-detail-kerangka.js": "ae332ed894ff2c6c5241edc40149aef89f6e9c317e5fe9302bb6ea19a3711017",
+    "app/web/static/portal-detail-kerangka.js": "6778ab09de373e81335c1588d91cfb35f7b040c5c7b5e118b0aba732376c1131",
     "app/web/templates/portal/detail_kerangka.html": "79f3bf55c2ec836cfd9ae433806c3e8f6177dac4637f6569ded66e36a688135b",
     "scripts/buat_kerangka_portal_detail.py": "4e2e9b8e46fa854c538e2b82fb6aa77c9efdc14663a2ad47b7a9351b7cf03cd2",
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
