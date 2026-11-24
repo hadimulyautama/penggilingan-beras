@@ -241,6 +241,21 @@ async def test_actual_accepted_receipt_row_four_tabs_native_chrome_back_and_docu
                 await page.keyboard.press('Home');await expect(page.locator(READY+' #tab-ringkasan')).to_be_focused()
                 back=page.locator(READY+' .detail-kirim-kembali');destination=address(await back.get_attribute('href'))
                 assert destination==expected['body_back']['href']
+                probe=await page.evaluate("""target=>{
+                  const frame=document.querySelector('.bingkai'),cap=document.documentElement.dataset.versi,
+                    token=document.getElementById('formulir-sesi')?.dataset.token,
+                    host=document.getElementById('padi-kerangka-langsung'),flag=document.getElementById('padi-retur-baca-kerangka');
+                  let factory=false;
+                  try{const r=JSON.parse(host.textContent),base=r.frames['/barang-masuk'].map(i=>r.potongan[i]).join('');
+                    factory=!!PadiKerangkaReturBacaUI.buat(target,base,frame.dataset.pindahKonteks,cap,token);
+                  }catch(_){}
+                  return {frame_address_matches:frame?.dataset.pindahAlamat===location.pathname+location.search,
+                    registry_present:!!host,permission_count:document.querySelectorAll('#padi-retur-baca-kerangka').length,
+                    permission_bound:!!flag&&flag.dataset.cap===cap&&flag.dataset.konteks===frame?.dataset.pindahKonteks,
+                    real_editor_present:!!document.querySelector('[data-editor-perintah],[data-kemas-ulang]'),factory};
+                }""",destination)
+                if out:(out/'before-native-back-probe.json').write_text(json.dumps(probe,indent=2))
+                assert probe['frame_address_matches'] and probe['factory'],probe
                 await back.press('Enter');await expect(page).to_have_url(BASE+destination)
                 await read_ready(page);await expect(page.locator('[data-detail-tab]')).to_have_count(0)
                 if out:await page.screenshot(path=str(out/'native-back.png'),full_page=True)
