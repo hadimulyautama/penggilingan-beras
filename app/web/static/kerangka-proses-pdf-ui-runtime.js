@@ -73,7 +73,9 @@
   for(const [selector,pool,attr]of[['style[data-ppv-style]',data.styles,'data-ppv-style'],['script[data-ppv-script]',data.scripts,'data-ppv-script']])for(const node of part.content.querySelectorAll(selector)){const key=node.getAttribute(attr);if(!own(pool,key))return null;node.textContent=pool[key];node.removeAttribute(attr);}
   const roots=part.content.querySelectorAll('[data-proses-pdf-kerangka]');if(roots.length!==1||part.content.querySelector('form,input,select,textarea,[data-post],[data-kirim],iframe[src],iframe[srcdoc],script[src],link[rel=stylesheet]'))return null;
   const root=roots[0];root.dataset.url=target;root.dataset.stamp=ctx+'|'+target;
-  root.querySelector('[data-ppv-heading]').textContent=component.heading_parts.join(entry.kode);root.querySelector('[data-ppv-title]').setAttribute('title',component.iframe_parts.join(entry.kode));
+  const heading=component.heading_parts.join(entry.kode);
+  root.setAttribute('aria-label',heading);
+  root.querySelector('[data-ppv-heading]').textContent=heading;root.querySelector('[data-ppv-title]').setAttribute('title',component.iframe_parts.join(entry.kode));
   const wrapper=navigationClone(mainNow,doc,part.content,data,state.parent);if(!wrapper)return null;
   while(starts[0].nextSibling&&starts[0].nextSibling!==ends[0])starts[0].nextSibling.remove();ends[0].before(wrapper);
   if(!chrome(main,doc,component,state.detail,entry.kode))return null;

@@ -128,6 +128,9 @@ def test_public_native_viewer_controls_geometry_and_chrome_without_pdf_fetch():
     from app.web.breadcrumb import susun
     for kind, variant in data['variants'].items():
         actual = BeautifulSoup(variant['html'], 'html.parser')
+        region=actual.select_one('[data-proses-pdf-kerangka]')
+        assert region['role']=='region' and region['aria-label']=='Laporan proses'
+        assert not actual.select('h1'), 'Do not add a transient visual title for the SDK gate'
         native = BeautifulSoup(native_fragment(kind, '__PADI_CODE__'), 'html.parser')
         assert actual.select_one('h2').get_text() == native.select_one('h2').get_text()
         assert actual.select_one('iframe')['style'] == native.select_one('iframe')['style']

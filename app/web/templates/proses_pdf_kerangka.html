@@ -1,6 +1,6 @@
 {# VIEWER_NATIVE is compiler output from one of the three actual native viewer
    templates. It contains no original PDF share-fetch script or iframe src. #}
-<div data-proses-pdf-kerangka data-url="{{ data_url }}" data-stamp="{{ stamp }}">
+<div role="region" aria-label="Laporan proses" data-proses-pdf-kerangka data-url="{{ data_url }}" data-stamp="{{ stamp }}">
 {{ VIEWER_NATIVE|safe }}
 <button class="btn btn--kecil" type="button" data-ppv-retry hidden>Coba lagi</button>
 <script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
