@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% block judul %}Pengaturan alat{% endblock %}
+{% block isi %}
+<div data-pengaturan-alat-kerangka data-url="{{ ALAT_SHELL.alamat }}" data-stamp="{{ ALAT_SHELL.stamp }}">
+<section class="kartu"><h1>Pengaturan alat</h1><p>Pengaturan alat kini dikelompokkan menurut kegunaannya.</p><a class="btn" href="/pengaturan/mesin">Mesin &amp; line produksi</a> <a class="btn" href="/pengaturan/silo">Silo</a><a class="btn" href="/pengaturan/sebab-berhenti">Sebab berhenti proses</a></section>
+<p class="bantu" role="status" aria-live="polite" data-alat-native-status>Memeriksa akses halaman terbaru…</p>
+<button class="btn" type="button" data-alat-native-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca halaman bertahap. Tidak ada perubahan yang dikirim selama memuat.</p></noscript>
+</div>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/pengaturan-alat-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

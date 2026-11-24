@@ -1,0 +1,20 @@
+{
+  "versi": 1,
+  "sumber": "ad0d0c077733f77d940675d3c1433a0ee875a4c24e912f634547b1d9ebbb09db",
+  "variants": [
+    "/pengaturan/alat"
+  ],
+  "aset_sha256": "f1501b83f7b0033229a05bfa9f20839bf4326eb5e407020fd288bddc86a1a153",
+  "inputs": {
+    "app/web/pengaturan.py": "49bce60991dccf0faedae57d7f1687e9113ef245a7daabfef60ad16ef70eaae6",
+    "app/web/pengaturan_alat_kerangka.py": "0a0ca0977c9d64629aa4aa2225f8b6ad0761f638f0caca43ed7052c56ef6b2f6",
+    "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
+    "app/web/static/kerangka-pengaturan-alat-ui-runtime.js": "45393fc9149a57faf969d167b54d26aeac8c59e052c5d37aeb810262a5c354f9",
+    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/pengaturan-alat-native.js": "78b42d2397a40d8f3587fd69589709a0c769c82766e1b2ad06f1ace9b6c262ef",
+    "app/web/templates/pengaturan_alat_kerangka.html": "5f954c538cd6fa1b54ac9eb6589a2857784e5690fe109e649b6c74df5bc5c553",
+    "hmu_tampilan/templates/alat.html": "c59af98cf5ae8eac9aa8b75d2eb62868052f79ef7d2cac17ba0550f7d839b913",
+    "scripts/buat_kerangka_pengaturan_alat.py": "c342d1fe943c1cf573130490b891c69d980f7f5b63d528745a535a4ccaa4c0fb",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

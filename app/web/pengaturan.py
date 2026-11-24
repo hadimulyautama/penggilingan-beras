@@ -551,6 +551,13 @@ MAKS_ALAT = 12
 @router.get("/pengaturan/silo")
 @router.get("/pengaturan/alat")
 async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_super)):
+    from app.web.pengaturan_alat_kerangka import permintaan_kerangka,kerangka
+    if permintaan_kerangka(request):
+        from app.web.halaman_bertahap import konteks_kerangka,penanda_konteks
+        context=await konteks_kerangka(request,akun)
+        context['SHELL']={'data_url':request.url.path,'stamp':penanda_konteks(request,akun)+'|'+request.url.path}
+        response=await kerangka(request,akun,context)
+        if response is not None:return response
     return await _halaman_alat(request, akun)
 
 
