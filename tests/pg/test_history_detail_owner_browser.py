@@ -131,6 +131,16 @@ async def open_from_actual_row(page, transport, client, item, *, summary=False):
     original = BeautifulSoup(await native_golden(client, source), 'html.parser')
     matches = [a for a in original.select('a[href]') if a.get('href') == path and code in a.get_text()]
     assert matches, 'Current native source must supply this exact href/code'
+    diagnostic = await page.evaluate("""target=>{
+      const frame=document.querySelector('.bingkai'),token=document.getElementById('formulir-sesi')?.dataset.token,
+       cap=document.documentElement.dataset.versi,host=document.getElementById('padi-kerangka-langsung');
+      try{
+       const r=JSON.parse(host.textContent),base=r.frames['/barang-masuk'].map(i=>r.potongan[i]).join(''),
+        f=window.PadiKerangkaRiwayatDetailUI.buat(target,base,frame.dataset.pindahKonteks,cap,token);
+       return {factory:!!f,menu:!!document.getElementById('padi-riwayat-kerangka'),source:location.pathname+location.search};
+      }catch(e){return {error:String(e),stack:e.stack};}
+    }""", path)
+    assert diagnostic.get('factory'), diagnostic
     entered, release, completed = gate(transport, path)
     if summary:
         original_summary = next((a.find_parent('summary') for a in matches if a.find_parent('summary')), None)
