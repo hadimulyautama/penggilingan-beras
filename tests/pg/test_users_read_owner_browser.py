@@ -34,6 +34,15 @@ READY = '[data-pengguna-baca-native-isi]'
 SETTINGS_SHELL = '[data-pengaturan-menu-kerangka]'
 
 
+async def visible_native_back(page):
+    # Native app.css hides the mobile .bar at min-width:900px. Enter on
+    # that hidden link does not exercise a keyboard-reachable desktop control.
+    back = page.locator('#isi-halaman header.bar a.bar__balik:visible, #isi-halaman a.desktop-back:visible')
+    await expect(back).to_have_count(1)
+    await expect(back).to_be_visible()
+    return back
+
+
 def address(value):
     parsed = urlsplit(value)
     assert not parsed.netloc or parsed.netloc == 'uji'
@@ -387,7 +396,7 @@ async def test_users_retry_stale_abandon_and_does_not_steal_later_header_focus(p
                     # A subsequent native header focus belongs to the user.
                     # It survives the content swap and must not be pulled back
                     # to Retry/container. No system Tab preference is changed.
-                    back = page.locator('header.bar a.bar__balik')
+                    back = await visible_native_back(page)
                     await back.focus()
                     await page.keyboard.press('ArrowRight')
                     await expect(back).to_be_focused()
@@ -401,7 +410,7 @@ async def test_users_retry_stale_abandon_and_does_not_steal_later_header_focus(p
                 await page.locator('.daftar-standar__baris a[href="' + staff_target + '"]').press('Enter')
                 await asyncio.wait_for(data.entered.wait(), 20)
                 await expect(page.locator(SHELL)).to_be_visible()
-                await page.locator('header.bar a.bar__balik').press('Enter')
+                await (await visible_native_back(page)).press('Enter')
                 await page.wait_for_function('()=>location.pathname==="/pengguna"')
                 await expect(page.locator(READY)).to_be_visible()
                 data.release.set()

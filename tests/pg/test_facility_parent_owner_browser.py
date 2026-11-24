@@ -17,7 +17,7 @@ from hmu_identitas import peran as P
 from tests.pg.test_pengaturan_usulan import master, klien
 from tests.pg.test_barang_masuk_bertahap_browser import BASE, peramban
 from tests.pg.test_halaman_bertahap import _sidik
-from tests.pg.test_users_read_owner_browser import ReadPhases, two_frames
+from tests.pg.test_users_read_owner_browser import ReadPhases, two_frames, visible_native_back
 
 pytestmark = pytest.mark.asyncio
 TARGETS = ('/pengaturan/gudang', '/pengaturan/silo',
@@ -194,7 +194,7 @@ async def test_four_native_settings_menu_clicks_two_phases_and_back(pg, master, 
                     await settings(page)
                     root, data = await open_held(page, phases, target, expected[target])
                     await release_data(page, phases, root, data, target, expected[target])
-                    await page.locator('header.bar a.bar__balik').press('Enter')
+                    await (await visible_native_back(page)).press('Enter')
                     await page.wait_for_function('()=>location.pathname==="/pengaturan"')
                     await expect(page.locator('.pg-pintu[href="/pengaturan/gudang"]')).to_be_visible()
                     await page.go_back(wait_until='load')
@@ -238,14 +238,14 @@ async def test_parent_read_failure_retry_keyboard_stale_and_leave(pg, master, mo
                     await page.keyboard.press('Enter')
                     await asyncio.wait_for(data.entered.wait(), 20)
                     # Respect a newer user-selected header focus; don't steal it.
-                    back = page.locator('header.bar a.bar__balik')
+                    back = await visible_native_back(page)
                     await back.focus()
                     await expect(back).to_be_focused()
                     await release_data(page, phases, root, data, target, expected)
                     await expect(back).to_be_focused()
                 await settings(page)
                 root, data = await open_held(page, phases, target, expected)
-                await page.locator('header.bar a.bar__balik').press('Enter')
+                await (await visible_native_back(page)).press('Enter')
                 await page.wait_for_function('()=>location.pathname==="/pengaturan"')
                 await expect(page.locator('.pg-pintu[href="/pengaturan/gudang"]')).to_be_visible()
                 data.release.set()
