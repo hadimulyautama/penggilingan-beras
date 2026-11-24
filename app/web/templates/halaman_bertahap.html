@@ -6,11 +6,11 @@
  {% if SHELL.kind=='pekerjaan' %}
  {% include '_pekerjaan_kontrol.html' %}
  <p class="bantu" id="shell-cetak-alasan">Print tersedia setelah daftar selesai dibaca.</p>
- <p class="bantu">{{ SHELL.scope }}</p>
+ <p class="bantu" data-shell-scope>{{ SHELL.scope }}</p>
  {% else %}
  <header class="halaman-bertahap__kepala"><h1>{{ SHELL.title }}</h1>{% if not LAPORAN_NAV %}<div><button class="btn btn--kecil" type="button" data-shell-guide aria-controls="shell-panduan">Panduan</button> <button class="btn btn--kecil" type="button" data-shell-print disabled aria-describedby="shell-cetak-alasan">Cetak</button></div>{% endif %}</header>
  <p class="bantu" id="shell-cetak-alasan">Cetak tersedia setelah daftar selesai dibaca.</p>
- <p class="bantu">{{ SHELL.scope }}</p>
+ <p class="bantu" data-shell-scope>{{ SHELL.scope }}</p>
  {% if SHELL.kind=='pekerjaan' %}{% include '_pekerjaan_panduan.html' %}{% else %}
  <dialog class="pk-panel" id="shell-panduan" data-shell-guide-panel aria-labelledby="shell-panduan-judul"><h2 id="shell-panduan-judul">Panduan stok</h2><p>Pilih jenis stok dan filter kepemilikan atau gudang. Angka saldo dan tindakan mengikuti data serta akses yang sudah berlaku.</p><p>Memuat data berbeda dari daftar kosong. Coba lagi hanya membaca data; tidak mencatat atau memindahkan stok.</p><button class="btn" type="button" data-shell-guide-close>Tutup panduan</button></dialog>
  {% endif %}
@@ -31,7 +31,7 @@
     </select>{% else %}<input class="fld" type="search" name="{{ field.name }}" value="{{ field.value }}" maxlength="200">{% endif %}
     {% if field.reason %}<small id="shell-bantu-{{ field.name }}">{{ field.reason }}</small>{% endif %}
    </label>{% endfor %}
-   <button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" href="{{ SHELL.reset_url }}">Atur ulang filter</a>
+   <button class="btn btn--utama" type="submit">Terapkan filter</button><a class="btn" data-shell-reset href="{{ SHELL.reset_url }}">Atur ulang filter</a>
   </form>
  </details>
  {% endif %}

@@ -152,7 +152,19 @@ async def lengkapi_dokumen(request: Request, response):
                         or body.count(b'</body>') != 1):
                     raise ValueError('Bentuk registry belum tersedia')
                 from app.web.tampilan import templates
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry).encode()
+                stok = None
+                try:
+                    from app.web.stok_kerangka_langsung import susun as susun_stok
+                    from app.web.halaman_bertahap import konteks_kerangka
+                    stok = await susun_stok(request, akun,
+                                            navigasi=await konteks_kerangka(request, akun))
+                except Exception as error:
+                    if isinstance(error, HTTPException) and error.status_code in (401, 403):
+                        raise
+                    # Kegagalan keluarga opsional tidak merusak enam frame
+                    # wajib. Tidak mencetak parameter atau meniru frame sukses.
+                    log.warning('Kerangka Stok belum tersedia (%s)', type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok).encode()
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
                 body = siap
         except Exception as e:

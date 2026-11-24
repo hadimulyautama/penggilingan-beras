@@ -3,6 +3,56 @@
  'use strict';
  if(!window.PINDAH||typeof PINDAH.aturKerangkaLangsung!=='function')return;
  let hostLama=null,registry=null;
+ function stokLangsung(pilihan,context,cap,token){
+  if(!pilihan.alamat.startsWith('/stok'))return null;
+  const u=new URL(pilihan.alamat,location.href),q=u.searchParams;
+  if(u.origin!==location.origin||u.pathname!=='/stok'||u.hash||u.search.length>3000)return null;
+  const names=['tab','pemilik','gudang','pelanggan_id','cari'];
+  if(Array.from(q.keys()).some(k=>!names.includes(k)||q.getAll(k).length!==1))return null;
+  const tab=q.get('tab')||'bahan',owner=q.get('pemilik')||'semua',warehouse=q.get('gudang')||'',customer=q.get('pelanggan_id')||'',search=q.get('cari')||'';
+  if(!['bahan','produk','karung'].includes(tab)||!['semua','pabrik','jasa'].includes(owner)||search.length>200||customer&&(!/^[1-9]\d{0,9}$/.test(customer)||Number(customer)>2147483647)||customer&&owner!=='jasa')return null;
+  const host=document.getElementById('padi-stok-kerangka');let data;
+  if(!host?.isConnected||host.dataset.konteks!==context||host.dataset.cap!==cap)return null;
+  try{data=JSON.parse(host.textContent);}catch(_){return null;}
+  if(data?.versi!==1||data.penyandian!=='baris-1'||data.konteks!==context||data.cap!==cap||data.sesi!==token||!data.frames||typeof data.frames!=='object'||Array.isArray(data.frames)||Object.keys(data.frames).some(k=>!['bahan','produk','karung'].includes(k)))return null;
+  // Jenis yang tidak disediakan otoritas tidak dibuat di browser. Penjaga
+  // native tetap berjalan ketika GET isi tiba atau hak telah berubah.
+  const html=decodeFrame(data,tab);if(!html)return null;
+  const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),main=doc.getElementById('isi-halaman'),root=main?.querySelector('[data-halaman-bertahap][data-kind="stok"]');
+  if(!frame||!root||frame.dataset.pindahKonteks!==context||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
+  const locationSelect=root.querySelector('select[name="gudang"]'),ownerSelect=root.querySelector('select[name="pemilik"]'),customerSelect=root.querySelector('select[name="pelanggan_id"]');
+  if(!locationSelect||!ownerSelect||!customerSelect||!Array.from(locationSelect.options).some(o=>o.value===warehouse))return null;
+  locationSelect.value=warehouse;ownerSelect.value=owner;
+  if(customer){const option=doc.createElement('option');option.value=customer;option.textContent='Pelanggan terpilih · ID '+customer+' (nama menunggu data)';customerSelect.append(option);customerSelect.value=customer;}
+  // Data pelanggan belum dibaca. ID dipertahankan tanpa menebak nama atau
+  // menampilkan pilihan transaksi lama dari konteks lain.
+  customerSelect.disabled=true;
+  for(const form of root.querySelectorAll('form')){
+   for(const input of form.querySelectorAll('input[type="hidden"]'))input.remove();
+   for(const input of form.querySelectorAll('input[name="cari"]'))input.value=search;
+   const fields=new Set(Array.from(form.elements).filter(e=>e.name&&!e.disabled).map(e=>e.name));
+   for(const [key,value] of [['tab',tab],['pemilik',owner],['gudang',warehouse],['pelanggan_id',customer],['cari',search]]){
+    if(fields.has(key)||key==='pelanggan_id'&&!customer)continue;
+    const input=doc.createElement('input');input.type='hidden';input.name=key;input.value=value;form.append(input);
+   }
+  }
+  for(const link of main.querySelectorAll('.laporan-nav a[href],.kontrol-tab a[href]')){
+   const target=new URL(link.getAttribute('href'),location.href);
+   if(target.origin!==location.origin||target.pathname!=='/stok')continue;
+   const kind=target.searchParams.get('tab')||'bahan';
+   if(!['bahan','produk','karung'].includes(kind))return null;
+   const next=new URL(u);next.searchParams.set('tab',kind);link.href=next.pathname+next.search;
+  }
+  const reset=new URL('/stok',location.href);reset.searchParams.set('tab',tab);reset.searchParams.set('pemilik','semua');if(search)reset.searchParams.set('cari',search);
+  root.querySelector('[data-shell-reset]')?.setAttribute('href',reset.pathname+reset.search);
+  const scope=root.querySelector('[data-shell-scope]');
+  if(scope)scope.textContent=({semua:'Semua kepemilikan',pabrik:'Pabrik',jasa:'Titipan jasa'})[owner]+(customer?' · Pelanggan ID '+customer+' (nama menunggu data)':'')+' · '+locationSelect.selectedOptions[0].textContent;
+  root.dataset.filtered=owner!=='semua'||!!(warehouse||customer||search)?'1':'0';
+  root.dataset.stamp=context+'|'+u.pathname+u.search;
+  root.dataset.url='/api/halaman-bertahap/stok'+u.search;
+  frame.dataset.pindahAlamat=u.pathname+u.search;
+  return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
+ }
  function detailLangsung(pilihan,context,cap){
   const source=document.querySelector('[data-bm-page]'),node=source?.querySelector('script[data-bm-detail-catalog]');
   if(!node||source.dataset.bmContext!==context||source.dataset.bmCap!==cap)return null;
@@ -48,7 +98,7 @@
   if(!host?.isConnected||!frame||!sesi?.dataset.token||!cap||host.dataset.cap!==cap||host.dataset.konteks!==frame.dataset.pindahKonteks||window.SESIFORM&&!SESIFORM.periksa())return null;
   if(host!==hostLama){try{registry=JSON.parse(host.textContent);hostLama=host;}catch(_){return null;}}
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
-  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat))return detailLangsung(pilihan,registry.konteks,cap);
+  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat))return stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||detailLangsung(pilihan,registry.konteks,cap);
   // Validasi seluruh indeks dan ukuran sebelum join. Versi/rujukan rusak
   // kembali ke navigasi native, bukan HTML parsial atau alamat tebakan.
   const html=decodeFrame(registry,pilihan.alamat);if(!html)return null;

@@ -56,6 +56,11 @@ def penanda_konteks(request: Request, akun) -> str:
 
 
 def penanda(request: Request, akun, jenis: str) -> str:
+    if jenis == 'stok':
+        # Korelasi baca, bukan izin/tanda tangan. Struktur kosong dapat
+        # mengikat filter baru di browser; GET tetap memeriksa aktor native.
+        return penanda_konteks(request, akun) + '|' + ALAMAT[jenis] + (
+            '?' + request.url.query if request.url.query else '')
     nilai = [penanda_konteks(request, akun), ALAMAT[jenis], request.url.query]
     return hashlib.sha256(json.dumps(nilai).encode()).hexdigest()
 
@@ -113,7 +118,7 @@ async def konteks_kerangka(request: Request, akun):
     return konteks
 
 
-async def kerangka(request: Request, akun, jenis: str, *, navigasi=None):
+async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lokasi=None):
     from app.web.tampilan import render
 
     q = request.query_params
@@ -175,7 +180,7 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None):
             mutu = await fitur_mutu(db) if tab == "bahan" else False
         nama = next(k for k, v in HALAMAN.items() if v == (tab, "jasa" if pemilik == "jasa" else "pabrik"))
         awal = dict(lot=[], tempat=[], daftar=[], karung=[], semua_kepemilikan=pemilik == "semua")
-        await siapkan(request, nama, awal)
+        await siapkan(request, nama, awal, metadata_navigasi=stok_lokasi)
         nav = awal["STOK_NAV"]
         columns = kolom_daftar(tab, mutu)
         from app.web.stok_navigasi import alamat

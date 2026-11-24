@@ -67,7 +67,7 @@ def kembali_aman(nilai):
     return alamat(tab, pemilik, pelanggan_id=pid, gudang=gudang, cari=q.get('cari',[''])[0][:200])
 
 
-async def siapkan(request, nama, konteks):
+async def siapkan(request, nama, konteks, *, metadata_navigasi=None):
     # Pembungkus kepemilikan tetap memakai kontrol template Stok asal.
     nama = (konteks.get("template_stok_asal")
             or konteks.get("template_kepemilikan_asal") or nama)
@@ -169,9 +169,12 @@ async def siapkan(request, nama, konteks):
     from app.services.transfer_lokasi import daftar as daftar_lokasi
     choices=();metadata={}
     if akun:
-        async with SessionLocal() as db:
-            choices=await pilihan_filter_stok(db,akun.user) if jenis=='bahan' else tuple((w.kode_fungsi or 'wh:'+str(w.id),w.nama_gudang,'') for w in await pilihan_gudang(db,akun.user))
-            metadata=await daftar_lokasi(db)
+        if metadata_navigasi is not None:
+            choices,metadata=metadata_navigasi
+        else:
+            async with SessionLocal() as db:
+                choices=await pilihan_filter_stok(db,akun.user) if jenis=='bahan' else tuple((w.kode_fungsi or 'wh:'+str(w.id),w.nama_gudang,'') for w in await pilihan_gudang(db,akun.user))
+                metadata=await daftar_lokasi(db)
     by_code={m.get('kode_fungsi') or 'wh:'+str(wid):m for wid,m in metadata.items()}
     if len({by_code.get(code,{}).get('pabrik_id') for code,_,_ in choices}-{None})>1:
         choices=tuple((code,(by_code.get(code,{}).get('pabrik_nama') or 'Pabrik belum ditetapkan')+' → '+name,kind) for code,name,kind in choices)
