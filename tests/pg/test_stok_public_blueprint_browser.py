@@ -47,8 +47,9 @@ async def test_stock_first_click_from_account_without_source_entity_options(pg,s
              const r=JSON.parse(document.getElementById('padi-kerangka-langsung').textContent),base=r.frames['/barang-masuk'].map(i=>r.potongan[i]).join('');
              const value=PadiKerangkaUI.buat('/stok?tab=bahan&pemilik=jasa&gudang=g2&pelanggan_id=123&cari=A%20%26%20B',base,r.konteks,r.cap,r.sesi);
              const doc=new DOMParser().parseFromString(value.html,'text/html');
-             return Array.from(doc.querySelectorAll('form'),f=>Object.fromEntries(new FormData(f)));
+             return Array.from(doc.querySelectorAll('[data-ui-stock-public] form'),f=>Object.fromEntries(new FormData(f)));
             }""")
+            assert len(preserved)==2
             assert all(form['gudang']=='g2' and form['pelanggan_id']=='123' and form['pemilik']=='jasa' and form['cari']=='A & B' for form in preserved)
             html_enter,html_release=asyncio.Event(),asyncio.Event();data_enter,data_release=asyncio.Event(),asyncio.Event()
             t['gates']['/stok']=(html_enter,html_release);t['gates']['/api/halaman-bertahap/stok']=(data_enter,data_release)
