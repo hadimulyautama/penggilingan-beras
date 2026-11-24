@@ -49,7 +49,7 @@ async def test_leaving_before_large_response_keeps_new_page_and_no_pdf_request(p
             try:
                 await page.locator('.lp-pintu[href="'+PATH+'"]').click()
                 await asyncio.wait_for(entered.wait(),20)
-                await page.locator('.bar__balik[href="/laporan"]').click()
+                await page.locator(('.bar__balik' if width<900 else '.desktop-back')+'[href="/laporan"]').click()
                 await expect(page).to_have_url(BASE+'/laporan')
                 release.set();await asyncio.wait_for(done.wait(),20)
                 await page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
