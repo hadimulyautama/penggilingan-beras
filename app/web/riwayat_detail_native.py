@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qsl
 
-from jinja2 import Environment, nodes
+from jinja2 import Environment, StrictUndefined, nodes
 
 ROOT = Path(__file__).resolve().parents[2]
 QC = ('gabah-basah', 'gabah-kering', 'pk-luar', 'pk-hasil-giling', 'beras-hasil-sosoh')
@@ -173,10 +173,20 @@ def metadata(variant):
         family = 'qc'
     slots = {('k', 'kode'): None, ('d', 'kode'): None, ('k', 'ref'): None}
     document_parts = _chrome().bagian_judul(text, slots)
+    back = re.search(r'<a\b[^>]*class=[\"\'][^\"\']*\b(?:rhs-back|riwayat-detail__back)\b[^\"\']*[\"\'][^>]*>.*?</a>', text, re.S)
+    if not back:
+        raise ValueError('Tautan kembali native berubah')
     paths.append(ROOT / 'app/web/native_detail_chrome.py')
-    return dict(variant=variant, family=family, title=title, document_parts=document_parts, tabs=tabs,
+    return dict(back_source=back[0], variant=variant, family=family, title=title, document_parts=document_parts, tabs=tabs,
                 native_titles=list(dict.fromkeys(titles)), tables=tables, extra_tables=extra_tables,
                 inputs={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths})
+
+
+def back_html(shape, kembali, jenis, kembali_kerja=None):
+    """Fragmen native saja; konteks navigasi skalar, tanpa kartu/DTO domain."""
+    return Environment(autoescape=True, undefined=StrictUndefined).from_string(shape['back_source']).render(
+        kembali=kembali, jenis=jenis, judul=shape['title'], dari_riwayat=True,
+        request={'query_params': {'kembali_kerja': kembali_kerja}})
 
 
 def memakai_dokumen(request):
@@ -295,6 +305,7 @@ async def kerangka(request, akun):
                 target = None
             if target and target.netloc == request.url.netloc and re.fullmatch(ASAL, target.path):
                 parent = target.path + ('?' + target.query if target.query else '')
+    spec['back_html'] = back_html(shape, parent, kind, request.query_params.get('kembali_kerja'))
     template = ('riwayat_detail_native.html' if spec['variant'].startswith('riwayat-') else
                 'qc_beras_native.html' if kind == 'beras-hasil-sosoh' else 'qc_detail_native.html')
     response = render(request, template, **{**values, 'DETAIL_RIWAYAT': spec,

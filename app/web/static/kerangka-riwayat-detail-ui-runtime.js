@@ -47,8 +47,17 @@
     try{const u=new URL(value,origin);if(u.origin===origin&&['/barang-masuk','/pekerjaan','/kabar'].includes(u.pathname))return value;}catch(_){}
    }
   }
+  if(selected.family==='qc'&&selected.kind!=='beras-hasil-sosoh'){
+   const paths=/^\/(?:riwayat-qc\/[\w-]+|pekerjaan|stok(?:\/pk\/detail)?|stok-pk-jasa|barang-masuk(?:\/\d+)?|jasa(?:\/pelanggan\/\d+)?|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:\/\d+)?|proses-aktif\/(?:giling|pengeringan|pendinginan|sosoh)\/[\w-]+)$/;
+   for(const key of ['kembali_qc','kembali_jasa','kembali_stok','kembali_kerja']){
+    const value=selected.u.searchParams.get(key);
+    if(typeof value!=='string'||!value.startsWith('/')||value.startsWith('//')||value.includes('\\'))continue;
+    try{const u=new URL(value,origin);if(u.origin===origin&&paths.test(u.pathname))return value;}catch(_){}
+   }
+  }
   return selected.parent;
  }
+ function contextualBack(selected,back){return selected.variant==='riwayat-pengeringan'?!!selected.u.searchParams.get('kembali_kerja'):selected.family==='qc'&&selected.kind!=='beras-hasil-sosoh'&&back!==selected.parent;}
  function validCatalog(p,{context,cap,token,source,digest}){
   return exact(p,['versi','sumber','cap','konteks','sesi','sumber_sha256','batas','boleh_catat_qc','entries'])&&p.versi===1&&p.sumber===source&&p.konteks===context&&p.cap===cap&&p.sesi===token&&p.sumber_sha256===digest&&/^[a-f0-9]{64}$/.test(digest)&&[30,200].includes(p.batas)&&typeof p.boleh_catat_qc==='boolean'&&Array.isArray(p.entries)&&p.entries.length<=p.batas&&new Set(p.entries.map(e=>e?.alamat)).size===p.entries.length&&p.entries.every(e=>{if(!exact(e,['alamat','kode','variant','boleh_koreksi'])||typeof e.kode!=='string'||!e.kode.length||e.kode.length>80||typeof e.boleh_koreksi!=='boolean')return false;const r=state(e.alamat,'https://catalog.invalid');return !!r&&r.variant===e.variant&&e.variant!=='qc-beras-daftar'&&(!r.ref||r.ref===e.kode)&&(!e.boleh_koreksi||['riwayat-giling','riwayat-sosoh'].includes(e.variant));});
  }
@@ -109,7 +118,14 @@
   const root=roots[0];root.dataset.url=address;root.dataset.stamp=context+'|'+address;root.dataset.rdnTab=selected.tab;
   for(const n of root.querySelectorAll('[data-rdn-privilege]'))if(n.dataset.rdnPrivilege==='koreksi'?!entry?.boleh_koreksi:!(selected.variant==='qc-beras-daftar'&&catalog?.boleh_catat_qc))n.remove();
   const code=root.querySelector('[data-rdn-code]');if(code)code.textContent=entry.kode;
-  const back=backContext(selected,location.origin),backLink=root.querySelector('.rhs-back,.riwayat-detail__back');if(backLink)backLink.href=back;
+  const back=backContext(selected,location.origin);let backLink=root.querySelector('.rhs-back,.riwayat-detail__back');
+  const contextual=root.querySelector('template[data-rdn-back-context]');
+  if(contextualBack(selected,back)){
+   const anchor=contextual?.content.querySelector('a.rhs-back,a.riwayat-detail__back');
+   if(!backLink||!anchor||contextual.content.querySelectorAll('a').length!==1||contextual.content.querySelector('script,form,input,button'))return null;
+   backLink.replaceWith(anchor.cloneNode(true));backLink=root.querySelector('.rhs-back,.riwayat-detail__back');
+  }
+  if(backLink)backLink.setAttribute('href',back);contextual?.remove();
   for(const t of root.querySelectorAll('[data-rdn-tab]')){const active=t.dataset.rdnTab===selected.tab;t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;}
   for(const p of root.querySelectorAll('[data-rdn-panel]'))p.hidden=p.dataset.rdnPanel!==selected.tab;
   try{pruneNavigation(part.content,selected,permission.menu);}catch(_){return null;}
@@ -134,6 +150,6 @@
   frame.dataset.pindahAlamat=address;doc.title=title+' · PT Hadi Mulya Utama';
   return {versi:1,alamat:address,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
- if(typeof module==='object'&&module.exports){module.exports={nativeTitle,state,validData,validCatalog,menuValid,backContext,visibleLink};return;}
+ if(typeof module==='object'&&module.exports){module.exports={nativeTitle,state,validData,validCatalog,menuValid,backContext,contextualBack,visibleLink};return;}
  global.PadiKerangkaRiwayatDetailUI=Object.freeze({versi:1,sumber:data?.sumber,buat,currentCatalog:(context,cap,token)=>validData(data)?currentCatalog(data,context,cap,token):null,visibleLink});
 })(typeof window==='undefined'?globalThis:window);

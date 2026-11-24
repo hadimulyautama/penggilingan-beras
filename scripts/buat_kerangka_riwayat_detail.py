@@ -71,8 +71,12 @@ def build():
             address, kind = '/riwayat-qc/beras-hasil-sosoh', 'beras-hasil-sosoh'
         else:
             address = '/riwayat-' + kind + '/1' if variant.startswith('riwayat-') else '/riwayat-qc/' + kind + '/PADI-KODE'
+        parent = '/riwayat-' + kind if variant.startswith('riwayat-') else '/riwayat-qc/' + kind
+        if variant == 'riwayat-giling':
+            parent += '#giling-1'
         value = native.deskripsi(address)
-        value.update(meta=meta, kode='PADI-KODE', stamp='__PADI_STAMP__', boleh_koreksi=True, boleh_qc=True)
+        value.update(meta=meta, kode='PADI-KODE', stamp='__PADI_STAMP__', boleh_koreksi=True, boleh_qc=True,
+                     back_html=native.back_html(meta, parent, kind))
         template = ('riwayat_detail_native.html' if variant.startswith('riwayat-') else
                     'qc_beras_native.html' if kind == 'beras-hasil-sosoh' else 'qc_detail_native.html')
         t = env.get_template(template)
@@ -85,6 +89,10 @@ def build():
                        PORTAL_READ_ONLY=False, TAMPILAN_INDUK=True)
         wrapper = env.get_template('laporan_katalog_blueprint.html').render(**context)
         doc = BeautifulSoup(wrapper, 'html.parser')
+        back_context = doc.new_tag('template')
+        back_context['data-rdn-back-context'] = ''
+        back_context.append(BeautifulSoup(native.back_html(meta, '/pekerjaan', kind, '/pekerjaan'), 'html.parser'))
+        doc.select_one('[data-riwayat-detail-native]').append(back_context)
         if doc.select('form,[name],[data-post],[data-kirim]') or any(not n.has_attr('disabled') or n.has_attr('value') for n in doc.select('input,textarea')):
             raise ValueError('Bentuk detail publik tidak boleh memuat field tulis aktif')
         for node in doc.select('[data-lk-cetak]'):
@@ -103,9 +111,6 @@ def build():
         program = doc.new_tag('script')
         program.string = asset('/static/riwayat-navigasi-native.js').replace('</script', '<\\/script')
         doc.append(program)
-        parent = '/riwayat-' + kind if variant.startswith('riwayat-') else '/riwayat-qc/' + kind
-        if variant == 'riwayat-giling':
-            parent += '#giling-1'
         crumb = env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(
             address, dict(kembali=parent, breadcrumb_detail='PADI-KODE'), meta['title']))
         variants[variant] = dict(title_parts=meta['document_parts'], bar_control=bar_control, html=str(doc), breadcrumb=crumb)

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {nativeTitle,state,validData,validCatalog,menuValid,backContext,visibleLink}=require('../app/web/static/kerangka-riwayat-detail-ui-runtime.js');
+const {nativeTitle,state,validData,validCatalog,menuValid,backContext,contextualBack,visibleLink}=require('../app/web/static/kerangka-riwayat-detail-ui-runtime.js');
 const {anchorHandler,summaryHandler}=require('../app/web/static/riwayat-detail-katalog.js');
 const {restoreNative}=require('../app/web/static/riwayat-detail-native.js');
 const origin='https://fixture.invalid',source='a'.repeat(64),digest='b'.repeat(64);
@@ -75,4 +75,27 @@ test('hydrated native editor hrefs load complete native controller only on expli
  const links=hrefs.map(href=>({href,mark:false,getAttribute:()=>href,setAttribute(k){if(k==='data-utuh')this.mark=true;}}));
  nativeActions({querySelectorAll:()=>links},origin);
  assert.deepEqual(links.map(x=>x.mark),[true,true,false,false]);
+});
+
+test('QC back context follows existing native read-only path whitelist and priority',()=>{
+ const choose=query=>state('/riwayat-qc/pk-luar/PK-1?'+query,origin);
+ const chosen=choose('kembali_qc=%2Fbarang-masuk%2F12%3Ftab%3Dqc&kembali_jasa=%2Fjasa');
+ assert.equal(backContext(chosen,origin),'/barang-masuk/12?tab=qc');
+ assert.equal(contextualBack(chosen,backContext(chosen,origin)),true);
+ for(const value of ['https://other.invalid/pekerjaan','//other.invalid/pekerjaan','/pengaturan','/api/actions/save','/stok/unknown']){
+  const state=choose('kembali_qc='+encodeURIComponent(value));
+  assert.equal(backContext(state,origin),'/riwayat-qc/pk-luar');
+  assert.equal(contextualBack(state,backContext(state,origin)),false);
+ }
+ const own=choose('kembali_qc=%2Friwayat-qc%2Fpk-luar');
+ assert.equal(contextualBack(own,backContext(own,origin)),false);
+});
+test('drying native Back label uses presence of raw return query, not invented stock state',()=>{
+ const plain=state('/riwayat-pengeringan/12',origin);
+ assert.equal(contextualBack(plain,backContext(plain,origin)),false);
+ const valid=state('/riwayat-pengeringan/12?kembali_kerja=%2Fpekerjaan',origin);
+ assert.equal(contextualBack(valid,backContext(valid,origin)),true);
+ const foreign=state('/riwayat-pengeringan/12?kembali_kerja=https%3A%2F%2Fother.invalid',origin);
+ assert.equal(backContext(foreign,origin),'/riwayat-pengeringan');
+ assert.equal(contextualBack(foreign,backContext(foreign,origin)),true);
 });

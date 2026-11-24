@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader, select_autoescape
 from starlette.requests import Request
 
-from app.web.riwayat_detail_native import VARIANTS, deskripsi, kerangka, metadata
+from app.web.riwayat_detail_native import VARIANTS, deskripsi, kerangka, metadata, back_html
 from app.web.riwayat_detail_catalog import katalog
 from app.web.native_detail_chrome import judul, kontrol_bar, bagian_judul
 
@@ -28,6 +28,8 @@ def path_for(variant):
 def html_for(variant, tab=None, admin=True):
     query = '' if not tab else ('tab_detail=' if variant.startswith('riwayat-') else 'tab_qc=') + tab
     value = deskripsi(path_for(variant), query)
+    parent='/riwayat-'+value['jenis'] if variant.startswith('riwayat-') else '/riwayat-qc/'+value['jenis']
+    value['back_html']=back_html(metadata(variant),parent,value['jenis'])
     value.update(meta=metadata(variant), document_title=judul(metadata(variant)['document_parts'], 'KODE-FIKTIF'), kode='KODE-FIKTIF', stamp='fixture-stamp', boleh_koreksi=admin, boleh_qc=admin)
     template = ('riwayat_detail_native.html' if variant.startswith('riwayat-') else
                 'qc_beras_native.html' if variant in ('qc-beras-daftar', 'qc-beras-hasil-sosoh') else 'qc_detail_native.html')
@@ -198,3 +200,44 @@ def test_title_source_expression_drift_declines_instead_of_generic_fallback():
         bagian_judul('{% block judul %}{{ akun.nama }}{% endblock %}',{('k','ref'):None})
     with pytest.raises(ValueError):
         bagian_judul('{% block judul %}{{ k.ref|upper }}{% endblock %}',{('k','ref'):None})
+
+
+@pytest.mark.parametrize('variant,target,raw_context,label', [
+    ('riwayat-giling','/riwayat-giling',None,'← Kembali ke Riwayat Penggilingan'),
+    ('riwayat-giling','/riwayat-giling?sebelum=20#giling-12',None,'← Kembali ke Riwayat Penggilingan'),
+    ('riwayat-sosoh','/riwayat-sosoh',None,'← Kembali ke Riwayat Penyosohan'),
+    ('riwayat-pengeringan','/riwayat-pengeringan',None,'← Kembali ke Riwayat Pengeringan'),
+    ('riwayat-pengeringan','/pekerjaan?tab=berjalan','/pekerjaan?tab=berjalan','← Kembali ke Pekerjaan'),
+    # Native uses raw query truthiness for its label even when href resolver
+    # rejects a foreign target. Preserve that display rule, not its URL.
+    ('riwayat-pengeringan','/riwayat-pengeringan','https://other.invalid','← Kembali ke Pekerjaan'),
+    *[('qc-'+kind,'/riwayat-qc/'+kind,None,'← Kembali ke '+title) for kind,title in [
+        ('gabah-basah','Riwayat QC Gabah Basah'),('gabah-kering','Riwayat QC Gabah Kering'),
+        ('pk-luar','Riwayat QC PK Luar'),('pk-hasil-giling','Riwayat QC PK Hasil Giling')]],
+    *[('qc-'+kind,'/barang-masuk/12?tab=qc',None,'← Kembali ke halaman asal') for kind in (
+        'gabah-basah','gabah-kering','pk-luar','pk-hasil-giling')],
+    ('qc-beras-hasil-sosoh','/riwayat-qc/beras-hasil-sosoh',None,'← Kembali ke daftar Riwayat QC beras'),
+])
+def test_body_back_uses_native_anchor_classes_href_text_and_order(variant,target,raw_context,label):
+    shape=metadata(variant)
+    kind=variant.removeprefix('riwayat-') if variant.startswith('riwayat-') else variant.removeprefix('qc-')
+    html=back_html(shape,target,kind,raw_context)
+    anchor=BeautifulSoup(html,'html.parser').select_one('a')
+    assert anchor.get_text()==label
+    assert anchor['href']==target
+    native_classes=(['riwayat-detail__back','rhs-back'] if variant=='riwayat-pengeringan' else
+                    ['riwayat-detail__back'] if variant.startswith('qc-') and variant!='qc-beras-hasil-sosoh' else ['rhs-back'])
+    assert anchor['class']==native_classes
+    assert list(anchor.attrs)==['class','href']
+    assert '← Kembali ke daftar riwayat' not in html
+
+
+def test_back_href_autoescapes_and_source_empty_qc_tables_are_not_changed():
+    html=back_html(metadata('qc-gabah-basah'),'/barang-masuk/12?cari=a&tab=qc','gabah-basah')
+    assert '?cari=a&amp;tab=qc' in html and '<script' not in html
+    source=(ROOT/'app/web/templates/_qc_sosoh.html').read_text()
+    # These native headers already exist outside tbody loops. This patch does
+    # not change native empty rows/values or manufacture a QC sample.
+    native=BeautifulSoup(source,'html.parser')
+    assert len(native.select('table thead'))==3
+    assert all(head.select('th') for head in native.select('table thead'))
