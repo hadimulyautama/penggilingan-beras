@@ -25,6 +25,11 @@
    });
   }
  }
+ // Jika paket UI tidak tersedia/cocok, pertahankan GET dokumen native.
+ // data-utuh dibaca penjaga PINDAH existing; tidak melewati penjaga editor.
+ const uiHost=document.getElementById('padi-kerangka-ui');let uiReady=false;
+ try{const ui=JSON.parse(uiHost?.textContent||'null');uiReady=!!(ui&&ui.versi===1&&ui.sumber===window.PadiKerangkaUI?.sumber&&ui.cap===document.documentElement.dataset.versi&&ui.konteks===document.querySelector('.bingkai')?.dataset.pindahKonteks&&ui.sesi===document.getElementById('formulir-sesi')?.dataset.token);}catch(_){}
+ if(!uiReady)document.querySelectorAll('a[href]').forEach(link=>{const u=new URL(link.href,location.href);if(u.origin===location.origin&&u.pathname==='/barang-keluar')link.setAttribute('data-utuh','');});
  const controls=document.querySelector('[data-stok-controls]');
  if(controls&&location.pathname==='/stok'){
   const u=new URL(controls.dataset.pelangganUrl,location.href);u.pathname='/api/halaman-bertahap/stok/html';controls.dataset.pelangganUrl=u.pathname+u.search;

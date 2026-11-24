@@ -194,7 +194,15 @@ async def lengkapi_dokumen(request: Request, response):
                     # Kegagalan keluarga opsional tidak merusak enam frame
                     # wajib. Tidak mencetak parameter atau meniru frame sukses.
                     log.warning('Kerangka Stok belum tersedia (%s)', type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok).encode()
+                ui=None
+                try:
+                    from app.web.kerangka_ui import susun as susun_ui
+                    ui=await susun_ui(request,akun,registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Paket kerangka UI belum tersedia (%s)',type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui).encode()
                 if len(body) + len(host) + 1 > BATAS_DOKUMEN_NATIVE:
                     raise ValueError('Dokumen native melampaui batas registry')
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)

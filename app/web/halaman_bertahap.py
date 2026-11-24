@@ -56,7 +56,7 @@ def penanda_konteks(request: Request, akun) -> str:
 
 
 def penanda(request: Request, akun, jenis: str) -> str:
-    if jenis == 'stok':
+    if jenis in ('stok','pengiriman'):
         # Korelasi baca, bukan izin/tanda tangan. Struktur kosong dapat
         # mengikat filter baru di browser; GET tetap memeriksa aktor native.
         return penanda_konteks(request, akun) + '|' + ALAMAT[jenis] + (

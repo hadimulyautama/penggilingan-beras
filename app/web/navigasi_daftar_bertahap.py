@@ -10,6 +10,11 @@ def pasang(response, request):
     if marker not in response.body:
         return response
     from hmu_tampilan import CAP_ASET
+    # Struktur publik stabil siap sebelum DOM interaktif. Tidak berisi akun,
+    # pilihan hak, saldo, draf atau token; pilihan per dokumen tetap no-store.
+    asset=('<script src="/static/kerangka-ui.js?v='+CAP_ASET+'"></script>').encode()
+    if response.body.count(b'</head>')==1:
+        response.body=response.body.replace(b'</head>',asset+b'\n</head>',1)
     from app.web.halaman_bertahap import penanda_konteks
     from app.web.halaman_bertahap import kolom_daftar
     from html import escape

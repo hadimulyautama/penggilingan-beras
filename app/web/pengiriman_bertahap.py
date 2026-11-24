@@ -2,6 +2,13 @@
 import re
 
 
+async def boleh_baca(user):
+    # Predicate pembaca native, dipakai juga sebelum memilih varian UI.
+    from app.peran import can_see_financials
+    from app.web.api import _is_g2_operator
+    return can_see_financials(user) or await _is_g2_operator(user)
+
+
 async def kerangka(request,akun,*,boleh_perintah,boleh_muat,pencarian,status,sejak,navigasi=None):
     from app.web.halaman_bertahap import konteks_kerangka,penanda
     from app.web.tampilan import render

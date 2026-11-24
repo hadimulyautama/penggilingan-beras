@@ -1,0 +1,33 @@
+{
+  "versi": 1,
+  "sumber": "05d3bb2b5175d05107518e20f13bbfbdb1a6ebe18b50ebd9c988dcd3acd8a640",
+  "aset_sha256": "049e6bb34f96d33315968a15e6cc15adc0bc5d8121fa8876bd62565ff0c4f2ed",
+  "variants": [
+    "pengiriman-admin",
+    "pengiriman-operator"
+  ],
+  "inputs": {
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/static/bantuan_pengiriman.js": "9a2c5b7335519710fb397d473d80f812bf7695c914ee3913bd90737aa69cbe2b",
+    "app/web/static/daftar_pengiriman.css": "d4eae5812f6f15bd23c3cbf53cbd39b056e63a1f4be018b97c73e2fdfda12c3b",
+    "app/web/static/halaman-bertahap.css": "8f6d0a7adaa7a955c35f555fb008b0ee105352152be995421190a0e75762090f",
+    "app/web/static/halaman-bertahap.js": "3fb3a23bdb3ca9a7e30edd677cbb70aeaaafa758c7660c23ca0313db7deeea47",
+    "app/web/static/kerangka-ui-runtime.js": "2fdf24cab56cb0313a8c4703e1c06564a35e755d7a68dbde608f578ce74d764a",
+    "app/web/templates/_barang_keluar_kontrol.html": "2492802850c7048de0b80d542cd30b24ec1856e56ed82af281352c25caf1fb40",
+    "app/web/templates/_pengiriman_bantuan.html": "4378858a777923c6a3551dc925c05144e0d37deb4514ec8def724cf27471ed3b",
+    "app/web/templates/_pengiriman_daftar_keadaan.html": "f94c345d6ec2870a80f2db5faa10c8b781e7096929de76e4f106d85dc647f586",
+    "app/web/templates/_pengiriman_riwayat_daftar.html": "550d505da037c833c92c14c1343b1c0d4faaf71c55d9839599eaf574cab7ac35",
+    "app/web/templates/pengiriman_bertahap.html": "71038c64768ce00073ae568a7f909d2cb578409607dabe2b6e3ffc5c9eef82dd",
+    "hmu_tampilan/static/pengiriman-kontrol.css": "4875b2fb270e6604adc8e23008adbffdf2235bc67ce2fc771a1b390993f63961",
+    "hmu_tampilan/static/pengiriman-kontrol.js": "8fd8335c1dc7ddab9effe9b4955bd85f1b18978c5f13bbb61af0eff3c5075e35",
+    "hmu_tampilan/static/pengiriman-retur.css": "e48dcdf3f27cfb7a5382924538d31eafb39f50366719dd04456ace70d88afc71",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/_kontrol_halaman.html": "162d5616ed892ccb15d36d2408cc710abbbc2ac0605588a243cd2796c200d7d4",
+    "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
+    "hmu_tampilan/templates/_pengiriman_daftar.html": "8c4795c6457a6690f7d4c1461d1d9e4b5cef1a45d8f4f9d18df77aa2b2edfbab",
+    "hmu_tampilan/templates/_pengiriman_kontrol.html": "963d299aba104da9c1547db92b20c287b292d0e5c25e8ce6d968be178b9a77a3",
+    "hmu_tampilan/templates/_pengiriman_tabs.html": "3dc44c5834a284dad40d79de4ef9831dff5aa51c087e4dfb8c642c44979b2724",
+    "hmu_tampilan/templates/_stok.html": "c7ed60e7801638cf94660385f7354d7cbf54947e959d1068bda8abc345d3b577",
+    "scripts/buat_kerangka_ui.py": "dd9a4f72f50d294a6d8b7c8b8ddfadb3fe28590c0a120d0c83b083abf1ec439b"
+  }
+}

@@ -78,6 +78,9 @@
   const content=document.createElement('div');content.dataset.halamanIsi=root.dataset.kind;
   for(let node=start.nextSibling;node&&node!==end;node=node.nextSibling)content.append(node.cloneNode(true));
   const css=main.querySelector('link[href*="/static/halaman-bertahap.css"]');if(css)content.prepend(css.cloneNode(true));
+  // CSS struktur sudah siap sebelum klik. Pertahankan selama stylesheet
+  // native isi selesai dibaca, agar swap data tidak menampilkan frame polos.
+  for(const style of Array.from(root.querySelectorAll('style[data-kerangka-ui-style]')).reverse())content.prepend(style.cloneNode(true));
   // Consumer pilihan pelanggan lama membaca HTML. Tetap memakai route native
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
   const stock=content.querySelector('[data-stok-controls]');

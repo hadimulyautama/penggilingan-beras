@@ -65,7 +65,8 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     # Periksa izin positif, bukan hanya menolak view G1: operator tanpa
     # gudang juga tidak berhak membaca daftar maupun URL detail langsung.
     boleh_perintah = can_see_financials(akun.user)
-    if not is_customer_read(request) and not (boleh_perintah or await _is_g2_operator(akun.user)):
+    from app.web.pengiriman_bertahap import boleh_baca
+    if not is_customer_read(request) and not await boleh_baca(akun.user):
         pesan = ("Pengiriman tersedia untuk Admin dan Operator Gudang 2. "
                  "Pilih gudang kerja melalui menu Kerja di gudang.")
         if "application/json" in request.headers.get("accept", "") and "text/html" not in request.headers.get("accept", ""):

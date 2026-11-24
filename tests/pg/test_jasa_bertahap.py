@@ -81,6 +81,28 @@ def _tanpa_host_registry(html):
         assert len(stock_matches)==1 and stock_matches[0].start()==end
         assert json.loads(stock_matches[0][1])==shape
         end=stock_matches[0].end()
+    ui_hosts=doc.select('#padi-kerangka-ui')
+    assert len(ui_hosts)<=1
+    if ui_hosts:
+        ui=ui_hosts[0]
+        assert ui.name=='script' and ui.get('type')=='application/json'
+        assert set(ui.attrs)=={'type','id','data-konteks','data-cap'}
+        assert not ui.find_parent(class_='bingkai')
+        shape=json.loads(ui.string)
+        assert set(shape)=={'versi','sumber','konteks','cap','sesi','varians'}
+        assert shape['versi']==1 and re.fullmatch('[0-9a-f]{64}',shape['sumber'])
+        assert shape['konteks']==ui['data-konteks']==registry['konteks']
+        assert shape['cap']==ui['data-cap']==registry['cap']
+        assert shape['sesi']==registry['sesi']
+        assert shape['varians'] in ({'pengiriman':'pengiriman-admin'},{'pengiriman':'pengiriman-operator'})
+        from app.web.kerangka_ui import aset
+        assert shape['sumber']==aset()['sumber']
+        ui_matches=list(re.finditer(
+            r'\n<script type="application/json" id="padi-kerangka-ui" '
+            r'data-konteks="[^"]+" data-cap="[^"]+">([^<]*)</script>',html))
+        assert len(ui_matches)==1 and ui_matches[0].start()==end
+        assert json.loads(ui_matches[0][1])==shape
+        end=ui_matches[0].end()
     assert html.count('</body>') == 1 and html[end:].startswith('\n</body>')
     return html[:start] + html[end + 1:]
 
