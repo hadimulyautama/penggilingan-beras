@@ -234,7 +234,12 @@ async def native_editor_veto_control(page, transport, releases, actions, ledger,
         await asyncio.wait_for(request_seen.wait(),20)
         assert not release.is_set()
         assert len(snapshots)==1 and all(snapshots[0].values()),snapshots
-        assert len(requests)==1 and all(requests[0].values()),requests
+        # The route bridge does not always receive browser Sec-Fetch headers.
+        # Browser protocol metadata still proves this is an exact ordinary
+        # document navigation, not an X-Pindah or native reader fetch. Explicit
+        # server DOCUMENT-header semantics are covered by separate tests.
+        required=('get','document','navigation','exactAddress','noPindah','noShape')
+        assert len(requests)==1 and all(requests[0][key] for key in required),requests
         ledger.phase('native-veto.before-html-asserted')
     finally:
         # No DOM RPC runs while full document HTML remains withheld.
