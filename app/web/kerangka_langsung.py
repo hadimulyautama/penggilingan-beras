@@ -226,7 +226,15 @@ async def lengkapi_dokumen(request: Request, response):
                     if isinstance(error,HTTPException) and error.status_code in (401,403):
                         raise
                     log.warning('Kerangka dokumen belum tersedia (%s)',type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat,pengaturan=pengaturan,dokumen=dokumen).encode()
+                sosoh=None
+                try:
+                    from app.web.sosoh_kerangka_langsung import susun as susun_sosoh
+                    sosoh=await susun_sosoh(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka Penyosohan belum tersedia (%s)',type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat,pengaturan=pengaturan,dokumen=dokumen,sosoh=sosoh).encode()
                 if len(body) + len(host) + 1 > BATAS_DOKUMEN_NATIVE:
                     raise ValueError('Dokumen native melampaui batas registry')
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)

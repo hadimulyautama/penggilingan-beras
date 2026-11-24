@@ -25,4 +25,4 @@ async def susun(request,akun,*,registry):
     for key,_ in PERIODE:
         if key=='khusus':continue
         start,end=_rentang(key);ranges[key]=dict(dari=start.isoformat(),sampai=end.isoformat())
-    return dict(versi=1,sumber=meta['sumber'],cap=registry['cap'],konteks=registry['konteks'],sesi=registry['sesi'],laporan=dict(targets=targets,choices=choices,rentang=ranges))
+    return dict(versi=1,sumber=meta['sumber'],cap=registry['cap'],konteks=registry['konteks'],sesi=registry['sesi'],laporan=dict(targets=targets,choices=choices,rentang=ranges),kabar=True)

@@ -25,7 +25,7 @@ BASE = 'https://uji'
 async def peramban(client, width):
     """Browser supplies Sec-Fetch; ASGI and native fixture supply all data."""
     gates, posts, errors = {}, [], []
-    transport = dict(gates=gates, gate_headers={}, posts=posts, errors=errors, gets=[], completed={}, corrupt_context=False, fail_asset=False)
+    transport = dict(gates=gates, gate_headers={}, pad_html={}, posts=posts, errors=errors, gets=[], completed={}, corrupt_context=False, fail_asset=False)
     pending = set()
     closing = False
     async with async_playwright() as pw:
@@ -70,6 +70,13 @@ async def peramban(client, width):
                     gate[0].set()
                     await gate[1].wait()
                 body = response.content
+                padding=transport['pad_html'].pop(u.path,0) if headers.get('x-pindah')=='1' and headers.get('x-kerangka-halaman')=='0' else 0
+                if padding:
+                    assert request.method=='GET' and response.status_code==200 and response.headers.get('content-type','').startswith('text/html')
+                    assert type(padding) is int and 0<padding<=16*1024*1024
+                    # Owner-only negative: pad AFTER actual native auth/read,
+                    # preserving its markers. No DB rows/response identity are fabricated.
+                    body=body.replace(b'</body>',b'<!-- synthetic owner size padding -->'+b'x'*padding+b'</body>',1)
                 if u.path == '/barang-masuk' and transport['corrupt_context']:
                     transport['corrupt_context'] = False
                     # Negative response-provenance control, not fake business

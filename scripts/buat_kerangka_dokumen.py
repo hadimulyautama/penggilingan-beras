@@ -16,6 +16,9 @@ def build():
     helper=module('doc_public_helpers',ROOT/'scripts/buat_kerangka_ui.py')
     native=module('doc_native_spec',ROOT/'app/web/laporan_detail_kerangka.py')
     heads=module('doc_native_headers',ROOT/'app/services/laporan_kepala.py')
+    breadcrumb=module('doc_native_breadcrumb',ROOT/'app/web/breadcrumb.py')
+    kabar=module('doc_native_kabar',ROOT/'app/web/kabar_kerangka.py')
+    inputs.update({ROOT/'hmu_tampilan/templates/kabar.html',ROOT/'app/web/layar_kabar.py'})
     catalog=module('doc_native_catalog',ROOT/'scripts/kerangka_laporan_katalog.py')
     public=catalog.metadata(ROOT);inputs.update(ROOT/p for p in catalog.source_pins(ROOT))
     inputs.add(ROOT/'app/services/laporan_isi_tahap.py')
@@ -43,7 +46,22 @@ def build():
             if 'document.currentScript' in text:raise ValueError('Native script binding requires review')
             node.attrs.clear();node.string=text.replace('</script','<\\/script')
         if doc.select('link[rel=stylesheet]'):raise ValueError('Review new stylesheet request')
-        variants['/laporan/'+code]=dict(title=meta['nama'],html=str(doc),columns=len(meta['kolom']))
+        crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/laporan/'+code,dict(kembali='/laporan',breadcrumb_detail=meta['nama']),meta['nama']))
+        variants['/laporan/'+code]=dict(title=meta['nama'],html=str(doc),columns=len(meta['kolom']),breadcrumb=crumb)
+    context=dict(VERSI='__PADI_CAP__',KABAR_SHELL={**kabar.deskripsi('/kabar'),'stamp':'__PADI_STAMP__'})
+    template=env.get_template('kabar_kerangka.html')
+    doc=BeautifulSoup(''.join(template.blocks['isi'](template.new_context(context))),'html.parser')
+    if doc.select('form,input,[name],[data-post],[data-kirim]'):raise ValueError('Kabar structure has no status mutation/form')
+    for node in doc.select('link[rel=stylesheet]'):
+        css=asset(node['href'])
+        if '@import' in css or '</style' in css.lower():raise ValueError('Kabar CSS requires review')
+        style=doc.new_tag('style');style.string=helper.compact_css_comments(css);node.replace_with(style)
+    for node in doc.select('script[src]'):
+        text=asset(node['src'])
+        if 'document.currentScript' in text:raise ValueError('Kabar script binding requires review')
+        node.attrs.clear();node.string=text.replace('</script','<\\/script')
+    crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/kabar',{},'Kabar'))
+    variants['/kabar']=dict(title='Kabar',html=str(doc),columns=0,breadcrumb=crumb)
     styles,scripts,srefs,jrefs={},{},{},{}
     for v in variants.values():
         doc=BeautifulSoup(v['html'],'html.parser')

@@ -53,6 +53,7 @@ async def test_report_catalog_first_click_structure_before_html_and_data(pg,stok
                     assert await root.locator('.lp-panel-aksi button:disabled').count()==2
                     await expect(root.locator('select[name=periode]')).to_have_value('bulan_ini')
                     await expect(page.locator('.bar__balik')).to_have_attribute('href','/laporan')
+                    await expect(page.locator('form.desktop-theme input[name=balik]')).to_have_value(path)
                     release.set();await expect(root).to_have_count(0)
                     await expect(page.locator('[data-laporan-detail]')).to_be_visible()
                     await expect(page.locator('.lp-panel-aksi a.lp-pdf-utama')).to_have_attribute('href',__import__('re').compile('^/laporan-periode/'+code+r'\.pdf'))

@@ -9,6 +9,22 @@
   if(!CODES.some(code=>u.pathname==='/laporan/'+code))return false;
   const keys=[...u.searchParams.keys()];return new Set(keys).size===keys.length&&keys.every(k=>['periode','dari','sampai'].includes(k));
  }
+ function pdfAddress(address,origin){
+  if(!allowed(address,origin))return null;
+  const u=new URL(address,origin),q=u.searchParams,period=q.has('periode')?q.get('periode'):'bulan_ini';
+  if(!['hari_ini','kemarin','minggu_ini','bulan_ini','30_hari','3_bulan','tahun_ini','tahun_lalu','semua','khusus'].includes(period))return null;
+  const date=value=>{if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||value.startsWith('0000'))return false;try{return new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;}catch(_){return false;}};
+  if(['dari','sampai'].some(k=>q.has(k)&&!date(q.get(k)))||period==='khusus'&&(!date(q.get('dari'))||!date(q.get('sampai'))||q.get('dari')>q.get('sampai')||q.get('sampai')==='9999-12-31'))return null;
+  return '/laporan-periode/'+u.pathname.slice('/laporan/'.length)+'.pdf'+u.search;
+ }
+ function sizeFailure({error,root,status,retry,address},origin){
+  if(error?.code!=='NATIVE_HTML_LIMIT')return false;
+  const href=pdfAddress(address,origin),link=root.querySelector('[data-detail-native-pdf-fallback]');
+  if(!href||!link)return false;
+  link.setAttribute('href',href);link.removeAttribute('aria-disabled');link.hidden=false;retry.hidden=true;
+  status.textContent='Laporan terlalu besar untuk tampilan bertahap. Buka PDF untuk membaca ulang periode yang sama, atau pilih rentang lebih pendek.';
+  return true;
+ }
  function emptySpec(data,code){
   if(!CODES.includes(code)||!data||data.kode!==code||!Array.isArray(data.rincian))throw Error('Struktur laporan tidak sesuai tujuan.');
   if(data.rincian.length)return null;
@@ -41,7 +57,7 @@
   range.querySelectorAll('input').forEach(el=>el.addEventListener('input',()=>{form.elements.sampai.setCustomValidity('');changed();}));
   const guide=root.querySelector('#lp-panduan');root.querySelector('[data-lp-panduan]').addEventListener('click',()=>guide.showModal());root.querySelector('[data-lp-tutup]').addEventListener('click',()=>guide.close());
  }
- const api={allowed,emptySpec,preserveEmptyTable,controls};
+ const api={allowed,emptySpec,preserveEmptyTable,controls,pdfAddress,sizeFailure};
  if(typeof module==='object'&&module.exports){module.exports=api;return;}
  const root=document.querySelector('[data-laporan-detail-native]');if(!root||!allowed(root.dataset.url,location.origin))return;
  const code=new URL(root.dataset.url,location.origin).pathname.slice('/laporan/'.length);
@@ -49,12 +65,14 @@
   statusSelector:'[data-detail-native-status]',retrySelector:'[data-detail-native-retry]',
   messages:{loading:'Memuat laporan. Ringkasan dan rincian belum dibaca.',response:'Laporan belum dapat dibaca. Muat ulang bila sesi atau akses berubah.',native:'Laporan native belum tersedia. Coba lagi hanya membaca data.',timeout:'Pembacaan laporan terlalu lama. Coba lagi hanya membaca data.'},
   afterInstall({content}){preserveEmptyTable(content,code);},
+  onFailure(state){sizeFailure(state,location.origin);},
   restoreFocus({focus,retry,content}){if(focus===retry)content.querySelector('[data-lp-panduan]')?.focus({preventScroll:true});}
  });
  controls(root,()=>{
   // Custom dates are a GET-filter draft. Do not let the old range replace it
   // after focus leaves the input; only Tampilkan/navigating reads that range.
   reader?.stop();root.querySelector('[data-detail-native-retry]').hidden=true;
+  const fallback=root.querySelector('[data-detail-native-pdf-fallback]');if(fallback){fallback.hidden=true;fallback.removeAttribute('href');fallback.setAttribute('aria-disabled','true');}
   root.querySelector('[data-detail-native-status]').textContent='Pilihan periode berubah. Pilih Tampilkan untuk membaca rentang tanggal, atau pilih periode lainnya.';
  });
 })(typeof window==='undefined'?globalThis:window);

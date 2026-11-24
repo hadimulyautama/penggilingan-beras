@@ -15,7 +15,9 @@ def pasang(response, request):
         try:
             from app.web.portal.scope import is_customer_read
             if not is_customer_read(request):
-                from app.web.giling_work_catalog import catalog
+                from app.web.giling_work_catalog import catalog as giling_catalog
+                from app.web.sosoh_work_catalog import catalog as sosoh_catalog
+                from app.web.pengeringan_native_html import katalog as dryer_catalog
                 from app.web.halaman_bertahap import penanda_konteks
                 from app.web.csrf import untuk_sesi
                 from app.web.security import baca_token,NAMA_COOKIE
@@ -26,16 +28,27 @@ def pasang(response, request):
                 nonce=request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state,'csrf',None)
                 context=penanda_konteks(request,request.state.akun)
                 token=untuk_sesi(nonce,baca_token(request.cookies.get(NAMA_COOKIE)),request.cookies.get('produksi_lihat',''))
-                targets=catalog(response.body.decode('utf-8'),source_address=address,
-                    cap=CAP_ASET,context=context,session=token)
-                if targets and targets['entries']:
-                    from jinja2.utils import htmlsafe_json_dumps
-                    payload=htmlsafe_json_dumps(targets).encode()
-                    if len(payload)<=262144:
-                        tag=('<script type="application/json" data-giling-native-catalog '
+                # Each bounded family consumes the same already-authorized
+                # native Work DOM. Failure in one optional family is isolated.
+                html=response.body.decode('utf-8')
+                for name,reader in [('giling',giling_catalog),('sosoh',sosoh_catalog),
+                                    ('pengeringan',dryer_catalog)]:
+                    try:
+                        targets=reader(html,source_address=address,cap=CAP_ASET,
+                            context=context,session=token)
+                        if not targets or not targets['entries']:
+                            continue
+                        from jinja2.utils import htmlsafe_json_dumps
+                        payload=htmlsafe_json_dumps(targets).encode()
+                        if len(payload)>262144:
+                            continue
+                        tag=('<script type="application/json" data-'+name+'-native-catalog '
                              'data-source-address="'+escape(address,quote=True)+'" '
                              'data-source-sha="'+targets['sumber_sha256']+'">').encode()+payload+b'</script>'
                         response.body=response.body.replace(marker,tag+marker,1)
+                    except Exception as error:
+                        import logging
+                        logging.getLogger(__name__).warning('Katalog struktur %s belum tersedia (%s)',name,type(error).__name__)
         except Exception as error:
             import logging
             logging.getLogger(__name__).warning('Katalog struktur Giling belum tersedia (%s)',type(error).__name__)
@@ -44,7 +57,10 @@ def pasang(response, request):
     asset=('<script src="/static/kerangka-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-riwayat-ui.js?v='+CAP_ASET+'"></script>'
            '<script src="/static/kerangka-pengaturan-ui.js?v='+CAP_ASET+'"></script>'
-           '<script src="/static/kerangka-dokumen-ui.js?v='+CAP_ASET+'"></script>').encode()
+           '<script src="/static/kerangka-dokumen-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-sosoh-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengeringan-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-jasa-detail-ui.js?v='+CAP_ASET+'"></script>').encode()
     if response.body.count(b'</head>')==1:
         response.body=response.body.replace(b'</head>',asset+b'\n</head>',1)
     from app.web.halaman_bertahap import penanda_konteks

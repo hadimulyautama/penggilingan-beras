@@ -3,6 +3,21 @@
  */
 (function(){
  'use strict';
+ function themeReturn(root,address,origin){
+  if(typeof address!=='string'||!address.startsWith('/')||address.startsWith('//'))return false;
+  let u;try{u=new URL(address,origin);}catch(_){return false;}
+  if(u.origin!==origin||u.hash||u.pathname+u.search!==address)return false;
+  let changed=false;
+  for(const form of root.querySelectorAll('form.desktop-theme[action="/pengaturan/terik"]')){
+   if(form.getAttribute('method')?.toLowerCase()!=='post')continue;
+   const field=form.querySelector('input[type="hidden"][name="balik"]');if(!field)continue;
+   field.setAttribute('value',address);changed=true;
+  }
+  return changed;
+ }
+ if(typeof module==='object'&&module.exports){module.exports={themeReturn};return;}
+ const currentFrame=document.querySelector('.bingkai');
+ if(currentFrame&&document.getElementById('formulir-sesi')?.dataset.token)themeReturn(currentFrame,currentFrame.dataset.pindahAlamat,location.origin);
  const binding=document.currentScript?.dataset.konteks||'';
  const schema=document.currentScript?.dataset.daftar;
  if(schema&&!document.querySelector('[data-halaman-bertahap]')){
@@ -15,7 +30,7 @@
   const u=new URL(alamat,location.href);
   const histories=['/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan','/riwayat-qc/gabah-basah','/riwayat-qc/gabah-kering','/riwayat-qc/pk-luar','/riwayat-qc/pk-hasil-giling'];
   if(u.origin===location.origin&&histories.includes(u.pathname))return true;
-  return u.origin===location.origin&&(u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||/^\/proses-aktif\/giling\/[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'||u.pathname==='/barang-keluar');
+  return u.origin===location.origin&&(['/audit','/kabar','/pengaturan','/pengaturan/sesi'].includes(u.pathname)||u.pathname.startsWith('/laporan/')||/^\/jasa\/pelanggan\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||/^\/proses-aktif\/(?:giling|sosoh|pengeringan|pendinginan)\/[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'||u.pathname==='/barang-keluar');
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);

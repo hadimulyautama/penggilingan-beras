@@ -20,6 +20,7 @@
 <dl class="lp-detail-native-fields" aria-label="Kolom rincian transaksi belum dibaca">{% for c in DETAIL_META.kolom %}<div><dt>{{ [c.kelompok,c.subkelompok,c.nama]|select('defined')|reject('none')|join(' · ') }}</dt><dd>Belum dibaca</dd></div>{% endfor %}</dl>
 <h3 class="lbl">Keterangan</h3><p class="lp-catatan">Keterangan transaksi mengikuti data terbaru.</p>
 </div>
+<a class="btn btn--utama" data-detail-native-pdf-fallback hidden aria-disabled="true" target="_blank" rel="noopener" data-utuh>Buka laporan PDF</a>
 <p id="lp-pdf-alasan" class="bantu">PDF tersedia setelah data periode dan akses terbaru selesai dibaca.</p>
 <p role="status" aria-live="polite" data-detail-native-status>Memuat laporan. Ringkasan dan rincian belum dibaca.</p><button class="btn" type="button" data-detail-native-retry hidden>Coba lagi</button>
 {% from '_panduan.html' import panel as panel_panduan %}

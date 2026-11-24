@@ -164,7 +164,8 @@ def _tanpa_host_registry(html):
         assert set(document.attrs)=={'type','id','data-konteks','data-cap'}
         assert not document.find_parent(class_='bingkai')
         shape=json.loads(document.string)
-        assert set(shape)=={'versi','sumber','cap','konteks','sesi','laporan'}
+        assert set(shape)=={'versi','sumber','cap','konteks','sesi','laporan','kabar'}
+        assert type(shape['kabar']) is bool
         assert shape['versi']==1 and all(shape[k]==registry[k] for k in ('cap','konteks','sesi'))
         assert shape['konteks']==document['data-konteks'] and shape['cap']==document['data-cap']
         assert set(shape['laporan'])=={'targets','choices','rentang'}
@@ -181,6 +182,25 @@ def _tanpa_host_registry(html):
             assert set(value)=={'dari','sampai'} and date.fromisoformat(value['dari'])<=date.fromisoformat(value['sampai'])
         matches=list(re.finditer(
             r'\n<script type="application/json" id="padi-dokumen-kerangka" '
+            r'data-konteks="[^\"]+" data-cap="[^\"]+">([^<]*)</script>',html))
+        assert len(matches)==1 and matches[0].start()==end and json.loads(matches[0][1])==shape
+        end=matches[0].end()
+    sosoh_hosts=doc.select('#padi-sosoh-kerangka')
+    assert len(sosoh_hosts)<=1
+    if sosoh_hosts:
+        host=sosoh_hosts[0]
+        assert host.name=='script' and host.get('type')=='application/json'
+        assert set(host.attrs)=={'type','id','data-konteks','data-cap'}
+        assert not host.find_parent(class_='bingkai')
+        shape=json.loads(host.string)
+        assert set(shape)=={'versi','sumber','cap','konteks','sesi','layout','hasil'}
+        assert shape['versi']==1 and all(shape[k]==registry[k] for k in ('cap','konteks','sesi'))
+        assert shape['konteks']==host['data-konteks'] and shape['cap']==host['data-cap']
+        from app.web.sosoh_kerangka_langsung import aset,descriptor
+        assert shape['sumber']==aset()['sumber']
+        assert descriptor(shape['hasil'],layout=shape['layout'],source=shape['sumber'],registry=registry)==shape
+        matches=list(re.finditer(
+            r'\n<script type="application/json" id="padi-sosoh-kerangka" '
             r'data-konteks="[^\"]+" data-cap="[^\"]+">([^<]*)</script>',html))
         assert len(matches)==1 and matches[0].start()==end and json.loads(matches[0][1])==shape
         end=matches[0].end()

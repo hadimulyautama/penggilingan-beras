@@ -95,7 +95,7 @@
  }
  async function parse(response){
   if(response.redirected||!response.ok||(response.headers.get('content-type')||'').split(';')[0].trim()!=='text/html')throw Error((config.messages?.response||'Data belum dapat dibaca. Muat ulang halaman bila sesi atau akses berubah.'));
-  const html=await response.text();if(!htmlWithinLimit(html))throw Error('Dokumen terlalu besar untuk dibaca bertahap. Muat ulang halaman.');
+  const html=await response.text();if(!htmlWithinLimit(html)){const error=Error('Dokumen terlalu besar untuk dibaca bertahap. Muat ulang halaman.');error.code='NATIVE_HTML_LIMIT';throw error;}
   const doc=new DOMParser().parseFromString(html,'text/html');
   if(doc.querySelectorAll('.bingkai').length!==1||doc.querySelectorAll('#formulir-sesi').length!==1||doc.querySelectorAll('#isi-halaman').length!==1||doc.querySelector('.halaman-memuat')||doc.querySelector(config.shellSelector||config.rootSelector))throw Error((config.messages?.native||'Halaman native belum tersedia. Coba lagi tanpa mengirim perubahan.'));
   const source=doc.getElementById('isi-halaman'),freshFrame=doc.querySelector('.bingkai'),freshSession=doc.getElementById('formulir-sesi');
@@ -131,7 +131,7 @@
  const observer=new MutationObserver(()=>{if(!root.isConnected){reader.stop();observer.disconnect();lifecycle.abort();}});
  const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','X-Kerangka-Halaman':'0','Accept':'text/html'}}),parse,prepare,beforeInstall,canInstall:()=>!interaction(),
   loading(){retry.hidden=true;status.setAttribute('role','status');status.textContent=(config.messages?.loading||'Memuat data…');},
-  failed(error){status.setAttribute('role','alert');status.textContent=error.name==='AbortError'?(config.messages?.timeout||'Pembacaan terlalu lama. Coba lagi hanya membaca data.'):error.message;retry.hidden=false;},
+  failed(error){status.setAttribute('role','alert');status.textContent=error.name==='AbortError'?(config.messages?.timeout||'Pembacaan terlalu lama. Coba lagi hanya membaca data.'):error.message;retry.hidden=false;if(current())config.onFailure?.({error,root,status,retry,address:ADDRESS});},
   install(fresh,prepared){
    if(!current())return;const [start,end]=markers(main),focus=document.activeElement,inside=main.contains(focus);
    // Seluruh GET aset sudah selesai. Tidak ada await setelah pemeriksaan akhir.

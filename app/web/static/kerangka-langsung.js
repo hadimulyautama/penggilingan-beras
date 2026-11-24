@@ -113,7 +113,16 @@
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
   if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat)){
    const history=riwayatLangsung(pilihan.alamat,registry.konteks,cap,sesi.dataset.token);if(history)return history;
-   if(pilihan.alamat.startsWith('/laporan/')){
+   // Resource identity comes from the currently visible native source, never
+   // from a route-shaped ID. Factories decline stale/hidden/foreign catalogs.
+   const families=[['/proses-aktif/sosoh/',window.PadiKerangkaSosohUI],
+                   ['/proses-aktif/pengeringan/',window.PadiKerangkaPengeringanUI],
+                   ['/proses-aktif/pendinginan/',window.PadiKerangkaPengeringanUI],
+                   ['/jasa/pelanggan/',window.PadiKerangkaJasaDetailUI]];
+   for(const [prefix,factory] of families)if(pilihan.alamat.startsWith(prefix)){
+    try{return factory?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(pilihan.alamat.startsWith('/laporan/')||pilihan.alamat.split('?')[0]==='/kabar'){
     try{return window.PadiKerangkaDokumenUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }
    if(['/pengaturan','/pengaturan/sesi'].includes(pilihan.alamat)){

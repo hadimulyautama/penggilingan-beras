@@ -1,15 +1,15 @@
 {
   "versi": 1,
-  "sumber": "b46d85f63b1adc73d8c1373c906731706659e98d70144ecb6f62d02dc3926302",
+  "sumber": "8b63324dbeada18ded8061e1ac05d52c4f1e67fff156b0d1989555a4f1c480d4",
   "variants": [
     "/pengaturan",
     "/pengaturan/sesi"
   ],
-  "aset_sha256": "62189e120c3fd95159c2e69cde2c51d69b4f0f2d63b878e6a6595050c6fe358a",
+  "aset_sha256": "c4e0383206a0b86aa62ab5d5e8fd04b816b8467a8f8b3ebbced6e9e57a1cf7fe",
   "inputs": {
     "app/web/pengaturan_menu_kerangka.py": "655350f8291fb9e843a79c7491e67ccf8ae6a3c53cce302c52ae7ac3666fc4aa",
     "app/web/static/kerangka-pengaturan-ui-runtime.js": "25b4da377c433644a8565cb0f4867293bd06f25ccf0022a83e176240d84f3954",
-    "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
+    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
     "app/web/static/pengaturan-menu-native.js": "7fbccf5b85bf63a39a14ff90313ba441cd87c9f1c5344c42561289a839bf6db8",
     "app/web/templates/_kata_pengaturan.html": "95cc45fbf6500b9a97ba0367c1e0f2f409ff08398de835e8019e364b3cba2745",
     "app/web/templates/_pengaturan_menu_kerangka_isi.html": "0b5932ecffc449d26178c93ee679d69ae6a1ef6eacc154d7870a6aed630f4f57",

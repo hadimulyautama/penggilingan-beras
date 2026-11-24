@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "3c65c2e9f8421938200a462672479d51bd84ded8d5e5e838758473fda58b6096",
-  "aset_sha256": "c94cdb135f2f8cbc95b1c6f4d1301c4e0cb6b6673a11d31cba104fa23670f989",
+  "sumber": "e4177f25c8de5e7ad5e915d49caa9a61af852bd11e8522f385aa203b3a0567ca",
+  "aset_sha256": "ea8ca8e054e7cd0ce6f1123e8720915a598f013abe894b0d1e3170fc436781b4",
   "variants": [
     "/riwayat-giling",
     "/riwayat-sosoh",
@@ -21,7 +21,7 @@
     "app/web/riwayat_daftar_metadata.py": "54a0662ef1d848e2b6e5c54be3cba7d7c1be55aa89b873732dbec2d498fdd7d6",
     "app/web/static/audit-native.js": "df3256162e629c36604a314638e5071b3ff8657039180e7e7ad4a7a7fd017dac",
     "app/web/static/kerangka-riwayat-ui-runtime.js": "bb0a1d664cff151f700e4416df3298688d7f314733b843d6da04efcdd2e14834",
-    "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
+    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
     "app/web/static/riwayat-daftar-native.js": "6695eb675073a8169386f0aab7d783ba37c9be9bc56a3639dd514e95f1d233d9",
     "app/web/static/riwayat-daftar-proses.css": "beb450a127ddb01278ca7ade3bfefe444ebd1e9d401c781ca8fac6eb1575947f",
     "app/web/static/riwayat-daftar-proses.js": "6d48099e3474882bbd25c48a678ceed7e08fb48ef172748f8853303a5820c5ec",
