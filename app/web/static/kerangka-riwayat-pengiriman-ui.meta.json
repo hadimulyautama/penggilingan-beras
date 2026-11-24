@@ -1,18 +1,18 @@
 {
   "versi": 1,
-  "sumber": "78daba3d450482dd45367f4b04c346c60708eb46744e66a42b03beaf54aff430",
+  "sumber": "c8de909cedf9b56d0aae71d14815dcf4ac981d9809f50734b6be08d45966e368",
   "variants": [
     "read",
     "review"
   ],
-  "aset_sha256": "c50385cb66fb63dc2f91c0e0ffa15b86c0d1886af58b1ceb249bd85da4df82ff",
+  "aset_sha256": "1fcd47087b9ca77e06434240b92751e73d6ca6853cdccf2263fe50f21cab309f",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/layar_keluar.py": "8a3e0f8ac071137c18f3c3a15b5c3a07dd251b063cb8d8125b129998d4bdd6fe",
     "app/web/riwayat_pengiriman_catalog.py": "f06b8033a8d05caa2794a631ac4991a43e7f3eae64705d20d01b5c02ae8377c7",
     "app/web/riwayat_pengiriman_kerangka.py": "73573d1485344434fcc130a67e15d428806f70cc5e934f36a8328358a6c292b6",
     "app/web/static/kerangka-riwayat-pengiriman-ui-runtime.js": "8180e5a640df885f91dc1d43fd891837b992f27f54609e61bc163bed55aa8974",
-    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
     "app/web/static/riwayat-pengiriman-native.js": "3e1c509086b5af6bb0c659efa6f78015ad5ca399c69bf1e4b77a5fa6889c468e",
     "app/web/static/status-pengiriman.css": "f079b7884e128f6b12bea70d583eeb4cffcfdb07b32d3967f2b406fd9a1b7510",
     "app/web/templates/_status_timbang_pengiriman.html": "8ac2e5d8157aa13337f0945a0ba7a65183b2345baded350b4a914306dff3492d",

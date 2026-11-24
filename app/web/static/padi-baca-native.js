@@ -69,6 +69,12 @@
  const status=root.querySelector(config.statusSelector),retry=root.querySelector(config.retrySelector);
  if(!main||!frame?.contains(main)||!main.contains(root)||!sameIdentity(identity,identity,ADDRESS)||address()!==ADDRESS||root.dataset.url!==ADDRESS||!stamp||!status||!retry)return;
  const lifecycle=new AbortController();
+ let focusEpoch=0,retryOrigin=null;
+ // Hiding the focused retry button moves focus to body before install.
+ // Remember that intent only until a later user interaction supersedes it.
+ for(const type of ['pointerdown','keydown','focusin'])document.addEventListener(type,event=>{
+  if(type!=='focusin'||event.target!==document.body)focusEpoch++;
+ },{capture:true,signal:lifecycle.signal});
  function current(){return root.isConnected&&root.dataset.stamp===stamp&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);}
  function interaction(){
   const focus=document.activeElement;
@@ -130,10 +136,12 @@
  }
  const observer=new MutationObserver(()=>{if(!root.isConnected){reader.stop();observer.disconnect();lifecycle.abort();}});
  const reader=createReader({address:ADDRESS,origin:location.origin,identityError:config.messages?.identity,identity,current,fetch:signal=>fetch(ADDRESS,{method:'GET',credentials:'same-origin',cache:'no-store',signal,headers:{'X-Pindah':'1','X-Kerangka-Halaman':'0','Accept':'text/html'}}),parse,prepare,beforeInstall,canInstall:()=>!interaction(),
-  loading(){retry.hidden=true;status.setAttribute('role','status');status.textContent=(config.messages?.loading||'Memuat data…');},
+  loading(){retryOrigin=document.activeElement===retry?{epoch:focusEpoch}:null;retry.hidden=true;status.setAttribute('role','status');status.textContent=(config.messages?.loading||'Memuat data…');},
   failed(error){status.setAttribute('role','alert');status.textContent=error.name==='AbortError'?(config.messages?.timeout||'Pembacaan terlalu lama. Coba lagi hanya membaca data.'):error.message;retry.hidden=false;if(current())config.onFailure?.({error,root,status,retry,address:ADDRESS});},
   install(fresh,prepared){
-   if(!current())return;const [start,end]=markers(main),focus=document.activeElement,inside=main.contains(focus);
+   if(!current())return;const [start,end]=markers(main);
+   const retryFocused=retryOrigin&&retryOrigin.epoch===focusEpoch&&document.activeElement===document.body;
+   const focus=retryFocused?retry:document.activeElement,inside=retryFocused||main.contains(focus);
    // Seluruh GET aset sudah selesai. Tidak ada await setelah pemeriksaan akhir.
    observer.disconnect();lifecycle.abort();while(start.nextSibling&&start.nextSibling!==end)start.nextSibling.remove();end.before(fresh.content);document.title=fresh.doc.title||document.title;
    const installedCurrent=()=>fresh.content.isConnected&&address()===ADDRESS&&sameIdentity(identity,{cap:document.documentElement.dataset.versi||'',context:document.querySelector('.bingkai')?.dataset.pindahKonteks||'',token:session(),address:document.querySelector('.bingkai')?.dataset.pindahAlamat||''},ADDRESS);

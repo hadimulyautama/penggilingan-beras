@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "7155decf8c17c159a6cdd25f3c80e31bf95c5c17c4c54e74e85518b1fa923720",
+  "sumber": "5b9668f751f3ff771e275362722819dc6cd669cf3d04e78095a0dbf0c6280082",
   "variants": [
     "pk-g1",
     "pk-g2-curah",
@@ -11,12 +11,12 @@
     "warehouse-g1",
     "warehouse-g2"
   ],
-  "aset_sha256": "22a7be5a5f07105955dc43fceb86a019176ef95842c9c1f03e6ab643630a5f4c",
+  "aset_sha256": "7b4312bc89cf1ef1d379ee458f9ea89e03556d2e09d54fee3536c3ffb1e0209e",
   "inputs": {
     "app/services/mutu_pk.py": "d36e6454871e1dbbff7155492205173f66a095f5eb808e3e27622ebb19d4e382",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/static/kerangka-stock-detail-ui-runtime.js": "fdbc7b6012a8e44fd5621727cc9046b0d45db8b64268fee30c3e2b5344b8dc36",
-    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
     "app/web/static/stock-detail-native.js": "304b8e0abaf050815f150a616fb3e05291964eaa22b5f72006a9f6bf507daba3",
     "app/web/stock_detail_native.py": "fea42c4990cfc8b083906e273e915fbabed393e4826a0e663422fb85003ceed0",
     "app/web/templates/stock_detail_native.html": "95eede95fa13f86ae0a35658fd938c4372de9fd2c05a785a51f1241267c17b33",

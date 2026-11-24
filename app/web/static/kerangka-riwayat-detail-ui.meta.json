@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "33072bab8001e8a0f7b233b138f9fe7d4082591dc51c94415152bf4a0fbfef8c",
+  "sumber": "12f43df0c611d43440602a6bed8f04f8ec766383ca5f1f4b3e2bf49f6d0f8405",
   "variants": [
     "riwayat-giling",
     "riwayat-sosoh",
@@ -12,7 +12,7 @@
     "qc-beras-hasil-sosoh",
     "qc-beras-daftar"
   ],
-  "aset_sha256": "5c5e58e68e840fed1246669b00415808c5e7b8825fa74391d4e609b3bfad7eec",
+  "aset_sha256": "60c605d69513ad09fe84171a6164ea8757451461c753e8ac0521988eaef1cb40",
   "inputs": {
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
@@ -24,7 +24,7 @@
     "app/web/static/detail_pendinginan.css": "23670e14c034b9f4ed3cfe64388044718cfe279e97327fbfa67b86a8e2f081fd",
     "app/web/static/detail_pengeringan.css": "3513da10fa157ee9bac229be0872fc1fbc3d86c5fb7077c9eb944bc7c9a8737f",
     "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "67e26c3231bc0e2f7fc21bbad2f13d14de42f16637345808d94c7fd6f01b0b00",
-    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
     "app/web/static/proses_aktif.css": "ca762b696a8a55220e7e171bbbe7416850bfa71f63e436e3334a035154907dd8",
     "app/web/static/qc-detail.css": "2dfe236e7bccbd5c2626097e2cbf95f201436381d6d11edf1fa267bf086e5eb1",
     "app/web/static/riwayat-detail-native.js": "cb404f6443e550ef0dd51d2773ed2be7158134e688f9199b3bac723db448bf4b",

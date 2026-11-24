@@ -82,15 +82,21 @@
     return document.cookie.split('; ').find(function (s) { return s.indexOf('produksi_csrf=') === 0; }) || '';
   }
   var sesi = nonce();
-  function alamat() { return location.pathname + location.search; }
+  function alamat() { return location.pathname + location.search + location.hash; }
+  function adopted(url) {
+    return !!(window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.siap(url)
+      || window.PadiKerangkaPortalDetailUI && PadiKerangkaPortalDetailUI.siap(url));
+  }
   function aman(url) {
     return url.origin === location.origin && (url.pathname === '/pelanggan' || url.pathname.indexOf('/pelanggan/') === 0)
       && !/\/(masuk|keluar|sw\.js|manifest\.webmanifest)$/.test(url.pathname)
-      && !/\.(pdf|csv)$/i.test(url.pathname) && !url.hash;
+      && !/\.(pdf|csv)$/i.test(url.pathname) && (!url.hash
+        || !!window.PadiKerangkaPortalDetailUI && PadiKerangkaPortalDetailUI.siap(url.pathname + url.search + url.hash));
   }
   function kerangka(url, dorong, gulung, judul) {
     if (nonce() !== sesi) return false;
     var native = window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.buat(url);
+    if (!native && window.PadiKerangkaPortalDetailUI) native = PadiKerangkaPortalDetailUI.buat(url);
     // Unknown deep variants keep native navigation; do not invent a title
     // page or a resource layout that the current document cannot establish.
     if (!native) return false;
@@ -99,7 +105,8 @@
       history.pushState({ portal: 1, portalScroll: 0 }, '', url);
     }
     var pending = main.querySelector('[data-portal-native-frame]');
-    if (!pending || pending.dataset.portalAddress !== url) main.innerHTML = native.html;
+    var requestUrl = new URL(url,location.origin);
+    if (!pending || pending.dataset.portalAddress !== requestUrl.pathname + requestUrl.search) main.innerHTML = native.html;
     pending=main.querySelector('[data-portal-native-frame]');
     pending.setAttribute('aria-busy','true');
     var readStatus=pending.querySelector('[data-portal-read-status]'),readRetry=pending.querySelector('[data-portal-read-retry]');
@@ -126,7 +133,8 @@
   function gagal(url, ulangi) {
     status('selesai');
     var frame=main.querySelector('[data-portal-native-frame]');
-    if (!frame || frame.dataset.portalAddress!==url) return;
+    var target = new URL(url,location.origin);
+    if (!frame || frame.dataset.portalAddress!==target.pathname+target.search) return;
     frame.setAttribute('aria-busy','false');
     var message=frame.querySelector('[data-portal-read-status]'),retry=frame.querySelector('[data-portal-read-retry]');
     message.setAttribute('role','alert');message.textContent='Catatan belum dapat dibaca. Struktur dan pilihan pencarian tetap tersedia.';
@@ -180,7 +188,7 @@
         if (!r.ok || !(r.headers.get('Content-Type') || '').startsWith('text/html')) {
           // A native permission/identity error still follows the original
           // response. An adopted read failing temporarily keeps its framework.
-          if (window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.siap(url) && (r.status>=500 || r.ok)) return null;
+          if (adopted(url) && (r.status>=500 || r.ok)) return null;
           return { utuh: r.url || url };
         }
         if (r.redirected) {
@@ -241,12 +249,12 @@
   }
   var router = pengarah({ waktu: Date.now, sentuhan: function () { return sentuhan; }, ambil: ambil,
     pasang: pasang, kerangka: kerangka, gagal: gagal, status: status, siap: siapSegar,
-    freshOnly: function(url){return !!window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.siap(url);},
+    freshOnly: adopted,
     draf: function(){return !!window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.filterDirty(main.querySelector('[data-portal-native-frame]'));}, utuh: function (url) { location.assign(url); } });
   window.PORTAL_NAV = { buka: function (url, judul) {
     var u = new URL(url, location.href);
     if (!aman(u) || nonce() !== sesi) { router.bersihkan(); location.assign(u.href); return; }
-    return router.pindah(u.pathname + u.search, u.pathname + u.search !== alamat(), 0, judul);
+    return router.pindah(u.pathname + u.search + u.hash, u.pathname + u.search + u.hash !== alamat(), 0, judul);
   } };
   router.ingat(alamat(), document.documentElement.outerHTML);
   if (main.querySelector('[data-portal-native-frame]')) router.pindah(alamat(),false,0);

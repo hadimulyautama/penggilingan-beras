@@ -145,6 +145,9 @@
    if(pilihan.alamat.startsWith('/riwayat-')){
     try{const detail=window.PadiKerangkaRiwayatDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(detail)return detail;}catch(_){return null;}
    }
+   if(pilihan.alamat.split('?')[0]==='/stok/karung/detail'){
+    try{return window.PadiKerangkaKarungDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
    if(['/stok/pk/detail','/stok-produk/detail','/stok-produk-jasa/detail'].includes(pilihan.alamat.split('?')[0])||pilihan.alamat.startsWith('/gudang/')){
     try{return window.PadiKerangkaStockDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }

@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "b4ebdd1424daa74052827f59e378a5e74161db866fbb3518928e0d43715945ad",
+  "sumber": "73826ddc7a367fd66e0becc5440d1c4faa30516c6d1714944ad07d837c5ab709",
   "variants": [
     "ringkasan",
     "penerimaan",
@@ -8,7 +8,7 @@
     "stok",
     "pengambilan"
   ],
-  "aset_sha256": "7de38e38c423f2f6e4ee67a18f795e9afcdd1a45f2ec657879cca8da59ecb6f9",
+  "aset_sha256": "8bf290f731c35eaa8bc565a09faf3ec98e3ae49a5a56a7915b44078b27e17ccb",
   "inputs": {
     "app/services/jasa_pelanggan.py": "48b3d45c316aced8df279d398ce62c136c54417f000934eff85ecb48481ff6e6",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
@@ -17,7 +17,7 @@
     "app/web/layar_jasa.py": "25696cf6f7ae940aa7de449086b3bdb535f4c9fd0f7fdea910f0011ffd26f50a",
     "app/web/static/jasa-detail-native.js": "d6d7ca43af096d95636051623fe7a44dcf571ae3dcfa7d10c70fa0e3b2160061",
     "app/web/static/kerangka-jasa-detail-ui-runtime.js": "d360701aea6cb72d9ce97e72cc913e4823ae4acdde911b84452f089f08134712",
-    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
     "app/web/templates/jasa_detail_kerangka.html": "b1119d1cf676c9ac745b0ba297e1d11af107e670fc7f60ffaa7b8d7ccdace20c",
     "hmu_tampilan/static/jasa-kontrol.css": "8ea965e53a5df195ce68889506c0e45abef9596ad0868c9f888130ce789cd9cc",
     "hmu_tampilan/static/jasa-kontrol.js": "0b61aba3ea3c24427e0ff3436aa4b7d999250e25d8d5a60e5a92a744f976dd7d",

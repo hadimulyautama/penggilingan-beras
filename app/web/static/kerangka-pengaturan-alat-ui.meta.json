@@ -1,17 +1,17 @@
 {
   "versi": 1,
-  "sumber": "4bb7c8d2783f812f896e018e899265645653c1a252824c2c031635b678ec5326",
+  "sumber": "8b049ac3ea9f56f18131fd9c389a6176f7fe65f3774663c769ee2234a7e1a488",
   "variants": [
     "/pengaturan/alat"
   ],
-  "aset_sha256": "d6c1079c731d242f441faae0ea5e7d5eb24c3c75ab6d226f7f812f0d3f0c37e2",
+  "aset_sha256": "41d814891a535880da3f9d940f99bbec71d6b78b75318f3a88ac73b788b1e26c",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/pengaturan.py": "5dda92f8aa0e8dc916f23ec51acd192dd661c38d886d7676f1b9baab83cae70c",
     "app/web/pengaturan_alat_kerangka.py": "0a0ca0977c9d64629aa4aa2225f8b6ad0761f638f0caca43ed7052c56ef6b2f6",
     "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
     "app/web/static/kerangka-pengaturan-alat-ui-runtime.js": "72315efc34a13793faaf344aaeddb162ba1a7e9c9c14136ae473b99b0940fc2a",
-    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
     "app/web/static/pengaturan-alat-native.js": "78b42d2397a40d8f3587fd69589709a0c769c82766e1b2ad06f1ace9b6c262ef",
     "app/web/templates/pengaturan_alat_kerangka.html": "5f954c538cd6fa1b54ac9eb6589a2857784e5690fe109e649b6c74df5bc5c553",
     "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",

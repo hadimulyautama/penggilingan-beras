@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "8a5d0c2226772e3447f1d58a0151dd224ecbcd33bb6e49ae36cc8676d01d2a7a",
+  "sumber": "c095ed8caedb935514ebcf7ca9b73e1072d1bc3a16d2426e8d6fda77a79d567c",
   "variants": [
     "peran-lihat",
     "peran-gudang",
@@ -11,7 +11,7 @@
     "sistem-admin",
     "sistem-umum"
   ],
-  "aset_sha256": "49584345e6936960f239ff85cc185c6ea17a0a08094bcafa3d898bab66f5b158",
+  "aset_sha256": "2020c036f1048b84092534aa7919ce2fefe76c660816770ec6354f468531c258",
   "references": {
     "columns": [
       "Super Admin",
@@ -43,7 +43,7 @@
     "app/web/pengaturan_detail_schema.py": "b4de2eb22458c7abee0dbd690bdc45d81803efd0eeedba0fbc63eb16c3716eb0",
     "app/web/pengaturan_navigasi.py": "c316f7cdf55a61d1597e61e32ca1be3d265ba8e028ed44f3eebdf8f717cc349a",
     "app/web/static/kerangka-pengaturan-detail-ui-runtime.js": "a1f178b7cced179442116edde98b2c8d19d85b417cd651907cb26549b3ecae9d",
-    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/padi-baca-native.js": "27f86ca9c0440b80af9a94af1572b562e21f06949aa734022b8e9816fc69fdad",
     "app/web/static/pengaturan-detail-native.js": "022a32318c8fc96281c756093859f7a8f2dd4327e657ca28c4674dac28f48cb3",
     "app/web/templates/pengaturan_detail_kerangka.html": "985d68dd26c7a030336205ef6aa6b33682fbd03957bccc610afcee5db2427c67",
     "hmu_tampilan/static/pengaturan.css": "8c75d83897acc331e3076617c46b929dc0da06509726ec058e4f2b3a9200f859",
