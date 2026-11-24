@@ -30,7 +30,7 @@ async def test_dua_tab_kerangka_tanpa_antrean_dan_isi_setara_native(pg,lengkap,m
             doc=BeautifulSoup(shell.text,'html.parser');root=doc.select_one('[data-halaman-bertahap]')
             assert root and len(root.select('thead th'))==5
             selected=root.select_one('nav[aria-label="Tab pekerjaan"] [aria-current="page"]')
-            assert selected and ('Perlu tindakan' if tab=='tindakan' else 'Berjalan') in selected.get_text()
+            assert selected and ('Perlu tindakan' if tab=='tindakan' else 'Berjalan') in selected.get_text(), (query, [str(n) for n in root.select('nav')])
             assert root.select_one('input[name=cari]') is not None
             assert len(root.select('select[name=jenis]'))==1
             assert root.select_one('select[name=pemasok]').has_attr('disabled')
