@@ -1,0 +1,12 @@
+{
+  "source_exact": "dba802815d4e1efe057320e44b46cec1018a2bae",
+  "purpose": "Native actual editor templates/controllers/SDK are unchanged; only artificial marker on NEW inert pending template is removed.",
+  "sha256": {
+    "app/web/templates/riwayat_giling_detail.html": "3feb8db918897afd29e0bd348d1d47cb23eda71ee217e1ccfdd2f24e66e37f16",
+    "app/web/templates/riwayat_sosoh_detail.html": "a8b08253d498830a23d14a2e7e1a981b0e31f3a16b2420e908110e36624278ee",
+    "app/web/static/riwayat-giling-desain.js": "9515c81fe04e7877ced4c57b37d2e92c69622964d6bec22781ab7f60ce3c35ee",
+    "app/web/static/riwayat-sosoh-desain.js": "dd874d1bc3b4c15ebe661eebc4f953d3993ccf0e6ce6a8a779c11bb88961a9f5",
+    "hmu_tampilan/static/koreksi.js": "0d22e67486d596f45d1d9e4215dd5392bdb8f6bbf5305e36566dcf298162ef82",
+    "hmu_tampilan/static/pindah.js": "894dfcac9d078ec57e8c83aba0f6db316edc29f5d09fdaa6473d7186fde8e482"
+  }
+}

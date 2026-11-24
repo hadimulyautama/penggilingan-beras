@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
 const require=createRequire(import.meta.url);
 const {nativeTitle,state,validData,validCatalog,menuValid,backContext,contextualBack,visibleLink}=require('../app/web/static/kerangka-riwayat-detail-ui-runtime.js');
 const {anchorHandler,summaryHandler}=require('../app/web/static/riwayat-detail-katalog.js');
@@ -107,4 +108,16 @@ test('breadcrumb identity parts distinguish History code from native QC title',(
  const missing={...data,variants:{...data.variants,'qc-gabah-basah':{...data.variants['qc-gabah-basah']}}};
  delete missing.variants['qc-gabah-basah'].breadcrumb_parts;
  assert.equal(validData(missing),false);
+});
+
+test('actual pending Giling and Sosoh assets do not initialize a native editor',()=>{
+ const payload=readFileSync(new URL('../app/web/static/kerangka-riwayat-detail-ui.js',import.meta.url),'utf8');
+ const compiled=JSON.parse(payload.split('window.PadiKerangkaRiwayatDetailData=',2)[1].split(';\n',1)[0]);
+ for(const variant of ['riwayat-giling','riwayat-sosoh']){
+  const html=compiled.variants[variant].html;
+  assert.match(html,/data-riwayat-detail-native/);
+  assert.doesNotMatch(html,/data-editor-perintah|data-kemas-ulang|data-rhs-actor|<form\b|\sname=/);
+ }
+ assert.equal(Object.keys(compiled.scripts).length,4);
+ for(const script of Object.values(compiled.scripts))assert.doesNotMatch(script,/PadiRiwayat(?:Giling|Sosoh)Desain|PADI_RIWAYAT_(?:GILING|SOSOH)_DRAF/);
 });

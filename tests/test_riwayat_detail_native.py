@@ -349,3 +349,42 @@ def test_qc_header_compilation_does_not_call_assessment_or_fabricate_rows():
     assert 'penilaian_dari_log(' not in source
     assert 'SimpleNamespace' not in source and 'p.nilai' not in source
     assert ".select('th')" in source
+
+
+@pytest.mark.parametrize('variant',['riwayat-giling','riwayat-sosoh'])
+def test_pending_history_is_read_structure_not_a_native_editor(variant):
+    doc=BeautifulSoup(html_for(variant),'html.parser')
+    assert not doc.select('[data-editor-perintah],[data-kemas-ulang],form,[name],[data-post],[data-kirim],[data-rhs-actor]')
+    assert not doc.select('script[type="application/json"]')
+    assert doc.select('[data-riwayat-detail-native]')
+    assert all(n.has_attr('disabled') for n in doc.select('input,textarea,select'))
+    assert 'Koreksi hasil' in doc.get_text()  # Allowed action shape stays disabled.
+
+def test_pending_history_pooled_scripts_have_no_editor_initializer_or_save_storage():
+    spec=importlib.util.spec_from_file_location('pending_reader_boundary_program',ROOT/'scripts/buat_kerangka_riwayat_detail.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    data=json.JSONDecoder().raw_decode(module.build()[0].decode().split('window.PadiKerangkaRiwayatDetailData=',1)[1])[0]
+    expected={
+        (ROOT/'hmu_tampilan/static/laporan-kontrol.js').read_text(),
+        (ROOT/'app/web/static/padi-baca-native.js').read_text(),
+        (ROOT/'app/web/static/riwayat-detail-native.js').read_text(),
+        (ROOT/'app/web/static/riwayat-navigasi-native.js').read_text(),
+    }
+    assert len(data['scripts'])==4
+    assert set(data['scripts'].values())==expected
+    for script in data['scripts'].values():
+        assert not any(key in script for key in ('PadiRiwayatGilingDesain','PadiRiwayatSosohDesain','PADI_RIWAYAT_GILING_DRAF','PADI_RIWAYAT_SOSOH_DRAF','dasar_','kunci_kiriman','sendBeacon','method:"POST"',"method: 'POST'"))
+    # The original read-navigation preference keys are allowed; do not confuse
+    # these with actor/process/session-bound editor draft or pending-save keys.
+    assert 'padiflow.riwayat.terakhir' in ''.join(data['scripts'].values())
+
+def test_actual_native_editor_marker_keys_and_sdk_veto_are_unchanged():
+    pin=json.loads((ROOT/'tests/fixtures/history_pending_editor_boundary_prechange.json').read_text())
+    for path,digest in pin['sha256'].items():
+        assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==digest,path
+    for name in ('giling','sosoh'):
+        source=(ROOT/('app/web/templates/riwayat_'+name+'_detail.html')).read_text()
+        assert 'data-editor-perintah' in source and 'data-rhs-actor=' in source
+        assert 'class="riwayat-koreksi__form"' in source
+    sdk=(ROOT/'hmu_tampilan/static/pindah.js').read_text()
+    assert 'document.querySelector("[data-editor-perintah],[data-kemas-ulang]")' in sdk

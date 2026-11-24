@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "108dc4dfe10c49aa13ee62829ec82b4afb35b4ae9780fedcf31e906828282712",
+  "sumber": "bf6221ac51d63339bf7a88c3c0f7b5eac8d3ea98872b0032f55b748c68aa1cf2",
   "variants": [
     "riwayat-giling",
     "riwayat-sosoh",
@@ -12,7 +12,7 @@
     "qc-beras-hasil-sosoh",
     "qc-beras-daftar"
   ],
-  "aset_sha256": "b977470d6bd753ee5ed53b54d441469e72b2e618ba608499a24b416fce7f5b04",
+  "aset_sha256": "4be91a39d2d3d6aeba75c80896b95cfe1ab2865c27f92fca072803d72bb43d39",
   "inputs": {
     "app/services/mutu_pk.py": "d36e6454871e1dbbff7155492205173f66a095f5eb808e3e27622ebb19d4e382",
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
@@ -40,7 +40,7 @@
     "app/web/templates/qc_beras_native.html": "d15b329b7632cc1adff5b4901505f33ee61904a91f6e398e51ed20c0e1c7efe1",
     "app/web/templates/qc_detail_native.html": "e6a53efab885dd8f55c2960bc49dfd5fd1a8d586f5cfe331d93355deb923d406",
     "app/web/templates/qc_sosoh_riwayat.html": "d6c6be28cbd0a8cec73e081ed4273c7bf51753a803c852b7b735f5889fbdde49",
-    "app/web/templates/riwayat_detail_native.html": "034f048406e545d542aca0ff1e4bddb41f0f87f334175b23900344e0486cf016",
+    "app/web/templates/riwayat_detail_native.html": "a9a25edac1b0a941d2e18de64805d667d0708ce271c9bdd4e363da6bb24ad469",
     "app/web/templates/riwayat_giling_detail.html": "3feb8db918897afd29e0bd348d1d47cb23eda71ee217e1ccfdd2f24e66e37f16",
     "app/web/templates/riwayat_pengeringan_detail.html": "70581ea31ac3f5bebd6d7abbcd9db1ce39015ac6827a08f489b9b919c1372a9e",
     "app/web/templates/riwayat_qc_detail.html": "ac645f2885e4988e47c569807892e60b68f0fcf01149d99226e1e23cfea3e379",
