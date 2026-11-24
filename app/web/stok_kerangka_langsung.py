@@ -1,6 +1,29 @@
 """Prototype struktur Stok berizin, tanpa saldo, baris atau cache transaksi."""
 from fastapi import Request
 
+MAX_JSON_BYTES = 1572864
+
+
+def sah_descriptor(data):
+    """Batas biaya struktur opsional; bukan pemeriksaan otorisasi."""
+    from jinja2.utils import htmlsafe_json_dumps
+    if (not isinstance(data, dict)
+            or set(data) != {'versi', 'cap', 'konteks', 'sesi', 'penyandian', 'potongan', 'frames'}
+            or data['versi'] != 1 or data['penyandian'] != 'baris-1'
+            or not all(isinstance(data[k], str) and data[k] for k in ('cap', 'konteks', 'sesi'))):
+        return False
+    frames, pieces = data['frames'], data['potongan']
+    if (not isinstance(frames, dict) or set(frames) not in ({'bahan'}, {'bahan', 'produk', 'karung'})
+            or not isinstance(pieces, list) or not 0 < len(pieces) <= 16384
+            or not all(isinstance(s, str) and s for s in pieces)):
+        return False
+    for refs in frames.values():
+        if (not isinstance(refs, list) or not 0 < len(refs) <= 16384
+                or not all(type(i) is int and 0 <= i < len(pieces) for i in refs)
+                or sum(len(pieces[i].encode('utf-8')) for i in refs) > 524288):
+            return False
+    return len(htmlsafe_json_dumps(data).encode('utf-8')) <= MAX_JSON_BYTES
+
 
 async def susun(request: Request, akun, *, navigasi):
     from hmu_tampilan import CAP_ASET
@@ -33,9 +56,12 @@ async def susun(request: Request, akun, *, navigasi):
                                   stok_lokasi=(bahan if tab == 'bahan' else lainnya, metadata))
         if response.status_code != 200:
             return None
+        if len(response.body) > 524288:
+            return None
         frames[tab] = response.body.decode('utf-8')
     nonce = request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state, 'csrf', None)
-    return dict(versi=1, cap=CAP_ASET, konteks=penanda_konteks(request, akun),
+    result = dict(versi=1, cap=CAP_ASET, konteks=penanda_konteks(request, akun),
                 sesi=csrf.untuk_sesi(nonce, baca_token(request.cookies.get(NAMA_COOKIE)),
                                     request.cookies.get('produksi_lihat', '')),
                 **kemas_frame(frames))
+    return result if sah_descriptor(result) else None

@@ -13,13 +13,15 @@
   if(!['bahan','produk','karung'].includes(tab)||!['semua','pabrik','jasa'].includes(owner)||search.length>200||customer&&(!/^[1-9]\d{0,9}$/.test(customer)||Number(customer)>2147483647)||customer&&owner!=='jasa')return null;
   const host=document.getElementById('padi-stok-kerangka');let data;
   if(!host?.isConnected||host.dataset.konteks!==context||host.dataset.cap!==cap)return null;
-  try{data=JSON.parse(host.textContent);}catch(_){return null;}
+  const encoded=host.textContent;if(!encoded||encoded.length>1572864)return null;
+  try{data=JSON.parse(encoded);}catch(_){return null;}
   if(data?.versi!==1||data.penyandian!=='baris-1'||data.konteks!==context||data.cap!==cap||data.sesi!==token||!data.frames||typeof data.frames!=='object'||Array.isArray(data.frames)||Object.keys(data.frames).some(k=>!['bahan','produk','karung'].includes(k)))return null;
   // Jenis yang tidak disediakan otoritas tidak dibuat di browser. Penjaga
   // native tetap berjalan ketika GET isi tiba atau hak telah berubah.
   const html=decodeFrame(data,tab);if(!html)return null;
   const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),main=doc.getElementById('isi-halaman'),root=main?.querySelector('[data-halaman-bertahap][data-kind="stok"]');
-  if(!frame||!root||frame.dataset.pindahKonteks!==context||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
+  const prototype='/stok?tab='+tab+'&pemilik=semua';
+  if(!frame||!root||frame.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==prototype||root.dataset.stamp!==context+'|'+prototype||root.dataset.url!=='/api/halaman-bertahap/stok?tab='+tab+'&pemilik=semua'||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
   const locationSelect=root.querySelector('select[name="gudang"]'),ownerSelect=root.querySelector('select[name="pemilik"]'),customerSelect=root.querySelector('select[name="pelanggan_id"]');
   if(!locationSelect||!ownerSelect||!customerSelect||!Array.from(locationSelect.options).some(o=>o.value===warehouse))return null;
   locationSelect.value=warehouse;ownerSelect.value=owner;
