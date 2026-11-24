@@ -1,13 +1,13 @@
 {
   "versi": 1,
-  "sumber": "2143887206f69f4a476324249713004b59cce711bf5fdda9788990951e6c7734",
+  "sumber": "d0b6551e148f50217521e1fb21d2ed8686d8436423df0181758eadf51c83f425",
   "variants": [
     "/pengaturan/alat"
   ],
-  "aset_sha256": "9f312cd9ae313ff09c781722a28d86cdd4c2de0eab3adb213d962e8afb63dabd",
+  "aset_sha256": "424c61e49603a7e4d475e5a9313e3d1e880d6512a2c6f05a64210686ad3b7335",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
-    "app/web/pengaturan.py": "5dda92f8aa0e8dc916f23ec51acd192dd661c38d886d7676f1b9baab83cae70c",
+    "app/web/pengaturan.py": "e2c8ba8f5262abe646c9a9115570be010ce483a83a26923d3819acf9fbae4f82",
     "app/web/pengaturan_alat_kerangka.py": "0a0ca0977c9d64629aa4aa2225f8b6ad0761f638f0caca43ed7052c56ef6b2f6",
     "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
     "app/web/static/kerangka-pengaturan-alat-ui-runtime.js": "72315efc34a13793faaf344aaeddb162ba1a7e9c9c14136ae473b99b0940fc2a",

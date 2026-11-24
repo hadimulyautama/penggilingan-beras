@@ -116,6 +116,9 @@ def test_immutable_native_guard_reader_and_writer_baseline_no_git_runtime():
     assert receipt['baseline_commit']=='cafdb911c33a422b984c078c03b72ed568d82912'
     for path,functions in receipt['functions'].items():
         nodes={n.name:n for n in ast.parse((ROOT/path).read_text()).body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
+        if path=='app/web/pengaturan.py':
+            from tests.test_pengguna_native_handoff import strip_declared_handoff
+            nodes['halaman_pengaturan']=strip_declared_handoff(nodes['halaman_pengaturan'],'akun',1)
         for name,expected in functions.items():assert digest(nodes[name])==expected,(path,name)
     for path,expected in receipt['controllers'].items():assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==expected
     parent=ast.parse((ROOT/'app/web/pengaturan.py').read_text());facility=ast.parse((ROOT/'app/web/fasilitas.py').read_text())

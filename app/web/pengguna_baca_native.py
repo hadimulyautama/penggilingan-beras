@@ -175,3 +175,85 @@ def katalog(html,*,source_address,permission):
         konteks=permission['konteks'],sesi=permission['sesi'],entries=entries)
     encoded=json.dumps(result,ensure_ascii=True).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
     return result if len(encoded.encode())<=131072 else None
+
+
+def _native_binding(request,akun,response):
+    """Same-object native response only, before any optional permission read."""
+    if (request.method!='GET' or request.headers.get('X-Pindah')!='1'
+        or request.headers.get('X-Kerangka-Halaman')!='0' or not akun_native(request,akun)
+        or response.status_code!=200 or response.headers.get('content-disposition')
+        or response.headers.get('content-encoding')
+        or response.headers.get('content-type','').split(';')[0].strip()!='text/html'):
+        return None
+    path,query=request.url.path,request.url.query
+    if (path=='/pengaturan' and query
+        or path!='/pengaturan' and spesifikasi(path,query) is None):return None
+    context=getattr(response,'context',None);body=getattr(response,'body',None)
+    if (not isinstance(context,dict) or context.get('akun') is not akun
+        or not isinstance(body,bytes) or len(body)>8*1024*1024
+        or body.count(b'<!-- isi-halaman:akhir -->')!=1
+        or b'id="padi-pengguna-kerangka"' in body or b'data-pengguna-native-catalog' in body):
+        return None
+    from app.web.portal.scope import is_customer_read
+    if is_customer_read(request):return None
+    from hmu_tampilan import CAP_ASET
+    address=path+('?' +query if query else '')
+    registry=dict(cap=CAP_ASET,konteks=context.get('PINDAH_KONTEKS'),sesi=context.get('CSRF'))
+    if (context.get('PINDAH_ALAMAT')!=address
+        or not all(type(v) is str and 0<len(v)<=2048 for v in registry.values())):return None
+    from bs4 import BeautifulSoup
+    doc=BeautifulSoup(body,'html.parser')
+    frames,mains,sessions=doc.select('.bingkai'),doc.select('#isi-halaman'),doc.select('#formulir-sesi')
+    if (doc.html is None or doc.html.get('data-versi')!=registry['cap']
+        or len(frames)!=1 or len(mains)!=1 or len(sessions)!=1
+        or frames[0] not in mains[0].parents or frames[0] not in sessions[0].parents
+        or frames[0].get('data-pindah-konteks')!=registry['konteks']
+        or frames[0].get('data-pindah-alamat')!=address
+        or sessions[0].get('data-token')!=registry['sesi']
+        or doc.select('#padi-pengguna-kerangka,[data-pengguna-native-catalog]')
+        or doc.select('.halaman-memuat,[data-pengguna-baca-native],[data-pengaturan-menu-kerangka]')):
+        return None
+    return registry,address,body
+
+
+def _bound_permission(value,registry):
+    if (not isinstance(value,dict) or set(value)!={'versi','cap','konteks','sesi','sumber','targets'}
+        or value['versi']!=1 or value['sumber']!=aset()['sumber']
+        or any(value.get(k)!=v for k,v in registry.items())):return False
+    targets=value['targets']
+    return (isinstance(targets,dict) and 0<len(targets)<=2
+        and all((path=='/pengguna' and variant in {'staf','staf-super'})
+            or (path=='/pengguna/pelanggan' and variant=='pelanggan') for path,variant in targets.items())
+        and ('/pengguna/pelanggan' not in targets or targets.get('/pengguna')=='staf-super'))
+
+
+async def pasang_native(request,akun,response):
+    """Scoped fresh GET handoff, never a new guard or a transactional reader.
+
+    The five native GET callers keep their original dependencies and reads.
+    Staff/customer callers already memo their exact native admission; Settings
+    may evaluate that same optional door guard once. A declined optional door
+    leaves the original native response usable, including its errors/status.
+    """
+    try:
+        binding=_native_binding(request,akun,response)
+        if binding is None:return response
+        registry,address,body=binding
+        permission=await susun(request,akun,registry=registry)
+        if not _bound_permission(permission,registry):return response
+        catalog=katalog(body.decode('utf-8'),source_address=address,permission=permission)
+        from app.web.tampilan import templates
+        tag=templates.get_template('_pengguna_baca_metadata.html').render(
+            pengguna=permission,pengguna_catalog=catalog).encode()
+        if len(tag)>139264 or len(body)+len(tag)>8*1024*1024:return response
+    except Exception as error:
+        import logging
+        logging.getLogger(__name__).warning('Metadata baca pengguna belum tersedia (%s)',type(error).__name__)
+        return response
+    response.body=body.replace(b'<!-- isi-halaman:akhir -->',tag+b'<!-- isi-halaman:akhir -->',1)
+    response.headers['content-length']=str(len(response.body))
+    response.headers['Cache-Control']='private, no-store'
+    vary=response.headers.get('Vary','')
+    if 'cookie' not in {v.strip().lower() for v in vary.split(',')}:
+        response.headers['Vary']=(vary+', ' if vary else '')+'Cookie'
+    return response

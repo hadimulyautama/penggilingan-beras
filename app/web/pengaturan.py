@@ -307,7 +307,8 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     from app.web.akses import daftar_umum, PERAN_KOLOM
     from app.web.api import actions_menu
     akses_aksi = await actions_menu(akun.user) if bagian == 'akses' else []
-    return await render_laci(
+    from app.web.pengguna_baca_native import pasang_native
+    return await pasang_native(request,akun,await render_laci(
         request, "pengaturan_fasilitas.html",
         akses_umum=daftar_umum(), akses_aksi=akses_aksi,
         akses_kolom=PERAN_KOLOM,
@@ -339,7 +340,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         # tertulis di tempat yang benar, bukan tersimpan sebagai kebetulan.
         PROSES=_proses_view(V_SUPER), target_umum=target_umum,
         JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),
-    )
+    ))
 
 
 @router.post("/pengaturan/target-kadar-air")

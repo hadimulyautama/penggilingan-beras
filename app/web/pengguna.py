@@ -133,10 +133,11 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
 @router.get("/pengguna")
 async def halaman_pengguna(request: Request, _=Depends(butuh_super)):
     from app.web.pengguna_baca_native import catat_guard,kerangka
+    from app.web.pengguna_baca_native import pasang_native
     catat_guard(request,_,'staf')
     pending=await kerangka(request,_,jenis='staf')
     if pending is not None:return pending
-    return render(request, "pengguna_kelola.html", **await _muat())
+    return await pasang_native(request,_,render(request, "pengguna_kelola.html", **await _muat()))
 
 
 @router.post("/pengguna/buat")
@@ -346,6 +347,7 @@ async def halaman_ubah(request: Request, akun_id: int, _=Depends(butuh_super)):
     seluruh catatan lamanya tertinggal atas nama yang pertama.
     """
     from app.web.pengguna_baca_native import catat_guard,kerangka,permintaan,spesifikasi,akun_native
+    from app.web.pengguna_baca_native import pasang_native
     catat_guard(request,_,'staf')
     early=bool(permintaan(request) and akun_native(request,_) and spesifikasi(request.url.path,request.url.query))
     async with SessionLocal() as db:
@@ -354,8 +356,8 @@ async def halaman_ubah(request: Request, akun_id: int, _=Depends(butuh_super)):
             .where(ProduksiAkun.id == akun_id)
         )).scalars().first()
         if a is None:
-            return render(request, "pengguna_kelola.html",
-                          **await _muat(pesan_err="Akun tidak ditemukan."))
+            return await pasang_native(request,_,render(request, "pengguna_kelola.html",
+                          **await _muat(pesan_err="Akun tidak ditemukan.")))
         if not early:
             jml_admin = await _jumlah_admin(db)
     if early:
@@ -365,10 +367,10 @@ async def halaman_ubah(request: Request, akun_id: int, _=Depends(butuh_super)):
         if pending is not None:return pending
         async with SessionLocal() as db:
             jml_admin = await _jumlah_admin(db)
-    return render(request, "pengguna_ubah.html", a=a, PERAN=PERAN, _MODE=_MODE,
+    return await pasang_native(request,_,render(request, "pengguna_ubah.html", a=a, PERAN=PERAN, _MODE=_MODE,
                   jml_admin=jml_admin, kembali="/pengguna",
                   pesan_err=_ERR_UBAH.get(request.query_params.get("err", "")),
-                  pesan_ok=_OK_UBAH.get(request.query_params.get("ok", "")))
+                  pesan_ok=_OK_UBAH.get(request.query_params.get("ok", ""))))
 
 
 _ERR_UBAH = {

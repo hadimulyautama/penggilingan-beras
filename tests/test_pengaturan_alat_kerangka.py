@@ -120,6 +120,8 @@ def test_only_native_get_wrapper_changes_not_stock_readers_or_any_writer(monkeyp
     # The separately tested six-settings presentation was adopted later.
     # Strip only its pinned two-node block; native reads/writers stay compared.
     remove_declared_shape(after['halaman_pengaturan'],'app.web.pengaturan_detail_kerangka',receipt['declared_detail_block_sha256'])
+    from tests.test_pengguna_native_handoff import strip_declared_handoff
+    after['halaman_pengaturan']=strip_declared_handoff(after['halaman_pengaturan'],'akun',1)
     for name,node in after.items():assert fingerprint(node)==receipt['functions'][name],name
     changed=copy.deepcopy(after['tambah_gudang'])
     commit=next(n for n in ast.walk(changed) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='commit')

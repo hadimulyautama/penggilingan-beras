@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "001df318cade46076c0417be019d23644e8eaf3f401bf317c3119dba06c6ac8c",
+  "sumber": "865f422b35753b7fc45216db7b34eca53bf3f433afd1f956818d709e97c26880",
   "variants": [
     "peran-lihat",
     "peran-gudang",
@@ -11,7 +11,7 @@
     "sistem-admin",
     "sistem-umum"
   ],
-  "aset_sha256": "7b62bc972b7db3023adc3947dd7dbb1fc1ab5325f8b8328a4f5b57a574bcf460",
+  "aset_sha256": "ddba9d493ef03a7d581940b75f169952f1287af185786d4d2974763270fd32ec",
   "references": {
     "columns": [
       "Super Admin",
@@ -38,7 +38,7 @@
     "app/penggilingan/gudang1/services/jeda.py": "bb2136eb662ba6eaa255811ce488fc7e2ca43456cd723c5ccfafd6f6f1f71e6f",
     "app/web/akses.py": "01616fab8829899ad5bcee737f2bddb8ed07dcfff3e5fce6740565f40a87bb53",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
-    "app/web/pengaturan.py": "5dda92f8aa0e8dc916f23ec51acd192dd661c38d886d7676f1b9baab83cae70c",
+    "app/web/pengaturan.py": "e2c8ba8f5262abe646c9a9115570be010ce483a83a26923d3819acf9fbae4f82",
     "app/web/pengaturan_detail_kerangka.py": "203d68da5786814bd47365fc6c042511c19d66d9bf81a6d03f3faa932ff62339",
     "app/web/pengaturan_detail_schema.py": "b4de2eb22458c7abee0dbd690bdc45d81803efd0eeedba0fbc63eb16c3716eb0",
     "app/web/pengaturan_navigasi.py": "c316f7cdf55a61d1597e61e32ca1be3d265ba8e028ed44f3eebdf8f717cc349a",

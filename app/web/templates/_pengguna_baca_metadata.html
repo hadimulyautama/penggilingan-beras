@@ -1,0 +1,2 @@
+<script type="application/json" id="padi-pengguna-kerangka" data-cap="{{ pengguna.cap }}" data-konteks="{{ pengguna.konteks }}">{{ pengguna|tojson }}</script>
+{% if pengguna_catalog %}<script type="application/json" data-pengguna-native-catalog data-source-address="{{ pengguna_catalog.source_address }}" data-source-sha="{{ pengguna_catalog.source_sha256 }}">{{ pengguna_catalog|tojson }}</script>{% endif %}

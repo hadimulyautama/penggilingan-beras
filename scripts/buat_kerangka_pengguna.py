@@ -21,7 +21,7 @@ def validate_fields(doc):
 
 
 def build():
-    inputs={Path(__file__).resolve(),ROOT/'app/web/static/kerangka-pengguna-ui-runtime.js',ROOT/'app/web/pengguna.py',ROOT/'app/web/portal/admin.py',ROOT/'app/web/security.py'}
+    inputs={Path(__file__).resolve(),ROOT/'app/web/static/kerangka-pengguna-ui-runtime.js',ROOT/'app/web/pengguna.py',ROOT/'app/web/portal/admin.py',ROOT/'app/web/security.py',ROOT/'app/web/templates/_pengguna_baca_metadata.html'}
     def module(name,path):
         inputs.add(path);spec=importlib.util.spec_from_file_location(name,path)
         result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result

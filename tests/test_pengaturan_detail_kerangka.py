@@ -217,6 +217,10 @@ def test_shared_caller_keeps_all_original_guards_readers_and_writers_except_decl
     for name,function in after.items():
         if name!='halaman_pengaturan':assert _ast_fingerprint(function)==receipt['functions'][name], name
     caller=after['halaman_pengaturan']
+    # Strip only the separately verified optional Users fresh-response
+    # wrapper. Its native reader call/arguments remain in this same oracle.
+    from tests.test_pengguna_native_handoff import strip_declared_handoff
+    caller=strip_declared_handoff(caller,'akun',1)
     assert 'Depends(butuh_akun)' in ast.unparse(caller.args)
     remove=[n for n in caller.body if isinstance(n,ast.ImportFrom) and n.module=='app.web.pengaturan_detail_kerangka' or isinstance(n,ast.If) and ast.unparse(n.test)=='permintaan_kerangka(request)']
     assert len(remove)==2
