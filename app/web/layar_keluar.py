@@ -96,6 +96,13 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     draf_saya = []
     from app.web.stok_navigasi import pelanggan_diminta
     pid=pelanggan_diminta(request)
+    from app.web.halaman_bertahap import memakai_kerangka
+    if (transaksi_id is None and memakai_kerangka(request,'pengiriman')
+            and not any(request.query_params.get(k) for k in ('buka','nilai','tiket'))):
+        from app.web.pengiriman_bertahap import kerangka
+        return await kerangka(request,akun,boleh_perintah=boleh_perintah,boleh_muat=boleh_muat,
+            pencarian=q,status=status,sejak=sejak,
+            navigasi=getattr(request.state,'navigasi_kerangka_langsung',None))
     from app.models import OutgoingRecord
     customer_scope={'allowed_ids':request.state.portal_scope.ids(OutgoingRecord)} if is_customer_read(request) else {}
     async with SessionLocal() as db:

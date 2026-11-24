@@ -13,6 +13,8 @@
           <td data-sel="status" role="cell"><span class="tabel-standar__status tabel-standar__status--{{ k.rec.status }}">{{ k.keadaan }}</span><small class="tabel-standar__sekunder">{{ 'Jasa' if k.jasa else 'Milik pabrik' }}</small></td>
           <td data-sel="tambahan" role="cell">{{ k.tiket_timbang.kode if k.tiket_timbang else '—' }}</td>
         </tr>
+      {% else %}
+      <tr><td colspan="7"{% if pengiriman_memuat|default(false) %} data-shell-message{% endif %}>{% if pengiriman_memuat|default(false) %}Memuat riwayat pengiriman. Kolom tetap tersedia.{% elif pencarian or status_filter or sejak_filter %}Tidak ada riwayat barang keluar sesuai filter.{% else %}Belum ada riwayat barang keluar.{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table>

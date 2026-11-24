@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.web.security import butuh_akun
 
 router = APIRouter(tags=["webapp"])
-ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa", "barang-masuk": "/barang-masuk"}
+ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa", "barang-masuk": "/barang-masuk", "pengiriman":"/barang-keluar"}
 
 
 def memakai_kerangka(request: Request, jenis: str) -> bool:
@@ -120,6 +120,15 @@ async def konteks_kerangka(request: Request, akun):
 
 async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lokasi=None):
     from app.web.tampilan import render
+
+    if jenis=='pengiriman':
+        # The actual handler owns positive access and action-link checks.
+        # Only render negotiation is added; its data reader stays separate.
+        from app.web.layar_keluar import halaman_barang_keluar
+        headers=[(k,v) for k,v in request.scope['headers'] if k.lower()!=b'x-kerangka-halaman']
+        native=Request({**request.scope,'headers':headers+[(b'x-kerangka-halaman',b'1')],
+            'state':{**request.scope.get('state',{}),'navigasi_kerangka_langsung':navigasi}})
+        return await halaman_barang_keluar(native,akun)
 
     q = request.query_params
     data = dict(kind=jenis, title="Pekerjaan" if jenis == "pekerjaan" else "Stok",
@@ -254,6 +263,16 @@ async def _isi(request: Request, akun, jenis: str):
     elif jenis == 'jasa':
         from app.web.layar_jasa import halaman_jasa
         response = await halaman_jasa(native, akun)
+    elif jenis == 'pengiriman':
+        from app.web.layar_keluar import halaman_barang_keluar
+        from pydantic import TypeAdapter,ValidationError
+        try:
+            before=TypeAdapter(int).validate_python(request.query_params['sebelum']) if 'sebelum' in request.query_params else None
+        except ValidationError:
+            raise HTTPException(422,'Halaman riwayat pengiriman tidak valid.')
+        response=await halaman_barang_keluar(native,akun,sebelum=before,
+            q=request.query_params.get('q',''),status=request.query_params.get('status',''),
+            sejak=request.query_params.get('sejak',''))
     else:
         from app.web.layar_stok import halaman_stok
         response = await halaman_stok(native, akun)

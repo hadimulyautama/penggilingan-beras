@@ -5,8 +5,10 @@
  'use strict';
  const root=document.querySelector('[data-halaman-bertahap]');
  if(!root||root.dataset.ready)return;root.dataset.ready='1';
- const main=document.getElementById('isi-halaman'),status=root.querySelector('[data-shell-status]'),retry=root.querySelector('[data-shell-retry]'),table=root.querySelector('[data-shell-table-wrap]'),message=root.querySelector('[data-shell-message]');
+ const main=document.getElementById('isi-halaman'),status=root.querySelector('[data-shell-status]'),retry=root.querySelector('[data-shell-retry]'),table=root.querySelector('[data-shell-table-wrap]');
  const detail=root.dataset.kind==='barang-masuk-detail';
+ function messageText(text){for(const node of root.querySelectorAll('[data-shell-message]'))node.textContent=text;}
+ function busy(value){for(const node of root.querySelectorAll('[data-shell-table-wrap]'))node.setAttribute('aria-busy',String(value));}
  function addressNow(){const u=new URL(location.href);if(detail)u.searchParams.delete('tab_detail');return u.pathname+u.search;}
  const address=addressNow(),token=document.getElementById('formulir-sesi')?.dataset.token||'',stamp=root.dataset.stamp;
  function formState(form){const values=new URLSearchParams(new FormData(form));if(root.dataset.kind==='stok')values.sort();return values.toString();}
@@ -59,9 +61,10 @@
   else if(previous?.hasAttribute('data-shell-guide'))target=content.querySelector('[data-sk-buka="sk-panduan"]');
   else if(root.dataset.kind==='stok'&&previous?.matches('.kontrol-pencarian__submit'))target=content.querySelector('[data-stok-controls] .kontrol-pencarian__submit');
   else if(root.dataset.kind==='stok'&&previous?.hasAttribute('data-sk-buka'))target=content.querySelector('[data-sk-buka="'+CSS.escape(previous.dataset.skBuka)+'"]');
+  else if(root.dataset.kind==='pengiriman'&&previous?.hasAttribute('data-bk-buka'))target=content.querySelector('[data-bk-buka="'+CSS.escape(previous.dataset.bkBuka)+'"]');
   else if(root.dataset.kind==='stok'&&previous===table){target=content.querySelector('[data-daftar-kosong]');if(!target){content.tabIndex=-1;content.setAttribute('aria-label','Daftar Stok');target=content;}}
   else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');
-  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
+  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':'Daftar '+({pekerjaan:'Pekerjaan',stok:'Stok',pengiriman:'Pengiriman'}[root.dataset.kind]||'data'));target=content;}
   target?.focus({preventScroll:true});
  }
  async function install(payload,number){
@@ -113,7 +116,7 @@
  async function read(){
   readFromRetry=document.activeElement===retry;
   if(controller)controller.abort();const number=++sequence;controller=new AbortController();const active=controller;pending=null;
-  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=detail?'Memuat detail penerimaan…':'Memuat data…';message.textContent=detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':'Memuat data. Judul kolom dan filter tetap tersedia.';
+  retry.hidden=true;busy(true);status.textContent=detail?'Memuat detail penerimaan…':'Memuat data…';messageText(detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':'Memuat data. Judul kolom dan filter tetap tersedia.');
   const timeout=setTimeout(()=>active.abort(),20000);
   try{
    const response=await fetch(root.dataset.url,{credentials:'same-origin',cache:'no-store',signal:active.signal,headers:{'Accept':'application/json'}});
@@ -125,9 +128,9 @@
    const payload=await response.json();if(current(number))await install(payload,number);
   }catch(error){
    failed(error,number);
-  }finally{clearTimeout(timeout);if(current(number)){controller=null;table.setAttribute('aria-busy','false');}}
+  }finally{clearTimeout(timeout);if(current(number)){controller=null;busy(false);}}
  }
- function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
+ function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;messageText(detail?'Gagal memuat detail; ini bukan penerimaan kosong.':'Gagal memuat data; ini bukan daftar kosong.');retry.hidden=false;}
  async function resume(){
   if(!pending||interacting())return;
   const next=pending;pending=null;if(!current(next.number))return;

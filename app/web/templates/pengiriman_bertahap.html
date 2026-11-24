@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block judul %}Barang Keluar{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengiriman-retur.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/halaman-bertahap.css?v={{ VERSI }}">
+<section data-halaman-bertahap data-kind="pengiriman" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
+<div class="keluar-halaman keluar-ringkas">
+{% include '_barang_keluar_kontrol.html' %}
+<p class="bantu" id="shell-cetak-alasan">Cetak tersedia setelah daftar pengiriman selesai dibaca.</p>
+<div class="halaman-bertahap__status"><p role="status" aria-live="polite" data-shell-status>Memuat daftar pengiriman…</p><button type="button" class="btn" data-shell-retry hidden>Coba lagi</button></div>
+<section class="keluar-ringkas__bagian" aria-labelledby="judul-aktif-keluar">
+<h2 id="judul-aktif-keluar">Pengiriman berjalan</h2>
+<div data-shell-table-wrap aria-busy="true">{% include '_pengiriman_daftar_keadaan.html' %}</div>
+</section>
+<section class="keluar-ringkas__bagian" aria-labelledby="judul-riwayat-keluar">
+<h2 id="judul-riwayat-keluar">Riwayat Barang Keluar</h2>
+<div data-shell-table-wrap aria-busy="true">{% include '_pengiriman_riwayat_daftar.html' %}</div>
+</section>
+</div></section>
+<noscript><p>JavaScript diperlukan untuk membaca daftar bertahap. Tidak ada transaksi yang dikirim.</p></noscript>
+<script src="/static/bantuan_pengiriman.js?v={{ VERSI }}" defer></script>
+<script src="/static/halaman-bertahap.js?v={{ VERSI }}" defer></script>
+{% endblock %}
