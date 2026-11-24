@@ -1,0 +1,5 @@
+{# Actual native collections only; never infer emptiness during a read/error. #}
+{% if not err and not isian and not detail and not pengering %}
+{% if mode=='jenis' and not jenis %}<p class="bantu" data-fasilitas-parent-empty>Belum ada jenis proses.</p>
+{% elif mode=='mesin' and not lini and not dryer %}<p class="bantu" data-fasilitas-parent-empty>Belum ada mesin atau line produksi.</p>{% endif %}
+{% endif %}
