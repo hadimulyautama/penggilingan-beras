@@ -56,6 +56,9 @@ async def read(request:Request,path:str,reader=Depends(require_customer)):
     req=native_request(request,path,scope)
     account=req.state.akun
     q=req.query_params
+    from .kerangka import dokumen as dokumen_kerangka
+    awal=await dokumen_kerangka(request,req)
+    if awal is not None:return awal
     from app.web import (layar_jasa as jasa,layar_pekerjaan as work,layar_produk as product,
         layar_stok as stock,layar_riwayat as history,layar_sosoh as sosoh,
         layar_berjalan as active,layar_keluar as outgoing,layar_retur as returns,

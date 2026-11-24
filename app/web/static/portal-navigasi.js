@@ -4,7 +4,7 @@
   function pengarah(ops) {
     var cache = new Map(), urutan = 0, menavigasi = false, memperbarui = false;
     function ingat(url, html) {
-      if (!html) return;
+      if (!html || ops.freshOnly && ops.freshOnly(url)) return;
       cache.delete(url); cache.set(url, { html: html, saat: ops.waktu() });
       if (cache.size > 8) cache.delete(cache.keys().next().value);
     }
@@ -13,7 +13,7 @@
       return item && ops.waktu() - item.saat < 30000 ? item.html : null;
     }
     async function pindah(url, dorong, gulung, judul) {
-      var nomor = ++urutan, lama = terakhir(url), sentuhan;
+      var nomor = ++urutan, lama = ops.freshOnly && ops.freshOnly(url) ? null : terakhir(url), sentuhan;
       if (lama && !ops.pasang(lama, url, dorong, gulung)) { ops.utuh(url); return; }
       var bertahap = !lama && ops.kerangka ? ops.kerangka(url, dorong, gulung, judul) : false;
       sentuhan = ops.sentuhan(); menavigasi = true;
@@ -30,6 +30,7 @@
         else ops.utuh(url);
         return;
       }
+      if (bertahap && ops.draf && ops.draf()) { ops.status('pilihan'); return; }
       ingat(url, baru);
       // Respons yang sama tidak perlu mengganti rincian yang sudah dibuka
       // atau meminta pengguna memuat ulang halaman yang tidak berubah.
@@ -66,7 +67,7 @@
         } finally { memperbarui = false; }
       },
       siapkan: async function (url) {
-        if (terakhir(url)) return;
+        if (ops.freshOnly && ops.freshOnly(url) || terakhir(url)) return;
         try { var html = await ops.ambil(url); if (typeof html === 'string') ingat(url, html); } catch (_) {}
       }
     };
@@ -89,14 +90,22 @@
   }
   function kerangka(url, dorong, gulung, judul) {
     if (nonce() !== sesi) return false;
+    var native = window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.buat(url);
+    // Unknown deep variants keep native navigation; do not invent a title
+    // page or a resource layout that the current document cannot establish.
+    if (!native) return false;
     if (dorong) {
       history.replaceState(Object.assign({}, history.state, { portalScroll: main.scrollTop }), '', alamat());
       history.pushState({ portal: 1, portalScroll: 0 }, '', url);
     }
-    var nom = judul || 'Halaman';
-    main.innerHTML = '<section class="halaman-memuat" aria-busy="true"><h1></h1><p role="status" aria-live="polite">Memuat data…</p><div class="halaman-memuat__baris" aria-hidden="true"><i></i><i></i><i></i></div></section>';
-    main.querySelector('h1').textContent = nom;
-    document.title = nom + ' · PadiFlow Pelanggan';
+    var pending = main.querySelector('[data-portal-native-frame]');
+    if (!pending || pending.dataset.portalAddress !== url) main.innerHTML = native.html;
+    pending=main.querySelector('[data-portal-native-frame]');
+    pending.setAttribute('aria-busy','true');
+    var readStatus=pending.querySelector('[data-portal-read-status]'),readRetry=pending.querySelector('[data-portal-read-retry]');
+    readStatus.setAttribute('role','status');readStatus.textContent='Memuat catatan sesuai akun Anda…';
+    readRetry.hidden=true;readRetry.onclick=null;
+    document.title = native.title + ' · PadiFlow Pelanggan';
     var path = new URL(url, location.origin).pathname;
     document.querySelectorAll('.portal-sidebar nav a[href],.portal-bawah a[href]').forEach(function (link) {
       var p = new URL(link.href, location.origin).pathname;
@@ -116,15 +125,24 @@
   }
   function gagal(url, ulangi) {
     status('selesai');
-    main.innerHTML = '<section class="halaman-memuat"><h1>Data belum dapat dimuat</h1><p role="alert">Periksa koneksi Anda, lalu coba lagi.</p><button class="btn" type="button">Coba lagi</button> <a class="btn" data-utuh>Muat ulang halaman</a></section>';
-    main.querySelector('button').addEventListener('click', ulangi);
-    main.querySelector('a').href = url;
+    var frame=main.querySelector('[data-portal-native-frame]');
+    if (!frame || frame.dataset.portalAddress!==url) return;
+    frame.setAttribute('aria-busy','false');
+    var message=frame.querySelector('[data-portal-read-status]'),retry=frame.querySelector('[data-portal-read-retry]');
+    message.setAttribute('role','alert');message.textContent='Catatan belum dapat dibaca. Struktur dan pilihan pencarian tetap tersedia.';
+    retry.hidden=false;retry.onclick=ulangi;
   }
   function status(mode, muat) {
     if (timer) clearTimeout(timer);
     if (pesan) pesan.remove();
     main.removeAttribute('aria-busy');
     pesan = null;
+    var frame=main.querySelector('[data-portal-native-frame]');
+    if (mode === 'pilihan' && frame) {
+      frame.setAttribute('aria-busy','false');
+      frame.querySelector('[data-portal-read-status]').textContent='Pilihan pencarian berubah. Klik Cari untuk membaca pilihan ini.';
+      return;
+    }
     if (mode === 'selesai') return;
     if (mode === 'tertunda') { mode = 'gagal'; muat = function () { segarkan(true); }; }
     if (mode === 'memuat' && main.querySelector('.halaman-memuat')) {
@@ -159,7 +177,12 @@
     var p = fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: { 'X-Portal-Navigasi': '1', 'Accept': 'text/html' } }).then(function (r) {
         if (r.status === 401) return { login: true };
-        if (!r.ok || !(r.headers.get('Content-Type') || '').startsWith('text/html')) return { utuh: r.url || url };
+        if (!r.ok || !(r.headers.get('Content-Type') || '').startsWith('text/html')) {
+          // A native permission/identity error still follows the original
+          // response. An adopted read failing temporarily keeps its framework.
+          if (window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.siap(url) && (r.status>=500 || r.ok)) return null;
+          return { utuh: r.url || url };
+        }
         if (r.redirected) {
           var cible = new URL(r.url, location.href);
           if (cible.origin === location.origin && cible.pathname === '/pelanggan/masuk') return { login: true };
@@ -175,6 +198,7 @@
     var doc = new DOMParser().parseFromString(html, 'text/html');
     var baru = doc.getElementById('isi-pelanggan');
     if (!baru || doc.body.getAttribute('data-portal-akun') !== akun) return false;
+    if (window.PadiKerangkaPortalUI && !PadiKerangkaPortalUI.freshDocument(doc)) return false;
     var keadaan = otomatis && window.KEADAAN_BACA ? KEADAAN_BACA.ambil(main) : null;
     if (otomatis && main.innerHTML === baru.innerHTML) return true;
     if (dorong) history.replaceState(Object.assign({}, history.state, { portalScroll: main.scrollTop }), '', alamat());
@@ -216,13 +240,16 @@
     return true;
   }
   var router = pengarah({ waktu: Date.now, sentuhan: function () { return sentuhan; }, ambil: ambil,
-    pasang: pasang, kerangka: kerangka, gagal: gagal, status: status, siap: siapSegar, utuh: function (url) { location.assign(url); } });
+    pasang: pasang, kerangka: kerangka, gagal: gagal, status: status, siap: siapSegar,
+    freshOnly: function(url){return !!window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.siap(url);},
+    draf: function(){return !!window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.filterDirty(main.querySelector('[data-portal-native-frame]'));}, utuh: function (url) { location.assign(url); } });
   window.PORTAL_NAV = { buka: function (url, judul) {
     var u = new URL(url, location.href);
     if (!aman(u) || nonce() !== sesi) { router.bersihkan(); location.assign(u.href); return; }
     return router.pindah(u.pathname + u.search, u.pathname + u.search !== alamat(), 0, judul);
   } };
   router.ingat(alamat(), document.documentElement.outerHTML);
+  if (main.querySelector('[data-portal-native-frame]')) router.pindah(alamat(),false,0);
   document.addEventListener('pointerdown', function () { sentuhan++; }, true);
   document.addEventListener('keydown', function () { sentuhan++; }, true);
   document.addEventListener('input', function () { sentuhan++; }, true);
@@ -255,6 +282,7 @@
   var segarTimer = null, segarTerakhir = 0;
   function siapSegar() {
     var aktif = document.activeElement, pilihan = window.getSelection && window.getSelection();
+    if (window.PadiKerangkaPortalUI && PadiKerangkaPortalUI.filterDirty(main.querySelector('[data-portal-native-frame]'))) return false;
     return !document.hidden && !(aktif && main.contains(aktif) && aktif.matches('input,textarea,select,button,[contenteditable=true]'))
       && !(pilihan && !pilihan.isCollapsed && main.contains(pilihan.anchorNode));
   }

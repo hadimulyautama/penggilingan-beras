@@ -283,7 +283,8 @@ def shell(request,content,*,title='Portal pelanggan',status_code=200):
     from app.web.tampilan import templates
     from hmu_tampilan import CAP_ASET as VERSI
     scope=request.state.portal_scope
-    html=templates.env.get_template('portal/shell.html').render(request=request,
+    from .kerangka import binding
+    html=templates.env.get_template('portal/shell.html').render(request=request,PORTAL_KERANGKA=binding(request,scope),
         title=title,content=Markup(content),reader=scope.reader,MENU=MENU,
         active=active_menu(request.url.path),CSRF=csrf_context(request),VERSI=VERSI,
         light=request.cookies.get('produksi_terik','1')=='1')

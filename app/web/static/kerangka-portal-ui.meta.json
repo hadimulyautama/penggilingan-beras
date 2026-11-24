@@ -1,0 +1,237 @@
+{
+  "versi": 1,
+  "sumber": "29b3faf382463a2a3f624a922e6ffd1953e7d8a175ff7e1e1b077c2721cf46d3",
+  "schemas": {
+    "/ringkasan": {
+      "labels": {
+        "jenis": "Jenis barang",
+        "cari": "Cari penerimaan",
+        "q": "Cari kode atau nama",
+        "status": "Status",
+        "sejak": "Sejak tanggal"
+      },
+      "options": [],
+      "tables": {},
+      "columns": [],
+      "css": ""
+    },
+    "/barang-masuk": {
+      "labels": {
+        "jenis": "Jenis barang",
+        "cari": "Cari penerimaan",
+        "q": "Cari kode atau nama",
+        "status": "Status",
+        "sejak": "Sejak tanggal"
+      },
+      "options": [
+        [
+          "",
+          "Semua jenis"
+        ],
+        [
+          "gabah_basah",
+          "Gabah basah"
+        ],
+        [
+          "gabah_kering",
+          "Gabah kering"
+        ],
+        [
+          "pk",
+          "PK"
+        ],
+        [
+          "beras",
+          "Beras"
+        ],
+        [
+          "broken",
+          "Broken"
+        ],
+        [
+          "lain",
+          "Jenis belum dikenal"
+        ]
+      ],
+      "tables": {},
+      "columns": [
+        "Nama / tiket",
+        "Status",
+        "Barang",
+        "Armada",
+        "Bobot diterima",
+        "Penerimaan",
+        ""
+      ],
+      "css": ""
+    },
+    "/barang-saya": {
+      "labels": {
+        "jenis": "Jenis barang",
+        "cari": "Cari penerimaan",
+        "q": "Cari kode atau nama",
+        "status": "Status",
+        "sejak": "Sejak tanggal"
+      },
+      "options": [],
+      "tables": {},
+      "columns": [],
+      "css": ""
+    },
+    "/jasa-saya": {
+      "labels": {
+        "jenis": "Jenis barang",
+        "cari": "Cari penerimaan",
+        "q": "Cari kode atau nama",
+        "status": "Status",
+        "sejak": "Sejak tanggal"
+      },
+      "options": [],
+      "tables": {},
+      "columns": [],
+      "css": ""
+    },
+    "/riwayat-proses": {
+      "labels": {
+        "jenis": "Jenis proses",
+        "cari": "Cari penerimaan",
+        "q": "Cari kode atau nama",
+        "status": "Status",
+        "sejak": "Sejak tanggal"
+      },
+      "options": [
+        [
+          "",
+          "Semua proses"
+        ],
+        [
+          "pengeringan",
+          "Pengeringan"
+        ],
+        [
+          "giling",
+          "Penggilingan"
+        ],
+        [
+          "sosoh",
+          "Penyosohan"
+        ],
+        [
+          "transfer",
+          "Pemindahan barang"
+        ]
+      ],
+      "tables": {},
+      "columns": [],
+      "css": ""
+    },
+    "/barang-keluar": {
+      "labels": {
+        "jenis": "Jenis barang",
+        "cari": "Cari penerimaan",
+        "q": "Cari pengambilan",
+        "status": "Status",
+        "sejak": "Sejak tanggal"
+      },
+      "options": [
+        [
+          "",
+          "Semua status"
+        ],
+        [
+          "perintah",
+          "Menunggu dimuat"
+        ],
+        [
+          "dimuat",
+          "Menunggu pemeriksaan"
+        ],
+        [
+          "selesai",
+          "Selesai"
+        ],
+        [
+          "batal",
+          "Dibatalkan"
+        ]
+      ],
+      "tables": {
+        "Pengambilan berjalan": [
+          "Pelanggan / pengambilan",
+          "Isi muatan",
+          "Rencana / dimuat",
+          "Status"
+        ],
+        "Riwayat pengambilan": [
+          "Pengambilan",
+          "Tanggal",
+          "Pelanggan",
+          "Nomor polisi",
+          "Muatan",
+          "Status",
+          "Tiket timbang"
+        ]
+      },
+      "columns": [],
+      "css": ".pengiriman-tab{display:flex;gap:8px;border-bottom:1px solid var(--garis,#b8c3b4);margin:0 0 24px;padding-bottom:10px;flex-wrap:wrap}.pengiriman-tab a{display:inline-flex;align-items:center;padding:10px 16px;border-radius:8px;color:inherit;text-decoration:none;min-height:44px}.pengiriman-tab a[aria-current]{font-weight:600;background:var(--bidang-aktif,rgba(102,135,94,.16))}.pengiriman-tab a:focus-visible,.retur-asal input:focus-visible,.retur-asal select:focus-visible,.retur-asal textarea:focus-visible{outline:2px solid currentColor;outline-offset:3px}.retur-asal{max-width:1100px;margin:auto}.retur-asal__panel{border:1px solid var(--garis,#b8c3b4);border-radius:12px;padding:20px;margin:16px 0}.retur-asal__baris{display:grid;grid-template-columns:minmax(170px,2fr) repeat(3,minmax(80px,1fr)) minmax(110px,1fr);gap:16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--garis,#b8c3b4)}.retur-asal__baris small{display:block;opacity:.8}.retur-asal label{display:block}.retur-asal input,.retur-asal select,.retur-asal textarea{font:inherit;color:inherit;background:var(--bidang,transparent);border:1px solid var(--garis,#b8c3b4);border-radius:6px;padding:10px;min-height:44px;max-width:100%;box-sizing:border-box}.retur-asal input[type=number]{width:100%}.retur-asal textarea{width:100%;min-height:80px}.retur-asal__pesan{border-left:4px solid #b37a25;padding:12px 16px;background:rgba(191,145,48,.12);margin:16px 0}.retur-asal__aksi{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}.retur-asal details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}.retur-asal .btn{min-height:44px}.retur-asal__tiket{width:100%;margin:8px 0 20px}@media(max-width:600px){.retur-asal__panel{padding:14px}.retur-asal__baris{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.retur-asal__nama{grid-column:1/-1}.retur-asal__jumlah{grid-column:1/-1}.retur-asal__aksi .btn{width:100%}}\n\n.retur-asal summary{min-height:44px;padding:10px 0;box-sizing:border-box;cursor:pointer}.retur-asal summary:focus-visible{outline:2px solid currentColor;outline-offset:3px}\n\n/* Khusus daftar Barang Keluar; formulir dan halaman detail memakai gaya lama. */\n.keluar-ringkas {--kirim-garis:#d4ddd0;--kirim-hijau:#36583f;gap:18px!important;max-width:1280px;width:100%;margin-inline:auto;box-sizing:border-box}\n.keluar-ringkas * {box-sizing:border-box}\n.keluar-ringkas__kepala {display:flex;align-items:center;justify-content:space-between;gap:20px}\n.keluar-ringkas__kepala h1 {margin:0;font-size:1.7rem;line-height:1.2}\n.keluar-ringkas__kepala p {margin:8px 0 0;color:var(--redup,#596573);font-size:.94rem}\n.keluar-ringkas__angka {display:flex;gap:10px;flex-shrink:0}\n.keluar-ringkas__angka>span {display:grid;gap:3px;border:1px solid var(--kirim-garis);border-radius:12px;padding:12px 16px;background:#fff;font-size:.82rem;color:#596573}\n.keluar-ringkas__angka strong {font-size:1.4rem;color:#24352a;font-variant-numeric:tabular-nums}\n.keluar-ringkas .pengiriman-tab {grid-row:2;margin:0;padding:0 0 10px;gap:6px}\n.keluar-ringkas .pengiriman-tab a {padding:10px 18px;border-radius:10px}\n.keluar-ringkas__tindakan {grid-row:3;gap:10px!important;display:flex;flex-wrap:wrap}\n.keluar-ringkas__tindakan .btn:first-child,.bantuan-kirim__panel .btn {background:var(--kirim-hijau);border-color:var(--kirim-hijau);color:white}\n.keluar-ringkas .bantuan-kirim {grid-row:4}\n.keluar-ringkas .keluar-pencarian {grid-row:5;margin:0;border:1px solid var(--kirim-garis);border-radius:12px;background:#fff;padding:0 16px}\n.keluar-ringkas .keluar-pencarian>summary {font-size:.94rem;min-height:48px;font-weight:600;cursor:pointer}\n.keluar-ringkas .keluar-filter {padding:4px 0 14px;margin:0;align-items:end}\n.keluar-ringkas .keluar-filter label {font-size:.87rem}\n.bantuan-kirim {border:1px solid var(--kirim-garis);border-radius:16px;background:#fff;overflow:hidden}\n.bantuan-kirim>summary {display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 20px;cursor:pointer;list-style:none}\n.bantuan-kirim>summary::-webkit-details-marker {display:none}\n.bantuan-kirim>summary strong {font-size:1rem;display:block}\n.bantuan-kirim>summary small {display:block;color:#596573;font-size:.85rem;margin-top:4px;line-height:1.5}\n.bantuan-kirim[open]>summary>span:last-child {transform:rotate(180deg)}\n.bantuan-kirim__isi {padding:0 20px 16px}\n.bantuan-kirim__tahap {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 16px}\n.bantuan-kirim__tahap button {display:flex;align-items:center;gap:10px;text-align:left;padding:12px;border:1px solid var(--kirim-garis);border-radius:12px;background:#fff;color:#24352a;font:inherit;cursor:pointer;min-width:0}\n.bantuan-kirim__tahap button>span:first-child {display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#edf0e9;font-size:.85rem;font-weight:700}\n.bantuan-kirim__tahap strong {display:block;font-size:.92rem}\n.bantuan-kirim__tahap small {display:block;font-size:.78rem;color:#596573;margin-top:4px}\n.bantuan-kirim__tahap button[aria-selected=true] {background:#edf3e9;border-color:#718b70}\n.bantuan-kirim__tahap button[aria-selected=true]>span:first-child {background:var(--kirim-hijau);color:#fff}\n.bantuan-kirim__panel {border-top:1px solid var(--kirim-garis);padding-top:16px}\n.bantuan-kirim__panel[hidden] {display:none}\n.bantuan-kirim__label {margin:0 0 8px;color:#596573;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em}\n.bantuan-kirim__panel h2 {font-size:1.08rem;line-height:1.4;margin:0}\n.bantuan-kirim__panel ul {padding-left:20px;margin:10px 0 16px;color:#475548;font-size:.9rem;line-height:1.65}\n.bantuan-kirim__panel li+li {margin-top:4px}\n.bantuan-kirim__panel .btn {min-height:44px;font-size:.9rem}\n.bantuan-kirim__cepat {margin-top:16px;border-top:1px solid var(--kirim-garis);padding-top:6px;font-size:.85rem;color:#596573}\n.bantuan-kirim__cepat summary {cursor:pointer;min-height:40px;align-content:center;font-weight:600}\n.bantuan-kirim__cepat p {line-height:1.65;margin:4px 0}\n.keluar-ringkas__bagian {min-width:0;background:#fff;border:1px solid var(--kirim-garis);border-radius:16px;padding:20px}\n.keluar-ringkas__bagian h2 {margin:0;font-size:1.15rem;line-height:1.4}\n.keluar-ringkas__bagian>p {margin:8px 0 0;font-size:.9rem;line-height:1.6}\n.keluar-ringkas__kosong {padding:24px 12px;text-align:center;border:1px dashed var(--kirim-garis);border-radius:12px;background:#fafbf8;margin-top:16px;color:#596573}\n.keluar-ringkas__kosong strong {font-size:.95rem;color:#35443a}\n.keluar-ringkas__kosong p {font-size:.86rem;margin:6px 0 0;line-height:1.6}\n.keluar-ringkas #draf-saya {border:1px solid var(--kirim-garis);border-radius:16px;background:#fff;padding:16px;margin:0}\n.keluar-ringkas #draf-saya:has([data-draf-kosong]:not([hidden])) {display:none}\n.keluar-ringkas #draf-saya h2 {font-size:1.05rem;margin:0}\n.keluar-ringkas :focus-visible {outline:3px solid #71916e;outline-offset:3px}\n@media(max-width:700px) {\n .keluar-ringkas {gap:14px!important}\n .keluar-ringkas__kepala {display:block}\n .keluar-ringkas__kepala h1 {font-size:1.5rem}\n .keluar-ringkas__kepala p {font-size:.87rem}\n .keluar-ringkas__angka {margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px}\n .keluar-ringkas__angka>span {padding:10px 12px;font-size:.76rem}\n .keluar-ringkas .pengiriman-tab a {flex:1;text-align:center;padding:10px 8px;font-size:.9rem}\n .keluar-ringkas__tindakan {display:grid;grid-template-columns:1fr}\n .keluar-ringkas__tindakan .btn {font-size:.9rem;text-align:center;justify-content:center}\n .bantuan-kirim>summary {padding:14px}\n .bantuan-kirim__isi {padding:0 14px 12px}\n .bantuan-kirim__tahap {gap:6px;margin-bottom:14px}\n .bantuan-kirim__tahap button {flex-direction:column;text-align:center;padding:10px 4px;gap:7px}\n .bantuan-kirim__tahap button>span:first-child {flex-basis:28px;width:28px;height:28px}\n .bantuan-kirim__tahap strong {font-size:.81rem}\n .bantuan-kirim__tahap small {font-size:.68rem;line-height:1.4}\n .bantuan-kirim__panel h2 {font-size:1rem}\n .bantuan-kirim__panel ul {font-size:.85rem}\n .bantuan-kirim__panel .btn {width:100%;justify-content:center;text-align:center;white-space:normal}\n .keluar-ringkas__bagian {padding:14px}\n .keluar-ringkas__bagian h2 {font-size:1.08rem}\n .keluar-ringkas__bagian .tabel-standar__scroll {margin:12px 0 0!important}\n .keluar-ringkas .keluar-tabel {margin-top:12px}\n}\n/* Warna mengikuti tema aplikasi; override hanya tombol panduan halaman ini. */\n.keluar-ringkas {--kirim-garis:var(--garis);--kirim-hijau:#36583f}\n.keluar-ringkas__angka>span,.keluar-ringkas .keluar-pencarian,.keluar-ringkas .bantuan-kirim,.keluar-ringkas__bagian,.keluar-ringkas #draf-saya {background:var(--panel)}\n.keluar-ringkas__angka>span,.bantuan-kirim>summary small,.bantuan-kirim__label,.bantuan-kirim__cepat,.bantuan-kirim__panel ul,.keluar-ringkas__kosong {color:var(--redup)}\n.keluar-ringkas__angka strong,.keluar-ringkas__kosong strong {color:var(--tinta)}\n.keluar-ringkas__kosong {background:var(--panel-2)}\n.keluar-ringkas .bantuan-kirim__tahap button {background:var(--panel)!important;color:var(--tinta)!important;border-color:var(--garis)!important}\n.keluar-ringkas .bantuan-kirim__tahap button[aria-selected=true] {background:var(--panel-2)!important;border-color:#718b70!important}\n.keluar-ringkas .bantuan-kirim__tahap button>span:first-child {background:var(--panel-2)}\n.keluar-ringkas .bantuan-kirim__tahap button[aria-selected=true]>span:first-child {background:var(--kirim-hijau);color:white!important}\n.keluar-ringkas .bantuan-kirim__tahap small {color:var(--redup)!important}\n.keluar-ringkas__tindakan .btn:first-child,.keluar-ringkas .bantuan-kirim__panel .btn {background:var(--kirim-hijau)!important;border-color:var(--kirim-hijau)!important;color:white!important}\n.keluar-ringkas .bantuan-kirim__panel .btn,.keluar-ringkas .keluar-filter .btn {width:auto;display:inline-flex;align-items:center;justify-content:center}\n.keluar-ringkas .keluar-filter .btn {flex:0 0 auto;padding-inline:20px}\n@media(max-width:700px) {.keluar-ringkas .bantuan-kirim__panel .btn{width:100%}.keluar-ringkas .keluar-filter .btn{flex:1}}\n.keluar-ringkas .keluar-filter .fld {min-width:0;width:100%;max-width:100%}\n@media(max-width:700px) {\n .keluar-ringkas .keluar-filter {display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}\n .keluar-ringkas .keluar-filter label {min-width:0}\n .keluar-ringkas .keluar-filter label:first-child {grid-column:1/-1}\n .keluar-ringkas .keluar-filter>a {min-height:44px;display:flex;align-items:center;justify-content:center}\n}\n\n/* Koreksi menyentuh catatan pengiriman, jadi sasaran sentuhnya harus utuh. */\n.tabel-standar__sekunder .pengiriman-perbaiki { min-height:44px; white-space:normal; }\n\n.keluar-ringkas .tabel-standar__kode { display:inline-flex; align-items:center; min-height:44px; }\n"
+    },
+    "/laporan": {
+      "labels": {
+        "jenis": "Jenis dokumen",
+        "cari": "Cari penerimaan",
+        "q": "Cari kode atau nama",
+        "status": "Status",
+        "sejak": "Sejak tanggal"
+      },
+      "options": [
+        [
+          "",
+          "Semua dokumen"
+        ],
+        [
+          "masuk",
+          "Bukti barang masuk"
+        ],
+        [
+          "pengambilan",
+          "Bukti pengambilan"
+        ],
+        [
+          "proses",
+          "Laporan proses"
+        ],
+        [
+          "rekap",
+          "Rekap barang"
+        ]
+      ],
+      "tables": {},
+      "columns": [],
+      "css": ""
+    }
+  },
+  "aset_sha256": "eb54ca11e3673d17e9c6c61d9c1fccb8be63ec472e839d04a486ae5da0a0902c",
+  "inputs": {
+    "app/services/kelompok_kerja.py": "7414e41a711bdce7bf907854eb7b30b71aecaa499c84796f64142365db627509",
+    "app/web/portal/beranda.py": "c706a77e17270fcdea6e5084dc04613edfa89d82b4e4ee5c81fb2b5fef6bd903",
+    "app/web/portal/kerangka.py": "f6f031cedbcd0fc238a6d520a201ee3d07b2975d816299810d78e590d65ff814",
+    "app/web/portal/navigation.py": "4bc588e5d5b4cd99fad0bb3d8ec5a9b8c493a4a1fae3d589f6d53859c13221ee",
+    "app/web/portal/routes.py": "a37e4e0aa0e7d91cebfa638a277db20686fa55aa638bbf1d241d406662b8109b",
+    "app/web/static/daftar_pengiriman.css": "d4eae5812f6f15bd23c3cbf53cbd39b056e63a1f4be018b97c73e2fdfda12c3b",
+    "app/web/static/portal-kerangka.js": "6f2a69260405121687a51342a592e56426c262958b3ca1101025a71c18b59100",
+    "app/web/templates/_pengiriman_riwayat_daftar.html": "550d505da037c833c92c14c1343b1c0d4faaf71c55d9839599eaf574cab7ac35",
+    "app/web/templates/portal/_daftar_catatan.html": "154d47ae70533a0c11a8c395b4d5045da827435776ad31509b0654c09ba0538f",
+    "app/web/templates/portal/barang.html": "176951c71bc7dd942bf1fd129fc74348fd0c1c6d25a6c780f5eb50cc8d43f60d",
+    "app/web/templates/portal/beranda.html": "deff9342e9c7766e6e0c03fdd5581779b5b87f19a00e8e855f23b3bdae0ecdce",
+    "app/web/templates/portal/jasa.html": "612bad6c386f217a51569c67b68a8ad53dc9558ec6f6d65fbbe267dc3937fc54",
+    "app/web/templates/portal/kerangka.html": "2918893a0fd69b354099daa7dc771af6bb0126e10c9f1ca719e81b5eb36419ad",
+    "app/web/templates/portal/masuk.html": "21bf1621093a12bd553093a91cbf37709a6e9f9e6cfcca828a28f6662d048250",
+    "app/web/templates/portal/pengambilan.html": "4d3d8ac1c7f76a39f961748b6682b3900d4a1d265f95e1c0f41c8cc515e0f16e",
+    "app/web/templates/portal/reports.html": "486fad38dbfdc935ba3e9bb6a1c4caf8227d6c8333b19492491bcdae5e659d86",
+    "app/web/templates/portal/riwayat.html": "224da6111f749687632533f8cac801be54a140927c8c2b431a429a47b42fddd3",
+    "hmu_tampilan/static/pengiriman-retur.css": "e48dcdf3f27cfb7a5382924538d31eafb39f50366719dd04456ace70d88afc71",
+    "hmu_tampilan/templates/_daftar_penerimaan.html": "30e80679137366199fdbca6afcb22f384784b8c391874979fca43dde39dca6c3",
+    "hmu_tampilan/templates/_pengiriman_daftar.html": "8c4795c6457a6690f7d4c1461d1d9e4b5cef1a45d8f4f9d18df77aa2b2edfbab",
+    "scripts/buat_kerangka_portal.py": "003b2894a124cf9765e8c7dc6807815b3b25e2a89880cbd2b58372f9d2d18b2c"
+  }
+}
