@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block judul %}Penyosohan {{ SOSOH_KERANGKA.kode }}{% endblock %}
+{% block isi %}
+{% set operator = SOSOH_KERANGKA.layout == 'operator' %}
+{% macro output_row(h) %}
+<div class="sr-output" data-sn-output-kind="{{ h.jenis }}">
+ <div><strong>{{ h.nama }}</strong><small>Catatan sebelumnya · menunggu data</small><small class="sr-work-percent">Persentase dari bahan · menunggu data</small></div>
+ {% if operator %}<label class="sr-work-total-label">Total sekarang (kg){% endif %}
+ <input type="number" step="0.01" inputmode="decimal" disabled aria-label="Total kumulatif {{ h.nama }}" aria-describedby="sn-menunggu">
+ {% if operator %}</label>{% endif %}
+ <span>{{ 'Perubahan' if operator else 'Pertambahan' }} · menunggu data</span>
+</div>
+{% endmacro %}
+{% macro output_card() %}
+<section class="sr-card" id="hasil" data-sn-results>
+ <h2>{{ 'Catat hasil & neraca' if operator else 'Catat hasil penyosohan' }}</h2>
+ <p class="sr-help">Isi total sejak awal proses, bukan tambahannya. Maksimal 2 desimal (0,01 kg).</p>
+ <section class="sr-note sr-work-result-balance{{ ' sr-admin-result-balance' if not operator }}" aria-live="polite">
+  <strong>Neraca hasil tercatat · menunggu data</strong><p class="sr-help">Dasar bahan · menunggu data</p><p>Total hasil dan persentase · menunggu data</p><p>Susut/selisih sementara · menunggu data</p>
+ </section>
+ <div class="sr-output-head"><span>Jenis / tercatat</span><span>Total sekarang (kg)</span><span>{{ 'Perubahan' if operator else 'Pertambahan' }}</span></div>
+ {% for h in SOSOH_KERANGKA.hasil_utama %}{{ output_row(h) }}{% endfor %}
+ <details data-sn-fold="hasil-lain"><summary>{{ 'Hasil samping' if operator else 'Jenis hasil lain' }}</summary>
+  {% for h in SOSOH_KERANGKA.hasil_lain %}{{ output_row(h) }}{% endfor %}
+ </details>
+ <button class="btn btn--utama" type="button" disabled data-save-output aria-describedby="sn-menunggu">{{ 'Simpan perubahan hasil' if operator else 'Catat perubahan hasil' }}</button>
+ <p class="sr-help">Catatan ini adalah hasil produksi. Sampel dan pengukuran QC beras mengikuti data terbaru. Pengemasan hasil samping mengikuti mekanisme otomatis; halaman ini tidak membuat mutasi stok kedua.</p>
+ {% if operator %}{{ balance_card() }}{% endif %}
+</section>
+{% endmacro %}
+{% macro balance_card() %}
+<details class="sr-card sr-full"><summary>Neraca hasil &amp; kepastian data</summary>
+ <dl>{% for label in ['Bahan proses','Hasil beras','Total seluruh hasil','Rendemen','Selisih sementara'] %}<div class="sr-pair"><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}</dl>
+ <p class="sr-help">Selisih sementara dapat mencakup bahan di mesin dan hasil yang belum dicatat; belum berarti susut final.</p>
+</details>
+{% endmacro %}
+{% macro sources_card() %}
+<section class="sr-card" id="sumber">
+ {% if operator %}<div class="sr-work-source-heading"><button type="button" class="sr-work-source-toggle" data-sn-silo-toggle aria-expanded="true" aria-controls="sn-silo-isi">▾ Bahan &amp; silo</button>
+ <button class="btn" type="button" disabled aria-describedby="sn-menunggu">Tambah silo / mix bahan</button></div>
+ {% else %}<h2>Bahan &amp; silo</h2><p class="sr-help">Bebaskan silo mencatat sisa satu siklus. Penyosohan tetap berjalan atau tetap dijeda.</p>{% endif %}
+ <div id="sn-silo-isi" data-sn-silo-body>
+  <p role="status">Memuat siklus, sumber dan sisa silo. Tidak ada silo atau pemilik yang dipilih sebelum data tersedia.</p>
+  <dl>{% for label in ['Bahan awal','Penambahan','Sisa tercatat','Bahan terpakai'] %}<div class="sr-pair"><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}</dl>
+  <details class="sr-source-details"><summary>Catatan sumber</summary>
+   <p class="sr-help">Rincian asal menjelaskan isi bahan. Bobot catatan asal tidak ditambahkan lagi ke total masuk pada siklus ini.</p>
+   <div class="tabel-standar__scroll" tabindex="0" role="region" aria-label="Struktur asal bahan">
+    <table class="sr-source-table"><thead><tr><th>Catatan asal</th><th>Bobot catatan asal</th><th>Waktu / keterangan</th></tr></thead><tbody><tr><td colspan="3">Memuat catatan sumber…</td></tr></tbody></table>
+   </div>
+  </details>
+ </div>
+ {% if not operator %}<button class="btn" type="button" disabled aria-describedby="sn-menunggu">Tambah silo / mix bahan</button>{% endif %}
+</section>
+{% endmacro %}
+{% macro qc_card() %}
+<section data-sn-qc><section class="riwayat-detail__card"><h2>QC beras hasil sosoh</h2><p role="status">Memuat sampel, hasil lab dan estimasi sesi. Pencatatan mengikuti izin pemeriksa, fitur mutu dan status proses yang berlaku.</p></section>
+ {% for table in SOSOH_KERANGKA.qc %}
+ <section class="riwayat-detail__card"><h2>{{ table.title }}</h2><div class="tabel-standar__scroll" tabindex="0" role="region" aria-label="{{ table.title }}">
+ <table class="tabel-standar">{{ table.header|safe }}<tbody><tr><td colspan="{{ table.columns|length }}"><p>Memuat catatan QC; ini bukan hasil pemeriksaan kosong.</p><dl class="fakta">{% for label in table.columns %}<div><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}</dl></td></tr></tbody></table>
+ </div></section>
+ {% endfor %}
+</section>
+{% endmacro %}
+{% macro pack_card() %}
+<details class="pp-panel sr-card{{ ' sr-full' if operator }}" data-sn-fold="kemasan"><summary>Catatan asal pengemasan otomatis</summary><p>Koreksi satu catatan hasil; karung dan curah mengikuti saldo. Bukan pengemasan manual.</p><p class="sr-help">Tautan catatan asal mengikuti data proses terbaru setelah dibaca.</p></details>
+{% endmacro %}
+{% macro history_card() %}
+<section class="sr-card{{ ' sr-full' if operator }}"><h2>Identitas &amp; waktu proses</h2><dl>{% for label in SOSOH_KERANGKA.fakta %}<div class="sr-pair"><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}</dl></section>
+<details class="sr-card sr-full" data-sn-fold="riwayat"><summary>Riwayat hasil, jeda, bahan &amp; waktu proses</summary><p role="status">Memuat pencatatan, alasan dan jejak koreksi…</p></details>
+{% endmacro %}
+<link rel="stylesheet" href="/static/sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/sosoh-ringkas.css?v={{ VERSI }}&amp;sr=20261108.operator2">
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/qc-sosoh.css?v={{ VERSI }}">
+<main class="sr sr-redesign{{ ' sr-worksheet' if operator }}" data-sosoh-native-html data-editor-perintah
+ data-layout="{{ SOSOH_KERANGKA.layout }}" data-sn-tab="{{ SOSOH_KERANGKA.tab }}"
+ data-stamp="{{ SOSOH_KERANGKA.stamp }}" data-url="{{ SOSOH_KERANGKA.data_url }}">
+ <div data-proses-isi>
+ <header>
+  {% if not operator %}<a class="sr-design-back" data-utuh href="{{ kembali }}">← Kembali ke Pekerjaan</a>{% endif %}
+  <small>PROSES AKTIF · PENYOSOHAN</small><h1>Penyosohan aktif</h1><p class="sr-design-code">{{ SOSOH_KERANGKA.kode }}</p>
+  <div class="sr-context"><strong>Pemilik · menunggu data</strong><span>Gudang · menunggu data</span><span>Status proses · menunggu data</span></div>
+  {% if operator %}<button class="btn btn--kecil sr-work-guide" type="button" data-sn-guide>ⓘ Panduan</button>
+  {% else %}<div class="sr-design-tools"><button class="btn btn--kecil" type="button" data-sn-guide>ⓘ Panduan</button><details class="sr-design-menu"><summary class="btn" aria-label="Tindakan proses" data-sn-menu>⋮</summary><div class="sr-design-menu-body"><button class="btn" type="button" data-sn-guide>ⓘ Panduan</button><button class="btn" type="button" disabled aria-describedby="sn-menunggu">Baca status terbaru</button><button class="btn" type="button" disabled aria-describedby="sn-menunggu">Print detail</button></div></details></div>{% endif %}
+ </header>
+ {% if operator %}
+ <div class="sr-board">
+  {{ output_card() }}{{ sources_card() }}
+  <section class="sr-card sr-full sr-work-finish"><h2>Kesiapan selesai</h2><p class="sr-help">Kesiapan dan data terbaru menunggu pemeriksaan.</p><button class="btn btn--utama" type="button" disabled aria-describedby="sn-menunggu">Periksa &amp; selesaikan penyosohan</button></section>
+  <details class="sr-card sr-full" data-sn-fold="qc"{% if SOSOH_KERANGKA.tab == 'qc' %} open{% endif %}><summary>QC beras · sampel &amp; hasil pemeriksaan</summary>{{ qc_card() }}</details>
+  {{ pack_card() }}{{ history_card() }}
+ </div>
+ {% else %}
+ <div class="sr-actions sr-design-actions"><button class="btn btn--utama" type="button" data-sn-tab-jump="hasil">Catat hasil</button></div>
+ <nav class="sr-design-tabs" role="tablist" aria-label="Detail penyosohan">{% for key,label in SOSOH_KERANGKA.tabs %}<button type="button" role="tab" id="sn-tab-{{ key }}" data-sn-tab-pilih="{{ key }}" aria-controls="sn-panel-{{ key }}" aria-selected="{{ 'true' if SOSOH_KERANGKA.tab == key else 'false' }}" tabindex="{{ '0' if SOSOH_KERANGKA.tab == key else '-1' }}">{{ label }}</button>{% endfor %}</nav>
+ <section class="sr-design-panel" role="tabpanel" id="sn-panel-ringkasan" aria-labelledby="sn-tab-ringkasan" data-sn-panel="ringkasan"{% if SOSOH_KERANGKA.tab != 'ringkasan' %} hidden{% endif %}>
+  <section class="sr-card sr-design-overview"><div class="sr-design-overview-title"><h2>Neraca sementara</h2><span class="sr-status">Menunggu data</span></div><div class="sr-design-mass">
+   {% for label in ['Bahan proses','Seluruh hasil tercatat','Selisih sementara'] %}<div><span>{{ label }}</span><strong>Menunggu data</strong><small>Angka dan kepastian sumber belum dibaca</small></div>{% endfor %}
+  </div><p class="sr-help">Selisih sementara dapat mencakup bahan di mesin dan hasil yang belum dicatat. Rendemen dan susut akhir mengikuti kepastian sumber serta pencatatan proses.</p></section>
+  {{ balance_card() }}<section class="sr-card sr-design-shortcuts"><h2>Pemeriksaan berikutnya</h2>{% for key,label in [('bahan','Bahan & silo'),('hasil','Rincian hasil'),('qc','QC beras'),('riwayat','Riwayat & waktu')] %}<button type="button" class="sr-shortcut" data-sn-tab-jump="{{ key }}"><span>{{ label }}<small>Menunggu data</small></span><span>›</span></button>{% endfor %}</section>
+ </section>
+ <section class="sr-design-panel" role="tabpanel" id="sn-panel-bahan" aria-labelledby="sn-tab-bahan" data-sn-panel="bahan"{% if SOSOH_KERANGKA.tab != 'bahan' %} hidden{% endif %}>{{ sources_card() }}</section>
+ <section class="sr-design-panel" role="tabpanel" id="sn-panel-hasil" aria-labelledby="sn-tab-hasil" data-sn-panel="hasil"{% if SOSOH_KERANGKA.tab != 'hasil' %} hidden{% endif %}>{{ output_card() }}{{ pack_card() }}</section>
+ <section class="sr-design-panel" role="tabpanel" id="sn-panel-qc" aria-labelledby="sn-tab-qc" data-sn-panel="qc"{% if SOSOH_KERANGKA.tab != 'qc' %} hidden{% endif %}>{{ qc_card() }}</section>
+ <section class="sr-design-panel" role="tabpanel" id="sn-panel-riwayat" aria-labelledby="sn-tab-riwayat" data-sn-panel="riwayat"{% if SOSOH_KERANGKA.tab != 'riwayat' %} hidden{% endif %}>{{ history_card() }}</section>
+ {% endif %}
+ <footer><p class="sr-help" id="sn-menunggu">Angka, saldo, status, sumber dan dampak perubahan menunggu data proses terbaru. Isian dan simpan belum tersedia.</p><p class="sr-help" data-sn-pending-unknown>Status simpan sebelumnya belum diperiksa. Jika status belum pasti, jangan kirim ulang.</p><p data-sn-status role="status" aria-live="polite">Memuat data proses…</p><button class="btn" type="button" data-sn-retry hidden>Coba lagi</button></footer>
+ </div>
+ {% from '_panduan.html' import panel as panduan %}
+ {% call panduan('sn-panduan','Panduan penyosohan aktif',penutup={'data-sn-guide-close':''}) %}
+ <p>Bahan awal, penambahan, sisa dan bahan terpakai tetap dibaca per siklus. Bobot asal tidak ditambahkan lagi ke total masuk.</p><p>Isi total kumulatif sejak awal proses, bukan tambahannya. Penyelesaian tetap memeriksa sisa tiap siklus, hasil dan data terbaru.</p><p>QC, catatan asal pengemasan dan riwayat mengikuti izin serta data yang berlaku. Membuka dan membaca ulang halaman tidak mengirim koreksi atau simpan ulang.</p>
+ {% endcall %}
+ <noscript>Struktur proses tetap tersedia. JavaScript diperlukan untuk membaca data proses dan mengerjakan tindakan yang diizinkan.</noscript>
+</main>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/sosoh-native-html.js?v={{ VERSI }}" defer></script>
+{% endblock %}
