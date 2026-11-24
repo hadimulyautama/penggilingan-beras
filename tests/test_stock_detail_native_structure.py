@@ -136,3 +136,45 @@ def test_finish_correlates_current_source_digest_host_to_payload(monkeypatch):
     assert host['data-source-sha']==payload['asal_sha256']==hashlib.sha256(b'/stok').hexdigest()
     assert payload['entries'][0]['body_title']=='LOT'
     assert payload['entries'][0]['chrome']['title']=='Stok'
+
+
+def test_pending_calculation_retains_six_actual_native_table_headers_no_dto():
+    """Headers render from native literal thead fragments only, no p object."""
+    import re
+    env=Environment(loader=FileSystemLoader(ROOT/'hmu_tampilan/templates'))
+    source=env.loader.get_source(env,'_penilaian_pk.html')[0]
+    headers=re.findall(r'<thead>.*?</thead>',source,re.S)
+    assert len(headers)==4
+    literal=[]
+    for header in headers:
+        # The one header expression depends only on macro mode (not data).
+        assert not any(isinstance(n,nodes.Name) and n.name=='p' for n in env.parse(header).find_all(nodes.Name))
+        doc=BeautifulSoup(env.from_string(header).render(tunggal=False),'html.parser')
+        literal.append([n.get_text(' ',strip=True) for n in doc.select('th')])
+    native_config=ast.parse((ROOT/'app/services/mutu_pk.py').read_text())
+    values={n.targets[0].id:ast.literal_eval(n.value) for n in native_config.body if isinstance(n,ast.Assign) and len(n.targets)==1 and isinstance(n.targets[0],ast.Name) and n.targets[0].id in {'ATURAN_ANGKA','KOMPONEN_ANGKA','KOMPONEN_KUALITATIF'}}
+    expected=[literal[0],literal[1],*[literal[2] for label in values['ATURAN_ANGKA']],literal[3]]
+    assert len(expected)==6
+    data,manifest=public()
+    for key in ('pk-g1','pk-g2-curah','pk-g2-karung'):
+        doc=BeautifulSoup(data['variants'][key]['html'],'html.parser')
+        tables=doc.select('[data-stock-qc-calculation]')
+        assert [[n.get_text(' ',strip=True) for n in table.select('thead th')] for table in tables]==expected
+        assert tables[0]['aria-label']=='Rincian skor enam komponen QC PK'
+        assert [n['data-komponen'] for n in tables[0].select('tbody tr')]==[label for label,field in (*values['KOMPONEN_ANGKA'],*values['KOMPONEN_KUALITATIF'])]
+        assert [n.get_text(' ',strip=True) for n in doc.select('.penilaian-pk__aturan h3')]==list(values['ATURAN_ANGKA'])
+        assert doc.select_one('details.penilaian-pk__pedoman summary').get_text(' ',strip=True)=='Lihat aturan skor dan kelas kualitas'
+        assert doc.select_one('.penilaian-pk__rumus strong').text=='Perhitungan nilai kualitas'
+        assert 'Perhitungan menunggu data QC terbaru.' in doc.text
+        for table in tables:
+            for row in table.select('tbody tr'):
+                # Real reference labels/ranges only; every operational value
+                # or derived score cell remains explicitly unread.
+                for td in row.select('td')[1:]:
+                    assert 'Belum dibaca' in td.text
+                    assert not re.fullmatch(r'[\s0.,%—-]+',td.text)
+        assert not doc.select('[data-kod-awal],form,input,script[type="application/json"]')
+    assert 'hmu_tampilan/templates/_penilaian_pk.html' in manifest['inputs']
+    assert 'app/services/mutu_pk.py' in manifest['inputs']
+    public_program=(ROOT/'app/web/static/kerangka-stock-detail-ui.js').read_text()
+    assert 'p.nilai' not in public_program and 'penilaian_dari_log(' not in public_program

@@ -153,7 +153,7 @@ def test_public_structure_native_labels_without_empty_rows_or_false_empty():
     shapes=compiler().native_shapes(Environment(loader=FileSystemLoader(ROOT/'hmu_tampilan/templates')))
     for key in ui.VARIANTS:
         meta=ui.metadata(key,mutu=key.startswith('pk-'),jasa=True,qc_latest=True)
-        html=env.get_template('stock_detail_native.html').render(STOCK_DETAIL=meta,STOCK_STRUCTURE=ui.structure(meta),STOCK_SHAPES=shapes,DETAIL_URL='/fixture',DETAIL_STAMP='ctx|/fixture',VERSI='fixture',ACTION_LABELS=['Native allowed action'])
+        html=env.get_template('stock_detail_native.html').render(STOCK_DETAIL=meta,STOCK_STRUCTURE=ui.structure(meta),STOCK_SHAPES=shapes,STOCK_QC_CALCULATION=compiler().native_qc_calculation(Environment(loader=FileSystemLoader(ROOT/'hmu_tampilan/templates'))),DETAIL_URL='/fixture',DETAIL_STAMP='ctx|/fixture',VERSI='fixture',ACTION_LABELS=['Native allowed action'])
         doc=BeautifulSoup(html,'html.parser')
         assert not doc.select('form,input,select,textarea,script[type="application/json"],a[href]')
         assert all('Belum dibaca'==dd.text for dd in doc.select('dd'))
