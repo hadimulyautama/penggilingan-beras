@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block judul %}Nama &amp; kata sandi{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+{% include '_pengaturan_akun_kerangka_isi.html' %}
+{# Pembaca/endpoint milik root; builder ini belum diadopsi. #}
+{% endblock %}
