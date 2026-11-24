@@ -278,7 +278,11 @@ async def release_data(page, phases, root, barrier, expected, ready=READY):
 async def source_users(page, kind):
     path = '/pengguna' if kind == 'staff' else '/pengguna/pelanggan'
     await page.goto(BASE + path, wait_until='load')
-    await expect(page.locator(READY)).to_be_visible()
+    # This is direct-source setup, not a first-paint acceptance assertion.
+    # The ASGI bridge may deliver complete native HTML without browser
+    # Sec-Fetch headers; only a client-installed read has the READY marker.
+    await expect(page.locator(SHELL)).to_have_count(0)
+    await expect(page.locator('.daftar-standar' if kind=='staff' else '.kelola-portal')).to_be_visible()
     await page.wait_for_function("""path=>{
       const host=document.getElementById('padi-pengguna-kerangka'),frame=document.querySelector('.bingkai');
       const catalog=document.querySelector('[data-pengguna-native-catalog]');
