@@ -211,6 +211,18 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     bagian = bagian if bagian in HALAMAN else ''
     if bagian in ('sebab-berhenti', 'mutu', 'kledo') and not tuan:
         raise HTTPException(403, 'Pengaturan ini hanya tersedia untuk Admin ke atas.')
+    # Six read-only detail shapes; native same-URL data/feedback/POST paths
+    # keep the original values, form controllers and guards below.
+    from app.web.pengaturan_detail_kerangka import permintaan_kerangka,kerangka as kerangka_detail
+    if permintaan_kerangka(request):
+        peran_asli_detail=getattr(request.state,'peran_asli',None) or akun.peran
+        if bagian=='peran' and not _P.boleh_ganti_gudang(peran_asli_detail):
+            raise HTTPException(403,'Pilihan tampilan dan gudang tidak tersedia untuk akun ini.')
+        from app.web.halaman_bertahap import konteks_kerangka,penanda_konteks
+        konteks=await konteks_kerangka(request,akun)
+        konteks['SHELL']={'data_url':request.url.path,'stamp':penanda_konteks(request,akun)+'|'+request.url.path}
+        response=await kerangka_detail(request,akun,konteks)
+        if response is not None:return response
     # Hanya presentasi Akun tanpa query. Hasil POST, sandi wajib, dan seluruh
     # pengaturan otoritas tetap dilayani alur native yang sama.
     if (bagian=='akun' and not request.url.query

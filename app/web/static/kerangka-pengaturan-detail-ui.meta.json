@@ -1,0 +1,57 @@
+{
+  "versi": 1,
+  "sumber": "8a5d0c2226772e3447f1d58a0151dd224ecbcd33bb6e49ae36cc8676d01d2a7a",
+  "variants": [
+    "peran-lihat",
+    "peran-gudang",
+    "akses",
+    "sebab-berhenti",
+    "mutu",
+    "kledo",
+    "sistem-admin",
+    "sistem-umum"
+  ],
+  "aset_sha256": "49584345e6936960f239ff85cc185c6ea17a0a08094bcafa3d898bab66f5b158",
+  "references": {
+    "columns": [
+      "Super Admin",
+      "Admin",
+      "Operator G1",
+      "Operator G2"
+    ],
+    "processes": [
+      [
+        "pengeringan",
+        "Pengeringan"
+      ],
+      [
+        "giling",
+        "Giling"
+      ],
+      [
+        "penyosohan",
+        "Penyosohan"
+      ]
+    ]
+  },
+  "inputs": {
+    "app/penggilingan/gudang1/services/jeda.py": "bb2136eb662ba6eaa255811ce488fc7e2ca43456cd723c5ccfafd6f6f1f71e6f",
+    "app/web/akses.py": "01616fab8829899ad5bcee737f2bddb8ed07dcfff3e5fce6740565f40a87bb53",
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/pengaturan.py": "5dda92f8aa0e8dc916f23ec51acd192dd661c38d886d7676f1b9baab83cae70c",
+    "app/web/pengaturan_detail_kerangka.py": "203d68da5786814bd47365fc6c042511c19d66d9bf81a6d03f3faa932ff62339",
+    "app/web/pengaturan_detail_schema.py": "b4de2eb22458c7abee0dbd690bdc45d81803efd0eeedba0fbc63eb16c3716eb0",
+    "app/web/pengaturan_navigasi.py": "c316f7cdf55a61d1597e61e32ca1be3d265ba8e028ed44f3eebdf8f717cc349a",
+    "app/web/static/kerangka-pengaturan-detail-ui-runtime.js": "a1f178b7cced179442116edde98b2c8d19d85b417cd651907cb26549b3ecae9d",
+    "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
+    "app/web/static/pengaturan-detail-native.js": "022a32318c8fc96281c756093859f7a8f2dd4327e657ca28c4674dac28f48cb3",
+    "app/web/templates/pengaturan_detail_kerangka.html": "985d68dd26c7a030336205ef6aa6b33682fbd03957bccc610afcee5db2427c67",
+    "hmu_tampilan/static/pengaturan.css": "8c75d83897acc331e3076617c46b929dc0da06509726ec058e4f2b3a9200f859",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/_daftar_akses.html": "2c6f8ea91aa09cfbf49324647b41c4dccaed67980cdd942afe383518af2c9666",
+    "hmu_tampilan/templates/_pengaturan_formulir.html": "a88c53aa5cc65b3dcac88a343e91f31a8e1e0cf4c18318dd64223bc6b581b16f",
+    "hmu_tampilan/templates/pengaturan.html": "0507dbbaa7245af84cfd49a088b6c577dd3a27fcef26d04a717548fed922e4ac",
+    "scripts/buat_kerangka_pengaturan_detail.py": "6bc50c0c5f74625c48d2981087387c9434fdb4b8eed745b9045f8746fae40fb1",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

@@ -1,0 +1,37 @@
+{% extends 'base.html' %}{% block judul %}Pengaturan{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+<section class="pg" aria-labelledby="pg-judul" data-pengaturan-detail-kerangka data-url="{{ PG_DETAIL_SHELL.alamat }}" data-stamp="{{ PG_DETAIL_SHELL.stamp }}" data-record-ready="0">
+<a class="pg-kembali" href="/pengaturan">← Kembali ke Pengaturan</a>
+<p class="pg-lingkup">Pengaturan / {{ PG_DETAIL_SHELL.group }}</p><h1 id="pg-judul">{{ PG_DETAIL_SHELL.heading }}</h1>
+<div class="pg-rincian">
+{% if PG_DETAIL_SHELL.kind=='peran' %}
+<div><span class="lbl">{{ PG_DETAIL_SHELL.heading }}</span>
+{% if PG_DETAIL_SHELL.variant=='peran-lihat' %}<p class="bantu" style="margin:6px 0 8px">Menampilkan aplikasi persis seperti yang dilihat peran itu — untuk menguji, tanpa membuat akun palsu. Hak Anda sendiri tidak berubah, dan peran yang lebih tinggi dari peran Anda tidak bisa dipilih.</p>
+{% else %}<p class="bantu" style="margin:6px 0 8px">Pilih gudang tempat Anda bertugas. Akses, data, dan tindakan mengikuti gudang yang sedang dipilih. Semua operator dapat bergantian bertugas di Gudang 1 atau Gudang 2.</p>{% endif %}
+<div class="grup" aria-describedby="pg-detail-pending"><select class="fld" disabled aria-label="{{ PG_DETAIL_SHELL.heading }}"><option>Belum dibaca</option></select><button class="btn" type="button" disabled>Terapkan</button></div></div>
+{% elif PG_DETAIL_SHELL.kind=='akses' %}
+<section aria-labelledby="daftar-akses"><h2 id="daftar-akses">Daftar akses</h2>
+<p class="bantu">Semua pengguna memakai tampilan yang sama. Kontrol tanpa izin terkunci. Super Admin mempunyai seluruh akses. Izin yang berlaku mengikuti peran dan gudang kerja yang sedang dipilih.</p>
+<p class="bantu">Di ponsel, geser tabel ke samping untuk melihat semua peran.</p>
+<div class="akses-tabel" role="region" aria-label="Akses tiap peran" tabindex="0"><table><thead><tr><th scope="col">Bagian</th>{% for label in PG_DETAIL_SHELL.columns %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="{{ PG_DETAIL_SHELL.columns|length+1 }}">Memuat daftar akses…</td></tr></tbody></table></div>
+<p class="bantu">Operator dapat berganti gudang untuk saling menggantikan. Bila belum ada Super Admin aktif, pengelolaan sistem sementara dapat dijalankan Admin. Status proses, kepemilikan dan ketersediaan barang tetap diperiksa sebelum tindakan disimpan.</p>
+<details class="lipat"><summary>Rincian akses tindakan · belum dibaca</summary><div class="akses-tabel" role="region" aria-label="Akses setiap tindakan" tabindex="0"><table><thead><tr><th scope="col">Tindakan</th>{% for label in PG_DETAIL_SHELL.columns %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="{{ PG_DETAIL_SHELL.columns|length+1 }}">Memuat rincian akses tindakan…</td></tr></tbody></table></div></details></section>
+{% elif PG_DETAIL_SHELL.kind=='sebab-berhenti' %}
+{% for key,label in PG_DETAIL_SHELL.processes %}<div><span class="lbl">{{ label }}</span><div class="kartu"><details class="lipat"><summary><span class="lbl" style="margin:0">Sebab berhenti</span><span class="lipat__jml">Belum dibaca</span></summary><div class="grup daftar-standar" style="gap:6px"><p class="bantu">Daftar sebab belum dibaca.</p><div class="sebaris-borang"><input class="fld" type="text" disabled maxlength="120" placeholder="Tambah sebab baru…" aria-label="Tambah sebab berhenti {{ key }}"><button class="btn btn--kecil" type="button" disabled>Tambah</button></div></div></details></div></div>{% endfor %}
+{% elif PG_DETAIL_SHELL.kind=='mutu' %}
+<section class="kartu"><h2>Target kadar air umum</h2><div class="grup"><label class="lbl" for="pg-detail-target">Target (%)</label><input class="fld" id="pg-detail-target" inputmode="decimal" disabled placeholder="Belum dibaca"><p class="bantu">Dipakai oleh dryer yang mengikuti target umum. Target khusus setiap dryer tetap terpisah.</p><button class="btn btn--utama" type="button" disabled>Simpan target umum</button></div></section>
+<div><span class="lbl">Pencatatan mutu</span><div class="kartu"><div class="saklar-borang"><button class="saklar" type="button" disabled aria-label="Pencatatan mutu belum dibaca" style="background:transparent;border:1px dashed currentColor"><span class="saklar__bulat" style="visibility:hidden"></span></button><span>Catat mutu &amp; QC</span></div><p class="bantu">Keadaan pencatatan mutu belum dibaca.</p></div></div>
+{% elif PG_DETAIL_SHELL.kind=='kledo' %}
+<div><span class="lbl">Kontak Kledo</span><div class="kartu"><button class="btn" type="button" disabled>Perbarui Kontak</button><p class="bantu">Status koneksi dan pembaruan kontak belum dibaca.</p></div></div>
+{% elif PG_DETAIL_SHELL.kind=='sistem' %}
+{% if PG_DETAIL_SHELL.admin %}<div><span class="lbl">Batas ubah catatan</span><div class="kartu"><div class="benda__judul"><span>Belum dibaca</span></div><p class="bantu">Catatan yang lebih tua terkunci: tak bisa dibatalkan lagi. Batas ini sengaja tak punya kotak isian — batas yang bisa dilonggarkan oleh orang yang ingin melonggarkannya bukan batas. Mengubahnya perlu keputusan Direksi, bukan satu ketukan di telepon.</p></div></div>{% endif %}
+<div class="kartu"><h2>Informasi versi</h2><p class="bantu mono" data-uji="baris-versi" style="text-align:center;margin-top:24px;font-size:11px;letter-spacing:.04em">Versi belum dibaca · commit belum dibaca · migrasi belum dibaca</p></div>
+{% endif %}
+</div>
+<p class="bantu" id="pg-detail-pending">Nilai, pilihan dan tindakan menunggu data serta akses terbaru. Tidak ada perubahan selama memuat.</p>
+<p role="status" aria-live="polite" data-pengaturan-detail-status>Memuat rincian Pengaturan…</p><button class="btn" type="button" data-pengaturan-detail-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca bertahap. Tidak ada perubahan yang dikirim selama memuat.</p></noscript>
+</section>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script><script src="/static/pengaturan-detail-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}
