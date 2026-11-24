@@ -237,21 +237,27 @@ async def test_actual_links_four_tabs_native_chrome_race_retry_and_leave(
                 await page.wait_for_function("()=>!!document.getElementById('padi-pengiriman-detail-catalog')")
                 tab = page.locator('[data-detail-tab] #tab-barang')
                 target = address(await tab.get_attribute("href"))
-                entered, release = native_read_gate(transport, item["path"])
-                releases.append(release)
                 await tab.press("Enter")
-                await asyncio.wait_for(entered.wait(), 20)
-                await expect(page.locator(SHELL)).to_be_visible()
+                await expect(page.locator('[data-detail-tab] #tab-barang')).to_have_attribute("aria-selected", "true")
                 await assert_chrome(page, client, target, item["code"])
                 await expect(page.locator('header.bar .bar__balik')).to_have_attribute("href", "/pekerjaan?tab=berjalan")
-                # Leave on the first click while native READ is pending. The
-                # original late response cannot reinstall shipping content.
+                # A direct complete document switches tabs locally. Exercise
+                # pending-leave through an actual list link, where a native
+                # GET really is still required, rather than fabricate a GET.
+                await page.goto(BASE + '/barang-keluar', wait_until='load')
+                await page.wait_for_function("()=>!!document.getElementById('padi-pengiriman-detail-catalog')")
+                link = page.locator('.keluar-daftar tr.keluar-baris td:first-child>a').filter(has=page.locator('small', has_text=item['code']))
+                entered, release = native_read_gate(transport, item["path"])
+                releases.append(release)
+                await link.click()
+                await asyncio.wait_for(entered.wait(), 20)
+                await expect(page.locator(SHELL)).to_be_visible()
                 await page.locator(SHELL + ' a.detail-kirim-kembali').press("Enter")
-                await expect(page).to_have_url(BASE + "/pekerjaan?tab=berjalan")
+                await expect(page).to_have_url(BASE + "/barang-keluar")
                 release.set()
                 await two_frames(page)
                 await expect(page.locator(SHELL + ',[data-detail-tab]')).to_have_count(0)
-                await expect(page).to_have_url(BASE + "/pekerjaan?tab=berjalan")
+                await expect(page).to_have_url(BASE + "/barang-keluar")
 
                 # Final records deliberately keep their original journey DTO.
                 final = shipments["selesai"]
