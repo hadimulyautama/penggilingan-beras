@@ -12,7 +12,7 @@ from tests.pg.test_barang_masuk_bertahap_browser import peramban,BASE
 
 pytestmark=pytest.mark.asyncio
 
-@pytest.mark.parametrize('role,warehouse,tabs,owner',[(P.ADMIN,None,{'bahan','produk','karung'},1),(P.OPERATOR,'g1',{'bahan'},0),(P.OPERATOR,'g2',{'bahan','produk','karung'},0)])
+@pytest.mark.parametrize('role,warehouse,tabs,owner',[(P.ADMIN,None,{'bahan','produk','karung'},1),(P.OPERATOR,'g1',{'bahan','produk','karung'},0),(P.OPERATOR,None,{'bahan'},0),(P.OPERATOR,'g2',{'bahan','produk','karung'},0)])
 async def test_public_manifest_uses_native_stock_flags_without_entity_metadata(pg,stok_lengkap,role,warehouse,tabs,owner):
     async with await _klien(pg,role=role,gudang_id=stok_lengkap['gudang'].get(warehouse)) as client:
         before=await _sidik(pg)
@@ -20,12 +20,20 @@ async def test_public_manifest_uses_native_stock_flags_without_entity_metadata(p
         assert not doc.select('#padi-stok-kerangka')
         ui=json.loads(doc.select_one('#padi-kerangka-ui').string)
         flags=ui['varians']['stok'];assert set(flags)==tabs
+        # G1 with an active warehouse can read all three native stock tabs.
+        # No-warehouse Operator is the actual negative case, not a G1 guess.
+        native=BeautifulSoup((await client.get('/stok?tab=bahan',headers={'X-Pindah':'1'})).text,'html.parser')
+        from urllib.parse import urlsplit,parse_qs
+        native_tabs={parse_qs(urlsplit(link['href']).query).get('tab',['bahan'])[0]
+                     for link in native.select('nav[aria-label="Jenis stok"] a[href]')}
+        assert native_tabs==tabs
+
         assert all(value in {f'stok-{tab}-{mutu}-{owner}' for mutu in (0,1)} for tab,value in flags.items())
         assert all(isinstance(value,str) for value in flags.values())
         assert not set(ui)-{'versi','sumber','konteks','cap','sesi','varians'}
         assert await _sidik(pg)==before
 
-@pytest.mark.parametrize('role,warehouse,tabs',[(P.ADMIN,None,3),(P.OPERATOR,'g1',1),(P.OPERATOR,'g2',3)])
+@pytest.mark.parametrize('role,warehouse,tabs',[(P.ADMIN,None,3),(P.OPERATOR,'g1',3),(P.OPERATOR,'g2',3)])
 @pytest.mark.parametrize('width',[390,1280])
 async def test_stock_first_click_from_account_without_source_entity_options(pg,stok_lengkap,role,warehouse,tabs,width):
     async with await _klien(pg,role=role,gudang_id=stok_lengkap['gudang'].get(warehouse)) as client:
