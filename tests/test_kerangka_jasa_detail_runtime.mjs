@@ -78,3 +78,17 @@ test('portal or open native editor sources cannot adopt the public reader frame'
  assert.equal(api.blockedSource({...clean,getElementById:()=>({open:false,style:{display:'flex'}})}),true);
  assert.equal(api.blockedSource({...clean,body:{hasAttribute:()=>true}}),true);
 });
+test('native customer block title and parent query preserve name and original URL key order',()=>{
+ assert.equal(api.nativeTitle('Fixture A'),'Fixture A · Pesanan Jasa');
+ assert.equal(api.backURL(api.address('/jasa/pelanggan/17?tab=stok',ORIGIN)),'/jasa?');
+ assert.equal(api.backURL(api.address('/jasa/pelanggan/17?halaman=3&cari=A%26B+%22x%22+*&status=berjalan&tab=stok',ORIGIN)),'/jasa?halaman=3&cari=A%26B+%22x%22+%2A&status=berjalan');
+});
+test('compiled native breadcrumb private name uses textContent and both native parent links use safe href',()=>{
+ const writes=[],links=[1,2].map(()=>({getAttribute:()=>'/jasa?__PADI_BACK_QUERY__',setAttribute:(key,value)=>writes.push([key,value])}));
+ const leaf={textContent:'__PADI_JASA_LABEL__ · Pesanan Jasa'};
+ Object.defineProperty(leaf,'innerHTML',{set(){throw Error('Private label must not become HTML');}});
+ const fragment={querySelectorAll:selector=>selector==='a[href]'?links:[leaf]},label='Nama <img src=x onerror=alert(1)> & "x"',back='/jasa?cari=A%26B';
+ assert.equal(api.bindBreadcrumb(fragment,label,back),true);
+ assert.equal(leaf.textContent,label+' · Pesanan Jasa');assert.deepEqual(writes,[['href',back],['href',back]]);
+ leaf.textContent='other-source';assert.equal(api.bindBreadcrumb(fragment,label,back),false);
+});

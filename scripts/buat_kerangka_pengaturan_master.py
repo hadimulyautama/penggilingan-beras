@@ -18,6 +18,7 @@ def build():
         result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result
     helper=module('master_public_pool',ROOT/'scripts/buat_kerangka_ui.py')
     native=module('master_public_spec',ROOT/'app/web/pengaturan_master_kerangka.py')
+    breadcrumb=module('master_public_breadcrumb',ROOT/'app/web/breadcrumb.py')
     roots=[ROOT/'app/web',ROOT/'hmu_tampilan']
     env=Environment(loader=ChoiceLoader([helper.SourceLoader(p/'templates',inputs) for p in roots]),autoescape=True,undefined=StrictUndefined)
     def asset(url):
@@ -40,7 +41,8 @@ def build():
             js=asset(node['src'])
             if 'document.currentScript' in js:raise ValueError('Script binding needs native review')
             node.attrs.clear();node.string=js.replace('</script','<\\/script')
-        variants[path]=dict(title=spec['title'],html=str(doc))
+        crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(path,dict(kembali='/pengaturan'),spec['title']))
+        variants[path]=dict(title=spec['title'],html=str(doc),breadcrumb=crumb)
     styles,scripts,srefs,jrefs={},{},{},{}
     for variant in variants.values():
         doc=BeautifulSoup(variant['html'],'html.parser')

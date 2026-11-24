@@ -17,6 +17,7 @@ def build():
         result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result
     helper=module('jasa_public_pool_helpers',ROOT/'scripts/buat_kerangka_ui.py')
     native=module('jasa_detail_public_spec',ROOT/'app/web/jasa_detail_kerangka.py')
+    breadcrumb=module('jasa_detail_public_breadcrumb',ROOT/'app/web/breadcrumb.py')
     roots=[ROOT/'app/web',ROOT/'hmu_tampilan']
     env=Environment(loader=ChoiceLoader([helper.SourceLoader(p/'templates',inputs) for p in roots]),autoescape=True,undefined=StrictUndefined)
     def asset(url):
@@ -26,7 +27,7 @@ def build():
     variants={}
     for tab,_ in native.TABS:
         spec=native.deskripsi('/jasa/pelanggan/1','tab='+tab)
-        spec.update(alamat='__PADI_DATA_URL__',stamp='__PADI_STAMP__',kembali='__PADI_BACK__',
+        spec.update(nama='__PADI_JASA_LABEL__',alamat='__PADI_DATA_URL__',stamp='__PADI_STAMP__',kembali='__PADI_BACK__',
             filter_pesanan=True,pesanan_cari='__PADI_ORDER_SEARCH__',rincian_cari='__PADI_DETAIL_SEARCH__')
         spec['tabs']=[dict(key=k,label=n,href='__PADI_TAB_'+k+'__',active=k==tab) for k,n in native.TABS]
         template=env.get_template('jasa_detail_kerangka.html')
@@ -46,7 +47,10 @@ def build():
         if filters:
             filters['data-jd-order-filter']='';filters.select_one('input')['data-jd-order-search']='';filters.select_one('select')['data-jd-order-status']=''
         for node in doc.select('input[aria-label="Cari catatan pelanggan"]'):node['data-jd-detail-search']=''
-        variants[tab]=dict(title='Pesanan Jasa',html=str(doc))
+        title='__PADI_JASA_LABEL__ · Pesanan Jasa'
+        crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(
+            '/jasa/pelanggan/1',dict(kembali='/jasa?__PADI_BACK_QUERY__'),title))
+        variants[tab]=dict(title=title,html=str(doc),breadcrumb=crumb)
     styles,scripts,srefs,jrefs={},{},{},{}
     for variant in variants.values():
         doc=BeautifulSoup(variant['html'],'html.parser')

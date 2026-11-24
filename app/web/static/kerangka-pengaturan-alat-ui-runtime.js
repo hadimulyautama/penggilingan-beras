@@ -7,7 +7,7 @@
  const sha=x=>typeof x==='string'&&/^[a-f0-9]{64}$/.test(x);
  function valid(data,p,ctx,cap,token){
   return exact(data,['versi','sumber','variants','styles','scripts'])&&data.versi===1&&sha(data.sumber)&&exact(data.variants,[ADDRESS])
-   &&exact(data.variants[ADDRESS],['title','html'])&&typeof data.variants[ADDRESS].html==='string'&&data.variants[ADDRESS].html.length<=32768&&data.variants[ADDRESS].title==='Pengaturan alat'
+   &&exact(data.variants[ADDRESS],['title','html','breadcrumb'])&&typeof data.variants[ADDRESS].html==='string'&&data.variants[ADDRESS].html.length<=32768&&data.variants[ADDRESS].title==='Pengaturan alat'&&typeof data.variants[ADDRESS].breadcrumb==='string'&&data.variants[ADDRESS].breadcrumb.length<=65536
    &&['styles','scripts'].every(k=>obj(data[k])&&Object.keys(data[k]).length<=8&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=262144))
    &&exact(p,['versi','cap','konteks','sesi','sumber','targets'])&&p.versi===1&&p.sumber===data.sumber&&p.cap===cap&&p.konteks===ctx&&p.sesi===token
    &&Array.isArray(p.targets)&&p.targets.length===1&&p.targets[0]===ADDRESS&&[ctx,cap,token].every(v=>typeof v==='string'&&v.length>0&&v.length<=2048);
@@ -38,7 +38,11 @@
   while(starts[0].nextSibling&&starts[0].nextSibling!==ends[0])starts[0].nextSibling.remove();ends[0].before(part.content);
   for(const old of main.querySelectorAll('.desktop-back'))old.remove();
   const title=main.querySelector('.bar__merek');if(title){title.textContent='Pengaturan alat';title.setAttribute('aria-label','Pengaturan alat');}
-  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const a=doc.createElement('a'),name=doc.createElement('strong');a.href='/pengaturan';a.textContent='Pengaturan';name.textContent='Pengaturan alat';crumb.replaceChildren(a,doc.createTextNode(' › '),name);}
+  const top=main.querySelector('header.bar');if(!top)return null;
+  const back=doc.createElement('a');back.className='bar__balik';back.setAttribute('href','/pengaturan');back.setAttribute('aria-label','Kembali');
+  back.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>';
+  const previous=top.querySelector('.bar__menu,.bar__balik');if(previous)previous.replaceWith(back);else top.prepend(back);
+  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const html=doc.createElement('template');html.innerHTML=data.variants[ADDRESS].breadcrumb;crumb.replaceChildren(html.content);}
   for(const old of doc.querySelectorAll('#'+HOST))old.remove();doc.body.append(doc.importNode(host,true));
   for(const link of doc.querySelectorAll('#laci a[href]')){const active=link.getAttribute('href')==='/pengaturan';link.classList.toggle('pintu--kini',active&&link.classList.contains('pintu'));link.classList.toggle('pintu-sub__satu--kini',active&&link.classList.contains('pintu-sub__satu'));if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
   frame.dataset.pindahAlamat=target;frame.dataset.pindahKerangka='1';doc.title='Pengaturan alat · PT Hadi Mulya Utama';

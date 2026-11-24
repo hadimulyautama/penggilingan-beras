@@ -14,6 +14,8 @@ def build():
         ROOT/'app/web/security.py',ROOT/'hmu_tampilan/templates/alat.html',ROOT/'app/web/static/kerangka-pengaturan-alat-ui-runtime.js'}
     helper_path=ROOT/'scripts/buat_kerangka_ui.py';inputs.add(helper_path)
     spec=importlib.util.spec_from_file_location('alat_public_pool',helper_path);helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
+    breadcrumb_path=ROOT/'app/web/breadcrumb.py';inputs.add(breadcrumb_path)
+    spec=importlib.util.spec_from_file_location('alat_public_breadcrumb',breadcrumb_path);breadcrumb=importlib.util.module_from_spec(spec);spec.loader.exec_module(breadcrumb)
     roots=[ROOT/'app/web',ROOT/'hmu_tampilan']
     env=Environment(loader=ChoiceLoader([helper.SourceLoader(p/'templates',inputs) for p in roots]),autoescape=True,undefined=StrictUndefined)
     template=env.get_template('pengaturan_alat_kerangka.html')
@@ -28,7 +30,8 @@ def build():
         node.attrs.clear();node.string=js.replace('</script','<\\/script')
     scripts,refs={},{}
     for node in doc.select('script:not([type])'):node['data-alat-script']=helper.intern_text(scripts,refs,node.string or '');node.clear()
-    variants={'/pengaturan/alat':dict(title='Pengaturan alat',html=str(doc))}
+    crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/pengaturan/alat',dict(kembali='/pengaturan'),'Pengaturan alat'))
+    variants={'/pengaturan/alat':dict(title='Pengaturan alat',html=str(doc),breadcrumb=crumb)}
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     source=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
     data=dict(versi=1,sumber=source,variants=variants,styles={},scripts=scripts)

@@ -19,7 +19,7 @@
  }
  function valid(data,p,ctx,cap,token,sourceSha,origin){
   if(!exact(data,['versi','sumber','variants','styles','scripts'])||data.versi!==1||!sha(data.sumber)||!exact(data.variants,TABS)
-   ||!TABS.every(k=>exact(data.variants[k],['title','html'])&&typeof data.variants[k].title==='string'&&typeof data.variants[k].html==='string'&&data.variants[k].html.length<=131072)
+   ||!TABS.every(k=>exact(data.variants[k],['title','html','breadcrumb'])&&data.variants[k].title==='__PADI_JASA_LABEL__ · Pesanan Jasa'&&typeof data.variants[k].html==='string'&&data.variants[k].html.length<=131072&&typeof data.variants[k].breadcrumb==='string'&&data.variants[k].breadcrumb.length<=65536)
    ||!['styles','scripts'].every(k=>obj(data[k])&&Object.keys(data[k]).length<=16&&Object.values(data[k]).every(v=>typeof v==='string'&&v.length<=262144))
    ||!exact(p,['versi','cap','konteks','sesi','sumber','source_address','sumber_sha256','mode','entries'])||p.versi!==1||p.sumber!==data.sumber||p.cap!==cap||p.konteks!==ctx||p.sesi!==token
    ||![ctx,cap,token].every(v=>typeof v==='string'&&v&&v.length<=2048)||!sha(sourceSha)||p.sumber_sha256!==sourceSha||typeof p.source_address!=='string'||p.source_address.length>4096
@@ -70,12 +70,26 @@
   for(const [k,v] of q)if(k.startsWith('pesanan_'))next.searchParams.set(k,v);
   return next.pathname+next.search;
  }
+ function nativeTitle(label){return (label+' · Pesanan Jasa').trim();}
+ function backURL(state){
+  const q=new URLSearchParams();for(const [key,value] of state.u.searchParams)if(['status','cari','halaman'].includes(key))q.append(key,value);
+  // Python native urlencode preserves input order and encodes '*' as well.
+  return '/jasa?'+q.toString().replace(/\*/g,'%2A');
+ }
+ function bindBreadcrumb(fragment,label,back){
+  const links=[...fragment.querySelectorAll('a[href]')].filter(a=>a.getAttribute('href')==='/jasa?__PADI_BACK_QUERY__'),leaves=fragment.querySelectorAll('[aria-current="page"]');
+  if(links.length!==2||leaves.length!==1||leaves[0].textContent!=='__PADI_JASA_LABEL__ · Pesanan Jasa')return false;
+  // Native breadcrumb.susun collapses whitespace. Set text/href via DOM only,
+  // never interpolate a private name or a filter into HTML program strings.
+  leaves[0].textContent=nativeTitle(label).replace(/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/g,' ').trim();
+  for(const link of links)link.setAttribute('href',back);return true;
+ }
  function blockedSource(doc,hash=''){
   if(hash)return true;
   if(doc.body?.hasAttribute('data-portal-akun')||doc.body?.classList.contains('portal-customer')||doc.querySelector('[data-editor-perintah],[data-kemas-ulang]'))return true;
   const dialog=doc.getElementById('lembar');return !!dialog&&(dialog.open||dialog.style?.display==='flex');
  }
- if(typeof module==='object'&&module.exports){module.exports={address,valid,pendingStamp,selectProvenance,shown,proofFromDOM,tabURL,blockedSource};return;}
+ if(typeof module==='object'&&module.exports){module.exports={address,valid,pendingStamp,selectProvenance,shown,proofFromDOM,tabURL,blockedSource,nativeTitle,backURL,bindBreadcrumb};return;}
  const data=global.PadiKerangkaJasaDetailData;
  function construct(target,base,ctx,cap,token){
   if(typeof base!=='string'||base.length>8388608||!address(target,location.origin)||blockedSource(document,location.hash))return null;
@@ -98,21 +112,21 @@
   root.dataset.url=target;root.dataset.stamp=pendingStamp(ctx,target,entry.id,p.sumber_sha256);root.dataset.jdPid=String(entry.id);root.dataset.jdOriginSha=p.sumber_sha256;root.dataset.jdOriginTarget=originTarget;
   heading.textContent=entry.label;
   for(const tab of root.querySelectorAll('[data-jd-tab]'))tab.setAttribute('href',tabURL(state,tab.dataset.jdTab));
-  const back=new URL('/jasa',location.origin);for(const key of ['status','cari','halaman'])if(q.has(key))back.searchParams.set(key,q.get(key));root.querySelector('.jasa-kembali').setAttribute('href',back.pathname+back.search);
+  const back=backURL(state);root.querySelector('.jasa-kembali').setAttribute('href',back);
   if(!entry.filter&&!(q.get('pesanan_cari')||q.get('pesanan_status')))root.querySelector('[data-jd-order-filter]')?.remove();
   for(const [selector,key] of [['[data-jd-order-search]','pesanan_cari'],['[data-jd-detail-search]','rincian_cari']])for(const node of root.querySelectorAll(selector))node.setAttribute('value',(q.get(key)||'').trim());
   for(const option of root.querySelectorAll('[data-jd-order-status] option'))option.toggleAttribute('selected',option.value===(q.get('pesanan_status')||''));
   while(starts[0].nextSibling&&starts[0].nextSibling!==ends[0])starts[0].nextSibling.remove();ends[0].before(part.content);
   for(const old of doc.querySelectorAll('#padi-jasa-detail-catalog'))old.remove();ends[0].before(doc.importNode(host,true));
-  const bar=main.querySelector('.bar__merek');if(bar){bar.textContent='Pesanan Jasa';bar.setAttribute('aria-label','Pesanan Jasa');}
+  const title=nativeTitle(entry.label),bar=main.querySelector('.bar__merek');if(bar){bar.textContent=title;bar.setAttribute('aria-label',title);}
   const top=main.querySelector('header.bar');if(!top)return null;
-  const backLink=doc.createElement('a');backLink.className='bar__balik';backLink.href=back.pathname+back.search;backLink.setAttribute('aria-label','Kembali');
+  const backLink=doc.createElement('a');backLink.className='bar__balik';backLink.setAttribute('href',back);backLink.setAttribute('aria-label','Kembali');
   backLink.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>';
   const oldBack=top.querySelector('.bar__menu,.bar__balik');if(oldBack)oldBack.replaceWith(backLink);else top.prepend(backLink);
   for(const old of main.querySelectorAll('.desktop-back'))old.remove();
-  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const a=doc.createElement('a'),name=doc.createElement('strong');a.href=back.pathname+back.search;a.textContent='Pesanan Jasa';name.textContent=entry.label;crumb.replaceChildren(a,doc.createTextNode(' › '),name);}
+  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const html=doc.createElement('template');html.innerHTML=data.variants[state.tab].breadcrumb;if(!bindBreadcrumb(html.content,entry.label,back))return null;crumb.replaceChildren(html.content);}
   for(const link of doc.querySelectorAll('#laci a[href]')){const active=new URL(link.getAttribute('href'),location.href).pathname==='/jasa';link.classList.toggle('pintu--kini',active&&link.classList.contains('pintu'));link.classList.toggle('pintu-sub__satu--kini',active&&link.classList.contains('pintu-sub__satu'));if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
-  frame.dataset.pindahAlamat=target;frame.dataset.pindahKerangka='1';doc.title=entry.label+' · Pesanan Jasa · PT Hadi Mulya Utama';
+  frame.dataset.pindahAlamat=target;frame.dataset.pindahKerangka='1';doc.title=title+' · PT Hadi Mulya Utama';
   return {versi:1,alamat:target,konteks:ctx,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  function buat(...args){try{return construct(...args);}catch(_){return null;}}

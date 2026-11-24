@@ -29,7 +29,7 @@ for component in data['variants'].values():
  assert len(doc.select('.jasa-detail-tab>a'))==5
  assert not doc.select('form,input[name],input[type=hidden],[data-post],[data-kirim],script[src],link[rel=stylesheet]')
  assert '/jasa/pelanggan/1' not in component['html']
- assert doc.select_one('h1').get_text()=='Identitas pelanggan belum dibaca'
+ assert doc.select_one('h1').get_text()=='__PADI_JASA_LABEL__'
  assert all(n.has_attr('disabled') for n in doc.select('[data-js-cetak]'))
 assert len(data['styles'])<5 and len(data['scripts'])<5
 assert len(payload)<=524288

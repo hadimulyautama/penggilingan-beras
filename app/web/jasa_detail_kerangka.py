@@ -53,11 +53,16 @@ async def _metadata_pelanggan(db,pid):
     """
     from sqlalchemy import select,text
     from app.models import Pelanggan,Jasa
-    if await db.scalar(select(Pelanggan.id).where(Pelanggan.id==pid)) is None:return None
+    person=(await db.execute(select(Pelanggan.id,Pelanggan.nama_pelanggan).where(Pelanggan.id==pid))).mappings().first()
+    if person is None:return None
     ids=list((await db.scalars(select(Jasa.id).where(Jasa.pelanggan_id==pid).limit(21))).all())
     if not ids and not await db.scalar(text("SELECT EXISTS(SELECT 1 FROM timbangan_transaksi WHERE arah='MASUK' AND jasa=TRUE AND pelanggan_id=:pid)"),{'pid':pid}):
         return None
-    return dict(banyak_pesanan=len(ids)>20)
+    # The same guarded row already establishes identity. Return a primitive
+    # label, not a fabricated customer/ORM object or another domain query.
+    name=person['nama_pelanggan']
+    if not isinstance(name,str) or not name.strip():return None
+    return dict(nama=name,banyak_pesanan=len(ids)>20)
 
 
 def kunci_cetak(body):
@@ -84,7 +89,7 @@ async def kerangka(request,akun,konteks):
     if metadata is None:return None
     from app.web.halaman_bertahap import penanda_konteks
     from app.web.tampilan import render
-    spec.update(stamp=penanda_konteks(request,akun)+'|'+spec['alamat'],
+    spec.update(nama=metadata['nama'],stamp=penanda_konteks(request,akun)+'|'+spec['alamat'],
         filter_pesanan=metadata['banyak_pesanan'] or bool(spec['pesanan_cari'] or spec['pesanan_status']))
     response=render(request,'jasa_detail_kerangka.html',JASA_DETAIL_SHELL=spec,layar='jasa',kembali=spec['kembali'],
         **{k:v for k,v in konteks.items() if k not in {'SHELL','layar','kembali','JASA_DETAIL_SHELL'}})

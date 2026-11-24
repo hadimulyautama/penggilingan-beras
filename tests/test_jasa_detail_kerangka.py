@@ -12,7 +12,7 @@ ROOT=Path(__file__).parents[1]
 
 def rendered(tab='ringkasan',query='',many=False):
     model=deskripsi('/jasa/pelanggan/17','tab='+tab+('&'+query if query else ''))
-    model.update(stamp='synthetic-context-stamp',filter_pesanan=many or bool(model['pesanan_cari'] or model['pesanan_status']))
+    model.update(nama='Pelanggan sintetis terverifikasi',stamp='synthetic-context-stamp',filter_pesanan=many or bool(model['pesanan_cari'] or model['pesanan_status']))
     env=Environment(loader=ChoiceLoader([DictLoader({'base.html':'{% block isi %}{% endblock %}'}),
         FileSystemLoader([str(ROOT/'app/web/templates'),str(ROOT/'hmu_tampilan/templates')])]),
         undefined=StrictUndefined,autoescape=True)
@@ -21,12 +21,12 @@ def rendered(tab='ringkasan',query='',many=False):
 
 
 @pytest.mark.parametrize('tab,label',TABS)
-def test_five_native_tabs_and_unknown_shape_without_customer_record(tab,label):
+def test_five_native_tabs_verified_identity_and_unknown_business_values_without_orm(tab,label):
     page=rendered(tab)
     links=page.select('.jasa-detail-tab>a')
     assert [x.get_text() for x in links]==[n for _,n in TABS]
     assert [x.get_text() for x in links if x.get('aria-current')=='page']==[label]
-    assert page.h1.get_text()=='Identitas pelanggan belum dibaca'
+    assert page.h1.get_text()=='Pelanggan sintetis terverifikasi'
     assert not page.select('form[method=post],input[type=hidden],input[name=_csrf]')
     assert not page.select('[data-buka],[data-nilai],.jasa-catatan[id]')
     for print_ in page.select('[data-js-cetak]'):
@@ -78,7 +78,10 @@ def test_native_guard_and_local_namespace_are_reused_without_claiming_runtime_ac
     native=(ROOT/'app/services/jasa_pelanggan.py').read_text()
     metadata=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='_metadata_pelanggan')
     text=ast.unparse(metadata)
-    assert 'select(Pelanggan.id).where(Pelanggan.id == pid)' in text
+    assert 'select(Pelanggan.id, Pelanggan.nama_pelanggan).where(Pelanggan.id == pid)' in text
+    assert "person['nama_pelanggan']" in text
+    assert "spec.update(nama=metadata['nama']" in source
+    assert text.count('await db.execute(')==1 # reuses existence lookup, no extra customer-name query
     assert 'select(Jasa.id).where(Jasa.pelanggan_id == pid).limit(21)' in text
     sql="SELECT EXISTS(SELECT 1 FROM timbangan_transaksi WHERE arah='MASUK' AND jasa=TRUE AND pelanggan_id=:pid)"
     assert sql in native and sql in ast.get_source_segment((ROOT/'app/web/jasa_detail_kerangka.py').read_text(),metadata)

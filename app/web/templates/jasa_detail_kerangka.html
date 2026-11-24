@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
-{% block judul %}Pesanan Jasa · Detail pelanggan{% endblock %}
+{% block judul %}{{ JASA_DETAIL_SHELL.nama }} · Pesanan Jasa{% endblock %}
 {% block isi %}
 <link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=6">
 <section data-jasa-detail-kerangka data-url="{{ JASA_DETAIL_SHELL.alamat }}" data-stamp="{{ JASA_DETAIL_SHELL.stamp }}" class="jasa-detail">
 <a class="jasa-kembali" href="{{ JASA_DETAIL_SHELL.kembali }}">← Kembali ke Pesanan Jasa</a>
-{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama='Identitas pelanggan belum dibaca') }}
+{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama=JASA_DETAIL_SHELL.nama) }}
 <div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span> · <span class="lencana">Titipan jasa</span><p>Jumlah penerimaan, pesanan, proses dan keadaan pelanggan belum dibaca.</p></div>
 <nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for tab in JASA_DETAIL_SHELL.tabs %}<a href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>{% endfor %}</nav>
 {% if JASA_DETAIL_SHELL.tab=='ringkasan' %}
