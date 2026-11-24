@@ -315,3 +315,37 @@ def test_native_qc_callers_do_not_override_breadcrumb_reference_as_kode():
                 calls.append(call.args[1].value)
     assert calls.count('riwayat_qc_detail.html')==1
     assert calls.count('qc_sosoh_riwayat.html')==2
+
+
+@pytest.mark.parametrize('variant',['qc-pk-luar','qc-pk-hasil-giling'])
+def test_pk_qc_table_frameworks_are_native_before_any_assessment_is_read(variant):
+    from app.web.riwayat_detail_native import qc_pk_table_structure
+    shape=qc_pk_table_structure()
+    assert len(shape['aggregate'])==6
+    assert shape['aggregate'][0]['columns']==['Komponen','Hasil rata-rata QC','Skor / 100']
+    assert shape['selected_round']['columns']==['Komponen','Hasil pemeriksaan','Skor / 100']
+    assert [v['title'] for v in shape['aggregate']][2:5]==['Aturan skor Kadar air','Aturan skor Butir patah','Aturan skor Susut']
+    doc=BeautifulSoup(html_for(variant),'html.parser')
+    tables=doc.select('[data-rdn-panel="perhitungan"] table')
+    assert len(tables)==6
+    assert [[n.get_text() for n in table.select('th')] for table in tables]==[v['columns'] for v in shape['aggregate']]
+    round_table=doc.select('[data-rdn-panel="putaran"] table')
+    assert len(round_table)==1
+    assert [n.get_text() for n in round_table[0].select('th')]==shape['selected_round']['columns']
+    assert all('Memuat catatan' in table.tbody.get_text() for table in [*tables,*round_table])
+    assert not doc.select('table [data-komponen]')
+    for path in ('hmu_tampilan/templates/_penilaian_pk.html','app/services/mutu_pk.py'):
+        assert path in metadata(variant)['inputs']
+
+@pytest.mark.parametrize('variant',['qc-gabah-basah','qc-gabah-kering'])
+def test_gabah_does_not_advertise_pk_score_tables(variant):
+    assert metadata(variant)['qc_tables']=={}
+    assert not BeautifulSoup(html_for(variant),'html.parser').select('table')
+
+def test_qc_header_compilation_does_not_call_assessment_or_fabricate_rows():
+    tree=ast.parse((ROOT/'app/web/riwayat_detail_native.py').read_text())
+    function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='qc_pk_table_structure')
+    source=ast.unparse(function)
+    assert 'penilaian_dari_log(' not in source
+    assert 'SimpleNamespace' not in source and 'p.nilai' not in source
+    assert ".select('th')" in source

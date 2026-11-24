@@ -107,6 +107,53 @@ def _tabs(text, expected):
     raise ValueError('Urutan tab native berubah; perlu ditinjau')
 
 
+@lru_cache(maxsize=1)
+def qc_pk_table_structure():
+    """Native PK macro headers only; no records, scores or dummy assessment.
+
+    Aggregate/selected-round labels are the literal tunggal branch. The
+    repeated rule table names come from the native constant's keys, not an
+    assumed count or a calculated QC result. Unknown rounds stay unknown.
+    """
+    from bs4 import BeautifulSoup
+    source = (ROOT / 'hmu_tampilan/templates/_penilaian_pk.html').read_text()
+    tables = re.findall(r'<table\b.*?</table>', source, re.S)
+    expected = ['Rincian skor enam komponen QC PK', 'Konversi klasifikasi QC PK',
+                'Aturan skor {{ label }}', 'Batas kelas kualitas PK']
+    if len(tables) != len(expected):
+        raise ValueError('Native QC table structure requires review')
+    env = Environment(autoescape=True, undefined=StrictUndefined)
+    headers = []
+    for table, label in zip(tables, expected):
+        if re.search(r'aria-label="([^"]+)"', table)[1] != label:
+            raise ValueError('Native QC table label/order requires review')
+        head = re.search(r'<thead>.*?</thead>', table, re.S)
+        if head is None:
+            raise ValueError('Native QC table header missing')
+        tree = env.parse(head[0])
+        for node in tree.find_all(nodes.Name):
+            if node.name != 'tunggal':
+                raise ValueError('Native QC header became data-dependent')
+        for node in tree.find_all(nodes.CondExpr):
+            if (not isinstance(node.test, nodes.Name) or node.test.name != 'tunggal'
+                    or not all(isinstance(v, nodes.Const) and type(v.value) is str
+                               for v in (node.expr1, node.expr2))):
+                raise ValueError('Native QC header conditional requires review')
+        rendered = [env.from_string(head[0]).render(tunggal=value) for value in (False, True)]
+        headers.append([[n.get_text(' ', strip=True) for n in BeautifulSoup(text, 'html.parser').select('th')]
+                        for text in rendered])
+    constants = ast.parse((ROOT / 'app/services/mutu_pk.py').read_text())
+    rules = next(ast.literal_eval(n.value) for n in constants.body if isinstance(n, ast.Assign)
+                 and any(isinstance(t, ast.Name) and t.id == 'ATURAN_ANGKA' for t in n.targets))
+    if type(rules) is not dict or not rules or not all(type(label) is str for label in rules):
+        raise ValueError('Native QC rule labels require review')
+    aggregate = [dict(title=expected[0], columns=headers[0][0]),
+                 dict(title=expected[1], columns=headers[1][0]),
+                 *[dict(title='Aturan skor ' + label, columns=headers[2][0]) for label in rules],
+                 dict(title=expected[3], columns=headers[3][0])]
+    return dict(aggregate=aggregate, selected_round=dict(title=expected[0], columns=headers[0][1]))
+
+
 @lru_cache(maxsize=16)
 def metadata(variant):
     from bs4 import BeautifulSoup
@@ -114,6 +161,7 @@ def metadata(variant):
         raise ValueError('Bentuk detail tidak dikenal')
     paths = [ROOT / 'app/web/layar_riwayat.py']
     extra_tables = {}
+    qc_tables = {}
     tree = ast.parse(paths[0].read_text())
     pages = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
                  and any(isinstance(t, ast.Name) and t.id == 'QC_PAGES' for t in node.targets))
@@ -173,6 +221,9 @@ def metadata(variant):
         family = 'qc'
         if not rice:
             paths.append(ROOT / 'app/web/detail_qc.py')
+            if kind in ('pk-luar', 'pk-hasil-giling'):
+                paths.extend((ROOT / 'hmu_tampilan/templates/_penilaian_pk.html', ROOT / 'app/services/mutu_pk.py'))
+                qc_tables = qc_pk_table_structure()
     slots = {('k', 'kode'): None, ('d', 'kode'): None, ('k', 'ref'): None}
     document_parts = _chrome().bagian_judul(text, slots)
     back = re.search(r'<a\b[^>]*class=[\"\'][^\"\']*\b(?:rhs-back|riwayat-detail__back)\b[^\"\']*[\"\'][^>]*>.*?</a>', text, re.S)
@@ -184,7 +235,7 @@ def metadata(variant):
     # document title instead of treating that reference as k.kode.
     breadcrumb_parts = [None] if variant.startswith('riwayat-') else document_parts
     return dict(back_source=back[0], variant=variant, family=family, title=title, document_parts=document_parts, breadcrumb_parts=breadcrumb_parts, tabs=tabs,
-                native_titles=list(dict.fromkeys(titles)), tables=tables, extra_tables=extra_tables,
+                native_titles=list(dict.fromkeys(titles)), tables=tables, extra_tables=extra_tables, qc_tables=qc_tables,
                 inputs={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths})
 
 
