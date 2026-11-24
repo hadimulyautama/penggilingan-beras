@@ -9,7 +9,7 @@
  function valid(data,p,context,cap,token){
   if(!exact(data,['versi','sumber','variants','styles','scripts'])||data.versi!==1||!/^[a-f0-9]{64}$/.test(data.sumber)
    ||!exact(data.variants,PATHS)||!['styles','scripts'].every(k=>obj(data[k])&&Object.keys(data[k]).length<=16&&Object.values(data[k]).every(s=>typeof s==='string'&&s.length<=131072))
-   ||!PATHS.every(path=>exact(data.variants[path],['title','html'])&&typeof data.variants[path].title==='string'&&typeof data.variants[path].html==='string'&&data.variants[path].html.length<=65536)
+   ||!PATHS.every(path=>exact(data.variants[path],['title','html','breadcrumb','mobile'])&&typeof data.variants[path].title==='string'&&data.variants[path].title.length>0&&data.variants[path].title.length<=200&&['html','breadcrumb','mobile'].every(k=>typeof data.variants[path][k]==='string'&&data.variants[path][k].length<=65536))
    ||!exact(p,['versi','cap','konteks','sesi','sumber','groups','advanced','recovery','short','console'])||p.versi!==1
    ||p.cap!==cap||p.konteks!==context||p.sesi!==token||p.sumber!==data.sumber||![context,cap,token].every(x=>typeof x==='string'&&x)
    ||!['advanced','recovery','short'].every(k=>typeof p[k]==='boolean')||typeof p.console!=='string'||p.console&&!validURL(p.console)
@@ -60,12 +60,17 @@
   const root=roots[0];try{prune(doc,root,p,target);}catch(_){return null;}
   root.dataset.url=target;root.dataset.stamp=context+'|'+target;
   const [from,to]=[starts[0],ends[0]];while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(part.content);
-  for(const n of main.querySelectorAll('.desktop-back'))n.remove();
-  const title=main.querySelector('.bar__merek');if(title){title.textContent='Pengaturan';title.setAttribute('aria-label','Pengaturan');}
-  const crumb=main.querySelector('.desktop-chrome__crumbrow');if(crumb){const a=doc.createElement('a');a.href='/pengaturan';a.textContent='Pengaturan';crumb.replaceChildren(a);}
+  const top=main.querySelector('header.bar'),title=top?.querySelector('.bar__merek'),crumb=main.querySelector('.desktop-chrome__crumbrow');
+  if(!top||!title||!crumb)return null;
+  const control=doc.createElement('template');control.innerHTML=component.mobile;
+  if(control.content.querySelectorAll('#buka-laci.bar__menu[type=button]').length!==1||control.content.querySelector('a,form,input,script,[name]'))return null;
+  const trail=doc.createElement('template');trail.innerHTML=component.breadcrumb;
+  if(trail.content.querySelectorAll('nav.desktop-breadcrumb').length!==1||trail.content.querySelectorAll('a.desktop-back').length!==1||trail.content.querySelector('form,input,script,[name]'))return null;
+  for(const old of top.querySelectorAll('.bar__menu,.bar__balik'))old.remove();top.prepend(control.content);
+  title.textContent=component.title;title.setAttribute('aria-label',component.title);crumb.replaceChildren(trail.content);
   for(const old of doc.querySelectorAll('#padi-pengaturan-kerangka'))old.remove();doc.body.append(doc.importNode(host,true));
   for(const a of doc.querySelectorAll('#laci a[href]')){const active=a.getAttribute('href')==='/pengaturan';a.classList.toggle('pintu--kini',active&&a.classList.contains('pintu'));a.classList.toggle('pintu-sub__satu--kini',active&&a.classList.contains('pintu-sub__satu'));if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
-  frame.dataset.pindahAlamat=target;doc.title='Pengaturan · PT Hadi Mulya Utama';
+  frame.dataset.pindahAlamat=target;frame.dataset.pindahKerangka='1';doc.title=component.title+' · PT Hadi Mulya Utama';
   return {versi:1,alamat:target,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  global.PadiKerangkaPengaturanUI=Object.freeze({versi:1,buat});

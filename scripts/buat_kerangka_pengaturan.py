@@ -15,8 +15,26 @@ def build():
         m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
     helper=module('settings_public_helpers',ROOT/'scripts/buat_kerangka_ui.py')
     native=module('settings_native_spec',ROOT/'app/web/pengaturan_menu_kerangka.py')
+    breadcrumb=module('settings_native_breadcrumb',ROOT/'app/web/breadcrumb.py')
+    navigation=module('settings_native_labels',ROOT/'app/web/pengaturan_navigasi.py')
     roots=[ROOT/'app/web',ROOT/'hmu_tampilan']
     env=Environment(loader=ChoiceLoader([helper.SourceLoader(p/'templates',inputs) for p in roots]),autoescape=True,undefined=StrictUndefined)
+    # Both native callers inherit the same title block. The session body's
+    # H1 is distinct; do not turn that H1 into an invented document title.
+    settings=env.get_template('pengaturan.html')
+    child=env.get_template('pengaturan_fasilitas.html')
+    if 'judul' in child.blocks:raise ValueError('Native Settings title override requires review')
+    title=BeautifulSoup(''.join(settings.blocks['judul'](settings.new_context({}))), 'html.parser').get_text().strip()
+    if not title or len(title)>200:raise ValueError('Native Settings title missing')
+    # Compile only the native navigation control, not the notification/account
+    # header data. These bare native callers pass no kembali or LAPORAN_NAV.
+    base=env.loader.get_source(env,'base.html')[0]
+    start=base.index('  {% if not kembali or LAPORAN_NAV %}',base.index('<header class="bar"'))
+    stop=base.index('  <span class="bar__merek"',start)
+    mobile=env.from_string(base[start:stop]).render(kembali=None,LAPORAN_NAV=None)
+    control=BeautifulSoup(mobile,'html.parser')
+    if len(control.select('#buka-laci.bar__menu[type=button]'))!=1 or control.select('a,form,input,script,[name]'):
+        raise ValueError('Native Settings menu control requires review')
     def asset(url):
         name=url.split('?')[0].removeprefix('/static/')
         if not name or '/' in name or '\\' in name:raise ValueError('Local program only')
@@ -29,6 +47,9 @@ def build():
         t=env.get_template('pengaturan_menu_kerangka.html')
         html=''.join(t.blocks['isi'](t.new_context(dict(PG_MENU_SHELL=spec,VERSI='__PADI_CAP__'))))
         doc=BeautifulSoup(html,'html.parser')
+        headings=[n.get_text(' ',strip=True) for n in doc.select('h1')]
+        if headings!=([] if path=='/pengaturan' else [navigation.HALAMAN['sesi'][1]]):
+            raise ValueError('Native Settings body heading requires review')
         if doc.select('form,input,[name],[data-post],[data-kirim]'):raise ValueError('No writes in public Settings')
         for node in doc.select('link[rel=stylesheet]'):
             css=asset(node['href'])
@@ -44,7 +65,8 @@ def build():
                 node['data-settings-group']=group['id']
                 for i,door in enumerate(node.select('.pg-pintu')):
                     if door.find_parent('details') is None:door['data-settings-door']=str(i)
-        variants[path]=dict(title=spec['title'],html=str(doc))
+        crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun(path,{},title))
+        variants[path]=dict(title=title,html=str(doc),breadcrumb=crumb,mobile=mobile)
     styles,scripts,srefs,jrefs={},{},{},{}
     for v in variants.values():
         doc=BeautifulSoup(v['html'],'html.parser')
