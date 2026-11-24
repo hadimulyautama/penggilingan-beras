@@ -84,3 +84,14 @@ async def test_disconnect_is_not_converted_to_success_or_empty_body():
     response=StreamingResponse(disconnected(),media_type='text/html')
     with pytest.raises(asyncio.CancelledError):
         await native.baca_native_terbatas(response)
+
+
+@pytest.mark.asyncio
+async def test_repeatable_async_iterable_does_not_restart_after_prefix(monkeypatch):
+    class Repeatable:
+        def __aiter__(self):
+            return parts([b'awal-',b'tengah-',b'akhir'])
+    monkeypatch.setattr(native,'BATAS_DOKUMEN_NATIVE',8)
+    response=StreamingResponse(Repeatable(),media_type='text/html')
+    assert await native.baca_native_terbatas(response) is None
+    assert await body(response)==b'awal-tengah-akhir'

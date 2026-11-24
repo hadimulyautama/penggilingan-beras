@@ -75,12 +75,13 @@ async def test_monitoring_first_frames_from_different_native_pages(pg,lengkap,mo
                     trace=await page.evaluate('()=>{__genericTrace.running=false;return __genericTrace}')
                     assert not trace['mutation'] and not trace['frame']
                     assert not html_entered.is_set()
-                    root=page.locator('[data-halaman-bertahap][data-kind="'+kind+'"]')
+                    selector='[data-bm-shell]' if kind=='barang-masuk' else '[data-halaman-bertahap][data-kind="'+kind+'"]'
+                    root=page.locator(selector)
                     await expect(root).to_be_visible()
                     await expect(root.locator('thead th').first).to_be_visible()
                     await expect(root.locator('input[type=search]').first).to_be_enabled()
                     data_release.set()
-                    await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+                    await expect(page.locator(selector)).to_have_count(0)
                     assert not transport['posts'] and not transport['errors']
                 finally:html_release.set();data_release.set()
         assert await _sidik(pg)==before

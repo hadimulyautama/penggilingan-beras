@@ -125,7 +125,7 @@ async def baca_native_terbatas(response):
     dokumen. Header itu bukan bukti apakah TemplateResponse telah lengkap.
     Batas ini tidak mengubah isi atau menelan sisa iterator saat tidak cocok.
     """
-    iterator = response.body_iterator
+    iterator = aiter(response.body_iterator)
     potongan, ukuran = [], 0
     async for bagian in iterator:
         potongan.append(bagian)
