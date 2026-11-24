@@ -1,6 +1,28 @@
 /* Registry hanya struktur native bagi konteks dokumen ini, bukan data/draf. */
 (function(){
  'use strict';
+ function themeReturn(root,address,origin){
+  if(typeof address!=='string'||!address.startsWith('/')||address.startsWith('//'))return false;
+  let u;try{u=new URL(address,origin);}catch(_){return false;}
+  if(u.origin!==origin||u.hash||u.pathname+u.search!==address)return false;
+  let changed=false;
+  for(const form of root.querySelectorAll('form.desktop-theme[action="/pengaturan/terik"]')){
+   if(form.getAttribute('method')?.toLowerCase()!=='post')continue;
+   const field=form.querySelector('input[type="hidden"][name="balik"]');if(!field)continue;
+   field.setAttribute('value',address);changed=true;
+  }
+  return changed;
+ }
+ if(typeof module==='object'&&module.exports){module.exports={themeReturn};return;}
+ function currentChrome(result,address){
+  if(!result)return null;
+  // The source frame is a private native prototype. Correlation is already
+  // checked by its factory; only the existing theme return field follows
+  // the selected destination. No form action, CSRF or submission is changed.
+  const doc=new DOMParser().parseFromString(result.html,'text/html');
+  themeReturn(doc,address,location.origin);
+  return {...result,html:'<!doctype html>'+doc.documentElement.outerHTML};
+ }
  if(!window.PINDAH||typeof PINDAH.aturKerangkaLangsung!=='function')return;
  let hostLama=null,registry=null;
  function riwayatLangsung(address,context,cap,token){
@@ -103,7 +125,7 @@
   for(const i of refs){if(!Number.isInteger(i)||i<0||i>=potongan.length)return null;panjang+=potongan[i].length;if(panjang>524288)return null;baris.push(potongan[i]);}
   return baris.join('');
  }
- PINDAH.aturKerangkaLangsung(function(pilihan){
+ function pilihKerangka(pilihan){
   // Script dapat diparse sebelum host di luar bingkai. Cari saat dipakai,
   // bukan membekukan null saat dokumen awal belum selesai diparse.
   const host=document.getElementById('padi-kerangka-langsung'),frame=document.querySelector('.bingkai'),sesi=document.getElementById('formulir-sesi');
@@ -142,5 +164,8 @@
   // kembali ke navigasi native, bukan HTML parsial atau alamat tebakan.
   const html=decodeFrame(registry,pilihan.alamat);if(!html)return null;
   return {versi:1,alamat:pilihan.alamat,konteks:registry.konteks,cap:cap,html};
+ }
+ PINDAH.aturKerangkaLangsung(function(pilihan){
+  return currentChrome(pilihKerangka(pilihan),pilihan.alamat);
  });
 })();
