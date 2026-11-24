@@ -6,6 +6,7 @@ import ast
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlencode,urlsplit
 
@@ -15,6 +16,51 @@ from starlette.requests import Request
 
 ROOT=Path(__file__).resolve().parents[1]
 CAP='__PADI_CAP__'
+
+
+def compact_css_comments(text):
+    """Compact only inert comment bodies; leave CSS tokens/spacing untouched.
+
+    Keep the comment delimiter as /**/ so adjacent tokens cannot merge. All
+    quoted strings, escapes and parenthesized contents (including URL/calc)
+    are copied unchanged; this is deliberately not a CSS minifier.
+    """
+    out=[];i=0;quote='';depth=0
+    while i<len(text):
+        char=text[i]
+        if char=='\\':
+            out.append(text[i:i+2]);i+=2;continue
+        if quote:
+            out.append(char)
+            if char==quote:quote=''
+            i+=1;continue
+        if char in {'\"', "'"}:
+            quote=char;out.append(char);i+=1;continue
+        if text.startswith('/*',i):
+            end=text.find('*/',i+2)
+            if end<0:raise ValueError('Unclosed CSS comment in public UI input')
+            out.append(text[i:end+2] if depth else '/**/');i=end+2;continue
+        if char=='(':depth+=1
+        elif char==')':depth=max(0,depth-1)
+        out.append(char);i+=1
+    return ''.join(out)
+
+
+def intern_text(pool, references, text):
+    """Opaque short references; full SHA still deduplicates exact content.
+
+    The runtime treats these as lookup keys, not hashes or authorization.
+    Native input SHA/CAP and complete generated-asset SHA remain unchanged
+    contracts in the manifest; deterministic numbering avoids repeated
+    random 64-byte strings in public HTML across every layout variant.
+    """
+    digest=hashlib.sha256(text.encode()).hexdigest()
+    if digest in references:
+        key=references[digest]
+        assert pool[key]==text, 'Public UI content hash collision'
+        return key
+    key=str(len(pool));references[digest]=key;pool[key]=text
+    return key
 
 
 class SourceLoader(FileSystemLoader):
@@ -51,6 +97,17 @@ def build():
         p=next(p/'static'/name for p in roots if (p/'static'/name).is_file())
         inputs.add(p)
         return p.read_text()
+
+    def css_asset(path, seen=()):
+        # Resolve native local imports at build time. No request is needed
+        # after a click, and remote/recursive/media imports stay unsupported.
+        name=urlsplit(path).path
+        assert name not in seen and len(seen)<8
+        text=asset(path)
+        pattern=r"@import\s+url\(['\"](/static/[^'\"]+)['\"]\);"
+        text=re.sub(pattern,lambda match:css_asset(match[1],(*seen,name)),text)
+        assert '@import' not in text and '</style' not in text.lower()
+        return text
 
     variants={}
     for key,admin in [('pengiriman-admin',True),('pengiriman-operator',False)]:
@@ -181,17 +238,39 @@ def build():
     crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/laporan',{},'Laporan periode'))
     catalog_codes=[row['kode'] for row in public['daftar']]
     variants['laporan-katalog']=dict(family='laporan',path='/laporan',title='Laporan periode',html=str(doc),breadcrumb=crumb,codes=catalog_codes)
+    spec=importlib.util.spec_from_file_location('giling_public_spec',ROOT/'app/web/giling_native_html.py')
+    giling=importlib.util.module_from_spec(spec);spec.loader.exec_module(giling)
+    inputs.add(ROOT/'app/web/giling_native_html.py')
+    layout=giling.deskripsi('/proses-aktif/giling/PADI_CODE_PLACEHOLDER')
+    layout['stamp']='__PADI_STAMP__'
+    context=dict(VERSI=CAP,GILING_KERANGKA=layout,kembali='/pekerjaan?tab=berjalan')
+    template=env.get_template('giling_native_html.html')
+    doc=BeautifulSoup(''.join(template.blocks['isi'](template.new_context(context))),'html.parser')
+    root=doc.select_one('[data-giling-native-html]');assert root and not root.select('form,input:not([disabled])')
+    css=[]
+    for link in doc.select('link[rel="stylesheet"]'):
+        text=css_asset(link['href'])
+        css.append(text);link.decompose()
+    style=doc.new_tag('style',attrs={'data-kerangka-ui-style':'giling'});style.string='\n'.join(css);root.insert(0,style)
+    for node in doc.select('script[src]'):
+        text=asset(node['src']);assert 'document.currentScript' not in text
+        node.attrs.clear();node.string=text.replace('</script','<\\/script')
+    crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/proses-aktif/giling/PADI_CODE_PLACEHOLDER',{'breadcrumb_detail':'PADI_CODE_PLACEHOLDER'},'Penggilingan PADI_CODE_PLACEHOLDER'))
+    variants['giling-proses']=dict(family='giling',path='/proses-aktif/giling/',title='Penggilingan',html=str(doc),breadcrumb=crumb)
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     digest=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
     # Intern the actual CSS/readonly JS once, not once per layout variant.
     # Restore synchronously from this already-loaded public asset before swap.
     styles,scripts={},{}
+    style_references,script_references={},{}
     for component in variants.values():
         doc=BeautifulSoup(component['html'],'html.parser')
-        for selector,pool,attribute in [('style',styles,'data-ui-style-ref'),('script:not([type])',scripts,'data-ui-script-ref')]:
+        for selector,pool,references,attribute in [('style',styles,style_references,'data-ui-style-ref'),('script:not([type])',scripts,script_references,'data-ui-script-ref')]:
             for node in doc.select(selector):
-                text=node.string or '';key=hashlib.sha256(text.encode()).hexdigest()
-                pool[key]=text;node.clear();node[attribute]=key
+                text=node.string or ''
+                if selector=='style':text=compact_css_comments(text)
+                key=intern_text(pool,references,text)
+                node.clear();node[attribute]=key
         component['html']=str(doc)
     data=dict(versi=1,sumber=digest,variants=variants,styles=styles,scripts=scripts)
     runtime=(ROOT/'app/web/static/kerangka-ui-runtime.js').read_text()
