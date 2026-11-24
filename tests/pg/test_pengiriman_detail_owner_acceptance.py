@@ -252,12 +252,15 @@ async def test_actual_links_four_tabs_native_chrome_race_retry_and_leave(
                 await link.click()
                 await asyncio.wait_for(entered.wait(), 20)
                 await expect(page.locator(SHELL)).to_be_visible()
-                await page.locator(SHELL + ' a.detail-kirim-kembali').press("Enter")
-                await expect(page).to_have_url(BASE + "/barang-keluar")
+                leave = page.locator(SHELL + ' a.detail-kirim-kembali')
+                destination = address(await leave.get_attribute('href'))
+                assert urlsplit(destination).path == '/barang-keluar'
+                await leave.press('Enter')
+                await expect(page).to_have_url(BASE + destination)
                 release.set()
                 await two_frames(page)
                 await expect(page.locator(SHELL + ',[data-detail-tab]')).to_have_count(0)
-                await expect(page).to_have_url(BASE + "/barang-keluar")
+                await expect(page).to_have_url(BASE + destination)
 
                 # Final records deliberately keep their original journey DTO.
                 final = shipments["selesai"]
