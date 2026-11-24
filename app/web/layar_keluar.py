@@ -118,6 +118,9 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         shell=await detail_kerangka(request,akun,dokumen_baris[0][0],dokumen_baris[0][1],
             boleh_perintah=boleh_perintah,boleh_muat=boleh_muat)
         if shell is not None:return shell
+        from app.web.riwayat_pengiriman_kerangka import kerangka as final_kerangka
+        shell=await final_kerangka(request,akun,dokumen_baris[0][0],boleh_perbaiki=boleh_perintah)
+        if shell is not None:return shell
     async with SessionLocal() as db:
         if boleh_perintah and transaksi_id is None and not pid:
             from app.web.draf_keluar import daftar_draf
@@ -345,7 +348,9 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         n_dimuat=sum(1 for k in kartu if k["rec"].status == OUT_DIMUAT),
     )
     from app.web.pengiriman_detail_catalog import pasang as pasang_detail_catalog
-    return pasang_detail_catalog(request,akun,response)
+    response=pasang_detail_catalog(request,akun,response)
+    from app.web.riwayat_pengiriman_catalog import pasang as pasang_final_catalog
+    return pasang_final_catalog(request,akun,response)
 
 
 def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "", cepat: bool = False) -> list[tuple]:
