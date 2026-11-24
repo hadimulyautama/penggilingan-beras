@@ -40,6 +40,8 @@ def test_generated_program_is_exact_deterministic_data_free_native_structure():
         # The factory returns root.outerHTML: this override must live inside
         # that root, where author .btn display:flex cannot defeat hidden.
         assert any('[data-portal-native-frame] [hidden]{display:none!important}' in (style.string or '') for style in root.select('style'))
+        if data['schemas'][path]['css']:
+            assert any(style.string==data['schemas'][path]['css'] for style in root.select('style'))
         assert doc.select_one('h1').get_text()==module.PAGES[path]['title']
         assert len(doc.select('[data-portal-read-retry][hidden]'))==1
         assert not doc.select('script,iframe,form[method=post],[name=_csrf],[data-post],[data-kirim]')
