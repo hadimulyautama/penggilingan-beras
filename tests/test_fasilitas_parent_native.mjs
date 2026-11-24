@@ -46,3 +46,24 @@ test('factory refuses cross-address/stale scope before parsing or touching contr
  assert.equal(window.PadiKerangkaFasilitasParentUI.buat(api.TARGETS[0],'x'.repeat(8388609),p.konteks,p.cap,p.sesi),null);
  frame.dataset.pindahKonteks='old';assert.equal(window.PadiKerangkaFasilitasParentUI.buat(api.TARGETS[0],'base',p.konteks,p.cap,p.sesi),null);assert.equal(parses,0);
 });
+
+test('pending mixed property is set before reads, never on final native fields',()=>{
+ const mixed={disabled:true,checked:false,indeterminate:false},ordinary={disabled:true,checked:false,indeterminate:false},enabled={disabled:false,checked:true,indeterminate:false};
+ let selected=null;const root={isConnected:true,matches:s=>s==='[data-fasilitas-parent-kerangka]',querySelectorAll:s=>{selected=s;return [mixed];}};
+ adapter.preparePending(root);assert.equal(selected,'input[type=checkbox][aria-checked=mixed]:disabled');assert.equal(mixed.indeterminate,true);assert.equal(mixed.disabled,true);assert.equal(mixed.checked,false);
+ assert.equal(ordinary.indeterminate,false);assert.equal(enabled.indeterminate,false);assert.equal(enabled.checked,true);
+ selected=null;root.matches=()=>false;adapter.preparePending(root);assert.equal(selected,null);
+ root.matches=()=>true;root.isConnected=false;adapter.preparePending(root);assert.equal(selected,null);
+ const source=readFileSync(new URL('../app/web/static/fasilitas-parent-native.js',import.meta.url),'utf8');assert.ok(source.includes('preparePending(root);core.mount(config)'));
+});
+test('browser bootstrap marks unknown checkbox before mounting the GET reader',()=>{
+ const checkbox={disabled:true,checked:false,indeterminate:false},events=[];
+ const root={dataset:{url:api.TARGETS[2]},isConnected:true,matches:()=>true,querySelectorAll:()=>[checkbox]};
+ const core={sameOriginAddress:()=>true,mount:config=>{assert.equal(config.address,api.TARGETS[2]);assert.equal(checkbox.indeterminate,true);assert.equal(checkbox.checked,false);events.push('GET mount');}};
+ const context={window:{PADI_BACA_NATIVE:core},document:{querySelector:s=>{assert.equal(s,'[data-fasilitas-parent-kerangka]');return root;}},location:{origin:'https://fixture.invalid'}};
+ vm.runInNewContext(readFileSync(new URL('../app/web/static/fasilitas-parent-native.js',import.meta.url),'utf8'),context);
+ assert.deepEqual(events,['GET mount']);
+ checkbox.indeterminate=false;context.document.querySelector=()=>null;
+ vm.runInNewContext(readFileSync(new URL('../app/web/static/fasilitas-parent-native.js',import.meta.url),'utf8'),context);
+ assert.equal(checkbox.indeterminate,false);assert.deepEqual(events,['GET mount']);
+});

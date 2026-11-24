@@ -137,7 +137,9 @@ async def assert_pending(page, expected, target):
     assert await root.locator('input:not(:disabled),select:not(:disabled),textarea:not(:disabled)').count() == 0
     assert await root.locator('button:not(:disabled):not([data-fp-retry])').count() == 0
     assert await root.locator('input[type=checkbox]').evaluate_all(
-        "nodes=>nodes.every(n=>!n.checked&&n.getAttribute('aria-checked')==='mixed')")
+        "nodes=>nodes.every(n=>n.indeterminate&&n.disabled&&!n.checked&&!n.hasAttribute('checked')&&n.getAttribute('aria-checked')==='mixed')")
+    if target.endswith(('/mesin','/jenis-proses')):
+        await expect(root.locator('input[type=checkbox][aria-checked=mixed]')).to_have_count(1)
     assert 'Belum ada ' not in await root.inner_text(), 'Unknown collection must not claim empty'
     return root
 
