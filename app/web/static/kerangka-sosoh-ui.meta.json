@@ -1,0 +1,24 @@
+{
+  "versi": 1,
+  "sumber": "80d6edd92e1175ff0f5f27aed39d87fdceb39e25f6aad6561ce396ee4004eb6b",
+  "variants": [
+    "admin",
+    "operator"
+  ],
+  "aset_sha256": "d2dc83acebc73d750a78a6061911fc12921826e1b4746538c38c13edf4f912fa",
+  "inputs": {
+    "app/web/sosoh_native_html.py": "436a262333c9c9b1af92cf325bbe0f245e8cfaf1e36c7dde46eb530e7a0572c8",
+    "app/web/static/kerangka-sosoh-ui-runtime.js": "9d06523f38b901ee4854490f025d6538df52365595dd182a1ccd93c73784491f",
+    "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
+    "app/web/static/riwayat.css": "21fa1ff357afc661b0392e2317182d3338a2938b48d7eb91a7c4e99c2c457071",
+    "app/web/static/sosoh-desain.css": "4f9a78fa32b14bb93609bc6fd8e0b3cc5088d21990ecfa48a45b1f6b23e91dcf",
+    "app/web/static/sosoh-native-html.js": "6b2cd6a1d33daac23098b06f2161247270f9bc0034e6560252ff8abe3bfe9725",
+    "app/web/static/sosoh-ringkas.css": "dc9f265d6dd6847e1b00f23132af624319b83f72e80f576a56e5d42c341e6032",
+    "app/web/templates/_qc_sosoh.html": "b1cb8c57e13b5f554f7d0b047a8d0375778b62c0952a0e268d91bc21257e5e2d",
+    "app/web/templates/sosoh_native_html.html": "72b0f43aee41d1d014e2845f0e84e8afa5dcfbe4e0fb2bf41cdd458dc55790ae",
+    "hmu_tampilan/static/qc-sosoh.css": "0df3de2802a56db54718b44c9cdfef203a876072325f980a867a2fb1c922be8d",
+    "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
+    "scripts/buat_kerangka_sosoh.py": "57a4de16dc4c07fe1fada9ebd900ee7c277410aab669ddcbe2f3e3c7770638d1",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

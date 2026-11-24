@@ -58,6 +58,15 @@ def layout_schema(schema, operator: bool):
     return dict(layout="operator" if operator else "admin", hasil_utama=main, hasil_lain=more)
 
 
+async def baca_schema_aktif(db):
+    """Current native reference labels only; no process/stock/owner identifiers."""
+    from app.penggilingan.gudang2.polishing import jenis_hasil, adalah_spek
+    from app.services.stok import nama_produk
+    active = await jenis_hasil(db)
+    return active_schema(active, (), {kind: nama_produk(kind) for kind in active},
+                         {kind for kind in active if adalah_spek(kind) or kind == "beras_b"})
+
+
 async def baca_schema_hasil(db, process_id):
     """Reuse actual native master/labels; probe type presence, never quantities."""
     from sqlalchemy import select
@@ -92,6 +101,18 @@ def qc_headers():
     return tuple(result)
 
 
+def memakai_dokumen(request):
+    document = (request.method == "GET" and request.headers.get("X-Pindah") != "1"
+            and deskripsi(request.url.path, request.url.query) is not None
+            and (request.headers.get("X-Kerangka-Halaman") == "1"
+                 or request.headers.get("Sec-Fetch-Mode") == "navigate"
+                 and request.headers.get("Sec-Fetch-Dest") in {"document", "empty"}))
+    if not document:
+        return False
+    from app.web.portal.scope import is_customer_read
+    return not is_customer_read(request) and getattr(request.state, "portal_scope", None) is None
+
+
 async def kerangka(request, akun, konteks):
     """Positive native permission precedes scoped process/schema-only reads.
 
@@ -99,7 +120,7 @@ async def kerangka(request, akun, konteks):
     X-Pindah:1 is always full native GET; this module registers no route.
     """
     spec = deskripsi(request.url.path, request.url.query)
-    if request.method != "GET" or request.headers.get("X-Pindah") == "1" or spec is None:
+    if not memakai_dokumen(request) or spec is None:
         return None
     from app.web.portal.scope import is_customer_read
     if is_customer_read(request) or getattr(request.state, "portal_scope", None) is not None:

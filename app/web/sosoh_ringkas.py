@@ -163,6 +163,11 @@ def neraca_lembar(data, hasil=None):
 
 async def halaman(kode,request,akun):
     await izin(akun.user,kode)
+    from app.web.sosoh_native_html import memakai_dokumen,kerangka
+    if memakai_dokumen(request):
+        from app.web.halaman_bertahap import konteks_kerangka
+        shell=await kerangka(request,akun,await konteks_kerangka(request,akun))
+        if shell is not None:return shell
     async with SessionLocal() as db:
         data=await baca(db,kode)
         from app.services.qc_sosoh import data_proses

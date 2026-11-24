@@ -2,11 +2,11 @@
 {% block judul %}Penyosohan {{ SOSOH_KERANGKA.kode }}{% endblock %}
 {% block isi %}
 {% set operator = SOSOH_KERANGKA.layout == 'operator' %}
-{% macro output_row(h) %}
-<div class="sr-output" data-sn-output-kind="{{ h.jenis }}">
- <div><strong>{{ h.nama }}</strong><small>Catatan sebelumnya · menunggu data</small><small class="sr-work-percent">Persentase dari bahan · menunggu data</small></div>
+{% macro output_row(h=none) %}
+<div class="sr-output" data-sn-output-kind="{{ h.jenis if h is not none else '' }}">
+ <div><strong data-sn-output-label>{{ h.nama if h is not none else '' }}</strong><small>Catatan sebelumnya · menunggu data</small><small class="sr-work-percent">Persentase dari bahan · menunggu data</small></div>
  {% if operator %}<label class="sr-work-total-label">Total sekarang (kg){% endif %}
- <input type="number" step="0.01" inputmode="decimal" disabled aria-label="Total kumulatif {{ h.nama }}" aria-describedby="sn-menunggu">
+ <input type="number" step="0.01" inputmode="decimal" disabled aria-label="Total kumulatif {{ h.nama if h is not none else '' }}" aria-describedby="sn-menunggu">
  {% if operator %}</label>{% endif %}
  <span>{{ 'Perubahan' if operator else 'Pertambahan' }} · menunggu data</span>
 </div>
@@ -23,6 +23,7 @@
  <details data-sn-fold="hasil-lain"><summary>{{ 'Hasil samping' if operator else 'Jenis hasil lain' }}</summary>
   {% for h in SOSOH_KERANGKA.hasil_lain %}{{ output_row(h) }}{% endfor %}
  </details>
+ {% if SOSOH_KERANGKA.blueprint|default(false) %}<p class="sr-help" data-sn-legacy-unread>Jenis hasil tambahan dari catatan lama belum dibaca; tampil setelah data proses terbaru tersedia.</p>{% endif %}
  <button class="btn btn--utama" type="button" disabled data-save-output aria-describedby="sn-menunggu">{{ 'Simpan perubahan hasil' if operator else 'Catat perubahan hasil' }}</button>
  <p class="sr-help">Catatan ini adalah hasil produksi. Sampel dan pengukuran QC beras mengikuti data terbaru. Pengemasan hasil samping mengikuti mekanisme otomatis; halaman ini tidak membuat mutasi stok kedua.</p>
  {% if operator %}{{ balance_card() }}{% endif %}
@@ -112,6 +113,7 @@
  {% endcall %}
  <noscript>Struktur proses tetap tersedia. JavaScript diperlukan untuk membaca data proses dan mengerjakan tindakan yang diizinkan.</noscript>
 </main>
+{% if SOSOH_KERANGKA.blueprint|default(false) %}<template data-sn-output-template>{{ output_row() }}</template>{% endif %}
 <script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
 <script src="/static/sosoh-native-html.js?v={{ VERSI }}" defer></script>
 {% endblock %}
