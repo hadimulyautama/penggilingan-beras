@@ -70,7 +70,7 @@
 <details id="terima-panel-qc"{% if tab_detail=='qc' %} open{% endif %}><summary>QC · seluruh putaran & rata-rata</summary><p class="bm-meta" data-qc-refresh-status role="status" hidden></p>{% include '_penerimaan_qc_ringkas.html' %}</details>
 </section>
 <section id="bm-panel-riwayat" role="tabpanel" aria-labelledby="bm-tab-riwayat" data-bm-detail-panel="riwayat"{% if tab_detail!='riwayat' %} hidden{% endif %}>
-<details id="terima-panel-riwayat"{% if tab_detail=='riwayat' %} open{% endif %}><summary>Jejak penerimaan & hubungan barang</summary>{% include '_penerimaan_catatan.html' %}
+<details id="terima-panel-riwayat"{% if tab_detail=='riwayat' %} open{% endif %}><summary>Jejak penerimaan & hubungan barang</summary>{% with bm_detail_empty_table=true %}{% include '_penerimaan_catatan.html' %}{% endwith %}
 {% with tanpa_navigasi_umum=true %}{% include '_penerimaan_lokasi.html' %}{% endwith %}
  {% if retur_supplier_terkait %}<h3>Pengajuan Retur ke Supplier terkait</h3><ul>{% for r in retur_supplier_terkait %}<li><a href="/retur-supplier/{{ r.id }}">{{ r.kode }}</a> · {{ 'Selesai di gudang' if r.status=='selesai_gudang' else r.status }}</li>{% endfor %}</ul>{% endif %}
  {% if awal.boleh_audit %}{% for c in catatan %}<p><a href="/audit?{{ {'rentang':'semua','cari':c.kode}|urlencode }}">Audit {{ c.kode }} →</a></p>{% endfor %}{% endif %}
