@@ -107,6 +107,35 @@ def _tanpa_host_registry(html):
         assert len(ui_matches)==1 and ui_matches[0].start()==end
         assert json.loads(ui_matches[0][1])==shape
         end=ui_matches[0].end()
+    history_hosts=doc.select('#padi-riwayat-kerangka')
+    assert len(history_hosts)<=1
+    if history_hosts:
+        history=history_hosts[0]
+        assert history.name=='script' and history.get('type')=='application/json'
+        assert set(history.attrs)=={'type','id','data-konteks','data-cap'}
+        assert not history.find_parent(class_='bingkai')
+        shape=json.loads(history.string)
+        from app.web.riwayat_kerangka_langsung import valid
+        assert valid(shape)
+        assert shape['konteks']==history['data-konteks']==registry['konteks']
+        assert shape['cap']==history['data-cap']==registry['cap']
+        assert shape['sesi']==registry['sesi']
+        for path,refs in shape['frames'].items():
+            frame=BeautifulSoup(''.join(shape['potongan'][n] for n in refs),'html.parser')
+            assert frame.select_one('.bingkai')['data-pindah-alamat']==path
+            assert frame.select_one('.bingkai')['data-pindah-konteks']==registry['konteks']
+            assert frame.select_one('.bingkai')['data-pindah-kerangka']=='1'
+            assert frame.select_one('#formulir-sesi')['data-token']==registry['sesi']
+            assert frame.html['data-versi']==registry['cap']
+            root=frame.select_one('[data-riwayat-daftar-native]')
+            assert root and root['data-url']==path
+            assert not root.select('a[href],input,form')
+        history_matches=list(re.finditer(
+            r'\n<script type="application/json" id="padi-riwayat-kerangka" '
+            r'data-konteks="[^"]+" data-cap="[^"]+">([^<]*)</script>',html))
+        assert len(history_matches)==1 and history_matches[0].start()==end
+        assert json.loads(history_matches[0][1])==shape
+        end=history_matches[0].end()
     assert html.count('</body>') == 1 and html[end:].startswith('\n</body>')
     return html[:start] + html[end + 1:]
 

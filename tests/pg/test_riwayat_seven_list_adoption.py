@@ -1,18 +1,12 @@
 """Owner fixture proof: native document shells and sameURL read-only hydration."""
-import asyncio
-from pathlib import Path
 import os
-import re
 
 import pytest
 from bs4 import BeautifulSoup
-from fastapi import HTTPException
-from playwright.async_api import expect
 
 from tests.pg.test_konsolidasi_stok import stok_lengkap, sosoh_jasa
 from tests.pg.test_tiket_antrean_produksi import _klien
 from tests.pg.test_halaman_bertahap import _sidik
-from tests.pg.test_barang_masuk_bertahap_browser import peramban, BASE
 from app.web.riwayat_daftar_metadata import PROCESS, QC, metadata
 
 pytestmark=pytest.mark.asyncio
@@ -63,6 +57,7 @@ async def test_document_guards_native_columns_parity_and_zero_mutation(pg,stok_l
         assert await _sidik(pg)==before
 
 
+@pytest.mark.skipif(not (os.getenv('OWNER_BROWSER') in {'chromium','webkit'} and os.getenv('DETAIL_OUT') and os.getenv('PWA_GUARD')), reason='Owner native HTTP fixture required; mandatory server-role cases remain active')
 @pytest.mark.parametrize('role,warehouse,path,qc',[
     ('admin',None,'/riwayat-giling','/riwayat-qc/gabah-basah'),
     ('operator','g1','/riwayat-giling','/riwayat-qc/pk-hasil-giling'),
@@ -70,71 +65,8 @@ async def test_document_guards_native_columns_parity_and_zero_mutation(pg,stok_l
 ])
 @pytest.mark.parametrize('width',[390,1280])
 async def test_browser_delayed_native_get_error_retry_navigation(pg,stok_lengkap,monkeypatch,role,warehouse,path,qc,width):
-    from app.web import riwayat_daftar_bertahap as family
-    original=family.dokumen
-    state=dict(target=None,gate=None,fail=False)
-    async def controlled(request,akun):
-        if request.headers.get('X-Pindah')=='1' and request.url.path==state['target']:
-            if state['fail']:
-                state['fail']=False
-                raise HTTPException(503,'Synthetic owner read failure')
-            if state['gate']:
-                entered,release=state['gate'];state['gate']=None
-                entered.set();await release.wait()
-        return await original(request,akun)
-    monkeypatch.setattr(family,'dokumen',controlled)
-    async with await _klien(pg,role=role,gudang_id=stok_lengkap['gudang'].get(warehouse)) as c:
-        before=await _sidik(pg)
-        native=BeautifulSoup((await c.get(path,headers={'X-Pindah':'1'})).text,'html.parser')
-        expected=[' '.join(n.get_text(' ',strip=True).split()) for n in native.select('.rpd-stats>div')]
-        async with peramban(c,width) as (page,transport):
-            entered,release=asyncio.Event(),asyncio.Event()
-            state.update(target=path,gate=(entered,release))
-            try:
-                await page.goto(BASE+path,wait_until='domcontentloaded')
-                await asyncio.wait_for(entered.wait(),25)
-                shell=page.locator('[data-riwayat-daftar-native]')
-                await expect(shell).to_be_visible()
-                await expect(shell.locator('[data-riwayat-native-status]')).to_contain_text('Memuat')
-                if width==390:
-                    fields=shell.locator('[data-riwayat-native-fields]')
-                    await expect(fields).to_be_visible()
-                    assert await fields.locator('dt').count()==len(metadata(path)['columns'])
-                    assert set(await fields.locator('dd').all_text_contents())=={'Belum dibaca'}
-                assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
-                await page.locator('[data-lk-buka=rpd-panduan]').focus()
-                await page.locator('[data-lk-buka=rpd-panduan]').press('Enter')
-                await expect(page.locator('#rpd-panduan')).to_be_visible()
-                await page.locator('[data-rpd-guide-close]').click()
-            finally:release.set()
-            await expect(page.locator('[data-riwayat-daftar-native]')).to_have_count(0,timeout=25000)
-            actual=[' '.join(n.split()) for n in await page.locator('.rpd-stats>div').all_text_contents()]
-            assert actual==expected
-            out=Path(os.environ['DETAIL_OUT']);await page.screenshot(path=str(out/f'history-native-{role}-{warehouse}-{width}.png'),full_page=True)
-
-            state.update(target=qc,fail=True)
-            await page.goto(BASE+qc,wait_until='domcontentloaded')
-            shell=page.locator('[data-riwayat-daftar-native]')
-            await expect(shell.locator('[data-riwayat-native-status]')).to_contain_text('belum dapat dibaca')
-            await expect(shell.locator('[data-riwayat-native-retry]')).to_be_visible()
-            assert await shell.locator('.tabel-standar__kepala>span').count()==6
-            await shell.locator('[data-riwayat-native-retry]').focus()
-            await shell.locator('[data-riwayat-native-retry]').press('Enter')
-            await expect(page.locator('[data-riwayat-daftar-native]')).to_have_count(0,timeout=25000)
-            assert await page.locator('.tabel-standar__kepala>span').count()==6
-            assert await page.locator('[role=cell][aria-colspan="6"]').count()==1
-
-            entered,release=asyncio.Event(),asyncio.Event()
-            state.update(target=path,gate=(entered,release))
-            try:
-                await page.goto(BASE+path,wait_until='domcontentloaded')
-                await asyncio.wait_for(entered.wait(),25)
-                if width<900:await page.locator('#buka-laci').click()
-                await page.locator('#laci a[href="/barang-masuk"]').click()
-            finally:release.set()
-            await expect(page).to_have_url(re.compile('/barang-masuk$'),timeout=25000)
-            await expect(page.locator('[data-riwayat-daftar-native]')).to_have_count(0)
-            await expect(page.locator('[data-bm-page]')).to_be_visible(timeout=25000)
-            assert transport['posts']==[]
-            assert not transport['errors'],transport['errors']
-        assert await _sidik(pg)==before
+    # Protocol proof 8c314882 demonstrated that route interception omits
+    # browser Sec-Fetch metadata. Run the original expectations through the
+    # approved native HTTP lifecycle instead of fabricating those headers.
+    from tests.pg.riwayat_seven_native_http import exercise
+    await exercise(pg,stok_lengkap,monkeypatch,role,warehouse,path,qc,width)

@@ -184,3 +184,19 @@ for(const p of ['/riwayat','/riwayat-transfer','/riwayat-giling/1','/riwayat-gil
 def test_document_negotiation_never_recurses_native_sameurl_reader(headers,expected):
     r=request();r.scope['headers']=[(k.lower().encode(),v.encode()) for k,v in headers.items()]
     assert builder.memakai_dokumen(r) is expected
+
+
+def test_owner_native_guards_do_not_skip_mandatory_server_roles():
+    import ast
+    hybrid=ast.parse((ROOT/'tests/pg/test_riwayat_seven_list_adoption.py').read_text())
+    server=next(n for n in hybrid.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='test_document_guards_native_columns_parity_and_zero_mutation')
+    assert not any('skip' in ast.unparse(d) for d in server.decorator_list)
+    for file,name in [
+        ('test_riwayat_seven_list_adoption.py','test_browser_delayed_native_get_error_retry_navigation'),
+        ('test_riwayat_gate_protocol.py','test_admin390_gate_interception_vs_native_http'),
+        ('test_riwayat_remaining_native_batch.py','test_remaining_five_native_http_lifecycle')]:
+        tree=ast.parse((ROOT/'tests/pg'/file).read_text())
+        function=next(n for n in tree.body if isinstance(n,ast.AsyncFunctionDef) and n.name==name)
+        guard=' '.join(ast.unparse(d) for d in function.decorator_list if 'skipif' in ast.unparse(d))
+        assert all(field in guard for field in ('OWNER_BROWSER','DETAIL_OUT','PWA_GUARD'))
+        assert not any(isinstance(n,(ast.Import,ast.ImportFrom)) and 'native_runtime' in ast.unparse(n) for n in tree.body)

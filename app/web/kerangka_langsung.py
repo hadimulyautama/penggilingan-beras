@@ -202,7 +202,15 @@ async def lengkapi_dokumen(request: Request, response):
                     if isinstance(error,HTTPException) and error.status_code in (401,403):
                         raise
                     log.warning('Paket kerangka UI belum tersedia (%s)',type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui).encode()
+                riwayat=None
+                try:
+                    from app.web.riwayat_kerangka_langsung import susun as susun_riwayat
+                    riwayat=await susun_riwayat(request,akun,navigasi=navigasi,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka Riwayat belum tersedia (%s)',type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat).encode()
                 if len(body) + len(host) + 1 > BATAS_DOKUMEN_NATIVE:
                     raise ValueError('Dokumen native melampaui batas registry')
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
