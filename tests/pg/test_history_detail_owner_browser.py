@@ -310,27 +310,24 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
                 await expect(page.locator(SHELL + ',' + READY)).to_have_count(0)
                 assert not transport['posts']
 
-                # Direct bookmark/refresh negotiates the same scoped shell,
-                # and browser Back returns to the source without writes.
+                # Explicit server document negotiation is checked separately:
+                # this ASGI route harness does not receive browser-generated
+                # Sec-Fetch headers on page.goto. It must not be called proof
+                # of real HTTP/PWA document first paint (a separate gate).
+                for document_headers in (DOC, {'X-Kerangka-Halaman':'1'}):
+                    document = await client.get(path, headers=document_headers)
+                    assert document.status_code == 200
+                    parsed = BeautifulSoup(document.text, 'html.parser')
+                    pending = parsed.select_one(SHELL)
+                    assert pending is not None
+                    assert not pending.select('form[method=post],input[name=_csrf]')
+                    assert title_and_chrome(document.text) == title_and_chrome(golden)
+                # Bookmark/reload through this existing harness correctly
+                # falls back to the complete native HTML, without writes.
                 await page.goto(BASE + item['source'], wait_until='load')
-                entered, release, completed = gate(transport, path)
-                releases.append(release)
-                response = await page.goto(BASE + path, wait_until='domcontentloaded')
+                response = await page.goto(BASE + path, wait_until='load')
                 assert response.status == 200
-                assert await page.locator(SHELL).count() == 1, shell_diagnostics[-8:]
-                await expect(page.locator(SHELL)).to_be_visible()
-                try:
-                    await asyncio.wait_for(entered.wait(), 20)
-                except TimeoutError:
-                    diagnostic = await page.evaluate("""()=>{
-                        const root=document.querySelector('[data-riwayat-detail-native]'),frame=document.querySelector('.bingkai'),token=document.getElementById('formulir-sesi')?.dataset.token;
-                        return {url:location.pathname+location.search,root:!!root,rdnReady:root?.dataset.rdnReady,mountReady:root?.dataset.padiBacaNativeReady,state:root?.dataset.padiBacaNativeState,urlMatches:root?.dataset.url===location.pathname+location.search,frameMatches:frame?.dataset.pindahAlamat===location.pathname+location.search,context:!!frame?.dataset.pindahKonteks,token:!!token,bodyFocus:document.activeElement===document.body,status:root?.querySelector('[data-rdn-status]')?.textContent};
-                    }""")
-                    raise AssertionError(dict(direct_read=diagnostic,errors=transport['errors'],trace=trace[-8:]))
-
-                await assert_native_parity(page, golden, before_data=True)
-                release.set()
-                await expect(page.locator(SHELL)).to_have_count(0, timeout=20000)
+                await expect(page.locator(READY)).to_be_visible()
                 await assert_native_parity(page, golden, before_data=False)
                 await page.reload(wait_until='load')
                 await expect(page.locator(READY)).to_be_visible()
