@@ -16,8 +16,19 @@ def build():
         inputs.add(path);spec=importlib.util.spec_from_file_location(name,path);result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result
     helper=module('shipping_public_pool',ROOT/'scripts/buat_kerangka_ui.py')
     native=module('shipping_public_spec',ROOT/'app/web/pengiriman_detail_kerangka.py')
+    breadcrumb=module('shipping_native_breadcrumb',ROOT/'app/web/breadcrumb.py')
     roots=[ROOT/'app/web',ROOT/'hmu_tampilan']
     env=Environment(loader=ChoiceLoader([helper.SourceLoader(p/'templates',inputs) for p in roots]),autoescape=True,undefined=StrictUndefined)
+    base_path=ROOT/'hmu_tampilan/templates/base.html';inputs.add(base_path);base_source=base_path.read_text()
+    header_source=base_source[base_source.index('  {% if not kembali or LAPORAN_NAV %}'):base_source.index('  <span class="bar__merek"')]
+    native_headers={name:env.from_string(header_source).render(kembali=back,LAPORAN_NAV=None)
+                    for name,back in [('header_menu',None),('header_back','__PADI_HEADER_BACK__')]}
+    crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/barang-keluar/1',
+        dict(breadcrumb_detail='__PADI_CODE__',PENGIRIMAN_URL='/barang-keluar'),'__PADI_CODE__'))
+    # Source-native markup, with only a private per-target href binding slot.
+    crumb_doc=BeautifulSoup(crumb,'html.parser')
+    for anchor in crumb_doc.select('a[href="/barang-keluar"]'):anchor['href']='__PADI_CHROME_BACK__'
+    crumb=str(crumb_doc)
     def asset(url):
         name=url.split('?')[0].removeprefix('/static/')
         if not name or '/' in name or '\\' in name:raise ValueError('Local program assets only')
@@ -39,7 +50,7 @@ def build():
             js=asset(node['src'])
             if 'document.currentScript' in js:raise ValueError('Script binding requires review')
             node.attrs.clear();node.string=js.replace('</script','<\\/script')
-        variants['command' if command else 'read']=dict(html=str(doc))
+        variants['command' if command else 'read']=dict(html=str(doc),breadcrumb=crumb,**native_headers)
     styles,scripts,srefs,jrefs={},{},{},{}
     for variant in variants.values():
         doc=BeautifulSoup(variant['html'],'html.parser')

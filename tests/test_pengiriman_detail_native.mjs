@@ -6,8 +6,10 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),reader=require('../app/web/static/pengiriman-detail-native.js'),ui=require('../app/web/static/kerangka-pengiriman-detail-ui-runtime.js');
 const ORIGIN='https://fixture.invalid',digest='a'.repeat(64);
 const metadata=()=>({id:17,kode:'SYNTHETIC-OUT',status:'perintah',keadaan:'Menunggu dimuat',jasa:false,cepat:false,bersama:false,tiket:false,boleh_perintah:false,boleh_muat:true,actions:[{label:'Catat muatan',bagian:'ringkasan'}]});
-const packageData=()=>({versi:1,sumber:digest,variants:{read:{html:'structure'},command:{html:'structure'}},styles:{},scripts:{}});
-const catalog=()=>({versi:1,cap:'cap',konteks:'context',sesi:'session',sumber:digest,source_address:'/barang-keluar?status=perintah',sumber_sha256:digest,mode:'list',entries:[{meta:metadata(),targets:['/barang-keluar/17?q=synthetic']} ]});
+const component=()=>({html:'structure',breadcrumb:'native',header_menu:'native',header_back:'native'});
+const packageData=()=>({versi:1,sumber:digest,variants:{read:component(),command:component()},styles:{},scripts:{}});
+const nativeNav=()=>({body_back:'/barang-keluar?q=synthetic&status=&sejak=',header_back:null,chrome_back:'/barang-keluar?q=synthetic&status=&sejak='});
+const catalog=()=>({versi:1,cap:'cap',konteks:'context',sesi:'session',sumber:digest,source_address:'/barang-keluar?status=perintah',sumber_sha256:digest,mode:'list',entries:[{meta:metadata(),targets:['/barang-keluar/17?q=synthetic'],nav:nativeNav()} ]});
 
 test('four known tabs and bounded native filters only',()=>{
  for(const tab of ['ringkasan','barang','tiket','riwayat']){
@@ -27,6 +29,9 @@ test('private native source CAP, session, context and strict variant metadata ar
  assert(!ui.meta({...metadata(),status:'selesai'}));assert(!ui.meta({...metadata(),status:'batal'}));
  assert(!ui.meta({...metadata(),weight:50}));assert(!ui.meta({...metadata(),boleh_muat:1}));
  assert(!ui.valid(packageData(),{...p,entries:[...p.entries,...p.entries]},'context','cap','session',digest,ORIGIN));
+ for(const nav of [{...nativeNav(),chrome_back:'https://other.invalid'},{...nativeNav(),chrome_back:'/stok'},
+ {...nativeNav(),header_back:'/barang-keluar'},{...nativeNav(),body_back:'//other.invalid'},{...nativeNav(),body_back:'/unknown'}])assert(!ui.navigation(nav,ORIGIN));
+ assert(ui.navigation({...nativeNav(),header_back:'/pekerjaan?tab=berjalan'},ORIGIN));
 });
 
 test('pending tab reuse is bound to the original exact authorized resource/read scope',()=>{

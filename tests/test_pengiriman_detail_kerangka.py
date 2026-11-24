@@ -119,7 +119,8 @@ def body(source,content):
 
 
 def bind(source,content,**context):
-    return catalog.susun_data(source,body(source,content),dict(kartu=[native_projection()],BOLEH_PERINTAH=False,BOLEH_MUAT=True,**context),
+    return catalog.susun_data(source,body(source,content),dict(kartu=[native_projection()],BOLEH_PERINTAH=False,BOLEH_MUAT=True,
+        filter_query=context.pop('filter_query','q=&status=&sejak='),**context),
         origin='https://fixture.invalid',cap='cap',konteks='ctx',sesi='session',sumber='a'*64)
 
 
@@ -140,10 +141,59 @@ def test_native_absolute_detail_tab_links_are_bound_without_fabricating_a_route(
     source='/barang-keluar/17?q=synthetic'
     markup='<article data-detail-tab><h1 id="judul-perintah">SYNTHETIC-OUT</h1><nav class="detail-kirim-tabs">'+''.join(
         '<a href="https://fixture.invalid/barang-keluar/17?q=synthetic&amp;tab_detail='+key+'#panel-'+key+'">'+label+'</a>' for key,label in page.TABS)+'</nav></article>'
-    result=bind(source,markup)
+    result=bind(source,markup,filter_query='q=synthetic&status=&sejak=')
     assert result and len(result['entries'][0]['targets'])==4
     assert all('#' not in target for target in result['entries'][0]['targets'])
     assert bind(source,markup.replace('https://fixture.invalid','https://other.invalid')) is None
+
+
+@pytest.mark.parametrize('query,header,filter_query',[
+    ('',None,'q=&status=&sejak='),
+    ('q=a%20b&status=dimuat&sejak=2026-11-24',None,'q=a+b&status=dimuat&sejak=2026-11-24'),
+    ('q=~%2A%26&tab_detail=barang',None,'q=~%2A%26&status=&sejak='),
+    ('kembali_kerja=%2Fpekerjaan%3Ftab%3Dberjalan','/pekerjaan?tab=berjalan','q=&status=&sejak='),
+    ('kembali=%2Fbarang-keluar%3Fq%3Dnative',None,'q=&status=&sejak='),
+    ('kembali_kerja=%2Fbarang-keluar%3Fstatus%3Ddimuat',None,'q=&status=&sejak='),
+    ('kembali=%2Fstok%3Ftab%3Dproduk',None,'q=&status=&sejak='),
+    ('kembali_kerja=&kembali=%2Fjasa%3Fcari%3Dx',None,'q=&status=&sejak='),
+])
+def test_compiled_chrome_is_exact_native_breadcrumb_and_native_header(query,header,filter_query):
+    from app.web.breadcrumb import susun
+    address='/barang-keluar/17'+('?' +query if query else '');code='SYNTHETIC<&>-OUT'
+    nav=page.navigasi_native(address,code,filter_query=filter_query,header_back=header)
+    payload=(ROOT/'app/web/static/kerangka-pengiriman-detail-ui.js').read_text()
+    encoded=payload.split('window.PadiKerangkaPengirimanDetailData=',1)[1]
+    data,_=json.JSONDecoder().raw_decode(encoded)
+    native=env().get_template('_breadcrumb.html').render(rantai=susun(address,dict(kembali=header,filter_query=filter_query),code))
+    for component in data['variants'].values():
+        actual=BeautifulSoup(component['breadcrumb'],'html.parser')
+        actual.select_one('[aria-current="page"]').string=code
+        for anchor in actual.select('a[href="__PADI_CHROME_BACK__"]'):anchor['href']=nav['chrome_back']
+        assert str(actual)==str(BeautifulSoup(native,'html.parser'))
+        assert [li.get_text(' ',strip=True).removeprefix('› ') for li in actual.select('li')]==['Beranda','Barang Keluar',code]
+        assert actual.select_one('a.desktop-back')['aria-label']=='Kembali ke Barang Keluar'
+        assert actual.select_one('a.desktop-back')['href']==nav['chrome_back']
+        assert actual.select_one('[aria-current="page"]').name=='span'
+        base=(ROOT/'hmu_tampilan/templates/base.html').read_text()
+        fragment=base[base.index('  {% if not kembali or LAPORAN_NAV %}'):base.index('  <span class="bar__merek"')]
+        expected=BeautifulSoup(env().from_string(fragment).render(kembali=header,LAPORAN_NAV=None),'html.parser')
+        control=BeautifulSoup(component['header_back' if header else 'header_menu'],'html.parser')
+        if header:control.select_one('a')['href']=header
+        assert str(control)==str(expected)
+        assert bool(control.select_one('button#buka-laci')) is (header is None)
+    # Content-back follows the existing content macro, not desktop parent policy.
+    assert nav['body_back']==page.deskripsi('/barang-keluar/17',query)['kembali']
+
+
+def test_current_query_parent_and_mobile_back_do_not_collapse_into_content_back():
+    nav=page.navigasi_native('/barang-keluar/17?kembali_kerja=%2Fpekerjaan%3Ftab%3Dberjalan','CODE',
+        filter_query='q=&status=&sejak=',header_back='/pekerjaan?tab=berjalan')
+    assert nav==dict(body_back='/pekerjaan?tab=berjalan',header_back='/pekerjaan?tab=berjalan',
+        chrome_back='/barang-keluar?q=&status=&sejak=')
+    source=(ROOT/'app/web/static/kerangka-pengiriman-detail-ui-runtime.js').read_text()
+    assert "fragment.innerHTML=component.breadcrumb" in source
+    assert "a.textContent='Pengiriman'" not in source
+    assert "title.textContent=code" in source and "leaves[0].textContent=code" in source
 
 
 def test_caller_adopts_after_native_positive_guard_and_actual_row_and_before_enrichment():

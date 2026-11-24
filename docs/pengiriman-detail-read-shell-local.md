@@ -84,3 +84,21 @@ computed-visibility predicate, native action links and generated allowlist
 parity. They do not prove native role/tenant SQL, browser layout, current native
 DTO parity, two-tab races, status changes, cold/warm cache or any transaction.
 Root must test those on the exact integrated fixture before a release decision.
+
+## Native chrome parity delta after Root review
+
+The compiler now imports the pure authoritative `breadcrumb.susun`, renders
+the existing `_breadcrumb.html`, and captures the native menu/back fragment
+from `base.html`. Both are source-pinned compiler inputs. Runtime binds only
+the verified code through textContent and the private native navigation hrefs;
+it does not compose a shorter breadcrumb or invent a header Back control.
+
+Native three-way return behavior remains distinct: the content link can return
+to Pekerjaan or another allowed source; desktop breadcrumb goes to its actual
+Barang Keluar parent with the native filter query; the mobile header is Menu by
+default and only becomes Back when native render_laci's konteks_aman supplied
+kembali_kerja. Private per-entry navigation is derived from the actual native
+response context and target using the native breadcrumb policy, so query and
+code binding do not rely on client role/route guesses. Pending tab reuse cannot
+change that entry's read filter scope. Historical/editor/return coverage and all
+runtime gates remain held as described above.

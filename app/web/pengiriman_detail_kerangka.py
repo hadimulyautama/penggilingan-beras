@@ -32,9 +32,23 @@ def deskripsi(path,query=''):
                     or value.partition('?')[0] not in ('/pekerjaan','/barang-keluar','/retur','/stok','/riwayat','/laporan','/jasa')):return None
     target=path+('?' +query if query else '')
     carry=[(k,v) for k,v in pairs if k!='tab_detail']
-    return dict(id=int(match[1]),alamat=target,tab=q.get('tab_detail','ringkasan'),
+    filter_query=urlencode({k:(q.get(k,'').strip()[:200] if k=='q' else q.get(k,'')) for k in ('q','status','sejak')})
+    asal=q.get('kembali_kerja',q.get('kembali',''))
+    body_back=asal if asal.partition('?')[0] in ('/pekerjaan','/barang-keluar','/retur','/stok','/riwayat','/laporan','/jasa') else '/barang-keluar?'+filter_query
+    return dict(id=int(match[1]),alamat=target,tab=q.get('tab_detail','ringkasan'),filter_query=filter_query,
         tabs=[dict(key=k,label=n,href=path+'?'+urlencode([*carry,('tab_detail',k)]),active=k==q.get('tab_detail','ringkasan')) for k,n in TABS],
-        kembali=q.get('kembali_kerja') or q.get('kembali') or '/barang-keluar?'+urlencode({k:q.get(k,'') for k in ('q','status','sejak')}))
+        kembali=body_back)
+
+
+def navigasi_native(address,code,*,filter_query,header_back=None):
+    """Bind actual native display context through the native breadcrumb policy."""
+    spec=deskripsi(*address.partition('?')[::2])
+    if spec is None or not isinstance(filter_query,str):return None
+    from app.web.breadcrumb import aman,susun
+    if header_back is not None and (not header_back or aman(header_back) is None):return None
+    chain=susun(address,dict(kembali=header_back,filter_query=filter_query,breadcrumb_detail=code,
+                            PENGIRIMAN_URL='/barang-keluar'),code)
+    return dict(body_back=spec['kembali'],header_back=header_back,chrome_back=chain['kembali'])
 
 
 def row_metadata(record,items,*,boleh_perintah,boleh_muat):
@@ -85,9 +99,14 @@ async def kerangka(request,akun,record,items,*,boleh_perintah,boleh_muat):
     meta=row_metadata(record,items,boleh_perintah=boleh_perintah,boleh_muat=boleh_muat)
     if not valid_meta(meta):return None
     from app.web.halaman_bertahap import konteks_kerangka,penanda_konteks
+    from app.web.layar_pekerjaan import konteks_aman
     from app.web.tampilan import render
     context=await konteks_kerangka(request,akun)
     spec.update(meta=meta,stamp=penanda_konteks(request,akun)+'|'+spec['alamat'])
-    response=render(request,'pengiriman_detail_kerangka.html',PD=spec,**context,layar='barang_keluar',kembali=spec['kembali'])
+    # Exactly render_laci's native mobile-header context. Content-back and
+    # breadcrumb-back have different native contracts and must stay distinct.
+    header_back=konteks_aman(request.query_params.get('kembali_kerja')) or None
+    response=render(request,'pengiriman_detail_kerangka.html',PD=spec,**context,layar='barang_keluar',
+                    kembali=header_back,filter_query=spec['filter_query'])
     response.headers['Cache-Control']='private, no-store';response.headers['Vary']='Cookie'
     return response

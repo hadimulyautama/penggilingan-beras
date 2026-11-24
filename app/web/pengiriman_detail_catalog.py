@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from urllib.parse import urljoin,urlsplit
 from bs4 import BeautifulSoup
-from app.web.pengiriman_detail_kerangka import ACTIVE,deskripsi,valid_meta
+from app.web.pengiriman_detail_kerangka import ACTIVE,deskripsi,valid_meta,navigasi_native
 from app.web.giling_work_catalog import _visible
 
 HOST='padi-pengiriman-detail-catalog'
@@ -93,7 +93,9 @@ def susun_data(source,body,context,*,origin,cap,konteks,sesi,sumber):
                 if target and _visible(link):targets.append(target)
         targets=list(dict.fromkeys(targets))
         if len(targets)!=(1 if mode=='list' else 4) or any(deskripsi(*t.partition('?')[::2])['id']!=meta['id'] for t in targets):return None
-        entries.append(dict(meta=meta,targets=targets))
+        nav=navigasi_native(targets[0],meta['kode'],filter_query=context.get('filter_query'),header_back=context.get('kembali') or None)
+        if nav is None:return None
+        entries.append(dict(meta=meta,targets=targets,nav=nav))
     return dict(versi=1,cap=cap,konteks=konteks,sesi=sesi,sumber=sumber,source_address=source,
                 sumber_sha256=hashlib.sha256(source.encode()).hexdigest(),mode=mode,entries=entries)
 
