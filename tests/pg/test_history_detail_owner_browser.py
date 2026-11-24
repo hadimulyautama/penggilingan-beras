@@ -131,15 +131,21 @@ async def open_from_actual_row(page, transport, client, item, *, summary=False):
     original = BeautifulSoup(await native_golden(client, source), 'html.parser')
     matches = [a for a in original.select('a[href]') if a.get('href') == path and code in a.get_text()]
     assert matches, 'Current native source must supply this exact href/code'
-    diagnostic = await page.evaluate("""target=>{
+    runtime = Path('app/web/static/kerangka-riwayat-detail-ui-runtime.js').read_text()
+    import re
+    marked = re.sub(r'return null;', lambda m: 'throw new Error("Native framework declined source line ' + str(runtime.count('\n', 0, m.start()) + 1) + '");', runtime)
+    diagnostic = await page.evaluate("""([target,marked])=>{
       const frame=document.querySelector('.bingkai'),token=document.getElementById('formulir-sesi')?.dataset.token,
        cap=document.documentElement.dataset.versi,host=document.getElementById('padi-kerangka-langsung');
+      const original=window.PadiKerangkaRiwayatDetailUI;
       try{
+       (0,eval)(marked);
        const r=JSON.parse(host.textContent),base=r.frames['/barang-masuk'].map(i=>r.potongan[i]).join(''),
         f=window.PadiKerangkaRiwayatDetailUI.buat(target,base,frame.dataset.pindahKonteks,cap,token);
        return {factory:!!f,menu:!!document.getElementById('padi-riwayat-kerangka'),source:location.pathname+location.search};
       }catch(e){return {error:String(e),stack:e.stack};}
-    }""", path)
+      finally{window.PadiKerangkaRiwayatDetailUI=original;}
+    }""", [path,marked])
     assert diagnostic.get('factory'), diagnostic
     entered, release, completed = gate(transport, path)
     if summary:
