@@ -410,12 +410,24 @@ async def test_users_retry_stale_abandon_and_does_not_steal_later_header_focus(p
                 await page.locator('.daftar-standar__baris a[href="' + staff_target + '"]').press('Enter')
                 await asyncio.wait_for(data.entered.wait(), 20)
                 await expect(page.locator(SHELL)).to_be_visible()
-                await (await visible_native_back(page)).press('Enter')
-                await page.wait_for_function('()=>location.pathname==="/pengguna"')
-                await expect(page.locator(READY)).to_be_visible()
+                back = await visible_native_back(page)
+                back_target = await back.get_attribute('href')
+                # The existing native desktop breadcrumb goes to Settings;
+                # its mobile control goes to the staff list. Test the real
+                # control's destination, not an invented common back route.
+                assert back_target in ('/pengguna', '/pengaturan')
+                back_native = await golden(client, back_target)
+                await back.press('Enter')
+                await page.wait_for_function('path=>location.pathname===path', arg=back_target)
+                if back_target == '/pengguna':
+                    await expect(page.locator(READY)).to_be_visible()
+                else:
+                    await expect(page.locator('.pg-pintu[href="/pengguna"]')).to_be_visible()
+                assert chrome(await page.content()) == chrome(back_native)
                 data.release.set()
                 await asyncio.wait_for(data.finished.wait(), 20)
                 await two_frames(page)
+                assert chrome(await page.content()) == chrome(back_native)
                 assert await page.locator('[data-pengguna-variant="staf-detail"]').count() == 0
                 assert await page.locator('form[action="' + staff_target + '"]').count() == 0
                 await no_mutation_ui(page, transport)
