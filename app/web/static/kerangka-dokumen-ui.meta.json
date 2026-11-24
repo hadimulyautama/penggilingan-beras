@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "9976c07047f53a5e8216c44457cc1939acfbf06dfd4459834c0222bfb361d279",
+  "sumber": "56db7a5c1529930166ce2c91d7396529f3c80441119ba7834ddac309d28b2fca",
   "variants": [
     "/laporan/gabah_masuk",
     "/laporan/pk_masuk",
@@ -15,7 +15,7 @@
     "/laporan/retur_pelanggan",
     "/laporan/retur_pk"
   ],
-  "aset_sha256": "64b3333457d373d5229b46e058b6fcc2798f56c6b743df63e52d4c6fcdba0fa7",
+  "aset_sha256": "c04474739afdbca6493da80baac717ad9eb100f15686d8fa1636809295db7488",
   "inputs": {
     "app/services/laporan_isi_tahap.py": "a36b9c275e388d6621ce6330d09cdcfc6e61a1187549a40973f297e6b0752610",
     "app/services/laporan_kepala.py": "b5b5059144db49168299a27733732ed694b6632b062725963510d6f45f187092",
@@ -23,7 +23,7 @@
     "app/web/laporan.py": "59cfb5ab83450df63053094531e673b932e38f1901d364a01a3848d023a3f165",
     "app/web/laporan_detail_kerangka.py": "bf3dc82fb3ade15a82174ff1234fea09c08bd57e11777c782f60dd1c2831118f",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
-    "app/web/static/kerangka-dokumen-ui-runtime.js": "8162cf34d214e7ec8d4809f8e09981ed280cafa341c77cc2c903d75fc25f5795",
+    "app/web/static/kerangka-dokumen-ui-runtime.js": "9fd58b50239a5413beaafe85cc6a7e5c1e1f429370a9019e9f465667842d0f38",
     "app/web/static/laporan-detail-native.js": "6371ea253f1c4dbe7521b23e90cb95e47cc30148c0983e526501d7ca5ac18155",
     "app/web/static/padi-baca-native.js": "a98a5a407011681a5f333ff8d8c9c123e4c400acf8cab31ff726d7e3edc28780",
     "app/web/templates/laporan_detail_kerangka.html": "7a491ad1e3fcdfefb3d44e08067e64525f671620b35bff9b42f5684e041057c2",

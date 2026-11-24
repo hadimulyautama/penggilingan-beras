@@ -26,7 +26,7 @@ async def test_native_report_document_retains_auth_dates_and_no_fake_summaries(p
             assert root and not doc.select('#laporan-data')
             assert int(root.select_one('tbody td')['colspan'])==len(metadata(code)['kolom'])
             assert not root.select('form[method=post],input[name=_csrf]')
-        for suffix in ('?periode=unknown','?periode=khusus','?dari=not-a-date','?periode=khusus&dari=2026-11-24&sampai=2026-11-01'):
+        for suffix in ('?periode=','?periode=unknown','?periode=khusus','?dari=not-a-date','?periode=khusus&dari=2026-11-24&sampai=2026-11-01'):
             response=await client.get('/laporan/penggilingan'+suffix,headers=DOC)
             assert response.status_code==422 and 'data-laporan-detail-native' not in response.text
         assert await _sidik(pg)==before

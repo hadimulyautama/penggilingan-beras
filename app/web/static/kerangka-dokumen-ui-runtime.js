@@ -9,7 +9,7 @@
  function address(value,origin){
   if(typeof value!=='string'||!value.startsWith('/')||value.startsWith('//'))return null;
   let u;try{u=new URL(value,origin);}catch(_){return null;}
-  const code=u.pathname.slice('/laporan/'.length),pairs=[...u.searchParams],q=u.searchParams,period=q.get('periode')||'bulan_ini';
+  const code=u.pathname.slice('/laporan/'.length),pairs=[...u.searchParams],q=u.searchParams,period=q.has('periode')?q.get('periode'):'bulan_ini';
   if(u.origin!==origin||u.hash||u.pathname+u.search!==value||!u.pathname.startsWith('/laporan/')||!CODES.includes(code)||u.search.length>2049||pairs.length>3||new Set(pairs.map(x=>x[0])).size!==pairs.length||pairs.some(x=>!['periode','dari','sampai'].includes(x[0]))||![...PERIODS,'khusus'].includes(period))return null;
   if(['dari','sampai'].some(k=>q.has(k)&&!date(q.get(k))))return null;
   if(period==='khusus'&&(!date(q.get('dari'))||!date(q.get('sampai'))||q.get('dari')>q.get('sampai')||q.get('sampai')==='9999-12-31'))return null;
