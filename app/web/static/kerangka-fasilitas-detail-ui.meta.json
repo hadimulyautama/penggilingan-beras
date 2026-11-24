@@ -1,0 +1,26 @@
+{
+  "versi": 1,
+  "sumber": "ce0b25aacaa8162ff664486f3403a8b0cb46b33c8f6cf58e1d4647e1bea60a2e",
+  "variants": [
+    "line",
+    "dryer"
+  ],
+  "aset_sha256": "ff738e667f293fb10db6521210c1e9bc5be13f5b4a888a196c079dcd9e606312",
+  "inputs": {
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/fasilitas.py": "a30dda5e9f84b44ec8847553359245ac087736d199645697acdc713bc54f825d",
+    "app/web/fasilitas_detail_catalog.py": "c05f2cba5c89b772c51f9fc11b238cc37d8193342d0e369412d59c98b985dfdb",
+    "app/web/fasilitas_detail_kerangka.py": "33796b4b15a7d9bdbfa26810ab9a2fd37e446f027b320b77f2f1231526b1718d",
+    "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
+    "app/web/static/fasilitas-detail-native.js": "1f8ca21d3d9d985d2b1df1bb76810910b3e2aba3f21a46fe734b4293ae29c4d4",
+    "app/web/static/kerangka-fasilitas-detail-ui-runtime.js": "1bbfd2b8b66c916b0b97e8eac10ceb85799b68d77b897546c1ec9dc5a296443a",
+    "app/web/static/padi-baca-native.js": "ee14bd0d9a31622c51b714ef700a3e2d03db8c166bca5b88f922c733b78bf9e8",
+    "app/web/templates/_fasilitas_form.html": "946b915a851fec3e5699301fb98cee78ce0edaeefd1d8b85b868c4105505c59b",
+    "app/web/templates/fasilitas.html": "61bb10e5c7d2b9db272959bfc61636cdeb93d6dcbc374afa30a28d9523dc7f66",
+    "app/web/templates/fasilitas_detail_kerangka.html": "b7a4ce19f9ef3e3a54b6230716b6d1d8acf0143bcb05bbab30d704f3cb5999bb",
+    "hmu_tampilan/static/pengaturan.css": "8c75d83897acc331e3076617c46b929dc0da06509726ec058e4f2b3a9200f859",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "scripts/buat_kerangka_fasilitas_detail.py": "82922632a78463c7db4c34c1326ab77148444bc9036e428f4adec6be12e36f54",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

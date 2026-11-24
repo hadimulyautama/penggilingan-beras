@@ -1,0 +1,34 @@
+{% extends 'base.html' %}{% block judul %}Mesin &amp; line produksi{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+<section class="pg pg-fasilitas" data-fasilitas-detail-kerangka data-url="{{ FD_SHELL.alamat }}" data-stamp="{{ FD_SHELL.stamp }}" data-record-ready="0">
+<a class="pg-kembali" href="/pengaturan/mesin">← Mesin &amp; line produksi</a>
+<p class="pg-lingkup">Pengaturan / Perusahaan &amp; fasilitas</p><h1 data-fd-label>{{ FD_SHELL.label }}</h1>
+<div class="kartu"><dl class="fasilitas-fakta"><dt>Gudang</dt><dd>Belum dibaca</dd><dt>Jenis proses</dt><dd>Belum dibaca</dd><dt>Status line</dt><dd>Belum dibaca</dd>{% if FD_SHELL.variant=='dryer' %}<dt>Status dryer</dt><dd>Belum dibaca</dd>{% endif %}</dl></div>
+{% if FD_SHELL.variant=='dryer' %}
+<section class="kartu"><h2>Pengaturan pengering</h2><div class="grup" aria-describedby="fd-pending"><div class="fasilitas-isian">
+<label>Nama pengering<input class="fld" minlength="3" maxlength="50" disabled placeholder="Belum dibaca"></label>
+<label>Kapasitas (kg)<input class="fld" inputmode="decimal" disabled placeholder="Belum dibaca"></label>
+<label>Target kadar air (%)<input class="fld" inputmode="decimal" disabled placeholder="Belum dibaca"></label>
+<label>Nama tungku<input class="fld" maxlength="50" disabled placeholder="Belum dibaca"></label></div>
+<label class="fasilitas-aktif"><input type="checkbox" disabled aria-checked="mixed" aria-label="Gunakan target umum belum dibaca" style="appearance:none;width:16px;height:16px;border:1px dashed currentColor;background:transparent"> Gunakan target umum (belum dibaca)</label>
+<p class="bantu">Target umum mengikuti setelan operasional. Hilangkan centang untuk menetapkan target khusus. Nama tungku yang sama menunjukkan tungku bersama.</p>
+<button class="btn btn--utama" type="button" disabled>Simpan pengering</button></div>
+<span class="btn" aria-disabled="true" title="Tindakan menunggu status dryer terbaru">Status dryer belum dibaca</span>
+<a href="/pengaturan/sebab-berhenti">Sebab berhenti umum</a> · <a href="/pengaturan/mutu">Setelan mutu &amp; target umum</a></section>
+{% endif %}
+<details class="kartu"><summary>Hubungan proses &amp; kode</summary><p class="bantu">Identitas line dan lokasi mengikuti relasi tersimpan. Mengubah bagian ini tidak menimpa kapasitas atau target kadar air dryer.</p>
+<div class="grup" aria-describedby="fd-pending"><div class="fasilitas-isian">
+<label>Nama <input class="fld" disabled maxlength="100" placeholder="Belum dibaca"></label>
+<label>Kode <input class="fld" disabled maxlength="40" placeholder="Belum dibaca"></label>
+<label>Gudang <select class="fld" disabled><option>Belum dibaca</option></select></label>
+<label>Jenis proses <select class="fld" disabled><option>Belum dibaca</option></select></label>
+<label>Dryer terkait (pengeringan) <select class="fld" disabled><option>Belum dibaca</option></select></label>
+<label class="fasilitas-aktif"><input type="checkbox" disabled aria-checked="mixed" aria-label="Aktif belum dibaca" style="appearance:none;width:16px;height:16px;border:1px dashed currentColor;background:transparent"> Aktif <span class="bantu">· belum dibaca</span></label>
+</div><button class="btn btn--utama" type="button" disabled>Simpan perubahan</button></div></details>
+<p class="bantu" id="fd-pending">Nilai, pilihan dan tindakan menunggu data serta akses terbaru. Tidak ada perubahan selama memuat.</p>
+<p role="status" aria-live="polite" data-fd-status>Memuat detail mesin…</p><button class="btn" type="button" data-fd-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca bertahap. Tidak ada perubahan yang dikirim selama memuat.</p></noscript>
+</section>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script><script src="/static/fasilitas-detail-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}
