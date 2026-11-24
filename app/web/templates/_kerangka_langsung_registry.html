@@ -8,3 +8,4 @@
 <script type="application/json" id="padi-sosoh-kerangka" data-konteks="{{ sosoh.konteks }}" data-cap="{{ sosoh.cap }}">{{ sosoh|tojson }}</script>{% endif %}{% if master %}
 <script type="application/json" id="padi-pengaturan-master-kerangka" data-konteks="{{ master.konteks }}" data-cap="{{ master.cap }}">{{ master|tojson }}</script>{% endif %}{% if alat %}
 <script type="application/json" id="padi-pengaturan-alat-kerangka" data-konteks="{{ alat.konteks }}" data-cap="{{ alat.cap }}">{{ alat|tojson }}</script>{% endif %}
+{% if pengaturan_detail %}<script type="application/json" id="padi-pengaturan-detail-kerangka" data-konteks="{{ pengaturan_detail.konteks }}" data-cap="{{ pengaturan_detail.cap }}">{{ pengaturan_detail|tojson }}</script>{% endif %}

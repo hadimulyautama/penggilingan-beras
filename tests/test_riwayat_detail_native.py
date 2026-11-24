@@ -275,3 +275,13 @@ def test_qc_return_referer_matches_exact_native_navigation_ast(query,referer,exp
     assert actual==expected==scope['native_back'](request,'pk-luar')
     label=BeautifulSoup(back_html(metadata('qc-pk-luar'),actual,'pk-luar'),'html.parser').a.get_text()
     assert label==('← Kembali ke Riwayat QC PK Luar' if actual=='/riwayat-qc/pk-luar' else '← Kembali ke halaman asal')
+
+
+def test_public_history_navigation_is_inert_until_private_menu_validation():
+    spec=importlib.util.spec_from_file_location('history_detail_program_inert',ROOT/'scripts/buat_kerangka_riwayat_detail.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    data=json.JSONDecoder().raw_decode(module.build()[0].decode().split('window.PadiKerangkaRiwayatDetailData=',1)[1])[0]
+    for component in data['variants'].values():
+        doc=BeautifulSoup(component['html'],'html.parser')
+        controls=doc.select('input,select,textarea')
+        assert all(node.has_attr('disabled') and not node.has_attr('name') and not node.has_attr('value') for node in controls)

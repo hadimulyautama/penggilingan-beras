@@ -1,14 +1,14 @@
 {
   "versi": 1,
-  "sumber": "5ac5ee362e31f49e66e0afb7d9fc90082fab5662767ec75cf7003a5d950116ba",
+  "sumber": "7da4c8030030953c3c59a60413ce0320883ac2ddfa2651b4d9a20bf9173f599a",
   "variants": [
     "read",
     "command"
   ],
-  "aset_sha256": "ab9ff8c33cb12ebba6ee64f025913fc99a8857f7ea044567e0f5f15f504bf5d8",
+  "aset_sha256": "6512631f8b9faba9032be27a6b114e92ea0baf70ffbea374faaa7f75a0a9554b",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
-    "app/web/layar_keluar.py": "f1ee9ebd73ca92c3ccbb2a1470c376e54cdc004e91a8fbdf85d303459f9bd04b",
+    "app/web/layar_keluar.py": "8a3e0f8ac071137c18f3c3a15b5c3a07dd251b063cb8d8125b129998d4bdd6fe",
     "app/web/pengiriman_detail_catalog.py": "545bc357c46e4e632c8b29eecc2be3e15f261a7f13a658ac634d5a1024231d73",
     "app/web/pengiriman_detail_kerangka.py": "4bcb3fafecb01bdfc708cd4fc7dbc0b6d4a519225650bbaa27a64166613ebabe",
     "app/web/static/detail_kirim_retur.css": "7000e9cfb2ff8e127818e515847e3facd3bee1947a6b9681bc35e175b1717278",

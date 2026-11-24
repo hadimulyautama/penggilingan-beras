@@ -93,6 +93,10 @@ def build():
         back_context['data-rdn-back-context'] = ''
         back_context.append(BeautifulSoup(native.back_html(meta, '/pekerjaan', kind, '/pekerjaan'), 'html.parser'))
         doc.select_one('[data-riwayat-detail-native]').append(back_context)
+        # The public program carries no authority. The factory enables only
+        # native read-navigation selectors after validating the private menu.
+        for node in doc.select('select[data-jenis-riwayat]'):
+            node['disabled'] = ''
         if doc.select('form,[name],[data-post],[data-kirim]') or any(not n.has_attr('disabled') or n.has_attr('value') for n in doc.select('input,textarea')):
             raise ValueError('Bentuk detail publik tidak boleh memuat field tulis aktif')
         for node in doc.select('[data-lk-cetak]'):

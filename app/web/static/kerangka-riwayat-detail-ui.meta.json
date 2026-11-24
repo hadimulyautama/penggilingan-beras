@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "e585dc5f355de66a6d7201f3bb4749cf293f97d2d00db88af6c02fb719423dd2",
+  "sumber": "33072bab8001e8a0f7b233b138f9fe7d4082591dc51c94415152bf4a0fbfef8c",
   "variants": [
     "riwayat-giling",
     "riwayat-sosoh",
@@ -12,7 +12,7 @@
     "qc-beras-hasil-sosoh",
     "qc-beras-daftar"
   ],
-  "aset_sha256": "8ad191069fbf5cad97fa0cd77b7db255c0ceb4a0bc72b0a48042e7b2f2e04ea8",
+  "aset_sha256": "5c5e58e68e840fed1246669b00415808c5e7b8825fa74391d4e609b3bfad7eec",
   "inputs": {
     "app/services/proses_aktif.py": "d99ad97b3cde4fb9020182b3cb4a9fba8286b94b4d728f776efdd2c7529a0a91",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
@@ -23,7 +23,7 @@
     "app/web/riwayat_detail_native.py": "ef22472b6ad408197305e7c79d10fd794337879dca0b7e3a1dc83412acc87a3d",
     "app/web/static/detail_pendinginan.css": "23670e14c034b9f4ed3cfe64388044718cfe279e97327fbfa67b86a8e2f081fd",
     "app/web/static/detail_pengeringan.css": "3513da10fa157ee9bac229be0872fc1fbc3d86c5fb7077c9eb944bc7c9a8737f",
-    "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "7bfa34b91d849bfbb564922ba40f09630fa0e36145e70b80ef190bc9fd47ca55",
+    "app/web/static/kerangka-riwayat-detail-ui-runtime.js": "67e26c3231bc0e2f7fc21bbad2f13d14de42f16637345808d94c7fd6f01b0b00",
     "app/web/static/padi-baca-native.js": "ab677e9893b0d5117c7a527d1b0444ec51234777a2db8929d1c7971d689dde23",
     "app/web/static/proses_aktif.css": "ca762b696a8a55220e7e171bbbe7416850bfa71f63e436e3334a035154907dd8",
     "app/web/static/qc-detail.css": "2dfe236e7bccbd5c2626097e2cbf95f201436381d6d11edf1fa267bf086e5eb1",
@@ -55,7 +55,7 @@
     "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
     "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
     "scripts/buat_kerangka_riwayat.py": "a30730eef29b283924fbf575d787df82316e84086aad1a3390e44a05001e7d82",
-    "scripts/buat_kerangka_riwayat_detail.py": "54fbc1a9f764d349a91d6170472558fb2e83de96fd9a64f1aea84db5fa0bd638",
+    "scripts/buat_kerangka_riwayat_detail.py": "adc62e93b4c29d71c899fae40c585c2a9f6f374a746fb4a42d276735bbd5070c",
     "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
   }
 }

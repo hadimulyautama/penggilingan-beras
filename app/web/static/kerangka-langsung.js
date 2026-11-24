@@ -150,7 +150,13 @@
    }
    // Resource identity comes from the currently visible native source, never
    // from a route-shaped ID. Factories decline stale/hidden/foreign catalogs.
-   const families=[['/barang-keluar/',window.PadiKerangkaPengirimanDetailUI],
+   if(pilihan.alamat.startsWith('/barang-keluar/')){
+    for(const factory of [window.PadiKerangkaPengirimanDetailUI,window.PadiKerangkaRiwayatPengirimanUI]){
+     try{const result=factory?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(result)return result;}catch(_){}
+    }
+    return null;
+   }
+   const families=[
                    ['/proses-aktif/sosoh/',window.PadiKerangkaSosohUI],
                    ['/proses-aktif/pengeringan/',window.PadiKerangkaPengeringanUI],
                    ['/proses-aktif/pendinginan/',window.PadiKerangkaPengeringanUI],
@@ -160,6 +166,9 @@
    }
    if(pilihan.alamat.startsWith('/laporan/')||pilihan.alamat.split('?')[0]==='/kabar'){
     try{return window.PadiKerangkaDokumenUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(['/pengaturan/peran','/pengaturan/akses','/pengaturan/sebab-berhenti','/pengaturan/mutu','/pengaturan/kledo','/pengaturan/sistem'].includes(pilihan.alamat)){
+    try{return window.PadiKerangkaPengaturanDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
    }
    if(pilihan.alamat==='/pengaturan/alat'){
     try{return window.PadiKerangkaPengaturanAlatUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}

@@ -97,6 +97,7 @@
   for(const a of nav.querySelectorAll('[data-tab-riwayat]')){const scope=menu.tabs[a.dataset.tabRiwayat];if(!scope){const span=a.ownerDocument.createElement('span');span.className=a.className+' akses-terkunci';span.setAttribute('aria-disabled','true');span.textContent=a.textContent;a.replaceWith(span);}else{a.href=scope.first;a.dataset.tujuan=JSON.stringify(scope.allowed);a.toggleAttribute('aria-current',a.dataset.tabRiwayat===selection.family);if(a.hasAttribute('aria-current'))a.setAttribute('aria-current','page');}}
   const allowed=menu.tabs[selection.family]?.allowed||[];
   for(const option of nav.querySelectorAll('select[data-jenis-riwayat] option')){option.disabled=!allowed.includes(option.value);option.toggleAttribute('selected',option.value===selection.parent);}
+  for(const select of nav.querySelectorAll('select[data-jenis-riwayat]'))select.disabled=!allowed.length;
   for(const a of nav.querySelectorAll('.laporan-nav__jenis a[href]'))if(!allowed.includes(a.getAttribute('href'))){const span=a.ownerDocument.createElement('span');span.className='akses-terkunci';span.setAttribute('aria-disabled','true');span.textContent=a.textContent;a.replaceWith(span);}else{a.toggleAttribute('aria-current',a.getAttribute('href')===selection.parent);if(a.hasAttribute('aria-current'))a.setAttribute('aria-current','page');}
  }
  const data=global.PadiKerangkaRiwayatDetailData;
