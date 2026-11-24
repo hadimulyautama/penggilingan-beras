@@ -309,7 +309,17 @@ async def proof(pg, client, item, width, monkeypatch, *, summary=False, edges=Fa
                 release.set()
                 await asyncio.wait_for(completed.wait(), 20)
                 await two_frames(page)
-                await expect(page.locator(SHELL + ',' + READY)).to_have_count(0)
+                if item['source']=='/riwayat-qc/beras-hasil-sosoh':
+                    # This list deliberately uses the same native-read family
+                    # as its detail. Its own installed marker is legitimate;
+                    # the abandoned detail must not replace that parent.
+                    await expect(page.locator(SHELL)).to_have_count(0)
+                    await expect(page.locator(READY)).to_be_visible()
+                    parent=await native_golden(client,item['source'])
+                    await assert_native_parity(page,parent,before_data=False)
+                    assert await page.locator('.bingkai').get_attribute('data-pindah-alamat')==item['source']
+                else:
+                    await expect(page.locator(SHELL + ',' + READY)).to_have_count(0)
                 assert not transport['posts']
 
                 # Explicit server document negotiation is checked separately:
