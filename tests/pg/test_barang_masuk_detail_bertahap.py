@@ -78,6 +78,32 @@ async def test_optional_descriptor_failure_keeps_existing_four_frames(pg, lengka
         assert await _sidik(pg) == before
 
 
+async def test_archive_negotiation_reads_source_once_and_keeps_legacy_variant(pg, lengkap, monkeypatch):
+    from app.models import ActivityLog
+    from app.web import layar_pekerjaan as layar
+    tid=lengkap['tiket']['BERAS_MASUK']
+    async with pg() as db:
+        db.add(ActivityLog(table_name='finished_goods_stock',record_id=987654,action='INSERT',
+                          aksi='produk_timbang_masuk',field_name='timbangan_transaksi_id',old_value=str(tid),
+                          new_value='TRX-391-BERAS_MASUK · private_fixture_audit_not_for_operator'))
+        await db.commit()
+    source=layar.sumber_detail_barang_masuk;calls=[]
+    async def counted(*args,**kwargs):
+        calls.append(args[1]);return await source(*args,**kwargs)
+    monkeypatch.setattr(layar,'sumber_detail_barang_masuk',counted)
+    async with await _klien(pg,role='operator',gudang_id=lengkap['gudang']['g2']) as c:
+        before=await _sidik(pg)
+        response=await c.get('/barang-masuk/'+str(tid),headers={'X-Kerangka-Halaman':'1'})
+        assert response.status_code==200
+        assert calls==[tid], 'Archive shell negotiation must not repeat the native source gate'
+        doc=BeautifulSoup(response.text,'html.parser')
+        assert not doc.select('[data-bm-detail-shell],[data-halaman-bertahap],[role=tab]')
+        assert 'Tidak tersedia pada arsip' in doc.get_text()
+        assert 'private_fixture_audit_not_for_operator' not in doc.get_text()
+        assert not doc.select('a[href^="/audit"]')
+        assert await _sidik(pg)==before
+
+
 @pytest.mark.parametrize('role,warehouse,kind', [('operator','g1','GABAH_KERING'), ('operator','g2','BERAS_PK'), ('admin',None,'GABAH_KERING')])
 @pytest.mark.parametrize('width', [390,1280])
 async def test_native_click_four_tabs_delayed_error_retry_back_and_leave(pg, lengkap, monkeypatch, role, warehouse, kind, width):
