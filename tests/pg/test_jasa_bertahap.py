@@ -29,8 +29,11 @@ def _tanpa_host_registry(html):
     assert registry['cap'] == host['data-cap'] == doc.html['data-versi']
     assert registry['sesi'] == sessions[0]['data-token']
     assert all(isinstance(registry[k], str) and registry[k] for k in ('konteks', 'cap', 'sesi'))
+    # Enam alamat yang disetujui: empat lama +default dan Perlu tindakan.
+    # Tetap exact-set, bukan menerima tujuan baru yang tidak ditinjau.
     assert set(registry['frames']) == {'/barang-masuk', '/barang-masuk?status=belum',
-                                     '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan'}
+                                     '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
+                                     '/pekerjaan', '/pekerjaan?tab=tindakan'}
     pieces = registry['potongan']
     assert isinstance(pieces, list) and 0 < len(pieces) <= 16384
     assert all(isinstance(piece, str) and piece for piece in pieces)
@@ -60,7 +63,8 @@ def _dokumen_registry_uji():
     registry = dict(versi=2, penyandian='baris-1', konteks='konteks-uji',
                     cap='cap-uji', sesi='sesi-uji', potongan=['<section></section>'],
                     frames={url: [0] for url in ('/barang-masuk', '/barang-masuk?status=belum',
-                            '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan')})
+                            '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
+                            '/pekerjaan', '/pekerjaan?tab=tindakan')})
     templates = Jinja2Templates(directory=str(
         Path(__file__).resolve().parents[2] / 'app/web/templates'))
     host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry)
@@ -125,3 +129,18 @@ async def test_renderer_eksplisit_dan_API_mempertahankan_legacy(pg,stok_lengkap,
         else:
             assert 'Bu Sri' not in data.text and 'data-jasa-bertahap' not in shell.text
         assert await _sidik(pg)==before
+
+
+@pytest.mark.parametrize('alamat',['/barang-masuk','/pekerjaan','/pekerjaan?tab=tindakan'])
+async def test_oracle_tetap_menolak_kerangka_wajib_yang_hilang(alamat):
+    from bs4 import BeautifulSoup
+    native, full, _ = _dokumen_registry_uji()
+    host = BeautifulSoup(full, 'html.parser').select_one('#padi-kerangka-langsung')
+    registry = json.loads(host.string)
+    del registry['frames'][alamat]
+    encoded = json.dumps(registry).replace('<', '\\u003c')
+    missing = full.replace(host.string, encoded)
+    with pytest.raises(AssertionError):
+        _tanpa_host_registry(missing)
+    # Kontrol normal tetap membuktikan hanya host inert dilepas, isi native sama.
+    assert _tanpa_host_registry(full) == native
