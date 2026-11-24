@@ -26,7 +26,7 @@ async def test_manifest_uses_native_permission_and_read_context(pg,stok_lengkap,
             registry=json.loads(doc.select_one('#padi-kerangka-langsung').string)
             data=json.loads(ui.string)
             assert set(data)=={'versi','sumber','cap','konteks','sesi','varians'}
-            assert data['varians']=={'pengiriman':variant}
+            assert data['varians']==({'pengiriman':variant,'jasa':'jasa-admin'} if variant=='pengiriman-admin' else {'pengiriman':variant})
             assert all(data[k]==registry[k] for k in ('cap','konteks','sesi'))
             _tanpa_host_registry(response.text)
         assert await _sidik(pg)==before

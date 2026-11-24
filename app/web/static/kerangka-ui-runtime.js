@@ -3,7 +3,7 @@
  'use strict';
  const data=window.PadiKerangkaUIData;
  if(data?.versi!==1||!data.variants||typeof data.sumber!=='string')return;
- for(const component of Object.values(data.variants))Object.freeze(component);
+ for(const component of Object.values(data.variants)){if(Array.isArray(component.statuses))Object.freeze(component.statuses);Object.freeze(component);}
  Object.freeze(data.variants);Object.freeze(data);
  const own=(object,key)=>Object.prototype.hasOwnProperty.call(object,key);
  function value(node,text){node.value=text;node.setAttribute('value',text);}
@@ -16,6 +16,14 @@
   if(search.length>200||!['','perintah','dimuat','selesai','batal'].includes(status)||since&&!dateValid(since)||customer&&(!/^[1-9]\d{0,9}$/.test(customer)||Number(customer)>2147483647)||cursor&&(!/^-?\d{1,10}$/.test(cursor)||Math.abs(Number(cursor))>2147483647))return null;
   return {u,search,status,since,customer};
  }
+ function jasa(address){
+  const u=new URL(address,location.href),q=u.searchParams;
+  if(u.origin!==location.origin||u.pathname!=='/jasa'||u.hash||u.search.length>3000||u.pathname+u.search!==address)return null;
+  if(Array.from(q.keys()).some(k=>!['cari','status','halaman'].includes(k)||q.getAll(k).length!==1))return null;
+  const search=(q.get('cari')||'').trim(),status=q.get('status')||'',page=q.get('halaman');
+  if(search.length>200||!data.variants['jasa-admin']?.statuses.includes(status)||page&&(!/^[1-9]\d{0,9}$/.test(page)||Number(page)>2147483647))return null;
+  return {u,search,status};
+ }
  function navigation(doc,path){
   doc.querySelectorAll('#laci summary.pintu').forEach(n=>{n.classList.remove('pintu--kini');n.removeAttribute('aria-current');});
   doc.querySelectorAll('#laci a[href]').forEach(n=>{
@@ -25,21 +33,24 @@
   });
  }
  function buat(address,base,context,cap,token){
-  const state=shipping(address);if(!state)return null;
+  const state=shipping(address)||jasa(address);if(!state)return null;
+  const family=state.u.pathname==='/jasa'?'jasa':'pengiriman';
   const host=document.getElementById('padi-kerangka-ui');let permission;
   if(!host?.isConnected||host.dataset.cap!==cap||host.dataset.konteks!==context||host.textContent.length>4096)return null;
   try{permission=JSON.parse(host.textContent);}catch(_){return null;}
-  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>k!=='pengiriman'))return null;
-  const key=permission.varians.pengiriman;
-  if(!['pengiriman-admin','pengiriman-operator'].includes(key)||!own(data.variants,key))return null;
-  const component=data.variants[key];if(component.path!==state.u.pathname||component.family!=='pengiriman'||typeof base!=='string')return null;
+  if(permission?.versi!==1||permission.sumber!==data.sumber||permission.cap!==cap||permission.konteks!==context||permission.sesi!==token||!permission.varians||Object.keys(permission.varians).some(k=>!['pengiriman','jasa'].includes(k)))return null;
+  const key=permission.varians[family];
+  if(!['pengiriman-admin','pengiriman-operator','jasa-admin'].includes(key)||!own(data.variants,key))return null;
+  const component=data.variants[key];if(component.path!==state.u.pathname||component.family!==family||typeof base!=='string')return null;
   const doc=new DOMParser().parseFromString(base,'text/html'),frame=doc.querySelector('.bingkai'),main=doc.getElementById('isi-halaman');
   if(!frame||!main||frame.dataset.pindahKonteks!==context||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
   const comments=Array.from(main.childNodes).filter(n=>n.nodeType===8),from=comments.find(n=>n.data.trim()==='isi-halaman:mulai'),to=comments.find(n=>n.data.trim()==='isi-halaman:akhir');
   if(!from||!to||!(from.compareDocumentPosition(to)&Node.DOCUMENT_POSITION_FOLLOWING))return null;
   const part=doc.createElement('template');part.innerHTML=component.html;
-  const root=part.content.querySelector('[data-halaman-bertahap][data-kind="pengiriman"]');if(!root)return null;
-  root.dataset.stamp=context+'|'+address;root.dataset.url='/api/halaman-bertahap/pengiriman'+state.u.search;
+  const root=part.content.querySelector(family==='jasa'?'[data-jasa-bertahap]':'[data-halaman-bertahap][data-kind="pengiriman"]');if(!root)return null;
+  root.dataset.stamp=context+'|'+address;root.dataset.url='/api/halaman-bertahap/'+family+state.u.search;
+  if(family==='pengiriman'){
+
   for(const form of root.querySelectorAll('form')){
    for(const input of form.querySelectorAll('input[type=hidden]'))input.remove();
    for(const input of form.querySelectorAll('[name=q]'))value(input,state.search);
@@ -53,6 +64,17 @@
   const statusChip=root.querySelector('[data-ui-status]');if(statusChip){statusChip.hidden=!state.status;statusChip.textContent=root.querySelector('select[name=status]')?.selectedOptions[0].textContent||'';}
   const dateChip=root.querySelector('[data-ui-date]');if(dateChip){dateChip.hidden=!state.since;dateChip.textContent='Sejak '+state.since;}
   const reset=root.querySelector('.bk-form-filter>a[href]');if(reset){const next=new URL('/barang-keluar',location.href);next.searchParams.set('q',state.search);if(state.customer)next.searchParams.set('pelanggan_id',state.customer);reset.setAttribute('href',next.pathname+next.search);}
+  }else{
+   root.dataset.filtered=state.search||state.status?'1':'0';
+   for(const input of root.querySelectorAll('[name=cari]'))value(input,state.search);
+   for(const input of root.querySelectorAll('input[name=status]'))value(input,state.status);
+   const select=root.querySelector('select[name=status]');select.value=state.status;
+   for(const option of select.options)option.toggleAttribute('selected',option.selected);
+   const scope=root.querySelector('[data-ui-jasa-status]');scope.hidden=!state.status;
+   scope.querySelector('strong').textContent=select.selectedOptions[0].textContent;
+   const filter=root.querySelector('[data-js-buka="js-filter"]');filter.textContent='Filter'+(state.status?' · 1':'');
+   root.querySelector('.js-form-filter>a[href]').setAttribute('href','/jasa?'+new URLSearchParams({cari:state.search}));
+  }
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(part.content);
   frame.dataset.pindahAlamat=address;doc.title=component.title+' · PT Hadi Mulya Utama';
   const label=main.querySelector('.bar__merek');if(label){label.textContent=component.title;label.setAttribute('aria-label',component.title);}

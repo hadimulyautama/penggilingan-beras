@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import importlib.util
 import json
@@ -86,6 +87,29 @@ def build():
             '/barang-keluar',{'PENGIRIMAN_URL':'/barang-keluar'},'Barang Keluar'))
         variants[key]=dict(family='pengiriman',path='/barang-keluar',title='Barang Keluar',
                            html=html,breadcrumb=crumb)
+    # STATUS is a product literal, never imported through the app/DB runtime.
+    source=ROOT/'app/services/jasa_pelanggan.py';inputs.add(source)
+    statuses=next(ast.literal_eval(node.value) for node in ast.parse(source.read_text()).body
+        if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='STATUS' for t in node.targets))
+    context=dict(VERSI=CAP,tapis='__PADI_STATUS__',cari='__PADI_SEARCH__',
+        STATUS_PILIHAN=statuses,JASA_SHELL=dict(stamp='__PADI_STAMP__',url='__PADI_DATA_URL__',filtered=False))
+    template=env.get_template('jasa_bertahap.html')
+    doc=BeautifulSoup(''.join(template.blocks['isi'](template.new_context(context))),'html.parser')
+    root=doc.select_one('[data-jasa-bertahap]');assert root and not root.select('h1')
+    css=[]
+    for link in doc.select('link[rel="stylesheet"]'):
+        text=asset(link['href']);assert '@import' not in text and '</style' not in text.lower()
+        css.append(text);link.decompose()
+    style=doc.new_tag('style',attrs={'data-kerangka-ui-style':'jasa'});style.string='\n'.join(css);root.insert(0,style)
+    for node in doc.select('script[src]'):
+        text=asset(node['src']);assert 'document.currentScript' not in text
+        node.attrs.clear();node.string=text.replace('</script','<\\/script')
+    for node in root.select('[data-js-cetak]'):
+        node['disabled']='';node['aria-describedby']='jasa-cetak-alasan'
+    scope=root.select_one('.js-cakupan');assert scope;scope['data-ui-jasa-status']=''
+    crumb=env.get_template('_breadcrumb.html').render(rantai=breadcrumb.susun('/jasa',{},'Pesanan Jasa'))
+    variants['jasa-admin']=dict(family='jasa',path='/jasa',title='Pesanan Jasa',html=str(doc),breadcrumb=crumb,
+        statuses=[key for key,_ in statuses])
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     digest=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
     data=dict(versi=1,sumber=digest,variants=variants)
