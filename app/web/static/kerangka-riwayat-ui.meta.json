@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "79c72f4fa33fe9f685a5a69ea46152d24c12fad334f7892148f8e7902e06fc60",
-  "aset_sha256": "04c9600a85c7c7f95427f4270f506ef5753ce3f9f05654feb6ac3d46c9071db7",
+  "sumber": "340b7a29664219b41deed5e2da1dea4cf60112caf4e8efdfab13bf1044f02dcc",
+  "aset_sha256": "ac9fafe2311c6741be99214d6146498ff89a6de0f8cd2d48d10a668f37c817ea",
   "variants": [
     "/riwayat-giling",
     "/riwayat-sosoh",
@@ -22,7 +22,7 @@
     "app/web/static/riwayat-daftar-proses.css": "beb450a127ddb01278ca7ade3bfefe444ebd1e9d401c781ca8fac6eb1575947f",
     "app/web/static/riwayat-daftar-proses.js": "6d48099e3474882bbd25c48a678ceed7e08fb48ef172748f8853303a5820c5ec",
     "app/web/static/riwayat-giling-daftar.css": "03b1149f6d158e28cbd6a8295aba75d0a9e5b71755f3a77651f64dd893544a0d",
-    "app/web/static/riwayat-navigasi-native.js": "bf8a819d8d731dbbce11b9947ab47793e8cde5a1ec0c4415a601d4c14fb1ba6b",
+    "app/web/static/riwayat-navigasi-native.js": "aa528ef29b6d8a259a7d732d825a463035767bd4fe3272d8a68a6917b2a43812",
     "app/web/static/riwayat-qc-desain.css": "0f185a046924ffc1c0c143b9c38a4f8262be55da221063c1ac814101cf2b8d08",
     "app/web/static/riwayat-qc-desain.js": "3727d1fc3372ba9f1502724c916f3bc3d3e746a0c2be8f55929046de0f979696",
     "app/web/static/riwayat-sosoh-desain.css": "682db7c58286abfa6f085a3270e40a8382cdd70ecab540c9b4e44fde376fad09",

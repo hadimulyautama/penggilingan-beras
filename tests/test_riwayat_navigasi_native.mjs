@@ -8,11 +8,15 @@ const menu={default:'/riwayat-sosoh',tabs:{
  proses:{first:'/riwayat-sosoh',allowed:['/riwayat-sosoh','/riwayat-giling']},
  qc:{first:'/riwayat-qc/pk-luar',allowed:['/riwayat-qc/pk-luar']},
  audit:{first:'/audit',allowed:['/audit']}}};
+menu.tabs.laporan={first:'/laporan',allowed:['/laporan']};
 test('uses the actual native default when no remembered choice exists',()=>{
  assert.equal(resolve(menu,frames,'/kabar',null,null),'/riwayat-sosoh');
 });
 test('retains current native history family before remembered choice',()=>{
  assert.equal(resolve(menu,frames,'/riwayat-giling','qc','/riwayat-qc/pk-luar'),'/riwayat-giling');
+});
+test('the report catalogue does not replace the remembered history destination',()=>{
+ assert.equal(resolve(menu,frames,'/laporan','proses','/riwayat-giling'),'/riwayat-giling');
 });
 test('only a remembered native allowed address is reused',()=>{
  assert.equal(resolve(menu,frames,'/kabar','proses','/riwayat-giling'),'/riwayat-giling');

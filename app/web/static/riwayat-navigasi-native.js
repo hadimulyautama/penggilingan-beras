@@ -7,7 +7,7 @@
  function resolve(menu,targets,current,last,saved){
   if(!menu||!menu.tabs||typeof menu.default!=='string'||!Array.isArray(targets))return null;
   let target=menu.default;
-  const active=Object.values(menu.tabs).find(tab=>Array.isArray(tab?.allowed)&&tab.allowed.includes(current));
+  const active=Object.entries(menu.tabs).find(([key,tab])=>key!=='laporan'&&Array.isArray(tab?.allowed)&&tab.allowed.includes(current));
   if(active)target=current;
   else if(Object.hasOwn(menu.tabs,last)){
    const tab=menu.tabs[last];
