@@ -51,7 +51,7 @@ async def test_sosoh_current_native_work_link_has_layout_before_get(pg,running,g
 @pytest.mark.parametrize('role',['admin','operator'])
 @pytest.mark.parametrize('width',[390,1280])
 @pytest.mark.parametrize('phase',['pengeringan','pendinginan'])
-async def test_dryer_phase_current_link_tabs_and_abandoned_get(pg,pengeringan,role,width,phase):
+async def test_dryer_phase_current_link_tabs_and_abandoned_get(pg,pengeringan,dunia,role,width,phase):
     if phase=='pendinginan':
         from app.models import User
         from app.penggilingan.gudang1.services import drying
