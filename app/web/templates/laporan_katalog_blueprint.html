@@ -1,0 +1,3 @@
+{# Wrapper yang sama dengan base.html:202, bukan judul/layout transisi.
+   KATALOG_NATIVE hanya hasil render block isi laporan.html oleh compiler. #}
+<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include '_laporan_navigasi.html' %}<div class="laporan-isi">{{ KATALOG_NATIVE|safe }}</div></div>
