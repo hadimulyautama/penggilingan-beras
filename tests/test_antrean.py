@@ -231,6 +231,25 @@ def test_layar_keputusan_hanya_admin():
     assert not {'aksi','berjalan','keputusan','mutu'} & keys
 
 
+def _asal_layar_laci(nama, berlaci):
+    """Ikuti pembungkus statis lewat loader yang sama dengan renderer."""
+    from jinja2 import nodes
+    seen = set()
+    while nama not in berlaci and nama not in seen:
+        seen.add(nama)
+        source, _, _ = templates.env.loader.get_source(templates.env, nama)
+        parents = list(templates.env.parse(source).find_all(nodes.Extends))
+        if len(parents) != 1 or not isinstance(parents[0].template, nodes.Const):
+            return None
+        nama = parents[0].template.value
+    return nama if nama in berlaci else None
+
+
+def _membawa_lencana(pembungkus, potongan):
+    return bool(pembungkus or "lencana(" in potongan or "**lencana" in potongan
+                or all(k in potongan for k in ("MENUNGGU", "BERJALAN", "KEPUTUSAN")))
+
+
 def test_tiap_layar_berlaci_membawa_ketiga_lencana():
     """Lencana yang hilang di sebagian layar lebih membingungkan daripada
     lencana yang tak pernah ada: orang menyimpulkan pekerjaannya habis
@@ -286,12 +305,18 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
                 assert m.group(1) or "lencana(" in _panggilan(teks, m.end())
                 continue
             if nama not in berlaci:
-                continue
+                # audit_native.html misalnya tetap mewarisi laci audit.html.
+                # Jangan abaikan pembungkus baru atau menambahkan allowlist.
+                from jinja2 import TemplateNotFound
+                try:
+                    nama = _asal_layar_laci(nama, berlaci)
+                except TemplateNotFound:
+                    nama = None
+                if nama is None:
+                    continue
             terlihat.add(nama)
-            if m.group(1):                     # render_laci → ketiganya sekaligus
-                continue
             potongan = _panggilan(teks, m.end())
-            if "lencana(" in potongan or "**lencana" in potongan:
+            if _membawa_lencana(m.group(1), potongan):
                 continue
             hilang = [l for l in ("MENUNGGU", "BERJALAN", "KEPUTUSAN")
                       if l not in potongan]
@@ -303,6 +328,22 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
     # Setiap pintu laci harus benar-benar punya layar yang dirender; kalau
     # tidak, tes di atas menjaga daftar kosong tanpa ada yang tahu.
     assert terlihat == berlaci, f"tak ketemu rendernya: {berlaci - terlihat}"
+
+
+def test_penjaga_lencana_menolak_pembungkus_audit_tanpa_badge():
+    """Kontrol negatif memakai panggilan audit nyata, bukan nama pengecualian."""
+    import re
+    from app.web import layar_audit
+    source = inspect.getsource(layar_audit.halaman_audit)
+    match = re.search(r'render(_laci)?\(\s*request,\s*"([^"]+)"', source)
+    assert match and _asal_layar_laci(match[2], {'audit.html'}) == 'audit.html'
+    call = _panggilan(source, match.end())
+    assert _membawa_lencana(match[1], call)
+    # Mengganti render_laci menjadi render akan kehilangan seluruh badge.
+    assert not _membawa_lencana(False, call)
+    for missing in ('MENUNGGU', 'BERJALAN', 'KEPUTUSAN'):
+        explicit = ', '.join(k + '=1' for k in ('MENUNGGU', 'BERJALAN', 'KEPUTUSAN') if k != missing)
+        assert not _membawa_lencana(False, explicit), missing
 
 
 def _panggilan(teks: str, mulai: int) -> str:

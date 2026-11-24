@@ -257,7 +257,7 @@ def test_mutu_dipasang_sebagai_saklar_yang_menunjukkan_keadaannya():
     assert blok.count("<button") == 1
 
 
-def test_setelan_dikelompokkan_per_proses():
+async def test_setelan_dikelompokkan_per_proses():
     """Halaman ini pernah jadi deretan judul yang harus digulung untuk
     menemukan satu angka: target kadar air, lalu sebab berhenti pengeringan,
     lalu sebab berhenti giling, masing-masing dengan judulnya sendiri. Yang
@@ -284,7 +284,15 @@ def test_setelan_dikelompokkan_per_proses():
     # `test_setelan_penyosohan_ada_di_pos_produksi`.
     rute = kode_saja(pengaturan.halaman_pengaturan)
     assert "PROSES=_proses_view(V_SUPER)" in rute
-    assert "blok_setelan=tuan" in rute
+    # Kedua render sekarang berbagi flag native, bukan menyalin ekspresi.
+    assert "**menu_native" in rute
+    for tuan in (False, True):
+        async def tidak_ada_pemulihan():
+            return False
+        flags = await pengaturan._metadata_menu_native(
+            view="admin" if tuan else "selepan", peran_asli="admin" if tuan else "operator",
+            tuan=tuan, is_super=False, sesi_pendek=False, pemulihan=tidak_ada_pemulihan)
+        assert flags["blok_setelan"] is tuan
     assert "penyosohan" not in rute, "setelan Gudang 2 diurus dari Meja"
 
     # Dilipat: daftar sebab tumbuh — itu memang gunanya — dan daftar yang
