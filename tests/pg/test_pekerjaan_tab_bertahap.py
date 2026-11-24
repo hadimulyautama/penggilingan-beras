@@ -83,3 +83,76 @@ async def test_default_dan_tab_tidak_membuka_data_tanpa_sesi(pg,lengkap):
             response=await c.get(path,headers={'X-Kerangka-Halaman':'1'},follow_redirects=False)
             assert response.status_code==303 and response.headers['location'].startswith('/masuk')
             assert 'POL-UJIP-' not in response.text
+
+
+@pytest.mark.parametrize('status',[404,403])
+async def test_tujuan_tab_opsional_gagal_tidak_mengabaikan_akses(pg,lengkap,monkeypatch,status):
+    from fastapi import HTTPException
+    from app.web import halaman_bertahap as page, kerangka_langsung as registry
+    original=page.kerangka
+    async def unavailable(request,*a,**kw):
+        if request.query_params.get('cari')=='tab-fixture' and request.query_params.get('tab')=='berjalan':
+            raise HTTPException(status,'Fixture optional target unavailable')
+        return await original(request,*a,**kw)
+    monkeypatch.setattr(page,'kerangka',unavailable)
+    async with await _klien(pg,role='admin') as c:
+        before=await _sidik(pg)
+        response=await c.get('/pekerjaan?tab=tindakan&cari=tab-fixture')
+        assert response.status_code==200
+        host=BeautifulSoup(response.text,'html.parser').select_one('#padi-kerangka-langsung')
+        if status==403:
+            assert host is None, 'Invalid access must not be softened into a partial registry'
+        else:
+            data=json.loads(host.string)
+            assert registry.sah_rujukan(data)
+            assert set(registry.LITERAL).issubset(data['frames'])
+            assert not any('tab=berjalan' in u and 'tab-fixture' in u for u in data['frames'])
+        assert await _sidik(pg)==before
+
+
+@pytest.mark.parametrize('role',['operator','admin'])
+@pytest.mark.parametrize('width',[390,1280])
+async def test_default_gagal_coba_lagi_mempertahankan_filter_dan_keluar_tanpa_post(pg,lengkap,role,width):
+    import asyncio
+    import httpx
+    from playwright.async_api import expect
+    from tests.pg.test_barang_masuk_bertahap_browser import peramban,BASE
+    api='/api/halaman-bertahap/pekerjaan'
+    async with await _klien(pg,role=role,gudang_id=lengkap['gudang']['g2'] if role=='operator' else None) as c:
+        before=await _sidik(pg);native=c.request;fault={'next':True}
+        async def read(method,url,**kw):
+            assert method=='GET','Navigasi/retry bukan izin untuk menulis'
+            response=await native(method,url,**kw)
+            if str(url).split('?')[0]==api and fault['next']:
+                fault['next']=False
+                return httpx.Response(503,json={'detail':'Fixture read unavailable'})
+            return response
+        c.request=read
+        async with peramban(c,width) as (page,t):
+            await page.goto(BASE+'/kabar')
+            if width<900:await page.locator('#buka-laci').click()
+            entered,release=asyncio.Event(),asyncio.Event();t['gates'][api]=(entered,release)
+            try:
+                await page.locator('#laci a[href="/pekerjaan"]').click()
+                await asyncio.wait_for(entered.wait(),15)
+                await expect(page.locator('[data-halaman-bertahap]')).to_be_visible()
+                await expect(page.locator('section[aria-label="Pekerjaan"] nav a')).to_have_count(3)
+                await expect(page.locator('[data-shell-table-wrap] th')).to_have_count(5)
+                release.set()
+                await expect(page.locator('[data-shell-message]')).to_contain_text('Gagal memuat data; ini bukan daftar kosong')
+                await expect(page.locator('[data-shell-retry]')).to_be_visible()
+                await page.locator('input[name=cari]:visible').fill('filter-belum-diterapkan')
+                await page.locator('[data-shell-retry]').click()
+                await expect(page.locator('[data-shell-status]')).to_contain_text('Data siap')
+                await expect(page.locator('input[name=cari]:visible')).to_have_value('filter-belum-diterapkan')
+                if width<900:await page.locator('#buka-laci').click()
+                await page.locator('#laci a[href="/kabar"]').focus()
+                await page.locator('#laci a[href="/kabar"]').press('Enter')
+                await expect(page).to_have_url(BASE+'/kabar')
+                await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
+                await page.goto(BASE+'/pekerjaan?tab=tindakan')
+                await expect(page.locator('input[name=cari]:visible')).to_have_value('')
+                assert not t['posts'] and not t['errors'],t['errors']
+                assert await _sidik(pg)==before
+            finally:
+                release.set();t['gates'].pop(api,None)

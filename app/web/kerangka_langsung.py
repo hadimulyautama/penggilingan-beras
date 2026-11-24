@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 log = logging.getLogger(__name__)
 LITERAL = ('/barang-masuk', '/barang-masuk?status=belum',
@@ -55,6 +55,8 @@ def sah_rujukan(registry: dict) -> bool:
         return False
     from urllib.parse import urlsplit, parse_qs
     for alamat in set(frames) - set(LITERAL):
+        if not isinstance(alamat, str):
+            return False
         try:
             u = urlsplit(alamat)
             q = parse_qs(u.query, keep_blank_values=True)
@@ -92,8 +94,18 @@ async def susun_registry(request: Request, akun) -> dict | None:
         native = Request({**request.scope, 'path': path, 'raw_path': path.encode(),
                           'query_string': query.encode(), 'state': dict(state)})
         jenis = 'pekerjaan' if path == '/pekerjaan' else 'barang-masuk'
-        response = await kerangka(native, akun, jenis, navigasi=navigasi)
+        try:
+            response = await kerangka(native, akun, jenis, navigasi=navigasi)
+        except HTTPException as error:
+            # Tab terfilter tambahan bersifat opsional. Kegagalan tujuan itu
+            # tidak membuang kerangka dasar; sesi/akses yang invalid tetap
+            # menghentikan registry dan tidak diubah menjadi frame sukses.
+            if alamat not in LITERAL and error.status_code in (404, 422, 503):
+                continue
+            raise
         if response.status_code != 200:
+            if alamat not in LITERAL and response.status_code in (404, 422, 503):
+                continue
             return None
         frames[alamat] = response.body.decode('utf-8')
     nonce = request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state, 'csrf', None)

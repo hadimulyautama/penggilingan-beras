@@ -59,7 +59,10 @@ async def kerangka_instans(page, t, reads, trigger, alamat, jenis, kolom, width,
             await expect(page.locator('[data-bm-results]')).to_have_attribute('aria-busy','true')
         else:
             # Ini heading helper native yang sama, bukan label klik Berjalan0.
-            await expect(page.get_by_role('heading', name='Pekerjaan', exact=True)).to_be_visible()
+            # Header kini sama dengan native Perlu tindakan: judul/bar dan
+            # region tab bersama, tanpa menambah H1 duplikat dalam isi.
+            await expect(page.locator('section[aria-label="Pekerjaan"]')).to_be_visible()
+            await expect(page.locator('section[aria-label="Pekerjaan"] nav[aria-label="Tab pekerjaan"] a')).to_have_count(3)
             await expect(page.locator('[data-shell-table-wrap]')).to_have_attribute('aria-busy','true')
         if width < 900:
             await page.locator('#buka-laci').click()
