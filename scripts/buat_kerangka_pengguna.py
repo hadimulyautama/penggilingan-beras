@@ -4,9 +4,19 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 from bs4 import BeautifulSoup
 from jinja2 import ChoiceLoader,Environment,StrictUndefined
 ROOT=Path(__file__).resolve().parents[1]
+
+
+def native_frame_selector():
+    """Read, never replace or relax, the installed SDK structural gate."""
+    path=ROOT/'hmu_tampilan/static/pindah.js'
+    selectors=re.findall(r'!isi\.querySelector\("([^"]+)"\)',path.read_text())
+    if selectors!=['h1,section[aria-label],[role=region][aria-label]']:
+        raise ValueError('Native SDK framework selector requires review')
+    return selectors[0]
 
 
 def validate_fields(doc):
@@ -21,7 +31,8 @@ def validate_fields(doc):
 
 
 def build():
-    inputs={Path(__file__).resolve(),ROOT/'app/web/static/kerangka-pengguna-ui-runtime.js',ROOT/'app/web/pengguna.py',ROOT/'app/web/portal/admin.py',ROOT/'app/web/security.py',ROOT/'app/web/templates/_pengguna_baca_metadata.html'}
+    inputs={Path(__file__).resolve(),ROOT/'app/web/static/kerangka-pengguna-ui-runtime.js',ROOT/'app/web/pengguna.py',ROOT/'app/web/portal/admin.py',ROOT/'app/web/security.py',ROOT/'app/web/templates/_pengguna_baca_metadata.html',ROOT/'hmu_tampilan/static/pindah.js'}
+    selector=native_frame_selector()
     def module(name,path):
         inputs.add(path);spec=importlib.util.spec_from_file_location(name,path)
         result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result
@@ -46,6 +57,9 @@ def build():
         template=env.get_template('pengguna_baca_native.html')
         raw=''.join(template.blocks['isi'](template.new_context(dict(PENGGUNA_BACA=spec,VERSI='__PADI_CAP__'))))
         doc=BeautifulSoup(raw,'html.parser')
+        root=doc.select_one('[data-pengguna-baca-native]')
+        if root is None or root.get('aria-label')!=spec['title'] or not doc.select_one(selector):
+            raise ValueError('Native SDK cannot recognize the named Users framework')
         validate_fields(doc)
         if doc.select('form,[name],input[type=hidden],[data-post],[data-kirim]'):raise ValueError('Bentuk pengguna tidak boleh berisi penulis/kunci akun')
         if any(not n.has_attr('disabled') or n.has_attr('value') for n in doc.select('input,select,textarea') if not n.has_attr('data-pengguna-cari')):raise ValueError('Nilai pengguna belum diketahui')

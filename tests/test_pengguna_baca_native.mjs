@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
 const require=createRequire(import.meta.url),{state,validData,validPermission,validCatalog,stripNative}=require('../app/web/static/kerangka-pengguna-ui-runtime.js');
 const {configuration,emptyPeopleCase}=require('../app/web/static/pengguna-baca-native.js');
 const origin='https://fixture.invalid',source='a'.repeat(64),ctx='context',cap='cap',token='session';
@@ -54,4 +55,22 @@ test('only native true-empty staff account-choice keeps disabled inert fields',(
   ['staf','Buatkan akun','Semua orang yang aktif sudah punya akun.',true],
   ['staf','Akun yang ada','Semua orang yang aktif sudah punya akun.',false],
  ])assert.equal(emptyPeopleCase(...values),false);
+});
+
+test('actual five-variant public package keeps valid factory input and named pending sections',()=>{
+ const file=readFileSync(new URL('../app/web/static/kerangka-pengguna-ui.js',import.meta.url),'utf8');
+ const actual=JSON.parse(file.split('window.PadiKerangkaPenggunaData=',2)[1].split(';\n',1)[0]);
+ assert.equal(validData(actual),true);
+ for(const variant of variants){
+  const component=actual.variants[variant];
+  const section=component.html.match(/<section\b[^>]*\bdata-pengguna-baca-native\b[^>]*>/);
+  assert.ok(section,variant);
+  assert.match(section[0],/\baria-label="[^"]+"/,variant);
+  const permissionFixture={...permission(),sumber:actual.sumber};
+  assert.equal(validPermission(permissionFixture,actual,ctx,cap,token),true,variant);
+ }
+ const runtime=readFileSync(new URL('../app/web/static/kerangka-pengguna-ui-runtime.js',import.meta.url),'utf8');
+ assert.ok(runtime.includes("root.setAttribute('aria-label',title)"),'Factory must fill a verified staff-detail name, not leave its compiled placeholder');
+ const unchangedSdk=readFileSync(new URL('../hmu_tampilan/static/pindah.js',import.meta.url),'utf8');
+ assert.ok(unchangedSdk.includes('!isi.querySelector("h1,section[aria-label],[role=region][aria-label]")'));
 });

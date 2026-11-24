@@ -45,6 +45,7 @@ def test_native_fields_disabled_unknown_values_not_false_empty_or_one_time_crede
     html=env.get_template('pengguna_baca_native.html').render(PENGGUNA_BACA=value,VERSI='fixture-cap')
     doc=BeautifulSoup(html,'html.parser')
     assert len(doc.select('[data-pengguna-baca-native]'))==1
+    assert doc.select_one('[data-pengguna-baca-native]').get('aria-label')==value['title']
     assert not doc.select('form,[name],input[type=hidden],[data-post],[data-kirim]')
     assert all(n.has_attr('disabled') for n in doc.select('input,select,textarea'))
     assert all(n.has_attr('disabled') and n.get('type')=='button' for n in doc.select('button:not([data-pengguna-baca-retry])'))
@@ -209,3 +210,30 @@ def test_catalog_overbudget_declines_without_truncating_or_guessing_rows():
 def test_compiler_declines_missing_ambiguous_or_duplicate_field_labels(html):
     spec=importlib.util.spec_from_file_location('users_a11y_compiler',ROOT/'scripts/buat_kerangka_pengguna.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     with pytest.raises(ValueError):module.validate_fields(BeautifulSoup(html,'html.parser'))
+
+
+def test_all_five_compiled_frames_satisfy_actual_installed_sdk_structure_without_extra_visual_heading(monkeypatch):
+    spec=importlib.util.spec_from_file_location('users_sdk_frame_compiler',ROOT/'scripts/buat_kerangka_pengguna.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    selector=module.native_frame_selector()
+    assert selector=='h1,section[aria-label],[role=region][aria-label]'
+    payload,manifest=module.build()
+    meta=json.loads(manifest)
+    assert 'hmu_tampilan/static/pindah.js' in meta['inputs']
+    data=json.loads(payload.decode().split('window.PadiKerangkaPenggunaData=',1)[1].split(';\n',1)[0])
+    for variant,component in data['variants'].items():
+        doc=BeautifulSoup(component['html'],'html.parser')
+        root=doc.select_one('[data-pengguna-baca-native]')
+        assert root and root.get('aria-label')==component['title'] and doc.select_one(selector)
+        # Preserve native visual heading count. Naming the existing section
+        # must not reintroduce a transient extra H1 on the three staff shapes.
+        assert len(doc.select('h1'))==(0 if variant.startswith('staf') else 1)
+        # A deliberately unnamed, heading-less synthetic negative fails the
+        # *same* SDK selector; do not loosen that selector to make it pass.
+        for heading in doc.select('h1'):heading.decompose()
+        for region in doc.select('section[aria-label],[role=region][aria-label]'):del region['aria-label']
+        assert not doc.select_one(selector)
+    # Prove the compiler actually enforces the installed selector before it
+    # can emit a package, rather than merely recording its source hash.
+    monkeypatch.setattr(module,'native_frame_selector',lambda:'#not-a-native-framework')
+    with pytest.raises(ValueError,match='SDK cannot recognize'):
+        module.build()

@@ -60,7 +60,7 @@
   const part=doc.createElement('template');part.innerHTML=component.html;
   for(const [selector,pool,attr]of [['style[data-users-style]',data.styles,'data-users-style'],['script[data-users-script]',data.scripts,'data-users-script']])for(const n of part.content.querySelectorAll(selector)){const key=n.getAttribute(attr);if(!own(pool,key))return null;n.textContent=pool[key];n.removeAttribute(attr);}
   const roots=part.content.querySelectorAll('[data-pengguna-baca-native]');if(roots.length!==1||part.content.querySelector('form,[name],input[type=hidden],[data-post],[data-kirim],script[src],link[rel=stylesheet]')||Array.from(part.content.querySelectorAll('input,select,textarea')).some(n=>!n.disabled)||Array.from(part.content.querySelectorAll('button:not([data-pengguna-baca-retry])')).some(n=>!n.disabled||n.type!=='button'))return null;
-  const root=roots[0];root.dataset.url=address;root.dataset.stamp=ctx+'|'+address;
+  const root=roots[0];root.dataset.url=address;root.dataset.stamp=ctx+'|'+address;root.setAttribute('aria-label',title);
   if(variant==='staf-detail')root.querySelector('[data-pengguna-nama]').textContent=title;
   const filter=root.querySelector('[data-pengguna-cari]');if(filter)filter.setAttribute('value',selected.search);
   // The source prototype has no Reset when query is empty; add only that
