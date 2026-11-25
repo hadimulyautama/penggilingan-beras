@@ -408,6 +408,10 @@ async def beranda(request: Request):
     if akun is None:
         return RedirectResponse("/masuk", status_code=303)
 
+    from app.web.beranda_bertahap import memakai, kerangka
+    if memakai(request):
+        return await kerangka(request, akun)
+
     from app.services import berjalan as svc
 
     # Benda yang berjalan diambil dari daftar yang SAMA dengan layar Sedang

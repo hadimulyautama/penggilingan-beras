@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block judul %}Beranda{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/beranda-alur.css?v={{ VERSI }}">
+<div data-halaman-bertahap data-kind="beranda" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
+ <header class="beranda-sambut beranda-sambut--ringkas" aria-labelledby="judul-beranda"><div class="beranda-sambut__kepala"><div>
+  <div class="beranda-eyebrow">{{ tanggal_tampil }} · {% if semua_gudang %}Semua gudang{% elif VIEW == 'selepan' %}Gudang 1 · Selepan{% elif VIEW == 'polesan' %}Gudang 2 · Penyosohan{% else %}Belum punya gudang{% endif %}</div>
+  <h1 id="judul-beranda">{{ sapaan }}</h1>
+ </div></div></header>
+ <div data-shell-table-wrap aria-busy="true">
+  <div class="beranda-kolom beranda-kolom--pekerjaan">
+   <section class="beranda-tindaklanjut" aria-label="Perlu perhatian"><h2 class="lbl">Perlu perhatian</h2>
+    <div class="beranda-pekerjaan">{% for nama in ['Barang Masuk', 'Pekerjaan', 'Pengiriman', 'Status & informasi'] %}<div class="tindakan"><div class="tindakan__isi"><strong>{{ nama }}</strong><p class="bantu">Jumlah dan tindakan menunggu pembacaan.</p></div><span aria-label="Belum dibaca">—</span></div>{% endfor %}</div>
+   </section>
+   <section class="beranda-aktivitas" aria-label="Sedang berjalan"><h2 class="lbl" data-beranda-judul-aktivitas>Sedang berjalan</h2>
+    <article class="padat"><dl class="fakta">{% for label in ['Proses / lot', 'Pemilik', 'Tahap', 'Status', 'Berat tercatat'] %}<div><dt>{{ label }}</dt><dd>—</dd></div>{% endfor %}</dl><button class="btn" type="button" disabled aria-describedby="beranda-baca-status">Tindakan proses tersedia setelah data dibaca</button></article>
+   </section>
+  </div>
+  <section class="beranda-ringkasan beranda-ringkasan--padat beranda-ringkasan--alur" aria-label="Ringkasan operasional">
+   {% for g in BERANDA_GUDANG %}<section class="alur-gudang" aria-label="{{ g.nama }} — {{ g.fungsi }}" data-alur-gudang="{{ g.id }}">
+    <header class="alur-gudang__kepala"><div class="alur-gudang__identitas"><span class="alur-gudang__kode">{{ g.id|upper }}</span><div><h2>{{ g.fungsi }}</h2><p>{{ g.nama }}</p></div></div>{% if g.boleh %}<a class="alur-gudang__buka" href="/gudang/{{ g.id }}" aria-label="Lihat {{ g.nama }}">↗</a>{% endif %}</header>
+    {% if g.boleh %}<div class="alur-masuk"><span>{{ 'Gabah masuk' if g.id == 'g1' else 'PK masuk' }} <small>hari ini</small></span><strong>—<small> kg</small></strong><p>Belum dibaca</p></div>
+    <div class="alur-mesin">{% if g.id == 'g1' %}<section class="alur-pengering" aria-label="Mesin pengering {{ g.nama }}"><header class="alur-bagian"><h3>Dryer / pengering</h3><span>— alat · — terisi</span></header><p>Keadaan alat menunggu data.</p></section>{% endif %}
+    <div class="alur-penyimpanan"><section class="alur-silo-area" aria-label="Silo {{ g.nama }}"><header class="alur-bagian"><h3>Silo terisi</h3><span>— / —</span></header><p>Keadaan silo menunggu data.</p></section></div></div>
+    <section class="alur-stok"><h3>{{ 'Stok PK' if g.id == 'g1' else 'Tumpukan PK' }}</h3><strong>—<small> kg</small></strong><p>Saldo menunggu pembacaan terbaru.</p><button type="button" disabled class="btn" aria-describedby="beranda-baca-status">Lihat stok setelah cakupan dibaca</button></section>
+    {% else %}<p class="alur-catatan" aria-disabled="true">Tidak memiliki akses gudang ini.</p>{% endif %}
+   </section>{% else %}<p class="kosong-tipis">Akun Anda belum ditetapkan gudangnya.</p>{% endfor %}
+  </section>
+ </div>
+ <div class="halaman-bertahap__status"><p id="beranda-baca-status" data-shell-status role="status">Membaca keadaan pabrik…</p><button type="button" class="btn btn--kecil" data-shell-retry hidden>Coba lagi</button></div>
+ <p class="bantu" data-shell-message>Angka bertanda — belum dibaca; bukan nol atau keadaan kosong.</p>
+</div>
+<script src="/static/halaman-bertahap.js?v={{ VERSI }}" defer></script>
+{% endblock %}

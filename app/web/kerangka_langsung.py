@@ -224,7 +224,15 @@ async def lengkapi_dokumen(request: Request, response):
                     if isinstance(error, HTTPException) and error.status_code in (401, 403):
                         raise
                     log.warning('Kerangka Riwayat belum tersedia (%s)', type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, riwayat=riwayat).encode()
+                beranda = None
+                try:
+                    from app.web.beranda_bertahap import susun as susun_beranda
+                    beranda = await susun_beranda(request, akun, navigasi=navigasi)
+                except Exception as error:
+                    if isinstance(error, HTTPException) and error.status_code in (401, 403):
+                        raise
+                    log.warning('Kerangka Beranda belum tersedia (%s)', type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, riwayat=riwayat, beranda=beranda).encode()
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
                 body = siap
         except Exception as e:

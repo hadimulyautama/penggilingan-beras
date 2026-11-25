@@ -120,6 +120,17 @@
   for(const anchor of frame.querySelectorAll('a.bar__balik,a.desktop-back'))anchor.setAttribute('href',kembali);
   return {versi:1,alamat:target.alamat,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
+ function berandaLangsung(pilihan,context,cap,token){
+  if(pilihan.alamat!=='/')return null;
+  const host=document.getElementById('padi-beranda-kerangka');
+  if(!host?.isConnected||host.dataset.konteks!==context||host.dataset.cap!==cap||host.textContent.length>1048576)return null;
+  let data;try{data=JSON.parse(host.textContent);}catch(_){return null;}
+  if(data?.versi!==1||data.penyandian!=='baris-1'||data.cap!==cap||data.konteks!==context||data.sesi!==token||!data.frames||Array.isArray(data.frames)||Object.keys(data.frames).length!==1||!Object.hasOwn(data.frames,'/'))return null;
+  const html=decodeFrame(data,'/');if(!html)return null;
+  const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),root=doc.querySelector('[data-halaman-bertahap][data-kind="beranda"]');
+  if(!frame||!root||frame.dataset.pindahAlamat!=='/'||frame.dataset.pindahKonteks!==context||root.dataset.stamp!==context+'|/'||root.dataset.url!=='/api/halaman-bertahap/beranda'||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
+  return {versi:1,alamat:'/',konteks:context,cap,html};
+ }
  const riwayatPaths=['/riwayat-sosoh','/riwayat-giling','/riwayat-pengeringan'];
  function descriptorRiwayat(context,cap,token){
   const node=document.getElementById('padi-riwayat-kerangka');
@@ -167,7 +178,7 @@
   if(!host?.isConnected||!frame||!sesi?.dataset.token||!cap||host.dataset.cap!==cap||host.dataset.konteks!==frame.dataset.pindahKonteks||window.SESIFORM&&!SESIFORM.periksa())return null;
   if(host!==hostLama){try{registry=JSON.parse(host.textContent);hostLama=host;}catch(_){return null;}}
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
-  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat))return stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||riwayatLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||detailLangsung(pilihan,registry.konteks,cap);
+  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat))return stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||riwayatLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||berandaLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||detailLangsung(pilihan,registry.konteks,cap);
   // Validasi seluruh indeks dan ukuran sebelum join. Versi/rujukan rusak
   // kembali ke navigasi native, bukan HTML parsial atau alamat tebakan.
   const html=decodeFrame(registry,pilihan.alamat);if(!html)return null;

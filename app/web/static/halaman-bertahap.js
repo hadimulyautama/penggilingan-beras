@@ -7,7 +7,44 @@
  if(!root||root.dataset.ready)return;root.dataset.ready='1';
  const main=document.getElementById('isi-halaman'),status=root.querySelector('[data-shell-status]'),retry=root.querySelector('[data-shell-retry]'),table=root.querySelector('[data-shell-table-wrap]'),message=root.querySelector('[data-shell-message]');
  const detail=root.dataset.kind==='barang-masuk-detail';
+ const beranda=root.dataset.kind==='beranda';
  const riwayat=['riwayat-sosoh','riwayat-giling','riwayat-pengeringan'].includes(root.dataset.kind);
+ function berandaIslands(content){
+  if(!beranda)return null;
+  if(content.querySelector('.pesan--hati[role="alert"]'))throw Error('Sebagian keadaan pabrik belum dapat dibaca. Coba lagi hanya membaca, tanpa mencatat transaksi.');
+  const selectors=['.beranda-sambut','.beranda-kolom','.beranda-tindaklanjut','.beranda-aktivitas','.beranda-ringkasan'];
+  const parts=selectors.map(selector=>({old:root.querySelector(selector),fresh:content.querySelector(selector)}));
+  if(parts.some(p=>!p.old||!p.fresh))throw Error('Struktur Beranda berubah. Muat ulang halaman.');
+  const oldTitle=root.querySelector('#judul-beranda'),nextTitle=content.querySelector('#judul-beranda');
+  const oldNeeds=root.querySelector('.beranda-tindaklanjut>h2.lbl'),nextNeeds=content.querySelector('.beranda-tindaklanjut>h2.lbl');
+  if(!oldTitle||!nextTitle||!oldNeeds||!nextNeeds||oldNeeds.textContent!==nextNeeds.textContent)throw Error('Judul Beranda belum sesuai. Coba lagi.');
+  const oldSites=Array.from(root.querySelectorAll('[data-alur-gudang]')),nextSites=Array.from(content.querySelectorAll('[data-alur-gudang]'));
+  const headerShape=n=>({key:n.dataset.alurGudang,code:n.querySelector('.alur-gudang__kode')?.textContent.trim(),name:n.querySelector('.alur-gudang__kepala p')?.textContent.trim(),title:n.querySelector('.alur-gudang__kepala h2')?.textContent.trim(),links:Array.from(n.querySelectorAll('.alur-gudang__kepala a'),a=>a.getAttribute('href'))});
+  if(JSON.stringify(oldSites.map(headerShape))!==JSON.stringify(nextSites.map(headerShape)))throw Error('Cakupan ringkasan gudang berubah. Muat ulang halaman.');
+  return {parts,oldTitle,nextTitle,oldNeeds,nextNeeds,oldSites,nextSites};
+ }
+ function retainBeranda(island){
+  if(!island)return;
+  const {parts,oldTitle,nextTitle,oldNeeds,nextNeeds,oldSites,nextSites}=island;
+  oldTitle.textContent=nextTitle.textContent;nextTitle.replaceWith(oldTitle);nextNeeds.replaceWith(oldNeeds);
+  // Nilai dan baris berasal dari renderer native. Hanya node struktur dan
+  // tautan gudang yang sudah tervalidasi dipertahankan, bukan hasil lama.
+  oldSites.forEach((old,i)=>{
+   const fresh=nextSites[i],head=old.querySelector('.alur-gudang__kepala');
+   fresh.querySelector('.alur-gudang__kepala').replaceWith(head);
+   old.replaceChildren(...Array.from(fresh.childNodes));fresh.replaceWith(old);
+  });
+  // Aktivitas kosong tetap memiliki judul bagian; angka belum dibaca tidak
+  // pernah dipakai memutuskan apakah ada proses atau tindakan.
+  const activity=parts[3],heading=activity.old.querySelector('[data-beranda-judul-aktivitas]');
+  if(heading){
+   const native=Array.from(activity.fresh.querySelectorAll('[data-blok]>.lbl')).find(n=>n.textContent.trim().startsWith('Sedang berjalan ·'));
+   if(native){heading.replaceChildren(...Array.from(native.childNodes));native.replaceWith(heading);}
+   else activity.fresh.prepend(heading);
+  }
+  // Anak dahulu supaya wrapper kolom memegang kembali bagian yang sama.
+  for(const i of [2,3,1,4,0]){const {old,fresh}=parts[i];old.className=fresh.className;old.replaceChildren(...Array.from(fresh.childNodes));fresh.replaceWith(old);}
+ }
  function riwayatIslands(content){
   if(!riwayat)return null;
   const old=root.closest('.laporan-riwayat'),fresh=content.querySelector('.laporan-riwayat');
@@ -270,7 +307,7 @@
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
   const stock=content.querySelector('[data-stok-controls]');
   if(stock){const url=new URL(stock.dataset.pelangganUrl,location.href);url.pathname='/api/halaman-bertahap/stok/html';stock.dataset.pelangganUrl=url.pathname+url.search;}
-  const island=controlIsland(content),stockFrame=stockTable(content),detailFrame=detailIslands(content),historyFrame=riwayatIslands(content);
+  const island=controlIsland(content),stockFrame=stockTable(content),detailFrame=detailIslands(content),historyFrame=riwayatIslands(content),homeFrame=berandaIslands(content);
   const prepared=await prepareScripts(content,doc,controller?.signal);
   if(!current(number)||payload.stamp!==stamp)return;
   // Pengguna dapat membuka filter ketika asset masih dibaca.
@@ -288,7 +325,7 @@
   }
   if(!window.PINDAH?.selaraskanChrome||!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
   const previousFocus=document.activeElement;
-  retainControls(island);retainTable(stockFrame);retainDetail(detailFrame);retainRiwayat(historyFrame);
+  retainControls(island);retainTable(stockFrame);retainDetail(detailFrame);retainRiwayat(historyFrame);retainBeranda(homeFrame);
   observer.disconnect();finished=true;controller=null;
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
   const valid=()=>content.isConnected&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
@@ -301,7 +338,7 @@
  async function read(){
   readFromRetry=document.activeElement===retry;
   if(controller)controller.abort();const number=++sequence;controller=new AbortController();const active=controller;pending=null;
-  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=detail?'Memuat detail penerimaan…':riwayat?'Memuat catatan…':'Memuat data…';message.textContent=detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':riwayat?'Catatan sedang dibaca. Jenis proses dan panduan tetap tersedia.':'Memuat data. Judul kolom dan filter tetap tersedia.';
+  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=detail?'Memuat detail penerimaan…':riwayat?'Memuat catatan…':beranda?'Membaca keadaan pabrik…':'Memuat data…';message.textContent=detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':riwayat?'Catatan sedang dibaca. Jenis proses dan panduan tetap tersedia.':beranda?'Angka bertanda — belum dibaca; bukan nol atau keadaan kosong.':'Memuat data. Judul kolom dan filter tetap tersedia.';
   const timeout=setTimeout(()=>active.abort(),20000);
   try{
    const response=await fetch(root.dataset.url,{credentials:'same-origin',cache:'no-store',signal:active.signal,headers:{'Accept':'application/json'}});
@@ -315,7 +352,7 @@
    failed(error,number);
   }finally{clearTimeout(timeout);if(current(number)){controller=null;table.setAttribute('aria-busy','false');}}
  }
- function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':riwayat?'Catatan belum dapat dibaca; ini bukan riwayat kosong.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
+ function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':riwayat?'Catatan belum dapat dibaca; ini bukan riwayat kosong.':beranda?'Keadaan pabrik belum dapat dibaca; ini bukan berarti tidak ada pekerjaan atau stok.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
  async function resume(){
   if(!pending||interacting())return;
   const next=pending;pending=null;if(!current(next.number))return;

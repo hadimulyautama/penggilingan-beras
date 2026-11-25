@@ -2,3 +2,4 @@
 <script type="application/json" id="padi-kerangka-langsung" data-konteks="{{ registry.konteks }}" data-cap="{{ registry.cap }}">{{ registry|tojson }}</script>{% if stok %}
 <script type="application/json" id="padi-stok-kerangka" data-konteks="{{ stok.konteks }}" data-cap="{{ stok.cap }}">{{ stok|tojson }}</script>{% endif %}{% if riwayat %}
 <script type="application/json" id="padi-riwayat-kerangka" data-konteks="{{ riwayat.konteks }}" data-cap="{{ riwayat.cap }}">{{ riwayat|tojson }}</script>{% endif %}
+{% if beranda %}<script type="application/json" id="padi-beranda-kerangka" data-konteks="{{ beranda.konteks }}" data-cap="{{ beranda.cap }}">{{ beranda|tojson }}</script>{% endif %}
