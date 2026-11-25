@@ -143,12 +143,14 @@
  }
  function pasangAliasRiwayat(){
   const frame=document.querySelector('.bingkai'),token=document.getElementById('formulir-sesi')?.dataset.token,cap=document.documentElement.dataset.versi;
-  if(!frame||!token||!cap)return;
+  if(!frame||!token||!cap||window.SESIFORM&&!SESIFORM.periksa())return;
   const data=descriptorRiwayat(frame.dataset.pindahKonteks,cap,token);
   if(!data?.default)return;
   // Hanya alias polos yang sama dengan keputusan server; bookmark kanonik
   // QC/Giling serta alias berparameter tetap milik navigasi native.
-  for(const a of document.querySelectorAll('a[href="/riwayat"],a[href="/laporan-riwayat"]'))a.setAttribute('href',data.default);
+  for(const a of document.querySelectorAll('#laci a.pintu[data-pindah-menu="laporan_riwayat"],.desktop-chrome__crumbrow a[href],a.desktop-back[href],a.bar__balik[href]')){
+   if(['/riwayat','/laporan-riwayat'].includes(a.getAttribute('href')))a.setAttribute('href',data.default);
+  }
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',pasangAliasRiwayat,{once:true});
  else pasangAliasRiwayat();
