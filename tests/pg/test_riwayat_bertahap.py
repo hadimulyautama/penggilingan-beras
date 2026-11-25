@@ -55,8 +55,14 @@ async def test_history_shell_permission_native_parity_and_cursor(pg, lengkap, mo
                     data=await client.get("/api/halaman-bertahap/"+kind+query)
                     assert shell.status_code==native.status_code==data.status_code==200
                     dom=BeautifulSoup(shell.text,"html.parser");root=dom.select_one("[data-halaman-bertahap]")
-                    assert root and root["data-stamp"]==data.json()["stamp"]
                     assert _isi(native.text)==_isi(data.json()["html"])
+                    if query:
+                        # Cursor routes deliberately remain native in this
+                        # slice, including invalid legacy cursor fallback.
+                        assert root is None
+                        assert _isi(shell.text)==_isi(native.text)
+                        continue
+                    assert root and root["data-stamp"]==data.json()["stamp"]
                     fresh=BeautifulSoup(native.text,"html.parser")
                     columns=lambda d:[c.text.strip() for c in d.select(".riwayat-desktop-list>.riwayat-desktop-head>span,.riwayat-desktop-list>table>thead th")]
                     assert columns(dom)==columns(fresh)==config["columns"]

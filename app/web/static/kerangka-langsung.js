@@ -130,9 +130,7 @@
  }
  function riwayatLangsung(pilihan,context,cap,token){
   const u=new URL(pilihan.alamat,location.href);
-  if(u.origin!==location.origin||!riwayatPaths.includes(u.pathname)||u.hash||u.search.length>100||Array.from(u.searchParams.keys()).some(k=>k!=='sebelum'||u.searchParams.getAll(k).length!==1))return null;
-  const cursor=u.searchParams.get('sebelum');
-  if(cursor!==null&&!/^-?\d{1,10}$/.test(cursor))return null;
+  if(u.origin!==location.origin||!riwayatPaths.includes(u.pathname)||u.hash||u.search)return null;
   const data=descriptorRiwayat(context,cap,token),html=data&&decodeFrame(data,u.pathname);if(!html)return null;
   const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),root=doc.querySelector('[data-halaman-bertahap]');
   const kind=u.pathname.slice(1),prototype=u.pathname;

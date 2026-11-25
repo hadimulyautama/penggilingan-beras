@@ -18,6 +18,9 @@ TUJUAN = {
 def memakai(request, kind):
     from app.web.portal.scope import is_customer_read
     return (kind in TUJUAN and not is_customer_read(request)
+            # Irisan pertama hanya tiga daftar default. Kursor/notifikasi
+            # lama tetap renderer native; API baca tetap mempertahankannya.
+            and not request.url.query
             and request.url.path == TUJUAN[kind]["path"]
             and not getattr(request.state, "isi_halaman_bertahap", False)
             and not getattr(request.state, "menyusun_kerangka_langsung", False)
