@@ -26,7 +26,7 @@
       if (!baru || typeof baru !== 'string') {
         if (baru && baru.login) { ops.utuh('/pelanggan/masuk'); }
         else if (baru && baru.utuh) { ops.utuh(baru.utuh); }
-        else if (bertahap && ops.gagal) { ops.gagal(url, function () { return pindah(url, false, gulung, judul); }); }
+        else if (bertahap && ops.gagal) { ops.gagal(url, function () { return pindah(url, dorong, gulung, judul); }); }
         else ops.utuh(url);
         return;
       }
@@ -43,7 +43,7 @@
         }
         ops.status('selesai'); return;
       }
-      if (!ops.pasang(baru, url, lama || bertahap ? false : dorong, gulung)) { ops.utuh(url); return; }
+      if (!ops.pasang(baru, url, lama ? false : dorong, gulung)) { ops.utuh(url); return; }
       ops.status('selesai');
     }
     return {
@@ -76,7 +76,7 @@
   var main = document.getElementById('isi-pelanggan');
   if (!main || !window.fetch || !window.history) return;
   var akun = document.body.getAttribute('data-portal-akun'), sentuhan = 0;
-  var janji = new Map(), pesan = null, timer = null;
+  var janji = new Map(), pesan = null, timer = null, isiMenunggu = null, statusSibuk = null;
   function nonce() {
     return document.cookie.split('; ').find(function (s) { return s.indexOf('produksi_csrf=') === 0; }) || '';
   }
@@ -87,49 +87,38 @@
       && !/\/(masuk|keluar|sw\.js|manifest\.webmanifest)$/.test(url.pathname)
       && !/\.(pdf|csv)$/i.test(url.pathname) && !url.hash;
   }
-  function kerangka(url, dorong, gulung, judul) {
+  function tandaiSibuk(ya) {
+    if (ya) {
+      if (!statusSibuk) statusSibuk = { aria: main.getAttribute('aria-busy') };
+      main.setAttribute('aria-busy', 'true');
+    } else if (statusSibuk) {
+      if (statusSibuk.aria === null) main.removeAttribute('aria-busy');
+      else main.setAttribute('aria-busy', statusSibuk.aria);
+      statusSibuk = null;
+    }
+  }
+  function pulihkanIsi() {
+    if (isiMenunggu) { main.inert = isiMenunggu.inert; isiMenunggu = null; }
+    tandaiSibuk(false);
+  }
+  function kerangka() {
     if (nonce() !== sesi) return false;
-    if (dorong) {
-      history.replaceState(Object.assign({}, history.state, { portalScroll: main.scrollTop }), '', alamat());
-      history.pushState({ portal: 1, portalScroll: 0 }, '', url);
-    }
-    var nom = judul || 'Halaman';
-    main.innerHTML = '<section class="halaman-memuat" aria-busy="true"><h1></h1><p role="status" aria-live="polite">Memuat data…</p><div class="halaman-memuat__baris" aria-hidden="true"><i></i><i></i><i></i></div></section>';
-    main.querySelector('h1').textContent = nom;
-    document.title = nom + ' · PadiFlow Pelanggan';
-    var path = new URL(url, location.origin).pathname;
-    document.querySelectorAll('.portal-sidebar nav a[href],.portal-bawah a[href]').forEach(function (link) {
-      var p = new URL(link.href, location.origin).pathname;
-      var aktif = p === path || p !== '/pelanggan/' && path.indexOf(p + '/') === 0;
-      if (aktif) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
-      if (link.classList.contains('pintu')) link.classList.toggle('pintu--kini', aktif);
-    });
-    var menu = document.getElementById('menu-pelanggan');
-    if (menu) {
-      if (document.querySelector('.portal-bawah a[aria-current]')) menu.removeAttribute('data-current');
-      else menu.setAttribute('data-current', 'true');
-    }
-    main.scrollTop = gulung || 0;
-    main.focus({ preventScroll: true });
-    window.dispatchEvent(new Event('portal:halaman'));
+    // Tunggu GET native tanpa judul/halaman transisi. Navigasi berada di luar
+    // main; hanya kontrol isi lama yang dibekukan sampai hasil pilihan tiba.
+    if (!isiMenunggu) isiMenunggu = { inert: main.inert };
+    main.inert = true; tandaiSibuk(true);
     return true;
   }
   function gagal(url, ulangi) {
-    status('selesai');
-    main.innerHTML = '<section class="halaman-memuat"><h1>Data belum dapat dimuat</h1><p role="alert">Periksa koneksi Anda, lalu coba lagi.</p><button class="btn" type="button">Coba lagi</button> <a class="btn" data-utuh>Muat ulang halaman</a></section>';
-    main.querySelector('button').addEventListener('click', ulangi);
-    main.querySelector('a').href = url;
+    pulihkanIsi();
+    status('navigasi-gagal', ulangi);
   }
   function status(mode, muat) {
     if (timer) clearTimeout(timer);
     if (pesan) pesan.remove();
-    main.removeAttribute('aria-busy');
     pesan = null;
-    if (mode === 'selesai') return;
+    if (mode === 'selesai') { pulihkanIsi(); return; }
     if (mode === 'tertunda') { mode = 'gagal'; muat = function () { segarkan(true); }; }
-    if (mode === 'memuat' && main.querySelector('.halaman-memuat')) {
-      main.setAttribute('aria-busy', 'true'); return;
-    }
     function tampilkan() {
       var tempat = document.querySelector('.portal-top-identitas');
       if (!tempat) return;
@@ -137,15 +126,15 @@
       pesan.className = 'portal-status-navigasi';
       pesan.setAttribute('role', 'status');
       pesan.setAttribute('aria-live', 'polite');
-      pesan.textContent = mode === 'gagal' ? 'Data belum berhasil diperbarui. Tampilan masih memakai data sebelumnya. ' : mode === 'perubahan' ? 'Data terbaru tersedia. ' : mode === 'simpan' ? 'Menyimpan…' : mode === 'memperbarui' ? 'Memperbarui data…' : 'Membuka halaman…';
+      pesan.textContent = mode === 'navigasi-gagal' ? 'Halaman belum dapat dibuka. Tampilan sebelumnya tetap tersedia. ' : mode === 'gagal' ? 'Data belum berhasil diperbarui. Tampilan masih memakai data sebelumnya. ' : mode === 'perubahan' ? 'Data terbaru tersedia. ' : mode === 'simpan' ? 'Menyimpan…' : mode === 'memperbarui' ? 'Memperbarui data…' : 'Membuka halaman…';
       if (muat) {
-        var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Muat data terbaru';
+        var b = document.createElement('button'); b.type = 'button'; b.textContent = mode === 'navigasi-gagal' ? 'Coba lagi' : 'Muat data terbaru';
         b.addEventListener('click', muat); pesan.appendChild(b);
       }
       tempat.appendChild(pesan);
     }
     if (muat) { tampilkan(); return; }
-    main.setAttribute('aria-busy', 'true');
+    tandaiSibuk(true);
     // Navigasi cepat tetap tenang. Status hanya muncul bila pengguna menunggu,
     // dalam kepala halaman; tidak menutupi isi atau mewarnai status bar HP.
     timer = setTimeout(function () {
@@ -177,6 +166,7 @@
     if (!baru || doc.body.getAttribute('data-portal-akun') !== akun) return false;
     var keadaan = otomatis && window.KEADAAN_BACA ? KEADAAN_BACA.ambil(main) : null;
     if (otomatis && main.innerHTML === baru.innerHTML) return true;
+    pulihkanIsi();
     if (dorong) history.replaceState(Object.assign({}, history.state, { portalScroll: main.scrollTop }), '', alamat());
     doc.querySelectorAll('link[rel=stylesheet][href]').forEach(function (link) {
       var ada = Array.from(document.querySelectorAll('link[rel=stylesheet][href]')).some(function (el) { return el.getAttribute('href') === link.getAttribute('href'); });
@@ -210,8 +200,7 @@
     var menuTerbuka = document.body.classList.contains('sidebar-open');
     if (otomatis) { if (keadaan) KEADAAN_BACA.pulihkan(main,keadaan); }
     else { main.scrollTop = gulung || 0; if (!menuTerbuka) main.focus({ preventScroll: true }); }
-    // Kerangka sudah menutup menu pada awal navigasi. Respons data yang
-    // datang belakangan tidak boleh menutup menu yang dibuka kembali.
+    // Respons data tidak boleh menutup menu yang masih dipakai.
     if (!menuTerbuka) window.dispatchEvent(new Event('portal:halaman'));
     return true;
   }
