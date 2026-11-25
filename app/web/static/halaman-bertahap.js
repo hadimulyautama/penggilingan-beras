@@ -355,7 +355,7 @@
    failed(error,number);
   }finally{clearTimeout(timeout);if(current(number)){controller=null;table.setAttribute('aria-busy','false');}}
  }
- function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':riwayat?'Catatan belum dapat dibaca; ini bukan riwayat kosong.':beranda?'Keadaan pabrik belum dapat dibaca; ini bukan berarti tidak ada pekerjaan atau stok.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
+ function failed(error,number){if(!current(number))return;if(beranda){root.querySelector('.beranda-sambut')?.after(status.parentElement);status.parentElement.after(message);}status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':riwayat?'Catatan belum dapat dibaca; ini bukan riwayat kosong.':beranda?'Keadaan pabrik belum dapat dibaca; ini bukan berarti tidak ada pekerjaan atau stok.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
  async function resume(){
   if(!pending||interacting())return;
   const next=pending;pending=null;if(!current(next.number))return;
