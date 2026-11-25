@@ -119,14 +119,14 @@ def save_cleanup_receipt(result, *, profile, engine, width):
     out = Path(raw)
     source = Path(__file__).resolve().parents[2]
     if (not out.is_absolute() or out.is_symlink() or not out.is_dir()
-            or out.stat().st_uid != os.getuid() or profile not in {'stock', 'alat', 'shared'}
+            or out.stat().st_uid != os.getuid() or profile not in {'stock', 'alat', 'shared', 'stock-owner'}
             or engine not in {'chromium', 'webkit'} or type(width) is not int
             or not 1 <= width <= 4096):
         raise AssertionError('Unsafe native HTTP evidence destination')
     out = out.resolve()
     if out == source or source in out.parents or out in source.parents:
         raise AssertionError('Native HTTP evidence must stay outside source')
-    suffix = '-'+str(next(_SHARED_RECEIPTS)) if profile=='shared' else ''
+    suffix = '-'+str(next(_SHARED_RECEIPTS)) if profile in {'shared', 'stock-owner'} else ''
     path = out / f'native-document-{profile}-{engine}-{width}{suffix}-cleanup.json'
     # An accidental repeat in the same output must fail, never overwrite proof.
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -151,7 +151,7 @@ def finish_cleanup(result, primary):
 
 class NativeDocumentHTTP:
     def __init__(self, app, profile, origin):
-        if profile not in {'stock', 'alat'}:
+        if profile not in {'stock', 'alat', 'stock-owner'}:
             raise ValueError('Unknown native-document fixture profile')
         self.app, self.profile, self.origin = app, profile, origin
         self.host = origin.removeprefix('http://').encode()
@@ -227,7 +227,7 @@ async def owned_http_browser(client, width, *, profile, transport_factory=None, 
     # The frozen owner network guard already permits this HTTP port. Never
     # retry another port if it belongs to an active PWA/other fixture worker.
     if fixed_port is not None:
-        assert fixed_port==59364 and profile=='shared'
+        assert fixed_port==59364 and profile in {'shared', 'stock-owner'}
     port = fixed_port if fixed_port is not None else 59364 if os.environ.get('PWA_GUARD') else 0
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

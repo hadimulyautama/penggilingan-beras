@@ -30,8 +30,7 @@ from tests.pg.test_stok_produk_jasa import sosoh_jasa
 from tests.pg.test_layar_gudang_http import dua_gudang
 from tests.pg.test_stok_pk_g1_polesan import _klien
 from tests.pg.test_halaman_bertahap import _sidik
-from tests.pg.test_barang_masuk_bertahap_browser import peramban, BASE
-from tests.pg.stock_setup_session import before_stock_setup_goto, stock_setup_sessions
+from tests.pg.stock_owner_http import peramban_stock as peramban, BASE
 
 pytestmark = pytest.mark.asyncio
 NATIVE = {'X-Pindah': '1', 'X-Kerangka-Halaman': '0'}
@@ -103,9 +102,6 @@ async def frames(page):
 
 
 async def choose_link(page, source, wanted):
-    # This goto resets the test's source document; it is not a user click.
-    # Do not abandon its already-issued native session check during setup.
-    await before_stock_setup_goto(page)
     await page.goto(BASE + source, wait_until='load')
     await page.wait_for_function('()=>window.PadiKerangkaStockDetailUI&&document.getElementById("padi-stock-detail-catalog")', timeout=20000)
     host = page.locator('#padi-stock-detail-catalog')
@@ -253,22 +249,19 @@ async def run_cases(pg, client, role, width, family, cases):
     out = evidence_folder(role, width, family)
     before = await _sidik(pg)
     results = []
-    setup_barriers = []
     try:
         async with peramban(client, width) as (page, transport):
-            with stock_setup_sessions(page, BASE) as session_reads:
-                setup_barriers = session_reads.barriers
-                for source, wanted, label in cases:
-                    results.append(await exercise(page, transport, client, source,
-                        wanted, out=out, label=label))
-                assert not transport['posts'], transport['posts']
-                assert not transport['errors'], transport['errors']
+            for source, wanted, label in cases:
+                results.append(await exercise(page, transport, client, source,
+                    wanted, out=out, label=label))
+            assert not transport['posts'], transport['posts']
+            assert not transport['errors'], transport['errors']
     finally:
         assert await _sidik(pg) == before, 'GET/navigation changed native tables'
         if out:
             (out/'observations.json').write_text(json.dumps(dict(role=role,
                 width=width, engine=os.getenv('UJI_BROWSER',os.getenv('OWNER_BROWSER','chromium')),
-                results=results, setup_session_barriers=setup_barriers), ensure_ascii=False, indent=2))
+                results=results), ensure_ascii=False, indent=2))
     failures = [dict(case=r['label'], detail=f) for r in results for f in r['failures']]
     assert not failures, json.dumps(failures, ensure_ascii=False, indent=2)
 

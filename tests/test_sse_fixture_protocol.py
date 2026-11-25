@@ -297,6 +297,78 @@ async def test_stock_setup_drain_rejects_failed_unknown_and_unfinished_session_r
         assert proof['after'][0]['terminal']==('failed' if fault=='failed' else 'finished')
 
 
+@pytest.mark.asyncio
+async def test_stock_owner_direct_scope_gzip_messages_gate_and_completion_are_native():
+    from tests.pg.stock_owner_http import StockOwnerHTTP
+    native_scope=scope('/stok/pk/detail',headers=[(b'cookie',b'private-fixture-cookie'),
+        (b'x-pindah',b'1'),(b'x-kerangka-halaman',b'0')])
+    raw=gzip.compress(b'ordinary synthetic native stock',mtime=0)
+    start=dict(type='http.response.start',status=200,headers=[(b'content-type',b'text/html'),
+        (b'content-encoding',b'gzip'),(b'content-length',str(len(raw)).encode())])
+    chunk=dict(type='http.response.body',body=raw,more_body=False)
+    seen=[];sent=[];entered,release,complete=asyncio.Event(),asyncio.Event(),asyncio.Event()
+    async def app(actual,receive,send):
+        seen.append(actual);await send(start);await send(chunk)
+    transport=StockOwnerHTTP(app,BASE)
+    transport.owner_data['gates']['/stok/pk/detail']=(entered,release)
+    transport.owner_data['gate_headers']['/stok/pk/detail']={'x-pindah':'1','x-kerangka-halaman':'0'}
+    transport.owner_data['completed']['/stok/pk/detail']=complete
+    async def send(message):sent.append(message)
+    task=asyncio.create_task(transport(native_scope,empty_body,send))
+    try:
+        await asyncio.wait_for(entered.wait(),1)
+        assert seen==[native_scope] and seen[0] is native_scope and not sent
+        assert transport.owner_data['gets']==['/stok/pk/detail'] and not complete.is_set()
+        transport.release();await asyncio.wait_for(task,1)
+        assert sent==[start,chunk] and sent[0] is start and sent[1] is chunk
+        assert complete.is_set() and not transport.held and not transport.active
+        assert transport.wire_proofs==[dict(path='/stok/pk/detail',status=200,mime='text/html',
+            bytes=len(raw),native_bytes=True,asgi_end_forwarded=True)]
+        assert not transport.owner_data['posts'] and not transport.owner_data['errors']
+        assert transport.owner_data['errors'] is transport.errors
+    finally:
+        transport.release();await asyncio.wait_for(asyncio.gather(task,return_exceptions=True),1)
+
+
+@pytest.mark.asyncio
+async def test_stock_owner_direct_sse_is_unbuffered_and_release_covers_unstarted_gate():
+    from tests.pg.stock_owner_http import StockOwnerHTTP
+    entered,release=asyncio.Event(),asyncio.Event();sent=[]
+    start=dict(type='http.response.start',status=200,headers=[(b'content-type',b'text/event-stream')])
+    first=dict(type='http.response.body',body=b': actual fixture stream\n\n',more_body=True)
+    last=dict(type='http.response.body',body=b'',more_body=False)
+    async def app(actual,receive,send):
+        entered.set();await release.wait();await send(start);await send(first);await send(last)
+    transport=StockOwnerHTTP(app,BASE)
+    unused_entered,gate_release=asyncio.Event(),asyncio.Event()
+    transport.owner_data['gates']['/api/aliran']=(unused_entered,gate_release)
+    async def send(message):sent.append(message)
+    task=asyncio.create_task(transport(scope('/api/aliran'),empty_body,send))
+    try:
+        await asyncio.wait_for(entered.wait(),1)
+        transport.release();assert gate_release.is_set()
+        release.set();await asyncio.wait_for(task,1)
+        assert sent==[start,first,last] and all(a is b for a,b in zip(sent,[start,first,last]))
+        assert not transport.owner_data['gets'] and not transport.errors
+        assert transport.cleanup_metadata()['HTTPX_trampoline'] is False
+    finally:
+        transport.release();release.set();await asyncio.wait_for(asyncio.gather(task,return_exceptions=True),1)
+
+
+@pytest.mark.asyncio
+async def test_stock_owner_direct_rejects_writes_and_retains_native_errors():
+    from tests.pg.stock_owner_http import StockOwnerHTTP
+    called=[];sent=[]
+    async def app(actual,receive,send):called.append(actual);raise RuntimeError('ordinary fixture error')
+    transport=StockOwnerHTTP(app,BASE)
+    async def send(message):sent.append(message)
+    await transport(scope(method='POST'),empty_body,send)
+    assert sent[0]['status']==405 and transport.owner_data['posts']==[('POST','/read')] and not called
+    with pytest.raises(RuntimeError):await transport(scope(),empty_body,send)
+    assert transport.errors==[dict(path='/read',type='RuntimeError')]
+    assert not transport.active
+
+
 @pytest.mark.parametrize('fault',['no-native','native-denied','wrong-path','wrong-method','wrong-mime','changed-html','extra-field','different-stamp','native-already-wrong'])
 def test_stock_stamp_negative_rejects_anything_outside_exact_authorised_native_envelope(fault):
     import json
