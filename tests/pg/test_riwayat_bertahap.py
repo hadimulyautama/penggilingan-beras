@@ -58,7 +58,7 @@ async def test_history_shell_permission_native_parity_and_cursor(pg, lengkap, mo
                     assert root and root["data-stamp"]==data.json()["stamp"]
                     assert _isi(native.text)==_isi(data.json()["html"])
                     fresh=BeautifulSoup(native.text,"html.parser")
-                    columns=lambda d:[c.text.strip() for c in d.select(".riwayat-desktop-head>span,thead th")]
+                    columns=lambda d:[c.text.strip() for c in d.select(".riwayat-desktop-list>.riwayat-desktop-head>span,.riwayat-desktop-list>table>thead th")]
                     assert columns(dom)==columns(fresh)==config["columns"]
                     assert [s.text for s in root.select(".rpd-stats>div>span")]==[s.text for s in fresh.select(".rpd-stats>div>span")]
                     assert fresh.select_one("[data-halaman-bertahap]") is None

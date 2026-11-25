@@ -28,7 +28,8 @@
   const stats=old.querySelector('.rpd-intro'),nextStats=fresh.querySelector('.rpd-intro');
   const labels=n=>Array.from(n?.querySelectorAll('.rpd-stats>div>span')||[],s=>s.textContent);
   if(!stats||!nextStats||labels(stats).length!==3||stats.querySelectorAll('strong').length!==3||nextStats.querySelectorAll('strong').length!==3||JSON.stringify(labels(stats))!==JSON.stringify(labels(nextStats)))throw Error('Ringkasan Riwayat berubah. Coba lagi.');
-  const head=old.querySelector('.riwayat-desktop-head,thead'),nextHead=fresh.querySelector('.riwayat-desktop-head,thead');
+  const headerSelector='.riwayat-desktop-list>.riwayat-desktop-head,.riwayat-desktop-list>table>thead';
+  const head=old.querySelector(headerSelector),nextHead=fresh.querySelector(headerSelector);
   const columns=n=>Array.from(n?.querySelectorAll('span,th')||[],c=>c.textContent.trim());
   if(!head||!nextHead||head.tagName!==nextHead.tagName||JSON.stringify(columns(head))!==JSON.stringify(columns(nextHead)))throw Error('Kolom Riwayat berubah. Muat ulang halaman.');
   const guide=old.querySelector('#rpd-panduan'),nextGuide=fresh.querySelector('#rpd-panduan'),body=old.querySelector('.laporan-isi'),nextBody=fresh.querySelector('.laporan-isi');
