@@ -7,6 +7,50 @@
  if(!root||root.dataset.ready)return;root.dataset.ready='1';
  const main=document.getElementById('isi-halaman'),status=root.querySelector('[data-shell-status]'),retry=root.querySelector('[data-shell-retry]'),table=root.querySelector('[data-shell-table-wrap]'),message=root.querySelector('[data-shell-message]');
  const detail=root.dataset.kind==='barang-masuk-detail';
+ const riwayat=['riwayat-sosoh','riwayat-giling','riwayat-pengeringan'].includes(root.dataset.kind);
+ function riwayatIslands(content){
+  if(!riwayat)return null;
+  const old=root.closest('.laporan-riwayat'),fresh=content.querySelector('.laporan-riwayat');
+  if(!old||!fresh)throw Error('Struktur Riwayat berubah. Muat ulang halaman.');
+  const nav=old.querySelector('[data-laporan-kontrol]'),nextNav=fresh.querySelector('[data-laporan-kontrol]');
+  const schema=node=>JSON.stringify({
+   active:node?.dataset.aktif,allowed:node?.dataset.bolehAlamat,tabs:node?.dataset.tujuanTab,
+   options:Array.from(node?.querySelectorAll('[data-jenis-riwayat] option')||[],o=>[o.value,o.textContent,o.disabled]),
+   category:Array.from(node?.querySelectorAll('.laporan-nav__jenis a')||[],a=>[a.getAttribute('href'),a.textContent,a.getAttribute('aria-current')])
+  });
+  if(!nav||!nextNav||schema(nav)!==schema(nextNav))throw Error('Akses atau jenis Riwayat berubah. Muat ulang halaman.');
+  // Bookmark tab yang berizin boleh berbeda dari href default native.
+  const tabs=JSON.parse(nav.dataset.tujuanTab||'[]');
+  for(const link of nav.querySelectorAll('[data-tab-riwayat]')){
+   const tab=tabs.find(t=>t.kunci===link.dataset.tabRiwayat),u=new URL(link.href,location.href);
+   if(!tab?.boleh||u.origin!==location.origin||u.search||u.hash||!tab.alamat.includes(u.pathname))throw Error('Tujuan Riwayat berubah. Muat ulang halaman.');
+  }
+  const stats=old.querySelector('.rpd-intro'),nextStats=fresh.querySelector('.rpd-intro');
+  const labels=n=>Array.from(n?.querySelectorAll('.rpd-stats>div>span')||[],s=>s.textContent);
+  if(!stats||!nextStats||labels(stats).length!==3||stats.querySelectorAll('strong').length!==3||nextStats.querySelectorAll('strong').length!==3||JSON.stringify(labels(stats))!==JSON.stringify(labels(nextStats)))throw Error('Ringkasan Riwayat berubah. Coba lagi.');
+  const head=old.querySelector('.riwayat-desktop-head,thead'),nextHead=fresh.querySelector('.riwayat-desktop-head,thead');
+  const columns=n=>Array.from(n?.querySelectorAll('span,th')||[],c=>c.textContent.trim());
+  if(!head||!nextHead||head.tagName!==nextHead.tagName||JSON.stringify(columns(head))!==JSON.stringify(columns(nextHead)))throw Error('Kolom Riwayat berubah. Muat ulang halaman.');
+  const guide=old.querySelector('#rpd-panduan'),nextGuide=fresh.querySelector('#rpd-panduan'),body=old.querySelector('.laporan-isi'),nextBody=fresh.querySelector('.laporan-isi');
+  if(!guide?.querySelector('.pd-panduan__isi')||!nextGuide?.querySelector('.pd-panduan__isi')||!body||!nextBody||nav.querySelectorAll('[data-lk-cetak]').length!==nextNav.querySelectorAll('[data-lk-cetak]').length)throw Error('Kontrol Riwayat belum lengkap. Coba lagi.');
+  return {old,fresh,nav,nextNav,stats,nextStats,head,nextHead,guide,nextGuide,body,nextBody,styles:Array.from(old.querySelectorAll('style[data-riwayat-aset-native]'),s=>s.cloneNode(true))};
+ }
+ function retainRiwayat(island){
+  if(!island)return;
+  const {old,fresh,nav,nextNav,stats,nextStats,head,nextHead,guide,nextGuide,body,nextBody,styles}=island;
+  const values=nextStats.querySelectorAll('strong');
+  stats.querySelectorAll('strong').forEach((s,i)=>{s.textContent=values[i].textContent;});
+  nextStats.replaceWith(stats);nextHead.replaceWith(head);
+  const guideBody=guide.querySelector('.pd-panduan__isi'),nextGuideBody=nextGuide.querySelector('.pd-panduan__isi');
+  guideBody.replaceChildren(...Array.from(nextGuideBody.childNodes));nextGuide.replaceWith(guide);
+  const before=nav.querySelectorAll('[data-lk-cetak]'),after=nextNav.querySelectorAll('[data-lk-cetak]');
+  before.forEach((b,i)=>{for(const attr of ['disabled','aria-describedby']){if(after[i].hasAttribute(attr))b.setAttribute(attr,after[i].getAttribute(attr));else b.removeAttribute(attr);}});
+  // Controller navigasi native memegang scope wrapper. Pertahankan wrapper,
+  // nav dan panduan yang sama; hanya data/statistik dan baris yang berubah.
+  body.replaceChildren(...Array.from(nextBody.childNodes));
+  for(const style of styles)if(!Array.from(old.querySelectorAll('style[data-riwayat-aset-native]')).some(s=>s.dataset.riwayatAsetNative===style.dataset.riwayatAsetNative))old.prepend(style);
+  fresh.replaceWith(old);
+ }
  function addressNow(){const u=new URL(location.href);if(detail)u.searchParams.delete('tab_detail');return u.pathname+u.search;}
  const address=addressNow(),token=document.getElementById('formulir-sesi')?.dataset.token||'',stamp=root.dataset.stamp;
  function formState(form){const values=new URLSearchParams(new FormData(form));if(root.dataset.kind==='stok')values.sort();return values.toString();}
@@ -44,6 +88,7 @@
   // Semua asset sudah dibaca sebelum swap. Tidak ada jeda async yang dapat
   // menjalankan kontrol halaman lama setelah pengguna pindah menu.
   for(const item of prepared){
+   if(riwayat&&!item.old.isConnected)continue;
    const script=document.createElement('script');
    for(const a of item.old.attributes)if(!['src','defer','async'].includes(a.name))script.setAttribute(a.name,a.value);
    script.textContent=item.text;item.old.replaceWith(script);
@@ -67,7 +112,7 @@
   else if(root.dataset.kind==='stok'&&previous?.hasAttribute('data-sk-buka'))target=content.querySelector('[data-sk-buka="'+CSS.escape(previous.dataset.skBuka)+'"]');
   else if(root.dataset.kind==='stok'&&previous===table){target=content.querySelector('[data-daftar-kosong]');if(!target){content.tabIndex=-1;content.setAttribute('aria-label','Daftar Stok');target=content;}}
   else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');
-  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
+  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':riwayat?root.dataset.riwayatLabel:'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
   target?.focus({preventScroll:true});
  }
  // Satu pulau kontrol native, bukan morph umum formulir transaksi.
@@ -224,7 +269,7 @@
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
   const stock=content.querySelector('[data-stok-controls]');
   if(stock){const url=new URL(stock.dataset.pelangganUrl,location.href);url.pathname='/api/halaman-bertahap/stok/html';stock.dataset.pelangganUrl=url.pathname+url.search;}
-  const island=controlIsland(content),stockFrame=stockTable(content),detailFrame=detailIslands(content);
+  const island=controlIsland(content),stockFrame=stockTable(content),detailFrame=detailIslands(content),historyFrame=riwayatIslands(content);
   const prepared=await prepareScripts(content,doc,controller?.signal);
   if(!current(number)||payload.stamp!==stamp)return;
   // Pengguna dapat membuka filter ketika asset masih dibaca.
@@ -242,7 +287,7 @@
   }
   if(!window.PINDAH?.selaraskanChrome||!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
   const previousFocus=document.activeElement;
-  retainControls(island);retainTable(stockFrame);retainDetail(detailFrame);
+  retainControls(island);retainTable(stockFrame);retainDetail(detailFrame);retainRiwayat(historyFrame);
   observer.disconnect();finished=true;controller=null;
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
   const valid=()=>content.isConnected&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
@@ -255,7 +300,7 @@
  async function read(){
   readFromRetry=document.activeElement===retry;
   if(controller)controller.abort();const number=++sequence;controller=new AbortController();const active=controller;pending=null;
-  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=detail?'Memuat detail penerimaan…':'Memuat data…';message.textContent=detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':'Memuat data. Judul kolom dan filter tetap tersedia.';
+  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=detail?'Memuat detail penerimaan…':riwayat?'Memuat catatan…':'Memuat data…';message.textContent=detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':riwayat?'Catatan sedang dibaca. Jenis proses dan panduan tetap tersedia.':'Memuat data. Judul kolom dan filter tetap tersedia.';
   const timeout=setTimeout(()=>active.abort(),20000);
   try{
    const response=await fetch(root.dataset.url,{credentials:'same-origin',cache:'no-store',signal:active.signal,headers:{'Accept':'application/json'}});
@@ -269,7 +314,7 @@
    failed(error,number);
   }finally{clearTimeout(timeout);if(current(number)){controller=null;table.setAttribute('aria-busy','false');}}
  }
- function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
+ function failed(error,number){if(!current(number))return;status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':riwayat?'Catatan belum dapat dibaca; ini bukan riwayat kosong.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
  async function resume(){
   if(!pending||interacting())return;
   const next=pending;pending=null;if(!current(next.number))return;

@@ -18,6 +18,8 @@ from app.web.security import butuh_akun
 
 router = APIRouter(tags=["webapp"])
 ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa", "barang-masuk": "/barang-masuk"}
+from app.web.riwayat_bertahap import TUJUAN as RIWAYAT_TUJUAN
+ALAMAT.update({kind: data['path'] for kind, data in RIWAYAT_TUJUAN.items()})
 
 
 def memakai_kerangka(request: Request, jenis: str) -> bool:
@@ -56,7 +58,7 @@ def penanda_konteks(request: Request, akun) -> str:
 
 
 def penanda(request: Request, akun, jenis: str) -> str:
-    if jenis == 'stok':
+    if jenis == 'stok' or jenis in RIWAYAT_TUJUAN:
         # Korelasi baca, bukan izin/tanda tangan. Struktur kosong dapat
         # mengikat filter baru di browser; GET tetap memeriksa aktor native.
         return penanda_konteks(request, akun) + '|' + ALAMAT[jenis] + (
@@ -236,10 +238,10 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lo
 async def _isi(request: Request, akun, jenis: str):
     if jenis not in ALAMAT:
         raise HTTPException(404, "Halaman tidak dikenal.")
-    if jenis == 'barang-masuk':
+    if jenis == 'barang-masuk' or jenis in RIWAYAT_TUJUAN:
         from app.web.portal.scope import is_customer_read
         if is_customer_read(request):
-            raise HTTPException(403, 'Gunakan daftar penerimaan pada portal sesuai cakupan pelanggan.')
+            raise HTTPException(403, 'Gunakan halaman portal sesuai cakupan pelanggan.')
     from starlette.requests import Request as NativeRequest
 
     scope = {**request.scope, "path": ALAMAT[jenis], "raw_path": ALAMAT[jenis].encode(),
@@ -254,6 +256,13 @@ async def _isi(request: Request, akun, jenis: str):
     elif jenis == 'jasa':
         from app.web.layar_jasa import halaman_jasa
         response = await halaman_jasa(native, akun)
+    elif jenis in RIWAYAT_TUJUAN:
+        if jenis == 'riwayat-sosoh':
+            from app.web.layar_sosoh import halaman_riwayat_sosoh
+            response = await halaman_riwayat_sosoh(native, akun)
+        else:
+            from app.web.layar_riwayat import halaman_riwayat_giling, halaman_riwayat_pengeringan
+            response = await (halaman_riwayat_giling if jenis == 'riwayat-giling' else halaman_riwayat_pengeringan)(native, akun)
     else:
         from app.web.layar_stok import halaman_stok
         response = await halaman_stok(native, akun)

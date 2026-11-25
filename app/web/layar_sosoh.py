@@ -70,6 +70,10 @@ async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(
             403, "Riwayat sosoh milik Admin ke atas dan operator Gudang 2.")
 
+    from app.web.riwayat_bertahap import memakai, kerangka
+    if memakai(request, 'riwayat-sosoh'):
+        return await kerangka(request, akun, 'riwayat-sosoh')
+
     sebelum = request.query_params.get("sebelum")
     try:
         sebelum_id = int(sebelum) if sebelum else None

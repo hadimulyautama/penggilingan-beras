@@ -82,6 +82,10 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(
             403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
 
+    from app.web.riwayat_bertahap import memakai, kerangka
+    if memakai(request, 'riwayat-giling'):
+        return await kerangka(request, akun, 'riwayat-giling')
+
     from app.penggilingan.gudang1.services.milling import riwayat_giling
 
     sebelum_id = _sebelum_id(request)
@@ -452,6 +456,10 @@ async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)
     if not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(
             403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
+
+    from app.web.riwayat_bertahap import memakai, kerangka
+    if memakai(request, 'riwayat-pengeringan'):
+        return await kerangka(request, akun, 'riwayat-pengeringan')
 
     from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
 

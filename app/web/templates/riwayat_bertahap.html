@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block judul %}{{ RIWAYAT.title }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-daftar-proses.css?v={{ VERSI }}">
+{% if SHELL.kind == 'riwayat-giling' %}<link rel="stylesheet" href="/static/riwayat-giling-daftar.css?v={{ VERSI }}">{% endif %}
+<div class="riwayat-detail rhs rpd" data-daftar-riwayat-proses data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-riwayat-label="{{ RIWAYAT.title }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
+ <header class="rhs-header rpd-header"><div class="rhs-tools"></div></header>
+ <div data-rpd-category-slot></div>
+ {% if SHELL.kind == 'riwayat-giling' %}<div class="rg-daftar">{% endif %}
+ <section class="rpd-intro" aria-label="{{ RIWAYAT.title }}"><div class="rpd-stats" aria-label="Ringkasan {{ RIWAYAT.title }}">
+ {% for caption in RIWAYAT.captions %}<div><span>{{ caption }}</span><strong>—</strong></div>{% endfor %}
+ </div></section>
+ <div class="halaman-bertahap__status"><p id="riwayat-baca-status" data-shell-status role="status">Memuat catatan…</p><button class="btn btn--kecil" type="button" data-shell-retry hidden>Coba lagi</button></div>
+ <p class="bantu" data-shell-message>Catatan sedang dibaca. Jenis proses dan panduan tetap tersedia.</p>
+ <div data-shell-table-wrap aria-busy="true" tabindex="0" aria-label="Daftar {{ RIWAYAT.title }}">
+  <div class="riwayat-list daftar-standar" data-riwayat-mobile-loading><article class="padat"><p>Catatan belum tersedia.</p></article></div>
+  <div class="riwayat-desktop-list tabel-standar{% if SHELL.kind == 'riwayat-giling' %} rg-tabel-scroll{% endif %}" aria-label="Daftar {{ RIWAYAT.title|lower }}">
+  {% if SHELL.kind == 'riwayat-giling' %}<table class="tabel-standar rg-tabel"><thead><tr>{% for c in RIWAYAT.columns %}<th scope="col"{% if loop.index in [3,4,5] %} class="rg-angka"{% endif %}>{{ c }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="{{ RIWAYAT.columns|length }}">Catatan sedang dibaca.</td></tr></tbody></table>
+  {% else %}<div class="riwayat-desktop-grid{% if SHELL.kind == 'riwayat-sosoh' %} riwayat-desktop-grid--sosoh{% endif %} riwayat-desktop-head" aria-hidden="true">{% for c in RIWAYAT.columns %}<span{% if SHELL.kind == 'riwayat-pengeringan' and loop.index == 7 %} class="riwayat-desktop-number"{% endif %}>{{ c }}</span>{% endfor %}</div><p>Catatan sedang dibaca.</p>{% endif %}
+  </div>
+ </div>
+ {% if SHELL.kind == 'riwayat-giling' %}</div>{% endif %}
+ {% from '_panduan.html' import panel as panduan %}
+ {% call panduan('rpd-panduan','Panduan daftar riwayat proses',penutup={'data-rpd-guide-close':'','data-lk-tutup':''}) %}
+ <p>Daftar ini memuat proses yang sudah selesai. Pilih jenis proses untuk berpindah; buka kode catatan setelah datanya tersedia. Ringkasan belum dibaca ditandai —, bukan nol.</p>
+ <p>Coba lagi hanya membaca data, tanpa mencatat transaksi. Cetak tersedia setelah catatan selesai dibaca.</p>
+ {% endcall %}
+</div>
+<script src="/static/halaman-bertahap.js?v={{ VERSI }}" defer></script>
+{% endblock %}
