@@ -11,12 +11,13 @@ from tests.pg.test_portal_pelanggan import portal,qc,client
 from tests.pg.test_riwayat_giling import _klien
 from hmu_identitas.peran import SUPERADMIN
 from hmu_tampilan import VERSI
+from tests.pg.test_navigasi_bertahap_browser import _catat_tampilan_lama, _pastikan_tampilan_lama_menunggu
 
 pytestmark=pytest.mark.asyncio
 BASE='http://127.0.0.1:59994'
 
 @pytest.mark.parametrize('pelanggan',[False,True])
-@pytest.mark.parametrize('engine',os.environ.get('UJI_PONSEL_ENGINES','chromium').split(','))
+@pytest.mark.parametrize('engine',os.environ.get('UJI_PONSEL_ENGINES',os.getenv('UJI_BROWSER',os.getenv('OWNER_BROWSER','chromium'))).split(','))
 @pytest.mark.parametrize('width',[320,390])
 async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
     asal='/pelanggan/' if pelanggan else '/barang-masuk'
@@ -59,10 +60,10 @@ async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
             try:
                 await page.goto(BASE+asal)
                 await page.locator(buka).tap()
+                await _catat_tampilan_lama(page,pelanggan)
                 await page.locator(menu+f' a[href="{daftar}"]').first.tap()
                 await asyncio.wait_for(started[daftar].wait(),5)
-                await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
-                await expect(page).to_have_url(BASE+daftar)
+                await _pastikan_tampilan_lama_menunggu(page)
                 # Membuka menu lagi ketika data masih di jalan adalah tindakan
                 # pengguna; datangnya data tidak boleh menutup atau menggantinya.
                 await page.locator(buka).tap()
@@ -71,7 +72,9 @@ async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
                 await asyncio.sleep(.4)
                 await expect(page.locator(menu)).to_be_in_viewport(ratio=.5,timeout=700)
                 await page.locator(tutup).tap()
-                await expect(page.locator('.halaman-memuat')).to_have_count(0,timeout=10000)
+                await expect(page).to_have_url(BASE+daftar,timeout=10000)
+                await expect(page.locator('.halaman-memuat')).to_have_count(0)
+                assert await page.title()==BeautifulSoup(pages[daftar].text,'html.parser').title.get_text()
                 # Respons pembaruan tiba ketika pengguna sedang mengetik filter.
                 # Isian, simpul yang sedang dipakai, dan guliran harus bertahan.
                 gates[daftar].clear();started[daftar].clear();refresh[0]=True
@@ -88,12 +91,14 @@ async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
                 assert await page.locator('main').evaluate('(el)=>el.scrollTop')==top
                 await field.fill('');await field.evaluate('(el)=>el.blur()')
                 await expect(page.locator('main a[href="'+detailHref+'"]').first).to_be_visible()
+                await _catat_tampilan_lama(page,pelanggan)
                 await page.locator('main a[href="'+detailHref+'"]').first.tap()
                 await asyncio.wait_for(started[detail].wait(),5)
-                await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
-                await expect(page).to_have_url(BASE+detailHref)
+                await _pastikan_tampilan_lama_menunggu(page)
                 await asyncio.sleep(2);gates[detail].set()
-                await expect(page.locator('.halaman-memuat')).to_have_count(0,timeout=10000)
+                await expect(page).to_have_url(BASE+detailHref,timeout=10000)
+                await expect(page.locator('.halaman-memuat')).to_have_count(0)
+                assert await page.title()==BeautifulSoup(pages[detailHref].text,'html.parser').title.get_text()
                 taps=await page.evaluate('window.taps')
                 assert taps[daftar]==taps[detail]==1,taps
                 assert not errors,errors

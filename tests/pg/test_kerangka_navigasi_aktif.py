@@ -22,6 +22,7 @@ from hmu_identitas import peran as P
 from tests.pg.test_halaman_bertahap import proses_aktif  # noqa: F401
 from tests.pg.test_pk_karung import batch_baru, dunia  # noqa: F401
 from tests.pg.test_riwayat_giling import _klien
+from tests.pg.test_navigasi_bertahap_browser import _catat_tampilan_lama, _pastikan_tampilan_lama_menunggu
 
 pytestmark = pytest.mark.asyncio
 BASE = 'http://127.0.0.1:59996'
@@ -75,6 +76,7 @@ class _ASGIBrowser:
         self.requests = []
         self.writes = []
         self.allow_data_abort = False
+        self.native_fallback = False
         self.aborted_data = []
 
     async def route(self, route):
@@ -109,10 +111,11 @@ class _ASGIBrowser:
         barrier = None
         if (url.path == '/stok' and not url.query and
                 forwarded.get('x-pindah') == '1' and
-                forwarded.get('x-kerangka-halaman') == '1'):
+                self.native_fallback and 'x-kerangka-halaman' not in forwarded):
             barrier = self.html
             assert response.status_code == 200
-            assert 'data-halaman-bertahap' in response.text
+            assert 'data-halaman-bertahap' not in response.text
+            assert KODE_BEBAS in response.text
         elif url.path == '/api/halaman-bertahap/stok' and not url.query:
             barrier = self.data
             assert response.status_code == 200
@@ -141,7 +144,7 @@ class _ASGIBrowser:
 
 @asynccontextmanager
 async def _browser(client, width):
-    engine = os.getenv('UJI_BROWSER', 'chromium')
+    engine = os.getenv('UJI_BROWSER', os.getenv('OWNER_BROWSER', 'chromium'))
     assert engine in {'chromium', 'webkit'}, engine
     bridge = _ASGIBrowser(client)
     async with async_playwright() as pw:
@@ -163,6 +166,7 @@ async def _browser(client, width):
 
 
 async def _buka_stok_dari_menu(page, bridge, width, *, legacy=False):
+    bridge.native_fallback = legacy
     response = await page.goto(BASE + '/barang-masuk')
     assert response and response.status == 200
     await page.wait_for_function(
@@ -173,13 +177,21 @@ async def _buka_stok_dari_menu(page, bridge, width, *, legacy=False):
     await expect(link).to_be_visible()
     # Fokus keyboard memakai tautan produk yang sama, tanpa memanggil fungsi
     # pindah dari tes atau mengganti fetch milik produk.
+    if legacy:await _catat_tampilan_lama(page)
     await link.focus()
     await link.press('Enter', no_wait_after=True)
     if legacy:
         await asyncio.wait_for(bridge.html.mulai.wait(), 10)
-        await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+        await _pastikan_tampilan_lama_menunggu(page)
         assert not bridge.html.lepas.is_set() and not bridge.data.mulai.is_set()
         bridge.html.lepas.set()
+        await expect(page).to_have_url(BASE + '/stok')
+        await expect(page.locator('[data-stok-controls]')).to_be_visible()
+        await expect(page.locator('[data-halaman-bertahap],.halaman-memuat')).to_have_count(0)
+        await expect(page.locator('#isi-halaman')).not_to_have_attribute('aria-busy','true')
+        assert bridge.html.jumlah == 1 and bridge.data.jumlah == 0
+        await expect(page.locator('#laci a[href="/stok"]').first).to_have_attribute('aria-current','page')
+        return page.locator('#isi-halaman')
     await asyncio.wait_for(bridge.data.mulai.wait(), 10)
     await expect(page).to_have_url(BASE + '/stok')
     await expect(page.locator('.halaman-memuat')).to_have_count(0)
@@ -270,10 +282,10 @@ async def test_fallback_native_tetap_aman_bila_katalog_opsional_tidak_tersedia(p
         before=await _sidik(pg)
         async with _browser(client,width) as (page,bridge):
             await _buka_stok_dari_menu(page,bridge,width,legacy=True)
-            assert bridge.html.jumlah==1 and bridge.data.jumlah==1
+            assert bridge.html.jumlah==1 and bridge.data.jumlah==0
+            assert not bridge.data.mulai.is_set()
             await expect(page.locator('#padi-kerangka-langsung')).to_have_count(1)
             await expect(page.locator('#padi-stok-kerangka')).to_have_count(0)
-            bridge.data.lepas.set()
             await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
             row=page.locator('.stok-mobile-list__baris' if width<900 else '.stok-baris__tautan',has_text=KODE_BEBAS)
             await expect(row).to_be_visible()

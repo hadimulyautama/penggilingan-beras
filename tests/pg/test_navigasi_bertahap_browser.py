@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
+from bs4 import BeautifulSoup
 import pytest
 from playwright.async_api import async_playwright, expect, Error as BrowserError
 from tests.pg.test_portal_pelanggan import portal, qc, client
@@ -12,6 +13,46 @@ from hmu_identitas.peran import SUPERADMIN
 
 pytestmark=pytest.mark.asyncio
 BASE='http://127.0.0.1:59996'
+
+async def _catat_tampilan_lama(page, pelanggan=False):
+    """Simpan identitas native, bukan HTML/DTO pengganti untuk halaman tujuan."""
+    await page.evaluate("""portal => {
+        const main = document.querySelector(portal ? '#isi-pelanggan' : '#isi-halaman');
+        const header = document.querySelector(portal ? '.portal-topbar' : 'header.bar');
+        if (!main || !header) throw new Error('Bingkai native wajib tersedia');
+        const nodes = [...main.childNodes];
+        const start = nodes.findIndex(n => n.nodeType === 8 && n.data.trim() === 'isi-halaman:mulai');
+        const end = nodes.findIndex(n => n.nodeType === 8 && n.data.trim() === 'isi-halaman:akhir');
+        const content = portal ? [...main.children] : nodes.slice(start + 1, end).filter(n => n.nodeType === 1);
+        if (!main || !header || !content.length || (!portal && (start < 0 || end <= start)))
+            throw new Error('Batas isi native wajib tersedia untuk oracle pending');
+        const menu = portal ? '.portal-sidebar' : '#laci';
+        window.__tampilanLama = {main, header, content, portal, title: document.title,
+            url: location.href, history: history.length, scroll: main.scrollTop,
+            headings: [...main.querySelectorAll('h1')],
+            current: [...document.querySelectorAll(menu + ' a[aria-current="page"]')].map(n => n.getAttribute('href'))};
+    }""", pelanggan)
+
+
+async def _pastikan_tampilan_lama_menunggu(page):
+    await expect(page.locator('#isi-pelanggan,#isi-halaman')).to_have_attribute('aria-busy', 'true', timeout=700)
+    await expect(page.locator('.halaman-memuat')).to_have_count(0)
+    facts = await page.evaluate("""() => {
+        const s = window.__tampilanLama;
+        const main = document.querySelector(s.portal ? '#isi-pelanggan' : '#isi-halaman');
+        const header = document.querySelector(s.portal ? '.portal-topbar' : 'header.bar');
+        const menu = s.portal ? '.portal-sidebar' : '#laci';
+        const headings = [...main.querySelectorAll('h1')];
+        return {main: main === s.main, header: header === s.header && !header.closest('[inert]'),
+            nodes: s.content.every(n => n.isConnected && main.contains(n)),
+            inert: s.portal ? main.inert : !main.inert && s.content.every(n => n.inert),
+            headings: headings.length === s.headings.length && headings.every((n,i) => n === s.headings[i]),
+            title: document.title === s.title, url: location.href === s.url,
+            history: history.length === s.history, scroll: main.scrollTop === s.scroll,
+            current: JSON.stringify([...document.querySelectorAll(menu + ' a[aria-current="page"]')].map(n => n.getAttribute('href'))) === JSON.stringify(s.current)};
+    }""")
+    assert all(facts.values()), facts
+
 
 async def _tuntaskan_baca(reads,pending):
     hasil=await asyncio.wait_for(asyncio.gather(*reads,return_exceptions=True),20) if reads else []
@@ -70,7 +111,9 @@ async def jalankan(pg,portal,pelanggan,width):
         pages={path:await c.get(path) for path in (asal,tujuan)}
         assert all(r.status_code==200 for r in pages.values())
         async with async_playwright() as pw:
-            browser=await pw.chromium.launch()
+            engine=os.getenv('UJI_BROWSER',os.getenv('OWNER_BROWSER','chromium'))
+            assert engine in {'chromium','webkit'},engine
+            browser=await getattr(pw,engine).launch()
             ctx=await browser.new_context(viewport={'width':width,'height':840},service_workers='block')
             await ctx.add_cookies([{'name':x.name,'value':x.value,'url':BASE} for x in c.cookies.jar])
             try:
@@ -99,12 +142,13 @@ async def jalankan(pg,portal,pelanggan,width):
                 await page.goto(BASE+asal)
                 if width<900:
                     await page.locator('.portal-menu-bawah' if pelanggan else '#buka-laci').click()
-                await page.evaluate("""portal => {window.clickAt=0;const selector=portal?'.halaman-memuat':'[data-halaman-bertahap][data-kind="stok"]';document.addEventListener('click',()=>{window.clickAt=performance.now()},true);new MutationObserver(()=>{if(document.querySelector(selector) && !window.shellMs)requestAnimationFrame(()=>{window.shellMs=performance.now()-window.clickAt})}).observe(document.body,{childList:true,subtree:true});}""",pelanggan)
+                await page.evaluate("""portal => {window.clickAt=0;const selector=portal?'#isi-pelanggan[aria-busy=\"true\"]':'[data-halaman-bertahap][data-kind="stok"]';document.addEventListener('click',()=>{window.clickAt=performance.now()},true);new MutationObserver(()=>{if(document.querySelector(selector) && !window.shellMs)requestAnimationFrame(()=>{window.shellMs=performance.now()-window.clickAt})}).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-busy']});}""",pelanggan)
                 menu='.portal-sidebar' if pelanggan else '#laci'
+                if pelanggan:await _catat_tampilan_lama(page,True)
                 await page.locator(menu+' a[href="'+tujuan+'"]').first.click()
                 await asyncio.wait_for(started.wait(),5)
                 if pelanggan:
-                    await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+                    await _pastikan_tampilan_lama_menunggu(page)
                 else:
                     root=page.locator('[data-halaman-bertahap][data-kind="stok"]')
                     await expect(root).to_be_visible(timeout=700)
@@ -114,8 +158,9 @@ async def jalankan(pg,portal,pelanggan,width):
                     assert await root.locator('th[scope="col"]').count()>=6
                     await expect(page.locator('.halaman-memuat')).to_have_count(0)
                     assert not stock_html,'Kerangka spesifik harus ada tanpa meminta HTML tujuan'
-                await expect(page).to_have_url(BASE+tujuan)
-                await expect(page.locator(menu+' a[href="'+tujuan+'"]')).to_have_attribute('aria-current','page')
+                if not pelanggan:
+                    await expect(page).to_have_url(BASE+tujuan)
+                    await expect(page.locator(menu+' a[href="'+tujuan+'"]')).to_have_attribute('aria-current','page')
                 assert not gate.is_set()
                 await page.wait_for_timeout(2000)
                 elapsed=await page.evaluate('window.shellMs')
@@ -126,7 +171,13 @@ async def jalankan(pg,portal,pelanggan,width):
                 await page.screenshot(path=str(out/(name+'.png')))
                 gate.set()
                 await expect(page.locator('.halaman-memuat')).to_have_count(0,timeout=15000)
-                if not pelanggan:
+                if pelanggan:
+                    await expect(page).to_have_url(BASE+tujuan,timeout=15000)
+                    await expect(page.locator('#isi-pelanggan')).not_to_have_attribute('aria-busy','true')
+                    assert not await page.locator('#isi-pelanggan').evaluate('(el)=>el.inert')
+                    await expect(page.locator(menu+' a[href="'+tujuan+'"]')).to_have_attribute('aria-current','page')
+                    assert await page.title()==BeautifulSoup(pages[tujuan].text,'html.parser').title.get_text()
+                else:
                     await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0,timeout=15000)
                     await expect(page.locator('[data-stok-controls]')).to_be_visible()
                 assert not writes,writes
