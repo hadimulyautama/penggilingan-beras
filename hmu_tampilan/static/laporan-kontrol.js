@@ -24,7 +24,10 @@
  const jenis=root.querySelector('[data-jenis-riwayat]');
  jenis?.addEventListener('change',()=>{
   const opsi=jenis.selectedOptions[0];
-  if(opsi&&!opsi.disabled&&opsi.value.startsWith('/riwayat-'))location.assign(opsi.value);
+  if(!opsi||opsi.disabled)return;
+  const link=[...root.querySelectorAll('.laporan-nav__jenis a[href]')].find(a=>a.getAttribute('href')===opsi.value);
+  // Jalur klik yang sama mempertahankan veto editor dan fallback native.
+  if(link)link.click();
  });
  const dialogs=()=>[...scope.querySelectorAll('dialog.lk-panel,dialog.pd-panduan')];
  scope.querySelectorAll('[data-lk-buka]').forEach(b=>b.addEventListener('click',()=>{

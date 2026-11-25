@@ -352,6 +352,7 @@
         {% if sub %}<details class="pintu-lipat"{{ ' open'|safe if ns.grup_aktif }}>{% endif %}
         <{{ "summary" if sub else "a" }}
            class="pintu{{ ' pintu--kini' if ns.grup_aktif }}"
+           {% if kunci == 'laporan_riwayat' and not sub %}data-pindah-menu="laporan_riwayat"{% endif %}
            {% if not sub %}href="{{ alamat }}"{% endif %}
            {{ ' aria-current=page'|safe if ns.grup_aktif }}>
           {# Ikon DIBACA dari `TAB`, tidak dipilih di sini — 29 September 2026.

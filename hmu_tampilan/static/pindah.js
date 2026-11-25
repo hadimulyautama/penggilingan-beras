@@ -179,6 +179,32 @@
     });
   }
 
+  // Izin tautan tetap berasal dari navigasi yang dirender server, bukan
+  // awalan URL bebas. data-utuh tetap menjadi fallback untuk SDK lama.
+  function daftarRiwayatBaca(path) {
+    return ["/riwayat-sosoh", "/riwayat-giling", "/riwayat-pengeringan",
+      "/riwayat-qc/gabah-basah", "/riwayat-qc/gabah-kering", "/riwayat-qc/pk-hasil-giling",
+      "/riwayat-qc/pk-luar", "/riwayat-qc/beras-hasil-sosoh", "/audit", "/laporan"].indexOf(path) !== -1;
+  }
+
+  function tautanRiwayatBaca(a) {
+    if (!a || !a.matches("[data-pindah-riwayat]")) return false;
+    var root = a.closest("[data-laporan-kontrol]");
+    if (!root || a.origin !== location.origin || a.search || a.hash || !daftarRiwayatBaca(a.pathname)) return false;
+    try {
+      var allowed = JSON.parse(root.dataset.bolehAlamat || "[]");
+      JSON.parse(root.dataset.tujuanTab || "[]").forEach(function (tab) {
+        if (tab.boleh === true) allowed = allowed.concat(tab.alamat || []);
+      });
+      return allowed.indexOf(a.pathname) !== -1;
+    } catch (_) { return false; }
+  }
+
+  function aliasRiwayat(alamat) {
+    var u = new URL(alamat, location.href);
+    return u.origin === location.origin && !u.hash && (u.pathname === "/riwayat" || u.pathname === "/laporan-riwayat");
+  }
+
   function bolehDitangani(a) {
     // Editor memakai navigasi utuh agar beforeunload menjaga draf gagal simpan.
     if (!editorBolehPindah()) { return false; }
@@ -186,7 +212,7 @@
     var h = a.getAttribute("href");
     if (!h || h.charAt(0) === "#") { return false; }
     if (a.hash || /\.(pdf|csv)$/i.test(a.pathname)) { return false; }
-    if (a.target || a.hasAttribute("download") || a.hasAttribute("data-utuh")) { return false; }
+    if (a.target || a.hasAttribute("download") || (a.hasAttribute("data-utuh") && !tautanRiwayatBaca(a))) { return false; }
     return a.origin === location.origin;
   }
 
@@ -230,8 +256,8 @@
   }
 
   /* Kerangka foreground tidak berbagi janji/cache HTML dengan pembaca data. */
-  function ambil(alamat, kerangkaHalaman, tanpaSimpan) {
-    var kunci = kunciBaca(alamat, kerangkaHalaman, tanpaSimpan);
+  function ambil(alamat, kerangkaHalaman, tanpaSimpan, denganAlamat) {
+    var kunci = (denganAlamat ? "alias:" : "") + kunciBaca(alamat, kerangkaHalaman, tanpaSimpan);
     if (sedang[kunci]) { return sedang[kunci]; }
     delete gagal[kunci];
     var bolehSimpan = !kerangkaHalaman && !tanpaSimpan;
@@ -253,12 +279,22 @@
          penjagaan navigasi utuh yang semula. */
       var pulih = r.status === 404 && r.headers.get("X-Pindah-Halaman") === "1"
         && (r.headers.get("Content-Type") || "").split(";")[0].trim() === "text/html";
-      if (r.redirected || (!r.ok && !pulih)) {
+      var kanonik = alamat;
+      if (denganAlamat) {
+        // Alamat menempel pada hasil yang sama, sehingga dua klik/response
+        // berlomba tidak dapat memasangkan HTML dengan URL milik respons lain.
+        var akhir = new URL(r.url, location.href);
+        if (!aliasRiwayat(alamat) || akhir.origin !== location.origin || akhir.hash
+            || !daftarRiwayatBaca(akhir.pathname) || r.status !== 200
+            || (r.headers.get("Content-Type") || "").split(";")[0].trim() !== "text/html") return null;
+        kanonik = akhir.pathname + akhir.search;
+      }
+      if ((r.redirected && !denganAlamat) || (!r.ok && !pulih)) {
         if (!r.redirected && r.status >= 500) gagal[kunci] = true;
         return null;
       }
       if (pulih) { bolehSimpan = false; delete simpan[alamat]; }
-      return r.text();
+      return r.text().then(function (teks) { return denganAlamat ? { teks: teks, alamat: kanonik } : teks; });
     }).catch(function () {
       gagal[kunci] = true;
       return null;              // jaringan putus — biarkan peramban mencoba
@@ -296,6 +332,16 @@
       if (!n.getAttribute("class")) n.removeAttribute("class");
     });
     if (salin.id === "laci") {
+      // Hanya pintu Riwayat yang ditandai server boleh mengingat daftar
+      // terakhir. Jangan menyamakan perubahan tautan lain dengan bookmark:
+      // perubahan izin, tujuan tak dikenal, dan markup lama tetap native.
+      var riwayat = salin.querySelectorAll("[data-pindah-menu]");
+      var daftarRiwayat = ["/riwayat", "/riwayat-sosoh", "/riwayat-giling", "/riwayat-pengeringan",
+        "/riwayat-qc/gabah-basah", "/riwayat-qc/gabah-kering", "/riwayat-qc/pk-hasil-giling",
+        "/riwayat-qc/pk-luar", "/riwayat-qc/beras-hasil-sosoh", "/audit"];
+      if (riwayat.length !== 1 || !riwayat[0].matches('a.pintu[data-pindah-menu="laporan_riwayat"]')
+          || daftarRiwayat.indexOf(riwayat[0].getAttribute("href")) < 0) return null;
+      riwayat[0].setAttribute("href", "/riwayat");
       salin.removeAttribute("hidden");
       var ukur = salin.querySelector(".laci__ukur");
       if (ukur) ukur.removeAttribute("aria-valuenow");
@@ -322,7 +368,8 @@
         || !batasIsi(document) || !batasIsi(doc)) return false;
     var wajib = ["#laci", "header.bar", ".desktop-chrome", "#buka-laci", ".bar__balik", ".bar__merek", ".desktop-chrome__crumbrow"];
     if (wajib.some(function (q) { return document.querySelectorAll(q).length !== 1 || doc.querySelectorAll(q).length !== 1; })) return false;
-    if (sidikChrome(document.getElementById("laci")) !== sidikChrome(doc.getElementById("laci"))) return false;
+    var laciLama = sidikChrome(document.getElementById("laci")), laciBaru = sidikChrome(doc.getElementById("laci"));
+    if (!laciLama || !laciBaru || laciLama !== laciBaru) return false;
     // Pita sesi/penyamaran dan pintu cepat juga merupakan batas konteks.
     var luar = function (frame) {
       return Array.prototype.filter.call(frame.children, function (n) {
@@ -815,6 +862,7 @@
     // Popstate tidak menambah entri baru; klik/retry menambah tepat sekali.
     try {
       if (data.dorong) history.pushState({ pindah: 1 }, '', data.alamat);
+      else if (data.kanonik && location.pathname + location.search !== data.alamat) history.replaceState(history.state, '', data.alamat);
       pasang(data.teks, data.alamat, false, data.dorong === true);
     } catch (e) { location.href = data.alamat; }
   }
@@ -880,16 +928,18 @@
     // agar HTML penuh tidak menjadi cache baru bagi rute data bertahap.
     if (!tahanNavigasi()) { tujuanPindah = null; location.href = alamat; return; }
     sibuk(true);
-    ambil(alamat, false, kerangkaHalaman).then(function (teks) {
+    var alias = aliasRiwayat(alamat);
+    ambil(alamat, false, kerangkaHalaman || alias, alias).then(function (hasil) {
+      var teks = alias && hasil ? hasil.teks : hasil;
       if (nomor !== nomorPindah) { return; }
       if (!teks) {
         pulihkanNavigasi();
         sibuk(false); tujuanPindah = null;
-        if (gagal[kunciBaca(alamat, false, kerangkaHalaman)]) { gagalMuat(alamat, judul, dorong); }
+        if (gagal[(alias ? "alias:" : "") + kunciBaca(alamat, false, kerangkaHalaman || alias)]) { gagalMuat(alamat, judul, dorong); }
         else { location.href = alamat; }
         return;
       }
-      dataMenunggu = { teks: teks, alamat: alamat, nomor: nomor, dorong: dorong };
+      dataMenunggu = { teks: teks, alamat: alias ? hasil.alamat : alamat, kanonik: alias, nomor: nomor, dorong: dorong };
       pasangMenunggu();
     });
   }
