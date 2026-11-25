@@ -61,10 +61,10 @@
 <div class="riwayat-list daftar-standar">
 {% for k in kartu %}
   <details class="padat padat--sosoh">
-    <summary onclick="event.preventDefault();location.href='/riwayat-sosoh/{{ k.id }}'">
+    <summary onclick="if(!event.target.closest('a') &amp;&amp; !event.ctrlKey &amp;&amp; !event.metaKey &amp;&amp; !event.shiftKey &amp;&amp; !event.altKey){event.preventDefault();this.querySelector('a[href]').click()}">
       <div class="padat__atas">
         <span class="padat__nama padat__nama--kode">
-          <a href="/riwayat-sosoh/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode }}</a> · {{ k.selesai|jam("%d/%m") or k.mulai|jam("%d/%m") }}
+          <a href="/riwayat-sosoh/{{ k.id }}">{{ k.kode }}</a> · {{ k.selesai|jam("%d/%m") or k.mulai|jam("%d/%m") }}
           {%- if k.lama %} · <span class="padat__umur">{{ k.lama }}</span>{% endif -%}
         </span>
         {# Angka besarnya PERSEN BERAS — yang pemilik sebut pertama, dan yang
@@ -242,8 +242,8 @@
   </div>
   {% for k in kartu %}
     <details class="riwayat-desktop-row">
-      <summary class="riwayat-desktop-grid riwayat-desktop-grid--sosoh" onclick="event.preventDefault();location.href='/riwayat-sosoh/{{ k.id }}'">
-        <span class="riwayat-desktop-lot"><strong><a href="/riwayat-sosoh/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode }}</a></strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
+      <summary class="riwayat-desktop-grid riwayat-desktop-grid--sosoh" onclick="if(!event.target.closest('a') &amp;&amp; !event.ctrlKey &amp;&amp; !event.metaKey &amp;&amp; !event.shiftKey &amp;&amp; !event.altKey){event.preventDefault();this.querySelector('a[href]').click()}">
+        <span class="riwayat-desktop-lot"><strong><a href="/riwayat-sosoh/{{ k.id }}">{{ k.kode }}</a></strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
         <span class="riwayat-desktop-owner">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
         <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
         <span class="riwayat-desktop-number">{{ kg(k.neraca.bahan_kg) ~ " kg" if k.bahan_pasti else k.bahan_teks }}</span>
