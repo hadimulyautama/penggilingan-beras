@@ -9,6 +9,7 @@ log = logging.getLogger(__name__)
 LITERAL = ('/barang-masuk', '/barang-masuk?status=belum',
            '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
            '/pekerjaan', '/pekerjaan?tab=tindakan')
+OPSIONAL = ('/jasa',)
 
 
 def kemas_frame(frames: dict[str, str]) -> dict:
@@ -51,10 +52,13 @@ def sah_rujukan(registry: dict) -> bool:
             or not isinstance(potongan, list) or not 0 < len(potongan) <= 16384
             or not all(isinstance(s, str) and s for s in potongan)
             or not isinstance(frames, dict) or not set(LITERAL).issubset(frames)
-            or len(frames) > len(LITERAL) + 2):
+            or len(frames) > len(LITERAL) + len(OPSIONAL) + 2
+            or len(set(frames) - set(LITERAL) - set(OPSIONAL)) > 2):
         return False
     from urllib.parse import urlsplit, parse_qs
     for alamat in set(frames) - set(LITERAL):
+        if alamat in OPSIONAL:
+            continue
         if not isinstance(alamat, str):
             return False
         try:
@@ -109,6 +113,30 @@ async def susun_registry(request: Request, akun, *, navigasi=None) -> dict | Non
                 continue
             return None
         frames[alamat] = response.body.decode('utf-8')
+    # Pintu Jasa memakai predicate otoritatif yang sama dengan halaman_jasa.
+    # Yang dibawa hanya struktur default; saldo/pelanggan tidak dibaca di sini.
+    # Operator tetap tidak mendapat kerangka maupun akses endpoint Jasa.
+    from app.peran import can_see_financials
+    if can_see_financials(akun.user):
+        native = Request({**request.scope, 'path': '/jasa', 'raw_path': b'/jasa',
+                          'query_string': b'', 'state': dict(state)})
+        try:
+            response = await kerangka(native, akun, 'jasa', navigasi=navigasi)
+            if response.status_code == 200:
+                frames['/jasa'] = response.body.decode('utf-8')
+            elif response.status_code in (401, 403):
+                raise HTTPException(response.status_code, 'Konteks kerangka Jasa tidak tersedia.')
+            else:
+                log.warning('Kerangka Jasa opsional tidak tersedia: HTTP %s', response.status_code)
+        except HTTPException as error:
+            # Perubahan sesi/hak tidak disamarkan sebagai kegagalan presentasi.
+            if error.status_code in (401, 403):
+                raise
+            log.warning('Kerangka Jasa opsional tidak tersedia: HTTP %s', error.status_code)
+        except Exception as error:
+            # Jangan menjatuhkan enam tujuan dasar karena satu template opsional.
+            # Nama kelas cukup; isi exception bisa memuat parameter pengguna.
+            log.warning('Kerangka Jasa opsional tidak tersedia: %s', type(error).__name__)
     nonce = request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state, 'csrf', None)
     sesi = csrf.untuk_sesi(nonce, baca_token(request.cookies.get(NAMA_COOKIE)),
                           request.cookies.get('produksi_lihat', ''))

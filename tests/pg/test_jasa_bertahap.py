@@ -29,11 +29,14 @@ def _tanpa_host_registry(html):
     assert registry['cap'] == host['data-cap'] == doc.html['data-versi']
     assert registry['sesi'] == sessions[0]['data-token']
     assert all(isinstance(registry[k], str) and registry[k] for k in ('konteks', 'cap', 'sesi'))
-    # Enam alamat yang disetujui: empat lama +default dan Perlu tindakan.
+    # Enam alamat wajib dan satu kerangka Jasa bila pintunya berizin.
     # Tetap exact-set, bukan menerima tujuan baru yang tidak ditinjau.
-    assert set(registry['frames']) == {'/barang-masuk', '/barang-masuk?status=belum',
-                                     '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
-                                     '/pekerjaan', '/pekerjaan?tab=tindakan'}
+    expected = {'/barang-masuk', '/barang-masuk?status=belum',
+                '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
+                '/pekerjaan', '/pekerjaan?tab=tindakan'}
+    if doc.select_one('#laci a[href="/jasa"]'):
+        expected.add('/jasa')
+    assert set(registry['frames']) == expected
     pieces = registry['potongan']
     assert isinstance(pieces, list) and 0 < len(pieces) <= 16384
     assert all(isinstance(piece, str) and piece for piece in pieces)

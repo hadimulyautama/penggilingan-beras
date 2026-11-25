@@ -20,7 +20,7 @@ pytestmark = pytest.mark.asyncio
 async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, lengkap, role, monkeypatch):
     from app.database import engine
     from app.web import kerangka_langsung as s
-    from app.services import berjalan, barang_masuk_daftar
+    from app.services import berjalan, barang_masuk_daftar, jasa_pelanggan
     from app.web import layar_pekerjaan
 
     asli = s.susun_registry
@@ -45,6 +45,7 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
                 m.setattr(berjalan, 'untuk', dilarang)
                 m.setattr(barang_masuk_daftar, 'daftar', dilarang)
                 m.setattr(layar_pekerjaan, 'siapkan_daftar_pekerjaan', dilarang)
+                m.setattr(jasa_pelanggan, 'daftar', dilarang)
                 data = await asli(request, akun, **kwargs)
         finally:
             event.remove(engine.sync_engine, 'before_cursor_execute', rekam)
@@ -79,7 +80,7 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
         host = doc.select_one('#padi-kerangka-langsung')
         assert host and not host.find_parent(class_='bingkai')
         data = json.loads(host.string)
-        assert set(data['frames']) == set(s.LITERAL)
+        assert set(data['frames']) == set(s.LITERAL) | ({'/jasa'} if role=='admin' else set())
         assert data['sesi'] == doc.select_one('#formulir-sesi')['data-token']
         assert data['konteks'] == doc.select_one('.bingkai')['data-pindah-konteks']
         assert data['versi'] == 2 and data['penyandian'] == 'baris-1'
@@ -98,8 +99,16 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
             assert frame.select_one('script[src*="kabar-badge.js"]')
             assert frame.select_one('section[aria-label],h1,[role="region"][aria-label]')
             columns = [n.get_text(strip=True) for n in frame.select('thead th')]
-            assert len(columns) == (5 if url.startswith('/pekerjaan') else 7 if 'diterima' in url else 6)
-            assert frame.select_one('button[data-lk-cetak]')['disabled'] == ''
+            if url == '/jasa':
+                assert role == 'admin'
+                assert frame.select_one('[data-jasa-bertahap]')
+                assert frame.select_one('[data-jasa-kontrol] input[name=cari]')['value'] == ''
+                assert frame.select_one('[data-jasa-baca-isi]')['aria-busy'] == 'true'
+                assert not frame.select('a.jasa-pelanggan')
+                assert frame.select_one('button[data-js-cetak]')['disabled'] == ''
+            else:
+                assert len(columns) == (5 if url.startswith('/pekerjaan') else 7 if 'diterima' in url else 6)
+                assert frame.select_one('button[data-lk-cetak]')['disabled'] == ''
             assert not frame.select('[data-pemulihan],[data-koreksi-bahan]')
         assert await _sidik(pg) == before
         if os.environ.get('PHASE_OUT'):
@@ -141,3 +150,64 @@ async def test_registry_opsional_gagal_tanpa_membocorkan_parameter(pg, lengkap, 
         assert logs and all(('SQLAlchemyError' if sebab == 'sql' else 'RuntimeError') in x.getMessage() for x in logs)
         assert all('SYNTHETIC_SQL_PARAMETER' not in x.getMessage() and not x.exc_info for x in logs)
         assert await _sidik(pg) == before
+
+
+@pytest.mark.parametrize('failure', ['response503', 'exception503', 'runtime'])
+async def test_jasa_opsional_gagal_tetap_mempertahankan_enam_kerangka(pg, lengkap, monkeypatch, failure, caplog):
+    from fastapi import HTTPException
+    from starlette.responses import Response
+    from app.web import halaman_bertahap as h, kerangka_langsung as registry
+    native = h.kerangka
+    async def broken(request, akun, jenis, **kwargs):
+        if jenis != 'jasa':
+            return await native(request, akun, jenis, **kwargs)
+        if failure == 'response503':
+            return Response(status_code=503)
+        if failure == 'exception503':
+            raise HTTPException(503, 'SYNTHETIC_JASA_PARAMETER')
+        raise RuntimeError('SYNTHETIC_JASA_PARAMETER')
+    monkeypatch.setattr(h, 'kerangka', broken)
+    async with await _klien(pg, role='admin') as client:
+        before = await _sidik(pg)
+        response = await client.get('/kabar')
+        doc = BeautifulSoup(response.text, 'html.parser')
+        host = doc.select_one('#padi-kerangka-langsung')
+        assert response.status_code == 200 and host
+        assert set(json.loads(host.string)['frames']) == set(registry.LITERAL)
+        assert await _sidik(pg) == before
+    assert 'SYNTHETIC_JASA_PARAMETER' not in caplog.text
+
+
+@pytest.mark.parametrize('code', [401, 403])
+async def test_jasa_opsional_izin_berubah_tidak_dijadikan_frame_sukses(pg, lengkap, monkeypatch, code):
+    from fastapi import HTTPException
+    from app.web import halaman_bertahap as h
+    native = h.kerangka
+    async def denied(request, akun, jenis, **kwargs):
+        if jenis == 'jasa':
+            raise HTTPException(code, 'Synthetic context changed')
+        return await native(request, akun, jenis, **kwargs)
+    monkeypatch.setattr(h, 'kerangka', denied)
+    async with await _klien(pg, role='admin') as client:
+        before = await _sidik(pg)
+        response = await client.get('/kabar')
+        assert response.status_code == 200
+        assert not BeautifulSoup(response.text, 'html.parser').select('#padi-kerangka-langsung')
+        assert await _sidik(pg) == before
+
+
+def test_anggaran_frame_filter_tetap_dua_walau_jasa_opsional():
+    from app.web.kerangka_langsung import LITERAL, sah_rujukan
+    base = {'versi':2,'penyandian':'baris-1','potongan':['frame'],
+            'frames':{url:[0] for url in LITERAL}}
+    base['frames'].update({'/pekerjaan?tab=tindakan&cari=A':[0],
+                           '/pekerjaan?tab=berjalan&cari=A':[0]})
+    assert sah_rujukan(base)
+    base['frames']['/jasa']=[0]
+    assert sah_rujukan(base)
+    del base['frames']['/jasa']
+    base['frames']['/pekerjaan?tab=berjalan&cari=B']=[0]
+    assert not sah_rujukan(base)
+    del base['frames']['/pekerjaan?tab=berjalan&cari=B']
+    base['frames']['/jasa?status=berjalan']=[0]
+    assert not sah_rujukan(base)
