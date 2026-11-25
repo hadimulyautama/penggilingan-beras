@@ -161,6 +161,8 @@ async def test_renderer_eksplisit_dan_API_mempertahankan_legacy(pg,stok_lengkap,
             assert not BeautifulSoup(full.text, 'html.parser').select('[data-jasa-bertahap]')
             assert 'data-jasa-bertahap' not in _tanpa_host_registry(full.text)
             assert 'data-jasa-bertahap' in shell.text
+            hidden_style = BeautifulSoup(shell.text, 'html.parser').select_one('style[data-jasa-hidden]')
+            assert hidden_style and '[data-jasa-bertahap] [hidden]{display:none!important}' in hidden_style.text
             assert '5.000' not in shell.text and 'Jumlah pelanggan belum dibaca.' in shell.text
             assert 'disabled aria-describedby="jasa-detail-alasan"' in shell.text
             assert 'no-store' in shell.headers['cache-control']

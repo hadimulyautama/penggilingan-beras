@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% block judul %}Pesanan Jasa{% endblock %}
 {% block isi %}
+{# Kerangka tampil sebelum CSS jaringan; tombol pemulihan belum berlaku. #}
+<style data-jasa-hidden>[data-jasa-bertahap] [hidden]{display:none!important}</style>
 <link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=3">
 <link rel="stylesheet" href="/static/jasa-bertahap.css?v={{ VERSI }}">
 <section data-jasa-bertahap data-stamp="{{ JASA_SHELL.stamp }}" data-url="{{ JASA_SHELL.url }}" data-filtered="{{ '1' if JASA_SHELL.filtered else '0' }}">
