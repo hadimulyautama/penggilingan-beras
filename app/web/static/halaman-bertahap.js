@@ -81,6 +81,7 @@
    forms:Array.from(node.querySelectorAll('form')).map(f=>[(f.getAttribute('method')||'get').toLowerCase(),f.getAttribute('action'),Array.from(new Set(Array.from(f.querySelectorAll('[name]')).map(n=>n.name))).sort()]),
    links:Array.from(node.querySelectorAll('a[href]')).map(a=>a.getAttribute('href')),
    dialogs:Array.from(node.querySelectorAll('dialog')).map(d=>d.id),
+   scopeLabels:node.querySelectorAll('.sk-cakupan').length,
   });
   if(schema(old)!==schema(fresh))throw Error('Cakupan kontrol berubah. Muat ulang halaman.');
   let tabs=null;
@@ -120,6 +121,10 @@
   }
   const counts=old.querySelectorAll('.kontrol-tab__jumlah'),nativeCounts=fresh.querySelectorAll('.kontrol-tab__jumlah');
   counts.forEach((count,i)=>{if(nativeCounts[i])count.textContent=nativeCounts[i].textContent;});
+  // Nama pemilik/lokasi mengikuti hasil baca tervalidasi, bukan placeholder
+  // kerangka. Labelnya tetap node yang sama, tanpa memasang ulang kontrol.
+  const scope=old.querySelector('.sk-cakupan'),nativeScope=fresh.querySelector('.sk-cakupan');
+  if(scope&&nativeScope)scope.replaceChildren(...Array.from(nativeScope.childNodes));
   // Placeholder nama memiliki hidden fallback hanya selama select disabled.
   for(const input of old.querySelectorAll('input[type="hidden"][name]')){
    if(old.querySelector('select[name="'+CSS.escape(input.name)+'"]')&&!fresh.querySelector('input[type="hidden"][name="'+CSS.escape(input.name)+'"]'))input.remove();
