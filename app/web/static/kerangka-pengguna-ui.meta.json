@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "8f6d4a2c8ff54bb63a93b829eaa1f60ec8f310791ecc3f4c3e6ad4437472fb75",
+  "sumber": "45007c83e3f6a0b15826bd9999160abb43d7a8bbcea17330cffb8a9f5209db18",
   "variants": [
     "staf",
     "staf-super",
@@ -8,7 +8,7 @@
     "pelanggan",
     "pelanggan-detail"
   ],
-  "aset_sha256": "1dde46b24e314f6ef7be291b2dfbf77f224bb645609cfe042ed48a83a858f695",
+  "aset_sha256": "125e758ede983581f1344497972a2ce192db547f2499e94fccedb6f26d3ada50",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
@@ -28,7 +28,7 @@
     "app/web/templates/pengguna_pelanggan.html": "60343a504ace0068c194c75d71d2a701e41ea82b74a7424f8f77aacee88ef91e",
     "app/web/templates/pengguna_ubah.html": "9c471eda306dbaf4baab8370aba4cf025bac8545c99211e710dd786dde000d44",
     "hmu_identitas/peran.py": "73544af0e271e85ce87937e4cb184cad069be78b4a86ac335ce67b08605faa89",
-    "hmu_tampilan/static/pindah.js": "894dfcac9d078ec57e8c83aba0f6db316edc29f5d09fdaa6473d7186fde8e482",
+    "hmu_tampilan/static/pindah.js": "7abe3ed02261f832e62d71766cbf7f9a6988192fae9e00dcf06d456c8232c90a",
     "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
     "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
     "hmu_tampilan/templates/pengguna.html": "746afa45f9565b5eed76fccd79188ebf212c9fc123e2a60030cc3e3785bf783b",

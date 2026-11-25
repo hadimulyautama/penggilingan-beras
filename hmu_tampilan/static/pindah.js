@@ -487,7 +487,44 @@
    * begitu penanda terbaca lagi. Persetujuan pemilik 14 Sep 2026. */
   var pukulSegar = null;
 
+  // Sinyal SSE/offline dapat tiba ketika skrip head sudah aktif tetapi body
+  // belum diparse. Hanya gambar status yang ditunda; API dan penanda tetap hidup.
+  var statusBadanMenunggu = {}, statusBadanTerdaftar = false;
+  var statusDokumenAktif = true;
+  function bersihkanStatusBadan() {
+    document.removeEventListener("DOMContentLoaded", gambarStatusBadan);
+    statusBadanTerdaftar = false;
+    statusBadanMenunggu = {};
+  }
+  function gambarStatusBadan() {
+    var menunggu = statusBadanMenunggu;
+    bersihkanStatusBadan();
+    if (!statusDokumenAktif || !document.body) return;
+    ["segar", "putus"].forEach(function (kunci) {
+      if (menunggu[kunci]) menunggu[kunci]();
+    });
+  }
+  function jalankanStatusSaatBadanSiap(kunci, gambar) {
+    if (!statusDokumenAktif) return;
+    if (document.body) {
+      delete statusBadanMenunggu[kunci];
+      gambar();
+      return;
+    }
+    statusBadanMenunggu[kunci] = gambar; // hanya sinyal terakhir per jenis
+    if (!statusBadanTerdaftar) {
+      statusBadanTerdaftar = true;
+      document.addEventListener("DOMContentLoaded", gambarStatusBadan, { once: true });
+    }
+  }
+  window.addEventListener("pagehide", function () {
+    statusDokumenAktif = false;
+    bersihkanStatusBadan();
+  });
+  window.addEventListener("pageshow", function () { statusDokumenAktif = true; });
+
   function tandaiPutus(putus) {
+    jalankanStatusSaatBadanSiap("putus", function () {
     var bar = document.querySelector(".putus");
     if (putus) {
       if (!bar) {
@@ -512,6 +549,7 @@
         b.disabled = false;
       });
     }
+    });
   }
   window.addEventListener("offline", function () { tandaiPutus(true); });
   window.addEventListener("online", function () { window.PINDAH.diam(); });
@@ -598,17 +636,19 @@
    * masalah — dan peringatan yang muncul tiap menit berhenti dibaca.
    */
   function tandaiSegar() {
-    var el = document.getElementById("segar");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "segar";
-      el.className = "segar";
-      document.body.appendChild(el);
-    }
     var t = new Date();
     pukulSegar = String(t.getHours()).padStart(2, "0") + ":" +
       String(t.getMinutes()).padStart(2, "0");
-    el.textContent = "diperbarui " + pukulSegar;
+    jalankanStatusSaatBadanSiap("segar", function () {
+      var el = document.getElementById("segar");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "segar";
+        el.className = "segar";
+        document.body.appendChild(el);
+      }
+      el.textContent = "diperbarui " + pukulSegar;
+    });
   }
 
   function lembarTerbuka() {
