@@ -215,6 +215,70 @@ async def test_existing_after_commit_opaque_hook_is_sent_once_and_never_replayed
         finally:await transport.restore()
 
 
+class _SessionPage:
+    def __init__(self): self.main_frame=object();self.callbacks={}
+    def on(self,event,callback): self.callbacks.setdefault(event,[]).append(callback)
+    def remove_listener(self,event,callback): self.callbacks[event].remove(callback)
+    def emit(self,event,value):
+        for callback in list(self.callbacks.get(event,[])): callback(value)
+
+
+def _session_request(page):
+    return NS(url=BASE+'/api/sesi-formulir',method='GET',frame=page.main_frame)
+
+
+def _session_response(request, *, status=200, mime='application/json'):
+    return NS(request=request,status=status,headers={'content-type':mime})
+
+
+@pytest.mark.asyncio
+async def test_stock_setup_drain_freezes_issued_reads_and_preserves_other_listeners():
+    from tests.pg.stock_setup_session import stock_setup_sessions,before_stock_setup_goto
+    page=_SessionPage();raw=[];page.on('pageerror',raw.append)
+    # SimpleNamespace is unhashable; real Playwright Request objects are keys.
+    first,late=(type('Request',(),vars(_session_request(page)))() for _ in range(2))
+    with stock_setup_sessions(page,BASE) as owner:
+        page.emit('request',first)
+        drain=asyncio.create_task(before_stock_setup_goto(page));observed=[]
+        def finish_after_capture():
+            observed.append(not drain.done())
+            page.emit('request',late)
+            page.emit('response',_session_response(first))
+            page.emit('requestfinished',first)
+        asyncio.get_running_loop().call_soon(finish_after_capture)
+        await drain
+        assert observed==[True] and owner.barriers==[dict(issued=1,captured=[1],completed=True)]
+        assert owner.rows[late]['terminal'] is None
+        page.emit('pageerror','unchanged raw error')
+    assert raw==['unchanged raw error'] and page.callbacks['pageerror']==[raw.append]
+    assert all(not page.callbacks[event] for event in ('request','response','requestfinished','requestfailed'))
+    with pytest.raises(AssertionError): await before_stock_setup_goto(page)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('fault',['failed','status','mime','timeout','wrong-frame','wrong-method'])
+async def test_stock_setup_drain_rejects_failed_unknown_and_unfinished_session_reads(fault):
+    from tests.pg.stock_setup_session import stock_setup_sessions
+    page=_SessionPage();request=type('Request',(),vars(_session_request(page)))()
+    if fault=='wrong-frame': request.frame=object()
+    if fault=='wrong-method': request.method='POST'
+    with stock_setup_sessions(page,BASE) as owner:
+        page.emit('request',request)
+        if fault in ('wrong-frame','wrong-method'):
+            with pytest.raises(AssertionError): await owner.drain_issued()
+            return
+        if fault=='timeout':
+            with pytest.raises(asyncio.TimeoutError): await owner.drain_issued(timeout=.001)
+            return
+        drain=asyncio.create_task(owner.drain_issued())
+        def complete():
+            page.emit('response',_session_response(request,status=503 if fault=='status' else 200,
+                mime='text/html' if fault=='mime' else 'application/json'))
+            page.emit('requestfailed' if fault=='failed' else 'requestfinished',request)
+        asyncio.get_running_loop().call_soon(complete)
+        with pytest.raises(AssertionError): await drain
+
+
 @pytest.mark.parametrize('fault',['no-native','native-denied','wrong-path','wrong-method','wrong-mime','changed-html','extra-field','different-stamp','native-already-wrong'])
 def test_stock_stamp_negative_rejects_anything_outside_exact_authorised_native_envelope(fault):
     import json
