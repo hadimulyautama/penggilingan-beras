@@ -249,6 +249,9 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     response = templates.TemplateResponse(request, nama, konteks, status_code=status_code)
     if status_code == 200 and "PINDAH_KONTEKS" in konteks and b"<!-- isi-halaman:akhir -->" in response.body:
         request.state.dokumen_native_kerangka = True
+        # Ukuran renderer, bukan header jaringan: Monitoring boleh menyisipkan
+        # skrip dan melepas Content-Length sebelum adapter kerangka berjalan.
+        request.state.panjang_html_native_kerangka = len(response.body)
     from app.web.navigasi_daftar_bertahap import pasang as pasang_navigasi_daftar
     return pasang_navigasi_daftar(response, request)
 

@@ -10,6 +10,7 @@ LITERAL = ('/barang-masuk', '/barang-masuk?status=belum',
            '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
            '/pekerjaan', '/pekerjaan?tab=tindakan')
 OPSIONAL = ('/jasa',)
+BATAS_DOKUMEN_NATIVE = 4 * 1024 * 1024
 
 
 def kemas_frame(frames: dict[str, str]) -> dict:
@@ -163,11 +164,32 @@ async def lengkapi_dokumen(request: Request, response):
             or not response.headers.get('content-type', '').startswith('text/html')
             or response.headers.get('content-encoding')):
         return response
-    # TemplateResponse sudah lengkap. call_next membungkusnya sebagai iterator;
-    # jangan mengonsumsi stream lain yang tidak mempunyai ukuran dokumen native.
-    if not response.headers.get('content-length'):
+    # MonitoringHTTP menyisipkan skrip pada HTML native dan sengaja melepas
+    # Content-Length. Marker ukuran hanya berasal dari renderer aplikasi;
+    # header request atau panjang jaringan bukan bukti stream boleh dibaca.
+    panjang = getattr(request.state, 'panjang_html_native_kerangka', None)
+    if type(panjang) is not int or not 0 < panjang <= BATAS_DOKUMEN_NATIVE:
         return response
-    chunks = [part async for part in response.body_iterator]
+    iterator = response.body_iterator
+    chunks, ukuran = [], 0
+    async for part in iterator:
+        chunks.append(part)
+        ukuran += len(part.encode() if isinstance(part, str) else part)
+        if ukuran > BATAS_DOKUMEN_NATIVE:
+            # Wrapper bisa menambah byte. Batas terlampaui bukan alasan
+            # mengirim HTML terpotong atau membuang sisa stream asli.
+            async def asli():
+                try:
+                    for chunk in chunks:
+                        yield chunk
+                    async for chunk in iterator:
+                        yield chunk
+                finally:
+                    tutup = getattr(iterator, 'aclose', None)
+                    if tutup is not None:
+                        await tutup()
+            response.body_iterator = asli()
+            return response
     body = b''.join(part.encode() if isinstance(part, str) else part for part in chunks)
     if b'<!-- isi-halaman:akhir -->' in body and b'data-pindah-konteks=' in body:
         try:
