@@ -64,6 +64,73 @@
   else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
   target?.focus({preventScroll:true});
  }
+ // Satu pulau kontrol native, bukan morph umum formulir transaksi.
+ // Ketidakcocokan struktur berhenti sebelum menyentuh kontrol yang terlihat.
+ function controlIsland(content){
+  const selector=root.dataset.kind==='pekerjaan'?'.pk-kepala':root.dataset.kind==='stok'?'[data-stok-controls]':null;
+  if(!selector)return null;
+  const old=root.querySelector(selector),fresh=content.querySelector(selector);
+  if(!old||!fresh)throw Error('Struktur kontrol berubah. Muat ulang halaman.');
+  const schema=node=>JSON.stringify({
+   forms:Array.from(node.querySelectorAll('form')).map(f=>[(f.getAttribute('method')||'get').toLowerCase(),f.getAttribute('action'),Array.from(new Set(Array.from(f.querySelectorAll('[name]')).map(n=>n.name))).sort()]),
+   links:Array.from(node.querySelectorAll('a[href]')).map(a=>a.getAttribute('href')),
+   dialogs:Array.from(node.querySelectorAll('dialog')).map(d=>d.id),
+  });
+  if(schema(old)!==schema(fresh))throw Error('Cakupan kontrol berubah. Muat ulang halaman.');
+  return {old,fresh};
+ }
+ function retainControls(island){
+  if(!island)return;
+  const {old,fresh}=island;
+  // GET native yang sama menentukan angka/opsi. Ketikan dan panel terbuka
+  // sudah ditahan oleh interacting(), juga sesudah seluruh aset selesai.
+  for(const select of old.querySelectorAll('select[name]')){
+   const native=fresh.querySelector('select[name="'+CSS.escape(select.name)+'"]');
+   if(!native)continue;
+   select.replaceChildren(...Array.from(native.options,o=>o.cloneNode(true)));select.value=native.value;
+  }
+  for(const selector of ['[data-pk-cetak]','[data-sk-cetak]','select[name]']){
+   const controls=old.querySelectorAll(selector),native=fresh.querySelectorAll(selector);
+   controls.forEach((control,i)=>{if(!native[i])return;for(const attr of ['disabled','aria-describedby']){if(native[i].hasAttribute(attr))control.setAttribute(attr,native[i].getAttribute(attr));else control.removeAttribute(attr);}});
+  }
+  const counts=old.querySelectorAll('.kontrol-tab__jumlah'),nativeCounts=fresh.querySelectorAll('.kontrol-tab__jumlah');
+  counts.forEach((count,i)=>{if(nativeCounts[i])count.textContent=nativeCounts[i].textContent;});
+  // Placeholder nama memiliki hidden fallback hanya selama select disabled.
+  for(const input of old.querySelectorAll('input[type="hidden"][name]')){
+   if(old.querySelector('select[name="'+CSS.escape(input.name)+'"]')&&!fresh.querySelector('input[type="hidden"][name="'+CSS.escape(input.name)+'"]'))input.remove();
+  }
+  for(const reason of old.querySelectorAll('[id^="shell-"]'))if(!fresh.querySelector('#'+CSS.escape(reason.id)))reason.remove();
+  if(fresh.dataset.pelangganUrl)old.dataset.pelangganUrl=fresh.dataset.pelangganUrl;
+  old.pfStockShellStop?.();
+  fresh.replaceWith(old);
+ }
+ function stockTable(content){
+  if(root.dataset.kind!=='stok')return null;
+  const old=table.querySelector('table'),head=old?.querySelector('thead');if(!head)return null;
+  const columns=n=>Array.from(n.querySelectorAll('th'),th=>th.textContent.trim().replace(/\s+/g,' '));
+  const oldColumns=columns(head),native=Array.from(content.querySelectorAll('.stok-seragam table')).filter(candidate=>{
+   const fresh=columns(candidate.querySelector('thead')||candidate);
+   return fresh.length===oldColumns.length&&fresh.every((label,i)=>label===oldColumns[i]||i===fresh.length-1&&label===''&&oldColumns[i]==='Tindakan'&&candidate.classList.contains('stok-tabel'));
+  });
+  // Beberapa tabel pemilik tidak disatukan: hasil tetap markup native.
+  return native.length===1?{old,head,fresh:native[0]}:null;
+ }
+ function retainTable(plan){
+  if(!plan)return;
+  const {old,head,fresh}=plan;
+  // Identitas table/thead/kolom tetap; badan dan gaya persis renderer native.
+  const nativeColumns=fresh.querySelectorAll('thead th');
+  head.querySelectorAll('th').forEach((th,i)=>{
+   th.textContent=nativeColumns[i].textContent;
+   for(const attr of Array.from(th.attributes))th.removeAttribute(attr.name);
+   for(const attr of nativeColumns[i].attributes)th.setAttribute(attr.name,attr.value);
+  });
+  for(const attr of Array.from(old.attributes))old.removeAttribute(attr.name);
+  for(const attr of fresh.attributes)old.setAttribute(attr.name,attr.value);
+  for(const child of Array.from(old.children))if(child!==head)child.remove();
+  for(const child of Array.from(fresh.children))if(child.tagName!=='THEAD')old.append(child);
+  fresh.replaceWith(old);
+ }
  async function install(payload,number){
   if(!current(number)||payload.stamp!==stamp)throw Error('Konteks sesi atau gudang berubah. Muat ulang halaman untuk membaca cakupan yang benar.');
   const doc=new DOMParser().parseFromString(payload.html,'text/html'),source=doc.getElementById('isi-halaman'),session=doc.getElementById('formulir-sesi');
@@ -79,6 +146,7 @@
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
   const stock=content.querySelector('[data-stok-controls]');
   if(stock){const url=new URL(stock.dataset.pelangganUrl,location.href);url.pathname='/api/halaman-bertahap/stok/html';stock.dataset.pelangganUrl=url.pathname+url.search;}
+  const island=controlIsland(content),stockFrame=stockTable(content);
   const prepared=await prepareScripts(content,doc,controller?.signal);
   if(!current(number)||payload.stamp!==stamp)return;
   // Pengguna dapat membuka filter ketika asset masih dibaca.
@@ -94,15 +162,11 @@
    for(const panel of content.querySelectorAll('[data-bm-detail-panel]')){panel.hidden=panel.dataset.bmDetailPanel!==key;if(!panel.hidden&&key!=='ringkasan')panel.querySelector('details')?.setAttribute('open','');}
    const rincian=content.querySelector('[data-bm-detail-rincian]');if(rincian)rincian.hidden=key==='ringkasan';
   }
+  if(!window.PINDAH?.selaraskanChrome||!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
   const previousFocus=document.activeElement;
+  retainControls(island);retainTable(stockFrame);
   observer.disconnect();finished=true;controller=null;
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
-  if(detail){
-   document.title=doc.title||document.title;
-   // Header/title native berada di luar marker isi. Pasang hanya setelah
-   // sesi/CAP/stamp cocok; controller halaman dipasang sesudahnya.
-   for(const selector of ['header.bar','.desktop-chrome__crumbrow']){const old=main.querySelector(selector),fresh=doc.querySelector('#isi-halaman '+selector);if(old&&fresh)old.replaceWith(fresh.cloneNode(true));}
-  }
   const valid=()=>content.isConnected&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;
   try{
    activateScripts(prepared);if(!valid())return;
@@ -146,12 +210,14 @@
   // Kerangka memakai markup header native yang sama. Controller daftar
   // native baru aktif setelah data; di sini hanya panel baca yang dibuka.
   let opener=null;
+  const shellDialogs=new AbortController(),stockControls=root.querySelector('[data-stok-controls]');
+  if(stockControls)stockControls.pfStockShellStop=()=>shellDialogs.abort();
   root.addEventListener('click',event=>{
    const open=event.target.closest('[data-sk-buka]'),close=event.target.closest('[data-sk-tutup]');
    if(open){const panel=root.querySelector('#'+CSS.escape(open.dataset.skBuka));if(panel?.tagName==='DIALOG'){opener=open;panel.showModal();}}
    if(close)close.closest('dialog')?.close();
-  });
-  for(const panel of root.querySelectorAll('dialog'))panel.addEventListener('close',()=>{if(opener?.isConnected)opener.focus({preventScroll:true});});
+  },{signal:shellDialogs.signal});
+  for(const panel of root.querySelectorAll('dialog'))panel.addEventListener('close',()=>{if(opener?.isConnected)opener.focus({preventScroll:true});},{signal:shellDialogs.signal});
  }
  const leave=e=>{const a=e.target.closest?.('a[href]');if(!finished&&root.isConnected&&a&&!a.target&&!a.hasAttribute('download')&&!a.hash&&!e.defaultPrevented&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey){stop();}};
  if(window.PINDAH)PINDAH.pasang(document,'click',leave);else document.addEventListener('click',leave,{once:true});
