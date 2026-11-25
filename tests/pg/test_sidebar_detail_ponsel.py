@@ -105,7 +105,7 @@ async def test_sidebar_detail_sekali_sentuh(pg,portal,pelanggan,engine,width):
                 assert not writes,writes
                 assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 if pelanggan:assert 'Rahasia Pelanggan B' not in await page.locator('main').inner_text()
-                out=Path(os.environ.get('UJI_PONSEL_OUT','output/ponsel'));out.mkdir(parents=True,exist_ok=True)
+                out=Path(os.environ.get('UJI_PONSEL_OUT',os.environ.get('UJI_KERANGKA_OUT','output/ponsel')));out.mkdir(parents=True,exist_ok=True)
                 name=('portal' if pelanggan else 'padiflow')+f'-{engine}-{width}'
                 await page.screenshot(path=str(out/(name+'.png')))
                 (out/(name+'.json')).write_text(json.dumps({'engine':engine,'width':width,'touch':True,'sidebar_taps':taps[daftar],'detail_taps':taps[detail],'data_delay_ms':2000,'menu_preserved':True,'input_preserved':True,'scroll_preserved':True,'errors':errors,'writes':writes})+'\n')
