@@ -51,6 +51,12 @@
  }
  function restoreSemanticFocus(previous,content){
   if(document.activeElement!==document.body)return;
+  // Pulau kontrol tetap memakai node semula, tetapi memindahkannya melalui
+  // dokumen detached melepas fokus browser. Pulihkan node yang benar-benar
+  // dipertahankan dahulu; jangan menebak kontrol lain dari nama kelasnya.
+  if(previous?.isConnected&&content.contains(previous)&&!previous.matches(':disabled')&&!previous.closest('[hidden]')){
+   previous.focus({preventScroll:true});return;
+  }
   let target=null;
   if(detail&&previous?.hasAttribute('data-bm-tab'))target=content.querySelector('[data-bm-tab="'+CSS.escape(previous.dataset.bmTab)+'"]');
   else if(detail&&previous?.matches('.bm-table-scroll'))target=content.querySelector('.bm-table-scroll')||content.querySelector('[data-bm-tab][aria-selected="true"]');
