@@ -18,7 +18,7 @@ async def browser(c, width):
         errors = []
         pending = set()
         closing = False
-        page.on('pageerror', lambda e: errors.append(e.stack))
+        page.on('pageerror', lambda e: errors.append(e.stack or str(e)))
         await page.context.add_cookies([
             dict(name=k.name, value=k.value, url='https://uji') for k in c.cookies.jar])
 
