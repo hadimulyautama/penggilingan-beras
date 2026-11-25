@@ -11,6 +11,10 @@
  const riwayat=['riwayat-sosoh','riwayat-giling','riwayat-pengeringan'].includes(root.dataset.kind);
  function berandaIslands(content){
   if(!beranda)return null;
+  // Pembacaan awal diterapkan utuh. Native tetap mengirim bagian parsial,
+  // tetapi shell menandainya gagal dan menyediakan satu retry GET; tidak
+  // menampilkan angka nol atau campuran data lama sebagai hasil lengkap.
+  if(content.querySelector('.pesan--hati[role="alert"]'))throw Error('Sebagian keadaan pabrik belum dapat dibaca. Coba lagi hanya membaca, tanpa mencatat transaksi.');
   const selectors=['.beranda-sambut','.beranda-kolom','.beranda-tindaklanjut','.beranda-aktivitas','.beranda-ringkasan'];
   const parts=selectors.map(selector=>({old:root.querySelector(selector),fresh:content.querySelector(selector)}));
   if(parts.some(p=>!p.old||!p.fresh))throw Error('Struktur Beranda berubah. Muat ulang halaman.');
@@ -19,21 +23,16 @@
   if(!oldTitle||!nextTitle||!oldNeeds||!nextNeeds||oldNeeds.textContent!==nextNeeds.textContent)throw Error('Judul Beranda belum sesuai. Coba lagi.');
   const oldSites=Array.from(root.querySelectorAll('[data-alur-gudang]')),nextSites=Array.from(content.querySelectorAll('[data-alur-gudang]'));
   const headerShape=n=>({key:n.dataset.alurGudang,code:n.querySelector('.alur-gudang__kode')?.textContent.trim(),name:n.querySelector('.alur-gudang__kepala p')?.textContent.trim(),title:n.querySelector('.alur-gudang__kepala h2')?.textContent.trim(),links:Array.from(n.querySelectorAll('.alur-gudang__kepala a'),a=>a.getAttribute('href'))});
-  const summaryFailed=nextSites.length===0&&!!parts[4].fresh.querySelector('.pesan--hati[role="alert"]');
-  if(!summaryFailed&&JSON.stringify(oldSites.map(headerShape))!==JSON.stringify(nextSites.map(headerShape)))throw Error('Cakupan ringkasan gudang berubah. Muat ulang halaman.');
-  return {parts,oldTitle,nextTitle,oldNeeds,nextNeeds,oldSites,nextSites,summaryFailed};
+  if(JSON.stringify(oldSites.map(headerShape))!==JSON.stringify(nextSites.map(headerShape)))throw Error('Cakupan ringkasan gudang berubah. Muat ulang halaman.');
+  return {parts,oldTitle,nextTitle,oldNeeds,nextNeeds,oldSites,nextSites};
  }
  function retainBeranda(island){
   if(!island)return;
-  const {parts,oldTitle,nextTitle,oldNeeds,nextNeeds,oldSites,nextSites,summaryFailed}=island;
+  const {parts,oldTitle,nextTitle,oldNeeds,nextNeeds,oldSites,nextSites}=island;
   oldTitle.textContent=nextTitle.textContent;nextTitle.replaceWith(oldTitle);nextNeeds.replaceWith(oldNeeds);
   // Nilai dan baris berasal dari renderer native. Hanya node struktur dan
   // tautan gudang yang sudah tervalidasi dipertahankan, bukan hasil lama.
-  // Kegagalan satu pembaca tidak menahan bagian native lain yang berhasil.
-  // Ringkasan gagal tetap — dengan header dan pesan/coba-lagi native; tidak
-  // mengubah kegagalan menjadi saldo nol atau mengambil data sebelumnya.
-  if(summaryFailed)parts[4].fresh.append(...oldSites);
-  else oldSites.forEach((old,i)=>{
+  oldSites.forEach((old,i)=>{
    const fresh=nextSites[i],head=old.querySelector('.alur-gudang__kepala');
    fresh.querySelector('.alur-gudang__kepala').replaceWith(head);
    old.replaceChildren(...Array.from(fresh.childNodes));fresh.replaceWith(old);
