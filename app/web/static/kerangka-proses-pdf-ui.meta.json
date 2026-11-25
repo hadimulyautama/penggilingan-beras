@@ -1,16 +1,16 @@
 {
   "versi": 1,
-  "sumber": "6ce5723801a622e13d8f8cfd65ab9ddb2014690547dccd4ccc6616ba7bd84044",
+  "sumber": "58cc0dcd01e98d68cebc426128738be065883bde636c73e0bb6c7db1f8cb34df",
   "variants": [
     "giling",
     "sosoh",
     "pengeringan"
   ],
-  "aset_sha256": "a2b5943154ed1cf6c411a27a8449adff48e7ce09141bdaa9a9640d86a5713a9c",
+  "aset_sha256": "b5e2c22db49cfec072b2395a94106f7eab95c2f7e066e6807157800f8b868baf",
   "inputs": {
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
-    "app/web/layar_riwayat.py": "5df9c83645622de444baef9c4c7996c5d3b6a58fdc5d4735a21fba78b232a640",
-    "app/web/layar_sosoh.py": "978456e565aa2549a1f7508f062365ca59df815bcdb78c852aa9a2dc92b9ee28",
+    "app/web/layar_riwayat.py": "9ae550d20b99aa05b7219696b559756ced70d4f473f650beb8fef662724dddc9",
+    "app/web/layar_sosoh.py": "fd61e29246a9896b3e668a7b632092c0a7f58fbbeafa1fefa9577010bc3e6f6f",
     "app/web/proses_pdf_catalog.py": "de67aa3e503b759f324d68cedbf6066b101e06b10e6057a747e454382be5f120",
     "app/web/proses_pdf_kerangka.py": "8ee404531b8e6c82b1cb048fe5e24c70a9720308c7e01e6f68a0da12877af70f",
     "app/web/static/kerangka-proses-pdf-ui-runtime.js": "ccef2d04212765a3283d622a787e461647b33a5d526a978250f0a1399289810a",

@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "d29683121e983d3e3546fe8367b971e3e54c7803ca45edfe8180a30f76ee6bcc",
-  "aset_sha256": "bf6572df09fff3a52487888d69cd63dd28df52f5164e5c2df844860f1ad8ed7c",
+  "sumber": "089c204d556674dbda0dc8d83d1ba5143d254154acdbddc817c7d22b0e6ac56d",
+  "aset_sha256": "02089beb3ce93fabc3ce45e0ea47c3fba13b2f59301578d68af10f8684ff9bf2",
   "inputs": {
     "app/web/portal/detail_kerangka.py": "1662064097d418fa8623e4d74258f3d85495bf673aa5a962cfdff0e20cb1ce4e",
     "app/web/portal/detail_catalog.py": "c57ef219d1143c5dfdc0d438c2d22c4aedb99732945ffc357ffc46730d93693c",
@@ -17,7 +17,7 @@
     "app/web/templates/portal/_inti_proses_ringkas.html": "457d0687ab76fa85ba5aa83b059809a6c738d85d60efa544fe7637173d3bb159",
     "app/web/templates/portal/_penerimaan_qc.html": "07b5db8cb88d0a97415cc2e5ec3d96d7c76b892dce94162d3aa0e7a8b198f986",
     "app/web/templates/portal/detail_riwayat_giling_kerangka.html": "76b3743dae4a561d270eb73042a3171ea4cedcbaffeabd1bbe0a905b6713d57c",
-    "app/web/templates/riwayat_giling_detail.html": "3feb8db918897afd29e0bd348d1d47cb23eda71ee217e1ccfdd2f24e66e37f16",
+    "app/web/templates/riwayat_giling_detail.html": "db87b3ada0ff88335f5969c616a241bc416a5295ead9c9b74f72431556a3c9bb",
     "app/web/templates/_qc_gabah_asal.html": "21949e2b35f2af655b22e96637c73ef3c5ebe298ab3d6739290ec750456a8a48",
     "hmu_tampilan/templates/_riwayat_jeda.html": "d2ebf9ed59440bf3a1c65800dca4a1a568d5ba5609ae0b424287eeeb467a5738",
     "app/web/static/riwayat.css": "21fa1ff357afc661b0392e2317182d3338a2938b48d7eb91a7c4e99c2c457071",

@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "5a48bf726fca3a721e54366f6b658ce3019a9a7c5ecb71c9670943aa9508d82c",
-  "aset_sha256": "d0d694db3ba0d173b1c1a9d1ab3f38f6b79cb015089c061b415018ff1788d2b8",
+  "sumber": "565dc157a17229c9a945ecfb7ddfda914863459cb0da808ce38b8de652f53453",
+  "aset_sha256": "3b8902e628f9dd4adebe028be2ba133f5503f99a089cbcff1f950e7c3120af11",
   "variants": [
     "/riwayat-giling",
     "/riwayat-sosoh",
@@ -17,7 +17,7 @@
     "app/web/audit_kerangka.py": "613562afe88170023a6c1e7f81af487fd8381ff866b545810c8536786856af40",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
     "app/web/laporan_navigasi.py": "ad30139710351acfc15cceaf9d2cf36c86a2c3714e3424f980b8038b62e72d5f",
-    "app/web/layar_riwayat.py": "5df9c83645622de444baef9c4c7996c5d3b6a58fdc5d4735a21fba78b232a640",
+    "app/web/layar_riwayat.py": "9ae550d20b99aa05b7219696b559756ced70d4f473f650beb8fef662724dddc9",
     "app/web/riwayat_daftar_metadata.py": "54a0662ef1d848e2b6e5c54be3cba7d7c1be55aa89b873732dbec2d498fdd7d6",
     "app/web/static/audit-native.js": "df3256162e629c36604a314638e5071b3ff8657039180e7e7ad4a7a7fd017dac",
     "app/web/static/kerangka-riwayat-ui-runtime.js": "bb0a1d664cff151f700e4416df3298688d7f314733b843d6da04efcdd2e14834",
