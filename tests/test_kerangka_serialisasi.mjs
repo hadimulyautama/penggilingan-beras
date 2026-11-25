@@ -16,12 +16,21 @@ function baca(registry,address=url,stock=null){
  const PINDAH={aturKerangkaLangsung:fn=>provider=fn};
  const document={getElementById:id=>id==='padi-kerangka-langsung'?host:id==='formulir-sesi'?sesi:id==='padi-stok-kerangka'?stock:null,
   querySelector:s=>s==='.bingkai'?frame:null,documentElement:{getAttribute:()=> 'cap-fixture'}};
- const sandbox={window:{PINDAH},PINDAH,document,URL,location:{href:'https://uji/kabar'},__joins:0,__parses:0};
+ // Isolate the encoding boundary from the browser's later chrome/layout pass.
+ // This stub does not claim HTML parsing or visibility coverage.
+ let parsedHtml=null;
+ class DOMParser {parseFromString(html,type){
+  assert.equal(type,'text/html');parsedHtml=html;
+  return {querySelectorAll:()=>[],getElementById:()=>null,
+          documentElement:{outerHTML:'<html>parser-result</html>'}};
+ }}
+ const sandbox={window:{PINDAH},PINDAH,document,URL,DOMParser,location:{href:'https://uji/kabar',origin:'https://uji'},__joins:0,__parses:0};
  const context=vm.createContext(sandbox);
  vm.runInContext('const asli=Array.prototype.join;Array.prototype.join=function(...a){__joins++;return asli.apply(this,a);};',context);
  vm.runInContext('const parse=JSON.parse;JSON.parse=function(...a){__parses++;return parse.apply(this,a);};',context);
  vm.runInContext(source,context);
- return {result:provider({alamat:address,sebab:'push'}),joins:sandbox.__joins,parses:sandbox.__parses};
+ const result=provider({alamat:address,sebab:'push'});
+ return {result,joins:sandbox.__joins,parses:sandbox.__parses,parsedHtml};
 }
 
 for(const address of ['/stok?tab=','/stok?pemilik=','/stok?tab=produk&tab=bahan',
@@ -37,10 +46,11 @@ test('descriptor Stok terlalu panjang ditolak sebelum JSON.parse',()=>{
  assert.equal(value.result,null);assert.equal(value.joins,0);assert.equal(value.parses,1,'Hanya registry utama yang boleh diparse');
 });
 
-test('join mempertahankan tiap karakter, pengulangan, urutan, src dan nonce',()=>{
- const d=data(),{result,joins}=baca(d);
+test('join menyerahkan tiap karakter, pengulangan, urutan, src dan nonce utuh ke parser',()=>{
+ const d=data(),{result,joins,parsedHtml}=baca(d);
  assert.equal(result.versi,1,'Kontrak SDK publik tetap versi1');
- assert.equal(result.html,d.potongan[0]+d.potongan[1]+d.potongan[0]);
+ assert.equal(parsedHtml,d.potongan[0]+d.potongan[1]+d.potongan[0]);
+ assert.equal(result.html,'<!doctype html><html>parser-result</html>');
  assert.equal(result.alamat,url);assert.equal(joins,1);
 });
 for(const [name,mutate] of [

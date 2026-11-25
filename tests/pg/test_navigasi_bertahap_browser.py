@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from bs4 import BeautifulSoup
 from urllib.parse import urlsplit
 import pytest
 from playwright.async_api import async_playwright, expect, Error as BrowserError
@@ -12,6 +13,28 @@ from hmu_identitas.peran import SUPERADMIN
 
 pytestmark=pytest.mark.asyncio
 BASE='http://127.0.0.1:59996'
+
+
+def portal_native_columns(html):
+    """Require actual receipt headers and both filters; an empty shell fails."""
+    native=BeautifulSoup(html,'html.parser')
+    columns=[n.get_text(' ',strip=True) for n in native.select('.masuk-kepala > span')]
+    assert len(columns)==7 and columns[0]=='Nama / tiket'
+    assert not native.select_one('[data-portal-native-frame]'), 'Golden must be the complete native read, not its pending framework'
+    assert native.select_one('form.pelanggan-filter-masuk[method=get] select[name=jenis]')
+    assert native.select_one('form.pelanggan-filter-masuk[method=get] input[name=cari]')
+    return columns
+
+
+async def test_portal_native_oracle_rejects_missing_columns_or_filter_controls():
+    # Pure negative controls for the source oracle, not a served response,
+    # permission, business row or a replacement for the native fixture GET.
+    html='<div class="masuk-kepala"><span>Nama / tiket</span>'+''.join('<span>Kolom</span>' for _ in range(6))+'</div><form class="pelanggan-filter-masuk" method="get"><select name="jenis"></select><input name="cari"></form>'
+    assert len(portal_native_columns(html))==7
+    for selector in ('.masuk-kepala','select[name=jenis]','input[name=cari]'):
+        doc=BeautifulSoup(html,'html.parser');doc.select_one(selector).decompose()
+        with pytest.raises(AssertionError):portal_native_columns(str(doc))
+    with pytest.raises(AssertionError):portal_native_columns('<div data-portal-native-frame>'+html+'</div>')
 
 async def _tuntaskan_baca(reads,pending):
     hasil=await asyncio.wait_for(asyncio.gather(*reads,return_exceptions=True),20) if reads else []
@@ -69,6 +92,13 @@ async def jalankan(pg,portal,pelanggan,width):
         # Ambil sebelum browser agar simulasi jaringan tidak menahan sesi DB.
         pages={path:await c.get(path) for path in (asal,tujuan)}
         assert all(r.status_code==200 for r in pages.values())
+        # Native fixture response is the golden structure; no generic loading
+        # page or fabricated receipt DTO may satisfy the portal assertion.
+        portal_columns=[]
+        if pelanggan:
+            native_target=await c.get(tujuan,headers={'X-Portal-Navigasi':'1'})
+            assert native_target.status_code==200
+            portal_columns=portal_native_columns(native_target.text)
         async with async_playwright() as pw:
             browser=await pw.chromium.launch()
             ctx=await browser.new_context(viewport={'width':width,'height':840},service_workers='block')
@@ -99,12 +129,22 @@ async def jalankan(pg,portal,pelanggan,width):
                 await page.goto(BASE+asal)
                 if width<900:
                     await page.locator('.portal-menu-bawah' if pelanggan else '#buka-laci').click()
-                await page.evaluate("""portal => {window.clickAt=0;const selector=portal?'.halaman-memuat':'[data-halaman-bertahap][data-kind="stok"]';document.addEventListener('click',()=>{window.clickAt=performance.now()},true);new MutationObserver(()=>{if(document.querySelector(selector) && !window.shellMs)requestAnimationFrame(()=>{window.shellMs=performance.now()-window.clickAt})}).observe(document.body,{childList:true,subtree:true});}""",pelanggan)
+                await page.evaluate("""portal => {window.clickAt=0;const selector=portal?'[data-portal-native-frame][data-portal-page="/barang-masuk"]':'[data-halaman-bertahap][data-kind="stok"]';document.addEventListener('click',()=>{window.clickAt=performance.now()},true);new MutationObserver(()=>{if(document.querySelector(selector) && !window.shellMs)requestAnimationFrame(()=>{window.shellMs=performance.now()-window.clickAt})}).observe(document.body,{childList:true,subtree:true});}""",pelanggan)
                 menu='.portal-sidebar' if pelanggan else '#laci'
                 await page.locator(menu+' a[href="'+tujuan+'"]').first.click()
                 await asyncio.wait_for(started.wait(),5)
                 if pelanggan:
-                    await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+                    root=page.locator('[data-portal-native-frame][data-portal-page="/barang-masuk"]')
+                    await expect(root).to_be_visible(timeout=700)
+                    await expect(root).to_have_attribute('data-portal-address',tujuan)
+                    await expect(root).to_have_attribute('aria-busy','true')
+                    await expect(root.locator('.pelanggan-sapaan h1')).to_have_text('Barang masuk')
+                    await expect(root.locator('form[role=search] select[name=jenis]')).to_be_visible()
+                    await expect(root.locator('form[role=search] input[name=cari]')).to_be_visible()
+                    assert await root.locator('.masuk-kepala > span').all_text_contents()==portal_columns
+                    await expect(root.locator('[data-portal-placeholder]')).to_be_visible()
+                    await expect(root.locator('[data-portal-read-status]')).to_have_attribute('role','status')
+                    await expect(page.locator('.halaman-memuat')).to_have_count(0)
                 else:
                     root=page.locator('[data-halaman-bertahap][data-kind="stok"]')
                     await expect(root).to_be_visible(timeout=700)
@@ -131,7 +171,10 @@ async def jalankan(pg,portal,pelanggan,width):
                     await expect(page.locator('[data-stok-controls]')).to_be_visible()
                 assert not writes,writes
                 assert not errors,errors
-                if pelanggan:assert 'Rahasia Pelanggan B' not in await page.locator('main').inner_text()
+                if pelanggan:
+                    await expect(page.locator('[data-portal-native-frame]')).to_have_count(0,timeout=15000)
+                    assert await page.locator('.masuk-kepala > span').all_text_contents()==portal_columns
+                    assert 'Rahasia Pelanggan B' not in await page.locator('main').inner_text()
                 (out/(name+'.json')).write_text(json.dumps({'shell_ms':elapsed,'held_response_ms':2000,'width':width,'writes':writes,'errors':errors})+'\n')
                 # Kembali memulihkan halaman asal, bukan membuat entri riwayat ganda.
                 await page.go_back()

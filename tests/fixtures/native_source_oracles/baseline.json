@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "fingerprint_format": "ast-fields-json-v1: no positions; omit empty Python>=3.12 type_params only",
+  "master": {
+    "spesifikasi_beras.py": {
+      "baseline_commit": "fc039feff813b6d27949bca98f81626774a6076c",
+      "module": "app/web/spesifikasi_beras.py",
+      "baseline_git_blob": "0cfa3988cb0637cd0b91d8e0ca4bb1b0f2baba8d",
+      "baseline_source_sha256": "d6b57fba86e519d6f9e60a4847242624c63307a376ddf06da6f6f548b35e4540",
+      "functions": {
+        "halaman": "afbbcfeea58d5a37693ee4425e628d2c07ea888f537ad913e2713697cbb6950f",
+        "lihat": "ae7a25c5d2e00c8f78adf13d75db9680870785f100442e39daad28a297c6200e",
+        "ubah": "50b0f386a4d6ffacf8689dc213e3d0df16fcee0d642253f9cd08c0277a27ce62"
+      },
+      "declared_get_block_sha256": "388dfc1dceb12360381ed87b229080f7a29d2e0a769808a31ff672bca4d820bd",
+      "adopted_commit": "ff942c44399ec60ef8933a0112c38f9ffda822d4"
+    },
+    "jenis_hasil_samping.py": {
+      "baseline_commit": "fc039feff813b6d27949bca98f81626774a6076c",
+      "module": "app/web/jenis_hasil_samping.py",
+      "baseline_git_blob": "90c416d26afefccf03deb60af3061fcd29b3e536",
+      "baseline_source_sha256": "c1db8403a319409478fdf2cbf8e4f7b6766845afc31a6278de2accdd837a22d7",
+      "functions": {
+        "halaman": "cd3960802f3e58b979a8bdc6429e95c453078911e916e7961d45771c095b3df1",
+        "lihat": "ae7a25c5d2e00c8f78adf13d75db9680870785f100442e39daad28a297c6200e",
+        "ubah": "4e27279e09a0b7a95f086c68afdd87b71c7cab067842fe9088bd55ed6e758b93"
+      },
+      "declared_get_block_sha256": "388dfc1dceb12360381ed87b229080f7a29d2e0a769808a31ff672bca4d820bd",
+      "adopted_commit": "ff942c44399ec60ef8933a0112c38f9ffda822d4"
+    }
+  },
+  "alat": {
+    "baseline_commit": "59a15198fda21a6e0afc0a7732aa2e856d2b4eed",
+    "module": "app/web/pengaturan.py",
+    "baseline_git_blob": "6135cb06e5e47a2635ab949b09fd1a756b1bc67d",
+    "baseline_source_sha256": "70b3802870646ce54b3bb327f307deba305f4c9c14d65c7b5f04dd689bd21803",
+    "functions": {
+      "halaman_gudang_pengaturan": "67e9b472ce46558db9ff0a835ebffdebdcc8dc01aab9f3448cef2190863e2658",
+      "_halaman_gudang": "3db0c0a48039b889358449368ff8f7b313fb41e8b41275d1277f3e8928d8f7b6",
+      "_balik_gudang": "e4f71b14f834303f65594b29cd534ae1ac70af91890e97bf616bb45e3d472cbb",
+      "tambah_gudang": "fd45f159a6437c880629519b8193c2d3ecadd09e74092bb0a594024bd5b9cf48",
+      "edit_gudang": "6d506df33e17376a5491aefcff76454b49b4581a10ba86d8d11a0037734b9514",
+      "hapus_gudang": "678c16a1f18649f567103cc33f41df56514f82028d7f6df6cf5e268484c00140",
+      "_proses_view": "ebe4c3c968b78a709bc072612c69fcef6957698662dd04bb4c1ccdd244187353",
+      "_metadata_menu_native": "fe18fb525639050a26bdabb0dd3de44eda3a753ff06790839fece9d52f4027cd",
+      "halaman_pengaturan": "4117d34092450ab78327c54a294ecfe2e94d1f0a2ec9a0d95e67180e2e4605cc",
+      "ubah_target_bawaan": "917ac8dfa8d39083eaa72a89bbb270ad8cd5700d236d69fd5f5a6e22e891f1eb",
+      "ubah_fitur_mutu": "945e8ce76d6bb2f7dc874798e3d3bb76f061ea121c4d7decdf74183007252b0a",
+      "ubah_sebab_jeda": "e757b08240e30c468bb337fbd1c24b31c116584ea026ca7bb7c5354f5eab40c0",
+      "mulai_sinkron_kledo_kontak": "707bdfb5490cb904483d03f07f2a3091dfb7b433139fe29025f07f27ec6449a1",
+      "ganti_terik": "88cfb2ccb01c7089b9b693dbd61f6e178597fa65efa48a7a6586c2b8206af316",
+      "ganti_nama": "04168946aa6199904c4e21e9944edefd1752825f72b6b928d201e9f5551efa57",
+      "halaman_alat": "7f57983c29200126921bb83708cacdc04910c0f1bd1a156a7091476cb87e7cdf",
+      "_halaman_alat": "42b69fbbd0b2ae6f5431795306a62f355c3f7165651e01822b16b492cda16120",
+      "_balik_alat": "6e980826c915ca9c6b45e07dfcad21b61b851b63c4b7478b727632d76e10f62b",
+      "tambah_dryer": "7a84ff74e639790e220bc071b248275e84ae4d87abe516803fdcd32cb0c5fb15",
+      "edit_dryer": "75c41df79552afb553cfb2a7545c2a2a396232af4fe7189f2369bd52f3c37b1d",
+      "tambah_silo": "efd0889315cf4bc3fc15ddc5803481463d2acdcb912b92582cc5d9e51181ceaa",
+      "edit_silo": "b2343b5584906c5f236898000f214ab7b52d11afb8bd57391354d9e11d6ce704",
+      "hapus_silo": "f6be2e97cadf98d5d03a1c8b262d074891fbee7a7dbdbd9aaf177e610f4fecd8",
+      "ubah_status_dryer": "c16f7f5b1e15c85b9d39f643059de228a35eaf46f245cce2d2f4ef33c33e88f8"
+    },
+    "declared_alat_block_sha256": "e0443d34526f1b91ac5b9d1c141773ef3e226ddfcf46af1653e5d403167d0f29",
+    "declared_detail_block_sha256": "4e6fb6f44c03dd63948a2e7417e6792b488761f2ef95afd9558c0fa74c773211",
+    "declared_adoption_commits": [
+      "2e1786500d08109bc9ff0b99b2e7105128cde6ad",
+      "7cddbb56aad9141631b09adcb2a9b99a8378d5eb"
+    ]
+  },
+  "stock": {
+    "layar_stok.py": {
+      "baseline_commit": "88560d962f61f027c9b2c77cbda3d19f53104384",
+      "module": "app/web/layar_stok.py",
+      "baseline_git_blob": "60edafa75574e6f80fcfa5a06041ef6db610a63e",
+      "baseline_source_sha256": "dc5fd56056beefee81bdc46ca2cdfc59779fd61a0c19694dce478494a7fb76bd",
+      "native_render_boundaries": {
+        "halaman_stok": "54b5a1371f61643da724190bd4415bd9438f3ae026948988745ae4f459e3f269",
+        "halaman_stok_pk_jasa": "aaf198d6060d0127cd5856b960d6db355c169865d3089e28034e48332c6bd1d6",
+        "halaman_detail_stok_pk": "81a8bcaf25d1c8ed7fc2ff1261b3f39453e066ae91ab84ed9b068293f3ee5725"
+      }
+    },
+    "layar_produk.py": {
+      "baseline_commit": "88560d962f61f027c9b2c77cbda3d19f53104384",
+      "module": "app/web/layar_produk.py",
+      "baseline_git_blob": "71da8a85e8a9673a3f179fde0013c1acb8515a75",
+      "baseline_source_sha256": "ce5bd50068c5dae6391df5b5ebba88b0527f825c5f5281ea9042a05593c11f27",
+      "native_render_boundaries": {
+        "halaman_stok_produk": "109fe9705d40307bc526659f922dbf2b88e796516ae1165054438ea4b601f5e8",
+        "halaman_stok_produk_jasa": "fe03027bca1c8f2be9aa5d02014a09ebfeff771dc9d4d43452605e52737ba1f6",
+        "_detail_produk": "75674f6533c255f451ec99cdfa04fab1a3b0c44c3a560359d6646163e0ec60f7",
+        "halaman_stok_semua": "c390b966b27ef1b8c8c92e96734b21801279d1a50e191be16e64666f2dc7a8c5"
+      }
+    },
+    "layar_gudang.py": {
+      "baseline_commit": "88560d962f61f027c9b2c77cbda3d19f53104384",
+      "module": "app/web/layar_gudang.py",
+      "baseline_git_blob": "246745408c98eaca65d3ebf5e98a2ecbd507793e",
+      "baseline_source_sha256": "0a7e6e6166c85fa8e7e6c0708f3d94d7e57570c75b6109322299b275bc90c918",
+      "native_render_boundaries": {
+        "halaman_gudang": "48a9e721cbd3bad142f450a0fa400308fa4e78f8b00c66881d6a652bd32e7332"
+      }
+    }
+  },
+  "karung": {
+    "app/web/kepemilikan_detail.py": {
+      "baseline_commit": "e7f6370af0c0620d040cd16de10897a43dc3e5fc",
+      "module": "app/web/kepemilikan_detail.py",
+      "baseline_git_blob": "52e5a7a3136ec2f50179a6cc4fee87b3c4db2baf",
+      "baseline_source_sha256": "8c234396109d848abc8408906a7f7eb3883ee34ed447e1ec5ffb7fc62abfe2c3"
+    },
+    "app/web/static/kepemilikan-detail.js": {
+      "baseline_commit": "e7f6370af0c0620d040cd16de10897a43dc3e5fc",
+      "module": "app/web/static/kepemilikan-detail.js",
+      "baseline_git_blob": "3b017ed4f1e9f552015073c7303b1994f5130ae9",
+      "baseline_source_sha256": "1f983090d2814559cdec309c70c7de4f79a795e7a86462bccd1d81944bbd2a02"
+    },
+    "app/web/layar_produk.py": {
+      "baseline_commit": "e7f6370af0c0620d040cd16de10897a43dc3e5fc",
+      "module": "app/web/layar_produk.py",
+      "baseline_git_blob": "ff09a8f3af5364001fcf8438a7013c52a7b56926",
+      "baseline_source_sha256": "ee46e33d13c493ca53bed3ff8d451e6404a19e02a596ff19b4fc6bf2bc27f329",
+      "native_render_boundaries": {
+        "halaman_stok_karung": "914e40a4b8b54a4d46f6dc70740afaebc13f2f8b694c33450bcd34349a0ca3e4",
+        "halaman_stok_karung_jasa": "f3a98c6966e06f2867047612dbb72f62cfdc3ce161790ece2ab615bb85020e5a",
+        "halaman_stok_semua": "c390b966b27ef1b8c8c92e96734b21801279d1a50e191be16e64666f2dc7a8c5"
+      }
+    }
+  },
+  "qc": {
+    "baseline_commit": "d147691f1650d623df2a2f5ebda5b0665e43404f",
+    "module": "app/web/templates/riwayat_qc.html",
+    "baseline_git_blob": "a2510931d10a87cc4fbf91410fd2f68865dc6e0f",
+    "baseline_source_sha256": "7afc6b63be6e79add7799b6ab709d0f17019645576c31584fea8a83ad2ff5cd1",
+    "row_branch_sha256": "cc6eb786e71e72e5c764fb49de5011b3d8a140bf194d86058569418709e29071",
+    "header_sha256": "d41c009000500385ee49d742b12bc9c68e8ea4d48a189b3be1a4b1013e221548"
+  }
+}

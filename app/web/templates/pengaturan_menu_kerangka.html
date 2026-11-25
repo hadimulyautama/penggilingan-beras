@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block judul %}Pengaturan{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+{% include '_pengaturan_menu_kerangka_isi.html' %}
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/pengaturan-menu-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

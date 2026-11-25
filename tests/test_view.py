@@ -345,7 +345,52 @@ def test_tempat_hanya_tumpukan_dan_disaring_kosong():
 
 # ─────────────────── Pengaturan: yang hanya milik pemilik ───────────────────
 
-def test_orang_dan_alat_milik_view_super():
+def _assert_menu_native_wiring(handler):
+    """Shell dan HTML harus memakai helper serta predicate native yang sama."""
+    import ast
+    tree = ast.parse(inspect.getsource(handler))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name) and n.func.id == '_metadata_menu_native']
+    assert len(calls) == 2
+    for call in calls:
+        args = {k.arg: ast.unparse(k.value) for k in call.keywords}
+        assert args['tuan'] == 'tuan'
+        assert args['pemulihan'] == 'pemulihan_lama_diizinkan'
+        assert args['is_super'] == 'akun.is_super'
+    assert "**menu_native" in ast.unparse(tree)
+    assert "konteks['PENGATURAN_NATIVE_FLAGS'] = menu" in ast.unparse(tree)
+
+
+async def _assert_kelola_policy(helper):
+    """Pemulihan hanya Admin sah, singkat-circuit untuk Super/Operator."""
+    for view, tuan, role in [(SUPER, True, 'superadmin'), (ADMIN, True, 'admin'),
+                             (SELEPAN, False, 'operator'), (POLESAN, False, 'operator')]:
+        for recovery in (False, True):
+            calls = []
+            async def pemulihan():
+                calls.append(True)
+                return recovery
+            flags = await helper(view=view, peran_asli=role, tuan=tuan,
+                is_super=view == SUPER, sesi_pendek=False, pemulihan=pemulihan)
+            assert flags['blok_kelola'] is (view == SUPER or tuan and recovery)
+            assert flags['blok_setelan'] is tuan
+            assert flags['kelola_darurat'] is (view != SUPER)
+            assert len(calls) == int(view != SUPER and tuan)
+
+
+async def test_penjaga_menu_menolak_hak_kelola_terbuka_dan_pemulihan_hilang():
+    """Kontrol negatif: grant semua orang atau hilang recovery tetap gagal."""
+    from app.web import pengaturan
+    for broken_value in (True, False):
+        async def broken(**kwargs):
+            flags = await pengaturan._metadata_menu_native(**kwargs)
+            flags['blok_kelola'] = broken_value
+            return flags
+        with pytest.raises(AssertionError):
+            await _assert_kelola_policy(broken)
+
+
+async def test_orang_dan_alat_milik_view_super():
     """Daftar peran berbunyi: Super Admin = "semua di atas, DITAMBAH
     mengelola orang, akun, dan alat".
 
@@ -360,15 +405,16 @@ def test_orang_dan_alat_milik_view_super():
     from app.web import pengaturan
 
     rute = inspect.getsource(pengaturan.halaman_pengaturan)
-    assert "blok_kelola=view == V_SUPER" in rute
     assert "akun.is_admin" not in rute
+    _assert_menu_native_wiring(pengaturan.halaman_pengaturan)
+    await _assert_kelola_policy(pengaturan._metadata_menu_native)
 
     teks = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
     assert "blok_kelola" in teks and "pintu(" in teks
     assert "VIEW == V_SUPER" not in teks, "templat bersama menebak peran lagi"
 
 
-def test_blok_sistem_tak_bisa_mengunci_semua_orang():
+async def test_blok_sistem_tak_bisa_mengunci_semua_orang():
     """Pabrik ini menjalankan SATU akun Admin dan NOL Super Admin. Blok yang
     ketat kepada Admin karenanya menyembunyikan dirinya dari semua orang —
     dan satu-satunya jalan mengangkat Super Admin pertama ada di balik pintu
@@ -385,12 +431,13 @@ def test_blok_sistem_tak_bisa_mengunci_semua_orang():
     rute = inspect.getsource(pengaturan.halaman_pengaturan)
     # Pemulihan satu perusahaan lama kini juga mensyaratkan belum ada master
     # organisasi; Admin tenant tidak memperoleh hak platform saat Super off.
-    assert "tuan and await pemulihan_lama_diizinkan()" in rute
+    _assert_menu_native_wiring(pengaturan.halaman_pengaturan)
+    await _assert_kelola_policy(pengaturan._metadata_menu_native)
     assert "ada_super=ada_super" in rute
     # Dan kalimat yang menjelaskan kenapa bloknya masih terbuka ikut dipasang
     # hanya selama pinjaman itu berlaku: blok yang muncul lalu hilang sendiri
     # tanpa keterangan terbaca sebagai aplikasi yang berubah-ubah.
-    assert "kelola_darurat=view != V_SUPER" in rute
+    assert "kelola_darurat=view != V_SUPER" in inspect.getsource(pengaturan._metadata_menu_native)
     teks = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
     assert "{% if kelola_darurat and blok_kelola %}" in teks
     # Hitungannya hanya akun AKTIF: Super Admin yang dinonaktifkan tak bisa

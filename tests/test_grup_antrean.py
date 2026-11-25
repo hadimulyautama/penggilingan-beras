@@ -497,35 +497,110 @@ def test_tak_ada_kelas_css_karangan_di_templat_app_ini():
     dilonggarkan oleh orang yang sedang tergesa.
     """
     import pathlib
-    import re
 
     akar = pathlib.Path(__file__).resolve().parents[1]
-    # Desain kini dibagi ke stylesheet bersama dan stylesheet halaman.
-    # Semua definisi tetap diperiksa, termasuk gaya lokal di blok <style>.
-    sumber_css = [p.read_text() for folder in (akar / "hmu_tampilan/static",
-                                               akar / "app/web/static")
-                  for p in folder.glob("*.css")]
-    for berkas in (akar / "app/web/templates").glob("*.html"):
-        sumber_css += re.findall(r"<style[^>]*>(.*?)</style>", berkas.read_text(), re.S)
-    ada = set(re.findall(r"\.([a-zA-Z][\w-]*)", "\n".join(sumber_css)))
-
-    # Kait interaksi bukan desain, tetapi harus benar-benar digunakan skrip.
-    for folder in (akar / "hmu_tampilan/static", akar / "app/web/static"):
-        for berkas in folder.glob("*.js"):
-            ada.update(re.findall(r"(?:querySelector(?:All)?|closest|matches)\(\s*['\"]\.([a-zA-Z][\w-]*)", berkas.read_text()))
-
-    karangan: dict[str, set[str]] = {}
-    for berkas in sorted((akar / "app/web/templates").glob("*.html")):
-        markup = re.sub(r"\{#.*?#\}", "", berkas.read_text(), flags=re.S)
-        # Hanya `class="…"` yang MURNI huruf — yang memuat `{{ }}` atau `{% %}`
-        # dirakit saat render dan tak bisa dibaca dari sini.
-        for daftar in re.findall(r'class="([^"{}]*)"', markup):
-            for kelas in daftar.split():
-                if kelas and kelas not in ada:
-                    karangan.setdefault(kelas, set()).add(berkas.name)
-
-    assert not karangan, "kelas dipakai templat tapi tak ada di stylesheet: " + ", ".join(
+    css = {str(p.relative_to(akar)): p.read_text()
+           for folder in (akar / "hmu_tampilan/static", akar / "app/web/static")
+           for p in folder.glob("*.css")}
+    native = {str(p.relative_to(akar)): p.read_text()
+              for p in (akar / "hmu_tampilan/templates").rglob("*.html")}
+    app = {str(p.relative_to(akar)): p.read_text()
+           for p in (akar / "app/web/templates").glob("*.html")}
+    scripts = {str(p.relative_to(akar)): p.read_text()
+               for folder in (akar / "hmu_tampilan/static", akar / "app/web/static")
+               for p in folder.glob("*.js") if not p.name.startswith('kerangka-')}
+    provenance = _sumber_kelas_native(css=css, native=native, app=app, scripts=scripts)
+    karangan = _kelas_tanpa_sumber(app, provenance)
+    assert not karangan, "kelas tanpa gaya/kait/sumber native: " + ", ".join(
         f"{k} ({', '.join(sorted(v))})" for k, v in sorted(karangan.items()))
+
+
+def _kelas_literal(markup):
+    """The same static class contract; quoted Jinja examples are not markup."""
+    import re
+    markup = re.sub(r"\{#.*?#\}", "", markup, flags=re.S)
+    return {kelas for daftar in re.findall(r'class="([^"{}]*)"', markup)
+            for kelas in daftar.split() if kelas}
+
+
+def _sumber_kelas_native(*, css, native, app, scripts):
+    """Trace each accepted class to source, never a list of failing names.
+
+    Native fragments retain structural classes even when CSS styles their
+    parent/tag (for example a summary inside details). The compiler deliberately
+    preserves those native identities. Inline styles can be provided by an
+    included native partial, not just a top-level app template. Native design
+    controllers also create their real panels through their tiny el() factory.
+    An arbitrary JS string is not evidence of a class.
+    """
+    import re
+    provenance = {}
+    def record(classes, source, kind):
+        for name in classes:
+            provenance.setdefault(name, set()).add((source, kind))
+    for path, source in css.items():
+        record(re.findall(r"\.([a-zA-Z][\w-]*)", source), path, 'stylesheet')
+    for path, source in {**native, **app}.items():
+        styles = '\n'.join(re.findall(r"<style[^>]*>(.*?)</style>", source, re.S))
+        record(re.findall(r"\.([a-zA-Z][\w-]*)", styles), path, 'inline-style')
+    for path, source in native.items():
+        record(_kelas_literal(source), path, 'native-structure')
+        # A native conditional may emit a whole literal class (the preopened
+        # product summary does this). Read literal AST branches from a complete
+        # class expression; never evaluate its record or condition.
+        from jinja2 import Environment, nodes
+        markup = re.sub(r"\{#.*?#\}", "", source, flags=re.S)
+        for value in re.findall(r'class="([^"]*)"', markup):
+            if not re.fullmatch(r'\s*\{\{.*?\}\}\s*', value, re.S):
+                continue
+            tree = Environment().parse(value)
+            for branch in tree.find_all(nodes.CondExpr):
+                for leaf in (branch.expr1, branch.expr2):
+                    if isinstance(leaf, nodes.Const) and isinstance(leaf.value, str):
+                        labels = leaf.value.split()
+                        if all(re.fullmatch(r'[a-zA-Z][\w-]*', label) for label in labels):
+                            record(labels, path, 'native-conditional-structure')
+    for path, source in scripts.items():
+        record(re.findall(r"(?:querySelector(?:All)?|closest|matches)\(\s*['\"]\.([a-zA-Z][\w-]*)", source), path, 'script-selector')
+        # Only the actual native constructor contract accepts third-argument
+        # class strings. Keeping a word in a comment/string is insufficient.
+        factory = re.search(r"const\s+el\s*=\s*\(tag,text,cls\)=>\{[^}]*document\.createElement\(tag\)[^}]*if\(cls\)n\.className=cls;return n;\}", source)
+        if factory:
+            for first, quote, classes in re.findall(r"\bel\(\s*(['\"])[^'\"]+\1\s*,\s*null\s*,\s*(['\"])([^'\"]+)\2", source):
+                record(classes.split(), path, 'native-script-constructor')
+    return provenance
+
+
+def _kelas_tanpa_sumber(templates, provenance):
+    unknown = {}
+    for path, source in templates.items():
+        for name in _kelas_literal(source) - provenance.keys():
+            unknown.setdefault(name, set()).add(path)
+    return unknown
+
+
+def test_penjaga_kelas_memerlukan_sumber_asli_bukan_daftar_pengecualian():
+    sources = dict(
+        css={'native.css': '.styled {display:grid}'},
+        native={'native.html': '''<section class="native-marker"></section><style>.included {display:flex}</style><summary class="{{ 'native-conditional' if open else '' }}"></summary>'''},
+        app={},
+        scripts={'native.js': "const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};el('section',null,'panel');const unused='not-a-hook';"},
+    )
+    app = {'app.html': '<section class="styled native-marker native-conditional included panel not-a-hook typo"></section>'}
+    known = _sumber_kelas_native(**sources)
+    assert known['styled'] == {('native.css', 'stylesheet')}
+    assert known['native-marker'] == {('native.html', 'native-structure')}
+    assert known['included'] == {('native.html', 'inline-style')}
+    assert known['native-conditional'] == {('native.html', 'native-conditional-structure')}
+    assert known['panel'] == {('native.js', 'native-script-constructor')}
+    assert set(_kelas_tanpa_sumber(app, known)) == {'not-a-hook', 'typo'}
+    # Source deletion is meaningful: an old name cannot remain blessed after
+    # its actual stylesheet, native prototype or constructor disappears.
+    for group, expected in [('css', 'styled'), ('native', 'native-marker'), ('scripts', 'panel')]:
+        changed = {**sources, group: {}}
+        assert expected in _kelas_tanpa_sumber(app, _sumber_kelas_native(**changed))
+    quoted_only = {**sources, 'scripts': {'native.js': "const text=\"el('section',null,'panel')\";"}}
+    assert 'panel' in _kelas_tanpa_sumber(app, _sumber_kelas_native(**quoted_only))
 
 
 def test_tombol_kirim_di_templat_app_ini_memakai_data_kirim():

@@ -6,6 +6,8 @@ import logging
 from fastapi import HTTPException, Request
 
 log = logging.getLogger(__name__)
+BATAS_DOKUMEN_NATIVE = 8 * 1024 * 1024
+BATAS_POTONGAN_NATIVE = 4096
 LITERAL = ('/barang-masuk', '/barang-masuk?status=belum',
            '/barang-masuk?status=diterima', '/pekerjaan?tab=berjalan',
            '/pekerjaan', '/pekerjaan?tab=tindakan')
@@ -116,6 +118,29 @@ async def susun_registry(request: Request, akun, *, navigasi=None) -> dict | Non
                 sesi=sesi, **kemas_frame(frames))
 
 
+async def baca_native_terbatas(response):
+    """Buffer hanya dokumen renderer native; oversize diteruskan byte-utuh.
+
+    Monitoring boleh menghapus Content-Length untuk menambah skrip pada ekor
+    dokumen. Header itu bukan bukti apakah TemplateResponse telah lengkap.
+    Batas ini tidak mengubah isi atau menelan sisa iterator saat tidak cocok.
+    """
+    iterator = aiter(response.body_iterator)
+    potongan, ukuran = [], 0
+    async for bagian in iterator:
+        potongan.append(bagian)
+        ukuran += len(bagian.encode() if isinstance(bagian, str) else bagian)
+        if ukuran > BATAS_DOKUMEN_NATIVE or len(potongan) > BATAS_POTONGAN_NATIVE:
+            async def teruskan():
+                for awal in potongan:
+                    yield awal
+                async for sisa in iterator:
+                    yield sisa
+            response.body_iterator = teruskan()
+            return None
+    return b''.join(p.encode() if isinstance(p, str) else p for p in potongan)
+
+
 async def lengkapi_dokumen(request: Request, response):
     """Hanya dokumen HTML native penuh; stream/partial/API tidak disentuh.
 
@@ -135,12 +160,15 @@ async def lengkapi_dokumen(request: Request, response):
             or not response.headers.get('content-type', '').startswith('text/html')
             or response.headers.get('content-encoding')):
         return response
-    # TemplateResponse sudah lengkap. call_next membungkusnya sebagai iterator;
-    # jangan mengonsumsi stream lain yang tidak mempunyai ukuran dokumen native.
-    if not response.headers.get('content-length'):
+    # Marker state berasal dari render() dokumen native yang sudah lengkap,
+    # bukan dari request/header pengguna. Stream/API/SSE tidak mendapat marker.
+    # Content-Length boleh hilang sesudah transformasi MonitoringHTTP.
+    panjang = response.headers.get('content-length')
+    if panjang and (not panjang.isdecimal() or int(panjang) > BATAS_DOKUMEN_NATIVE):
         return response
-    chunks = [part async for part in response.body_iterator]
-    body = b''.join(part.encode() if isinstance(part, str) else part for part in chunks)
+    body = await baca_native_terbatas(response)
+    if body is None:
+        return response
     if b'<!-- isi-halaman:akhir -->' in body and b'data-pindah-konteks=' in body:
         try:
             from app.web.halaman_bertahap import konteks_kerangka
@@ -166,7 +194,112 @@ async def lengkapi_dokumen(request: Request, response):
                     # Kegagalan keluarga opsional tidak merusak enam frame
                     # wajib. Tidak mencetak parameter atau meniru frame sukses.
                     log.warning('Kerangka Stok belum tersedia (%s)', type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok).encode()
+                ui=None
+                try:
+                    from app.web.kerangka_ui import susun as susun_ui
+                    ui=await susun_ui(request,akun,registry,navigasi=navigasi,stok=stok)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Paket kerangka UI belum tersedia (%s)',type(error).__name__)
+                riwayat=None
+                try:
+                    from app.web.riwayat_kerangka_langsung import susun as susun_riwayat
+                    riwayat=await susun_riwayat(request,akun,navigasi=navigasi,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka Riwayat belum tersedia (%s)',type(error).__name__)
+                pengaturan=None
+                try:
+                    from app.web.pengaturan_kerangka_langsung import susun as susun_pengaturan
+                    pengaturan=await susun_pengaturan(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka Pengaturan belum tersedia (%s)',type(error).__name__)
+                dokumen=None
+                try:
+                    from app.web.dokumen_kerangka_langsung import susun as susun_dokumen
+                    dokumen=await susun_dokumen(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka dokumen belum tersedia (%s)',type(error).__name__)
+                sosoh=None
+                try:
+                    from app.web.sosoh_kerangka_langsung import susun as susun_sosoh
+                    sosoh=await susun_sosoh(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka Penyosohan belum tersedia (%s)',type(error).__name__)
+                master=None
+                try:
+                    from app.web.pengaturan_master_kerangka import susun as susun_master
+                    master=await susun_master(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka master belum tersedia (%s)',type(error).__name__)
+                alat=None
+                try:
+                    from app.web.pengaturan_alat_kerangka import susun as susun_alat
+                    alat=await susun_alat(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka pusat alat belum tersedia (%s)',type(error).__name__)
+                fasilitas_parent=None
+                try:
+                    from app.web.fasilitas_parent_kerangka import susun as susun_fasilitas_parent
+                    fasilitas_parent=susun_fasilitas_parent(request,akun,registry=registry,guarded_alat=alat)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):raise
+                    log.warning('Kerangka induk fasilitas belum tersedia (%s)',type(error).__name__)
+                pengaturan_detail=None
+                try:
+                    from app.web.pengaturan_detail_kerangka import susun as susun_pengaturan_detail
+                    pengaturan_detail=await susun_pengaturan_detail(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    log.warning('Kerangka rincian Pengaturan belum tersedia (%s)',type(error).__name__)
+                retur_baca=None
+                try:
+                    from app.web.retur_baca_kerangka import susun as susun_retur_baca
+                    retur_baca=await susun_retur_baca(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):raise
+                    log.warning('Kerangka baca retur belum tersedia (%s)',type(error).__name__)
+                beranda=muatan=None
+                try:
+                    from app.web.beranda_kerangka import susun as susun_beranda
+                    beranda=await susun_beranda(request,akun,registry=registry,navigasi=navigasi)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):raise
+                    log.warning('Kerangka Beranda belum tersedia (%s)',type(error).__name__)
+                try:
+                    from app.web.muatan_kerangka import susun as susun_muatan
+                    muatan=await susun_muatan(request,akun,registry=registry)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):raise
+                    log.warning('Kerangka Muatan belum tersedia (%s)',type(error).__name__)
+                pengguna=pengguna_catalog=None
+                try:
+                    from app.web.pengguna_baca_native import susun as susun_pengguna, katalog as katalog_pengguna
+                    pengguna=await susun_pengguna(request,akun,registry=registry)
+                    if pengguna is not None:
+                        address=request.url.path+('?' +request.url.query if request.url.query else '')
+                        pengguna_catalog=katalog_pengguna(body.decode('utf-8'),source_address=address,permission=pengguna)
+                except Exception as error:
+                    if isinstance(error,HTTPException) and error.status_code in (401,403):
+                        raise
+                    pengguna=pengguna_catalog=None
+                    log.warning('Kerangka pengguna belum tersedia (%s)',type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, ui=ui,riwayat=riwayat,pengaturan=pengaturan,dokumen=dokumen,sosoh=sosoh,master=master,alat=alat,pengaturan_detail=pengaturan_detail,pengguna=pengguna,pengguna_catalog=pengguna_catalog,beranda=beranda,muatan=muatan,fasilitas_parent=fasilitas_parent,retur_baca=retur_baca).encode()
+                if len(body) + len(host) + 1 > BATAS_DOKUMEN_NATIVE:
+                    raise ValueError('Dokumen native melampaui batas registry')
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
                 body = siap
         except Exception as e:

@@ -1,0 +1,16 @@
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const require=createRequire(import.meta.url),{permission,valid,frameBound,navigationParent}=require('../app/web/static/kerangka-muatan-ui-runtime.js');
+const data={versi:1,sumber:'a'.repeat(64),variants:{'/muatan':{title:'Catat muatan',brand:'Catat muatan',read:'<section></section>',record:'<section></section>',breadcrumbs:{'/muatan':'Muatan','/barang-keluar':'Barang Keluar'}}},scripts:{},styles:{}};
+const desc={versi:1,sumber:data.sumber,cap:'cap',konteks:'ctx',sesi:'session',permission:{can_record:false}};
+let count=0;function test(name,run){run();console.log('PASS '+name);count++;}
+test('permission is explicit strict native result not view or outbound grant',()=>{assert(permission({can_record:true}));assert(permission({can_record:false}));for(const p of [{can_record:1},{view:'selepan'},{can_record:true,outbound:1},{can_record:true,perintah:3}])assert(!permission(p));});
+test('private read-only descriptor is valid but old identity rejected',()=>{assert(valid(data,desc,'ctx','cap','session'));for(const k of ['sumber','cap','konteks','sesi'])assert(!valid(data,{...desc,[k]:'other'},'ctx','cap','session'));});
+test('public package canonical and no role data',()=>{assert(!valid({...data,variants:{...data.variants,'/selesai-muat':data.variants['/muatan']}},desc,'ctx','cap','session'));assert(!valid(data,{...desc,actor:'operator'},'ctx','cap','session'));});
+function doc(){const main={},session={dataset:{token:'session'}},frame={dataset:{pindahKonteks:'ctx',pindahAlamat:'/barang-masuk'},contains:n=>n===main||n===session};return {frame,main,session,documentElement:{dataset:{versi:'cap'}},querySelector:s=>s==='.bingkai'?frame:null,getElementById:s=>s==='isi-halaman'?main:s==='formulir-sesi'?session:null,querySelectorAll:s=>s==='.bingkai'?[frame]:s==='#isi-halaman'?[main]:s==='#formulir-sesi'?[session]:[]};}
+test('base chrome bound to exact private Root context and address',()=>{const d=doc();assert(frameBound(d,'ctx','cap','session','/barang-masuk'));assert(!frameBound(d,'ctx','cap','session','/muatan'));assert(!frameBound(d,'other','cap','session','/barang-masuk'));d.frame.contains=()=>false;assert(!frameBound(d,'ctx','cap','session','/barang-masuk'));});
+test('breadcrumb presentation follows actual bound native menu only',()=>{for(const path of ['/muatan','/barang-keluar'])assert.equal(navigationParent({querySelectorAll:()=>[{getAttribute:()=>path}]}),path);assert.equal(navigationParent({querySelectorAll:()=>[]}),null);assert.equal(navigationParent({querySelectorAll:()=>[{},{}]}),null);});
+test('queries detail aliases and other workflows decline before DOM access',()=>{const code=readFileSync(new URL('../app/web/static/kerangka-muatan-ui-runtime.js',import.meta.url),'utf8');const ctx={window:{PadiKerangkaMuatanData:data},document:new Proxy({},{get(){throw Error('Must not touch DOM');}})};vm.runInNewContext(code,ctx);for(const target of ['/muatan?perintah=7','/muatan?item=4','/barang-keluar/7/muatan','/selesai-muat','/muatan/'])assert.equal(ctx.window.PadiKerangkaMuatanUI.buat(target,'base','ctx','cap','session'),null);});
+console.log(`${count} pure Node contracts passed; no browser or native writer execution.`);

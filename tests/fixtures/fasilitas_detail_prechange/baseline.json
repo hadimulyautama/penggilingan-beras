@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "module": "app/web/fasilitas.py",
+  "baseline_commit": "ef7e9c7a0d9cf4bce67f63c159a7b55966f78655",
+  "baseline_git_blob": "c55a7dcd255585741a68e2d57aa3c1aafeab6265",
+  "baseline_source_sha256": "8e477fe00c79715556c47e9a207652e482ab0b45892d044adfaba71303e16f44",
+  "fingerprint_format": "Python3.11 ast.dump(include_attributes=False)",
+  "functions": {
+    "daftar": "c64ac4ae0ded150eb2fa00cfd9a9464086151bf18e99fac461c62328399b307c",
+    "detail_dryer": "45027dc6a071067c7cfd6b00e310f2caf72bb63e4ebf165e99b770efabd1196d",
+    "detail_mesin": "6343230626d620c5ee72d60dbeb86356d968629a6aca071964422537b52151ff",
+    "halaman": "eac73daa46c29a9331d2275820037e62af9e5a88fad9e69d2d35ad4921a1dfd4",
+    "lama": "cb4476565c0a72cbeec0b4ee57256549b543e8a73dcd424db1608b6092aad6b3",
+    "simpan": "09076d1f65c0dcc12d5c1fc38d753261045bfaae6f06ce190129cc7d9af504c5",
+    "tujuan": "b6bfe6f805f9ba4f4bfa9d635326e32f09cbbfe8eefdb00412f4421d709c4227"
+  },
+  "module_envelope_sha256": "6af45ad4066f5e100b257af2c1feb33905cecd3c3d4f405e0c0664b65b1de8ac",
+  "decoration_tail_sha256": "92cf3a2ac77d938b43d607ce10ee8e60c191aad04706187c7e82c14300c0450c",
+  "native_guard_module": "app/web/security.py",
+  "native_guard_functions": {
+    "butuh_super": "a00ecaa3a827ee14aa55694796ea758ae3f691caab97cf94704bb5be3fcf9e89",
+    "pemulihan_lama_diizinkan": "c3ce25ccdc9ddbf875a5378daad353a773747370918ff0be509a5adeb43762c0"
+  },
+  "verified": "Only native render return is decorated; all full reads, direct routes, guards, redirects and writers identical.",
+  "original_controller_sha256": {
+    "hmu_tampilan/static/pengaturan-isian.js": "feb0c1e15311a82d6791e4cbc31aab67be660c5d528355fdbf0eb4753ada7eee",
+    "app/web/static/pengaturan-alat.js": "dcd1d954665a715de499d07085b6afc07f7e0c833e9beb649b1f672dbcfb16ba"
+  }
+}

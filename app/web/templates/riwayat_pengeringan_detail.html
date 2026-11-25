@@ -6,7 +6,10 @@
 {% import "_proses_visual.html" as visual with context %}
 {% block judul %}Riwayat pengeringan {{ d.kode }}{% endblock %}
 {% block isi %}
-<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_pengeringan.css?v=1');@import url('/static/detail_pendinginan.css?v=1');</style>
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/proses_aktif.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/detail_pengeringan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/detail_pendinginan.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/riwayat-pengeringan-desain.css?v={{ VERSI }}">
 {% macro tindakan(p, utama=false) %}

@@ -33,6 +33,9 @@ async def halaman_audit(
     cari: str = Query(""),
     akun=Depends(butuh_admin),
 ):
+    from app.web.audit_kerangka import dokumen,metadata
+    shell=await dokumen(request,akun)
+    if shell is not None:return shell
     async with SessionLocal() as db:
         catatan, semua = await svc.daftar(
             db, rentang=rentang, kelompok=kelompok, cari=cari)
@@ -41,7 +44,7 @@ async def halaman_audit(
         # pernah ada.
         pratinjau = await undo_svc.pratinjau_terakhir(db, cakupan=None)
     return await render_laci(
-        request, "audit.html", layar="audit",
+        request, "audit_native.html", layar="audit", AUDIT_META=metadata(),
         catatan=catatan, semua=semua, pratinjau=pratinjau,
         rentang=rentang, kelompok=kelompok, cari=cari,
         RENTANG=svc.RENTANG, KELOMPOK=svc.KELOMPOK,

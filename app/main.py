@@ -408,6 +408,12 @@ async def beranda(request: Request):
     if akun is None:
         return RedirectResponse("/masuk", status_code=303)
 
+    # Present only the native structure before Home's collection reads.
+    # X-Pindah data, feedback/action queries and auth redirects stay native.
+    from app.web.beranda_kerangka import kerangka as kerangka_beranda
+    shell=await kerangka_beranda(request,akun)
+    if shell is not None:return shell
+
     from app.services import berjalan as svc
 
     # Benda yang berjalan diambil dari daftar yang SAMA dengan layar Sedang

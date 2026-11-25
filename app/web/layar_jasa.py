@@ -55,9 +55,11 @@ async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
             cocok=await svc.saring_kartu(db,k.tindakan+k.masuk,d['id'])
             d['pekerjaan']=sum(id(x) in tindakan_ids for x in cocok)
             _tambah_tiket(d,[x for x in cocok if id(x) in masuk_ids])
-    return await render_laci(
+    response = await render_laci(
         request,"jasa.html",layar='jasa',**data,tapis=tapis,cari=cari,
         STATUS_PILIHAN=svc.STATUS,kg=svc.kg_rinci)
+    from app.web.jasa_detail_catalog import pasang
+    return pasang(request,akun,response)
 
 
 def _tambah_tiket(d,rows):
@@ -83,6 +85,14 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
     tab=request.query_params.get('tab','ringkasan')
     if tab not in {'ringkasan','penerimaan','proses','stok','pengambilan'}:
         raise HTTPException(422,'Tab pelanggan tidak dikenal.')
+    if (not is_customer_read(request) and request.headers.get('X-Pindah')!='1'
+            and (request.headers.get('X-Kerangka-Halaman')=='1'
+                 or request.headers.get('Sec-Fetch-Mode')=='navigate'
+                 and request.headers.get('Sec-Fetch-Dest') in {'document','empty'})):
+        from app.web.jasa_detail_kerangka import kerangka
+        from app.web.halaman_bertahap import konteks_kerangka
+        response=await kerangka(request,akun,await konteks_kerangka(request,akun))
+        if response is not None:return response
     pilihan = dict(halaman=request.query_params.get('pesanan_halaman','1'),
                    cari=request.query_params.get('pesanan_cari',''),
                    status=request.query_params.get('pesanan_status',''),
@@ -108,7 +118,7 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
         params.update(pesanan_halaman=str(pag['halaman']),pesanan_cari=pag['cari'],pesanan_status=pag['status'])
     konteks=f'/jasa/pelanggan/{pelanggan_id}?'+urlencode({'tab':tab,**params})
     kembali='/jasa?'+urlencode({k:v for k,v in request.query_params.items() if k in ('status','cari','halaman')})
-    return await render_laci(request,'jasa_pelanggan_detail.html',layar='jasa',d=d,tab=tab,
+    response = await render_laci(request,'jasa_pelanggan_detail.html',layar='jasa',d=d,tab=tab,
         kembali=kembali,konteks=konteks,kg=svc.kg_rinci,ke=lambda h:svc.ke(h,konteks),
         stok_href=lambda t:'/stok?'+urlencode(dict(tab=t,pemilik='jasa',pelanggan_id=pelanggan_id)),
         kerja_href='/pekerjaan?'+urlencode(dict(pelanggan_id=pelanggan_id)),
@@ -118,6 +128,8 @@ async def detail_pelanggan(pelanggan_id:int,request:Request,akun=Depends(butuh_a
         pesanan_query={k:v for k,v in params.items() if k.startswith('pesanan_')},
         PESANAN_STATUS=svc.STATUS,
         buka=request.query_params.get('buka',''),nilai=request.query_params.get('nilai',''))
+    from app.web.jasa_detail_catalog import pasang
+    return pasang(request,akun,response)
 
 
 @router.get('/jasa/{jasa_id:int}')

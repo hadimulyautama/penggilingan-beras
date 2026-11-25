@@ -1,0 +1,39 @@
+# Line detail first-click only — native parent provenance
+
+Baseline `ef7e9c7a0d9cf4bce67f63c159a7b55966f78655`; same Root branch/checkout. Only bare line targets `/pengaturan/mesin/{positive-int}` are adopted from an already-read native parent `/pengaturan/mesin`. Orphan dryer, other facility lists/masters, staff, profile/password, shipping/nota, Transfer and authority/B1 remain outside this slice. No Root registry/provider/head/SDK/vendor files were edited.
+
+## What stays native
+
+There is **no direct-document shell or metadata lookup**. `detail_mesin`, `detail_dryer`, their `butuh_super` dependencies, missing-resource 404, orphan redirect, full four-collection reader, configuration/stock reads, writers and return URLs are unchanged. Cold direct URL/full reload still waits for that original native reader; this patch does not claim to improve it. Same-URL `X-Pindah:1` also runs the complete original target reader and resource/permission checks. A route-shaped integer is never enough to construct a first-click view.
+
+The sole `facilitas.py` change assigns the existing native render result and decorates it afterward. The optional catalog admits only a GET bare parent, actual parent mode/context, same request-state account, no portal/forced password, status200, and `request.scope['endpoint'] is fasilitas.daftar`. This is the actual FastAPI endpoint whose unchanged `Depends(butuh_super)` has already run, not a header, role flag or a repeated recovery query. `butuh_super` still owns its exact Super/narrow legacy-recovery rule. Unknown endpoint identity/context declines decoration. In particular an internal wrapper that does not preserve native endpoint provenance receives no catalog; no Admin fallback is invented to compensate.
+
+## Private catalog source and bounds
+
+`fasilitas_detail_catalog.susun_data` uses only `lini`/`dryer` that native `halaman` already selected and the rendered native visible link. It accesses loaded column dictionaries with `vars`, never an ORM property/relationship or a new query. It emits only `{id,label,variant,target}`. The label follows native exactly: existing referenced dryer name if present, otherwise line name; variant is `dryer` or `line` from that actual loaded association. Missing structural columns/unknown context/mismatched caption/ID/duplicate/native frame declines. There is no active-only filter or new warehouse/company rule.
+
+Only the first 32 native visible line links are cataloged; extra source links/rows remain completely unchanged and use native navigation. This bound is program metadata capacity, not a domain line limit. No per-row query, new schema or policy is added. The metadata host is escaped inert private/no-store JSON `#padi-fasilitas-detail-catalog` within the native content markers, bound to source address/SHA, CAP, context, session and public program digest. It contains no capacity, target, selected warehouse/process, status, config version, CSRF form, operation/draft key or credential. Nothing is placed in storage or a public asset. The parent HTML parsing/DTO scan has not been benchmarked; no parent/page latency claim is made.
+
+## Initial UI and fresh data
+
+Two public data-free variants preserve native static block title **Mesin & line produksi**, verified H1 from the private native caption, facts Gudang/Jenis proses/Status line and optional Status dryer, and Hubungan proses & kode fields Nama/Kode/Gudang/Jenis proses/Dryer terkait/Aktif. The actual dryer variant adds Pengaturan pengering fields Nama pengering/Kapasitas/Target kadar air/Nama tungku/Gunakan target umum plus native fixed links. All configuration values, selected options, active checks and save actions remain unread/disabled/unnamed, with no form, value attribute, record/operation key or transaction controller. Unknown checkbox state is explicitly mixed/neutral; state-dependent dryer action is an inert pending slot, not a guessed Activate/Deactivate command.
+
+Breadcrumb uses source-only `breadcrumb.susun` + actual `_breadcrumb.html`, not a reconstructed trail. Current native contract is Beranda → Pengaturan → Mesin & line produksi with desktop back `/pengaturan`; mobile back is explicitly `/pengaturan/mesin`. That native difference is preserved. H1 uses DOM `textContent`, never HTML interpolation.
+
+`fasilitas-detail-native.js` declares only the target read to `PADI_BACA_NATIVE`. Fresh same-URL GET, context/session/CAP validation and asset preparation must complete before original native fields/forms/controllers replace the pending layout. Original `pengaturan-isian.js` and `pengaturan-alat.js` are absent from the public program and byte-pinned unchanged in the receipt; they are introduced only by fresh native HTML. The child does not reset/reuse operation keys or alter beforeunload/draft/uncertain-save behavior. Existing native capture guard remains before the navigation bubble handler; the factory installs no navigation listener and declines an already-visible leave-draft prompt. Original controller activation exactly once still requires Root browser proof, not an inference from these source checks.
+
+## Root wiring contract (not performed)
+
+Load `/static/kerangka-fasilitas-detail-ui.js?v=CAP` through the existing Root program/head mechanism. Native parent response already emits the private host when eligible. For only declared bare line targets, Root can call:
+
+`PadiKerangkaFasilitasDetailUI.buat(target, baseHTML, context, CAP, sessionToken)`
+
+It returns null/native fallback or `{versi:1,alamat,konteks,cap,html}`. It requires current URL **exactly the original parent**, unique connected current frame/main/session/host with matching source/context/CAP/session/program digest, exact current visible native href+caption and original catalog entry. Wrong/missing/old/foreign metadata, hidden/detached/duplicate link, another target ID, query/action/orphan URL, portal/editor/prompt or malformed/oversize frame declines. There is no pending resource chain; the parent catalog is removed from the constructed detail. Every fresh target GET remains native authority.
+
+## Local evidence and runtime gates
+
+35 Python pure/source/template tests and five Node pure/DOM-protocol tests pass; source-only compiler regeneration/`--check`, JS syntax and diff checks pass. Review program is 36,112 bytes. No PG/browser/network/remote/CI/deploy ran in this child. Initial pure failures were harness errors (mutating Starlette's cached URL as though it were a new request; raw `select(` grep matching BeautifulSoup); tests were corrected with fresh request objects and a stricter AST import/database-call oracle, without changing product guards.
+
+`tests/fixtures/fasilitas_detail_prechange/baseline.json` pins original source SHA/blob, all seven native functions and module envelope, the exact allowed render-decoration tail, actual `butuh_super`/recovery functions and both original config controllers. Proof runs without Git/commands and normalizes only that declared tail; a nonexecuted native writer commit→rollback control must differ. Direct endpoints/readers/writers and original field/controller sources are therefore source-pinned, not tested by pretending to post product data.
+
+Root remaining sequential nodes: actual Super and supported synthetic recovery, ordinary Admin/Operator denial at parent and target; first-click from current native parent with/without actual dryer, inactive/missing relation cases matching native; separate HTML/data delays; native title/H1/breadcrumb/mobile back/keyboard at 390 px and desktop; unknown state and stale/foreign/deleted source; error/retry and fast navigation/Back; dirty parent form and pending native save behavior unchanged; fresh native controller activation once and no POST while reading; direct cold/reload unchanged; PWA cold/warm upgrade/rollback and final exact program-input regeneration. No all-facility/all-pages runtime or readiness claim is made.

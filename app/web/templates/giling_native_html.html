@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block judul %}Penggilingan {{ GILING_KERANGKA.kode }}{% endblock %}
+{% block isi %}
+{% macro output_pending() %}
+ <section class="sr-card" data-gk-output>
+  <h2>Catat hasil penggilingan</h2><p class="sr-help">Isi total sejak awal proses, bukan tambahannya.</p>
+  <label>Total PK sampai sekarang (kg)<input type="number" inputmode="decimal" step="any" disabled aria-label="Total PK kumulatif" aria-describedby="gk-menunggu"></label>
+  <dl><div class="sr-pair"><dt>PK tercatat sebelumnya</dt><dd>Menunggu data</dd></div></dl>
+  <small>Perubahan catatan</small><p class="sr-help">Menunggu data</p>
+  <button class="btn btn--utama" type="button" disabled aria-describedby="gk-menunggu">Periksa &amp; catat PK</button>
+  <details><summary>Perhitungan stok lengkap</summary><dl>{% for label in GILING_KERANGKA.stok %}<div class="sr-pair"><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}</dl></details>
+ </section>
+{% endmacro %}
+<link rel="stylesheet" href="/static/giling-ringkas.css?v={{ VERSI }}&amp;gr=20261104.auto1">
+<link rel="stylesheet" href="/static/sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/giling-desain.css?v={{ VERSI }}">
+<main class="sr gr sr-redesign gr-redesign" data-giling-native-html data-editor-perintah
+      data-gk-tab="{{ GILING_KERANGKA.tab }}" data-gk-alamat="{{ GILING_KERANGKA.alamat }}"
+      data-stamp="{{ GILING_KERANGKA.stamp }}" data-url="{{ GILING_KERANGKA.data_url }}">
+ <div data-proses-isi>
+ <header>
+  <a class="sr-design-back" href="{{ kembali }}" data-utuh>← Kembali ke Pekerjaan</a>
+  <small>PROSES AKTIF · PENGGILINGAN</small>
+  <h1>Penggilingan aktif</h1><p class="sr-design-code">{{ GILING_KERANGKA.kode }}</p>
+  <div class="sr-context"><span>Pemilik · menunggu data</span><span>Gudang · menunggu data</span><span>Status proses · menunggu data</span></div>
+  <div class="sr-design-tools"><button class="btn btn--kecil" type="button" data-gk-panduan>ⓘ Panduan</button>
+   <details class="sr-design-menu"><summary class="btn" aria-label="Tindakan proses" data-gk-menu>⋮</summary>
+    <div class="sr-design-menu-body"><button class="btn" type="button" data-gk-panduan>ⓘ Panduan</button>
+     <button class="btn" type="button" disabled aria-describedby="gk-menunggu">Baca status terbaru</button>
+     <button class="btn" type="button" disabled aria-describedby="gk-menunggu">Print detail</button></div>
+   </details></div>
+ </header>
+ <nav class="sr-design-tabs" role="tablist" aria-label="Detail penggilingan">
+ {% for key, label in GILING_KERANGKA.tabs %}
+  <button type="button" role="tab" id="gk-tab-{{ key }}" data-gk-tab-pilih="{{ key }}"
+    aria-controls="gk-panel-{{ key }}" aria-selected="{{ 'true' if key == GILING_KERANGKA.tab else 'false' }}"
+    tabindex="{{ '0' if key == GILING_KERANGKA.tab else '-1' }}">{{ label }}</button>
+ {% endfor %}
+ </nav>
+ <section class="sr-design-panel" role="tabpanel" id="gk-panel-ringkasan" aria-labelledby="gk-tab-ringkasan" data-gk-panel="ringkasan"{% if GILING_KERANGKA.tab != 'ringkasan' %} hidden{% endif %}>
+  <section class="sr-card sr-design-overview"><h2>Hasil penggilingan</h2><div class="sr-metrics gr-design-metrics">
+   {% for label in ['Gabah terkait','Hasil PK operator · kumulatif','Rendemen'] %}<div class="sr-metric"><small>{{ label }}</small><strong>Menunggu data</strong></div>{% endfor %}
+  </div></section>
+  <div data-gk-output-slot>{% if GILING_KERANGKA.tab == 'ringkasan' %}{{ output_pending() }}{% endif %}</div>
+  <section class="sr-card gr-design-stock"><h2>Stok PK yang berlaku</h2><dl>
+   {% for label in ['Dasar stok yang berlaku','PK tersedia'] %}<div class="sr-pair"><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}
+  </dl></section>
+ </section>
+ <section class="sr-design-panel" role="tabpanel" id="gk-panel-bahan" aria-labelledby="gk-tab-bahan" data-gk-panel="bahan"{% if GILING_KERANGKA.tab != 'bahan' %} hidden{% endif %}>
+  <section class="sr-card"><h2>Bahan &amp; silo</h2><p class="sr-help">Sisa positif tetap gabah di silo. Bebaskan silo tidak menyelesaikan proses di mesin.</p>
+   <div class="sr-silo"><p data-gk-bahan-status role="status">Memuat sumber, silo, pemilik dan sisa. Tindakan mengikuti catatan yang tersedia.</p></div>
+  </section>
+ </section>
+ <section class="sr-design-panel" role="tabpanel" id="gk-panel-hasil" aria-labelledby="gk-tab-hasil" data-gk-panel="hasil"{% if GILING_KERANGKA.tab != 'hasil' %} hidden{% endif %}>
+  {% if GILING_KERANGKA.tab != 'ringkasan' %}{{ output_pending() }}{% endif %}
+ </section>
+ <section class="sr-design-panel" role="tabpanel" id="gk-panel-qc" aria-labelledby="gk-tab-qc" data-gk-panel="qc"{% if GILING_KERANGKA.tab != 'qc' %} hidden{% endif %}>
+  <section class="sr-card gr-wide"><h2>QC hasil PK</h2><p class="sr-help">Jenis PK dari sumber · menunggu data · rata-rata seluruh putaran</p>
+   <div><strong>Menunggu penilaian</strong><p class="sr-help">Putaran dan kelengkapan komponen menunggu data</p>
+    <div class="gr-qc-grid" data-gk-qc-grid>
+     {% for label in ['Kadar air','Butir patah','Susut uji','Butir kuning','Kandungan gabah','Merang'] %}
+      <div class="gr-qc-value"><small>{{ label }}</small><strong>Menunggu data</strong><small>Pengukuran dan skor menunggu data</small></div>
+     {% endfor %}
+    </div>
+    <details><summary>Perhitungan mutu</summary><p>Nilai, aturan dan kelas mutu menunggu pembacaan terbaru. Nilai kosong tidak menjadi nol. Susut uji QC berbeda dari rendemen proses.</p></details>
+   </div>
+   <p class="sr-help">Pencatatan mengikuti izin pemeriksa, fitur mutu dan keadaan proses yang berlaku setelah data terbaru diperiksa.</p>
+   <details><summary>Seluruh putaran &amp; catatan lab</summary><p>Memuat pemeriksaan QC…</p></details>
+  </section>
+ </section>
+ <section class="sr-design-panel" role="tabpanel" id="gk-panel-riwayat" aria-labelledby="gk-tab-riwayat" data-gk-panel="riwayat"{% if GILING_KERANGKA.tab != 'riwayat' %} hidden{% endif %}>
+  <section class="sr-card"><h2>Identitas &amp; waktu proses</h2><dl>{% for label in GILING_KERANGKA.fakta %}<div class="sr-pair"><dt>{{ label }}</dt><dd>Menunggu data</dd></div>{% endfor %}</dl></section>
+  <details class="sr-card" open><summary>Riwayat PK, jeda &amp; waktu proses</summary><p role="status">Memuat riwayat proses…</p></details>
+ </section>
+ <footer>
+  <p id="gk-menunggu" class="sr-help">Angka, kondisi dan tindakan menunggu pembacaan proses terbaru. Isian belum dapat diubah.</p>
+  <p class="sr-help" data-gk-recovery-unknown role="status">Status simpan sebelumnya belum diperiksa. Membaca halaman ini tidak mengirim ulang koreksi. Jika status belum pasti, jangan kirim ulang.</p>
+  <p data-gk-status role="status" aria-live="polite">Memuat data proses…</p>
+  <button class="btn" type="button" data-gk-retry hidden>Coba lagi</button>
+ </footer>
+ </div>
+ {% from '_panduan.html' import panel as panduan %}
+ {% call panduan('gk-panduan','Panduan penggilingan aktif',penutup={'data-gk-panduan-tutup':''}) %}
+ <p>Hasil PK memakai total kumulatif sejak awal penggilingan, bukan tambahannya. Periksa catatan sebelumnya, total baru dan perubahannya sebelum menyimpan.</p>
+ <p>Catatan operator, verifikasi Admin dan saldo tersedia adalah angka berbeda. Sisa positif tetap gabah di silo. Membebaskan silo tidak menyelesaikan penggilingan.</p>
+ <p>Membuka halaman dan membaca ulang tidak mencatat hasil, QC, silo atau status. Tindakan dan isian tersedia setelah data serta izin proses selesai diperiksa.</p>
+ {% endcall %}
+ <noscript>Struktur proses tetap tersedia. JavaScript diperlukan untuk membaca angka dan mengerjakan proses. Membuka halaman tidak mengubah hasil, QC, silo atau status.</noscript>
+</main>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/giling-native-html.js?v={{ VERSI }}" defer></script>
+{% endblock %}

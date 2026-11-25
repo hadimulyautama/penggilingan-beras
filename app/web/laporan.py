@@ -130,6 +130,14 @@ def ke_html(teks: str) -> str:
 
 @router.get("/laporan")
 async def halaman_laporan(request: Request, akun=Depends(butuh_akun)):
+    if (not request.url.query
+            and (request.headers.get('X-Kerangka-Halaman')=='1'
+                 or request.headers.get('X-Pindah')!='1'
+                 and request.headers.get('Sec-Fetch-Mode')=='navigate'
+                 and request.headers.get('Sec-Fetch-Dest') in {'document','empty'})):
+        from app.web.laporan_katalog_bertahap import kerangka
+        response=await kerangka(request,akun)
+        if response is not None:return response
     from app.web.nav import lencana
     from app.web.laporan_navigasi import siapkan
     konteks = {}
@@ -157,6 +165,9 @@ async def detail_laporan(request: Request, kode: str, periode: str = "bulan_ini"
     if periode not in {k for k, _ in PERIODE}:
         raise HTTPException(422, "Periode tidak dikenal.")
     awal, akhir = _rentang(periode, dari, sampai)
+    from app.web.laporan_detail_kerangka import dokumen as dokumen_detail
+    shell=await dokumen_detail(request,akun,kode,periode,dari,sampai)
+    if shell is not None:return shell
     async with SessionLocal() as db:
         data = await ambil(db, kode, awal, akhir)
     parameter = dict(periode=periode)

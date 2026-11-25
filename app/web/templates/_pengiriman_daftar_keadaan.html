@@ -1,0 +1,13 @@
+{# Native columns stay authoritative; the adapter adds only an empty body row. #}
+{% set native_table %}{% include '_pengiriman_daftar.html' %}{% endset %}
+{% if daftar_keluar %}{{ native_table }}{% else %}
+{% if pengiriman_memuat|default(false) %}
+{% set body_row %}<tr><td colspan="4" data-shell-message>Memuat pengiriman berjalan. Kolom dan kontrol tetap tersedia.</td></tr>{% endset %}
+{% elif pencarian or status_filter or sejak_filter %}
+{% set body_row %}<tr><td colspan="4">Tidak ada pengiriman berjalan sesuai filter.</td></tr>{% endset %}
+{% else %}
+{% set body_row %}<tr><td colspan="4"><strong>Belum ada pengiriman berjalan</strong><p>Perintah yang menunggu pengeluaran atau verifikasi akan tampil di sini.</p></td></tr>{% endset %}
+{% endif %}
+{% set replacement %}<tbody>{{ body_row }}{% endset %}
+{{ native_table|replace('<tbody>', replacement) }}
+{% endif %}

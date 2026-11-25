@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block judul %}Kabar{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/kabar-feed.css?v={{ VERSI }}">
+<section class="kb" aria-label="Kabar" data-kabar-native data-url="{{ KABAR_SHELL.alamat }}" data-stamp="{{ KABAR_SHELL.stamp }}">
+{% from '_kontrol_halaman.html' import tombol %}
+<div class="kontrol-halaman"><nav class="kontrol-tab" aria-label="Status baca">{% for tab in KABAR_SHELL.tabs %}<a class="kontrol-tab__item" href="{{ tab.href }}" data-kabar-native-tab="{{ tab.key }}"{% if tab.key==KABAR_SHELL.tab %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.key %} <span aria-label="Jumlah belum dibaca">—</span>{% endif %}</a>{% endfor %}</nav><div class="kontrol-aksi kontrol-halaman__aksi">{{ tombol('panduan',{'data-kb-panduan':''}) }}</div>
+<div class="kb-kind"><label for="kb-jenis">Jenis</label><select id="kb-jenis" disabled aria-describedby="kb-native-pending"><option>Jenis belum dibaca</option></select><button type="button" disabled aria-describedby="kb-native-pending">Terapkan</button></div></div>
+<div class="kb-summary"><button class="kb-link" type="button" disabled aria-describedby="kb-native-pending">Tandai semua dibaca</button></div>
+<div class="kb-feed" aria-label="Daftar kabar belum dibaca"><p role="status">Memuat kabar sesuai cakupan akun…</p></div>
+<p class="bantu" id="kb-native-pending">Jenis, jumlah, tanggal dan tindakan kabar menunggu pembacaan terbaru. Tidak ada kabar yang ditandai ketika halaman ini dimuat.</p>
+<p role="status" aria-live="polite" data-kabar-native-status>Memuat kabar…</p><button type="button" class="btn" data-kabar-native-retry hidden>Coba lagi</button>
+{% from '_panduan.html' import panel as panduan %}
+{% call panduan('kb-panduan','Panduan Kabar',penutup={'data-kb-tutup':''}) %}
+<p>Angka pada tab Belum dibaca menunjukkan kabar yang belum dibaca dalam cakupan Anda. Jenis menyaring daftar yang ditampilkan.</p><p>Membaca atau menandai kabar tidak menyelesaikan pekerjaan. Buka catatan terkait untuk melihat status saat ini dan tindakan yang tersedia.</p>
+{% endcall %}
+</section>
+<script src="/static/kabar-kontrol.js?v={{ VERSI }}" defer></script>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/kabar-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

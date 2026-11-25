@@ -1,0 +1,30 @@
+{% from '_pengaturan_ikon.html' import ikon %}
+{% import '_kata_pengaturan.html' as kata with context %}
+{% macro menu_pintu(href, judul, isi, image, allowed) -%}
+<{{ 'a' if allowed else 'span' }} class="pg-pintu{{ ' akses-terkunci' if not allowed }}" {% if allowed %}href="{{ href }}"{% else %}aria-disabled="true" title="Tidak memiliki akses untuk peran ini"{% endif %}><span class="pg-pintu__ikon">{{ ikon(image) }}</span><span class="pg-pintu__isi"><strong>{{ judul }}</strong><small>{{ isi }}</small></span><span class="pg-panah" aria-hidden="true">›</span></{{ 'a' if allowed else 'span' }}>
+{%- endmacro %}
+<section class="pg" data-pengaturan-menu-kerangka data-stamp="{{ PG_MENU_SHELL.stamp }}" data-url="{{ PG_MENU_SHELL.address }}" aria-label="{{ PG_MENU_SHELL.title }}">
+{% if PG_MENU_SHELL.variant=='index' %}
+ <div class="pg-akun"><span class="pg-akun__ikon">{{ ikon('user') }}</span><div><strong>Identitas akun belum dibaca</strong><p>Peran akun menunggu data terbaru</p></div></div>
+ <div class="pg-terik"><div class="saklar-borang"><div><div class="lbl">Mode terik</div><div class="bantu">Layar terang untuk kerja di bawah matahari. Berlaku untuk perangkat ini saja.</div></div><button class="saklar" type="button" disabled aria-busy="true" aria-label="Mode terik belum dibaca" aria-describedby="pg-menu-pending"><span class="saklar__bulat"></span></button></div></div>
+ <div class="pg-kelompok">{% for group in PG_MENU_SHELL.groups %}
+ <section class="pg-grup" aria-labelledby="pg-menu-{{ group.id }}"><header><span>{{ ikon(group.icon) }}</span><div><h2 id="pg-menu-{{ group.id }}">{{ group.title }}</h2><p>{{ group.subtitle }}</p></div></header>
+ {% if group.id=='pengguna' and PG_MENU_SHELL.recovery %}<p class="pg-darurat">Belum ada akun Super Admin aktif, jadi pengelolaan sementara masih di tangan {{ kata.pemegang_sementara() }}.</p>{% endif %}
+ {% for door in group.doors %}{{ menu_pintu(door.href,door.judul,door.isi,door.ikon,door.allowed) }}{% endfor %}
+ {% if group.id=='fasilitas' %}<details class="pg-lanjutan"><summary>Pengaturan lanjutan</summary>{{ menu_pintu('/pengaturan/jenis-proses','Jenis proses','Master jenis proses produksi','sliders',PG_MENU_SHELL.advanced) }}</details>{% endif %}
+ {% if not group.doors %}<p class="bantu">Pilihan berizin belum tersedia.</p>{% endif %}
+ </section>{% endfor %}</div>
+{% else %}
+ <a class="pg-kembali" href="/pengaturan">← Kembali ke Pengaturan</a>
+ <p class="pg-lingkup">Pengaturan / Akun &amp; perangkat</p><h1>Sesi perangkat</h1>
+ <div class="pg-rincian"><div class="setelan-sesi"><span class="lbl">Sesi perangkat</span><div class="kartu setelan-sesi__isi">
+ <p class="bantu">Keluar dari akun pada perangkat ini, atau akhiri sesi akun di semua perangkat.</p>
+ <div><button class="btn btn--utama" type="button" disabled aria-describedby="pg-menu-pending">{{ PG_MENU_SHELL.session_label }}</button></div>
+ <div><button class="btn btn--putih-sesi" type="button" disabled aria-describedby="pg-menu-pending">Keluar dari semua perangkat</button></div>
+ </div></div></div>
+{% endif %}
+ <p class="bantu" id="pg-menu-pending">Nilai dan tindakan perangkat tersedia setelah akun serta sesi terbaru selesai dibaca. Tidak ada perubahan selama memuat.{% if PG_MENU_SHELL.variant=='index' %} Keadaan Mode terik belum dibaca.{% endif %}</p>
+ <p role="status" aria-live="polite" data-pengaturan-menu-status>Memuat pengaturan…</p>
+ <button type="button" class="btn" data-pengaturan-menu-retry hidden>Coba lagi</button>
+ <noscript><p>JavaScript diperlukan untuk membaca pengaturan bertahap. Tidak ada perubahan yang dikirim selama memuat.</p></noscript>
+</section>

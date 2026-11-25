@@ -108,8 +108,9 @@ class _ASGIBrowser:
         response = await self.client.get(path, headers=forwarded)
         barrier = None
         if (url.path == '/stok' and not url.query and
-                forwarded.get('x-pindah') == '1' and
-                forwarded.get('x-kerangka-halaman') == '1'):
+                (request.is_navigation_request() or
+                 forwarded.get('x-pindah') == '1' and
+                 forwarded.get('x-kerangka-halaman') == '1')):
             barrier = self.html
             assert response.status_code == 200
             assert 'data-halaman-bertahap' in response.text
@@ -140,7 +141,12 @@ class _ASGIBrowser:
 
 
 @asynccontextmanager
-async def _browser(client, width):
+async def _browser(client, width, *, native_document=False):
+    if native_document:
+        from tests.pg.native_document_http import native_document_browser
+        async with native_document_browser(client, width, profile='stock') as value:
+            yield value
+        return
     engine = os.getenv('UJI_BROWSER', 'chromium')
     assert engine in {'chromium', 'webkit'}, engine
     bridge = _ASGIBrowser(client)
@@ -162,8 +168,9 @@ async def _browser(client, width):
             await browser.close()
 
 
-async def _buka_stok_dari_menu(page, bridge, width, *, legacy=False):
-    response = await page.goto(BASE + '/barang-masuk')
+async def _buka_stok_dari_menu(page, bridge, width, *, native_document=False):
+    base = getattr(bridge, 'origin', BASE)
+    response = await page.goto(base + '/barang-masuk')
     assert response and response.status == 200
     await page.wait_for_function(
         "typeof window.PINDAH?.aturKerangkaHalaman === 'function'")
@@ -171,19 +178,25 @@ async def _buka_stok_dari_menu(page, bridge, width, *, legacy=False):
         await page.locator('#buka-laci').click()
     link = page.locator('#laci a[href="/stok"]').first
     await expect(link).to_be_visible()
+    if native_document:
+        await expect(link).to_have_attribute('data-utuh', '')
+    await expect(page.locator('.halaman-memuat')).to_have_count(0)
     # Fokus keyboard memakai tautan produk yang sama, tanpa memanggil fungsi
     # pindah dari tes atau mengganti fetch milik produk.
     await link.focus()
     await link.press('Enter', no_wait_after=True)
-    if legacy:
+    if native_document:
         await asyncio.wait_for(bridge.html.mulai.wait(), 10)
-        await expect(page.locator('.halaman-memuat')).to_be_visible(timeout=700)
+        # Both optional publishers are absent: the actual link requests a
+        # native document. Release its HTML before DOM RPCs while navigation
+        # is provisional; only the subsequent native data GET stays held.
+        # This is not a pre-HTML destination-frame claim.
         assert not bridge.html.lepas.is_set() and not bridge.data.mulai.is_set()
         bridge.html.lepas.set()
     await asyncio.wait_for(bridge.data.mulai.wait(), 10)
-    await expect(page).to_have_url(BASE + '/stok')
+    await expect(page).to_have_url(base + '/stok')
     await expect(page.locator('.halaman-memuat')).to_have_count(0)
-    assert bridge.html.jumlah == (1 if legacy else 0)
+    assert bridge.html.jumlah == (1 if native_document else 0)
     await expect(page.locator('#laci a[href="/stok"]').first).to_have_attribute(
         'aria-current', 'page')
     root = page.locator('[data-halaman-bertahap][data-kind="stok"]')
@@ -261,24 +274,45 @@ async def test_navigasi_kerangka_lalu_data_refresh_native_dan_kosong(
 
 
 @pytest.mark.parametrize('width', [390,1280])
-async def test_fallback_native_tetap_aman_bila_katalog_opsional_tidak_tersedia(pg,stok_navigasi,monkeypatch,width):
-    from app.web import stok_kerangka_langsung
+@pytest.mark.parametrize('publishers', ['stock-unavailable', 'both-unavailable'])
+async def test_fallback_native_tetap_aman_bila_katalog_opsional_tidak_tersedia(pg,stok_navigasi,monkeypatch,width,publishers):
+    from app.web import kerangka_ui, stok_kerangka_langsung
     async def unavailable(*args,**kwargs):
         return None
     monkeypatch.setattr(stok_kerangka_langsung,'susun',unavailable)
+    native_document=publishers=='both-unavailable'
+    if native_document:
+        monkeypatch.setattr(kerangka_ui,'susun',unavailable)
     async with await _klien(pg,peran=P.OPERATOR,gudang=GUDANG) as client:
         before=await _sidik(pg)
-        async with _browser(client,width) as (page,bridge):
-            await _buka_stok_dari_menu(page,bridge,width,legacy=True)
-            assert bridge.html.jumlah==1 and bridge.data.jumlah==1
+        async with _browser(client,width,native_document=native_document) as (page,bridge):
+            errors=[]
+            page.on('pageerror',lambda error:errors.append(str(error)))
+            await _buka_stok_dari_menu(page,bridge,width,native_document=native_document)
+            assert bridge.html.jumlah==int(native_document) and bridge.data.jumlah==1
             await expect(page.locator('#padi-kerangka-langsung')).to_have_count(1)
             await expect(page.locator('#padi-stok-kerangka')).to_have_count(0)
+            ui=page.locator('#padi-kerangka-ui')
+            if native_document:
+                await expect(ui).to_have_count(0)
+                documents=[r for r in bridge.requests if r['path']=='/stok' and r['navigation_request']]
+                assert len(documents)==1
+                assert 'x-pindah' not in documents[0]['headers']
+            else:
+                # The generic publisher is a real guard-bound fallback. Its
+                # descriptor, not a fabricated permission payload, supplies
+                # the pending native table while the data GET is held.
+                await expect(ui).to_have_count(1)
+                descriptor=json.loads(await ui.text_content())
+                assert descriptor['varians']['stok']['bahan'].startswith('stok-bahan-')
+                assert descriptor['sumber']==await page.evaluate('window.PadiKerangkaUI.sumber')
             bridge.data.lepas.set()
             await expect(page.locator('[data-halaman-bertahap]')).to_have_count(0)
             row=page.locator('.stok-mobile-list__baris' if width<900 else '.stok-baris__tautan',has_text=KODE_BEBAS)
             await expect(row).to_be_visible()
             await expect(row.locator('.stok-mobile-list__berat' if width<900 else '.stok-tabel__angka')).to_have_text('1.000 kg')
             assert not bridge.writes
+            assert not errors,errors
         assert await _sidik(pg)==before
 
 

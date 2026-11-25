@@ -1,6 +1,6 @@
 {% import '_detail_kirim_tabs.html' as dt with context %}
 {% set angka = st.kg_rinci %}
-<link rel="stylesheet" href="/static/detail_kirim_retur.css?v=2">
+<link rel="stylesheet" href="/static/detail_kirim_retur.css?v={{ VERSI }}">
 <article class="kirim-detail" data-detail-tab>
 {% include "_pengiriman_tabs.html" %}
     <a class="detail-kirim-kembali" href="{{ dt.kembali('/barang-keluar?' ~ filter_query) }}">← Kembali ke Pengiriman</a>
@@ -124,4 +124,4 @@
       {% else %}<li>Riwayat petugas belum tercatat.</li>{% endfor %}</ol>
     </section>
 {{ retur_terkait_kartu() }}</div></article>
-<script src="/static/detail_kirim_retur.js?v=1" defer></script>
+<script src="/static/detail_kirim_retur.js?v={{ VERSI }}" defer></script>

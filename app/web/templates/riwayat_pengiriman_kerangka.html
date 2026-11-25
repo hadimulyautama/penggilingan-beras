@@ -1,0 +1,28 @@
+{% extends 'base.html' %}{% block judul %}Riwayat pengiriman · {{ RP.meta.kode }}{% endblock %}
+{% block isi %}
+{% if RP.meta.review %}<p><button class="btn btn--kecil" type="button" disabled aria-describedby="rp-pending">Perbaiki pengiriman</button></p>{% endif %}
+<link rel="stylesheet" href="/static/riwayat-kiriman.css?v={{ VERSI }}">
+<div class="rk" data-riwayat-pengiriman-kerangka data-url="{{ RP.alamat }}" data-stamp="{{ RP.stamp }}">
+{% with tab_pengiriman='keluar',BOLEH_PERINTAH=false %}{% include '_pengiriman_tabs.html' %}{% endwith %}
+<a data-rp-back href="{{ RP.kembali }}">← Riwayat pengiriman</a>
+<header class="rk-panel rk-hero"><div><p>Riwayat pengiriman · Tanggal belum dibaca</p><span class="rk-status" data-rp-state>{{ 'Keadaan perjalanan belum dibaca' if RP.meta.bersama else ('Terverifikasi' if RP.meta.status=='selesai' else 'Dibatalkan') }}</span><h1 data-rp-title>{{ RP.meta.title }}</h1><p>Pelanggan, barang dan ekspedisi belum dibaca</p><small>Satu perjalanan · satu tiket keluar</small></div><div><span>Aktual barang dikirim</span><strong class="rk-number">Belum dibaca</strong></div></header>
+<link rel="stylesheet" href="/static/status-pengiriman.css?v={{ VERSI }}">
+<section class="sp-status" aria-label="Status timbang dan verifikasi pengiriman"><h2>Status timbang dan pengiriman</h2><dl><div><dt>Penimbangan · TeraFlow</dt><dd>Belum dibaca</dd></div><div><dt>Verifikasi pengiriman · PadiFlow</dt><dd>Belum dibaca</dd></div></dl><p>Data perjalanan terbaru sedang dibaca.</p></section>
+<div class="rk-layout"><div class="rk-stack" id="judul-isi-muatan">
+<section class="rk-panel" aria-label="Rincian pelanggan belum dibaca" data-rp-customers>
+<h2>Rincian pelanggan</h2><p>Pelanggan dan kelompok barang menunggu data terbaru. Bagian ini bukan daftar kosong.</p>
+<div class="rk-actions"><button class="btn btn--kecil" type="button" disabled aria-describedby="rp-pending">Rincian perintah</button><button class="btn btn--kecil" data-rp-handover type="button" disabled aria-describedby="rp-pending"{% if RP.meta.status!='selesai' %} hidden{% endif %}>Serah terima</button></div>
+<dl class="rk-quantities" aria-label="Kolom barang belum dibaca">{% for label in ['Perintah','Dikirim aktual','Tidak terkirim'] %}<div><dt>{{ label }}</dt><dd>Belum dibaca</dd></div>{% endfor %}</dl>
+<p><strong>Alasan tidak terkirim:</strong> Belum dibaca</p><p><strong>Catatan perintah:</strong> Belum dibaca</p>
+{% if RP.meta.review %}<section class="rk-returns"><h2>Retur pelanggan ini</h2><p>Catatan terkait belum dibaca. Tidak ada tindakan retur selama memuat.</p></section>{% endif %}
+<details><summary id="judul-jejak-pengiriman">Petugas perintah pelanggan</summary><ol class="rk-timeline"><li>Riwayat petugas belum dibaca.</li></ol></details>
+</section></div><aside class="rk-stack">
+<section class="rk-panel rk-weigh"><p>Hasil timbang total satu armada; rincian pelanggan belum dibaca.</p><h2 id="judul-timbang-pengiriman">Hasil timbang satu armada</h2><p>Tiket dan versi sumber bobot belum dibaca.</p><dl class="rk-facts">{% for label in ['Total aktual PadiFlow','Selisih seluruh armada'] %}<div><dt>{{ label }}</dt><dd>Belum dibaca</dd></div>{% endfor %}</dl><details><summary>Rincian penimbangan</summary><dl class="rk-facts">{% for label in ['Sopir','Timbang pertama','Timbang kedua','Kendaraan kosong','Kendaraan bermuatan','Netto jembatan timbang','Total tara & pengurang','Tara lain'] %}<div><dt>{{ label }}</dt><dd>Belum dibaca</dd></div>{% endfor %}</dl></details></section>
+<section class="rk-panel"><h2>Ringkasan perjalanan</h2><dl class="rk-facts">{% for label in ['Total perintah','Dikirim aktual','Tidak terkirim'] %}<div><dt>{{ label }}</dt><dd>Belum dibaca</dd></div>{% endfor %}</dl><p>Retur dicatat sebagai penerimaan terpisah. Angka pengiriman asal tetap.</p></section>
+<section class="rk-panel"><h2>Riwayat pemeriksaan</h2><p>Metode verifikasi dan catatan tiap pelanggan belum dibaca.</p></section>
+</aside></div>
+<p id="rp-pending" class="bantu">Nilai, kelompok pelanggan dan tautan tersedia setelah data terbaru diperiksa. Tidak ada transaksi selama memuat.</p><p role="status" aria-live="polite" data-rp-status>Memuat riwayat pengiriman…</p><button class="btn" type="button" data-rp-retry hidden>Coba lagi</button>
+</div>
+{% if RP.meta.review %}<section><h2>Koreksi pascaverifikasi</h2><p>Catatan koreksi dan tautan terkait belum dibaca.</p></section>{% endif %}
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script><script src="/static/riwayat-pengiriman-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

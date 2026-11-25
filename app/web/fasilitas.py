@@ -31,13 +31,15 @@ async def halaman(request, akun, *, err='', form=None, mode=None, identitas=None
     if not pesan and request.query_params.get('pesan'):
         from app.web.pengaturan import _PESAN
         pesan = _PESAN.get(request.query_params['pesan'], '')
-    return await render_laci(request, 'fasilitas.html', layar='pengaturan',
+    response = await render_laci(request, 'fasilitas.html', layar='pengaturan',
         kembali='/pengaturan/mesin' if detail or pengering else '/pengaturan',
         jenis=jenis, lini=lini, gudang=gudang, dryer=dryer, penjalan=PENJALAN,
         dryer_nama={d.id:d.nama for d in dryer}, jenis_nama={j.id:j.nama for j in jenis}, gudang_nama={w.id:w.nama_gudang for w in gudang},
         detail=detail, pengering=pengering, target_global=target_global, tungku=tungku,
         mode=mode, err=err, pesan=pesan, isian=form or {},
         operasi_alat=token_baru)
+    from app.web.fasilitas_detail_catalog import pasang
+    return pasang(request,akun,response)
 
 @router.get('/pengaturan/fasilitas')
 async def lama(request: Request, akun=Depends(butuh_super)):

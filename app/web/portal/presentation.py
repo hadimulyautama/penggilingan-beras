@@ -276,6 +276,8 @@ def render_customer(request, name, *, status_code=200, **ctx):
     content=read_only(body,path,origin=str(request.base_url),report_available=report_available)
     from .identitas_proses import tampilkan_detail
     content=tampilkan_detail(content,ctx,env)
+    from .detail_catalog import dekorasi as detail_catalog
+    content=detail_catalog(request,name,ctx,content)
     return shell(request,content,status_code=status_code,title=ctx.get('page_title') or ctx.get('breadcrumb_detail') or 'Portal pelanggan')
 
 
@@ -283,7 +285,8 @@ def shell(request,content,*,title='Portal pelanggan',status_code=200):
     from app.web.tampilan import templates
     from hmu_tampilan import CAP_ASET as VERSI
     scope=request.state.portal_scope
-    html=templates.env.get_template('portal/shell.html').render(request=request,
+    from .kerangka import binding
+    html=templates.env.get_template('portal/shell.html').render(request=request,PORTAL_KERANGKA=binding(request,scope),
         title=title,content=Markup(content),reader=scope.reader,MENU=MENU,
         active=active_menu(request.url.path),CSRF=csrf_context(request),VERSI=VERSI,
         light=request.cookies.get('produksi_terik','1')=='1')

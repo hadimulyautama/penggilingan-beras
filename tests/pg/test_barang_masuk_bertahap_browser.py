@@ -1,4 +1,9 @@
-"""Native browser/ASGI acceptance; no listener, fake actor or external harness."""
+"""Native browser over owned loopback HTTP with existing synthetic fixtures.
+
+The browser sends its own headers/cookies. Normal response bytes are native;
+existing explicit negative fixtures remain labelled. SSE is the application's
+actual authenticated stream, never a mock or a proof of PWA/hosted behavior.
+"""
 import asyncio
 import json
 import os
@@ -9,7 +14,7 @@ from urllib.parse import urlsplit
 
 import httpx
 import pytest
-from playwright.async_api import Error as BrowserError, async_playwright, expect
+from playwright.async_api import expect
 from sqlalchemy.exc import SQLAlchemyError
 
 from hmu_identitas import peran as P
@@ -18,84 +23,17 @@ from tests.pg.test_tiket_antrean_produksi import _klien
 from tests.pg.test_halaman_bertahap import _sidik
 
 pytestmark = pytest.mark.asyncio
-BASE = 'https://uji'
+from tests.pg.native_shared_http import BASE
 
 
 @asynccontextmanager
 async def peramban(client, width):
-    """Browser supplies Sec-Fetch; ASGI and native fixture supply all data."""
-    gates, posts, errors = {}, [], []
-    transport = dict(gates=gates, posts=posts, errors=errors, gets=[], completed={}, corrupt_context=False, fail_asset=False)
-    pending = set()
-    closing = False
-    async with async_playwright() as pw:
-        engine = os.environ.get('UJI_BROWSER', os.environ.get('OWNER_BROWSER', 'chromium'))
-        assert engine in {'chromium', 'webkit'}
-        browser = await getattr(pw, engine).launch()
-        context = await browser.new_context(viewport={'width': width, 'height': 900},
-                                            service_workers='block', reduced_motion='reduce')
-        await context.add_cookies([dict(name=x.name, value=x.value, url=BASE) for x in client.cookies.jar])
-        page = await context.new_page()
-        page.on('pageerror', lambda error: errors.append(str(error)))
-        async def route(route):
-            request = route.request
-            u = urlsplit(request.url)
-            if closing or u.netloc != 'uji':
-                await route.abort()
-                return
-            if u.path == '/api/aliran':
-                await route.fulfill(status=204, body='')
-                return
-            if request.method != 'GET':
-                posts.append(u.path)
-            else:
-                transport['gets'].append(u.path)
-            if u.path == '/static/barang-masuk-pencarian.js' and transport['fail_asset']:
-                await route.fulfill(status=503, body='Fixture asset unavailable')
-                return
-            headers = await request.all_headers()
-            job = asyncio.create_task(client.request(request.method,
-                u.path + ('?' + u.query if u.query else ''), content=request.post_data_buffer,
-                headers={k: v for k, v in headers.items() if k in {
-                    'content-type', 'x-csrf-token', 'x-pindah', 'x-kerangka-halaman',
-                    'x-barang-masuk-cari', 'accept', 'sec-fetch-mode', 'sec-fetch-dest',
-                    'sec-fetch-site', 'sec-fetch-user'}}))
-            pending.add(job)
-            gate = None
-            try:
-                response = await asyncio.wait_for(asyncio.shield(job), 60)
-                gate = gates.pop(u.path, None)
-                if gate:
-                    gate[0].set()
-                    await gate[1].wait()
-                body = response.content
-                if u.path == '/barang-masuk' and transport['corrupt_context']:
-                    transport['corrupt_context'] = False
-                    # Negative response-provenance control, not fake business
-                    # data or a claim that two warehouses are two companies.
-                    body = re.sub(rb'data-bm-context="[^"]+"', b'data-bm-context="stale-response"', body, count=1)
-                await route.fulfill(status=response.status_code, body=body,
-                    headers={k: v for k, v in response.headers.items() if k.lower() not in {
-                        'content-length', 'content-encoding', 'transfer-encoding', 'set-cookie'}})
-            except BrowserError:
-                if not (gate or closing or request.failure):
-                    raise
-            finally:
-                pending.discard(job)
-                completed = transport['completed'].get(u.path)
-                if gate and completed:
-                    completed.set()
-        await context.route('**/*', route)
-        try:
-            yield page, transport
-        finally:
-            closing = True
-            for entered, release in list(gates.values()):
-                release.set()
-            if pending:
-                await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), 65)
-            await context.close()
-            await browser.close()
+    """Real owned HTTP; existing data gates/fault hooks, unbuffered native SSE."""
+    from tests.pg.native_document_http import owned_http_browser
+    from tests.pg.native_shared_http import SharedNativeHTTP
+    async with owned_http_browser(client, width, profile='shared', fixed_port=59364,
+            transport_factory=lambda app, origin: SharedNativeHTTP(app, client, origin)) as (page, transport):
+        yield page, transport.data
 
 
 @pytest.mark.parametrize('role,warehouse', [(P.OPERATOR, 'g1'), (P.OPERATOR, 'g2'), (P.ADMIN, None)])

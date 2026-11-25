@@ -20,6 +20,13 @@ async def halaman(request, *, err='', isian=None):
 
 @router.get(ALAMAT)
 async def lihat(request: Request, akun=Depends(butuh_admin)):
+    from app.web.pengaturan_master_kerangka import permintaan_kerangka,kerangka
+    if permintaan_kerangka(request):
+        from app.web.halaman_bertahap import konteks_kerangka,penanda_konteks
+        context=await konteks_kerangka(request,akun)
+        context['SHELL']={'data_url':request.url.path,'stamp':penanda_konteks(request,akun)+'|'+request.url.path}
+        response=await kerangka(request,akun,context)
+        if response is not None:return response
     return await halaman(request)
 
 

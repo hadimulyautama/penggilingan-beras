@@ -70,7 +70,7 @@ async def halaman_gudang(request: Request, gid: str, akun=Depends(butuh_akun)):
         # itu berhenti berarti.
         milik = await svc.untuk(db, akun.user)
 
-    return render(
+    response = render(
         request, "gudang.html", layar="gudang", kembali="/",
         JUDUL={**JUDUL, "gudang": NAMA_GUDANG[gid]},
         gid=gid, nama_gudang=NAMA_GUDANG[gid], fungsi=FUNGSI_GUDANG[gid],
@@ -84,3 +84,6 @@ async def halaman_gudang(request: Request, gid: str, akun=Depends(butuh_akun)):
         nilai=request.query_params.get("nilai") or "",
         **milik.lencana(),
     )
+    from app.web.stock_detail_native import finish, warehouse_offer
+    offer = warehouse_offer(gid, alur_gudang)
+    return finish(response, request, detail=offer.meta if offer is not None else None)

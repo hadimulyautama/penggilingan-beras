@@ -55,7 +55,9 @@ async def test_draf_terisi_dan_filter_tidak_mengubah_transaksi(pg, gudang):
         assert 'value="tidak-ada"' in kosong.text
         assert 'value="perintah" selected' in kosong.text
         assert 'value="2020-01-01"' in kosong.text
-        assert 'Belum ada pengiriman berjalan' in kosong.text
+        assert 'Tidak ada pengiriman berjalan sesuai filter.' in kosong.text
+        from bs4 import BeautifulSoup
+        assert len(BeautifulSoup(kosong.text,'html.parser').select('.keluar-tabel thead th'))==4
         assert f'/barang-keluar/{oid}"' not in kosong.text
         if os.environ.get('BUKTI_DAFTAR_KELUAR'):
             folder = Path(os.environ['BUKTI_DAFTAR_KELUAR']); folder.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block judul %}{{ JASA_DETAIL_SHELL.nama }} · Pesanan Jasa{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/jasa-pelanggan.css?v={{ VERSI }}&jasa=6">
+<section data-jasa-detail-kerangka data-url="{{ JASA_DETAIL_SHELL.alamat }}" data-stamp="{{ JASA_DETAIL_SHELL.stamp }}" class="jasa-detail">
+<a class="jasa-kembali" href="{{ JASA_DETAIL_SHELL.kembali }}">← Kembali ke Pesanan Jasa</a>
+{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama=JASA_DETAIL_SHELL.nama) }}
+<div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span> · <span class="lencana">Titipan jasa</span><p>Jumlah penerimaan, pesanan, proses dan keadaan pelanggan belum dibaca.</p></div>
+<nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for tab in JASA_DETAIL_SHELL.tabs %}<a href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>{% endfor %}</nav>
+{% if JASA_DETAIL_SHELL.tab=='ringkasan' %}
+<section class="jasa-bahan" aria-label="Bahan titipan sesuai tahap"><h3>Bahan titipan</h3><p class="bantu">Tahap dan berat bahan belum dibaca.</p></section>
+<p class="jasa-produk-label">PK dan hasil yang tersedia</p>
+<div class="jasa-detail-angka" aria-label="Saldo terpisah menurut jenis">{% for label in ['PK tersedia','Beras tersisa','Hasil samping'] %}<div><span>{{ label }}</span><strong>Belum dibaca</strong></div>{% endfor %}</div>
+<section class="kartu"><h2>Tindak lanjut pelanggan</h2><div class="jasa-kondisi"><span class="bantu">Keadaan dan tindakan pelanggan belum dibaca.</span></div><div class="saring jasa-operasi"><button class="btn btn--kecil" type="button" disabled aria-describedby="jasa-detail-pending">Pengambilan barang</button></div><p class="bantu">Saldo per jenis tidak dijumlahkan antar tahap. Bahan di silo/proses bukan PK tersedia untuk diambil. Bobot belum final ditandai pada tab Stok.</p></section>
+<dl class="jasa-pasang jasa-rekap-riwayat" aria-label="Jumlah pengiriman dan retur"><div><dt>Pengambilan / pengiriman</dt><dd>Belum dibaca</dd></div><div><dt>Retur terkait</dt><dd>Belum dibaca</dd></div></dl>
+<section class="kartu" id="pesanan-pelanggan"><h2>Pesanan &amp; rekap barang · belum dibaca</h2><p class="bantu">Penutupan dan pembatalan berlaku untuk pesanan yang dipilih, bukan seluruh pelanggan.</p>
+{% if JASA_DETAIL_SHELL.filter_pesanan %}<div class="jasa-pesanan-filter"><label>Cari pesanan<input disabled value="{{ JASA_DETAIL_SHELL.pesanan_cari }}" placeholder="Nomor atau catatan pesanan" maxlength="200" aria-describedby="jasa-detail-pending"></label><label>Status pesanan<select disabled aria-describedby="jasa-detail-pending">{% for value,label in JASA_DETAIL_SHELL.status_pilihan %}<option value="{{ value }}"{% if value==JASA_DETAIL_SHELL.pesanan_status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><button class="btn btn--kecil" type="button" disabled>Tampilkan</button></div>{% endif %}
+<p class="bantu">Catatan, rekap dan tindakan tiap pesanan menunggu pembacaan data terbaru.</p></section>
+<details class="kartu jasa-terkait"><summary>Halaman terkait pelanggan</summary><p class="bantu">Tautan pelanggan tersedia setelah data terbaru dibaca.</p><div class="saring jasa-operasi">{% for label in ['Barang Masuk pelanggan','Pekerjaan pelanggan','Proses berjalan pelanggan','Stok pelanggan'] %}<span class="btn btn--kecil" aria-disabled="true">{{ label }}</span>{% endfor %}</div></details>
+{% elif JASA_DETAIL_SHELL.tab in ['penerimaan','proses'] %}
+<div class="saring"><input class="fld" type="search" disabled value="{{ JASA_DETAIL_SHELL.rincian_cari }}" aria-label="Cari catatan pelanggan" placeholder="Cari kode atau pesanan…" maxlength="200" aria-describedby="jasa-detail-pending"><button class="cari-berikon btn btn--kecil" type="button" disabled>Cari</button></div>
+<section class="kartu"><h2>{{ 'Penerimaan' if JASA_DETAIL_SHELL.tab=='penerimaan' else 'Proses terkait' }} · belum dibaca</h2>
+{% if JASA_DETAIL_SHELL.tab=='penerimaan' %}<button class="btn btn--kecil" type="button" disabled aria-describedby="jasa-detail-pending">Buka Barang Masuk pelanggan</button>{% else %}<p class="bantu">Hasil campuran adalah milik proses, tidak dibagi ke tiket atau pesanan asal.</p>{% endif %}
+<p class="bantu">Catatan pelanggan belum dibaca; ini bukan daftar kosong.</p></section>
+{% elif JASA_DETAIL_SHELL.tab=='pengambilan' %}
+<section class="kartu"><h2>Pengambilan &amp; pengiriman · belum dibaca</h2><div class="saring jasa-operasi"><button class="btn btn--kecil" type="button" disabled aria-describedby="jasa-detail-pending">Pengambilan barang</button><button class="btn btn--kecil" type="button" disabled aria-describedby="jasa-detail-pending">Buka pengiriman pelanggan</button></div><p class="bantu">Catatan pengambilan dan pengiriman belum dibaca.</p><h3>Retur terkait · belum dibaca</h3><p class="bantu">Penerimaan retur terkait belum dibaca.</p></section>
+{% else %}
+<section class="kartu"><h2>Stok pelanggan</h2><p class="bantu">Saldo produk yang tidak memiliki alokasi per pesanan ditampilkan per pelanggan. Rincian asal adalah referensi hasil, bukan pembagian saldo lot.</p><div class="saring jasa-operasi">{% for label in ['Bahan & PK','Produk','Karung'] %}<span class="btn btn--kecil" aria-disabled="true">{{ label }}</span>{% endfor %}</div><div class="jasa-stok"><div class="jasa-stok__kepala"><span>Barang / sumber</span><span>Lokasi</span><span>Saldo</span></div><p class="bantu">Saldo, kemasan dan sumber belum dibaca; ini bukan stok nol.</p></div></section>
+{% endif %}
+<p class="bantu" id="jasa-detail-pending">Nilai dan tindakan menunggu data pelanggan yang telah diperiksa. Tidak ada transaksi selama memuat.</p>
+<p class="bantu" id="jasa-detail-cetak-alasan">Cetak tersedia setelah data pelanggan selesai dibaca.</p>
+<p role="status" aria-live="polite" data-jasa-detail-status>Memuat detail pelanggan…</p><button class="btn" type="button" data-jasa-detail-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca detail bertahap. Tidak ada transaksi yang dikirim.</p></noscript>
+</section>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/jasa-detail-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

@@ -1,6 +1,5 @@
-/* Bukan pengganti PINDAH: hanya dua daftar memakai dokumen kerangka cepat.
- * Pembacaan ulang X-Pindah tetap renderer native, termasuk filter pelanggan.
- */
+/* Native structures register before data. Read filters, current context and
+ * action/draft guards keep their native owners; this adapter never posts. */
 (function(){
  'use strict';
  const binding=document.currentScript?.dataset.konteks||'';
@@ -13,7 +12,14 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
-  return u.origin===location.origin&&(u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan');
+  const histories=['/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan','/riwayat-qc/gabah-basah','/riwayat-qc/gabah-kering','/riwayat-qc/pk-luar','/riwayat-qc/pk-hasil-giling'];
+  if(u.origin===location.origin&&histories.includes(u.pathname))return true;
+  if(u.origin===location.origin&&(['/', '/muatan'].includes(u.pathname)||/^\/riwayat-(giling|sosoh|pengeringan)\/[1-9]\d*\/laporan$/.test(u.pathname)||/^\/pengaturan\/mesin\/[1-9]\d*$/.test(u.pathname)))return true;
+  if(u.origin===location.origin&&/^\/pengguna(?:\/pelanggan)?(?:\/[1-9]\d*)?$/.test(u.pathname))return true;
+  if(u.origin===location.origin&&['/pengaturan/gudang','/pengaturan/silo','/pengaturan/mesin','/pengaturan/jenis-proses'].includes(u.pathname))return true;
+  if(u.origin===location.origin&&(u.pathname==='/retur'||/^\/retur\/(?:[1-9]\d*|tiket\/[1-9]\d*)$/.test(u.pathname)))return true;
+  if(u.origin===location.origin&&(/^\/riwayat-(giling|sosoh|pengeringan)\/[1-9]\d*$/.test(u.pathname)||/^\/riwayat-qc\/(gabah-basah|gabah-kering|pk-hasil-giling|pk-luar|beras-hasil-sosoh)(?:\/[^/]+)?$/.test(u.pathname)||['/stok/pk/detail','/stok-produk/detail','/stok-produk-jasa/detail','/gudang/g1','/gudang/g2'].includes(u.pathname)))return true;
+  return u.origin===location.origin&&(['/audit','/kabar','/pengaturan','/pengaturan/sesi','/pengaturan/spesifikasi-beras','/pengaturan/hasil-samping','/pengaturan/alat','/pengaturan/peran','/pengaturan/akses','/pengaturan/sebab-berhenti','/pengaturan/mutu','/pengaturan/kledo','/pengaturan/sistem','/stok/karung/detail'].includes(u.pathname)||u.pathname.startsWith('/laporan/')||/^\/jasa\/pelanggan\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||/^\/proses-aktif\/(?:giling|sosoh|pengeringan|pendinginan)\/[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/stok'||u.pathname==='/pekerjaan'||u.pathname==='/barang-keluar'||/^\/barang-keluar\/[1-9]\d*$/.test(u.pathname));
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);
@@ -25,6 +31,19 @@
    });
   }
  }
+ // Jika paket UI tidak tersedia/cocok, pertahankan GET dokumen native.
+ // data-utuh dibaca penjaga PINDAH existing; tidak melewati penjaga editor.
+ function nativeIfUIUnavailable(){
+  const uiHost=document.getElementById('padi-kerangka-ui');let uiReady=false;
+  try{const ui=JSON.parse(uiHost?.textContent||'null');uiReady=!!(ui&&ui.versi===1&&ui.sumber===window.PadiKerangkaUI?.sumber&&ui.cap===document.documentElement.dataset.versi&&ui.konteks===document.querySelector('.bingkai')?.dataset.pindahKonteks&&ui.sesi===document.getElementById('formulir-sesi')?.dataset.token);}catch(_){}
+  let historyReady=false;
+  try{const host=document.getElementById('padi-riwayat-kerangka'),data=JSON.parse(host?.textContent||'null');historyReady=!!(host?.isConnected&&data?.versi===1&&data.sumber===window.PadiKerangkaRiwayatUI?.sumber&&data.cap===document.documentElement.dataset.versi&&data.konteks===document.querySelector('.bingkai')?.dataset.pindahKonteks&&data.sesi===document.getElementById('formulir-sesi')?.dataset.token);}catch(_){}
+  if(!historyReady)document.querySelectorAll('.laporan-nav a[href]').forEach(link=>{const u=new URL(link.href,location.href);if(u.origin===location.origin&&/^\/riwayat-(giling|sosoh|pengeringan|qc\/)/.test(u.pathname))link.setAttribute('data-utuh','');});
+  if(!uiReady)document.querySelectorAll('a[href]').forEach(link=>{const u=new URL(link.href,location.href);if(u.origin===location.origin&&(['/barang-keluar','/jasa','/pengaturan/akun','/laporan'].includes(u.pathname)||u.pathname.startsWith('/proses-aktif/giling/')||u.pathname==='/stok'&&!document.getElementById('padi-stok-kerangka')))link.setAttribute('data-utuh','');});
+ }
+ // Parser awal belum mencapai laci/manifest di luar bingkai. Partial swap
+ // sudah memiliki DOM lengkap; keduanya memeriksa dokumen yang benar.
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',nativeIfUIUnavailable,{once:true});else nativeIfUIUnavailable();
  const controls=document.querySelector('[data-stok-controls]');
  if(controls&&location.pathname==='/stok'){
   const u=new URL(controls.dataset.pelangganUrl,location.href);u.pathname='/api/halaman-bertahap/stok/html';controls.dataset.pelangganUrl=u.pathname+u.search;

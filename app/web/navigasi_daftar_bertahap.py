@@ -1,7 +1,8 @@
-"""Pemasangan adapter aplikasi; tidak menyalin atau menyunting base paket.
+"""App-owned native first-click structures and bounded source catalogues.
 
-Script berada di wilayah isi agar dokumen lama yang memakai PINDAH juga
-memasangnya. Efeknya dibatasi ke dua alamat daftar, bukan navigasi global.
+Public versioned programs contain layout only. Per-document scope, session
+and actual visible resource links remain private; native GET owns all data
+and action authorization.
 """
 def pasang(response, request):
     if response.status_code != 200 or not getattr(request.state, "akun", None):
@@ -10,6 +11,118 @@ def pasang(response, request):
     if marker not in response.body:
         return response
     from hmu_tampilan import CAP_ASET
+    if request.url.path in {'/pekerjaan','/berjalan'} and b'proses-aktif-list__row' in response.body:
+        # Exact visible native links only; no per-row DB lookup or data cache.
+        try:
+            from app.web.portal.scope import is_customer_read
+            if not is_customer_read(request):
+                from app.web.giling_work_catalog import catalog as giling_catalog
+                from app.web.sosoh_work_catalog import catalog as sosoh_catalog
+                from app.web.pengeringan_native_html import katalog as dryer_catalog
+                from app.web.halaman_bertahap import penanda_konteks
+                from app.web.csrf import untuk_sesi
+                from app.web.security import baca_token,NAMA_COOKIE
+                from app.web import csrf
+                import json
+                from html import escape
+                address=request.url.path+('?' +request.url.query if request.url.query else '')
+                nonce=request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state,'csrf',None)
+                context=penanda_konteks(request,request.state.akun)
+                token=untuk_sesi(nonce,baca_token(request.cookies.get(NAMA_COOKIE)),request.cookies.get('produksi_lihat',''))
+                # Each bounded family consumes the same already-authorized
+                # native Work DOM. Failure in one optional family is isolated.
+                html=response.body.decode('utf-8')
+                for name,reader in [('giling',giling_catalog),('sosoh',sosoh_catalog),
+                                    ('pengeringan',dryer_catalog)]:
+                    try:
+                        targets=reader(html,source_address=address,cap=CAP_ASET,
+                            context=context,session=token)
+                        if not targets or not targets['entries']:
+                            continue
+                        from jinja2.utils import htmlsafe_json_dumps
+                        payload=htmlsafe_json_dumps(targets).encode()
+                        if len(payload)>262144:
+                            continue
+                        tag=('<script type="application/json" data-'+name+'-native-catalog '
+                             'data-source-address="'+escape(address,quote=True)+'" '
+                             'data-source-sha="'+targets['sumber_sha256']+'">').encode()+payload+b'</script>'
+                        response.body=response.body.replace(marker,tag+marker,1)
+                    except Exception as error:
+                        import logging
+                        logging.getLogger(__name__).warning('Katalog struktur %s belum tersedia (%s)',name,type(error).__name__)
+        except Exception as error:
+            import logging
+            logging.getLogger(__name__).warning('Katalog struktur Giling belum tersedia (%s)',type(error).__name__)
+    # Optional resource references come only from the just-authorized native
+    # result. Neither publisher issues another lookup or invents a row.
+    try:
+        from app.web.portal.scope import is_customer_read
+        if not is_customer_read(request):
+            values=getattr(response,'context',{})
+            groups=values.get('alur_gudang')
+            if isinstance(groups,(list,tuple)):
+                from app.web.stock_detail_native import finish,warehouse_offer
+                offers=tuple(o for group in groups if isinstance(group,dict)
+                    and (o:=warehouse_offer(group.get('id'),groups)) is not None)
+                if offers:response=finish(response,request,offers=offers)
+            path=request.url.path
+            histories={'/riwayat-giling','/riwayat-sosoh','/riwayat-pengeringan'}
+            checks={'/riwayat-qc/'+kind for kind in ('gabah-basah','gabah-kering','pk-hasil-giling','pk-luar','beras-hasil-sosoh')}
+            if path in histories|checks:
+                from app.web.riwayat_detail_catalog import katalog
+                from app.web.halaman_bertahap import penanda_konteks
+                from app.web.csrf import untuk_sesi
+                from app.web.security import baca_token,NAMA_COOKIE
+                from app.web import csrf
+                from jinja2.utils import htmlsafe_json_dumps
+                from html import escape
+                address=path+('?' +request.url.query if request.url.query else '')
+                nonce=request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state,'csrf',None)
+                context=penanda_konteks(request,request.state.akun)
+                token=untuk_sesi(nonce,baca_token(request.cookies.get(NAMA_COOKIE)),request.cookies.get('produksi_lihat',''))
+                native_admin=request.state.akun.is_admin is True
+                targets=katalog(response.body.decode('utf-8'),source_address=address,cap=CAP_ASET,
+                    context=context,session=token,boleh_koreksi=native_admin,
+                    boleh_catat_qc=native_admin and values.get('MUTU_AKTIF') is True)
+                if targets is not None:
+                    payload=htmlsafe_json_dumps(targets).encode()
+                    if len(payload)<=262144:
+                        tag=('<script type="application/json" data-riwayat-detail-catalog '
+                             'data-source-address="'+escape(address,quote=True)+'" '
+                             'data-source-sha="'+targets['sumber_sha256']+'">').encode()+payload+b'</script>'
+                        response.body=response.body.replace(marker,tag+marker,1)
+    except Exception as error:
+        import logging
+        logging.getLogger(__name__).warning('Katalog detail native belum tersedia (%s)',type(error).__name__)
+    # Struktur publik stabil siap sebelum DOM interaktif. Tidak berisi akun,
+    # pilihan hak, saldo, draf atau token; pilihan per dokumen tetap no-store.
+    asset=('<style data-native-pending-visibility>#isi-halaman [data-url][data-stamp] [hidden]{display:none!important}</style>'
+           '<script src="/static/padi-baca-native.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/filter-daftar-native.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-riwayat-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengaturan-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-dokumen-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-sosoh-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengeringan-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-jasa-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengaturan-master-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengaturan-alat-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengiriman-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-riwayat-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-stock-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengaturan-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-riwayat-pengiriman-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-karung-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-pengguna-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-beranda-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-muatan-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-proses-pdf-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-fasilitas-detail-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-fasilitas-parent-ui.js?v='+CAP_ASET+'"></script>'
+           '<script src="/static/kerangka-retur-baca-ui.js?v='+CAP_ASET+'"></script>').encode()
+    if response.body.count(b'</head>')==1:
+        response.body=response.body.replace(b'</head>',asset+b'\n</head>',1)
     from app.web.halaman_bertahap import penanda_konteks
     from app.web.halaman_bertahap import kolom_daftar
     from html import escape
@@ -36,6 +149,8 @@ def pasang(response, request):
         extra = ('<link rel="stylesheet" href="/static/halaman-bertahap.css?v='+CAP_ASET+'">'
                  '<script src="/static/daftar-kosong-bertahap.js?v='+CAP_ASET+'"></script>')
     extra += '<script src="/static/kerangka-langsung.js?v='+CAP_ASET+'" defer></script>'
+    extra += '<script src="/static/riwayat-navigasi-native.js?v='+CAP_ASET+'" defer></script>'
+    extra += '<script src="/static/riwayat-detail-katalog.js?v='+CAP_ASET+'" defer></script>'
     script = ('<script src="/static/navigasi-daftar-bertahap.js?v='
               + CAP_ASET + '" data-konteks="' + konteks + '"'+data+'></script>').encode()
     response.body = response.body.replace(marker, extra.encode() + script + marker, 1)

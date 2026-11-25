@@ -1,0 +1,32 @@
+{
+  "versi": 1,
+  "sumber": "7802131c67533975c11fc084480eed51f3a73c6192df9ca3e2e98f93e54db062",
+  "variants": [
+    "ringkasan",
+    "penerimaan",
+    "proses",
+    "stok",
+    "pengambilan"
+  ],
+  "aset_sha256": "90a533a1932956bfb727b8c1dcc2e43ef9467224f4ca3a3d15b8526279cfd320",
+  "inputs": {
+    "app/services/jasa_pelanggan.py": "48b3d45c316aced8df279d398ce62c136c54417f000934eff85ecb48481ff6e6",
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/jasa_detail_catalog.py": "b37e2bcb058f848edcf532c9636dc84b42ef63b1e13560c243ad44df83e62ff2",
+    "app/web/jasa_detail_kerangka.py": "f96035075e2152f6521febcf8d313ead00ea547c7afccaf0342fa454048d55f1",
+    "app/web/layar_jasa.py": "25696cf6f7ae940aa7de449086b3bdb535f4c9fd0f7fdea910f0011ffd26f50a",
+    "app/web/static/jasa-detail-native.js": "d6d7ca43af096d95636051623fe7a44dcf571ae3dcfa7d10c70fa0e3b2160061",
+    "app/web/static/kerangka-jasa-detail-ui-runtime.js": "247d00c8b8053e3a617e5a5364ee1c12218b07be27f7cb0618a6ff77aac125c6",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
+    "app/web/templates/jasa_detail_kerangka.html": "b1119d1cf676c9ac745b0ba297e1d11af107e670fc7f60ffaa7b8d7ccdace20c",
+    "hmu_tampilan/static/jasa-kontrol.css": "8ea965e53a5df195ce68889506c0e45abef9596ad0868c9f888130ce789cd9cc",
+    "hmu_tampilan/static/jasa-kontrol.js": "0b61aba3ea3c24427e0ff3436aa4b7d999250e25d8d5a60e5a92a744f976dd7d",
+    "hmu_tampilan/static/jasa-pelanggan.css": "608dbcce2928908e549185e8f17d491a69e53e6b5d1dea0c2314a8aa0cf9d613",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/_jasa_kontrol.html": "6ea1d228b38d1f0dfb10942f12d10a93134ac5877d76a452c86d61285ef5c76e",
+    "hmu_tampilan/templates/_kontrol_halaman.html": "162d5616ed892ccb15d36d2408cc710abbbc2ac0605588a243cd2796c200d7d4",
+    "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
+    "scripts/buat_kerangka_jasa_detail.py": "acd8bb60678c98f35289000f13f54be628f80f765d2702ff0e2f5b7a81aafff3",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

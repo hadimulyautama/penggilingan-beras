@@ -1,8 +1,44 @@
 /* Registry hanya struktur native bagi konteks dokumen ini, bukan data/draf. */
 (function(){
  'use strict';
+ function themeReturn(root,address,origin){
+  if(typeof address!=='string'||!address.startsWith('/')||address.startsWith('//'))return false;
+  let u;try{u=new URL(address,origin);}catch(_){return false;}
+  if(u.origin!==origin||u.hash||u.pathname+u.search!==address)return false;
+  let changed=false;
+  for(const form of root.querySelectorAll('form.desktop-theme[action="/pengaturan/terik"]')){
+   if(form.getAttribute('method')?.toLowerCase()!=='post')continue;
+   const field=form.querySelector('input[type="hidden"][name="balik"]');if(!field)continue;
+   field.setAttribute('value',address);changed=true;
+  }
+  return changed;
+ }
+ if(typeof module==='object'&&module.exports){module.exports={themeReturn};return;}
+ function pendingVisibility(doc){
+  const roots=doc.getElementById('isi-halaman')?.querySelectorAll('[data-url][data-stamp]');
+  if(!roots?.length)return;
+  for(const root of roots)root.setAttribute('data-kerangka-native-ui','');
+  for(const old of doc.querySelectorAll('style[data-kerangka-native-visibility]'))old.remove();
+  const style=doc.createElement('style');style.setAttribute('data-kerangka-native-visibility','');
+  style.textContent='#isi-halaman [data-kerangka-native-ui] [hidden]{display:none!important}';
+  // SDK swaps the frame body, not inline head styles.
+  roots[0].prepend(style);
+ }
+ function currentChrome(result,address){
+  if(!result)return null;
+  // The source frame is a private native prototype. Correlation is already
+  // checked by its factory; only the existing theme return field follows
+  // the selected destination. No form action, CSRF or submission is changed.
+  const doc=new DOMParser().parseFromString(result.html,'text/html');
+  themeReturn(doc,address,location.origin);
+  pendingVisibility(doc);
+  return {...result,html:'<!doctype html>'+doc.documentElement.outerHTML};
+ }
  if(!window.PINDAH||typeof PINDAH.aturKerangkaLangsung!=='function')return;
  let hostLama=null,registry=null;
+ function riwayatLangsung(address,context,cap,token){
+  try{return window.PadiKerangkaRiwayatUI?.buat(address,decodeFrame(registry,'/barang-masuk'),context,cap,token)||null;}catch(_){return null;}
+ }
  function stokLangsung(pilihan,context,cap,token){
   if(!pilihan.alamat.startsWith('/stok'))return null;
   const u=new URL(pilihan.alamat,location.href),q=u.searchParams;
@@ -100,7 +136,7 @@
   for(const i of refs){if(!Number.isInteger(i)||i<0||i>=potongan.length)return null;panjang+=potongan[i].length;if(panjang>524288)return null;baris.push(potongan[i]);}
   return baris.join('');
  }
- PINDAH.aturKerangkaLangsung(function(pilihan){
+ function pilihKerangka(pilihan){
   // Script dapat diparse sebelum host di luar bingkai. Cari saat dipakai,
   // bukan membekukan null saat dokumen awal belum selesai diparse.
   const host=document.getElementById('padi-kerangka-langsung'),frame=document.querySelector('.bingkai'),sesi=document.getElementById('formulir-sesi');
@@ -108,10 +144,86 @@
   if(!host?.isConnected||!frame||!sesi?.dataset.token||!cap||host.dataset.cap!==cap||host.dataset.konteks!==frame.dataset.pindahKonteks||window.SESIFORM&&!SESIFORM.periksa())return null;
   if(host!==hostLama){try{registry=JSON.parse(host.textContent);hostLama=host;}catch(_){return null;}}
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
-  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat))return stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||detailLangsung(pilihan,registry.konteks,cap);
+  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat)){
+   const top=pilihan.alamat==='/'?window.PadiKerangkaBerandaUI:pilihan.alamat==='/muatan'?window.PadiKerangkaMuatanUI:null;
+   if(top){try{return top.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}}
+   if(['/barang-masuk','/pekerjaan'].includes(pilihan.alamat.split('?')[0])){
+    try{
+     const program=window.PadiFilterDaftarNative,prototype=program?.baseAddress(pilihan.alamat,location.origin);
+     const base=prototype&&decodeFrame(registry,prototype);
+     if(base)return program.buat(pilihan.alamat,base,registry.konteks,cap,sesi.dataset.token)||null;
+    }catch(_){return null;}
+   }
+   const history=riwayatLangsung(pilihan.alamat,registry.konteks,cap,sesi.dataset.token);if(history)return history;
+   if(pilihan.alamat.startsWith('/riwayat-')){
+    try{const detail=window.PadiKerangkaRiwayatDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(detail)return detail;}catch(_){return null;}
+    try{const viewer=window.PadiKerangkaProsesPDFUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(viewer)return viewer;}catch(_){return null;}
+   }
+   if(pilihan.alamat.split('?')[0]==='/stok/karung/detail'){
+    try{return window.PadiKerangkaKarungDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(['/stok/pk/detail','/stok-produk/detail','/stok-produk-jasa/detail'].includes(pilihan.alamat.split('?')[0])||pilihan.alamat.startsWith('/gudang/')){
+    try{return window.PadiKerangkaStockDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   // Resource identity comes from the currently visible native source, never
+   // from a route-shaped ID. Factories decline stale/hidden/foreign catalogs.
+   if(pilihan.alamat.startsWith('/barang-keluar/')){
+    for(const factory of [window.PadiKerangkaPengirimanDetailUI,window.PadiKerangkaRiwayatPengirimanUI]){
+     try{const result=factory?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token);if(result)return result;}catch(_){}
+    }
+    return null;
+   }
+   const families=[
+                   ['/proses-aktif/sosoh/',window.PadiKerangkaSosohUI],
+                   ['/proses-aktif/pengeringan/',window.PadiKerangkaPengeringanUI],
+                   ['/proses-aktif/pendinginan/',window.PadiKerangkaPengeringanUI],
+                   ['/jasa/pelanggan/',window.PadiKerangkaJasaDetailUI]];
+   for(const [prefix,factory] of families)if(pilihan.alamat.startsWith(prefix)){
+    try{return factory?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(pilihan.alamat.startsWith('/laporan/')||pilihan.alamat.split('?')[0]==='/kabar'){
+    try{return window.PadiKerangkaDokumenUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(['/pengaturan/gudang','/pengaturan/silo','/pengaturan/mesin','/pengaturan/jenis-proses'].includes(pilihan.alamat)){
+    try{return window.PadiKerangkaFasilitasParentUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(/^\/pengaturan\/mesin\/[1-9]\d*$/.test(pilihan.alamat)){
+    try{return window.PadiKerangkaFasilitasDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(pilihan.alamat.split('?')[0]==='/retur'||/^\/retur\/(?:[1-9]\d*|tiket\/[1-9]\d*)(?:\?|$)/.test(pilihan.alamat)){
+    try{return window.PadiKerangkaReturBacaUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(pilihan.alamat.split('?')[0]==='/pengguna'||pilihan.alamat.startsWith('/pengguna/')){
+    try{return window.PadiKerangkaPenggunaUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(['/pengaturan/peran','/pengaturan/akses','/pengaturan/sebab-berhenti','/pengaturan/mutu','/pengaturan/kledo','/pengaturan/sistem'].includes(pilihan.alamat)){
+    try{return window.PadiKerangkaPengaturanDetailUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(pilihan.alamat==='/pengaturan/alat'){
+    try{return window.PadiKerangkaPengaturanAlatUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(['/pengaturan/spesifikasi-beras','/pengaturan/hasil-samping'].includes(pilihan.alamat)){
+    try{return window.PadiKerangkaPengaturanMasterUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   if(['/pengaturan','/pengaturan/sesi'].includes(pilihan.alamat)){
+    try{return window.PadiKerangkaPengaturanUI?.buat(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   // Modul opsional tidak boleh menggagalkan kerangka Stok/Barang Masuk.
+   if(['/barang-keluar','/jasa','/pengaturan/akun','/laporan'].includes(pilihan.alamat.split('?')[0])||pilihan.alamat.startsWith('/proses-aktif/giling/')){
+    try{return window.PadiKerangkaUI?.buat?.(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   const stock=stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token);if(stock)return stock;
+   if(pilihan.alamat.split('?')[0]==='/stok'){
+    try{return window.PadiKerangkaUI?.buat?.(pilihan.alamat,decodeFrame(registry,'/barang-masuk'),registry.konteks,cap,sesi.dataset.token)||null;}catch(_){return null;}
+   }
+   return detailLangsung(pilihan,registry.konteks,cap);
+  }
   // Validasi seluruh indeks dan ukuran sebelum join. Versi/rujukan rusak
   // kembali ke navigasi native, bukan HTML parsial atau alamat tebakan.
   const html=decodeFrame(registry,pilihan.alamat);if(!html)return null;
   return {versi:1,alamat:pilihan.alamat,konteks:registry.konteks,cap:cap,html};
+ }
+ PINDAH.aturKerangkaLangsung(function(pilihan){
+  return currentChrome(pilihKerangka(pilihan),pilihan.alamat);
  });
 })();

@@ -6,7 +6,11 @@
 {% import "_proses_visual.html" as visual with context %}
 {% block judul %}Pendinginan aktif {{ d.kode }}{% endblock %}
 {% block isi %}
-<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');@import url('/static/detail_pengeringan.css?v=1');@import url('/static/detail_pendinginan.css?v=1');
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/proses_aktif.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/detail_pengeringan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/detail_pendinginan.css?v={{ VERSI }}">
+<style>
 .rhpd #tindakan-proses.cold-actions{padding:0}
 .cold-actions .pilihan__satu{flex:none;width:auto;display:flex;flex-direction:column;gap:4px;min-height:44px;padding:12px 16px;border:1px solid var(--pd-line);border-radius:8px;background:var(--pd-sheet);text-decoration:none}
 .cold-actions .pilihan__satu--utama{background:var(--pd-green);color:var(--pd-sheet);border-color:var(--pd-green)}

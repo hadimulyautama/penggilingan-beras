@@ -1,0 +1,38 @@
+{
+  "versi": 1,
+  "sumber": "45007c83e3f6a0b15826bd9999160abb43d7a8bbcea17330cffb8a9f5209db18",
+  "variants": [
+    "staf",
+    "staf-super",
+    "staf-detail",
+    "pelanggan",
+    "pelanggan-detail"
+  ],
+  "aset_sha256": "125e758ede983581f1344497972a2ce192db547f2499e94fccedb6f26d3ada50",
+  "inputs": {
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/native_detail_chrome.py": "6f3e46c7c974fc72cdc58da81076675825e8eef7f74718520adcc69a7b18d3f0",
+    "app/web/pengguna.py": "323667ea1a1a087430346f9f558fd1272a5aa48ca2e86c98440541c5cf66aa34",
+    "app/web/pengguna_baca_native.py": "4924249be9cf770acdb8a3899c5f76ad8c5a0ffbbf58710932fe06cf273c765a",
+    "app/web/pengguna_baca_schema.py": "a52ba3b3639a191188edd19041bc87178664b3676fe46d0d3b664dc3c7083d2c",
+    "app/web/portal/admin.py": "39a1f88717b2b62aae2b85ffd50435adf37e77f17fc1607651ff8c749e0632a7",
+    "app/web/security.py": "abb3bae767967130da7b5e2149e8e3afe324c2244e5bb00142c176d2a8f141a8",
+    "app/web/static/akun-pelanggan.css": "1b69d333f8dd70561aba1528b6e023d449ecffceef2ea0c41cffcf13b921801c",
+    "app/web/static/kerangka-pengguna-ui-runtime.js": "77ba8f66ac44fe728810082f164fb7655fdbdebe0fcb31584a6c2bf6f17fea89",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
+    "app/web/static/pengguna-baca-native.js": "eba9a7d21dcb47c866ad1818ceb9963cba0bc3dddd1874a53ba7e5152b4c9ea9",
+    "app/web/templates/_pengguna_baca_metadata.html": "f9ed6809769433f189f0f2c29e9af75c4991da83ddd2d77f9ee4063d888b3386",
+    "app/web/templates/_pengguna_jenis.html": "3c643169a3e4171b816f757e2ce4fd7c276cb87f91d26ea520bb6543c6de2885",
+    "app/web/templates/pengguna_baca_native.html": "d2bee8781ff5cacaa8447a4a07908737adb37436e882ee608cc9bec0a306876d",
+    "app/web/templates/pengguna_kelola.html": "c90e10f8206e5334460c4f1cd131d2bfc6de0de07ceb795b528aa1886e44a13a",
+    "app/web/templates/pengguna_pelanggan.html": "60343a504ace0068c194c75d71d2a701e41ea82b74a7424f8f77aacee88ef91e",
+    "app/web/templates/pengguna_ubah.html": "9c471eda306dbaf4baab8370aba4cf025bac8545c99211e710dd786dde000d44",
+    "hmu_identitas/peran.py": "73544af0e271e85ce87937e4cb184cad069be78b4a86ac335ce67b08605faa89",
+    "hmu_tampilan/static/pindah.js": "7abe3ed02261f832e62d71766cbf7f9a6988192fae9e00dcf06d456c8232c90a",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
+    "hmu_tampilan/templates/pengguna.html": "746afa45f9565b5eed76fccd79188ebf212c9fc123e2a60030cc3e3785bf783b",
+    "scripts/buat_kerangka_pengguna.py": "29fe4abf8a01014abd8af47e357d740cee9aa73a6b10967c854266b45f8dfe51",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

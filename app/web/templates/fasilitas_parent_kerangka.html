@@ -1,0 +1,25 @@
+{% extends 'base.html' %}{% block judul %}{{ FP_SHELL.title }}{% endblock %}
+{% from '_fasilitas_parent_fields.html' import input,active,identity %}
+{% block isi %}
+{% if FP_SHELL.variant!='gudang' %}<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">{% endif %}
+<section{% if FP_SHELL.variant!='gudang' %} class="pg pg-fasilitas"{% endif %} data-fasilitas-parent-kerangka data-url="{{ FP_SHELL.alamat }}" data-stamp="{{ FP_SHELL.stamp }}" data-record-ready="0">
+{% if FP_SHELL.variant!='gudang' %}<a class="pg-kembali" href="/pengaturan">← Pengaturan</a>{% endif %}
+<p class="{{ 'bantu' if FP_SHELL.variant=='gudang' else 'pg-lingkup' }}">Pengaturan / Perusahaan &amp; fasilitas{% if FP_SHELL.variant=='jenis-proses' %} / Pengaturan lanjutan{% endif %}</p><h1>{{ 'Gudang' if FP_SHELL.variant=='gudang' else FP_SHELL.title }}</h1>
+{% if FP_SHELL.variant=='gudang' %}
+<div class="kartu"><h2 style="margin-top:0">Daftar gudang</h2><p class="bantu">Nama boleh diubah kapan saja. Gudang selepan dan penyosohan tetap terhubung ke alur produksinya meski namanya berubah.</p><div class="daftar-standar"><p class="bantu">Daftar gudang belum dibaca.</p></div></div>
+<div class="kartu" style="margin-top:14px"><h2 style="margin-top:0">Tambah gudang</h2><p class="bantu">Gudang baru tercatat sebagai lokasi. Agar menjadi bagian alur produksi, alur kerjanya perlu dihubungkan lebih dahulu.</p><div class="grup">{{ input('Nama gudang',slot='fp-gudang-nama') }}{{ input('Alamat','textarea',slot='fp-gudang-alamat') }}<div class="grup grup--dua"><div>{{ input('Latitude',decimal=true,slot='fp-gudang-lat') }}</div><div>{{ input('Longitude',decimal=true,slot='fp-gudang-lon') }}</div></div><button class="btn btn--utama" type="button" disabled aria-describedby="fp-pending">Tambah gudang</button></div></div>
+<a href="/pengaturan" class="btn">Kembali ke Pengaturan</a>
+{% elif FP_SHELL.variant=='silo' %}
+{% for group in ['Silo gabah','Silo bahan penyosohan'] %}<div><span class="lbl">{{ group }}</span><div class="kartu daftar-standar"><p class="bantu">Daftar silo belum dibaca.</p><p class="bantu" style="margin-top:8px">{{ 'Silo tidak berbatas isinya, jadi tidak ada kapasitas yang perlu diisi.' if loop.first else 'Bekatul tidak termasuk dalam pilihan filter komoditas silo Gudang 2.' }}</p></div>
+<div class="grup" style="margin-top:12px">{% if loop.first %}{{ input('Gudang','select') }}{% endif %}<div>{{ input('Nama silo baru',slot='fp-silo-nama-'~loop.index) }}<p class="bantu" style="margin-top:6px">Cukup hurufnya — akan tersimpan sebagai “Silo C”.</p></div><button class="btn btn--utama" type="button" disabled aria-describedby="fp-pending">Tambah silo</button></div></div>{% endfor %}
+{% elif FP_SHELL.variant=='mesin' %}
+<p>Pilih mesin untuk mengatur identitas, gudang, dan hubungan prosesnya.</p><section class="pg-grup"><p class="bantu">Gudang, mesin dan line produksi belum dibaca.</p></section>
+<details class="kartu"><summary>Tambah mesin / line</summary><p>Untuk penggilingan atau penyosohan, tambahkan line. Untuk pengeringan, tambahkan dryer beserta line-nya.</p>{{ identity(true) }}</details>
+<details class="kartu"><summary>Tambah dryer</summary><div style="margin-top:1rem"><div class="fasilitas-isian">{{ input('Nama dryer',label_class='') }}{{ input('Gudang','select',label_class='') }}{{ input('Kapasitas (kg)',decimal=true,label_class='') }}</div><button class="btn btn--utama" type="button" disabled aria-describedby="fp-pending">Tambahkan dryer</button></div></details>
+{% elif FP_SHELL.variant=='jenis-proses' %}
+<p>Pendaftaran jenis proses tidak otomatis menyediakan alur produksi baru. Pelaksanaan tetap memerlukan dukungan bahan, hasil, stok, QC, dan validasinya.</p><p class="bantu">Daftar jenis proses belum dibaca.</p><details class="kartu"><summary>Tambah jenis proses</summary>{{ identity() }}</details>
+{% endif %}
+<p class="bantu" id="fp-pending">Nilai, pilihan dan tindakan menunggu data serta akses terbaru. Tidak ada perubahan selama memuat.</p><p role="status" aria-live="polite" data-fp-status>Memuat pengaturan…</p><button class="btn" type="button" data-fp-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca bertahap. Tidak ada perubahan yang dikirim selama memuat.</p></noscript>
+</section><script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script><script src="/static/fasilitas-parent-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

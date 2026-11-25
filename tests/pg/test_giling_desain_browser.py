@@ -22,10 +22,13 @@ async def test_editor_tunggal_tab_draf_qc_sumber_stok_dan_simpan(pg,hasil,width)
   before=await fakta(pg,pr)
   async with browser(c,width) as page:
    await page.goto('https://uji/proses-aktif/giling/'+pr.kode_proses)
-   await page.locator('.sr-design-tabs').wait_for();assert await page.locator('[data-sr-tab]').count()==5
+   # The early structure intentionally shares native tab styling, but is not
+   # the initialized editor. Wait for all five tabs on the actual native root.
+   await expect(page.locator('[data-giling-ringkas] .sr-design-tabs')).to_be_visible()
+   await expect(page.locator('[data-giling-ringkas] [data-sr-tab]')).to_have_count(5)
    await expect(page.locator('[data-sr-panel=ringkasan]')).to_contain_text('5.900 kg')
    assert await page.locator('[data-sr-tab=ringkasan]').evaluate("e=>getComputedStyle(e).backgroundColor")=='rgba(0, 0, 0, 0)'
-   out=Path(os.getenv('BUKTI_GILING_DESAIN','../bukti'));out.mkdir(parents=True,exist_ok=True)
+   out=Path(os.getenv('BUKTI_GILING_DESAIN') or os.getenv('DETAIL_OUT') or '../bukti');out.mkdir(parents=True,exist_ok=True)
    await page.screenshot(path=str(out/f'ringkasan-{width}.png'),full_page=True)
    await page.locator('[data-sr-tab=ringkasan]').focus();await page.keyboard.press('ArrowRight')
    assert await page.locator('[data-sr-tab=bahan]').get_attribute('aria-selected')=='true'

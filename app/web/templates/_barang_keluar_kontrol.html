@@ -1,16 +1,14 @@
 {% from '_pengiriman_kontrol.html' import kontrol_pengiriman with context %}
 {% set filter_jumlah = (1 if status_filter else 0) + (1 if sejak_filter else 0) %}
 {% call(slot) kontrol_pengiriman('Barang Keluar', 'keluar', filter=true, filter_jumlah=filter_jumlah) %}
-{% if slot=='tindakan' %}
-{% if BOLEH_PERINTAH %}
-<details class="bk-buat" data-bk-buat><summary class="btn" aria-label="Buat pengiriman" aria-haspopup="true"><span class="bk-buat-label">Buat pengiriman</span><span class="bk-buat-ikon" aria-hidden="true">＋</span><span class="bk-buat-panah" aria-hidden="true">⌄</span></summary><div class="bk-buat-opsi"><a href="/barang-keluar/baru" data-utuh>Buat perintah barang keluar</a><a href="/barang-keluar/pengambilan-jasa" data-utuh>Pengambilan barang jasa</a></div></details>
-{% endif %}
-{% elif slot=='alat' %}
+{% if slot=='alat' %}
 <div class="kontrol-pencarian" data-pengiriman-alat><button class="kontrol-filter filter-berikon" type="button" data-bk-buka="bk-filter" aria-haspopup="dialog">Filter{% if filter_jumlah %} · {{ filter_jumlah }}{% endif %}</button>
 <form class="kontrol-pencarian__form" method="get" action="/barang-keluar" role="search">
 {% for key,value in request.query_params.items() %}{% if key not in ('q','sebelum','buka','nilai') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
 <label class="kontrol-pencarian__field"><span class="sr-only">Cari kode, pelanggan, atau plat</span><input class="kontrol-pencarian__input" type="search" name="q" aria-label="Cari kode, pelanggan, atau plat" placeholder="Kode, pelanggan, atau plat" value="{{ pencarian }}" maxlength="200"></label><button class="kontrol-pencarian__submit cari-berikon" type="submit">Cari</button>
-</form></div>
+</form>
+{% if BOLEH_PERINTAH %}<details class="bk-buat" data-bk-buat><summary class="btn" aria-label="Buat pengiriman" aria-haspopup="true"><span class="bk-buat-label">Buat pengiriman</span><span class="bk-buat-ikon" aria-hidden="true">＋</span><span class="bk-buat-panah" aria-hidden="true">⌄</span></summary><div class="bk-buat-opsi"><a href="/barang-keluar/baru" data-utuh>Buat perintah barang keluar</a><a href="/barang-keluar/pengambilan-jasa" data-utuh>Pengambilan barang jasa</a></div></details>{% endif %}
+</div>
 
 {% elif slot=='cakupan' %}
 <div class="bk-cakupan" role="status"><span><strong>{{ n_perintah }}</strong> menunggu pengeluaran · <strong>{{ n_dimuat }}</strong> menunggu verifikasi</span>{% if status_filter %}<span class="bk-chip">{{ {'perintah':'Menunggu pengeluaran','dimuat':'Menunggu verifikasi','selesai':'Terverifikasi','batal':'Dibatalkan'}.get(status_filter,status_filter) }}</span>{% endif %}{% if sejak_filter %}<span class="bk-chip">Sejak {{ sejak_filter }}</span>{% endif %}</div>

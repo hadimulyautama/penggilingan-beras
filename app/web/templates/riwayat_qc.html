@@ -12,17 +12,16 @@
 <div data-rqd-category-slot></div>
 <section class="riwayat-detail__card"><div class="rhs-mass"><div><span>Lot atau proses</span><strong>{{ rows|length }}</strong></div><div><span>Pencatatan QC</span><strong>{{ jumlah_putaran.n }}</strong></div></div></section>
 <section>
-
-  {% if catatan_kosong %}
-    <div class="kosong riwayat-empty"><div><h2>Belum ada catatan QC</h2><p class="bantu">{{ catatan_kosong }}</p></div></div>
-  {% elif not rows %}
-    <div class="kosong riwayat-empty"><div><h2>Belum ada catatan QC</h2><p class="bantu">Catatan QC yang disimpan akan muncul di halaman ini.</p></div></div>
-  {% else %}
     <div class="tabel-standar tabel-standar--grid" style="--tabel-kolom:minmax(180px,1.2fr) minmax(160px,1fr) minmax(115px,.8fr) minmax(220px,1.5fr) 100px 24px">
       <div class="tabel-standar__scroll">
         <div class="tabel-standar__kepala" role="row">
           <span>Batch / proses · waktu</span><span>Asal bahan</span><span>Nomor polisi</span><span>Rata-rata QC</span><span>Putaran QC</span><span aria-hidden="true"></span>
         </div>
+  {% if catatan_kosong or not rows %}
+      <div class="tabel-standar__item"><div class="tabel-standar__baris" role="row"><div role="cell" aria-colspan="6" style="grid-column:1/-1">
+        <h2>Belum ada catatan QC</h2><p class="bantu">{{ catatan_kosong or 'Catatan QC yang disimpan akan muncul di halaman ini.' }}</p>
+      </div></div></div>
+  {% else %}
       {% for row in rows %}
         <div class="tabel-standar__item">
           <a class="tabel-standar__baris" href="/riwayat-qc/{{ jenis }}/{{ row.ref|urlencode }}" aria-label="Detail QC {{ row.ref }}">
@@ -44,9 +43,9 @@
           </a>
         </div>
       {% endfor %}
+  {% endif %}
       </div>
     </div>
-  {% endif %}
 </section>
 {{ panduan_qc() }}
 </main>

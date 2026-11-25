@@ -1,5 +1,5 @@
 {% from '_ikon_portal.html' import ikon_portal %}
-<!doctype html><html lang="id" class="portal-document"><head>
+<!doctype html><html lang="id" class="portal-document" data-portal-cap="{{ VERSI }}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="formulir-sesi" content="{{ CSRF }}"><meta name="robots" content="noindex,nofollow">
 <title>{{ title }} · PadiFlow Pelanggan</title>
@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-alur16">
 <script src="/static/portal-pelanggan.js?v={{ VERSI }}-alur14" defer></script>
 <script src="/static/keadaan-baca.js?v={{ VERSI }}"></script>
+<script src="/static/kerangka-portal-ui.js?v={{ VERSI }}" defer></script>
+<script src="/static/kerangka-portal-detail-ui.js?v={{ VERSI }}" defer></script>
 <script src="/static/portal-navigasi.js?v={{ VERSI }}-6" defer></script>
 </head><body data-portal-akun="{{ reader.account_id }}" class="padiflow-ui portal-customer {{ 'terik' if light }}">
 <a class="portal-skip" href="#isi-pelanggan">Lewati ke isi</a>
@@ -29,4 +31,5 @@
 <!-- Native page styles are loaded above this final shared theme contract. -->
 <link rel="stylesheet" href="/static/komponen-portal.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/portal-pelanggan.css?v={{ VERSI }}-alur16">
+{% if PORTAL_KERANGKA %}<script type="application/json" id="padi-portal-kerangka">{{ PORTAL_KERANGKA|tojson }}</script>{% endif %}
 </body></html>

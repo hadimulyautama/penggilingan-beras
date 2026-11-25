@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from bs4 import BeautifulSoup
 from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader
 from starlette.requests import Request
 
@@ -59,6 +60,15 @@ async def test_api_mengulang_native_dan_bypass_tidak_dari_query(monkeypatch):
     assert request.url.path=='/api/halaman-bertahap/jasa'
 
 
+def _kerangka_jasa_tanpa_judul_transisi(html):
+    document = BeautifulSoup(html, 'html.parser')
+    roots = document.select('[data-jasa-bertahap]')
+    assert len(roots) == 1 and roots[0].get('aria-label') == 'Pesanan Jasa'
+    assert not roots[0].select('h1'), 'Judul transisi tidak boleh muncul sebelum daftar native.'
+    assert len(roots[0].select('[data-jasa-kontrol]')) == 1
+    return roots[0]
+
+
 def test_kerangka_memakai_kontrol_native_dan_nilai_belum_dibaca():
     root=Path(__file__).parents[1]
     env=Environment(loader=ChoiceLoader([
@@ -68,7 +78,7 @@ def test_kerangka_memakai_kontrol_native_dan_nilai_belum_dibaca():
     html=env.get_template('jasa_bertahap.html').render(
         JASA_SHELL=dict(stamp='fixture-stamp',url='/api/jasa-daftar',filtered=False),
         tapis='',cari='',STATUS_PILIHAN=[('','Semua pesanan'),('berjalan','Berjalan')])
-    assert '<h1>Pesanan Jasa</h1>' in html
+    _kerangka_jasa_tanpa_judul_transisi(html)
     assert '<h3>Bahan titipan</h3>' in html
     assert 'name="cari"' in html and 'name="status"' in html
     assert 'data-jasa-baca-ulang hidden' in html
@@ -78,6 +88,17 @@ def test_kerangka_memakai_kontrol_native_dan_nilai_belum_dibaca():
     assert 'disabled aria-describedby="jasa-detail-alasan"' in html
     assert 'href="/jasa/pelanggan/' not in html
     assert ' 0 kg' not in html and ' 0 pelanggan' not in html
+
+
+@pytest.mark.parametrize('body', [
+    '<h1>Pesanan Jasa</h1><section data-jasa-kontrol></section>',
+    '<h1 class="judul-besar">Pesanan Jasa</h1><section data-jasa-kontrol></section>',
+    '<p>Memuat data...</p>',
+])
+def test_penjaga_jasa_menolak_judul_transisi_atau_kontrol_hilang(body):
+    with pytest.raises(AssertionError):
+        _kerangka_jasa_tanpa_judul_transisi(
+            '<section data-jasa-bertahap aria-label="Pesanan Jasa">' + body + '</section>')
 
 
 def test_penanda_berubah_untuk_aktor_perusahaan_dan_gudang():

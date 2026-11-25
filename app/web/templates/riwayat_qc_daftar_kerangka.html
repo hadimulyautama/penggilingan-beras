@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block judul %}{{ RIWAYAT_META.title }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-qc-desain.css?v={{ VERSI }}">
+<main class="riwayat-detail rhs rqd rqd-list" data-riwayat-qc>
+{% from '_riwayat_qc_alat.html' import panduan_qc with context %}
+<div data-rqd-category-slot></div>
+<section data-riwayat-daftar-native aria-label="{{ RIWAYAT_META.title }}" data-stamp="{{ RIWAYAT_STAMP }}" data-url="{{ RIWAYAT_URL }}">
+<section class="riwayat-detail__card"><div class="rhs-mass"><div><span>Lot atau proses</span><strong>Belum dibaca</strong></div><div><span>Pencatatan QC</span><strong>Belum dibaca</strong></div></div></section>
+{% include '_riwayat_daftar_kerangka_isi.html' %}
+</section>
+{{ panduan_qc() }}
+</main>
+<script src="/static/riwayat-qc-desain.js?v={{ VERSI }}"></script>
+{% include '_riwayat_daftar_kerangka_script.html' %}
+{% endblock %}

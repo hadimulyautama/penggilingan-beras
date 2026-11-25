@@ -1,0 +1,28 @@
+{
+  "versi": 1,
+  "sumber": "85705829f33166818501cd48ed3b27193bc47b9078df1c792a42028e879df23a",
+  "variants": [
+    "/muatan"
+  ],
+  "aset_sha256": "13f31d1838bc1ba4fdb92b72441f917be9a2f1d32fac0d66fb716fac35ff5051",
+  "inputs": {
+    "app/peran.py": "b22181c244dd824b82ccc2ecee4c6e46066a90b4dc12217de16b535f0cb9549e",
+    "app/web/api.py": "937b6f948e6d2fdc72d868669dda73891c14a3ce201060e780f602da2d254fc5",
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/muatan.py": "14cdd16cb0d9d6d8bf751d3475d850fa4153997e848e4cefe94a52bfdd9833b5",
+    "app/web/muatan_kerangka.py": "34dd3ddd404686dcd3037a14e9ca043f0ec3485e442dce808dde003b8b0cdd00",
+    "app/web/selesai_muatan.py": "77afb6c5d45700f37c5eb6e71a83cb10eaade42109abdd4e3e79586aa13fdadb",
+    "app/web/static/kerangka-muatan-ui-runtime.js": "87281bb794d4ed57e200714d08bd38644b598081481f08dfb1aa4effe6b73fef",
+    "app/web/static/muat-ringkas.css": "cf12251934fb86a4fc838d88015b188b8084b54b79c15fc270459347b8acd34d",
+    "app/web/static/muat-ringkas.js": "7128f5f6b4911d5002936601b707c3018ec64bc35292db22ca2214d056e5b4c4",
+    "app/web/static/muatan-native.js": "9f040fea909b51ba6708a6f59ed29dc27511920f8154d60da800857bee6e0c61",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
+    "app/web/templates/_lembar_muatan.html": "5a0a6a2713f384e3dda793e8ffb59a76d9569aee4b7fbe0a45e754f80d454760",
+    "app/web/templates/catat_muatan.html": "0296029beb4d3448ee685663a07d087dc2f18ea2bdfdeb83aceb5d6dede054fa",
+    "app/web/templates/muatan_kerangka.html": "482d9eed8ce55f30a0feda8ab55757de97413a530c3f2e21e29be43f194732d1",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
+    "scripts/buat_kerangka_muatan.py": "c718acce6a2f85acc5a50530a413a56332150a34d936e308a79a197cfdf61250",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

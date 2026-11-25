@@ -1,0 +1,28 @@
+{
+  "versi": 1,
+  "sumber": "00b757a870f98b607d3c8ab5198fb6faf4ba3d896575d829c4d714194a912acd",
+  "variants": [
+    "admin",
+    "operator"
+  ],
+  "aset_sha256": "913ba8f5ef2d5f6689fbba628a8e6328dec03d5efbec79c426372ce81a93b007",
+  "inputs": {
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/sosoh_native_html.py": "f681919d28648fb2d0ccedebf05ba20f32424488d46449c63bfa7b7989bc674b",
+    "app/web/static/kerangka-sosoh-ui-runtime.js": "1b5cb768303db0603668c0d4904acf88a823b1ad65cfd259288dadf3aedf3db3",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
+    "app/web/static/riwayat.css": "21fa1ff357afc661b0392e2317182d3338a2938b48d7eb91a7c4e99c2c457071",
+    "app/web/static/sosoh-desain.css": "4f9a78fa32b14bb93609bc6fd8e0b3cc5088d21990ecfa48a45b1f6b23e91dcf",
+    "app/web/static/sosoh-native-html.js": "6b2cd6a1d33daac23098b06f2161247270f9bc0034e6560252ff8abe3bfe9725",
+    "app/web/static/sosoh-ringkas.css": "dc9f265d6dd6847e1b00f23132af624319b83f72e80f576a56e5d42c341e6032",
+    "app/web/templates/_qc_sosoh.html": "b1cb8c57e13b5f554f7d0b047a8d0375778b62c0952a0e268d91bc21257e5e2d",
+    "app/web/templates/sosoh_native_html.html": "72b0f43aee41d1d014e2845f0e84e8afa5dcfbe4e0fb2bf41cdd458dc55790ae",
+    "hmu_tampilan/static/qc-sosoh.css": "0df3de2802a56db54718b44c9cdfef203a876072325f980a867a2fb1c922be8d",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/_panduan.html": "f5d53aed4cbe75a90160d8628d8bce0c3f6815eb69213d61a03a6a842cb05bf5",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
+    "scripts/buat_kerangka_sosoh.py": "3a597ece46f0ff65a5f2f340e0891370567095b79f018c31dc78960710ba5d7c",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621",
+    "scripts/stock_sosoh_native_chrome.py": "8a1c7f47422c8d3f75373bfa2e8a7996bdd32a9675f267f0ee97d51b3d446d4e"
+  }
+}

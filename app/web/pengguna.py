@@ -132,7 +132,12 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
 
 @router.get("/pengguna")
 async def halaman_pengguna(request: Request, _=Depends(butuh_super)):
-    return render(request, "pengguna_kelola.html", **await _muat())
+    from app.web.pengguna_baca_native import catat_guard,kerangka
+    from app.web.pengguna_baca_native import pasang_native
+    catat_guard(request,_,'staf')
+    pending=await kerangka(request,_,jenis='staf')
+    if pending is not None:return pending
+    return await pasang_native(request,_,render(request, "pengguna_kelola.html", **await _muat()))
 
 
 @router.post("/pengguna/buat")
@@ -341,19 +346,31 @@ async def halaman_ubah(request: Request, akun_id: int, _=Depends(butuh_super)):
     yang naik jadi staff harus didaftarkan ulang sebagai orang kedua, dan
     seluruh catatan lamanya tertinggal atas nama yang pertama.
     """
+    from app.web.pengguna_baca_native import catat_guard,kerangka,permintaan,spesifikasi,akun_native
+    from app.web.pengguna_baca_native import pasang_native
+    catat_guard(request,_,'staf')
+    early=bool(permintaan(request) and akun_native(request,_) and spesifikasi(request.url.path,request.url.query))
     async with SessionLocal() as db:
         a = (await db.execute(
             select(ProduksiAkun).options(selectinload(ProduksiAkun.user))
             .where(ProduksiAkun.id == akun_id)
         )).scalars().first()
         if a is None:
-            return render(request, "pengguna_kelola.html",
-                          **await _muat(pesan_err="Akun tidak ditemukan."))
-        jml_admin = await _jumlah_admin(db)
-    return render(request, "pengguna_ubah.html", a=a, PERAN=PERAN, _MODE=_MODE,
+            return await pasang_native(request,_,render(request, "pengguna_kelola.html",
+                          **await _muat(pesan_err="Akun tidak ditemukan.")))
+        if not early:
+            jml_admin = await _jumlah_admin(db)
+    if early:
+        # Row native sudah terbaca satu kali. Lepas koneksi baca sebelum
+        # metadata menu meminta SessionLocal lain; penulis tidak disentuh.
+        pending=await kerangka(request,_,jenis='staf',staff_row=a)
+        if pending is not None:return pending
+        async with SessionLocal() as db:
+            jml_admin = await _jumlah_admin(db)
+    return await pasang_native(request,_,render(request, "pengguna_ubah.html", a=a, PERAN=PERAN, _MODE=_MODE,
                   jml_admin=jml_admin, kembali="/pengguna",
                   pesan_err=_ERR_UBAH.get(request.query_params.get("err", "")),
-                  pesan_ok=_OK_UBAH.get(request.query_params.get("ok", "")))
+                  pesan_ok=_OK_UBAH.get(request.query_params.get("ok", ""))))
 
 
 _ERR_UBAH = {

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "baseline_commit": "05d3651accc0f012909bc21da6b9e131c62b1ca4",
+  "modules": {
+    "app/web/layar_retur.py": {
+      "blob": "ede2b3f883c855c91cb9ca7662a38463f9573811",
+      "source_sha256": "960535863f51fab37cc83c88327e73bc8e51ccbeceeb31ee87314ec1c36a57b1",
+      "functions": {
+        "_pesan_url": "8845f490b98a602bd4a460edee2f71fb97016404f7175c20e8974017602ae7b2",
+        "_boleh": "585295b5d814d4f9abf4fb22f007c79b876030d647281ffa17831aa67621c3b0",
+        "_siapkan": "22896590c8d89d291099a4c110c79fdf142c0c9affc37d596a0e81c20e764899",
+        "halaman_retur": "31903e0ef11c003e02b5f644eaf90f85a39430a298c81281b2057243e9b5ecd2",
+        "detail_retur": "9c9af4444e6264501799913923fdc67ea5526f94aab670aad38273ab00b62b08",
+        "terima_retur": "5c619e46404ef8c3b32626e08c1c308da8d5def6bc8527b44be10f1a0c4805f8"
+      },
+      "envelope": "d72fef18e2a6ad333591ac49d4f65063ef5b6bf06fb41a56289c54c74d165ba8"
+    },
+    "app/web/layar_retur_asal.py": {
+      "blob": "b31e239733fe2576e1b2857e8ff215210ff9d7d2",
+      "source_sha256": "ac4a14722ce04dc5226d442b5dc95ef6df08bcd3d7ee6c3848247252b2ce2a20",
+      "functions": {
+        "wajib": "18e526bd17a6346bcb921143778636aaf88927c504d9d46c9b87cc8f402d3a8a",
+        "tiket_retur": "7399bdc55ff91a091b96e93f6c6aa45e5e7b07806660fe80b0681120a9675d01",
+        "formulir": "6b83b4a8e272d6a47139717deb11081b61cbc3518acba9c368fac4a44b89ff38",
+        "simpan": "a042cd38b95c3fc5b8a69e2c1d569231a527f0fb85def82c6c197140acd6651e",
+        "verifikasi": "07ce0fa9402cf88179ca46af38320cdf0b8a381569de629bb6beabdb4e7e34c6",
+        "batalkan": "fbf32627704f38c47c00dda4bdfa2847db445dd3f0aa4c2d7609807e6324c7c0"
+      },
+      "envelope": "a382034669e17c943422c5936bf3e58237f488ba096fe0e18cf0cb65c0aac72c"
+    }
+  },
+  "untouched_sha256": {
+    "app/web/templates/retur_daftar.html": "70d59642c5a99536f1c9c9791ace18f9f53ab4e4284e288c07a49dc6d9ae99ba",
+    "app/web/templates/retur_detail.html": "87bcfb2ca0bbf23ded8dccc9dc1ad82d9dcf3be335010a1b7e4b55b6476eb1cc",
+    "app/web/templates/retur_tiket.html": "071136bd8215594026615c962591c0b67f8356287107f4f267c6f860186916fc",
+    "app/web/templates/retur_asal.html": "5cff6f0f255aa43c9f79c944dd2450d1210f0264732b820dbe47faf9b764b054",
+    "app/web/static/retur.js": "5083d89456786fc98c2ca38887117b1c4abb00866bbe38e5985d7cbfa72a21a5",
+    "app/web/static/detail_kirim_retur.js": "77b7306b8b2a3889f2109855f8cad57a4dd1a1e240f4e4c68222a09f20c4d750",
+    "app/web/retur_supplier.py": "94a8ec0844fd3309afc02e1fea592a2bad00f01519992713ae9325e1f31cd2f5",
+    "app/web/retur_supplier_koreksi.py": "9b4020319a4f7a50c1a507b6fd20d62efcdef91fbee586c34704b54b80b36c8e",
+    "app/web/riwayat_retur_supplier.py": "435803e3e185f29f477c90c65c3880cd4562e7ea65a68992b7871036bf4f4834"
+  }
+}

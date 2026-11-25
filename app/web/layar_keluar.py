@@ -65,7 +65,8 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     # Periksa izin positif, bukan hanya menolak view G1: operator tanpa
     # gudang juga tidak berhak membaca daftar maupun URL detail langsung.
     boleh_perintah = can_see_financials(akun.user)
-    if not is_customer_read(request) and not (boleh_perintah or await _is_g2_operator(akun.user)):
+    from app.web.pengiriman_bertahap import boleh_baca
+    if not is_customer_read(request) and not await boleh_baca(akun.user):
         pesan = ("Pengiriman tersedia untuk Admin dan Operator Gudang 2. "
                  "Pilih gudang kerja melalui menu Kerja di gudang.")
         if "application/json" in request.headers.get("accept", "") and "text/html" not in request.headers.get("accept", ""):
@@ -96,14 +97,37 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     draf_saya = []
     from app.web.stok_navigasi import pelanggan_diminta
     pid=pelanggan_diminta(request)
+    from app.web.halaman_bertahap import memakai_kerangka
+    if (transaksi_id is None and memakai_kerangka(request,'pengiriman')
+            and not any(request.query_params.get(k) for k in ('buka','nilai','tiket'))):
+        from app.web.pengiriman_bertahap import kerangka
+        return await kerangka(request,akun,boleh_perintah=boleh_perintah,boleh_muat=boleh_muat,
+            pencarian=q,status=status,sejak=sejak,
+            navigasi=getattr(request.state,'navigasi_kerangka_langsung',None))
     from app.models import OutgoingRecord
     customer_scope={'allowed_ids':request.state.portal_scope.ids(OutgoingRecord)} if is_customer_read(request) else {}
+    from app.web.pengiriman_detail_kerangka import kerangka as detail_kerangka,memakai_dokumen as detail_dokumen
+    dokumen_baris = None
+    if transaksi_id is not None and not is_customer_read(request) and detail_dokumen(request):
+        # The original exact row/items reader owns resource identity. Release
+        # its connection before optional navigation metadata opens another one.
+        async with SessionLocal() as db:
+            dokumen_baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1, **customer_scope)
+        if not dokumen_baris:
+            raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
+        shell=await detail_kerangka(request,akun,dokumen_baris[0][0],dokumen_baris[0][1],
+            boleh_perintah=boleh_perintah,boleh_muat=boleh_muat)
+        if shell is not None:return shell
+        from app.web.riwayat_pengiriman_kerangka import kerangka as final_kerangka
+        shell=await final_kerangka(request,akun,dokumen_baris[0][0],boleh_perbaiki=boleh_perintah)
+        if shell is not None:return shell
     async with SessionLocal() as db:
         if boleh_perintah and transaksi_id is None and not pid:
             from app.web.draf_keluar import daftar_draf
             draf_saya = await daftar_draf(db, akun.user)
         if transaksi_id is not None:
-            baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1, **customer_scope)
+            baris = (dokumen_baris if dokumen_baris is not None else
+                     await svc.daftar(db, transaksi_id=transaksi_id, batas=1, **customer_scope))
             if not baris:
                 raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
             sebelum_berikut = None
@@ -277,7 +301,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         })
     kartu.sort(key=lambda k: k["urut"])
 
-    return await render_laci(
+    response = await render_laci(
         request, "pengiriman.html", layar="barang_keluar", kartu=kartu,
         detail=transaksi_id is not None,
         verifikasi_detail=verifikasi_detail,
@@ -323,6 +347,10 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         STATUS_SARING=status, n_perintah=sum(1 for k in kartu if k["rec"].status == OUT_PERINTAH),
         n_dimuat=sum(1 for k in kartu if k["rec"].status == OUT_DIMUAT),
     )
+    from app.web.pengiriman_detail_catalog import pasang as pasang_detail_catalog
+    response=pasang_detail_catalog(request,akun,response)
+    from app.web.riwayat_pengiriman_catalog import pasang as pasang_final_catalog
+    return pasang_final_catalog(request,akun,response)
 
 
 def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "", cepat: bool = False) -> list[tuple]:

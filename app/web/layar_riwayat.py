@@ -82,6 +82,11 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(
             403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
 
+    from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
+    shell = await dokumen_riwayat(request, akun)
+    if shell is not None:
+        return shell
+
     from app.penggilingan.gudang1.services.milling import riwayat_giling
 
     sebelum_id = _sebelum_id(request)
@@ -104,6 +109,10 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     from app.web.api import _is_jenis_operator
     if not is_customer_read(request) and not await _is_jenis_operator(akun.user,"penggilingan"):
         raise HTTPException(403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
+    from app.web.riwayat_detail_native import kerangka as kerangka_detail
+    shell = await kerangka_detail(request, akun)
+    if shell is not None:
+        return shell
     from app.penggilingan.gudang1.services.milling import (
         alasan_koreksi_hasil_giling, riwayat_giling,
     )
@@ -122,8 +131,12 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     from app.services.penghalang_koreksi import daftar
     async with SessionLocal() as db:
         catatan_penghalang = await daftar(db, "giling", process_id) if akun.is_admin and penghalang else []
-    return await render_laci(
-        request, "riwayat_giling_detail.html", jenis="giling", k=kartu[0], qc_gabah_asal=qc_gabah_asal,
+    from app.web.riwayat_baca_saja import riwayat_baca_saja
+    response = await render_laci(
+        request, "riwayat_giling_detail.html", jenis="giling", k=kartu[0],
+        RIWAYAT_BACA_SAJA=riwayat_baca_saja(request, akun, jenis="giling",
+            process_id=process_id, boleh_koreksi=akun.is_admin),
+        qc_gabah_asal=qc_gabah_asal,
         catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-giling" + _query_giling(request) + f"#giling-{process_id}",
         aksi_koreksi=f"/riwayat-giling/{process_id}/koreksi" + _query_giling(request),
@@ -135,6 +148,8 @@ async def detail_riwayat_giling(process_id: int, request: Request,
         isian_koreksi=getattr(request.state, "koreksi_form", {}),
         jeda_riwayat=jeda_riwayat,
     )
+    from app.web.proses_pdf_catalog import pasang
+    return pasang(request, akun, response)
 
 
 @router.post("/riwayat-giling/{process_id}/koreksi")
@@ -438,10 +453,12 @@ async def halaman_laporan_giling(request: Request, process_id: int,
         if process is None or process.status != "selesai":
             raise HTTPException(404, "Riwayat penggilingan tidak ditemukan.")
         kode = process.kode_proses
-    return await render_laci(
+    response = await render_laci(
         request, "laporan_giling.html", kode=kode,
         pdf_url=f"/riwayat-giling/{process_id}/laporan.pdf",
     )
+    from app.web.proses_pdf_kerangka import native_response
+    return native_response(request, akun, response)
 
 
 @router.get("/riwayat-pengeringan")
@@ -452,6 +469,11 @@ async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)
     if not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(
             403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
+
+    from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
+    shell = await dokumen_riwayat(request, akun)
+    if shell is not None:
+        return shell
 
     from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
 
@@ -474,6 +496,12 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
     from app.web.api import _is_jenis_operator
     if not is_customer_read(request) and not await _is_jenis_operator(akun.user,"pengeringan"):
         raise HTTPException(403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
+    # The optional helper owns its independent resource/context reads. Do not
+    # retain an outer connection while it prepares navigation in another one.
+    from app.web.riwayat_detail_native import kerangka as kerangka_detail
+    shell = await kerangka_detail(request, akun)
+    if shell is not None:
+        return shell
     from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
     from app.services import berjalan, proses_aktif
     from app.services.detail_pendinginan import lengkapi as lengkapi_pendinginan
@@ -501,7 +529,7 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
     dasar = request.url.remove_query_params(["buka", "nilai"])
     def halaman(parameter, nomor):
         return str(dasar.include_query_params(**{parameter: nomor}))
-    return await render_laci(
+    response = await render_laci(
         request, "riwayat_pengeringan_detail.html", d=detail, proses=proses, k=kartu[0],
         tab_pengeringan=(request.query_params.get("tab_detail") if request.query_params.get("tab_detail") in
                         {"ringkasan", "bahan", "pengukuran", "riwayat"} else
@@ -513,6 +541,8 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
         alamat=request.url.path, halaman_proses=halaman, buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
+    from app.web.proses_pdf_catalog import pasang
+    return pasang(request, akun, response)
 
 
 def _pdf_pengeringan(data: dict) -> bytes:
@@ -667,10 +697,12 @@ async def halaman_laporan_pengeringan(request: Request, lot_id: int,
         if lot is None or lot.waktu_selesai_pendinginan is None:
             raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
         kode = lot.kode_lot
-    return await render_laci(
+    response = await render_laci(
         request, "laporan_pengeringan.html", kode=kode, lot_id=lot_id,
         pdf_url=f"/riwayat-pengeringan/{lot_id}/laporan.pdf",
     )
+    from app.web.proses_pdf_kerangka import native_response
+    return native_response(request, akun, response)
 
 
 @router.get("/riwayat-transfer")
@@ -760,6 +792,16 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     boleh = await (_is_gabah_operator(akun.user) if jenis in ("gabah-basah","gabah-kering") else _is_jenis_operator(akun.user,"penggilingan") if jenis=="pk-hasil-giling" else _is_jenis_operator(akun.user,"penyosohan") if jenis=="beras-hasil-sosoh" else _is_g2_operator(akun.user))
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
+
+    from app.web.riwayat_detail_native import kerangka as kerangka_detail
+    shell = await kerangka_detail(request, akun)
+    if shell is not None:
+        return shell
+
+    from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
+    shell = await dokumen_riwayat(request, akun)
+    if shell is not None:
+        return shell
 
     if jenis == "beras-hasil-sosoh":
         from app.web.riwayat_qc_sosoh import halaman

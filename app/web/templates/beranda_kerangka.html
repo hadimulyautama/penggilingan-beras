@@ -1,0 +1,28 @@
+{% extends 'base.html' %}{% block judul %}Beranda{% endblock %}
+{% block isi %}
+<div data-beranda-native data-url="{{ HOME_SHELL.alamat }}" data-stamp="{{ HOME_SHELL.stamp }}">
+<header class="beranda-sambut beranda-sambut--ringkas" aria-labelledby="judul-beranda">
+  <div class="beranda-sambut__kepala"><div>
+    <div class="beranda-eyebrow"><span data-home-date>{{ HOME_SHELL.tanggal }}</span> · <span data-home-scope>{{ HOME_SHELL.scope }}</span></div>
+    <h1 id="judul-beranda" data-home-greeting>{{ HOME_SHELL.sapaan }}</h1>
+  </div></div>
+</header>
+<div class="beranda-kolom beranda-kolom--pekerjaan">
+  <section class="beranda-tindaklanjut" aria-label="Perlu perhatian">
+    <h2 class="lbl">Perlu perhatian</h2>
+    <div class="beranda-pekerjaan" aria-busy="true"><p class="bantu" data-home-unread>Pekerjaan, peringatan dan jumlah belum dibaca.</p></div>
+  </section>
+  <section class="beranda-aktivitas" aria-label="Sedang berjalan" aria-busy="true">
+    <p class="lbl">Sedang berjalan · Transit</p><p class="bantu" data-home-unread>Proses, waktu dan tindakan menunggu data terbaru.</p>
+  </section>
+</div>
+<section class="beranda-ringkasan beranda-ringkasan--padat" aria-label="Ringkasan operasional" aria-busy="true">
+  <p class="bantu" data-home-unread>Ringkasan operasional belum dibaca. Nama mesin, silo, jumlah kartu dan saldo mengikuti data gudang yang dapat Anda akses.</p>
+</section>
+<p class="bantu" role="status" aria-live="polite" data-home-native-status>Memuat data Beranda…</p>
+<button class="btn" type="button" data-home-native-retry hidden>Coba lagi</button>
+<noscript><p>JavaScript diperlukan untuk membaca Beranda bertahap. Tidak ada transaksi yang dikirim saat halaman dimuat.</p></noscript>
+</div>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/beranda-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

@@ -1,0 +1,24 @@
+{
+  "versi": 1,
+  "sumber": "b344c56de412130191a0032e4977e06552364627f78569883c8da383dc4233b8",
+  "variants": [
+    "/"
+  ],
+  "aset_sha256": "053a5efbc64d28fbeddce926513271bb2268a505b695971339a0daddf88d71c1",
+  "inputs": {
+    "app/main.py": "c315737e30a48a5d1caaecab56bc662c4621026cedce40bd0ef8f4c231c2c19c",
+    "app/services/beranda.py": "bc6565fff38acb6956e3ca3614353130daf2eb652ae46fd8a1fbb4dbfe656e89",
+    "app/web/beranda_kerangka.py": "884e772c3b63e392cca919b9caaa91870c525ade49f0f65eb41ed0fb9df0a75f",
+    "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
+    "app/web/layar.py": "f6965aacbd3f53c358a0dbc19b57a72f93c1bf60c9e502146a12a167cc5f3c27",
+    "app/web/static/beranda-native.js": "b9b438071b910649218ee99ee0e0c043b96dc66bacd4219d90b7521cb765ec67",
+    "app/web/static/kerangka-beranda-ui-runtime.js": "33dcb4ed9a65f7ba68e0f87f8a7c6811683e1833a4bdb55e2deb849ea824c21d",
+    "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
+    "app/web/templates/beranda_kerangka.html": "22378c42c63ca9be8a83043e60a692ee16e73cb37d251b9bf67940fd475de757",
+    "hmu_tampilan/templates/_breadcrumb.html": "a2eed20d1b72985a6c27b8b8e1b618e46821ba5b42051fcce12d73d4eda5a129",
+    "hmu_tampilan/templates/base.html": "d4ee4682b598d0bfe516d6d7dff585f7a6ec109f5981451552be24b4ae0fe2aa",
+    "hmu_tampilan/templates/beranda.html": "c8cab161fd2e36fb4d7cbadbf0083d81ac1c653a30c30f63fd04c2352cedc944",
+    "scripts/buat_kerangka_beranda.py": "dd0914ce0117aac124cde72374ec85a58e5e06d4275b5828a0a695dfd16609d1",
+    "scripts/buat_kerangka_ui.py": "6112157c265d48844d8808f23ee4a50cfa0414e04c36e61b782bb381ee95c621"
+  }
+}

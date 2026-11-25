@@ -61,7 +61,9 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis:
     konteks = await _halaman_stok_produk(request, akun=akun, jenis=jenis)
     if not isinstance(konteks, dict):
         return konteks
-    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+    response = await render_laci(request, "stok_kepemilikan.html", **konteks)
+    from app.web.stock_detail_native import finish, product_offers
+    return finish(response, request, offers=product_offers(konteks))
 
 
 async def _halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis: str | None = None):
@@ -155,7 +157,9 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
     konteks = await _halaman_stok_produk_jasa(request, akun=akun, jenis=jenis, pelanggan_id=pelanggan_id)
     if not isinstance(konteks, dict):
         return konteks
-    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+    response = await render_laci(request, "stok_kepemilikan.html", **konteks)
+    from app.web.stock_detail_native import finish, product_offers
+    return finish(response, request, offers=product_offers(konteks))
 
 
 async def _halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
@@ -501,7 +505,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
     if sumber_kepemilikan is not None:
         boleh_pindah=False
         for row in rows:row['pindah']=None
-    return await render_laci(request, "stok_produk_koreksi_asal.html", template_stok_asal="stok_produk_detail.html", asal_pengemasan=asal_pengemasan,sumber_kepemilikan=sumber_kepemilikan,
+    response = await render_laci(request, "stok_produk_koreksi_asal.html", template_stok_asal="stok_produk_detail.html", asal_pengemasan=asal_pengemasan,sumber_kepemilikan=sumber_kepemilikan,
         layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",
         breadcrumb_detail=k.nama, k=k, beras=svc.adalah_beras(k.jenis), pemilik=pemilik or "Pabrik",
         pelanggan_id=pelanggan_id, jasa_ids=jasa_ids, kemasan=kemasan,
@@ -511,6 +515,8 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
         BOLEH_CATAT=boleh_catat, BOLEH_PINDAH=boleh_pindah,
         BOLEH_MASUKKAN_SILO=boleh_masukkan_silo,
         buka=request.query_params.get("buka") or "", nilai=request.query_params.get("nilai") or "")
+    from app.web.stock_detail_native import finish, product_offer
+    return finish(response, request, detail=product_offer(k, customer=pelanggan_id).meta)
 
 
 @router.get("/stok-karung")
@@ -518,7 +524,9 @@ async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
     konteks = await _halaman_stok_karung(request, akun=akun)
     if not isinstance(konteks, dict):
         return konteks
-    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+    response = await render_laci(request, "stok_kepemilikan.html", **konteks)
+    from app.web.karung_detail_native import finish, references
+    return finish(response, request, offers=references(konteks))
 
 
 async def _halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
@@ -559,7 +567,9 @@ async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
     konteks = await _halaman_stok_karung_jasa(request, akun=akun)
     if not isinstance(konteks, dict):
         return konteks
-    return await render_laci(request, "stok_kepemilikan.html", **konteks)
+    response = await render_laci(request, "stok_kepemilikan.html", **konteks)
+    from app.web.karung_detail_native import finish, references
+    return finish(response, request, offers=references(konteks))
 
 
 async def _halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
@@ -630,4 +640,9 @@ async def halaman_stok_semua(request: Request, akun, tab):
     titipan = await pembaca[1](request, akun=akun)
     await siapkan(request, titipan["template_kepemilikan_asal"], titipan)
     pabrik.update(semua_kepemilikan=True, stok_jasa=titipan)
-    return await render_laci(request, "stok_semua.html", **pabrik)
+    response = await render_laci(request, "stok_semua.html", **pabrik)
+    if tab == 'karung':
+        from app.web.karung_detail_native import finish as finish_karung, references
+        return finish_karung(response, request, offers=references(pabrik))
+    from app.web.stock_detail_native import finish, product_offers
+    return finish(response, request, offers=product_offers(pabrik) if tab == 'produk' else ())

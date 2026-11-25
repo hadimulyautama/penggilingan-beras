@@ -1,0 +1,13 @@
+{# Source-derived native headers only. No placeholder record, number or identity. #}
+{% if RIWAYAT_META.family=='qc' %}
+<div class="tabel-standar tabel-standar--grid" style="--tabel-kolom:minmax(180px,1.2fr) minmax(160px,1fr) minmax(115px,.8fr) minmax(220px,1.5fr) 100px 24px"><div class="tabel-standar__scroll">{{ RIWAYAT_META.header|safe }}<div><p>Data belum tersedia.</p></div></div></div>
+{% elif RIWAYAT_META.kind=='giling' %}
+<div class="riwayat-list daftar-standar" aria-label="Struktur daftar penggilingan">{% include '_riwayat_daftar_kerangka_mobile.html' %}</div>
+<div class="riwayat-desktop-list tabel-standar rg-tabel-scroll" role="region" aria-label="Daftar riwayat penggilingan"><table class="tabel-standar rg-tabel">{{ RIWAYAT_META.header|safe }}<tbody><tr><td colspan="{{ RIWAYAT_META.columns|length }}">Data belum tersedia.</td></tr></tbody></table></div>
+{% else %}
+<div class="riwayat-list daftar-standar" aria-label="Struktur daftar proses">{% include '_riwayat_daftar_kerangka_mobile.html' %}</div>
+<div class="riwayat-desktop-list tabel-standar" aria-label="{{ RIWAYAT_META.title }}">{{ RIWAYAT_META.header|safe }}<p>Data belum tersedia.</p></div>
+{% endif %}
+<p role="status" aria-live="polite" data-riwayat-native-status>{{ RIWAYAT_STATE.pesan }}</p>
+<button class="btn" type="button" data-riwayat-native-retry{% if not RIWAYAT_STATE.retry %} hidden{% endif %}>Coba lagi</button>
+<p class="bantu" id="riwayat-native-cetak-alasan">Cetak dan penelusuran catatan tersedia setelah daftar selesai dibaca.</p>

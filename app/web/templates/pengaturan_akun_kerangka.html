@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block judul %}Pengaturan{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/pengaturan.css?v={{ VERSI }}">
+{% include '_pengaturan_akun_kerangka_isi.html' %}
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/pengaturan-akun-native.js?v={{ VERSI }}" defer></script>
+{# Root belum memasang gate; consumer hanya membaca GET native route sama. #}
+{% endblock %}

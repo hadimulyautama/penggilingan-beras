@@ -110,6 +110,14 @@ async def baca(db,kode,user):
  return jsonable_encoder(d)
 
 async def halaman(kode,request,akun):
+ if (request.headers.get('X-Pindah')!='1'
+     and (request.headers.get('X-Kerangka-Halaman')=='1'
+          or request.headers.get('Sec-Fetch-Mode')=='navigate'
+          and request.headers.get('Sec-Fetch-Dest') in {'document','empty'})):
+  from app.web.giling_native_html import kerangka
+  from app.web.halaman_bertahap import konteks_kerangka
+  response=await kerangka(request,akun,await konteks_kerangka(request,akun))
+  if response is not None:return response
  await izin(akun.user,kode)
  async with SessionLocal() as db:d=await baca(db,kode,akun.user)
  from app.web.layar_pekerjaan import konteks_aman

@@ -70,6 +70,11 @@ async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(
             403, "Riwayat sosoh milik Admin ke atas dan operator Gudang 2.")
 
+    from app.web.riwayat_daftar_bertahap import dokumen as dokumen_riwayat
+    shell = await dokumen_riwayat(request, akun)
+    if shell is not None:
+        return shell
+
     sebelum = request.query_params.get("sebelum")
     try:
         sebelum_id = int(sebelum) if sebelum else None
@@ -118,6 +123,10 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         await _izin_lokasi(akun.user,PolishingProcess,process_id)
     if not is_customer_read(request):
         await _pastikan_akses_sosoh(akun.user)
+    from app.web.riwayat_detail_native import kerangka as kerangka_detail
+    shell = await kerangka_detail(request, akun)
+    if shell is not None:
+        return shell
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.gudang2.polishing import (
         jenis_hasil, alasan_koreksi_hasil, riwayat_sosoh,
@@ -147,8 +156,11 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
     from app.services.penghalang_koreksi import daftar
     async with SessionLocal() as db:
         catatan_penghalang = await daftar(db, "sosoh", process_id) if akun.is_admin else []
-    return await render_laci(
+    from app.web.riwayat_baca_saja import riwayat_baca_saja
+    response = await render_laci(
         request, "riwayat_sosoh_detail.html", jenis="sosoh", k=kartu[0],
+        RIWAYAT_BACA_SAJA=riwayat_baca_saja(request, akun, jenis="sosoh",
+            process_id=process_id, boleh_koreksi=akun.is_admin),
         qc_sosoh=qc_sosoh, qc_kode=kartu[0].kode,
         catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
@@ -163,6 +175,8 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         isian_koreksi=getattr(request.state, "koreksi_form", {}),
         jeda_riwayat=jeda_riwayat,
     )
+    from app.web.proses_pdf_catalog import pasang
+    return pasang(request, akun, response)
 
 
 @router.post("/riwayat-sosoh/{process_id}/koreksi")
@@ -247,8 +261,10 @@ async def halaman_pdf_riwayat_sosoh(request: Request, process_id: int,
         process = await db.get(PolishingProcess, process_id)
     if process is None or process.status != "selesai":
         raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
-    return await render_laci(
+    response = await render_laci(
         request, "laporan_sosoh.html",
         kode=process.kode_proses,
         pdf_url=f"/riwayat-sosoh/{process_id}/laporan.pdf",
     )
+    from app.web.proses_pdf_kerangka import native_response
+    return native_response(request, akun, response)

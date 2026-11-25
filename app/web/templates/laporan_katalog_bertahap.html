@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block judul %}Laporan periode{% endblock %}
+{% block isi %}
+<section aria-label="Laporan periode" data-laporan-katalog-kerangka data-stamp="{{ KATALOG_STAMP }}" data-url="/laporan">
+{% with LAPORAN_NAV=KATALOG_NAV %}{% include 'laporan_katalog_blueprint.html' %}{% endwith %}
+<p role="status" aria-live="polite" data-katalog-native-status>Membaca navigasi dan akses terbaru…</p>
+<button class="btn" type="button" data-katalog-native-retry hidden>Coba lagi</button>
+<noscript><p>Pilih laporan untuk membaca periode dan data terbaru. Tidak ada transaksi yang dikirim dari katalog.</p></noscript>
+</section>
+<script src="/static/padi-baca-native.js?v={{ VERSI }}" defer></script>
+<script src="/static/laporan-katalog-native.js?v={{ VERSI }}" defer></script>
+{% endblock %}

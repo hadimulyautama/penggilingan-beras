@@ -9,6 +9,7 @@
 <h1>{{ 'Jenis proses' if mode=='jenis' else pengering.nama if pengering else detail.nama if detail else 'Mesin & line produksi' }}</h1>
 {% if err %}<div class="nota nota--buruk" role="alert">{{ err }}</div>{% endif %}
 {% if pesan or request.query_params.get('tersimpan') %}<div class="pesan pesan--ok" role="status">{{ pesan or 'Pengaturan tersimpan.' }}</div>{% endif %}
+{% include '_fasilitas_parent_empty.html' %}
 {% if mode=='jenis' %}
 <p>Pendaftaran jenis proses tidak otomatis menyediakan alur produksi baru. Pelaksanaan tetap memerlukan dukungan bahan, hasil, stok, QC, dan validasinya.</p>
 {% for j in jenis %}<details class="kartu" {% if isian.get('id')==j.id|string %}open{% endif %}><summary>{{ j.nama }} · {{ j.kode }} · {{ 'Aktif' if j.aktif else 'Nonaktif' }}</summary>{{ formulir('jenis', j) }}</details>{% endfor %}

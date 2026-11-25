@@ -170,16 +170,22 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
     async with await _klien(pg, role=role, gudang_id=lengkap['gudang'].get(warehouse)) as c:
         before = await _sidik(pg)
         native = c.request
-        fail = {'next': False}
+        fail = {'next': False, 'failed_reads': 0, 'stamp_changes': 0}
         async def request(method, url, **kwargs):
-            if method == 'GET' and urlsplit(str(url)).path == api and fail['next']:
-                fail['next'] = False
-                return httpx.Response(503, json={'detail': 'Fixture read unavailable'})
             response = await native(method, url, **kwargs)
+            if method == 'GET' and urlsplit(str(url)).path == api and fail['next']:
+                # The transport fault follows one actual authorised GET;
+                # it must not bypass the native fixture read/provenance.
+                assert response.status_code == 200
+                fail['next'] = False
+                fail['failed_reads'] += 1
+                return httpx.Response(503, json={'detail': 'Fixture read unavailable'}, request=response.request)
             if method=='GET' and urlsplit(str(url)).path==api and fail.get('stamp'):
+                assert response.status_code == 200
                 fail['stamp']=False
+                fail['stamp_changes'] += 1
                 payload=response.json();payload['stamp']='fixture-wrong-context'
-                return httpx.Response(200,json=payload)
+                return httpx.Response(200,json=payload,request=response.request)
             return response
         c.request = request
         async with peramban(c, width) as (page, transport):
@@ -239,11 +245,13 @@ async def test_klik_stok_sebelum_html_dan_data_filter_baru_retry_keluar(pg, leng
                         await page.screenshot(path=str(Path(os.environ['DETAIL_OUT']) / (role + '-' + str(width) + '-before-data.png')))
                     release2.set()
                     await expect(root.locator('[data-shell-retry]')).to_be_visible()
+                    assert fail['failed_reads'] == 1 and fail['stamp_changes'] == 0
                     fail['stamp']=True
                     await root.locator('[data-shell-retry]').focus()
                     await page.keyboard.press('Enter')
                     await expect(root.locator('[data-shell-status]')).to_contain_text('Konteks sesi atau gudang berubah')
                     await expect(root.locator('[data-shell-retry]')).to_be_visible()
+                    assert fail['failed_reads'] == fail['stamp_changes'] == 1
                     await root.locator('[data-shell-retry]').click()
                     await expect(page.locator('[data-stok-controls]')).to_be_visible()
                     await expect(page.locator('[data-halaman-bertahap][data-kind="stok"]')).to_have_count(0)

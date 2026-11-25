@@ -72,7 +72,12 @@ async def page(request,*,message='',error='',selected=None,status=200,contact_va
 
 @router.get('')
 async def index(request:Request,actor=Depends(super_only)):
-    return await page(request,message={'dibuat':'Akun pelanggan berhasil dibuat.','diubah':'Perubahan akun tersimpan.','status':'Status akun tersimpan.'}.get(request.query_params.get('ok'),''))
+    from app.web.pengguna_baca_native import catat_guard,kerangka
+    from app.web.pengguna_baca_native import pasang_native
+    catat_guard(request,actor,'pelanggan')
+    pending=await kerangka(request,actor,jenis='pelanggan')
+    if pending is not None:return pending
+    return await pasang_native(request,actor,await page(request,message={'dibuat':'Akun pelanggan berhasil dibuat.','diubah':'Perubahan akun tersimpan.','status':'Status akun tersimpan.'}.get(request.query_params.get('ok'),'')))
 
 
 @router.get('/kontak')
@@ -104,7 +109,12 @@ async def create(request:Request,kontak:str=Form(...),username:str=Form(...,max_
 
 @router.get('/{account_id}')
 async def detail(request:Request,account_id:int=Path(...,ge=1,le=2**31-1),actor=Depends(super_only)):
-    return await page(request,selected=account_id)
+    from app.web.pengguna_baca_native import catat_guard,kerangka
+    from app.web.pengguna_baca_native import pasang_native
+    catat_guard(request,actor,'pelanggan')
+    pending=await kerangka(request,actor,jenis='pelanggan',customer_id=account_id)
+    if pending is not None:return pending
+    return await pasang_native(request,actor,await page(request,selected=account_id))
 
 
 @router.post('/{account_id}')
