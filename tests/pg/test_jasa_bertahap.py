@@ -1,6 +1,7 @@
 """Negosiasi kerangka Jasa terpisah dari legacy; memakai dunia sintetis native."""
 import hashlib,json,re
 import pytest
+from bs4 import BeautifulSoup
 from sqlalchemy import text
 from hmu_identitas import peran as P
 from tests.pg.test_konsolidasi_stok import stok_lengkap
