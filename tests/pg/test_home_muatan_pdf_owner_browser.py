@@ -12,6 +12,7 @@ used. Setup is the existing approved fixture recipes, before fingerprints.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import gzip
 import hashlib
 import json
@@ -306,6 +307,84 @@ async def test_muatan_admin_document_remains_readonly_without_inventing_menu_off
         assert await _sidik(pg) == before
 
 
+class FinitePDFReads:
+    """Only the actual binary GETs finish; a live EventSource is never idle."""
+    def __init__(self, page, path):
+        self.page,self.url=page,BASE+path
+        self.requests=set();self.pending=set();self.finished=set();self.responses={};self.failed=[]
+        self.settled=asyncio.Event()
+    def request(self, request):
+        if request.method=='GET' and request.url==self.url:
+            self.requests.add(request);self.pending.add(request);self.settled.clear()
+    def response(self, response):
+        if response.request in self.requests:
+            self.responses[response.request]=(response.status,response.headers.get('content-type','').split(';')[0].strip().lower())
+    def done(self, request):
+        if request in self.requests:
+            self.pending.discard(request);self.finished.add(request)
+            if not self.pending:self.settled.set()
+    def failure(self, request):
+        if request in self.requests:
+            self.failed.append(request);self.pending.discard(request)
+            if not self.pending:self.settled.set()
+    def assert_complete(self):
+        assert self.requests, 'The real binary PDF endpoint must be requested'
+        assert not self.pending and not self.failed and self.finished==self.requests, 'Every binary PDF GET must finish successfully'
+        assert set(self.responses)==self.requests
+        assert all(status in (200,206) and mime=='application/pdf' for status,mime in self.responses.values())
+    async def wait(self):
+        # Observe the actual target iframe load as well as the native share
+        # control's ready state checked by the caller. This excludes an early
+        # empty pending iframe and does not assume a fixed/coalesced GET count.
+        async def ready():
+            await self.page.wait_for_function('()=>window.__ownerFinitePDFLoads>0',timeout=20000)
+            await self.settled.wait()
+        await asyncio.wait_for(ready(),20)
+        self.assert_complete()
+
+
+@asynccontextmanager
+async def observe_pdf_reads(page, path):
+    reads=FinitePDFReads(page,path)
+    await page.add_init_script('''(() => {
+      const path=PATH;window.__ownerFinitePDFLoads=0;
+      document.addEventListener('load',event=>{
+        const frame=event.target;
+        if(frame?.tagName!=='IFRAME'||!frame.getAttribute('src'))return;
+        const url=new URL(frame.getAttribute('src'),location.href);
+        if(url.origin===location.origin&&url.pathname===path&&!url.search&&!url.hash)
+          window.__ownerFinitePDFLoads++;
+      },true);
+    })();'''.replace('PATH',json.dumps(path)))
+    callbacks=[('request',reads.request),('response',reads.response),('requestfinished',reads.done),('requestfailed',reads.failure)]
+    for event,callback in callbacks:page.on(event,callback)
+    try:yield reads
+    finally:
+        # Detach before peramban closes its live Playwright channel.
+        for event,callback in callbacks:page.remove_listener(event,callback)
+
+
+async def test_finite_pdf_barrier_requires_all_binary_reads_and_excludes_live_sse():
+    class Request:
+        def __init__(self,path):self.url=BASE+path;self.method='GET'
+    reads=FinitePDFReads(None,'/fixture.pdf')
+    with pytest.raises(AssertionError):reads.assert_complete()
+    reads.request(Request('/api/aliran'))
+    with pytest.raises(AssertionError):reads.assert_complete()
+    one,two=Request('/fixture.pdf'),Request('/fixture.pdf')
+    reads.request(one);reads.request(two)
+    for request in (one,two):
+        reads.response(type('Response',(),dict(request=request,status=200,headers={'content-type':'application/pdf'}))())
+    reads.done(one)
+    with pytest.raises(AssertionError):reads.assert_complete()
+    reads.done(two);reads.assert_complete()
+    bad=FinitePDFReads(None,'/fixture.pdf');bad.request(one);bad.failure(one)
+    with pytest.raises(AssertionError):bad.assert_complete()
+    wrong=FinitePDFReads(None,'/fixture.pdf');wrong.request(one)
+    wrong.response(type('Response',(),dict(request=one,status=200,headers={'content-type':'text/html'}))());wrong.done(one)
+    with pytest.raises(AssertionError):wrong.assert_complete()
+
+
 async def pdf_exercise(pg, client, detail, width, kind):
     """Compare actual native PDF requests, not a fabricated PDF/HTTP oracle."""
     target = detail + '/laporan'
@@ -320,20 +399,20 @@ async def pdf_exercise(pg, client, detail, width, kind):
     expected_frame_title = native_frame.get('title')
     expected_heading = native_heading.get_text(' ', strip=True)
     before = await _sidik(pg)
-    # Direct native HTML in a fresh intercepted context: existing iframe plus
+    # Direct native HTML in a fresh native HTTP context: existing iframe plus
     # existing share preparation fetch. Never click Print/share/download.
-    async with peramban(client, width) as (page, transport):
+    async with peramban(client, width) as (page, transport), observe_pdf_reads(page,pdf) as finite:
         await performance_probe(page)
         await page.goto(BASE + target, wait_until='load')
         await expect(page.locator('#bagikan-pdf')).to_be_enabled(timeout=30000)
         await expect(page.locator('#status-bagikan')).to_contain_text('PDF siap')
-        await page.wait_for_load_state('networkidle')
+        await finite.wait()
         baseline_reads = transport['gets'].count(pdf)
         assert baseline_reads >= 1, 'Actual binary PDF path must be requested; no mocked PDF.'
         await evidence(page, 'pdf-' + kind + '-' + str(width), native=native.text,
                        phase='native-document-control', extra={'pdf_get_count': baseline_reads})
         assert not transport['posts'] and not transport['errors'], transport
-    async with peramban(client, width) as (page, transport):
+    async with peramban(client, width) as (page, transport), observe_pdf_reads(page,pdf) as finite:
         await performance_probe(page)
         await page.goto(BASE + detail, wait_until='load')
         await page.wait_for_function('()=>window.PadiKerangkaProsesPDFUI&&document.getElementById("padi-proses-pdf-catalog")')
@@ -360,7 +439,7 @@ async def pdf_exercise(pg, client, detail, width, kind):
             await expect(page.locator('iframe[data-ppv-activated="1"]')).to_have_attribute('src', pdf)
             await expect(page.locator('#bagikan-pdf')).to_be_enabled(timeout=30000)
             await expect(page.locator('#status-bagikan')).to_contain_text('PDF siap')
-            await page.wait_for_load_state('networkidle')
+            await finite.wait()
             reads = transport['gets'].count(pdf)
             assert reads == baseline_reads, {'native_pdf_gets': baseline_reads, 'candidate_pdf_gets': reads}
             assert chrome(await page.content()) == expected
