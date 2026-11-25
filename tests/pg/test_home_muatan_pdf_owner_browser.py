@@ -312,6 +312,7 @@ class FinitePDFReads:
     def __init__(self, page, path):
         self.page,self.url=page,BASE+path
         self.requests=set();self.pending=set();self.finished=set();self.responses={};self.failed=[]
+        self.browser_responses={};self.failure_facts={};self.binary_fetches=[]
         self.meta={};self.iframe_requests=set();self.iframe_started=asyncio.Event();self.settled=asyncio.Event()
         self.complete=False
     def request(self, request):
@@ -327,6 +328,7 @@ class FinitePDFReads:
                 self.iframe_requests.add(request);self.iframe_started.set()
     def response(self, response):
         if response.request in self.requests:
+            self.browser_responses[response.request]=response
             self.responses[response.request]=(response.status,response.headers.get('content-type','').split(';')[0].strip().lower())
     def done(self, request):
         if request in self.requests:
@@ -335,21 +337,43 @@ class FinitePDFReads:
     def failure(self, request):
         if request in self.requests:
             self.failed.append(request);self.pending.discard(request)
+            reason=request.failure
+            text=reason if isinstance(reason,str) else ''
+            self.failure_facts[request]=dict(category='aborted-or-cancelled' if any(word in text.lower() for word in ('abort','cancel')) else 'unreviewed-request-failure',
+                literal=text if 0<len(text)<=512 else None,sha256=hashlib.sha256(text.encode()).hexdigest(),reviewed=False)
             if not self.pending:self.settled.set()
-    def assert_complete(self):
+    def terminal_checks(self):
         assert self.requests and self.iframe_requests, 'Actual binary GET and native iframe navigation provenance are required'
-        assert not self.pending and not self.failed and self.finished==self.requests, 'Every binary PDF GET must finish successfully'
+        assert not self.pending and self.finished|set(self.failed)==self.requests, 'Every binary PDF GET must reach a terminal browser outcome'
         assert set(self.responses)==self.requests
         assert all(status in (200,206) and mime=='application/pdf' for status,mime in self.responses.values())
+        assert set(self.failed)<=self.iframe_requests, 'The actual share fetch must not fail'
+        fetches=self.requests-self.iframe_requests
+        assert fetches and fetches<=self.finished
+        assert all(self.responses[r]==(200,'application/pdf') for r in fetches)
+    def assert_complete(self):
+        self.terminal_checks()
+        assert not self.failed, 'HOLD: actual iframe failure reason is recorded but has not been reviewed against native baseline'
+    async def read_binary_fetches(self):
+        for request in self.requests-self.iframe_requests:
+            body=await self.browser_responses[request].body()
+            value=dict(bytes=len(body),PDF_prefix=body.startswith(b'%PDF-'),status=self.responses[request][0],mime=self.responses[request][1])
+            self.binary_fetches.append(value)
+            assert value['bytes']>5 and value['PDF_prefix'], 'The completed native share fetch must contain a real PDF'
     async def wait(self):
         async def ready():
             await self.iframe_started.wait()
             await self.settled.wait()
+            self.terminal_checks()
+            await self.read_binary_fetches()
+            # Diagnostic-first: do not guess which headless navigation
+            # failures are safe. Root must review the observed literal first.
+            self.assert_complete()
         await asyncio.wait_for(ready(),20)
-        self.assert_complete();self.complete=True
+        self.complete=True
     def snapshot(self):
         return dict(status='PASS' if self.complete else 'FAIL', scope='exact-target-PDF-GET-only',
-            iframe_load_or_pixel_claim=False, requests=[dict(self.meta[r],finished=r in self.finished,
+            iframe_load_or_pixel_claim=False, binary_share_fetches=self.binary_fetches,requests=[dict(self.meta[r],failure=self.failure_facts.get(r),finished=r in self.finished,
                 pending=r in self.pending,failed=r in self.failed,status=self.responses.get(r,(None,None))[0],
                 mime=self.responses.get(r,(None,None))[1]) for r in self.meta])
 
@@ -395,6 +419,7 @@ async def test_finite_pdf_barrier_requires_all_binary_reads_and_excludes_live_ss
     class Request:
         def __init__(self,path,nav=False):
             self.url=BASE+path;self.method='GET';self.nav=nav;self.resource_type='document' if nav else 'fetch'
+            self.failure='Synthetic unreviewed request failure'
             self.frame=type('Frame',(),dict(parent_frame=page.main_frame))()
         def is_navigation_request(self):return self.nav
     reads=FinitePDFReads(page,'/fixture.pdf')
