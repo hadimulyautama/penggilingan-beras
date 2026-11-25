@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% block judul %}{{ SHELL.title }}{% endblock %}
 {% block isi %}
+{# Semantik hidden tidak boleh menunggu CSS tujuan selesai diunduh saat Back. #}
+<style>.halaman-bertahap [hidden]{display:none!important}</style>
 <link rel="stylesheet" href="/static/halaman-bertahap.css?v={{ VERSI }}">
 <section class="halaman-bertahap" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}" data-filtered="{{ '1' if SHELL.filtered else '0' }}">
  {% if SHELL.kind=='pekerjaan' %}
