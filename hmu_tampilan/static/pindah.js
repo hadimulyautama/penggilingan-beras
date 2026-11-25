@@ -28,6 +28,7 @@
   var pilihKerangkaHalaman = null; // aplikasi memilih sendiri; bawaan tetap native
   var nomorPindah = 0, tujuanPindah = null, nomorSentuhan = 0;
   var dataMenunggu = null, pointerAktif = false;
+  var navigasiMenunggu = null, pesanNavigasi = null;
   document.addEventListener("pointerdown", function () { nomorSentuhan++; pointerAktif = true; }, true);
   function lepasPointer() { pointerAktif = false; setTimeout(pasangMenunggu, 0); }
   document.addEventListener('pointerup', lepasPointer, true);
@@ -201,16 +202,17 @@
     } catch (e) { return null; } // gagal presentasi tidak boleh membuka target lain
   }
 
-  function kunciBaca(alamat, kerangkaHalaman) {
+  function kunciBaca(alamat, kerangkaHalaman, tanpaSimpan) {
+    if (tanpaSimpan) return "native:" + alamat;
     return kerangkaHalaman ? "kerangka:" + alamat : alamat;
   }
 
   /* Kerangka foreground tidak berbagi janji/cache HTML dengan pembaca data. */
-  function ambil(alamat, kerangkaHalaman) {
-    var kunci = kunciBaca(alamat, kerangkaHalaman);
+  function ambil(alamat, kerangkaHalaman, tanpaSimpan) {
+    var kunci = kunciBaca(alamat, kerangkaHalaman, tanpaSimpan);
     if (sedang[kunci]) { return sedang[kunci]; }
     delete gagal[kunci];
-    var bolehSimpan = !kerangkaHalaman;
+    var bolehSimpan = !kerangkaHalaman && !tanpaSimpan;
     var batas = new AbortController();
     var pewaktu = setTimeout(function () { batas.abort(); }, 15000);
     var janji = fetch(alamat, {
@@ -229,7 +231,10 @@
          penjagaan navigasi utuh yang semula. */
       var pulih = r.status === 404 && r.headers.get("X-Pindah-Halaman") === "1"
         && (r.headers.get("Content-Type") || "").split(";")[0].trim() === "text/html";
-      if (r.redirected || (!r.ok && !pulih)) { return null; }
+      if (r.redirected || (!r.ok && !pulih)) {
+        if (!r.redirected && r.status >= 500) gagal[kunci] = true;
+        return null;
+      }
       if (pulih) { bolehSimpan = false; delete simpan[alamat]; }
       return r.text();
     }).catch(function () {
@@ -624,68 +629,54 @@
     else { bingkai.removeAttribute("aria-busy"); }
   }
 
-  function gantiIsiHalaman(html) {
+  function tahanNavigasi() {
     var main = document.getElementById('isi-halaman');
-    if (!main) return null;
+    if (!main) return false;
     var nodes = Array.prototype.slice.call(main.childNodes);
     var awal = nodes.find(function (n) { return n.nodeType === 8 && n.data.trim() === 'isi-halaman:mulai'; });
     var akhir = nodes.find(function (n) { return n.nodeType === 8 && n.data.trim() === 'isi-halaman:akhir'; });
-    if (!awal || !akhir) return null;
-    while (awal.nextSibling && awal.nextSibling !== akhir) awal.nextSibling.remove();
-    var isi = document.createElement('section'); isi.className = 'halaman-memuat';
-    isi.innerHTML = html; main.insertBefore(isi, akhir);
-    return isi;
-  }
-
-  function kerangka(alamat, judul) {
-    var isi = gantiIsiHalaman('<h1></h1><p role="status" aria-live="polite">Memuat data…</p><div class="halaman-memuat__baris" aria-hidden="true"><i></i><i></i><i></i></div>');
-    if (!isi) { return false; }
-    isi.setAttribute('aria-busy', 'true');
-    // Pendengar sidebar tetap hidup sampai isi baru benar-benar dipasang.
-    // cabutSemua() dijalankan oleh pasang(), setelah pengguna selesai memakai menu.
+    if (!awal || !akhir || nodes.indexOf(awal) >= nodes.indexOf(akhir)) return false;
+    var isi = nodes.slice(nodes.indexOf(awal) + 1, nodes.indexOf(akhir)).filter(function (node) { return node.nodeType === 1; });
+    navigasiMenunggu = { main: main, sibuk: main.getAttribute('aria-busy'), isi: isi.map(function (node) {
+      var sebelum = node.getAttribute('inert'); node.setAttribute('inert', '');
+      return { node: node, inert: sebelum };
+    }) };
+    // Header/hamburger juga berada di main. Hanya isi lama yang dibekukan;
+    // menu dan indikator bilah tetap dapat dipakai tanpa menggeser layout.
+    main.setAttribute('aria-busy', 'true');
+    // Sama seperti navigasi lama yang telah lolos veto editor: lembar aksi
+    // tidak boleh tertinggal interaktif di luar batas isi halaman.
     var lembarLama = document.getElementById('lembar');
     if (lembarLama) lembarLama.remove();
-    // Kerangka tidak membawa angka, izin, atau formulir dari halaman lama.
-    // Sidebar dan tombol menu tetap hidup saat pembaca data masih bekerja.
-    var nama = judul || 'Halaman';
-    isi.querySelector('h1').textContent = nama;
-    var merek = document.querySelector('.bar__merek');
-    if (merek) merek.textContent = nama;
-    var crumb = document.querySelector('.desktop-breadcrumb');
-    if (crumb) { crumb.textContent = 'Memuat navigasi…'; crumb.setAttribute('aria-busy', 'true'); }
-    var balikDesktop = document.querySelector('.desktop-back');
-    if (balikDesktop) balikDesktop.hidden = true;
-    document.title = nama + ' · PT Hadi Mulya Utama';
-    var terpilih = null;
-    document.querySelectorAll('#laci summary.pintu').forEach(function (a) { a.classList.remove('pintu--kini'); a.removeAttribute('aria-current'); });
-    document.querySelectorAll('#laci a[href]').forEach(function (a) {
-      var cocok = a.pathname + a.search === alamat;
-      a.classList.toggle('pintu--kini', cocok && a.classList.contains('pintu'));
-      a.classList.toggle('pintu-sub__satu--kini', cocok && a.classList.contains('pintu-sub__satu'));
-      if (cocok) { a.setAttribute('aria-current', 'page'); terpilih = a; }
-      else a.removeAttribute('aria-current');
-    });
-    if (terpilih) {
-      var grup = terpilih.closest('details');
-      if (grup) { grup.open = true; var head = grup.querySelector('summary'); if (head) head.classList.add('pintu--kini'); }
-    }
-    var laci = document.getElementById('laci');
-    if (laci) laci.hidden = true;
-    var buka = document.getElementById('buka-laci');
-    if (buka) buka.setAttribute('aria-expanded', 'false');
-    var gulung = document.querySelector('.isi');
-    if (gulung) gulung.scrollTop = 0;
     return true;
   }
 
-  function gagalMuat(alamat, judul) {
-    var crumb = document.querySelector('.desktop-breadcrumb');
-    if (crumb) { crumb.textContent = 'Navigasi belum dimuat'; crumb.removeAttribute('aria-busy'); }
-    var isi = gantiIsiHalaman('<h1></h1><p role="alert">Data belum dapat dimuat. Periksa koneksi Anda.</p><button type="button" class="btn">Coba lagi</button> <a class="btn" data-utuh>Muat ulang halaman</a>');
-    if (!isi) { location.href = alamat; return; }
-    isi.querySelector('h1').textContent = judul || 'Halaman';
-    isi.querySelector('button').addEventListener('click', function () { pindah(alamat, false, judul); });
-    isi.querySelector('a').href = alamat;
+  function pulihkanNavigasi() {
+    if (!navigasiMenunggu) return;
+    var lama = navigasiMenunggu; navigasiMenunggu = null;
+    lama.isi.forEach(function (item) {
+      if (item.inert === null) item.node.removeAttribute('inert');
+      else item.node.setAttribute('inert', item.inert);
+    });
+    if (lama.sibuk === null) lama.main.removeAttribute('aria-busy');
+    else lama.main.setAttribute('aria-busy', lama.sibuk);
+  }
+
+  function hapusPesanNavigasi() {
+    if (pesanNavigasi) pesanNavigasi.remove();
+    pesanNavigasi = null;
+  }
+
+  function gagalMuat(alamat, judul, dorong) {
+    var main = document.getElementById('isi-halaman');
+    if (!main) { location.href = alamat; return; }
+    hapusPesanNavigasi();
+    var pesan = document.createElement('div'); pesan.className = 'pesan pesan--err';
+    pesan.setAttribute('role', 'alert');
+    pesan.appendChild(document.createTextNode('Halaman belum dapat dibuka. Periksa koneksi, lalu '));
+    var coba = document.createElement('button'); coba.type = 'button'; coba.className = 'btn'; coba.textContent = 'Coba lagi';
+    coba.addEventListener('click', function () { pindah(alamat, dorong, judul); });
+    pesan.appendChild(coba); main.appendChild(pesan); pesanNavigasi = pesan;
   }
 
   function pasangMenunggu() {
@@ -696,8 +687,14 @@
     // menutup menu yang baru dibuka saat data masih dalam perjalanan.
     if (pointerAktif || laci && !laci.hidden) return;
     var data = dataMenunggu; dataMenunggu = null;
+    pulihkanNavigasi();
     tujuanPindah = null; sibuk(false);
-    pasang(data.teks, data.alamat, false);
+    // Inisialisasi dokumen native harus membaca URL tujuan yang sudah benar.
+    // Popstate tidak menambah entri baru; klik/retry menambah tepat sekali.
+    try {
+      if (data.dorong) history.pushState({ pindah: 1 }, '', data.alamat);
+      pasang(data.teks, data.alamat, false);
+    } catch (e) { location.href = data.alamat; }
   }
 
   function pindah(alamat, dorong, judul) {
@@ -705,6 +702,7 @@
     // respons lama datang setelah klik sidebar/detail berikutnya.
     var nomor = ++nomorPindah;
     dataMenunggu = null;
+    pulihkanNavigasi(); hapusPesanNavigasi();
     tujuanPindah = alamat;
     var langsung = rencanaKerangkaLangsung(alamat, dorong);
     if (langsung) {
@@ -755,26 +753,22 @@
       return;
     }
 
-    // Navigasi tidak lagi menunggu pembacaan data pada kunjungan pertama.
-    // URL hanya didorong sekali; respons lama tetap kalah dari pilihan baru.
-    var bertahap = kerangka(alamat, judul);
-    if (bertahap && dorong) { history.pushState({ pindah: 1 }, '', alamat); }
+    // Tanpa provider native, jangan mengganti isi dengan layar transisi.
+    // Tujuan bertahap dibaca sebagai HTML native, dengan janji/cache terpisah
+    // agar HTML penuh tidak menjadi cache baru bagi rute data bertahap.
+    if (!tahanNavigasi()) { tujuanPindah = null; location.href = alamat; return; }
     sibuk(true);
-    ambil(alamat, kerangkaHalaman).then(function (teks) {
+    ambil(alamat, false, kerangkaHalaman).then(function (teks) {
       if (nomor !== nomorPindah) { return; }
       if (!teks) {
+        pulihkanNavigasi();
         sibuk(false); tujuanPindah = null;
-        if (bertahap && gagal[kunciBaca(alamat, kerangkaHalaman)]) { gagalMuat(alamat, judul); }
+        if (gagal[kunciBaca(alamat, false, kerangkaHalaman)]) { gagalMuat(alamat, judul, dorong); }
         else { location.href = alamat; }
         return;
       }
-      if (bertahap) {
-        dataMenunggu = { teks: teks, alamat: alamat, nomor: nomor };
-        pasangMenunggu(); return;
-      }
-      sibuk(false); tujuanPindah = null;
-      if (!pasang(teks, alamat, !bertahap)) { return; }
-      if (!bertahap && dorong) { history.pushState({ pindah: 1 }, "", alamat); }
+      dataMenunggu = { teks: teks, alamat: alamat, nomor: nomor, dorong: dorong };
+      pasangMenunggu();
     });
   }
 
@@ -792,6 +786,7 @@
     if (alamat === location.pathname + location.search) {
       // Klik kembali ke halaman kini juga membatalkan tujuan yang menunggu.
       ++nomorPindah; tujuanPindah = null; sibuk(false);
+      dataMenunggu = null; pulihkanNavigasi(); hapusPesanNavigasi();
       e.preventDefault(); return;
     }
     e.preventDefault();
