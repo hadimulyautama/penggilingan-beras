@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block judul %}{{ judul }}{% endblock %}
+{% block isi %}
+<link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
+<link rel="stylesheet" href="/static/riwayat-qc-desain.css?v={{ VERSI }}">
+<main class="riwayat-detail rhs rqd{% if jenis!='beras-hasil-sosoh' %} rqd-list{% endif %}" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-qc-label="{{ judul }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
+ <div data-rqd-category-slot></div>
+ {% if jenis=='beras-hasil-sosoh' %}
+  {% include '_qc_sosoh_daftar_aksi.html' %}
+  <section class="riwayat-detail__card" data-qc-rice-frame><h2>Proses dan sampel QC</h2><p class="bantu" data-qc-rice-columns>Kode proses · Sampel · Menunggu hasil QC · Status proses</p><div data-qc-rice-body data-shell-table-wrap aria-busy="true"><p>Catatan QC sedang dibaca.</p></div></section>
+ {% else %}
+  <section class="riwayat-detail__card" data-qc-summary><div class="rhs-mass"><div><span>Lot atau proses</span><strong>—</strong></div><div><span>Pencatatan QC</span><strong>—</strong></div></div></section>
+  <section><div data-qc-read-grid data-shell-table-wrap aria-busy="true" class="tabel-standar tabel-standar--grid" style="--tabel-kolom:minmax(180px,1.2fr) minmax(160px,1fr) minmax(115px,.8fr) minmax(220px,1.5fr) 100px 24px" tabindex="0" aria-label="Daftar {{ judul }}">
+   <div class="tabel-standar__scroll"><div class="tabel-standar__kepala" role="row">{% for kolom in QC_KOLOM %}<span{% if not kolom %} aria-hidden="true"{% endif %}>{{ kolom }}</span>{% endfor %}</div>
+    <div class="tabel-standar__item" data-qc-loading-row><div class="tabel-standar__baris">{% for kolom in QC_KOLOM %}<span data-sel="{{ 'utama' if loop.index==1 else 'hasil' if loop.index==4 else 'status' if loop.index==5 else 'tambahan' }}">{% if kolom %}<small class="tabel-standar__sekunder">{{ kolom }}</small><strong>—</strong>{% endif %}</span>{% endfor %}</div></div>
+   </div></div></section>
+ {% endif %}
+ <div class="halaman-bertahap__status"><p id="qc-baca-status" data-shell-status role="status">Membaca catatan QC…</p><button type="button" class="btn btn--kecil" data-shell-retry hidden>Coba lagi</button></div>
+ <p class="bantu" data-shell-message>Nilai belum dibaca ditandai —, bukan nol atau hasil penilaian.</p>
+ {% from '_riwayat_qc_alat.html' import panduan_qc with context %}{{ panduan_qc() }}
+</main>
+<script src="/static/qc-kerangka.js?v={{ VERSI }}" defer></script>
+<script src="/static/halaman-bertahap.js?v={{ VERSI }}" defer></script>
+{% endblock %}

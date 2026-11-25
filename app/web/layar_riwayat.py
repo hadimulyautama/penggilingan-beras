@@ -762,12 +762,15 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     if jenis not in QC_PAGES:
         raise HTTPException(404, "Kategori riwayat QC tidak ditemukan.")
     judul, gudang = QC_PAGES[jenis]
-    from app.web.api import _is_g1_operator, _is_g2_operator, _is_gabah_operator, _is_jenis_operator
+    from app.web.qc_bertahap import boleh as boleh_qc, memakai as memakai_qc, kerangka as kerangka_qc
     from app.services.cakupan_fasilitas import batas as batas_qc
     baca_user=None if is_customer_read(request) else akun.user
-    boleh = await (_is_gabah_operator(akun.user) if jenis in ("gabah-basah","gabah-kering") else _is_jenis_operator(akun.user,"penggilingan") if jenis=="pk-hasil-giling" else _is_jenis_operator(akun.user,"penyosohan") if jenis=="beras-hasil-sosoh" else _is_g2_operator(akun.user))
+    boleh = await boleh_qc(akun.user,jenis)
     if not is_customer_read(request) and not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
+
+    if referensi is None and memakai_qc(request,'qc-'+jenis):
+        return await kerangka_qc(request,akun,'qc-'+jenis)
 
     if jenis == "beras-hasil-sosoh":
         from app.web.riwayat_qc_sosoh import halaman
