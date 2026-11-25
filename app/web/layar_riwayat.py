@@ -131,8 +131,12 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     from app.services.penghalang_koreksi import daftar
     async with SessionLocal() as db:
         catatan_penghalang = await daftar(db, "giling", process_id) if akun.is_admin and penghalang else []
+    from app.web.riwayat_baca_saja import riwayat_baca_saja
     response = await render_laci(
-        request, "riwayat_giling_detail.html", jenis="giling", k=kartu[0], qc_gabah_asal=qc_gabah_asal,
+        request, "riwayat_giling_detail.html", jenis="giling", k=kartu[0],
+        RIWAYAT_BACA_SAJA=riwayat_baca_saja(request, akun, jenis="giling",
+            process_id=process_id, boleh_koreksi=akun.is_admin),
+        qc_gabah_asal=qc_gabah_asal,
         catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-giling" + _query_giling(request) + f"#giling-{process_id}",
         aksi_koreksi=f"/riwayat-giling/{process_id}/koreksi" + _query_giling(request),

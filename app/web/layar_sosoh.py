@@ -156,8 +156,11 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
     from app.services.penghalang_koreksi import daftar
     async with SessionLocal() as db:
         catatan_penghalang = await daftar(db, "sosoh", process_id) if akun.is_admin else []
+    from app.web.riwayat_baca_saja import riwayat_baca_saja
     response = await render_laci(
         request, "riwayat_sosoh_detail.html", jenis="sosoh", k=kartu[0],
+        RIWAYAT_BACA_SAJA=riwayat_baca_saja(request, akun, jenis="sosoh",
+            process_id=process_id, boleh_koreksi=akun.is_admin),
         qc_sosoh=qc_sosoh, qc_kode=kartu[0].kode,
         catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,

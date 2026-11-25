@@ -28,7 +28,7 @@
   @media(max-width:700px){.riwayat-koreksi__input{flex-basis:122px}.riwayat-koreksi__field{font-size:.9rem}}
 @media(max-width:700px){.rhs[data-riwayat-giling] .rhs-tabs{column-gap:8px}}
 </style>
-<main class="riwayat-detail rhs" data-riwayat-giling data-editor-perintah data-tab-awal="{{ tab_awal }}" data-rhs-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}:{{ k.id }}" data-rhs-return="{{ '1' if gagal_koreksi or hasil_koreksi else '0' }}">
+<main class="riwayat-detail rhs" data-riwayat-giling{% if RIWAYAT_BACA_SAJA is sameas true and boleh_koreksi is sameas false and akun and akun.is_admin is sameas false %} data-history-readonly="1"{% else %} data-editor-perintah{% endif %} data-tab-awal="{{ tab_awal }}" data-rhs-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}:{{ k.id }}" data-rhs-return="{{ '1' if gagal_koreksi or hasil_koreksi else '0' }}">
 <a class="rhs-back" href="{{ kembali }}">← Kembali ke Riwayat Penggilingan</a>
 <header class="rhs-header"><h1>Riwayat penggilingan</h1><p class="rhs-code">{{ k.kode }}</p>
 <div class="rhs-identity"><span class="rhs-status">Selesai</span><strong>{% if k.jasa %}{{ k.nama_pemilik or 'Pemilik belum tercatat' }} · Jasa{% else %}Milik pabrik{% endif %}</strong></div>

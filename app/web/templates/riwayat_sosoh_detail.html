@@ -10,7 +10,7 @@
 {% block isi %}
 <link rel="stylesheet" href="/static/riwayat.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/riwayat-sosoh-desain.css?v={{ VERSI }}">
-<main class="riwayat-detail rhs" data-riwayat-sosoh data-editor-perintah data-tab-awal="{{ tab_awal }}" data-rhs-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}:{{ k.id }}" data-rhs-return="{{ '1' if gagal_koreksi or hasil_koreksi else '0' }}">
+<main class="riwayat-detail rhs" data-riwayat-sosoh{% if RIWAYAT_BACA_SAJA is sameas true and boleh_koreksi is sameas false and akun and akun.is_admin is sameas false %} data-history-readonly="1"{% else %} data-editor-perintah{% endif %} data-tab-awal="{{ tab_awal }}" data-rhs-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}:{{ k.id }}" data-rhs-return="{{ '1' if gagal_koreksi or hasil_koreksi else '0' }}">
 <a class="rhs-back" href="{{ kembali }}">← Kembali ke Riwayat Penyosohan</a>
 <header class="rhs-header"><h1>Riwayat penyosohan</h1><p class="rhs-code">{{ k.kode }}</p>
 <div class="rhs-identity"><span class="rhs-status">Selesai</span><strong>{% if k.jasa %}{{ k.nama_pemilik or 'Pemilik belum tercatat' }} · Jasa{% else %}Milik pabrik{% endif %}</strong></div>
