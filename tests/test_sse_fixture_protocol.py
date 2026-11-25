@@ -247,7 +247,14 @@ async def test_stock_setup_drain_freezes_issued_reads_and_preserves_other_listen
             page.emit('requestfinished',first)
         asyncio.get_running_loop().call_soon(finish_after_capture)
         await drain
-        assert observed==[True] and owner.barriers==[dict(issued=1,captured=[1],completed=True)]
+        assert observed==[True] and len(owner.barriers)==1
+        proof=owner.barriers[0]
+        assert {k:proof[k] for k in ('issued','captured','completed')}==dict(issued=1,captured=[1],completed=True)
+        assert proof['before'][0]['terminal'] is None and proof['before'][0]['status'] is None
+        assert proof['after'][0]['terminal']=='finished' and proof['after'][0]['status']==200
+        assert proof['after'][0]['mime']=='application/json' and proof['pending_captured']==[]
+        assert [row['id'] for row in proof['pending_at_exit']]==[2]
+        assert proof['error_type'] is None and proof['ended_ms']>=proof['started_ms']>=0
         assert owner.rows[late]['terminal'] is None
         page.emit('pageerror','unchanged raw error')
     assert raw==['unchanged raw error'] and page.callbacks['pageerror']==[raw.append]
@@ -269,6 +276,13 @@ async def test_stock_setup_drain_rejects_failed_unknown_and_unfinished_session_r
             return
         if fault=='timeout':
             with pytest.raises(asyncio.TimeoutError): await owner.drain_issued(timeout=.001)
+            proof=owner.barriers[-1]
+            assert not proof['completed'] and proof['error_type']=='TimeoutError'
+            assert proof['pending_captured']==[1] and proof['before']==proof['after']
+            assert proof['pending_at_exit']==proof['after'] and proof['after'][0]['terminal'] is None
+            assert proof['after'][0]['status'] is None and proof['after'][0]['mime'] is None
+            assert proof['after'][0]['path']=='/api/sesi-formulir'
+            assert proof['after'][0]['frame_known'] is True and proof['after'][0]['main_frame'] is True
             return
         drain=asyncio.create_task(owner.drain_issued())
         def complete():
@@ -277,6 +291,10 @@ async def test_stock_setup_drain_rejects_failed_unknown_and_unfinished_session_r
             page.emit('requestfailed' if fault=='failed' else 'requestfinished',request)
         asyncio.get_running_loop().call_soon(complete)
         with pytest.raises(AssertionError): await drain
+        proof=owner.barriers[-1]
+        assert not proof['completed'] and proof['error_type']=='AssertionError'
+        assert proof['before'][0]['terminal'] is None and proof['pending_captured']==[]
+        assert proof['after'][0]['terminal']==('failed' if fault=='failed' else 'finished')
 
 
 @pytest.mark.parametrize('fault',['no-native','native-denied','wrong-path','wrong-method','wrong-mime','changed-html','extra-field','different-stamp','native-already-wrong'])
