@@ -121,16 +121,50 @@ async def assert_pending_has_no_editor(page):
     await expect(page.locator('.halaman-memuat')).to_have_count(0)
 
 
-async def remember_native_identity(page, kind):
+def native_history_contract(html, kind, *, editor):
+    """Admin tetap editor native; Operator terbukti sebagai pembaca murni."""
+    assert kind in {'giling', 'sosoh'} and type(editor) is bool
+    doc = BeautifulSoup(html, 'html.parser')
+    roots = doc.select('[data-riwayat-' + kind + ']')
+    assert len(roots) == 1
+    root = roots[0]
+    assert root.has_attr('data-editor-perintah') is editor
+    assert root.has_attr('data-history-readonly') is (not editor)
+    if editor:
+        assert root.select_one('.riwayat-koreksi__form') is not None
+    else:
+        assert root['data-history-readonly'] == '1'
+        assert not root.select('form,[name],[data-rhs-edit],[data-kirim],[data-aksi],[data-buka-aksi],[data-qc-editor],[data-qc-jenis],[data-qc-lengkapi],[data-qc-baru]')
+        assert not doc.select('script[src*="qc-sosoh.js"],script[src*="koreksi-bahan-berjalan"],script[src*="koreksi-di-detail"]')
+        assert all(not tag.get('data-buka') and not tag.get('data-nilai') for tag in doc.select('script[data-buka]'))
+    return True
+
+
+async def prepare_native_admin_draft(page):
+    """Actual local review only: no confirmation/POST and no fixture write."""
+    await page.locator('[data-rhs-edit]:visible').first.click()
+    form = page.locator('.riwayat-koreksi__form')
+    field = form.locator('input[type=number][name^="hasil_"]').first
+    value = await field.input_value()
+    assert value and float(value) >= 0
+    await field.fill(str(float(value) + 0.25))
+    await form.locator('[name=alasan]').fill('Draf sintetis pemeriksaan navigasi; belum disimpan')
+    await form.locator('button[type=submit]:visible').first.click()
+    await expect(form.locator('[data-rhs-review]')).to_be_visible()
+    await expect(form.locator('[data-rhs-confirm]')).to_be_visible()
+    assert await form.evaluate("f=>{const r=f.closest('[data-riwayat-giling],[data-riwayat-sosoh]'),m=window[r.hasAttribute('data-riwayat-giling')?'PADI_RIWAYAT_GILING_DRAF':'PADI_RIWAYAT_SOSOH_DRAF'];return m[r.dataset.rhsActor+'|'+f.querySelector('[name=_csrf]').value].form===f;}")
+
+
+async def remember_native_identity(page, kind, *, editor):
     selector = '[data-riwayat-' + kind + ']'
     native = page.locator(selector)
     await expect(native).to_be_visible()
     await expect(native).to_have_attribute('data-rhs-ready', '1')
-    assert await native.evaluate('r=>r.hasAttribute("data-editor-perintah")')
+    assert native_history_contract(await page.content(), kind, editor=editor)
     # Same key calculation as the UNCHANGED actual native design controller.
     # Keep all synthetic token/value material inside this disposable browser;
     # return booleans only, never credentials/CSRF/field values in artifacts.
-    valid = await page.evaluate("""kind=>{
+    valid = await page.evaluate("""({kind,editor})=>{
       const root=document.querySelector('[data-riwayat-'+kind+']'),
        memory=window[kind==='giling'?'PADI_RIWAYAT_GILING_DRAF':'PADI_RIWAYAT_SOSOH_DRAF'],
        form=root.querySelector('.riwayat-koreksi__form'),
@@ -139,16 +173,18 @@ async def remember_native_identity(page, kind):
       const values=Array.from(form?.elements||[]).map(node=>[node,node.value]),
        storage=Object.keys(sessionStorage).filter(k=>/koreksi|draft|draf|pending/i.test(k))
         .map(k=>[k,sessionStorage.getItem(k)]);
-      window.__historyPendingOwner={root,memory,key,entry:memory[key],form,values,storage};
+      if(!!form!==editor)return false;
+      window.__historyPendingOwner={root,memory,key,entry:memory[key],form,values,storage,editor};
       return true;
-    }""", kind)
+    }""", dict(kind=kind,editor=editor))
     assert valid
 
 
 async def assert_native_identity_preserved(page):
     valid = await page.evaluate("""()=>{
       const s=window.__historyPendingOwner;
-      return !!s&&s.root.isConnected&&s.root.hasAttribute('data-editor-perintah')&&
+      return !!s&&s.root.isConnected&&s.root.hasAttribute('data-editor-perintah')===s.editor&&
+       s.root.hasAttribute('data-history-readonly')===!s.editor&&
        s.memory[s.key]===s.entry&&(!s.form||s.form.isConnected)&&
        s.values.every(([node,value])=>node.isConnected&&node.value===value)&&
        s.storage.every(([key,value])=>sessionStorage.getItem(key)===value)&&
@@ -266,6 +302,46 @@ async def native_editor_veto_control(page, transport, releases, actions, ledger,
     ledger.phase('native-veto.destination-native-ready')
 
 
+async def native_readonly_nonblocking_control(page, transport, releases, actions, ledger, destination_golden):
+    """The hydrated real Operator reader has no writer to veto navigation."""
+    await assert_native_identity_preserved(page)
+    html_entered, html_release = asyncio.Event(), asyncio.Event()
+    data_entered, data_release, completed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    releases.extend([html_release, data_release])
+    transport['gates'][TARGET] = (html_entered, html_release)
+    transport['gate_headers'][TARGET] = {}
+    transport['gates'][DATA_TARGET] = (data_entered, data_release)
+    transport['completed'][DATA_TARGET] = completed
+    count_html = transport['gets'].count(TARGET)
+    try:
+        link = await menu_link(page)
+        actions.append(asyncio.create_task(link.press('Enter',no_wait_after=True,timeout=30000)))
+        ledger.phase('native-readonly.menu-press-started')
+        await asyncio.wait_for(data_entered.wait(),20)
+        await expect(page.locator('[data-bm-page]')).to_be_visible()
+        await expect(page.locator('[data-bm-results] th')).to_have_count(6)
+        await expect(page.locator('.halaman-memuat')).to_have_count(0)
+        assert not html_entered.is_set()
+        assert transport['gets'].count(TARGET) == count_html
+        assert await page.evaluate("""()=>{
+          const s=window.__historyPendingOwner,
+           keys=Object.keys(sessionStorage).filter(k=>/koreksi|draft|draf|pending/i.test(k));
+          return !!s&&!s.editor&&!s.form&&!s.root.isConnected&&s.memory[s.key]===s.entry&&
+           keys.length===s.storage.length&&s.storage.every(([key,value])=>sessionStorage.getItem(key)===value);
+        }""")
+        ledger.phase('native-readonly.before-data-and-html-asserted')
+    finally:
+        data_release.set();html_release.set()
+        transport['gates'].pop(TARGET,None)
+    await asyncio.wait_for(completed.wait(),20)
+    await page.wait_for_function("""()=>{
+      const root=document.querySelector('#isi-halaman [data-bm-page]:not([data-bm-shell])'),results=root?.querySelector('[data-bm-results]');
+      return !!results&&!results.hasAttribute('aria-busy')&&!root.querySelector('[data-bm-error]:not([hidden])');
+    }""",timeout=20000)
+    assert bm_native_semantics(await page.content()) == bm_native_semantics(destination_golden)
+    ledger.phase('native-readonly.destination-native-ready')
+
+
 async def consume_native_penanda(page):
     """Use a DOM event from native tandaiSegar as an actual consume barrier.
 
@@ -292,7 +368,8 @@ async def exercise(pg, client, item, width, monkeypatch, mode):
     ledger.phase('baseline.native-read.begin')
     golden = await asyncio.wait_for(native_golden(client,item['path']),30)
     ledger.phase('baseline.native-read.end')
-    assert 'data-editor-perintah' in golden
+    editor = item['native_editor']
+    assert native_history_contract(golden, item['kind'], editor=editor)
     ledger.phase('baseline.destination-native-read.begin')
     destination_golden=await asyncio.wait_for(native_golden(client,TARGET),30)
     bm_native_semantics(destination_golden)
@@ -374,7 +451,7 @@ async def exercise(pg, client, item, width, monkeypatch, mode):
                     release.set()
                     await asyncio.wait_for(completed.wait(), 20)
                     await expect(page.locator(READY)).to_be_visible()
-                    await remember_native_identity(page,item['kind'])
+                    await remember_native_identity(page,item['kind'],editor=editor)
                     ledger.phase('history.reopen.native-identity-ready')
                 else:
                     assert mode == 'penanda-refresh'
@@ -398,10 +475,10 @@ async def exercise(pg, client, item, width, monkeypatch, mode):
                     await assert_pending_has_no_editor(page)
                     refresh_release.set()
                     await asyncio.wait_for(refresh_completed.wait(), 20)
-                    await remember_native_identity(page,item['kind'])
+                    await remember_native_identity(page,item['kind'],editor=editor)
                     ledger.phase('penanda.refresh-native-ready')
-                    # The refresh returned a complete legitimate native editor.
-                    # Its identity/keys must survive the earlier pending response.
+                    # The refresh returned the actual native reader/editor for
+                    # this role. Its identity/keys survive the older held read.
                     transport['completed'][item['path']] = old_completed
                     old_release.set()
                     await asyncio.wait_for(old_completed.wait(), 20)
@@ -410,8 +487,15 @@ async def exercise(pg, client, item, width, monkeypatch, mode):
                     await assert_native_identity_preserved(page)
                     assert signal['reads'] >= 2
                     assert any(path == item['path'] and x == '1' and flag is None for _, path, x, flag in trace)
-                await native_editor_veto_control(page,transport,releases,actions,ledger,destination_golden)
-                ledger.phase('native-veto.complete')
+                if editor:
+                    await prepare_native_admin_draft(page)
+                    await remember_native_identity(page,item['kind'],editor=True)
+                    ledger.phase('native-editor.actual-draft-reviewed')
+                    await native_editor_veto_control(page,transport,releases,actions,ledger,destination_golden)
+                    ledger.phase('native-veto.complete')
+                else:
+                    await native_readonly_nonblocking_control(page,transport,releases,actions,ledger,destination_golden)
+                    ledger.phase('native-readonly.complete')
                 assert not transport['posts'] and not transport['errors'], transport
                 assert all(method == 'GET' for method, *_ in trace)
         except TimeoutError:
@@ -443,7 +527,7 @@ async def test_giling_pending_reader_can_leave_but_real_editor_keeps_its_boundar
     async with pg() as db:
         stored = await db.scalar(select(MillingProcess).where(MillingProcess.id == process.id))
         item = dict(name='giling-' + role, kind='giling', path='/riwayat-giling/' + str(stored.id),
-                    code=stored.kode_proses, source='/riwayat-giling', family='history')
+                    code=stored.kode_proses, source='/riwayat-giling', family='history',native_editor=role=='admin')
     async with await _klien(pg, peran=role, gudang='Gudang 1') as client:
         await exercise(pg, client, item, width, monkeypatch, mode)
 
@@ -463,6 +547,6 @@ async def test_sosoh_pending_reader_can_leave_but_real_editor_keeps_its_boundary
             db.add(Warehouse(kode_fungsi=code,nama_gudang=name))
             await db.commit()
     item = dict(name='sosoh-' + role, kind='sosoh', path='/riwayat-sosoh/' + str(sosoh_selesai['id']),
-                code=sosoh_selesai['kode'], source='/riwayat-sosoh', family='history')
+                code=sosoh_selesai['kode'], source='/riwayat-sosoh', family='history',native_editor=role=='admin')
     async with await _klien(pg, peran=role, gudang='Gudang 2') as client:
         await exercise(pg, client, item, width, monkeypatch, mode)
