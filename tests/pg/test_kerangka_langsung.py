@@ -196,7 +196,7 @@ async def test_jasa_opsional_izin_berubah_tidak_dijadikan_frame_sukses(pg, lengk
         assert await _sidik(pg) == before
 
 
-def test_anggaran_frame_filter_tetap_dua_walau_jasa_opsional():
+async def test_anggaran_frame_filter_tetap_dua_walau_jasa_opsional():
     from app.web.kerangka_langsung import LITERAL, sah_rujukan
     base = {'versi':2,'penyandian':'baris-1','potongan':['frame'],
             'frames':{url:[0] for url in LITERAL}}
