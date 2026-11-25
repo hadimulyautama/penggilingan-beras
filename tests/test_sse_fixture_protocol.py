@@ -213,3 +213,54 @@ async def test_existing_after_commit_opaque_hook_is_sent_once_and_never_replayed
             assert sent[0]['status']==503 and len(transport.faults)==1
             assert transport.faults[0]['kind']=='explicit-existing-503' and not transport.errors
         finally:await transport.restore()
+
+
+@pytest.mark.parametrize('fault',['no-native','native-denied','wrong-path','wrong-method','wrong-mime','changed-html','extra-field','different-stamp','native-already-wrong'])
+def test_stock_stamp_negative_rejects_anything_outside_exact_authorised_native_envelope(fault):
+    import json
+    payload={'stamp':'native-fixture-context','html':'<main>Native fixture structure</main>'}
+    source_status=403 if fault=='native-denied' else 200
+    if fault=='native-already-wrong':payload['stamp']='fixture-wrong-context'
+    native=NativeWire(source_status,((b'content-type',b'application/json'),),json.dumps(payload).encode())
+    changed={**payload,'stamp':'fixture-wrong-context'}
+    if fault=='changed-html':changed['html']='<main>Unproven replacement</main>'
+    if fault=='extra-field':changed['extra']='unproven'
+    if fault=='different-stamp':changed['stamp']='another-fault'
+    mime='text/plain' if fault=='wrong-mime' else 'application/json'
+    response=httpx.Response(200,json=changed,headers={'content-type':mime})
+    with pytest.raises(AssertionError):
+        replacement_wire(response,[] if fault=='no-native' else [native],
+            'POST' if fault=='wrong-method' else 'GET',
+            '/api/halaman-bertahap/pekerjaan' if fault=='wrong-path' else '/api/halaman-bertahap/stok',{})
+
+
+@pytest.mark.asyncio
+async def test_stock_fault_hook_reads_native_once_before_503_stamp_negative_and_successful_retry():
+    import json
+    path='/api/halaman-bertahap/stok'
+    payload={'stamp':'native-fixture-context','html':'<main>Native fixture structure</main>'}
+    reads=[]
+    async def app(scope,receive,send):
+        reads.append(scope['path'])
+        await send(dict(type='http.response.start',status=200,headers=[(b'content-type',b'application/json')]))
+        await send(dict(type='http.response.body',body=json.dumps(payload).encode(),more_body=False))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url=BASE) as client:
+        original=client.request;faults=iter(('503','stamp','native'))
+        async def hook(method,url,**kw):
+            response=await original(method,url,**kw)
+            assert response.status_code==200
+            mode=next(faults)
+            if mode=='503':return httpx.Response(503,json={'detail':'Fixture read unavailable'},request=response.request)
+            if mode=='stamp':return httpx.Response(200,json={**response.json(),'stamp':'fixture-wrong-context'},request=response.request)
+            return response
+        client.request=hook
+        transport=SharedNativeHTTP(app,client,BASE);await transport.start();sent=[]
+        async def send(message):sent.append(message)
+        try:
+            for _ in range(3):await transport(scope(path),empty_body,send)
+            assert reads==[path]*3 and transport.data['gets']==[path]*3
+            assert [entry['kind'] for entry in transport.faults]==['explicit-existing-503','explicit-existing-stock-stamp']
+            starts=[message['status'] for message in sent if message['type']=='http.response.start']
+            assert starts==[503,200,200] and not transport.writes and not transport.errors
+            assert [entry['native_bytes'] for entry in transport.wire_proofs]==[False,False,True]
+        finally:await transport.restore()

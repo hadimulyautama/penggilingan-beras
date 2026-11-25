@@ -57,6 +57,16 @@ def replacement_wire(response, native, method, path, headers):
         assert set(before)==set(after) and before.get('n')
         assert after=={**before,'n':str(before['n'])+'.owner-pending-read-signal'}
         kind='explicit-existing-penanda-signal'
+    elif response.status_code==200 and method=='GET' and path=='/api/halaman-bertahap/stok' and mime=='application/json':
+        # Existing stock negative: change correlation only AFTER the actual
+        # authorised native read. Never invent HTML, rows, scope or a success
+        # DTO, and never generalise this rule to another JSON reader.
+        before=json.loads(decoded(native[-1]));after=response.json()
+        assert set(before)=={'stamp','html'}
+        assert type(before['stamp']) is str and before['stamp'] and before['stamp']!='fixture-wrong-context'
+        assert type(before['html']) is str
+        assert after=={**before,'stamp':'fixture-wrong-context'}, 'Unknown stock JSON override is not the declared stamp negative'
+        kind='explicit-existing-stock-stamp'
     elif (response.status_code==200 and method=='GET' and mime=='text/html'
             and headers.get('x-pindah')=='1' and headers.get('x-kerangka-halaman')=='0'):
         before=decoded(native[-1])
