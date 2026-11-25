@@ -308,14 +308,23 @@ async def test_muatan_admin_document_remains_readonly_without_inventing_menu_off
 
 
 class FinitePDFReads:
-    """Only the actual binary GETs finish; a live EventSource is never idle."""
+    """Finish exact binary GETs, not SSE or a PDF viewer's private load event."""
     def __init__(self, page, path):
         self.page,self.url=page,BASE+path
         self.requests=set();self.pending=set();self.finished=set();self.responses={};self.failed=[]
-        self.settled=asyncio.Event()
+        self.meta={};self.iframe_requests=set();self.iframe_started=asyncio.Event();self.settled=asyncio.Event()
+        self.complete=False
     def request(self, request):
         if request.method=='GET' and request.url==self.url:
+            assert len(self.requests)<16, 'Unexpected repeated binary reads'
             self.requests.add(request);self.pending.add(request);self.settled.clear()
+            nav=request.is_navigation_request();parent=False;available=True
+            try:parent=request.frame.parent_frame is self.page.main_frame
+            except Exception:available=False
+            self.meta[request]=dict(navigation=nav,parent_is_main=parent,frame_available=available,
+                resource=request.resource_type if request.resource_type in ('document','fetch','xhr','other') else 'OTHER')
+            if nav and parent:
+                self.iframe_requests.add(request);self.iframe_started.set()
     def response(self, response):
         if response.request in self.requests:
             self.responses[response.request]=(response.status,response.headers.get('content-type','').split(';')[0].strip().lower())
@@ -328,61 +337,86 @@ class FinitePDFReads:
             self.failed.append(request);self.pending.discard(request)
             if not self.pending:self.settled.set()
     def assert_complete(self):
-        assert self.requests, 'The real binary PDF endpoint must be requested'
+        assert self.requests and self.iframe_requests, 'Actual binary GET and native iframe navigation provenance are required'
         assert not self.pending and not self.failed and self.finished==self.requests, 'Every binary PDF GET must finish successfully'
         assert set(self.responses)==self.requests
         assert all(status in (200,206) and mime=='application/pdf' for status,mime in self.responses.values())
     async def wait(self):
-        # Observe the actual target iframe load as well as the native share
-        # control's ready state checked by the caller. This excludes an early
-        # empty pending iframe and does not assume a fixed/coalesced GET count.
         async def ready():
-            await self.page.wait_for_function('()=>window.__ownerFinitePDFLoads>0',timeout=20000)
+            await self.iframe_started.wait()
             await self.settled.wait()
         await asyncio.wait_for(ready(),20)
-        self.assert_complete()
+        self.assert_complete();self.complete=True
+    def snapshot(self):
+        return dict(status='PASS' if self.complete else 'FAIL', scope='exact-target-PDF-GET-only',
+            iframe_load_or_pixel_claim=False, requests=[dict(self.meta[r],finished=r in self.finished,
+                pending=r in self.pending,failed=r in self.failed,status=self.responses.get(r,(None,None))[0],
+                mime=self.responses.get(r,(None,None))[1]) for r in self.meta])
 
 
 @asynccontextmanager
 async def observe_pdf_reads(page, path):
     reads=FinitePDFReads(page,path)
-    await page.add_init_script('''(() => {
-      const path=PATH;window.__ownerFinitePDFLoads=0;
-      document.addEventListener('load',event=>{
-        const frame=event.target;
-        if(frame?.tagName!=='IFRAME'||!frame.getAttribute('src'))return;
-        const url=new URL(frame.getAttribute('src'),location.href);
-        if(url.origin===location.origin&&url.pathname===path&&!url.search&&!url.hash)
-          window.__ownerFinitePDFLoads++;
-      },true);
-    })();'''.replace('PATH',json.dumps(path)))
     callbacks=[('request',reads.request),('response',reads.response),('requestfinished',reads.done),('requestfailed',reads.failure)]
     for event,callback in callbacks:page.on(event,callback)
     try:yield reads
     finally:
-        # Detach before peramban closes its live Playwright channel.
         for event,callback in callbacks:page.remove_listener(event,callback)
 
 
+@asynccontextmanager
+async def pdf_read_page(client,width,path,label):
+    out=Path(os.environ['DETAIL_OUT']) if os.environ.get('DETAIL_OUT') else None
+    before=set(out.glob('native-document-shared-*-cleanup.json')) if out else set()
+    reads=None;primary=None
+    try:
+        async with peramban(client,width) as (page,transport), observe_pdf_reads(page,path) as reads:
+            yield page,transport,reads
+    except BaseException as error:
+        primary=error;raise
+    finally:
+        if out and reads is not None:
+            try:
+                native=[]
+                for receipt in sorted(set(out.glob('native-document-shared-*-cleanup.json'))-before):
+                    value=json.loads(receipt.read_text())
+                    native.append(dict(receipt=receipt.name,cleanup_status=value['status'],
+                        binary_wire=[entry for entry in value.get('gates',{}).get('wire',[]) if entry['path']==path]))
+                with (out/('pdf-finite-'+label+'.json')).open('x') as stream:
+                    json.dump(dict(browser=reads.snapshot(),native_HTTP_receipts=native),stream,indent=2)
+                    stream.write('\n')
+            except (OSError,ValueError,KeyError) as error:
+                if primary is None:raise
+                print('PDF metadata receipt failed: '+type(error).__name__)
+
+
 async def test_finite_pdf_barrier_requires_all_binary_reads_and_excludes_live_sse():
+    page=type('Page',(),dict(main_frame=object()))()
     class Request:
-        def __init__(self,path):self.url=BASE+path;self.method='GET'
-    reads=FinitePDFReads(None,'/fixture.pdf')
+        def __init__(self,path,nav=False):
+            self.url=BASE+path;self.method='GET';self.nav=nav;self.resource_type='document' if nav else 'fetch'
+            self.frame=type('Frame',(),dict(parent_frame=page.main_frame))()
+        def is_navigation_request(self):return self.nav
+    reads=FinitePDFReads(page,'/fixture.pdf')
     with pytest.raises(AssertionError):reads.assert_complete()
     reads.request(Request('/api/aliran'))
     with pytest.raises(AssertionError):reads.assert_complete()
-    one,two=Request('/fixture.pdf'),Request('/fixture.pdf')
+    one,two=Request('/fixture.pdf'),Request('/fixture.pdf',True)
     reads.request(one);reads.request(two)
     for request in (one,two):
         reads.response(type('Response',(),dict(request=request,status=200,headers={'content-type':'application/pdf'}))())
     reads.done(one)
     with pytest.raises(AssertionError):reads.assert_complete()
     reads.done(two);reads.assert_complete()
-    bad=FinitePDFReads(None,'/fixture.pdf');bad.request(one);bad.failure(one)
+    assert reads.snapshot()['iframe_load_or_pixel_claim'] is False
+    bad=FinitePDFReads(page,'/fixture.pdf');bad.request(two);bad.failure(two)
     with pytest.raises(AssertionError):bad.assert_complete()
-    wrong=FinitePDFReads(None,'/fixture.pdf');wrong.request(one)
-    wrong.response(type('Response',(),dict(request=one,status=200,headers={'content-type':'text/html'}))());wrong.done(one)
+    wrong=FinitePDFReads(page,'/fixture.pdf');wrong.request(two)
+    wrong.response(type('Response',(),dict(request=two,status=200,headers={'content-type':'text/html'}))());wrong.done(two)
     with pytest.raises(AssertionError):wrong.assert_complete()
+    fetch_only=FinitePDFReads(page,'/fixture.pdf');fetch_only.request(one)
+    fetch_only.response(type('Response',(),dict(request=one,status=200,headers={'content-type':'application/pdf'}))());fetch_only.done(one)
+    with pytest.raises(AssertionError):fetch_only.assert_complete()
 
 
 async def pdf_exercise(pg, client, detail, width, kind):
@@ -401,7 +435,7 @@ async def pdf_exercise(pg, client, detail, width, kind):
     before = await _sidik(pg)
     # Direct native HTML in a fresh native HTTP context: existing iframe plus
     # existing share preparation fetch. Never click Print/share/download.
-    async with peramban(client, width) as (page, transport), observe_pdf_reads(page,pdf) as finite:
+    async with pdf_read_page(client,width,pdf,kind+'-'+str(width)+'-baseline') as (page,transport,finite):
         await performance_probe(page)
         await page.goto(BASE + target, wait_until='load')
         await expect(page.locator('#bagikan-pdf')).to_be_enabled(timeout=30000)
@@ -412,7 +446,7 @@ async def pdf_exercise(pg, client, detail, width, kind):
         await evidence(page, 'pdf-' + kind + '-' + str(width), native=native.text,
                        phase='native-document-control', extra={'pdf_get_count': baseline_reads})
         assert not transport['posts'] and not transport['errors'], transport
-    async with peramban(client, width) as (page, transport), observe_pdf_reads(page,pdf) as finite:
+    async with pdf_read_page(client,width,pdf,kind+'-'+str(width)+'-candidate') as (page,transport,finite):
         await performance_probe(page)
         await page.goto(BASE + detail, wait_until='load')
         await page.wait_for_function('()=>window.PadiKerangkaProsesPDFUI&&document.getElementById("padi-proses-pdf-catalog")')
