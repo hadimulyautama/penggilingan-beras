@@ -25,10 +25,11 @@ on:
         options:
           - semua
           - koreksi-bahan
+          - diagnostik-navigasi
 
 jobs:
   uji:
-    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' && github.event.inputs.cakupan != 'diagnostik-navigasi' }}
     name: Uji ${{ matrix.profil }}
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -121,7 +122,7 @@ jobs:
           path: bukti/
 
   dua-aplikasi:
-    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' && github.event.inputs.cakupan != 'diagnostik-navigasi' }}
     name: Integrasi HTTP PadiFlow dan TeraFlow terpin
     runs-on: ubuntu-latest
     services:
@@ -183,7 +184,7 @@ jobs:
           path: bukti/dua-aplikasi/
 
   retur-dua-aplikasi:
-    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' }}
+    if: ${{ github.event.inputs.cakupan != 'koreksi-bahan' && github.event.inputs.cakupan != 'diagnostik-navigasi' }}
     name: Integrasi HTTP retur PadiFlow dan TeraFlow terpin
     runs-on: ubuntu-latest
     services:
@@ -343,6 +344,7 @@ jobs:
       - name: Migrasi database sementara dari kosong
         run: alembic upgrade head
       - name: Gudang kerja, dryer, silo, giling, sosoh, stok dan portal di iPhone
+        if: ${{ github.event.inputs.cakupan != 'diagnostik-navigasi' }}
         run: |
           python -m pytest -q tests/test_kepemilikan_tampilan.py \
             tests/test_portal_angka_browser.py \
@@ -368,6 +370,31 @@ jobs:
             tests/pg/test_retur_read_owner_browser.py \
             tests/pg/test_history_pending_reader_boundary_browser.py \
             --junitxml=bukti/safari.xml
+      - name: Diagnostik navigasi native Stok, bukan cakupan penuh
+        if: ${{ github.event.inputs.cakupan == 'diagnostik-navigasi' }}
+        env:
+          DETAIL_OUT: ${{ runner.temp }}/padiflow-diagnostik-${{ matrix.browser }}
+        run: |
+          mkdir -p "$DETAIL_OUT"
+          python - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          Path(os.environ['DETAIL_OUT'], 'scope.json').write_text(json.dumps({
+              'scope': 'diagnostik-navigasi', 'not_full_ci': True,
+              'source': os.environ['GITHUB_SHA'], 'browser': os.environ['UJI_BROWSER'],
+              'tests': ['tests/pg/test_stock_detail_owner_browser.py'],
+              'production_access': False,
+          }, indent=2) + '\n')
+          PYTHON
+          python -m pytest -vv --tb=short tests/pg/test_stock_detail_owner_browser.py \
+            --junitxml="$DETAIL_OUT/diagnostik.xml"
+      - name: Simpan diagnostik native terisolasi
+        if: ${{ always() && github.event.inputs.cakupan == 'diagnostik-navigasi' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostik-navigasi-${{ matrix.browser }}
+          path: ${{ runner.temp }}/padiflow-diagnostik-${{ matrix.browser }}/
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
