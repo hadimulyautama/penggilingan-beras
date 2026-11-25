@@ -264,10 +264,11 @@ async def test_sidebar_detail_sekali_sentuh(pg, portal, pelanggan, engine, width
                 if error is not None: row['error'] = diagnostic_error(error)
                 try:
                     row['DOM'] = await asyncio.wait_for(page.evaluate("""() => {
-                      const frame=document.querySelector('.bingkai'),main=document.getElementById('isi-halaman'),
+                      const frame=document.querySelector('.bingkai'),main=document.getElementById('isi-halaman')||document.querySelector('main'),
                         registry=document.getElementById('padi-kerangka-langsung');
                       return {readyState:document.readyState,main:!!main,frame:!!frame,
-                        sessionPresent:!!document.getElementById('formulir-sesi')?.dataset.token,
+                        staffSessionPresent:!!document.getElementById('formulir-sesi')?.dataset.token,
+                        portalSessionPresent:!!document.querySelector('meta[name="formulir-sesi"]')?.content,
                         editorPresent:!!document.querySelector('[data-editor-perintah],[data-kemas-ulang]'),
                         PINDAH:!!window.PINDAH,UIFactory:typeof window.PadiKerangkaUI?.buat==='function',
                         UIData:!!window.PadiKerangkaUIData,JasaDetailFactory:typeof window.PadiKerangkaJasaDetailUI?.buat==='function',
