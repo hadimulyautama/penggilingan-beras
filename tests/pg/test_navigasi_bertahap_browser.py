@@ -20,19 +20,21 @@ def portal_native_columns(html):
     native=BeautifulSoup(html,'html.parser')
     columns=[n.get_text(' ',strip=True) for n in native.select('.masuk-kepala > span')]
     assert len(columns)==7 and columns[0]=='Nama / tiket'
-    assert native.select_one('form[role=search] select[name=jenis]')
-    assert native.select_one('form[role=search] input[name=cari]')
+    assert not native.select_one('[data-portal-native-frame]'), 'Golden must be the complete native read, not its pending framework'
+    assert native.select_one('form.pelanggan-filter-masuk[method=get] select[name=jenis]')
+    assert native.select_one('form.pelanggan-filter-masuk[method=get] input[name=cari]')
     return columns
 
 
 async def test_portal_native_oracle_rejects_missing_columns_or_filter_controls():
     # Pure negative controls for the source oracle, not a served response,
     # permission, business row or a replacement for the native fixture GET.
-    html='<div class="masuk-kepala"><span>Nama / tiket</span>'+''.join('<span>Kolom</span>' for _ in range(6))+'</div><form role="search"><select name="jenis"></select><input name="cari"></form>'
+    html='<div class="masuk-kepala"><span>Nama / tiket</span>'+''.join('<span>Kolom</span>' for _ in range(6))+'</div><form class="pelanggan-filter-masuk" method="get"><select name="jenis"></select><input name="cari"></form>'
     assert len(portal_native_columns(html))==7
     for selector in ('.masuk-kepala','select[name=jenis]','input[name=cari]'):
         doc=BeautifulSoup(html,'html.parser');doc.select_one(selector).decompose()
         with pytest.raises(AssertionError):portal_native_columns(str(doc))
+    with pytest.raises(AssertionError):portal_native_columns('<div data-portal-native-frame>'+html+'</div>')
 
 async def _tuntaskan_baca(reads,pending):
     hasil=await asyncio.wait_for(asyncio.gather(*reads,return_exceptions=True),20) if reads else []
@@ -94,7 +96,9 @@ async def jalankan(pg,portal,pelanggan,width):
         # page or fabricated receipt DTO may satisfy the portal assertion.
         portal_columns=[]
         if pelanggan:
-            portal_columns=portal_native_columns(pages[tujuan].text)
+            native_target=await c.get(tujuan,headers={'X-Portal-Navigasi':'1'})
+            assert native_target.status_code==200
+            portal_columns=portal_native_columns(native_target.text)
         async with async_playwright() as pw:
             browser=await pw.chromium.launch()
             ctx=await browser.new_context(viewport={'width':width,'height':840},service_workers='block')
