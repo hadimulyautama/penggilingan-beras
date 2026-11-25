@@ -27,7 +27,7 @@ def test_native_caller_guard_still_precedes_presentation_and_undo_untouched():
     source=(ROOT/'app/web/layar_audit.py').read_text()
     assert 'akun=Depends(butuh_admin)' in source
     assert source.index('shell=await dokumen(request,akun)')<source.index('catatan, semua = await svc.daftar')
-    undo=source[source.index('@router.post'):] 
+    undo=source[source.index('@router.post'):]
     assert 'log_id=log_id' in undo and 'actor=akun.user' in undo
     empty=(ROOT/'app/web/templates/audit_native.html').read_text()
     assert '{{ super() }}' in empty and '{% if LAPORAN_NAV and not catatan %}' in empty
