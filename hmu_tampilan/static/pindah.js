@@ -193,9 +193,17 @@
     if (!root || a.origin !== location.origin || a.search || a.hash || !daftarRiwayatBaca(a.pathname)) return false;
     try {
       var allowed = JSON.parse(root.dataset.bolehAlamat || "[]");
-      JSON.parse(root.dataset.tujuanTab || "[]").forEach(function (tab) {
-        if (tab.boleh === true) allowed = allowed.concat(tab.alamat || []);
-      });
+      var tabs = JSON.parse(root.dataset.tujuanTab || "[]");
+      var strings = function (xs) { return Array.isArray(xs) && xs.every(function (x) { return typeof x === "string"; }); };
+      if (!strings(allowed) || !Array.isArray(tabs)) return false;
+      for (var i = 0; i < tabs.length; i++) {
+        var tab = tabs[i];
+        if (!tab || typeof tab !== "object") return false;
+        if (tab.boleh === true) {
+          if (!strings(tab.alamat)) return false;
+          allowed = allowed.concat(tab.alamat);
+        }
+      }
       return allowed.indexOf(a.pathname) !== -1;
     } catch (_) { return false; }
   }
@@ -929,7 +937,8 @@
     if (!tahanNavigasi()) { tujuanPindah = null; location.href = alamat; return; }
     sibuk(true);
     var alias = aliasRiwayat(alamat);
-    ambil(alamat, false, kerangkaHalaman || alias, alias).then(function (hasil) {
+    var permintaan = alias ? ambil(alamat, false, true, true) : ambil(alamat, false, kerangkaHalaman);
+    permintaan.then(function (hasil) {
       var teks = alias && hasil ? hasil.teks : hasil;
       if (nomor !== nomorPindah) { return; }
       if (!teks) {
