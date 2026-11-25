@@ -1,6 +1,6 @@
 """Batas struktur murni, tanpa database, akun, saldo atau request jaringan."""
 import pytest
-from app.web.stok_kerangka_langsung import sah_descriptor, boleh_sumber
+from app.web.stok_kerangka_langsung import sah_descriptor
 
 
 def valid():
@@ -30,12 +30,7 @@ def test_descriptor_tidak_valid_tidak_dipasang(mutate):
     data=valid();mutate(data);assert not sah_descriptor(data)
 
 
-@pytest.mark.parametrize('path', ['/kabar','/pekerjaan','/stok','/jasa','/barang-masuk','/barang-masuk/42'])
-def test_hanya_sumber_operasi_yang_memakai_katalog(path):
-    assert boleh_sumber(path)
-
-
-@pytest.mark.parametrize('path', ['/pengaturan/perusahaan-sendiri/1','/pengaturan/perusahaan-sendiri/1/riwayat',
-    '/pengguna','/console','/riwayat-pengeringan','/laporan','/stok-rahasia','/barang-masuk/42/edit','/barang-masuk/0'])
-def test_administrasi_dan_keluarga_lain_tidak_menerima_metadata_stok(path):
-    assert not boleh_sumber(path)
+# Aturan lama menguji whitelist asal, sehingga Riwayat/Beranda justru wajib
+# kehilangan kerangka Stok. Kontrak tujuan kini diuji lewat dokumen native,
+# aktor dan namespace nyata pada test_stok_tujuan_shell.py; bukan melonggarkan
+# batas descriptor atau menganggap katalog sebagai otorisasi endpoint.

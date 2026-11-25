@@ -1,16 +1,7 @@
-"""Prototype struktur Stok berizin, tanpa saldo, baris atau cache transaksi."""
+"""Struktur tujuan Stok pada shell native, tanpa saldo atau cache transaksi."""
 from fastapi import Request
-import re
 
 MAX_JSON_BYTES = 1572864
-SUMBER_OPERASI = frozenset({'/kabar', '/barang-masuk', '/pekerjaan', '/stok', '/jasa'})
-
-
-def boleh_sumber(path):
-    # Izin administrasi perusahaan/lokasi bukan izin membawa pilihan stok
-    # operasional ke dokumennya. Default-deny keluarga lain; pembaca native
-    # Stok tetap memiliki aturan dan gerbangnya sendiri.
-    return path in SUMBER_OPERASI or bool(re.fullmatch(r'/barang-masuk/[1-9][0-9]*', path))
 
 
 def sah_descriptor(data):
@@ -35,8 +26,11 @@ def sah_descriptor(data):
 
 
 async def susun(request: Request, akun, *, navigasi):
-    if not boleh_sumber(request.url.path):
-        return None
+    # Pemanggil hanya melengkapi dokumen native terautentikasi dengan shell
+    # bersama; API, partial, portal dan stream asing ditolak di sana. Struktur
+    # tujuan harus siap pada shell itu, bukan tergantung halaman asal. Tetap
+    # gunakan izin, metadata lokasi dan renderer Stok milik aktor efektif;
+    # endpoint isi memeriksa ulang akses dan tidak membawa saldo di katalog.
     from hmu_tampilan import CAP_ASET
     from app.database import SessionLocal
     from app.services.cakupan_fasilitas import (
