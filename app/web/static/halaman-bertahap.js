@@ -77,11 +77,19 @@
    dialogs:Array.from(node.querySelectorAll('dialog')).map(d=>d.id),
   });
   if(schema(old)!==schema(fresh))throw Error('Cakupan kontrol berubah. Muat ulang halaman.');
-  return {old,fresh};
+  let tabs=null;
+  if(root.dataset.kind==='pekerjaan'){
+   const selector='nav[aria-label="Tab pekerjaan"]',before=root.querySelectorAll(selector),after=content.querySelectorAll(selector);
+   if(before.length!==1||after.length!==1||schema(before[0])!==schema(after[0])||old.contains(before[0])!==fresh.contains(after[0]))throw Error('Struktur tab pekerjaan berubah. Muat ulang halaman.');
+   // Native browser dapat menempatkan tab sebagai saudara kepala kontrol.
+   // Pertahankan pulau itu sendiri; jangan mencari atau membuat tab lain.
+   if(!old.contains(before[0]))tabs={old:before[0],fresh:after[0]};
+  }
+  return {old,fresh,tabs};
  }
  function retainControls(island){
   if(!island)return;
-  const {old,fresh}=island;
+  const {old,fresh,tabs}=island;
   // GET native yang sama menentukan angka/opsi. Ketikan dan panel terbuka
   // sudah ditahan oleh interacting(), juga sesudah seluruh aset selesai.
   for(const select of old.querySelectorAll('select[name]')){
@@ -102,6 +110,15 @@
   for(const reason of old.querySelectorAll('[id^="shell-"]'))if(!fresh.querySelector('#'+CSS.escape(reason.id)))reason.remove();
   if(fresh.dataset.pelangganUrl)old.dataset.pelangganUrl=fresh.dataset.pelangganUrl;
   old.pfStockShellStop?.();
+  if(tabs){
+   const links=tabs.old.querySelectorAll('a[href]'),nativeLinks=tabs.fresh.querySelectorAll('a[href]');
+   links.forEach((link,i)=>{
+    for(const attr of ['class','aria-current']){if(nativeLinks[i].hasAttribute(attr))link.setAttribute(attr,nativeLinks[i].getAttribute(attr));else link.removeAttribute(attr);}
+    const counts=link.querySelectorAll('.kontrol-tab__jumlah'),nativeCounts=nativeLinks[i].querySelectorAll('.kontrol-tab__jumlah');
+    counts.forEach((count,j)=>{if(nativeCounts[j])count.textContent=nativeCounts[j].textContent;});
+   });
+   tabs.fresh.replaceWith(tabs.old);
+  }
   fresh.replaceWith(old);
  }
  function stockTable(content){
