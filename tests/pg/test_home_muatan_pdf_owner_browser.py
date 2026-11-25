@@ -487,7 +487,7 @@ async def pdf_exercise(pg, client, detail, width, kind):
         await page.goto(BASE + target, wait_until='load')
         await expect(page.locator('#bagikan-pdf')).to_be_enabled(timeout=30000)
         await expect(page.locator('#status-bagikan')).to_contain_text('PDF siap')
-        baseline_pdf=await finite.wait(baseline_pdf)
+        baseline_pdf=await finite.wait()
         baseline_reads = transport['gets'].count(pdf)
         assert baseline_reads >= 1, 'Actual binary PDF path must be requested; no mocked PDF.'
         await evidence(page, 'pdf-' + kind + '-' + str(width), native=native.text,
@@ -520,7 +520,7 @@ async def pdf_exercise(pg, client, detail, width, kind):
             await expect(page.locator('iframe[data-ppv-activated="1"]')).to_have_attribute('src', pdf)
             await expect(page.locator('#bagikan-pdf')).to_be_enabled(timeout=30000)
             await expect(page.locator('#status-bagikan')).to_contain_text('PDF siap')
-            await finite.wait()
+            await finite.wait(baseline_pdf)
             reads = transport['gets'].count(pdf)
             assert reads == baseline_reads, {'native_pdf_gets': baseline_reads, 'candidate_pdf_gets': reads}
             assert chrome(await page.content()) == expected
