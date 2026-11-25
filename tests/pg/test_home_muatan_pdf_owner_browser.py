@@ -309,8 +309,11 @@ async def test_muatan_admin_document_remains_readonly_without_inventing_menu_off
 
 class FinitePDFReads:
     """Finish exact binary GETs, not SSE or a PDF viewer's private load event."""
-    def __init__(self, page, path):
+    def __init__(self, page, path, *, engine=None):
         self.page,self.url=page,BASE+path
+        self.engine=engine or os.environ.get('UJI_BROWSER',os.environ.get('OWNER_BROWSER','chromium'))
+        assert self.engine in ('chromium','webkit')
+        self.baseline_matched=None
         self.requests=set();self.pending=set();self.finished=set();self.responses={};self.failed=[]
         self.browser_responses={};self.failure_facts={};self.binary_fetches=[]
         self.meta={};self.iframe_requests=set();self.iframe_started=asyncio.Event();self.settled=asyncio.Event()
@@ -343,7 +346,7 @@ class FinitePDFReads:
                 literal=text if 0<len(text)<=512 else None,sha256=hashlib.sha256(text.encode()).hexdigest(),reviewed=False)
             if not self.pending:self.settled.set()
     def terminal_checks(self):
-        assert self.requests and self.iframe_requests, 'Actual binary GET and native iframe navigation provenance are required'
+        assert len(self.requests)==2 and len(self.iframe_requests)==1, 'Require exactly the native iframe GET and share fetch; extra or missing requests must fail'
         assert not self.pending and self.finished|set(self.failed)==self.requests, 'Every binary PDF GET must reach a terminal browser outcome'
         assert set(self.responses)==self.requests
         assert all(status in (200,206) and mime=='application/pdf' for status,mime in self.responses.values())
@@ -351,28 +354,47 @@ class FinitePDFReads:
         fetches=self.requests-self.iframe_requests
         assert fetches and fetches<=self.finished
         assert all(self.responses[r]==(200,'application/pdf') for r in fetches)
-    def assert_complete(self):
+    def assert_complete(self, baseline=None):
         self.terminal_checks()
-        assert not self.failed, 'HOLD: actual iframe failure reason is recorded but has not been reviewed against native baseline'
+        if self.failed:
+            # Exact reasons observed in the separate fresh native controls
+            # (WK97 / Chromium98); not a generic aborted-request exemption or
+            # a claim about PDF pixels/plugin support or the cause of failure.
+            reasons={'webkit':('Frame load interrupted','4b3d0ac418eb3a72ce2099f1e3c00dc13a5eafc3c2eb702a92eb7d10fd648257'),
+                'chromium':('net::ERR_ABORTED','7ba7a1709a2d7d220e120c927e0a7e90adf45c88b09ba912b237d705090d1d4e')}
+            assert len(self.failed)==1
+            request=self.failed[0];meta=self.meta[request];failure=self.failure_facts[request]
+            assert meta['navigation'] is True and meta['parent_is_main'] is True and meta['frame_available'] is True and meta['resource']=='document'
+            assert self.responses[request]==(200,'application/pdf')
+            assert (failure['literal'],failure['sha256'])==reasons[self.engine], 'HOLD: unknown or changed actual iframe failure'
+            assert len(self.binary_fetches)==1 and all(value['bytes']>5 and value['PDF_prefix'] is True and value['status']==200 and value['mime']=='application/pdf' for value in self.binary_fetches)
+            failure['reviewed']=True
+        signature=dict(engine=self.engine,requests=sorted([
+            (self.meta[r]['navigation'],self.meta[r]['parent_is_main'],self.meta[r]['frame_available'],self.meta[r]['resource'],
+             self.responses[r][0],self.responses[r][1],'failed' if r in self.failed else 'finished',
+             self.failure_facts[r]['sha256'] if r in self.failed else '') for r in self.requests]))
+        if baseline is not None:
+            self.baseline_matched=signature==baseline
+            assert self.baseline_matched, 'Candidate terminal/request outcome differs from this fresh native baseline'
+        return signature
     async def read_binary_fetches(self):
         for request in self.requests-self.iframe_requests:
             body=await self.browser_responses[request].body()
             value=dict(bytes=len(body),PDF_prefix=body.startswith(b'%PDF-'),status=self.responses[request][0],mime=self.responses[request][1])
             self.binary_fetches.append(value)
             assert value['bytes']>5 and value['PDF_prefix'], 'The completed native share fetch must contain a real PDF'
-    async def wait(self):
+    async def wait(self, baseline=None):
         async def ready():
             await self.iframe_started.wait()
             await self.settled.wait()
             self.terminal_checks()
             await self.read_binary_fetches()
-            # Diagnostic-first: do not guess which headless navigation
-            # failures are safe. Root must review the observed literal first.
-            self.assert_complete()
-        await asyncio.wait_for(ready(),20)
+            return self.assert_complete(baseline)
+        signature=await asyncio.wait_for(ready(),20)
         self.complete=True
+        return signature
     def snapshot(self):
-        return dict(status='PASS' if self.complete else 'FAIL', scope='exact-target-PDF-GET-only',
+        return dict(status='PASS' if self.complete else 'FAIL', scope='exact-target-PDF-GET-only', engine=self.engine, fresh_baseline_matched=self.baseline_matched,
             iframe_load_or_pixel_claim=False, binary_share_fetches=self.binary_fetches,requests=[dict(self.meta[r],failure=self.failure_facts.get(r),finished=r in self.finished,
                 pending=r in self.pending,failed=r in self.failed,status=self.responses.get(r,(None,None))[0],
                 mime=self.responses.get(r,(None,None))[1]) for r in self.meta])
@@ -465,7 +487,7 @@ async def pdf_exercise(pg, client, detail, width, kind):
         await page.goto(BASE + target, wait_until='load')
         await expect(page.locator('#bagikan-pdf')).to_be_enabled(timeout=30000)
         await expect(page.locator('#status-bagikan')).to_contain_text('PDF siap')
-        await finite.wait()
+        baseline_pdf=await finite.wait(baseline_pdf)
         baseline_reads = transport['gets'].count(pdf)
         assert baseline_reads >= 1, 'Actual binary PDF path must be requested; no mocked PDF.'
         await evidence(page, 'pdf-' + kind + '-' + str(width), native=native.text,
@@ -528,3 +550,39 @@ async def test_sosoh_pdf_actual_detail_link_and_request_count(pg, sosoh_selesai,
 async def test_dryer_pdf_actual_detail_link_and_request_count(pg, dryer_selesai, width):
     async with await role_client(pg, peran='operator', gudang='Gudang 1') as client:
         await pdf_exercise(pg, client, '/riwayat-pengeringan/' + str(dryer_selesai['id']), width, 'pengeringan')
+
+
+async def test_pdf_terminal_allowance_is_engine_specific_paired_and_rejects_new_outcomes():
+    def make(engine):
+        page=type('Page',(),dict(main_frame=object()))()
+        probe=FinitePDFReads(page,'/fixture.pdf',engine=engine)
+        class Request:
+            method='GET';url=BASE+'/fixture.pdf'
+            def __init__(self,nav):
+                self.nav=nav;self.resource_type='document' if nav else 'fetch'
+                self.frame=type('Frame',(),dict(parent_frame=page.main_frame))()
+                self.failure='Frame load interrupted' if engine=='webkit' else 'net::ERR_ABORTED'
+            def is_navigation_request(self):return self.nav
+        iframe,fetch=Request(True),Request(False)
+        for request in (iframe,fetch):
+            probe.request(request)
+            probe.response(type('Response',(),dict(request=request,status=200,headers={'content-type':'application/pdf'}))())
+        probe.failure(iframe);probe.done(fetch)
+        probe.binary_fetches=[dict(bytes=100,PDF_prefix=True,status=200,mime='application/pdf')]
+        return probe,iframe,fetch
+    for engine in ('webkit','chromium'):
+        baseline,_,_=make(engine);signature=baseline.assert_complete()
+        candidate,_,_=make(engine);assert candidate.assert_complete(signature)==signature
+        for fault in ('unknown-literal','unknown-hash','status','mime','failed-fetch','extra-request','missing-parent','bad-PDF','changed-terminal'):
+            probe,iframe,fetch=make(engine)
+            if fault=='unknown-literal':probe.failure_facts[iframe]['literal']='New unreviewed failure'
+            elif fault=='unknown-hash':probe.failure_facts[iframe]['sha256']='0'*64
+            elif fault=='status':probe.responses[iframe]=(503,'application/pdf')
+            elif fault=='mime':probe.responses[iframe]=(200,'text/html')
+            elif fault=='failed-fetch':probe.failed.append(fetch);probe.finished.discard(fetch)
+            elif fault=='extra-request':probe.requests.add(object())
+            elif fault=='missing-parent':probe.meta[iframe]['parent_is_main']=False
+            elif fault=='bad-PDF':probe.binary_fetches[0]['PDF_prefix']=False
+            else:
+                probe.failed=[];probe.finished.add(iframe)
+            with pytest.raises(AssertionError):probe.assert_complete(signature)
