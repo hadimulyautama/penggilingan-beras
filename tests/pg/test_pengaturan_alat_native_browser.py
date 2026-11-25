@@ -13,7 +13,7 @@ pytestmark=pytest.mark.asyncio
 PATH='/pengaturan/alat'
 
 @pytest.mark.parametrize('width',[390,1280])
-async def test_equipment_hub_native_links_and_chrome_do_not_shift(pg,stok_lengkap,width):
+async def test_equipment_hub_direct_document_keeps_three_native_links_and_chrome(pg,stok_lengkap,width):
     async with await _klien(pg,role=P.SUPERADMIN) as client:
         before=await _sidik(pg)
         actual=BeautifulSoup((await client.get(PATH,headers={'X-Pindah':'1'})).text,'html.parser')
@@ -21,11 +21,14 @@ async def test_equipment_hub_native_links_and_chrome_do_not_shift(pg,stok_lengka
         assert len(expected)==3
         crumb=str(actual.select_one('.desktop-chrome__crumbrow'))
         async with peramban(client,width) as (page,t):
-            await page.goto(BASE+'/pengaturan',wait_until='load')
-            await page.wait_for_function("()=>window.PadiKerangkaPengaturanAlatUI&&document.getElementById('padi-pengaturan-alat-kerangka')")
             entered,release=asyncio.Event(),asyncio.Event();t['gates'][PATH]=(entered,release)
+            t['gate_headers'][PATH]={'x-pindah':'1','x-kerangka-halaman':'0'}
             try:
-                await page.locator('.pg-pintu[href="'+PATH+'"]').press('Enter')
+                # This legacy hub has no native /pengaturan menu door: that
+                # menu links directly to /pengaturan/mesin. Cover the real deep
+                # document and its separate fresh GET, not an invented anchor
+                # or a claim that this is pre-HTML sidebar navigation.
+                await page.goto(BASE+PATH,wait_until='load')
                 await asyncio.wait_for(entered.wait(),20)
                 root=page.locator('[data-pengaturan-alat-kerangka]');await expect(root).to_be_visible()
                 await expect(page.locator('.halaman-memuat')).to_have_count(0)

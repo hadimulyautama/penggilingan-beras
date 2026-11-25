@@ -13,15 +13,26 @@ pytestmark=[pytest.mark.asyncio,pytest.mark.skipif(os.getenv('UJI_BROWSER_SOSOH_
 @pytest.mark.parametrize('width',[1440,390,320])
 async def test_tab_draf_qc_sumber_dan_editor_asli(pg,running,width):
  from playwright.async_api import expect
- out=Path(os.environ.get('BUKTI_SOSOH_DESAIN','../bukti'));out.mkdir(parents=True,exist_ok=True)
+ out=Path(os.environ.get('BUKTI_SOSOH_DESAIN') or os.environ.get('DETAIL_OUT') or '../bukti');out.mkdir(parents=True,exist_ok=True)
  uid,kode,mid,intake=running
+ # The native Admin read includes both warehouses. The original running
+ # recipe only creates G2; add the canonical G1 master before audit baselines,
+ # without creating a user, grant, binding, silo, process or stock for G1.
+ from app.models import Warehouse
+ from app.services.seed import _WAREHOUSES
+ async with pg() as db:
+  existing=await db.scalar(select(Warehouse.id).where(Warehouse.kode_fungsi=='g1'))
+  if existing is None:
+   code,name=next(pair for pair in _WAREHOUSES if pair[0]=='g1')
+   db.add(Warehouse(kode_fungsi=code,nama_gudang=name));await db.commit()
  async with await _klien(pg,peran='admin') as c:
   c.headers['X-CSRF-Token']=cap_formulir(c)
   async with pg() as db:
    before=await db.scalar(select(func.count()).select_from(ActivityLog))
   async with browser(c,width) as page:
    await page.goto('https://uji/proses-aktif/sosoh/'+kode)
-   await page.locator('.sr-design-tabs').wait_for();assert await page.locator('[data-sr-tab]').count()==5
+   await expect(page.locator('[data-sosoh-ringkas] .sr-design-tabs')).to_be_visible()
+   await expect(page.locator('[data-sosoh-ringkas] [data-sr-tab]')).to_have_count(5)
    assert await page.locator('[data-proses-isi]>header').get_by_text('Mulai',exact=False).is_visible()
    assert await page.locator('[data-sr-tab="ringkasan"]').evaluate("e=>getComputedStyle(e).backgroundColor")=='rgba(0, 0, 0, 0)'
    await page.locator('[data-sr-tab="ringkasan"]').focus();await page.keyboard.press('ArrowRight')
