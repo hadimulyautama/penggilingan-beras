@@ -3,6 +3,19 @@
  'use strict';
  if(!window.PINDAH||typeof PINDAH.aturKerangkaLangsung!=='function')return;
  let hostLama=null,registry=null;
+ // Sama dengan stok_navigasi.alamat: urutan/default dan encoding adalah
+ // bagian tautan native; jangan menormalkan scope dengan URL permintaan mentah.
+ function kutipStok(value,scalar=false){
+  let text=encodeURIComponent(String(value)).replace(/[!'()*]/g,char=>'%'+char.charCodeAt(0).toString(16).toUpperCase());
+  return scalar?text.replace(/%2F/g,'/'):text.replace(/%20/g,'+');
+ }
+ function alamatStok(tab,owner,customer,warehouse,search){
+  const params=[['tab',tab],['pemilik',owner||'semua']];
+  if(owner==='jasa'&&customer)params.push(['pelanggan_id',customer]);
+  if(warehouse)params.push(['gudang',warehouse]);
+  if(search)params.push(['cari',search]);
+  return '/stok?'+params.map(([key,value])=>key+'='+kutipStok(value)).join('&');
+ }
  function stokLangsung(pilihan,context,cap,token){
   if(!pilihan.alamat.startsWith('/stok'))return null;
   const u=new URL(pilihan.alamat,location.href),q=u.searchParams;
@@ -50,11 +63,15 @@
    if(target.origin!==location.origin||target.pathname!=='/stok')continue;
    const kind=target.searchParams.get('tab')||'bahan';
    if(!['bahan','produk','karung'].includes(kind))return null;
-   const next=new URL(u);next.searchParams.set('tab',kind);link.href=next.pathname+next.search;
+   link.setAttribute('href',alamatStok(kind,owner,customer,warehouse,search));
   }
-  const reset=new URL('/stok',location.href);reset.searchParams.set('tab',tab);reset.searchParams.set('pemilik','semua');if(search)reset.searchParams.set('cari',search);
-  root.querySelector('[data-shell-reset],.sk-form-filter>a[href]')?.setAttribute('href',reset.pathname+reset.search);
-  const historyLink=root.querySelector('.sk-riwayat-link');if(historyLink){const back=new URL(historyLink.getAttribute('href'),location.href);if(back.origin!==location.origin||back.pathname!=='/kepemilikan')return null;back.searchParams.set('kembali_stok',u.pathname+u.search);historyLink.href=back.pathname+back.search;}
+  root.querySelector('[data-shell-reset],.sk-form-filter>a[href]')?.setAttribute('href','/stok?tab='+tab+'&pemilik=semua&cari='+kutipStok(search,true));
+  const historyLink=root.querySelector('.sk-riwayat-link');
+  if(historyLink){
+   const back=new URL(historyLink.getAttribute('href'),location.href),kind=tab==='bahan'?'pk':tab;
+   if(back.origin!==location.origin||back.pathname!=='/kepemilikan'||back.searchParams.get('kind')!==kind||Array.from(back.searchParams.keys()).some(key=>!['kind','kembali_stok'].includes(key)||back.searchParams.getAll(key).length!==1))return null;
+   historyLink.setAttribute('href','/kepemilikan?kind='+kind+'&kembali_stok='+kutipStok(alamatStok(tab,owner,customer,warehouse,search),true));
+  }
   const scope=root.querySelector('[data-shell-scope],.sk-cakupan');
   if(scope){const ownerLabel=({semua:'Semua kepemilikan',pabrik:'Pabrik',jasa:'Titipan jasa'})[owner]+(customer?' · Pelanggan ID '+customer+' (nama menunggu data)':'');const strong=doc.createElement('strong');strong.textContent=ownerLabel;scope.replaceChildren(strong,doc.createTextNode(' · '+locationSelect.selectedOptions[0].textContent));}
   root.dataset.filtered=owner!=='semua'||!!(warehouse||customer||search)?'1':'0';
