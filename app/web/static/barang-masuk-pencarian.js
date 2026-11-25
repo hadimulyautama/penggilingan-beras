@@ -55,6 +55,8 @@
     const freshForm=next.querySelector(form.matches('[data-bm-search]')?'[data-bm-search]':'.bm-form-filter');
     const schema=f=>Array.from(f.elements).filter(e=>e.name&&e.type!=='hidden').map(e=>e.name+':'+e.type).sort().join('|');
     if(!freshForm||(form.method||'get').toLowerCase()!=='get'||(freshForm.method||'get').toLowerCase()!=='get'||form.getAttribute('action')!==freshForm.getAttribute('action')||schema(form)!==schema(freshForm))throw Error('Struktur pilihan penerimaan berubah. Muat ulang halaman.');
+    const links=Array.from(form.querySelectorAll('a[href]')),targets=Array.from(freshForm.querySelectorAll('a[href]'));
+    if(links.length!==targets.length||links.some((link,i)=>{const a=new URL(link.getAttribute('href'),location.href),b=new URL(targets[i].getAttribute('href'),location.href);return a.origin!==location.origin||b.origin!==location.origin||a.pathname!=='/barang-masuk'||b.pathname!==a.pathname;}))throw Error('Tujuan pilihan penerimaan berubah. Muat ulang halaman.');
    }
    const tabPairs=[];
    for(const selector of ['nav[aria-label="Bagian Barang Masuk"]','[data-bm-nav].kontrol-tab']){
@@ -77,6 +79,8 @@
     for(const field of freshForm.querySelectorAll('input[type="hidden"]')){
      if(!Array.from(form.elements).some(x=>x.name===field.name&&x.type==='hidden'))form.append(field.cloneNode(true));
     }
+    const links=form.querySelectorAll('a[href]'),targets=freshForm.querySelectorAll('a[href]');
+    links.forEach((link,i)=>link.setAttribute('href',targets[i].getAttribute('href')));
    }
    for(const {links,targets} of tabPairs){
     links.forEach((link,i)=>{link.href=targets[i].getAttribute('href');if(targets[i].hasAttribute('aria-current'))link.setAttribute('aria-current',targets[i].getAttribute('aria-current'));else link.removeAttribute('aria-current');const count=link.querySelector('.kontrol-tab__jumlah'),freshCount=targets[i].querySelector('.kontrol-tab__jumlah');if(count&&freshCount)count.textContent=freshCount.textContent;});

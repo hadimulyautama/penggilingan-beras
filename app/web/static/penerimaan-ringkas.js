@@ -88,7 +88,13 @@
   root.querySelector('[data-status-baca]').onclick=()=>readStatus();
   root.querySelector('[data-status-isian]').onclick=()=>{if(!checked||!data.pending)return;state.uncertain=false;state.inflight=false;checked=null;persist();render();notice('Data terbaru sudah dibaca. Isian tetap tersedia; periksa tujuan dan bobot sebelum menyimpan.');};
   root.querySelector('[data-status-detail]').onclick=()=>{state={...state,dirty:false,uncertain:false,inflight:false,forms:{},active:''};persist();leaving=true;};
-  try{const saved=JSON.parse(sessionStorage.getItem(storage)||'null');if(saved){state={...state,...saved};if(state.inflight){state.inflight=false;state.uncertain=true;}if(state.dirty||state.uncertain)notice('Isian perangkat dipulihkan. Periksa data dan status sebelum menyimpan.');if(state.notice){notice(state.notice,true);state.notice='';persist();}}}catch(_){}
+  // Opt-in navigasi baca perlu bukti pemulihan berhasil, bukan sekadar
+  // state awal bersih ketika storage tak dapat dibaca. Jalur native lama
+  // tetap menang untuk draf tak dikenal atau perangkat yang menolak storage.
+  let pemulihanBacaSah=false;
+  try{const saved=JSON.parse(sessionStorage.getItem(storage)||'null');
+    pemulihanBacaSah=saved===null||!!(saved&&typeof saved==='object'&&!Array.isArray(saved)&&saved.forms&&typeof saved.forms==='object'&&!Array.isArray(saved.forms)&&typeof saved.active==='string'&&['dirty','uncertain','inflight'].every(k=>typeof saved[k]==='boolean')&&typeof saved.key==='string'&&saved.key.length>0&&Array.isArray(saved.before)&&saved.before.every(x=>typeof x==='string')&&(!('notice' in saved)||typeof saved.notice==='string'));
+    if(saved){state={...state,...saved};if(state.inflight){state.inflight=false;state.uncertain=true;}if(state.dirty||state.uncertain)notice('Isian perangkat dipulihkan. Periksa data dan status sebelum menyimpan.');if(state.notice){notice(state.notice,true);state.notice='';persist();}}}catch(_){}
   const legacy=root.dataset.buka;if(data.formulir.some(a=>a.id===legacy))state.active=legacy;
   function markReturn(a){const u=new URL(a.href,location.href);if(u.origin===location.origin&&u.pathname+u.search===root.dataset.kembali){try{sessionStorage.setItem('barang-masuk-kembali:'+root.dataset.actor,root.dataset.kembali);}catch(_){}}}
   document.addEventListener('click',e=>{if(!root.isConnected||e.defaultPrevented||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;const a=e.target.closest('a[href]');if(!a||a.target||a.hasAttribute('download')||a.getAttribute('href').startsWith('#'))return;
@@ -105,7 +111,7 @@
   detached.observe(document.body,{childList:true,subtree:true});
   // Navigasi parsial hanya boleh meninggalkan controller yang benar-benar
   // bersih. Status kiriman/draf tetap dimiliki controller native ini.
-  root.pfCanNavigateRead=()=>root.isConnected&&!busy&&!state.dirty&&!state.uncertain&&!state.inflight&&!checked;
+  root.pfCanNavigateRead=()=>pemulihanBacaSah&&root.isConnected&&!busy&&!state.dirty&&!state.uncertain&&!state.inflight&&!checked;
   const bolehBacaQC=()=>root.isConnected&&!busy&&!state.inflight&&!state.uncertain&&!checked;
   function withReadState(change){
     const view=window.KEADAAN_BACA.ambil(root);view.fields=[];
