@@ -302,7 +302,7 @@
   if(!source||session?.dataset.token!==token)throw Error('Sesi pembacaan berubah. Muat ulang halaman.');
   const [start,end]=markers(source),[from,to]=markers(main);if(!start||!end||!from||!to)throw Error('Struktur daftar belum dapat dibaca. Coba lagi.');
   if(interacting()){
-   pending={payload,number};status.textContent='Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
+   pending={payload,number};status.textContent=qc?'Data siap. Tutup panduan untuk menampilkan catatan QC.':'Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
   }
   const content=document.createElement('div');content.dataset.halamanIsi=root.dataset.kind;
   for(let node=start.nextSibling;node&&node!==end;node=node.nextSibling)content.append(node.cloneNode(true));
@@ -317,7 +317,7 @@
   if(!current(number)||payload.stamp!==stamp)return;
   // Pengguna dapat membuka filter ketika asset masih dibaca.
   if(interacting()){
-   pending={payload,number};status.textContent='Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
+   pending={payload,number};status.textContent=qc?'Data siap. Tutup panduan untuk menampilkan catatan QC.':'Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
   }
   if(detail){
    // Tab boleh berubah selama pembacaan tanpa mengubah draf/controller.
