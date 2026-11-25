@@ -18,7 +18,7 @@
 <main class="penerimaan-detail bm" data-bm-detail-shell data-penerimaan-ringkas data-editor-perintah data-tiket="{{ tiket.id }}" data-kembali="{{ kembali }}" data-buka="{{ buka }}" data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
 <header class="bm-kepala">
  <p class="bm-meta" data-gudang-penerima-label>{{ nama_gudang }} · Barang Masuk</p>
- <h1>{{ nama_jenis }}</h1><p><strong>{{ tiket.kode }}</strong></p>
+ <h1>Detail penerimaan</h1><p data-bm-identitas><strong>{{ nama_jenis }}</strong> · <strong>{{ tiket.kode }}</strong></p>
  <p>{{ 'Pelanggan / pemilik' if tiket.jasa else 'Supplier' }}: {{ (tiket.nama_pelanggan or tiket.pihak_nama or 'Belum tercatat') if tiket.jasa else tiket.nama_supplier or tiket.pihak_nama or 'Belum tercatat' }}{% if tiket.jasa_kode and tiket.jasa_id %} · {% if awal.boleh_audit %}<a href="/jasa/{{ tiket.jasa_id }}">{{ tiket.jasa_kode }}</a>{% else %}{{ tiket.jasa_kode }}{% endif %}{% endif %}</p>
  <p class="bm-meta">{% if timbang and timbang.cara_timbang=='PARTAI' %}Partai kecil{% else %}{{ tiket.nomor_polisi or 'Nomor polisi belum tercatat' }} · {{ tiket.nama_sopir or 'Sopir belum tercatat' }}{% endif %}</p>
  <div class="bm-tahap" aria-label="Tahap penerimaan"><span>Tiket masuk</span><span>Penerimaan</span><strong>{{ 'Ditolak' if catatan and not diterima else 'Tercatat' if diterima else 'Belum diterima' }}</strong></div>

@@ -148,6 +148,45 @@
   for(const child of Array.from(fresh.children))if(child.tagName!=='THEAD')old.append(child);
   fresh.replaceWith(old);
  }
+ function detailIslands(content){
+  if(!detail)return null;
+  const fresh=content.querySelector('[data-bm-detail-shell][data-penerimaan-ringkas]');
+  if(!fresh||content.querySelectorAll('[data-bm-detail-shell]').length!==1||root.hasAttribute('data-penerimaan-ringkas')||fresh.dataset.tiket!==location.pathname.split('/').pop()||!fresh.dataset.actor)throw Error('Profil detail berubah. Muat ulang halaman.');
+  const keys=['ringkasan','tiket','qc','riwayat'];
+  const tabs=node=>Array.from(node.querySelectorAll('[data-bm-tab]'));
+  const before=tabs(root),after=tabs(fresh);
+  if(before.length!==4||after.length!==4||keys.some((key,i)=>{
+   const a=before[i],b=after[i];return a.dataset.bmTab!==key||b.dataset.bmTab!==key||a.id!==b.id||a.getAttribute('aria-controls')!==b.getAttribute('aria-controls')||a.dataset.url!==b.dataset.url||a.textContent.trim()!==b.textContent.trim();
+  }))throw Error('Struktur tab detail berubah. Muat ulang halaman.');
+  const selectors=['.bm-kepala','.bm-kepala h1','[role="tablist"]','[data-bm-detail-rincian]',...keys.map(key=>'#bm-panel-'+key)];
+  for(const selector of selectors)if(root.querySelectorAll(selector).length!==1||fresh.querySelectorAll(selector).length!==1)throw Error('Struktur panel detail belum lengkap. Coba lagi.');
+  if(root.querySelector('.bm-kepala h1').textContent.trim()!=='Detail penerimaan'||fresh.querySelector('.bm-kepala h1').textContent.trim()!=='Detail penerimaan')throw Error('Judul detail berubah. Muat ulang halaman.');
+  const back=root.querySelector('[data-bm-back]');
+  if(!back||back.getAttribute('href')!==fresh.dataset.kembali)throw Error('Tujuan kembali detail berubah. Muat ulang halaman.');
+  return {fresh,keys,before,after,back};
+ }
+ function retainDetail(plan){
+  if(!plan)return;
+  const {fresh,keys,before,after,back}=plan;
+  const attrs=(old,native)=>{for(const a of Array.from(old.attributes))old.removeAttribute(a.name);for(const a of native.attributes)old.setAttribute(a.name,a.value);};
+  const heading=root.querySelector('.bm-kepala'),nativeHeading=fresh.querySelector('.bm-kepala'),h1=heading.querySelector('h1');
+  nativeHeading.querySelector('h1').replaceWith(h1);attrs(heading,nativeHeading);heading.replaceChildren(...Array.from(nativeHeading.childNodes));nativeHeading.replaceWith(heading);
+  for(const key of keys){
+   const panel=root.querySelector('#bm-panel-'+key),native=fresh.querySelector('#bm-panel-'+key);
+   attrs(panel,native);panel.replaceChildren(...Array.from(native.childNodes));native.replaceWith(panel);
+  }
+  before.forEach((tab,i)=>{for(const name of ['aria-selected','tabindex','data-url']){if(after[i].hasAttribute(name))tab.setAttribute(name,after[i].getAttribute(name));else tab.removeAttribute(name);}});
+  fresh.querySelector('[role="tablist"]').replaceWith(root.querySelector('[role="tablist"]'));
+  const rincian=root.querySelector('[data-bm-detail-rincian]'),nativeRincian=fresh.querySelector('[data-bm-detail-rincian]');
+  attrs(rincian,nativeRincian);rincian.replaceChildren(...Array.from(nativeRincian.childNodes));nativeRincian.replaceWith(rincian);
+  // Hanya tautan GET yang sudah ada pada shell dan cocok dengan induk native.
+  fresh.append(back.parentElement);
+  // Peningkatan sekali dari shell baca; profil native yang sudah terpasang
+  // ditolak di detailIslands, jadi formulir/draf hidup tidak pernah di-morph.
+  const tabsReady=root.dataset.bmDetailReady;
+  attrs(root,fresh);if(tabsReady)root.dataset.bmDetailReady=tabsReady;
+  root.replaceChildren(...Array.from(fresh.childNodes));fresh.replaceWith(root);
+ }
  async function install(payload,number){
   if(!current(number)||payload.stamp!==stamp)throw Error('Konteks sesi atau gudang berubah. Muat ulang halaman untuk membaca cakupan yang benar.');
   const doc=new DOMParser().parseFromString(payload.html,'text/html'),source=doc.getElementById('isi-halaman'),session=doc.getElementById('formulir-sesi');
@@ -163,7 +202,7 @@
   // melalui endpoint baca khusus, bukan merender shell kembali sebagai opsi.
   const stock=content.querySelector('[data-stok-controls]');
   if(stock){const url=new URL(stock.dataset.pelangganUrl,location.href);url.pathname='/api/halaman-bertahap/stok/html';stock.dataset.pelangganUrl=url.pathname+url.search;}
-  const island=controlIsland(content),stockFrame=stockTable(content);
+  const island=controlIsland(content),stockFrame=stockTable(content),detailFrame=detailIslands(content);
   const prepared=await prepareScripts(content,doc,controller?.signal);
   if(!current(number)||payload.stamp!==stamp)return;
   // Pengguna dapat membuka filter ketika asset masih dibaca.
@@ -181,7 +220,7 @@
   }
   if(!window.PINDAH?.selaraskanChrome||!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
   const previousFocus=document.activeElement;
-  retainControls(island);retainTable(stockFrame);
+  retainControls(island);retainTable(stockFrame);retainDetail(detailFrame);
   observer.disconnect();finished=true;controller=null;
   while(from.nextSibling&&from.nextSibling!==to)from.nextSibling.remove();to.before(content);
   const valid=()=>content.isConnected&&addressNow()===address&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;

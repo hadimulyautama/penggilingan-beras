@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="/static/penerimaan-ringkas.css?v={{ VERSI }}">
 <link rel="stylesheet" href="/static/barang-masuk-detail-shell.css?v={{ VERSI }}">
 <main class="penerimaan-detail bm" data-bm-detail-shell data-halaman-bertahap data-kind="barang-masuk-detail" data-stamp="{{ detail_stamp }}" data-url="{{ detail_data_url }}">
- <header class="bm-kepala"><p class="bm-meta">Barang Masuk</p><h1>Detail penerimaan</h1><p>Identitas, bobot dan status sedang dibaca.</p></header>
+ <header class="bm-kepala"><p class="bm-meta">Barang Masuk</p><h1>Detail penerimaan</h1><p data-bm-identitas><strong>Menunggu jenis barang</strong> · <strong>Menunggu tiket</strong></p><p>Identitas, bobot dan status sedang dibaca.</p></header>
  <nav class="bm-detail-tabs" role="tablist" aria-label="Bagian detail penerimaan">
  {% for key,label in tabs %}<button class="btn" type="button" id="bm-tab-{{ key }}" role="tab" data-bm-tab="{{ key }}" data-url="{{ tab_href(key) }}" aria-selected="{{ 'true' if tab_detail==key else 'false' }}" aria-controls="bm-panel-{{ key }}" tabindex="{{ 0 if tab_detail==key else -1 }}">{{ label }}</button>{% endfor %}
  </nav>
@@ -13,8 +13,8 @@
  <button class="btn" type="button" data-shell-retry hidden>Coba baca lagi</button>
  <div data-shell-table-wrap aria-busy="true">
  {% for key,label in tabs %}
+ {% if key=='tiket' %}<section class="terima-panel bm-rincian" data-bm-detail-rincian{% if tab_detail=='ringkasan' %} hidden{% endif %}><h2>Rincian penerimaan</h2>{% endif %}
  <section class="terima-panel" id="bm-panel-{{ key }}" role="tabpanel" aria-labelledby="bm-tab-{{ key }}" data-bm-detail-panel="{{ key }}"{% if key!=tab_detail %} hidden{% endif %}>
-  <h2>{{ label }}</h2>
   {% if key=='riwayat' %}
   <h3>Catatan penerimaan</h3>
   <div class="bm-table-scroll" tabindex="0" aria-label="Catatan penerimaan"><table class="terima-catatan" data-bm-table-state="loading"><thead><tr>{% for label in ['Catatan','Bobot','Status','Waktu / petugas'] %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="4">Memuat catatan penerimaan…</td></tr></tbody></table></div>
@@ -26,6 +26,7 @@
   {% endif %}
  </section>
  {% endfor %}
+ </section>
  </div>
  <p data-shell-message>Belum ada data yang dapat ditampilkan. Tindakan dan pilihan penerimaan menunggu pemeriksaan terbaru.</p>
  <p><a class="btn" data-bm-back href="{{ kembali }}">Kembali ke Barang Masuk</a></p>
