@@ -56,9 +56,9 @@ async def test_katalog_dua_tab_filter_native_tanpa_wildcard_atau_aksi(pg,lengkap
         data=json.loads(doc.select_one('#padi-kerangka-langsung').string)
         assert registry.sah_rujukan(data)
         links={x['href'] for x in doc.select('nav[aria-label="Tab pekerjaan"] a') if urlsplit(x['href']).path=='/pekerjaan'}
-        assert links.issubset(data['frames'])
-        assert len(data['frames'])==len(registry.LITERAL)+2
-        for address in set(data['frames'])-set(registry.LITERAL):
+        assert len(links)==2
+        assert set(data['frames'])==set(registry.LITERAL)|{'/jasa'}|links
+        for address in links:
             assert 'halaman=' not in address and 'buka=' not in address and 'nilai=' not in address
             html=''.join(data['potongan'][i] for i in data['frames'][address])
             frame=BeautifulSoup(html,'html.parser')
@@ -68,10 +68,10 @@ async def test_katalog_dua_tab_filter_native_tanpa_wildcard_atau_aksi(pg,lengkap
             assert root.select_one('input[name=cari]')['value']=='Nama & uji'
             assert root.select_one('select[name=jenis] option[selected]')['value']=='packing'
             assert not root.select('[data-post],.benda[data-cari]')
-        # Parameter non-kontrak tidak membuang enam kerangka dasar.
+        # Parameter non-kontrak tidak membuang enam kerangka dasar/Jasa Admin.
         extra=await c.get('/pekerjaan?token_fixture=tidak-dicatat')
         inert=json.loads(BeautifulSoup(extra.text,'html.parser').select_one('#padi-kerangka-langsung').string)
-        assert set(inert['frames'])==set(registry.LITERAL)
+        assert set(inert['frames'])==set(registry.LITERAL)|{'/jasa'}
         assert await _sidik(pg)==before
 
 
@@ -105,7 +105,11 @@ async def test_tujuan_tab_opsional_gagal_tidak_mengabaikan_akses(pg,lengkap,monk
         else:
             data=json.loads(host.string)
             assert registry.sah_rujukan(data)
-            assert set(registry.LITERAL).issubset(data['frames'])
+            remaining_tabs={x['href'] for x in BeautifulSoup(response.text,'html.parser').select('nav[aria-label="Tab pekerjaan"] a')
+                            if urlsplit(x['href']).path=='/pekerjaan'
+                            and not ('tab=berjalan' in x['href'] and 'tab-fixture' in x['href'])}
+            assert len(remaining_tabs)==1
+            assert set(data['frames'])==set(registry.LITERAL)|{'/jasa'}|remaining_tabs
             assert not any('tab=berjalan' in u and 'tab-fixture' in u for u in data['frames'])
         assert await _sidik(pg)==before
 

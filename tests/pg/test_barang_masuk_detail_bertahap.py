@@ -72,7 +72,7 @@ async def test_optional_descriptor_failure_keeps_existing_four_frames(pg, lengka
         assert response.status_code == 200 and not doc.select_one('[data-bm-detail-catalog]')
         registry = json.loads(doc.select_one('#padi-kerangka-langsung').string)
         from app.web.kerangka_langsung import LITERAL
-        assert set(registry['frames']) == set(LITERAL)
+        assert set(registry['frames']) == set(LITERAL) | {'/jasa'}
         c.cookies.clear()
         assert (await c.get('/barang-masuk')).status_code == 303
         assert await _sidik(pg) == before

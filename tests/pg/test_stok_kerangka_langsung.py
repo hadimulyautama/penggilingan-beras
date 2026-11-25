@@ -49,7 +49,7 @@ async def test_prototype_native_izin_dan_tanpa_saldo(pg, lengkap, monkeypatch, r
         assert response.status_code == 200
         doc = BeautifulSoup(response.text, 'html.parser')
         base = json.loads(doc.select_one('#padi-kerangka-langsung').string)
-        assert set(base['frames']) == set(LITERAL)
+        assert set(base['frames']) == set(LITERAL) | ({'/jasa'} if role == 'admin' else set())
         host = doc.select_one('#padi-stok-kerangka')
         assert host and not host.find_parent(class_='bingkai')
         descriptor = json.loads(host.string)
