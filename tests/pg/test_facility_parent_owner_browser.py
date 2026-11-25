@@ -131,27 +131,49 @@ class FacilityReadObservations:
             page.on(event, handler)
 
     def payload(self):
-        return dict(version=1, width=self.width, status='PASS' if self.passed else 'FAIL',
+        return dict(version=1, width=self.width, status='PASS' if self.passed and not self.failure_type and not self.cleanup_errors else 'FAIL',
             observation_only=True, ignored_errors=0, business_values_recorded=False,
             query_headers_body_credentials_recorded=False, limit=self.LIMIT,
             dropped=self.dropped, failure_type=self.failure_type, cleanup_errors=self.cleanup_errors, events=self.events)
 
-    def finish(self):
+    def detach(self):
+        # Playwright listener removal may use the live channel; call this
+        # inside peramban before that context closes its page/browser.
         if self.page is not None:
             for event, handler in self.listeners:
                 try:
                     self.page.remove_listener(event, handler)
                 except Exception as error:
                     self.cleanup_errors.append(type(error).__name__)
+        self.page = None
+        self.listeners = []
+
+    def finish(self):
+        # Do not touch a browser channel here. This outer finally only writes
+        # metadata after browser/client/DB cleanup and preserves a primary
+        # test failure if observation cleanup also failed.
+        primary_failed = self.failure_type is not None
+        if self.page is not None or self.listeners:
+            self.cleanup_errors.append('ListenersNotDetachedBeforeBrowserClose')
+        if self.cleanup_errors and not primary_failed:
+            self.failure_type = 'ObservationCleanupError'
         folder = os.environ.get('DETAIL_OUT')
-        if folder:
-            target = Path(folder)/('facility-native-read-observations-'+str(self.width)+'.json')
-            target.parent.mkdir(parents=True, exist_ok=True)
-            # New runner outputs are unique; do not overwrite a prior receipt.
-            with target.open('x') as stream:
-                json.dump(self.payload(), stream, indent=2)
-                stream.write('\n')
-        assert not self.cleanup_errors, 'Passive observation listener cleanup failed'
+        try:
+            if folder:
+                target = Path(folder)/('facility-native-read-observations-'+str(self.width)+'.json')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                # New runner outputs are unique; never overwrite prior proof.
+                with target.open('x') as stream:
+                    json.dump(self.payload(), stream, indent=2)
+                    stream.write('\n')
+        except OSError as error:
+            if not primary_failed:
+                raise
+            # Preserve the original traceback; no path or exception text
+            # (which could contain private values) is printed.
+            print('Owner observation receipt write failed: '+type(error).__name__)
+        if self.cleanup_errors and not primary_failed:
+            raise AssertionError('Passive observation listener cleanup failed')
 
 
 async def test_facility_observation_urls_and_errors_never_record_private_values():
@@ -183,6 +205,41 @@ async def test_facility_observation_urls_and_errors_never_record_private_values(
     assert len(probe.events) == probe.LIMIT and probe.dropped == count+1
     assert probe.events[0]['category'] == 'kabar-count-access-control'
     assert probe.payload()['ignored_errors'] == 0 and probe.payload()['status'] == 'FAIL'
+
+    class Page:
+        closed=False
+        def on(self, event, handler):pass
+        def remove_listener(self, event, handler):
+            if self.closed:raise RuntimeError('closed synthetic channel')
+    normal=FacilityReadObservations(390);page=Page();normal.attach(page)
+    normal.detach();page.closed=True;normal.passed=True
+    assert normal.payload()['status']=='PASS' and not normal.cleanup_errors
+    failed=FacilityReadObservations(390);page=Page();failed.attach(page);page.closed=True
+    failed.detach();failed.passed=True
+    assert failed.cleanup_errors and failed.payload()['status']=='FAIL'
+    failed.failure_type='OriginalNativeFailure'
+    assert failed.payload()['failure_type']=='OriginalNativeFailure'
+
+
+async def test_facility_observation_receipt_preserves_primary_failure_and_cleanup_status(tmp_path, monkeypatch):
+    # Plain metadata-file controls, not a browser/PG or product assertion.
+    monkeypatch.setenv('DETAIL_OUT', str(tmp_path))
+    primary=FacilityReadObservations(390)
+    primary.failure_type='OriginalNativeFailure'
+    primary.cleanup_errors.append('SyntheticCleanupError')
+    primary.passed=True
+    primary.finish()  # A secondary cleanup error must not replace the primary.
+    saved=json.loads((tmp_path/'facility-native-read-observations-390.json').read_text())
+    assert saved['status']=='FAIL' and saved['failure_type']=='OriginalNativeFailure'
+    assert saved['cleanup_errors']==['SyntheticCleanupError']
+    cleanup=FacilityReadObservations(1280)
+    cleanup.passed=True
+    cleanup.cleanup_errors.append('SyntheticCleanupError')
+    with pytest.raises(AssertionError, match='listener cleanup failed'):
+        cleanup.finish()
+    saved=json.loads((tmp_path/'facility-native-read-observations-1280.json').read_text())
+    assert saved['status']=='FAIL' and saved['failure_type']=='ObservationCleanupError'
+    assert saved['cleanup_errors']==['SyntheticCleanupError']
 
 
 def chrome(html):
@@ -347,8 +404,8 @@ async def test_four_native_settings_menu_clicks_two_phases_and_back(pg, master, 
             before = await _sidik(pg)
             phases = ReadPhases(client, monkeypatch)
             async with peramban(client, width) as (page, transport):
-                observations.attach(page)
                 try:
+                    observations.attach(page)
                     for target in TARGETS:
                         observations.add('phase', phase='settings.begin', target=target)
                         await settings(page)
@@ -370,7 +427,10 @@ async def test_four_native_settings_menu_clicks_two_phases_and_back(pg, master, 
                         assert fixed_shape(await page.content(), target) == fixed_shape(expected[target], target)
                     assert not transport['posts'] and not transport['errors'], transport['errors']
                 finally:
-                    phases.free()
+                    try:
+                        phases.free()
+                    finally:
+                        observations.detach()
             assert await _sidik(pg) == before
         observations.passed = True
     except BaseException as error:
