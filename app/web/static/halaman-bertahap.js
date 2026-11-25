@@ -79,7 +79,18 @@
   if(schema(old)!==schema(fresh))throw Error('Cakupan kontrol berubah. Muat ulang halaman.');
   let tabs=null;
   if(root.dataset.kind==='pekerjaan'){
-   const selector='nav[aria-label="Tab pekerjaan"]',before=root.querySelectorAll(selector),after=content.querySelectorAll(selector);
+   const selector='nav[aria-label="Tab pekerjaan"]',before=[],after=content.querySelectorAll(selector);
+   const [start,end]=markers(main);
+   if(!start||!end)throw Error('Batas tab pekerjaan berubah. Muat ulang halaman.');
+   // LAPORAN_NAV menaruh tab di luar root daftar, tetapi tetap di dalam
+   // batas isi native aktif. Header/sidebar di luar batas tidak dijaring.
+   let node=start.nextSibling;
+   for(;node&&node!==end;node=node.nextSibling){
+    if(node.nodeType!==1)continue;
+    if(node.matches(selector))before.push(node);
+    before.push(...node.querySelectorAll(selector));
+   }
+   if(node!==end)throw Error('Batas tab pekerjaan berubah. Muat ulang halaman.');
    if(before.length!==1||after.length!==1||schema(before[0])!==schema(after[0])||old.contains(before[0])!==fresh.contains(after[0]))throw Error('Struktur tab pekerjaan berubah. Muat ulang halaman.');
    // Native browser dapat menempatkan tab sebagai saudara kepala kontrol.
    // Pertahankan pulau itu sendiri; jangan mencari atau membuat tab lain.
