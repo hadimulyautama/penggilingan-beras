@@ -19,7 +19,7 @@ from playwright.async_api import Error as BrowserError, async_playwright, expect
 from sqlalchemy import text
 
 from hmu_identitas import peran as P
-from tests.pg.test_halaman_bertahap import proses_aktif  # noqa: F401
+from tests.pg.test_halaman_bertahap import _memasang_kerangka, proses_aktif  # noqa: F401
 from tests.pg.test_pk_karung import batch_baru, dunia  # noqa: F401
 from tests.pg.test_riwayat_giling import _klien
 from tests.pg.test_navigasi_bertahap_browser import _catat_tampilan_lama, _pastikan_tampilan_lama_menunggu
@@ -114,7 +114,7 @@ class _ASGIBrowser:
                 self.native_fallback and 'x-kerangka-halaman' not in forwarded):
             barrier = self.html
             assert response.status_code == 200
-            assert 'data-halaman-bertahap' not in response.text
+            assert not _memasang_kerangka(response.text)
             assert KODE_BEBAS in response.text
         elif url.path == '/api/halaman-bertahap/stok' and not url.query:
             barrier = self.data
