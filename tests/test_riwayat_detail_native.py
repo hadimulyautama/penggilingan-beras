@@ -378,13 +378,62 @@ def test_pending_history_pooled_scripts_have_no_editor_initializer_or_save_stora
     # these with actor/process/session-bound editor draft or pending-save keys.
     assert 'padiflow.riwayat.terakhir' in ''.join(data['scripts'].values())
 
+def _assert_only_approved_history_marker_delta(source, name, old_digest):
+    # Only the reviewed strict conditional may differ from the frozen native
+    # template. Every form/field/name/action and all other bytes remain pinned.
+    approved=('data-riwayat-'+name+'{% if RIWAYAT_BACA_SAJA is sameas true and boleh_koreksi is sameas false and akun and akun.is_admin is sameas false %} data-history-readonly="1"{% else %} data-editor-perintah{% endif %}')
+    assert source.count(approved)==1
+    original=source.replace(approved,'data-riwayat-'+name+' data-editor-perintah',1)
+    assert hashlib.sha256(original.encode()).hexdigest()==old_digest
+
+
 def test_actual_native_editor_marker_keys_and_sdk_veto_are_unchanged():
-    pin=json.loads((ROOT/'tests/fixtures/history_pending_editor_boundary_prechange.json').read_text())
+    frozen=ROOT/'tests/fixtures/history_pending_editor_boundary_prechange.json'
+    assert hashlib.sha256(frozen.read_bytes()).hexdigest()=='989bd2bfaaa878b03fce3fc459cd87b4be70fa84c6c0960beba191e91e55d58d'
+    pin=json.loads(frozen.read_text())
     for path,digest in pin['sha256'].items():
-        assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==digest,path
-    for name in ('giling','sosoh'):
-        source=(ROOT/('app/web/templates/riwayat_'+name+'_detail.html')).read_text()
-        assert 'data-editor-perintah' in source and 'data-rhs-actor=' in source
-        assert 'class="riwayat-koreksi__form"' in source
+        current=(ROOT/path).read_bytes()
+        if path in {'app/web/templates/riwayat_giling_detail.html','app/web/templates/riwayat_sosoh_detail.html'}:
+            name='giling' if 'giling' in path else 'sosoh'
+            _assert_only_approved_history_marker_delta(current.decode(),name,digest)
+        elif path=='hmu_tampilan/static/pindah.js':
+            # Exactly deployed SDK or the reviewed body-ready-only source
+            # package. The latter does not change navigation/editor functions.
+            assert digest=='894dfcac9d078ec57e8c83aba0f6db316edc29f5d09fdaa6473d7186fde8e482'
+            assert hashlib.sha256(current).hexdigest() in {digest,'7abe3ed02261f832e62d71766cbf7f9a6988192fae9e00dcf06d456c8232c90a'}
+        else:
+            assert hashlib.sha256(current).hexdigest()==digest,path
     sdk=(ROOT/'hmu_tampilan/static/pindah.js').read_text()
-    assert 'document.querySelector("[data-editor-perintah],[data-kemas-ulang]")' in sdk
+    for name,next_name,digest in [
+        ('bolehDitangani','memakaiKerangkaHalaman','c1a46f4a64ec1ab607e7df091d24a519631af687315b622510db8d201646127c'),
+        ('rencanaKerangkaLangsung','kunciBaca','4f8ff49729cba7369c04f9b00589b6529b4f0ee567236115dc52ef73877a09d1')]:
+        start='  function '+name+'(';end='  function '+next_name+'('
+        assert sdk.count(start)==sdk.count(end)==1
+        assert hashlib.sha256(sdk[sdk.index(start):sdk.index(end)].encode()).hexdigest()==digest
+    # Actual Admin rendering must retain its real form and unconditional SDK
+    # veto marker, including conservative inconsistent correction metadata.
+    from tests.test_riwayat_baca_saja import native_html
+    for name in ('giling','sosoh'):
+        for allowed in (False,True):
+            doc=native_html(name,admin=True,boleh=allowed)
+            root=doc.select_one('[data-riwayat-'+name+']')
+            assert root.has_attr('data-editor-perintah') and not root.has_attr('data-history-readonly')
+            if allowed:assert root.select_one('.riwayat-koreksi__form') is not None
+
+
+@pytest.mark.parametrize('name',['giling','sosoh'])
+@pytest.mark.parametrize('mutation',['weaken-condition','outside-edit','remove-marker','duplicate-marker'])
+def test_native_template_delta_guard_rejects_changes_beyond_strict_readonly_classification(name,mutation):
+    path='app/web/templates/riwayat_'+name+'_detail.html'
+    source=(ROOT/path).read_text()
+    pin=json.loads((ROOT/'tests/fixtures/history_pending_editor_boundary_prechange.json').read_text())['sha256'][path]
+    if mutation=='weaken-condition':
+        source=source.replace('boleh_koreksi is sameas false','not boleh_koreksi')
+    elif mutation=='outside-edit':
+        source=source.replace('class="riwayat-koreksi__form"','class="riwayat-koreksi__form-rusak"')
+    elif mutation=='remove-marker':
+        source=source.replace(' data-editor-perintah','')
+    else:
+        source=source.replace(' data-editor-perintah',' data-editor-perintah data-editor-perintah')
+    with pytest.raises(AssertionError):
+        _assert_only_approved_history_marker_delta(source,name,pin)
