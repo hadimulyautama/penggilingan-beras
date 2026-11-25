@@ -1,7 +1,8 @@
-/* Pendengar terikat kepala halaman yang ikut diganti oleh PINDAH. */
+/* Dialog terikat kontrol tetap; pencarian terikat hasil baca yang terbaru. */
 (function () {
   function pasang(root) {
-  if (!root || root.dataset.skTerpasang) return;
+  if (!root) return;
+  if (!root.dataset.skTerpasang) {
   root.dataset.skTerpasang = "1";
   var asal;
   root.querySelectorAll('[data-sk-buka]').forEach(function (tombol) {
@@ -27,6 +28,7 @@
     });
   });
 
+  }
   pasangDaftar(root);
 
   }
@@ -36,6 +38,15 @@
  * menyaring tampilan. Semua baris sudah dirender oleh pembaca stok lama. */
 function pasangDaftar(root) {
   var isi=document.querySelector('.stok-seragam');if(!isi)return;
+  if(root.pfStockResultsStop)root.pfStockResultsStop();
+  var events=new AbortController(),load=null;
+  var session=document.getElementById('formulir-sesi')?.dataset.token;
+  function valid(){return root.isConnected&&isi.isConnected&&document.getElementById('formulir-sesi')?.dataset.token===session&&!events.signal.aborted;}
+  function stop(){events.abort();if(load)load.abort();watch.disconnect();}
+  var watch=new MutationObserver(function(){if(!valid())stop();});
+  watch.observe(document.body,{childList:true,subtree:true});
+  root.pfStockResultsStop=stop;
+  var options={signal:events.signal};
   var input=root.querySelector('[type=search]'),form=root.querySelector('.kontrol-pencarian__form');
   function cari(tulis) {
     var q=input.value.trim().toLocaleLowerCase('id'),jumlah=0;
@@ -56,24 +67,24 @@ function pasangDaftar(root) {
       a.href=u.pathname+u.search+u.hash;
     });
   }
-  form.addEventListener('submit',function(e){e.preventDefault();cari(true);});
-  input.addEventListener('keydown',function(e){if(e.key==='Escape'){input.value='';cari(true);}});
-  input.addEventListener('search',function(){if(!input.value)cari(true);});
-  root.querySelector('.sk-form-filter').addEventListener('submit',function(){root.querySelector('.sk-form-filter [name=cari]').value=input.value;});
+  form.addEventListener('submit',function(e){e.preventDefault();cari(true);},options);
+  input.addEventListener('keydown',function(e){if(e.key==='Escape'){input.value='';cari(true);}},options);
+  input.addEventListener('search',function(){if(!input.value)cari(true);},options);
+  root.querySelector('.sk-form-filter').addEventListener('submit',function(){root.querySelector('.sk-form-filter [name=cari]').value=input.value;},options);
   cari(false);
-  var filter=root.querySelector('.sk-form-filter'),owner=filter.querySelector('[name=pemilik]'),label=filter.querySelector('[data-stok-pelanggan]'),select=label.querySelector('select'),status=filter.querySelector('[data-stok-pelanggan-status]'),load=null;
+  var filter=root.querySelector('.sk-form-filter'),owner=filter.querySelector('[name=pemilik]'),label=filter.querySelector('[data-stok-pelanggan]'),select=label.querySelector('select'),status=filter.querySelector('[data-stok-pelanggan-status]');
   async function pelanggan(){
     var jasa=owner.value==='jasa';label.hidden=!jasa;select.disabled=!jasa;status.hidden=true;
     if(load)load.abort();if(!jasa)return;
     load=new AbortController();var current=load;select.disabled=true;status.hidden=false;status.textContent='Memuat pelanggan…';
     try{var url=new URL(root.dataset.pelangganUrl,location.href);url.searchParams.set('gudang',filter.querySelector('[name=gudang]').value);
       var response=await fetch(url.pathname+url.search,{credentials:'same-origin',cache:'no-store',signal:current.signal});
-      if(!response.ok||response.redirected)throw new Error('gagal');var doc=new DOMParser().parseFromString(await response.text(),'text/html'),source=doc.querySelector('.sk-form-filter [name=pelanggan_id]');if(!source)throw new Error('gagal');if(load!==current)return;
+      if(!response.ok||response.redirected)throw new Error('gagal');var doc=new DOMParser().parseFromString(await response.text(),'text/html'),source=doc.querySelector('.sk-form-filter [name=pelanggan_id]');if(!source)throw new Error('gagal');if(load!==current||!valid())return;
       var value=select.value;select.replaceChildren.apply(select,Array.from(source.options).map(function(o){return o.cloneNode(true);}));select.value=value;if(select.selectedIndex<0)select.value='';select.disabled=false;status.hidden=true;
-    }catch(e){if(load!==current||e.name==='AbortError')return;select.value='';select.disabled=true;status.textContent='Pelanggan belum dapat dimuat. Terapkan filter untuk melihat titipan jasa.';}
+    }catch(e){if(load!==current||!valid()||e.name==='AbortError')return;select.value='';select.disabled=true;status.textContent='Pelanggan belum dapat dimuat. Terapkan filter untuk melihat titipan jasa.';}
   }
-  owner.addEventListener('change',pelanggan);
-  filter.querySelector('[name=gudang]').addEventListener('change',function(){if(owner.value==='jasa')pelanggan();});
+  owner.addEventListener('change',pelanggan,options);
+  filter.querySelector('[name=gudang]').addEventListener('change',function(){if(owner.value==='jasa')pelanggan();},options);
 }
 
 })();

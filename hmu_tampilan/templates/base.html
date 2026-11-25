@@ -112,20 +112,16 @@
 {% if akun %}
 <header class="bar" aria-label="Navigasi aplikasi">
   {# Halaman dengan induk mempertahankan tombol kembali; menu tetap tersedia pada halaman utama. #}
-  {% if not kembali or LAPORAN_NAV %}
     <button class="bar__menu" type="button" id="buka-laci" aria-label="Buka menu"
-            aria-controls="laci" aria-expanded="false">
+            aria-controls="laci" aria-expanded="false"{% if kembali and not LAPORAN_NAV %} hidden style="display:none"{% endif %}>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2.1" stroke-linecap="round">
         <path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
-  {% endif %}
-  {% if kembali and not LAPORAN_NAV %}
-    <a class="bar__balik" href="{{ kembali }}" aria-label="Kembali">
+    <a class="bar__balik" href="{{ kembali or '/' }}" aria-label="Kembali"{% if not kembali or LAPORAN_NAV %} hidden style="display:none"{% endif %}>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
-  {% endif %}
   <span class="bar__merek" aria-label="{{ 'PT Hadi Mulya Utama' if layar == 'beranda' else self.judul()|striptags|trim }}">
     {{ 'PT Hadi Mulya Utama' if layar == 'beranda' else self.judul()|striptags|trim }}
   </span>
@@ -206,9 +202,9 @@
 {% if STOK_NAV %}</div><script src="/static/stok-seragam.js?v={{ VERSI }}" defer></script>{% endif %}
 {% block kaki %}{% endblock %}
 <script src="/static/menu-layar.js?v={{ VERSI }}" defer></script>
+{% if JASA_KEMBALI %}<script src="/static/konteks-jasa.js?v={{ VERSI }}" defer></script>{% endif %}
 <!-- isi-halaman:akhir -->
 <script src="/static/kabar-badge.js?v={{ VERSI }}" defer></script>
-{% if JASA_KEMBALI %}<script src="/static/konteks-jasa.js?v={{ VERSI }}" defer></script>{% endif %}
 </main>
 
 {# ── Laci menu ──
@@ -493,16 +489,13 @@
 <script src="/static/sesi.js?v={{ VERSI }}"></script>
 <script src="/static/koreksi.js?v={{ VERSI }}"></script>
 <script>
-/* ── Buka & tutup laci ──
-   Ditulis di sini, di dalam `.bingkai`, karena perpindahan halaman instan
-   mengganti seluruh isi bingkai — skrip yang dipasang sekali di luar akan
-   kehilangan elemennya pada perpindahan pertama. `pindah.js` menjalankan
-   ulang skrip yang datang bersama isi baru, jadi penautan ini ikut hidup
-   lagi setiap kali. */
+/* Laci dan tombol tetap hidup selama perpindahan satu konteks. Penautan
+   sekali menjaga Escape/menu tidak menumpuk atau terhapus bersama halaman. */
 (function () {
   var laci = document.getElementById("laci");
   var tombol = document.getElementById("buka-laci");
-  if (!laci || !tombol) return;
+  if (!laci || !tombol || laci.pfChromeTerpasang) return;
+  laci.pfChromeTerpasang = "1";
   function buka(ya) {
     laci.hidden = !ya;
     tombol.setAttribute("aria-expanded", ya ? "true" : "false");
@@ -539,13 +532,8 @@
     laci.querySelectorAll("a.pintu, .pintu-sub__satu"), function (a) {
       a.addEventListener("click", function () { buka(false); });
     });
-  /* Lewat PINDAH: `document` TIDAK ikut ditukar saat halaman berpindah,
-     jadi pendengar yang dipasang langsung padanya menumpuk sekali tiap
-     perpindahan — dan yang menumpuk memegang laci lama yang sudah dibuang. */
-  var pasang = (window.PINDAH && PINDAH.pasang)
-    ? PINDAH.pasang
-    : function (s, j, f) { s.addEventListener(j, f); };
-  pasang(document, "keydown", function (e) {
+  // Laci tetap hidup; pendengar ini tidak ikut dibuang bersama isi halaman.
+  document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && !laci.hidden) buka(false);
   });
 })();
@@ -553,11 +541,11 @@
 
 <script>
 /* Lebar sidebar per perangkat: pointer untuk mouse/sentuh dan tombol panah
-   untuk keyboard. Jalankan pada setiap halaman karena konten bingkai
-   diganti tanpa memuat ulang dokumen. */
+   untuk keyboard. Pegangan dipasang sekali pada chrome yang tetap hidup. */
 (function () {
   var pegangan = document.querySelector(".laci__ukur");
-  if (!pegangan || !window.matchMedia("(min-width: 900px)").matches) return;
+  if (!pegangan || pegangan.pfChromeTerpasang || !window.matchMedia("(min-width: 900px)").matches) return;
+  pegangan.pfChromeTerpasang = true;
   var kunci = "hmu.sidebar.lebar.produksi";
   var batas = function (n) { return Math.max(220, Math.min(440, n)); };
   var simpan = function (n, tetap) {

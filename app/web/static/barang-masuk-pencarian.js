@@ -47,11 +47,55 @@
    if(next.hasAttribute('data-bm-shell')||next.querySelector('[data-bm-error]:not([hidden])'))throw Error('Daftar belum berhasil dibaca. Coba lagi tanpa mencatat transaksi.');
    if(sedangMengisi()){pending={doc,n,url};status.textContent='Data siap. Isian pilihan tetap dipertahankan; terapkan atau tutup pilihan untuk melanjutkan.';return;}
    const focus=ambilFokus(),holder=document.querySelector('.isi'),scroll=holder?.scrollTop;
-   const tabs=document.querySelector('nav[aria-label="Bagian Barang Masuk"]'),fresh=doc.querySelector('nav[aria-label="Bagian Barang Masuk"]');
-   if(tabs&&fresh)tabs.replaceChildren(...Array.from(fresh.childNodes,x=>x.cloneNode(true)));
+   const nextResult=next.querySelector('[data-bm-results]'),nextCount=next.querySelector('.bm-jumlah');
+   if(!nextResult||!nextCount)throw Error('Daftar penerimaan belum lengkap. Coba baca lagi.');
+   // Header, form, dialog dan tab adalah kerangka tetap. Yang berubah hanya
+   // hasil baca dan metadata pilihan; jangan memasang controller daftar kedua.
+   for(const form of forms){
+    const freshForm=next.querySelector(form.matches('[data-bm-search]')?'[data-bm-search]':'.bm-form-filter');
+    const schema=f=>Array.from(f.elements).filter(e=>e.name&&e.type!=='hidden').map(e=>e.name+':'+e.type).sort().join('|');
+    if(!freshForm||(form.method||'get').toLowerCase()!=='get'||(freshForm.method||'get').toLowerCase()!=='get'||form.getAttribute('action')!==freshForm.getAttribute('action')||schema(form)!==schema(freshForm))throw Error('Struktur pilihan penerimaan berubah. Muat ulang halaman.');
+   }
+   const tabPairs=[];
+   for(const selector of ['nav[aria-label="Bagian Barang Masuk"]','[data-bm-nav].kontrol-tab']){
+    const old=document.querySelector(selector),fresh=doc.querySelector(selector);if(!old||!fresh)continue;
+    const links=Array.from(old.querySelectorAll('a')),targets=Array.from(fresh.querySelectorAll('a'));
+    if(links.length!==targets.length)throw Error('Pilihan bagian penerimaan berubah. Muat ulang halaman.');
+    tabPairs.push({links,targets});
+   }
+   if(window.PINDAH?.selaraskanChrome&&!PINDAH.selaraskanChrome(doc)){hentikanBaca();location.assign(url);return;}
+   for(const form of forms){
+    const freshForm=next.querySelector(form.matches('[data-bm-search]')?'[data-bm-search]':'.bm-form-filter');
+    for(const field of Array.from(form.elements)){
+     if(!field.name)continue;
+     const fresh=Array.from(freshForm.elements).find(x=>x.name===field.name&&x.type===field.type);
+     if(!fresh){if(field.type==='hidden')field.remove();continue;}
+     if(field.tagName==='SELECT')field.replaceChildren(...Array.from(fresh.options,o=>o.cloneNode(true)));
+     field.value=fresh.value;field.disabled=fresh.disabled;
+     if(!field.disabled)field.removeAttribute('aria-describedby');
+    }
+    for(const field of freshForm.querySelectorAll('input[type="hidden"]')){
+     if(!Array.from(form.elements).some(x=>x.name===field.name&&x.type==='hidden'))form.append(field.cloneNode(true));
+    }
+   }
+   for(const {links,targets} of tabPairs){
+    links.forEach((link,i)=>{link.href=targets[i].getAttribute('href');if(targets[i].hasAttribute('aria-current'))link.setAttribute('aria-current',targets[i].getAttribute('aria-current'));else link.removeAttribute('aria-current');const count=link.querySelector('.kontrol-tab__jumlah'),freshCount=targets[i].querySelector('.kontrol-tab__jumlah');if(count&&freshCount)count.textContent=freshCount.textContent;});
+   }
+   for(const selector of ['.kontrol-filter','.bm-tindakan-ponsel [data-bm-buka="bm-filter"]']){
+    const old=root.querySelector(selector),fresh=next.querySelector(selector);if(!old||!fresh)continue;
+    if(fresh.hasAttribute('aria-label'))old.setAttribute('aria-label',fresh.getAttribute('aria-label'));
+    if(old.matches('.kontrol-filter'))old.textContent=fresh.textContent;
+    else{const dot=old.querySelector('.bm-titik'),freshDot=fresh.querySelector('.bm-titik');if(dot&&!freshDot)dot.remove();else if(!dot&&freshDot)old.append(freshDot.cloneNode(true));}
+   }
    const link=document.querySelector('#laci a[href="/barang-masuk"]'),freshLink=doc.querySelector('#laci a[href="/barang-masuk"]');
    if(link&&freshLink){link.querySelectorAll('.pintu__jml').forEach(x=>x.remove());for(const badge of freshLink.querySelectorAll('.pintu__jml'))link.append(badge.cloneNode(true));}
-   hentikanBaca();root.replaceWith(next);if(window.PINDAH){PINDAH.lupakan();PINDAH.lupakanSentuhan();}pasang(next);pulihkanFokus(next,focus);if(holder&&scroll!=null)holder.scrollTop=scroll;
+   result.replaceChildren(...Array.from(nextResult.childNodes,node=>node.cloneNode(true)));
+   root.querySelector('.bm-jumlah').replaceChildren(...Array.from(nextCount.childNodes,node=>node.cloneNode(true)));
+   for(const key of ['cariTertampil','pemasokTertampil','bmStatus'])root.dataset[key]=next.dataset[key]||'';
+   root.removeAttribute('data-bm-shell');root.querySelector('[data-bm-bootstrap]')?.remove();root.querySelector('#bm-nama-alasan')?.remove();
+   const catalog=root.querySelector('script[data-bm-detail-catalog]'),freshCatalog=next.querySelector('script[data-bm-detail-catalog]');catalog?.remove();if(freshCatalog)root.prepend(freshCatalog.cloneNode(true));
+   pending=null;baseline=nilaiIsian();lastDraft=baseline;error.hidden=true;aturCetak(true);tandaiPilihan();status.textContent='Daftar penerimaan selesai dibaca.';
+   if(window.PINDAH){PINDAH.lupakan();PINDAH.lupakanSentuhan();}pulihkanFokus(root,focus);if(holder&&scroll!=null)holder.scrollTop=scroll;
   }
   function tampilkanGagal(e,n,url){if(!masihBerlaku(n,url))return;pending=null;error.hidden=false;status.textContent=e.name==='AbortError'?'Pembacaan terlalu lama. Coba lagi tanpa mengirim pencatatan.':e.message;tampilkanTabel('error',url);aturCetak(false);tandaiPilihan();}
   async function baca(url,json=false,push=true){

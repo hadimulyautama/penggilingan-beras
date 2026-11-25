@@ -64,6 +64,18 @@
       }
       penyediaKerangkaLangsung = penyedia;
     },
+    selaraskanChrome: function (doc) {
+      if (!chromeSama(doc)) return false;
+      selaraskanChrome(doc);
+      // Hydration juga menyelesaikan pembacaan route yang sama. Penanda
+      // target ikut native, tanpa mengadopsi konteks atau sesi yang baru.
+      var lama = document.querySelector(".bingkai"), baru = doc.querySelector(".bingkai");
+      ["data-pindah-alamat", "data-pindah-kerangka"].forEach(function (nama) {
+        if (baru.hasAttribute(nama)) lama.setAttribute(nama, baru.getAttribute(nama));
+        else lama.removeAttribute(nama);
+      });
+      return true;
+    },
     pasang: function (sasaran, jenis, fn) {
       sasaran.addEventListener(jenis, fn);
       terpasang.push([sasaran, jenis, fn]);
@@ -157,9 +169,19 @@
 
   if (!window.fetch || !window.history || !history.pushState) { return; }
 
+  // Hanya editor yang mengumumkan kesiapan baca secara eksplisit boleh ikut.
+  // SDK tidak menebak draf, kunci pending, atau aturan transaksi dari markup.
+  function editorBolehPindah() {
+    if (document.querySelector("[data-kemas-ulang]")) return false;
+    return Array.prototype.every.call(document.querySelectorAll("[data-editor-perintah]"), function (el) {
+      try { return typeof el.pfCanNavigateRead === "function" && el.pfCanNavigateRead() === true; }
+      catch (_) { return false; }
+    });
+  }
+
   function bolehDitangani(a) {
     // Editor memakai navigasi utuh agar beforeunload menjaga draf gagal simpan.
-    if (document.querySelector("[data-editor-perintah],[data-kemas-ulang]")) { return false; }
+    if (!editorBolehPindah()) { return false; }
     if (!a || !a.getAttribute) { return false; }
     var h = a.getAttribute("href");
     if (!h || h.charAt(0) === "#") { return false; }
@@ -175,7 +197,7 @@
   }
 
   function rencanaKerangkaLangsung(alamat, dorong) {
-    if (!penyediaKerangkaLangsung || document.querySelector("[data-editor-perintah],[data-kemas-ulang]")) return null;
+    if (!penyediaKerangkaLangsung || !editorBolehPindah()) return null;
     try {
       var hasil = penyediaKerangkaLangsung({ alamat: alamat, sebab: dorong ? "push" : "pop" });
       var kini = document.querySelector(".bingkai"), sesi = document.getElementById("formulir-sesi");
@@ -252,11 +274,96 @@
     return janji;
   }
 
+  function batasIsi(doc) {
+    var main = doc.getElementById("isi-halaman");
+    if (!main) return null;
+    var nodes = Array.prototype.slice.call(main.childNodes);
+    var awal = nodes.filter(function (n) { return n.nodeType === 8 && n.data.trim() === "isi-halaman:mulai"; });
+    var akhir = nodes.filter(function (n) { return n.nodeType === 8 && n.data.trim() === "isi-halaman:akhir"; });
+    if (awal.length !== 1 || akhir.length !== 1 || nodes.indexOf(awal[0]) >= nodes.indexOf(akhir[0])) return null;
+    return { main: main, awal: awal[0], akhir: akhir[0] };
+  }
+
+  // Abaikan hanya penanda presentasi yang memang berubah per halaman.
+  // Identitas, tautan berizin, formulir dan kontrol lain harus tetap persis.
+  function sidikChrome(el) {
+    if (!el) return null;
+    var salin = el.cloneNode(true);
+    salin.querySelectorAll(".pintu__jml").forEach(function (n) { n.remove(); });
+    [salin].concat(Array.prototype.slice.call(salin.querySelectorAll("*"))).forEach(function (n) {
+      ["aria-current", "open"].forEach(function (a) { n.removeAttribute(a); });
+      n.classList.remove("pintu--kini", "pintu-sub__satu--kini");
+      if (!n.getAttribute("class")) n.removeAttribute("class");
+    });
+    if (salin.id === "laci") {
+      salin.removeAttribute("hidden");
+      var ukur = salin.querySelector(".laci__ukur");
+      if (ukur) ukur.removeAttribute("aria-valuenow");
+    }
+    // Jinja dapat memberi lekukan berbeda ketika lencana tidak dirender.
+    function rapikan(n) {
+      Array.prototype.slice.call(n.childNodes).forEach(function (anak) {
+        if (anak.nodeType === 3 && !anak.textContent.trim()) anak.remove();
+        else if (anak.nodeType === 1) rapikan(anak);
+      });
+    }
+    rapikan(salin);
+    return salin.outerHTML;
+  }
+
+  function chromeSama(doc) {
+    var lama = document.querySelector(".bingkai"), baru = doc.querySelector(".bingkai");
+    var sesi = document.getElementById("formulir-sesi"), sesiBaru = doc.getElementById("formulir-sesi");
+    var cap = document.documentElement.getAttribute("data-versi");
+    if (!cap || doc.documentElement.getAttribute("data-versi") !== cap || !lama || !baru
+        || !lama.dataset.pindahKonteks || lama.dataset.pindahKonteks !== baru.dataset.pindahKonteks
+        || !sesi || !sesiBaru || !sesi.dataset.token || sesi.dataset.token !== sesiBaru.dataset.token
+        || sesi.outerHTML !== sesiBaru.outerHTML || document.body.className !== doc.body.className
+        || !batasIsi(document) || !batasIsi(doc)) return false;
+    var wajib = ["#laci", "header.bar", ".desktop-chrome", "#buka-laci", ".bar__balik", ".bar__merek", ".desktop-chrome__crumbrow"];
+    if (wajib.some(function (q) { return document.querySelectorAll(q).length !== 1 || doc.querySelectorAll(q).length !== 1; })) return false;
+    if (sidikChrome(document.getElementById("laci")) !== sidikChrome(doc.getElementById("laci"))) return false;
+    // Pita sesi/penyamaran dan pintu cepat juga merupakan batas konteks.
+    var luar = function (frame) {
+      return Array.prototype.filter.call(frame.children, function (n) {
+        return n.id !== "isi-halaman" && n.id !== "laci" && n.id !== "formulir-sesi" && n.id !== "lembar" && n.tagName !== "SCRIPT";
+      }).map(function (n) { return n.outerHTML; }).join("");
+    };
+    if (luar(lama) !== luar(baru)) return false;
+    return sidikChrome(document.querySelector(".desktop-chrome__shortcuts")) === sidikChrome(doc.querySelector(".desktop-chrome__shortcuts"));
+  }
+
+  function selaraskanChrome(doc) {
+    ["#buka-laci", ".bar__balik"].forEach(function (q) {
+      var a = document.querySelector(q), b = doc.querySelector(q);
+      ["href", "hidden", "style", "aria-label"].forEach(function (nama) {
+        if (b.hasAttribute(nama)) a.setAttribute(nama, b.getAttribute(nama)); else a.removeAttribute(nama);
+      });
+    });
+    var merek = document.querySelector(".bar__merek"), baru = doc.querySelector(".bar__merek");
+    merek.textContent = baru.textContent; merek.setAttribute("aria-label", baru.getAttribute("aria-label") || "");
+    document.querySelector(".desktop-chrome__crumbrow").innerHTML = doc.querySelector(".desktop-chrome__crumbrow").innerHTML;
+    var balik = document.querySelector('.desktop-theme input[name="balik"]'), balikBaru = doc.querySelector('.desktop-theme input[name="balik"]');
+    if (balik && balikBaru) balik.value = balikBaru.value;
+    var menu = document.getElementById("laci").querySelectorAll(".pintu,.pintu-sub__satu");
+    var menuBaru = doc.getElementById("laci").querySelectorAll(".pintu,.pintu-sub__satu");
+    Array.prototype.forEach.call(menu, function (n, i) {
+      ["class", "aria-current"].forEach(function (a) {
+        if (menuBaru[i].hasAttribute(a)) n.setAttribute(a, menuBaru[i].getAttribute(a)); else n.removeAttribute(a);
+      });
+      if (menuBaru[i].parentElement && menuBaru[i].parentElement.tagName === "DETAILS" && menuBaru[i].parentElement.open
+          && n.parentElement && n.parentElement.tagName === "DETAILS") n.parentElement.open = true;
+      n.querySelectorAll(".pintu__jml").forEach(function (badge) { badge.remove(); });
+      menuBaru[i].querySelectorAll(".pintu__jml").forEach(function (badge) { n.appendChild(badge.cloneNode(true)); });
+    });
+    document.title = doc.title || document.title;
+  }
+
   /* ── Memasang HTML yang sudah di tangan ── */
-  function pasang(teks, alamat, halus) {
+  function pasang(teks, alamat, halus, resetScroll) {
     var doc = new DOMParser().parseFromString(teks, "text/html");
     var baru = doc.querySelector(".bingkai");
-    if (!baru) { location.href = alamat; return false; }
+    if (!baru || !chromeSama(doc)) { location.href = alamat; return false; }
 
     cabutSemua();
     disentuh = false;   // halamannya berganti — ketikan lamanya memang pergi
@@ -268,18 +375,18 @@
     if (halus && document.startViewTransition) {
       var generasi = nomorPindah;
       var transisi = document.startViewTransition(function () {
-        if (generasi === nomorPindah) { tukar(doc, baru); }
+        if (generasi === nomorPindah) { tukar(doc, baru, resetScroll); }
       });
       // Ketukan berikutnya boleh melewati animasi yang masih berjalan.
       // `ready` ditolak saat animasi dilewati; pemasangan halaman tetap jalan.
       transisi.ready.catch(function () {});
     } else {
-      tukar(doc, baru);
+      tukar(doc, baru, resetScroll);
     }
     return true;
   }
 
-  function tukar(doc, baru) {
+  function tukar(doc, baru, resetScroll) {
     // CSS khusus detail harus ikut saat navigasi parsial. Sebelumnya hanya
     // isi body yang ditukar: detail yang dibuka lewat sidebar/kartu dapat
     // kehilangan gaya, meskipun reload langsung terlihat benar.
@@ -289,14 +396,29 @@
       });
       if (!ada) { document.head.appendChild(link.cloneNode(true)); }
     });
-    document.title = doc.title || document.title;
+    selaraskanChrome(doc);
     // Bingkai luar dipertahankan native. Marker konteks harus ikut dokumen
     // baru, agar registry lama tidak hidup melewati perubahan sesi/otoritas.
     ["data-pindah-konteks", "data-pindah-alamat", "data-pindah-kerangka"].forEach(function (nama) {
       if (baru.hasAttribute(nama)) bingkai.setAttribute(nama, baru.getAttribute(nama));
       else bingkai.removeAttribute(nama);
     });
-    bingkai.innerHTML = baru.innerHTML;
+    var batas = batasIsi(document), sumber = batasIsi(doc);
+    var lembar = document.getElementById("lembar");
+    if (lembar && lembar.parentNode === bingkai) lembar.remove();
+    while (batas.awal.nextSibling !== batas.akhir) batas.awal.nextSibling.remove();
+    var skrip = [];
+    while (sumber.awal.nextSibling !== sumber.akhir) {
+      var node = sumber.awal.nextSibling;
+      if (node.nodeType === 1) {
+        if (node.tagName === "SCRIPT") skrip.push(node);
+        Array.prototype.push.apply(skrip, node.querySelectorAll("script"));
+      }
+      batas.main.insertBefore(node, batas.akhir);
+    }
+    // Hanya navigasi push biasa mulai di atas. Pop/refresh tetap memberi
+    // ruang kepada pemulih posisi halaman native, sebelum skripnya berjalan.
+    if (resetScroll === true) batas.main.scrollTop = 0;
     tandaiSegar();
     // Isi yang baru dipasang adalah keadaan sekarang: hitungan pil dimulai
     // dari nol, dan penanda berikutnya menjadi titik acuan baru.
@@ -306,7 +428,7 @@
     /* Skrip yang datang lewat innerHTML tidak dijalankan peramban —
        harus dibuatkan ulang elemennya. Tanpa ini layar Catat dan Laporan
        tampil utuh tetapi tak satu tombolnya hidup. */
-    Array.prototype.forEach.call(bingkai.querySelectorAll("script"), function (lama) {
+    skrip.forEach(function (lama) {
       var s = document.createElement("script");
       Array.prototype.forEach.call(lama.attributes, function (at) {
         s.setAttribute(at.name, at.value);
@@ -693,7 +815,7 @@
     // Popstate tidak menambah entri baru; klik/retry menambah tepat sekali.
     try {
       if (data.dorong) history.pushState({ pindah: 1 }, '', data.alamat);
-      pasang(data.teks, data.alamat, false);
+      pasang(data.teks, data.alamat, false, data.dorong === true);
     } catch (e) { location.href = data.alamat; }
   }
 
@@ -710,7 +832,7 @@
       // tukar() menjalankan ulang script. Validasi di atas belum mengubah DOM.
       if (dorong) history.pushState({ pindah: 1 }, "", alamat);
       tujuanPindah = null; sibuk(false);
-      try { pasang(langsung.html, alamat, false); }
+      try { pasang(langsung.html, alamat, false, dorong === true); }
       catch (e) {
         // URL sudah menjadi tujuan tervalidasi. Kegagalan kontrol/DOM harus
         // kembali ke GET native, bukan meninggalkan layar setengah terpasang.
@@ -725,7 +847,7 @@
     if (tersimpan) {
       sibuk(false);
       // Sudah di tangan: tampilkan sekarang juga, tanpa menyeberangi laut.
-      if (!pasang(tersimpan, alamat, true)) { return; }
+      if (!pasang(tersimpan, alamat, true, dorong === true)) { return; }
       if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
       // Lalu periksa diam-diam apakah sudah berubah.
       delete simpan[alamat];

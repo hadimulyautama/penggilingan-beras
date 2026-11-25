@@ -8,6 +8,7 @@
   const token=()=>document.getElementById('formulir-sesi')?.dataset.token||'';
   const storage='penerimaan-ringkas:'+root.dataset.actor+':'+root.dataset.tiket+':'+token();
   let state={forms:{},active:data.formulir[0]?.id||'',dirty:false,uncertain:false,inflight:false,key:crypto.randomUUID(),before:[],notice:''},busy=false,leaving=false,checked=null;
+  const lifecycle=new AbortController();
   const kg=v=>v==null?'Belum diketahui':Number(v).toLocaleString('id-ID',{maximumFractionDigits:3})+' kg';
   const ids=d=>d.catatan.map(c=>c.model+':'+c.id);
   function el(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;}
@@ -95,11 +96,16 @@
     if(leaving||(!busy&&!state.dirty&&!state.uncertain)){markReturn(a);return;}
     e.preventDefault();e.stopImmediatePropagation();if(busy){notice('Permintaan sedang berlangsung. Tunggu hasil atau periksa status sebelum berpindah.',true);return;}
     root.querySelector('[data-nav-guard]')?.remove();const p=el('section',null,'terima-panel');p.dataset.navGuard='';const saved=persist();p.append(el('h2','Isian belum disimpan'),el('p',saved?'Isian tetap disimpan pada perangkat ini. Berpindah halaman tidak mencatat penerimaan atau stok.':'Perangkat belum dapat menyimpan isian. Tetap di halaman ini agar isian tidak hilang.'),button('Tetap di halaman ini',()=>p.remove()));if(saved)p.append(button('Lanjut dengan isian tersimpan',()=>{markReturn(a);leaving=true;location.assign(a.href);}));root.prepend(p);p.scrollIntoView({block:'start'});
-  },true);
-  window.addEventListener('beforeunload',e=>{if(root.isConnected&&!leaving&&(busy||state.dirty||state.uncertain)){persist();e.preventDefault();e.returnValue='';}});
+  },{capture:true,signal:lifecycle.signal});
+  window.addEventListener('beforeunload',e=>{if(root.isConnected&&!leaving&&(busy||state.dirty||state.uncertain)){persist();e.preventDefault();e.returnValue='';}},{signal:lifecycle.signal});
   // Refresh QC saja: jangan render ulang host formulir atau menyalin snapshot
   // isian ke data transaksi. Draf dan fokus tetap pada simpul yang sama.
-  let readBusy=false;
+  let readBusy=false,qcReadAbort=null;
+  const detached=new MutationObserver(()=>{if(!root.isConnected){lifecycle.abort();qcReadAbort?.abort();detached.disconnect();}});
+  detached.observe(document.body,{childList:true,subtree:true});
+  // Navigasi parsial hanya boleh meninggalkan controller yang benar-benar
+  // bersih. Status kiriman/draf tetap dimiliki controller native ini.
+  root.pfCanNavigateRead=()=>root.isConnected&&!busy&&!state.dirty&&!state.uncertain&&!state.inflight&&!checked;
   const bolehBacaQC=()=>root.isConnected&&!busy&&!state.inflight&&!state.uncertain&&!checked;
   function withReadState(change){
     const view=window.KEADAAN_BACA.ambil(root);view.fields=[];
@@ -111,7 +117,7 @@
   root.pfReadRefresh=async()=>{
     if(readBusy||!bolehBacaQC()||!window.KEADAAN_BACA)return false;
     const path=location.pathname+location.search,abort=new AbortController();
-    const timer=setTimeout(()=>abort.abort(),25000);readBusy=true;
+    const timer=setTimeout(()=>abort.abort(),25000);readBusy=true;qcReadAbort=abort;
     try{
       session();
       const r=await fetch(path,{credentials:'same-origin',cache:'no-store',signal:abort.signal,headers:{'X-Pindah':'1'}});
@@ -130,8 +136,8 @@
         withReadState(()=>{const note=root.querySelector('[data-qc-refresh-status]');if(note){note.textContent='Pembaruan QC belum dapat dibaca. Data sebelumnya tetap ditampilkan.';note.hidden=false;}});
       }
       return false;
-    }finally{clearTimeout(timer);readBusy=false;}
+    }finally{clearTimeout(timer);readBusy=false;if(qcReadAbort===abort)qcReadAbort=null;}
   };
   function openFragment(){let id;try{id=decodeURIComponent(location.hash.slice(1));}catch(_){return;}const target=document.getElementById(id);if(target&&root.contains(target))for(let n=target;n&&n!==root;n=n.parentElement)if(n.tagName==='DETAILS')n.open=true;}
-  window.addEventListener('hashchange',openFragment);render();openFragment();
+  window.addEventListener('hashchange',openFragment,{signal:lifecycle.signal});render();openFragment();
 })();
