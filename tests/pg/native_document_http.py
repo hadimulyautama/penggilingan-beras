@@ -1,6 +1,7 @@
 """Real loopback HTTP for native-document negotiation, never header emulation.
 
-Only the two reviewed read profiles use this helper. ASGI response messages
+The original stock/alat profiles keep their reviewed transport; a factory
+also owns the shared browser fixture. Native profile ASGI response messages
 pass through unchanged; a gate delays their original start. Native SSE remains
 live and closes with its actual browser connection. No app lifespan is started.
 """
@@ -10,11 +11,15 @@ import asyncio
 from contextlib import asynccontextmanager
 import hashlib
 import json
+import itertools
 import os
 from pathlib import Path
 import re
 import socket
 from urllib.parse import parse_qsl
+
+
+_SHARED_RECEIPTS = itertools.count(1)
 
 
 class ResponseGate:
@@ -114,14 +119,15 @@ def save_cleanup_receipt(result, *, profile, engine, width):
     out = Path(raw)
     source = Path(__file__).resolve().parents[2]
     if (not out.is_absolute() or out.is_symlink() or not out.is_dir()
-            or out.stat().st_uid != os.getuid() or profile not in {'stock', 'alat'}
+            or out.stat().st_uid != os.getuid() or profile not in {'stock', 'alat', 'shared'}
             or engine not in {'chromium', 'webkit'} or type(width) is not int
             or not 1 <= width <= 4096):
         raise AssertionError('Unsafe native HTTP evidence destination')
     out = out.resolve()
     if out == source or source in out.parents or out in source.parents:
         raise AssertionError('Native HTTP evidence must stay outside source')
-    path = out / f'native-document-{profile}-{engine}-{width}-cleanup.json'
+    suffix = '-'+str(next(_SHARED_RECEIPTS)) if profile=='shared' else ''
+    path = out / f'native-document-{profile}-{engine}-{width}{suffix}-cleanup.json'
     # An accidental repeat in the same output must fail, never overwrite proof.
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as stream:
@@ -210,8 +216,8 @@ class NativeDocumentHTTP:
 
 
 @asynccontextmanager
-async def native_document_browser(client, width, *, profile):
-    """Existing fixture cookies/app; one owned socket, no product overrides."""
+async def owned_http_browser(client, width, *, profile, transport_factory=None, fixed_port=None):
+    """Shared owned lifecycle; each test transport declares its own read policy."""
     import uvicorn
     from app.main import app
     from playwright.async_api import async_playwright
@@ -220,7 +226,9 @@ async def native_document_browser(client, width, *, profile):
     assert engine in {'chromium', 'webkit'}, engine
     # The frozen owner network guard already permits this HTTP port. Never
     # retry another port if it belongs to an active PWA/other fixture worker.
-    port = 59364 if os.environ.get('PWA_GUARD') else 0
+    if fixed_port is not None:
+        assert fixed_port==59364 and profile=='shared'
+    port = fixed_port if fixed_port is not None else 59364 if os.environ.get('PWA_GUARD') else 0
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_task = context = browser = server = transport = pw = None
@@ -233,7 +241,9 @@ async def native_document_browser(client, width, *, profile):
         listener.listen(128)
         listener.setblocking(False)
         origin = 'http://127.0.0.1:' + str(listener.getsockname()[1])
-        transport = NativeDocumentHTTP(app, profile, origin)
+        transport = transport_factory(app, origin) if transport_factory else NativeDocumentHTTP(app, profile, origin)
+        if hasattr(transport, 'start'):
+            await transport.start()
 
         class ReadyServer(uvicorn.Server):
             async def startup(self, sockets=None):
@@ -336,6 +346,8 @@ async def native_document_browser(client, width, *, profile):
         except BaseException as error:
             cleanup['steps'].append(dict(step='listener_socket_close', status='FAIL',
                 forced=False, pending=False, error_type=type(error).__name__))
+        if transport and hasattr(transport, 'restore'):
+            cleanup['steps'].append(await bounded_cleanup('restore_owned_client', transport.restore, owned_tasks=cleanup_tasks))
         cleanup['forced'] = cleanup['forced'] or any(s['forced'] for s in cleanup['steps'])
         cleanup['resources'] = dict(listener_closed=listener.fileno() == -1,
             servers_closed=all(not child.is_serving() for child in getattr(server, 'servers', ())),
@@ -352,7 +364,7 @@ async def native_document_browser(client, width, *, profile):
         cleanup.update(profile=profile, width=width, engine=engine,
             helper_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             wire=wire_receipt(transport),
-            gates={name:dict(count=getattr(transport, name).jumlah,
+            gates=transport.cleanup_metadata() if transport and hasattr(transport, 'cleanup_metadata') else {name:dict(count=getattr(transport, name).jumlah,
                 entered=getattr(transport, name).mulai.is_set(), released=getattr(transport, name).lepas.is_set(),
                 completed=getattr(transport, name).selesai.is_set()) for name in ('html', 'data')} if transport else {})
         try:
@@ -362,3 +374,10 @@ async def native_document_browser(client, width, *, profile):
             cleanup['steps'].append(dict(step='exclusive_cleanup_receipt', status='FAIL',
                 forced=False, pending=False, error_type=type(error).__name__))
         finish_cleanup(cleanup, primary)
+
+
+@asynccontextmanager
+async def native_document_browser(client, width, *, profile):
+    """Original stock/alat API, retaining the reviewed native transport."""
+    async with owned_http_browser(client, width, profile=profile) as result:
+        yield result

@@ -29,7 +29,8 @@ TABS = {"ringkasan": "Ringkasan", "barang": "Barang",
 def address(href):
     """Keep the actual native query, remove only its panel fragment."""
     u = urlsplit(href)
-    assert not u.netloc or u.netloc == "uji"
+    from tests.pg.test_barang_masuk_bertahap_browser import BASE
+    assert not u.netloc or (u.scheme, u.netloc) == (urlsplit(BASE).scheme, urlsplit(BASE).netloc)
     return u.path + ("?" + u.query if u.query else "")
 
 
@@ -107,9 +108,10 @@ async def role_client(pg, stock, role):
             warehouse = None
     client = await _klien(pg, role=P.ADMIN if role == "admin" else P.OPERATOR,
                           gudang_id=warehouse)
-    # peramban's existing public origin is https://uji. Native tab macros use
-    # request.url; keep scheme identical instead of rewriting hrefs/HTML/guards.
-    client.base_url = "https://uji"
+    # Native tab macros use request.url; pin the same owned browser origin
+    # before obtaining goldens instead of rewriting native hrefs or HTML.
+    from tests.pg.test_barang_masuk_bertahap_browser import BASE
+    client.base_url = BASE
     return client
 
 

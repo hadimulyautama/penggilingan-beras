@@ -49,7 +49,7 @@ ITEMS=['Barang / merek','Mutu','Kemasan','Jumlah kemasan','Berat','Catatan','Cat
 
 def address(value):
     parsed=urlsplit(value)
-    assert not parsed.netloc or parsed.netloc=='uji'
+    assert not parsed.netloc or (parsed.scheme,parsed.netloc)==(urlsplit(BASE).scheme,urlsplit(BASE).netloc)
     return parsed.path+('?' +parsed.query if parsed.query else '')
 
 
