@@ -198,6 +198,11 @@ async def test_tombol_kartu_silo_memulai_giling_dengan_alat_yang_benar(pg,silos,
             await page.goto('https://uji/pekerjaan' if peran=='operator' else 'https://uji/')
             if peran!='operator':
                 await page.locator('a[href="/gudang/g1"]').first.click()
+                # Halaman asal tetap terlihat selama GET. Pilih kartu dari
+                # gudang tujuan yang sudah terpasang, bukan kartu asal inert.
+                await expect(page).to_have_url('https://uji/gudang/g1')
+                await expect(page.locator('.bingkai')).to_have_attribute('data-pindah-alamat','/gudang/g1')
+                await expect(page.locator('#isi-halaman')).not_to_have_attribute('aria-busy','true')
             link=page.locator('a[href*="buka=mulai_giling"][href*="nilai="]').first
             await link.wait_for(state='attached')
             nama=parse_qs(urlsplit(await link.get_attribute('href')).query)['nilai'][0]
