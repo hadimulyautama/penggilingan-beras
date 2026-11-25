@@ -60,16 +60,24 @@ async def test_catalog_failed_get_retry_keeps_framework_and_does_not_post(pg,sto
         before=await _sidik(pg)
         async with peramban(client,390) as (page,t):
             await page.goto(BASE+'/kabar',wait_until='load');await page.wait_for_function('()=>window.PadiKerangkaUI')
-            failed={'once':False}
+            failed={'once':False,'native_reads':0}
             async def response(route):
-                if not failed['once'] and (await route.request.all_headers()).get('x-pindah')=='1':
+                headers=await route.request.all_headers()
+                # SDK hover/touch prefetch uses X-Pindah alone. The failure
+                # must reach the actual native reader, not be spent on that
+                # optional prefetch before the click installs its framework.
+                native=route.request.method=='GET' and headers.get('x-pindah')=='1' and headers.get('x-kerangka-halaman')=='0'
+                if native:failed['native_reads']+=1
+                if native and not failed['once']:
                     failed['once']=True;await route.fulfill(status=503,content_type='text/html',body='Fixture read unavailable')
                 else:await route.fallback()
             await page.context.route('**/laporan',response)
             await page.locator('#buka-laci').click();await page.locator('#laci a[href="/laporan"]').click()
             root=page.locator('[data-laporan-katalog-kerangka]');await expect(root.locator('[data-katalog-native-retry]')).to_be_visible()
             await expect(root.locator('a[data-laporan]')).to_have_count(13)
+            await expect(root.locator('[data-katalog-native-status]')).to_have_attribute('role','alert')
+            assert failed=={'once':True,'native_reads':1},'Exactly the current native GET must fail before the explicit retry'
             await root.locator('[data-katalog-native-retry]').click();await expect(root).to_have_count(0)
             await expect(page.locator('a[data-laporan]')).to_have_count(13)
-            assert failed['once'] and not t['posts'] and not t['errors']
+            assert failed=={'once':True,'native_reads':2} and not t['posts'] and not t['errors']
         assert await _sidik(pg)==before
