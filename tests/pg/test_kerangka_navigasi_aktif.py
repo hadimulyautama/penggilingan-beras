@@ -141,7 +141,12 @@ class _ASGIBrowser:
 
 
 @asynccontextmanager
-async def _browser(client, width):
+async def _browser(client, width, *, native_document=False):
+    if native_document:
+        from tests.pg.native_document_http import native_document_browser
+        async with native_document_browser(client, width, profile='stock') as value:
+            yield value
+        return
     engine = os.getenv('UJI_BROWSER', 'chromium')
     assert engine in {'chromium', 'webkit'}, engine
     bridge = _ASGIBrowser(client)
@@ -164,7 +169,8 @@ async def _browser(client, width):
 
 
 async def _buka_stok_dari_menu(page, bridge, width, *, native_document=False):
-    response = await page.goto(BASE + '/barang-masuk')
+    base = getattr(bridge, 'origin', BASE)
+    response = await page.goto(base + '/barang-masuk')
     assert response and response.status == 200
     await page.wait_for_function(
         "typeof window.PINDAH?.aturKerangkaHalaman === 'function'")
@@ -188,7 +194,7 @@ async def _buka_stok_dari_menu(page, bridge, width, *, native_document=False):
         assert not bridge.html.lepas.is_set() and not bridge.data.mulai.is_set()
         bridge.html.lepas.set()
     await asyncio.wait_for(bridge.data.mulai.wait(), 10)
-    await expect(page).to_have_url(BASE + '/stok')
+    await expect(page).to_have_url(base + '/stok')
     await expect(page.locator('.halaman-memuat')).to_have_count(0)
     assert bridge.html.jumlah == (1 if native_document else 0)
     await expect(page.locator('#laci a[href="/stok"]').first).to_have_attribute(
@@ -279,7 +285,7 @@ async def test_fallback_native_tetap_aman_bila_katalog_opsional_tidak_tersedia(p
         monkeypatch.setattr(kerangka_ui,'susun',unavailable)
     async with await _klien(pg,peran=P.OPERATOR,gudang=GUDANG) as client:
         before=await _sidik(pg)
-        async with _browser(client,width) as (page,bridge):
+        async with _browser(client,width,native_document=native_document) as (page,bridge):
             errors=[]
             page.on('pageerror',lambda error:errors.append(str(error)))
             await _buka_stok_dari_menu(page,bridge,width,native_document=native_document)

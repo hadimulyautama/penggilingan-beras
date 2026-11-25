@@ -8,7 +8,7 @@ from tests.pg.test_konsolidasi_stok import stok_lengkap
 from tests.pg.test_stok_produk_jasa import sosoh_jasa
 from tests.pg.test_stok_pk_g1_polesan import _klien
 from tests.pg.test_halaman_bertahap import _sidik
-from tests.pg.test_barang_masuk_bertahap_browser import peramban,BASE
+from tests.pg.native_document_http import native_document_browser
 pytestmark=pytest.mark.asyncio
 PATH='/pengaturan/alat'
 
@@ -20,16 +20,19 @@ async def test_equipment_hub_direct_document_keeps_three_native_links_and_chrome
         expected=[(a.get('href'),a.get_text(' ',strip=True)) for a in actual.select('#isi-halaman section.kartu a.btn')]
         assert len(expected)==3
         crumb=str(actual.select_one('.desktop-chrome__crumbrow'))
-        async with peramban(client,width) as (page,t):
-            entered,release=asyncio.Event(),asyncio.Event();t['gates'][PATH]=(entered,release)
-            t['gate_headers'][PATH]={'x-pindah':'1','x-kerangka-halaman':'0'}
+        async with native_document_browser(client,width,profile='alat') as (page,t):
+            entered,release=t.data.mulai,t.data.lepas
             try:
                 # This legacy hub has no native /pengaturan menu door: that
                 # menu links directly to /pengaturan/mesin. Cover the real deep
                 # document and its separate fresh GET, not an invented anchor
                 # or a claim that this is pre-HTML sidebar navigation.
-                await page.goto(BASE+PATH,wait_until='load')
+                await page.goto(t.origin+PATH,wait_until='load')
                 await asyncio.wait_for(entered.wait(),20)
+                documents=[r for r in t.requests if r['path']==PATH and r['navigation_request']]
+                assert len(documents)==1
+                assert documents[0]['headers']['sec-fetch-mode']=='navigate'
+                assert documents[0]['headers']['sec-fetch-dest'] in {'document','empty'}
                 root=page.locator('[data-pengaturan-alat-kerangka]');await expect(root).to_be_visible()
                 await expect(page.locator('.halaman-memuat')).to_have_count(0)
                 got=await root.locator('section.kartu a.btn').evaluate_all("ns=>ns.map(n=>[n.getAttribute('href'),n.textContent.trim()])")
@@ -40,7 +43,8 @@ async def test_equipment_hub_direct_document_keeps_three_native_links_and_chrome
                 release.set();await expect(root).to_have_count(0)
                 got=await page.locator('#isi-halaman section.kartu a.btn').evaluate_all("ns=>ns.map(n=>[n.getAttribute('href'),n.textContent.trim()])")
                 assert got==[list(row) for row in expected]
-                assert not t['posts'] and not t['errors'],t
+                assert t.data.jumlah==1
+                assert not t.writes and not t.errors,(t.writes,t.errors)
             finally:release.set()
         assert await _sidik(pg)==before
 
