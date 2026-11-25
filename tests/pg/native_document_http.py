@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+import hashlib
+import json
 import os
+from pathlib import Path
 import re
 import socket
 from urllib.parse import parse_qsl
@@ -50,6 +53,94 @@ def gate_kind(profile, path, query, headers):
 
 def foreign_url_pattern(origin):
     return re.compile(r'^(?!' + re.escape(origin) + r'(?:/|$)).*')
+
+
+async def bounded_cleanup(step, operation, *, timeout=5, cancel_timeout=1, owned_tasks=None):
+    """A cancellation-resistant close must not make fixture teardown hang."""
+    result = dict(step=step, status='FAIL', forced=False, pending=False)
+    try:
+        job = asyncio.ensure_future(operation())
+    except BaseException as error:
+        result['error_type'] = type(error).__name__
+        return result
+    if owned_tasks is not None:
+        owned_tasks.add(job)
+    done, _ = await asyncio.wait({job}, timeout=timeout)
+    if not done:
+        result.update(forced=True, error_type='TimeoutError')
+        job.cancel()
+        settled, _ = await asyncio.wait({job}, timeout=cancel_timeout)
+        result['pending'] = not bool(settled)
+        if settled and not job.cancelled():
+            job.exception()  # consume only an already-finished exception
+        if settled and owned_tasks is not None:
+            owned_tasks.discard(job)
+        return result
+    if owned_tasks is not None:
+        owned_tasks.discard(job)
+    if job.cancelled():
+        result['error_type'] = 'CancelledError'
+    else:
+        error = job.exception()
+        if error is None:
+            result['status'] = 'PASS'
+        else:
+            result['error_type'] = type(error).__name__
+    return result
+
+
+def wire_receipt(transport):
+    """Never persist cookie/token/header/query values or browser error text."""
+    rows = []
+    for call in transport.requests if transport else ():
+        h = call['headers']
+        rows.append(dict(path=call['path'], query_present=bool(call['query_names']),
+            native_navigation=call['navigation_request'], status=call.get('status'),
+            sec_fetch_mode_present='sec-fetch-mode' in h,
+            sec_fetch_mode_navigate=h.get('sec-fetch-mode') == 'navigate',
+            sec_fetch_dest_present='sec-fetch-dest' in h,
+            sec_fetch_dest_document=h.get('sec-fetch-dest') == 'document',
+            sec_fetch_dest_empty=h.get('sec-fetch-dest') == 'empty',
+            x_pindah_present='x-pindah' in h, x_pindah_one=h.get('x-pindah') == '1',
+            x_kerangka_present='x-kerangka-halaman' in h,
+            x_kerangka_zero=h.get('x-kerangka-halaman') == '0'))
+    return rows
+
+
+def save_cleanup_receipt(result, *, profile, engine, width):
+    raw = os.environ.get('DETAIL_OUT')
+    if not raw:
+        return None
+    out = Path(raw)
+    source = Path(__file__).resolve().parents[2]
+    if (not out.is_absolute() or out.is_symlink() or not out.is_dir()
+            or out.stat().st_uid != os.getuid() or profile not in {'stock', 'alat'}
+            or engine not in {'chromium', 'webkit'} or type(width) is not int
+            or not 1 <= width <= 4096):
+        raise AssertionError('Unsafe native HTTP evidence destination')
+    out = out.resolve()
+    if out == source or source in out.parents or out in source.parents:
+        raise AssertionError('Native HTTP evidence must stay outside source')
+    path = out / f'native-document-{profile}-{engine}-{width}-cleanup.json'
+    # An accidental repeat in the same output must fail, never overwrite proof.
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, 'w') as stream:
+        stream.write(json.dumps(result, indent=2, sort_keys=True) + '\n')
+    return path.name
+
+
+def finish_cleanup(result, primary):
+    """Secondary cleanup failure cannot replace the original test exception."""
+    if result['status'] == 'PASS':
+        return
+    if primary is not None:
+        primary.native_http_cleanup = result
+        if hasattr(primary, 'add_note'):
+            primary.add_note('Native HTTP cleanup also failed; secondary steps: ' + ', '.join(
+                row['step'] for row in result['steps'] if row['status'] != 'PASS') + '. Inspect exclusive DETAIL_OUT receipt.')
+        return
+    raise AssertionError('Owned native HTTP cleanup failed: ' + ', '.join(
+        row['step'] for row in result['steps'] if row['status'] != 'PASS'))
 
 
 class NativeDocumentHTTP:
@@ -132,8 +223,11 @@ async def native_document_browser(client, width, *, profile):
     port = 59364 if os.environ.get('PWA_GUARD') else 0
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_task = context = browser = server = transport = None
+    server_task = context = browser = server = transport = pw = None
+    primary = None
     startup = asyncio.Event()
+    cleanup = dict(status='FAIL', steps=[], forced=False, primary_error_type=None)
+    cleanup_tasks = set()
     try:
         listener.bind(('127.0.0.1', port))
         listener.listen(128)
@@ -148,7 +242,7 @@ async def native_document_browser(client, width, *, profile):
                     startup.set()
 
         server = ReadyServer(uvicorn.Config(transport, lifespan='off', access_log=False,
-            log_level='error', proxy_headers=False, timeout_graceful_shutdown=4))
+            log_level='error', proxy_headers=False, timeout_graceful_shutdown=None))
         server_task = asyncio.create_task(server.serve(sockets=[listener]))
         ready = asyncio.create_task(startup.wait())
         try:
@@ -159,62 +253,112 @@ async def native_document_browser(client, width, *, profile):
             assert startup.is_set(), 'Owned native HTTP server did not start'
         finally:
             ready.cancel()
-            await asyncio.gather(ready, return_exceptions=True)
+            done, _ = await asyncio.wait({ready}, timeout=1)
+            assert done, 'Startup observer did not settle'
 
-        async with async_playwright() as pw:
-            browser = await getattr(pw, engine).launch()
-            context = await browser.new_context(viewport={'width': width, 'height': 900},
-                service_workers='block', reduced_motion='reduce')
-            # Match ONLY foreign URLs. Same-origin requests are never routed,
-            # so the native document's wire Sec-Fetch/cookies stay browser-owned.
-            await context.route(foreign_url_pattern(origin), lambda route: route.abort())
-            await context.add_cookies([dict(name=c.name, value=c.value, url=origin)
-                                      for c in client.cookies.jar])
-            page = await context.new_page()
-            page.on('pageerror', lambda error: transport.errors.append(str(error)))
-            try:
-                yield page, transport
-            finally:
-                transport.closing = True
-                transport.release()
-                # Closing the real browser connection delivers native SSE
-                # disconnect before asking the owned HTTP server to stop.
-                await context.close()
-                context = None
-                await browser.close()
-                browser = None
+        # Own driver shutdown explicitly too; an async context-manager exit
+        # would otherwise introduce another unbounded cleanup await.
+        pw = await async_playwright().start()
+        browser = await getattr(pw, engine).launch()
+        context = await browser.new_context(viewport={'width': width, 'height': 900},
+            service_workers='block', reduced_motion='reduce')
+        # Match ONLY foreign URLs. Same-origin requests are never routed,
+        # so the native document's wire Sec-Fetch/cookies stay browser-owned.
+        await context.route(foreign_url_pattern(origin), lambda route: route.abort())
+        await context.add_cookies([dict(name=c.name, value=c.value, url=origin)
+                                  for c in client.cookies.jar])
+        page = await context.new_page()
+        page.on('pageerror', lambda error: transport.errors.append(str(error)))
+        yield page, transport
+    except BaseException as error:
+        primary = error
+        cleanup['primary_error_type'] = type(error).__name__
+        raise
     finally:
         if transport:
             transport.closing = True
             transport.release()
-        if context:
-            await context.close()
-        if browser:
-            await browser.close()
+        # Close native browser connections before the server, including SSE.
+        for step, resource, method in (('context_close', context, 'close'),
+                                       ('browser_close', browser, 'close'),
+                                       ('playwright_stop', pw, 'stop')):
+            if resource is not None:
+                try:
+                    result = await bounded_cleanup(step, getattr(resource, method), owned_tasks=cleanup_tasks)
+                except BaseException as error:
+                    result = dict(step=step, status='FAIL', forced=True, pending=True, error_type=type(error).__name__)
+                cleanup['steps'].append(result)
         if server:
             server.should_exit = True
-        forced = False
-        try:
-            if server_task:
-                await asyncio.wait_for(asyncio.shield(server_task), 10)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
-            forced = True
+        if server_task:
+            step = await bounded_cleanup('server_shutdown', lambda: asyncio.shield(server_task), timeout=10)
+            cleanup['steps'].append(step)
+        if server_task and cleanup['steps'][-1]['status'] != 'PASS':
+            cleanup['forced'] = True
             if server:
                 server.force_exit = True
-            if transport:
-                remaining = list(transport.active)
-                for task in remaining:
-                    task.cancel()
-                await asyncio.gather(*remaining, return_exceptions=True)
-            if server_task:
-                server_task.cancel()
-                await asyncio.gather(server_task, return_exceptions=True)
-        finally:
+                for connection in list(server.server_state.connections):
+                    try:
+                        connection.transport.abort()
+                    except BaseException as error:
+                        cleanup['steps'].append(dict(step='force_connection_abort', status='FAIL',
+                            forced=True, pending=False, error_type=type(error).__name__))
+            owned = set(transport.active if transport else ())
+            if server:
+                owned.update(server.server_state.tasks)
+            owned.add(server_task)
+            for task in owned:
+                task.cancel()
+            done, pending = await asyncio.wait(owned, timeout=2)
+            for task in done:
+                if not task.cancelled():
+                    task.exception()
+            cleanup['steps'].append(dict(step='forced_owned_task_drain', status='FAIL',
+                forced=True, pending=bool(pending), remaining_count=len(pending)))
+        remaining = {task for task in cleanup_tasks if not task.done()}
+        if remaining:
+            for task in remaining:
+                task.cancel()
+            done, pending = await asyncio.wait(remaining, timeout=2)
+            for task in done:
+                if not task.cancelled():
+                    task.exception()
+            cleanup['steps'].append(dict(step='forced_close_task_drain', status='FAIL',
+                forced=True, pending=bool(pending), remaining_count=len(pending)))
+        for child in getattr(server, 'servers', ()):
+            try:
+                child.close()
+            except BaseException as error:
+                cleanup['steps'].append(dict(step='listener_server_close', status='FAIL',
+                    forced=False, pending=False, error_type=type(error).__name__))
+        try:
             listener.close()
-        assert not forced, 'Owned native HTTP cleanup required forced cancellation'
-        assert listener.fileno() == -1
-        assert not server or all(not child.is_serving() for child in getattr(server, 'servers', ()))
-        assert not server_task or server_task.done()
-        assert not transport or not transport.active, 'Owned native HTTP tasks remain'
-        assert not transport or not transport.foreign, transport.foreign if transport else None
-        assert not transport or not transport.errors, transport.errors if transport else None
+        except BaseException as error:
+            cleanup['steps'].append(dict(step='listener_socket_close', status='FAIL',
+                forced=False, pending=False, error_type=type(error).__name__))
+        cleanup['forced'] = cleanup['forced'] or any(s['forced'] for s in cleanup['steps'])
+        cleanup['resources'] = dict(listener_closed=listener.fileno() == -1,
+            servers_closed=all(not child.is_serving() for child in getattr(server, 'servers', ())),
+            server_task_done=server_task is None or server_task.done(),
+            pending_close_tasks=sum(not task.done() for task in cleanup_tasks),
+            active_calls=len(transport.active) if transport else 0,
+            connections=len(server.server_state.connections) if server else 0,
+            protocol_error_count=len(transport.errors) if transport else 0,
+            foreign_request_count=len(transport.foreign) if transport else 0)
+        r = cleanup['resources']
+        complete = (r['listener_closed'] and r['servers_closed'] and r['server_task_done']
+                    and not any(r[k] for k in ('pending_close_tasks', 'active_calls', 'connections', 'protocol_error_count', 'foreign_request_count')))
+        cleanup['status'] = 'PASS' if complete and not cleanup['forced'] and all(s['status'] == 'PASS' for s in cleanup['steps']) else 'FAIL'
+        cleanup.update(profile=profile, width=width, engine=engine,
+            helper_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            wire=wire_receipt(transport),
+            gates={name:dict(count=getattr(transport, name).jumlah,
+                entered=getattr(transport, name).mulai.is_set(), released=getattr(transport, name).lepas.is_set(),
+                completed=getattr(transport, name).selesai.is_set()) for name in ('html', 'data')} if transport else {})
+        try:
+            save_cleanup_receipt(cleanup, profile=profile, engine=engine, width=width)
+        except BaseException as error:
+            cleanup['status'] = 'FAIL'
+            cleanup['steps'].append(dict(step='exclusive_cleanup_receipt', status='FAIL',
+                forced=False, pending=False, error_type=type(error).__name__))
+        finish_cleanup(cleanup, primary)
