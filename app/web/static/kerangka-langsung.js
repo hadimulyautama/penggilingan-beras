@@ -80,6 +80,15 @@
   frame.dataset.pindahAlamat=u.pathname+u.search;
   return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
+ function kembaliDetailMasuk(target){
+  if(target.searchParams.getAll('kembali_kerja').length>1)return null;
+  const raw=target.searchParams.get('kembali_kerja')||'/barang-masuk';
+  const back=new URL(raw,location.href);
+  if(!raw.startsWith('/')||raw.startsWith('//')||back.origin!==location.origin||back.pathname!=='/barang-masuk'||back.hash)return null;
+  // Nilai ini datang dari href katalog native. Pertahankan kueri persis,
+  // bukan URL list yang kebetulan sedang dibuka atau bentuk normalisasi baru.
+  return raw;
+ }
  function detailLangsung(pilihan,context,cap){
   const source=document.querySelector('[data-bm-page]'),node=source?.querySelector('script[data-bm-detail-catalog]');
   if(!node||source.dataset.bmContext!==context||source.dataset.bmCap!==cap)return null;
@@ -89,6 +98,7 @@
   if(!target)return null;
   const u=new URL(target.alamat,location.href);
   if(u.origin!==location.origin||!/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||u.hash)return null;
+  const kembali=kembaliDetailMasuk(u);if(kembali===null)return null;
   // Prototype hanya struktur. ID/URL berasal dari link native pada halaman
   // yang masih aktif; tidak menerima ID bebas atau mencampur data sumber.
   const base=decodeFrame(registry,'/barang-masuk');if(!base)return null;
@@ -106,8 +116,8 @@
   for(const tab of root.querySelectorAll('[data-bm-tab]')){const link=new URL(u);link.searchParams.set('tab_detail',tab.dataset.bmTab);tab.dataset.url=link.pathname+link.search;}
   const back=root.querySelector('[data-bm-back]'),link=source.querySelector('a[href="'+CSS.escape(target.alamat)+'"]');
   if(!link)return null;
-  if(back){back.href=location.pathname+location.search;back.textContent='Kembali ke Barang Masuk';}
-  for(const anchor of frame.querySelectorAll('a.bar__balik,a.desktop-back'))if(anchor.getAttribute('href')==='/barang-masuk')anchor.href=location.pathname+location.search;
+  if(back){back.setAttribute('href',kembali);back.textContent='Kembali ke Barang Masuk';}
+  for(const anchor of frame.querySelectorAll('a.bar__balik,a.desktop-back'))anchor.setAttribute('href',kembali);
   return {versi:1,alamat:target.alamat,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  function decodeFrame(data,address){
