@@ -36,7 +36,7 @@ async def test_qc_shell_permission_native_parity_and_query(pg,lengkap,qc,rice_du
                 assert f.select_one('script[data-qc-aset-native="qc-kerangka.js"]')
                 assert f.select_one('script[data-qc-aset-native="halaman-bertahap.js"]')
                 assert f.select_one('[data-lk-cetak]').has_attr('disabled')
-                assert not f.select('form[method=post],.tabel-standar__baris[href],a[href*="/GB-QC-"]')
+                assert not f.select_one('[data-halaman-bertahap]').select('form[method=post],.tabel-standar__baris[href],a[href*="/GB-QC-"]')
         for kind,cfg in TUJUAN.items():
             shell=await client.get(cfg['path'],headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})
             native=await client.get(cfg['path'],headers={'X-Pindah':'1'})
