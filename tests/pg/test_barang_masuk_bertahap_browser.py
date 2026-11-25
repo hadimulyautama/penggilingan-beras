@@ -1,4 +1,9 @@
-"""Native browser/ASGI acceptance; no listener, fake actor or external harness."""
+"""Native browser/ASGI reads; SSE is an explicit comment-only protocol scaffold.
+
+This bridge does not prove native SSE messages, authentication, reconnects or
+PWA behavior. Actual HTTP/SSE acceptance has separate owner receipts. The
+scaffold contains no application DTO and never suppresses browser page errors.
+"""
 import asyncio
 import json
 import os
@@ -19,13 +24,16 @@ from tests.pg.test_halaman_bertahap import _sidik
 
 pytestmark = pytest.mark.asyncio
 BASE = 'https://uji'
+SSE_PROTOCOL_COMMENT = ': fixture protocol scaffold; no application message\n\n'
 
 
 @asynccontextmanager
 async def peramban(client, width):
-    """Browser supplies Sec-Fetch; ASGI and native fixture supply all data."""
+    """ASGI supplies native page data; the SSE branch is protocol-only, not data."""
     gates, posts, errors = {}, [], []
     transport = dict(gates=gates, gate_headers={}, pad_html={}, posts=posts, errors=errors, gets=[], completed={}, corrupt_context=False, fail_asset=False)
+    transport['sse_scaffold'] = dict(status=200, mime='text/event-stream', requests=0,
+        comment_only=True, application_DTO_supplied=False, native_SSE_coverage=False)
     pending = set()
     closing = False
     async with async_playwright() as pw:
@@ -44,7 +52,13 @@ async def peramban(client, width):
                 await route.abort()
                 return
             if u.path == '/api/aliran':
-                await route.fulfill(status=204, body='')
+                # Native endpoint is a 200 text/event-stream. This finite idle
+                # comment is only a protocol scaffold; it supplies no penanda
+                # or business value. Do not infer reconnect/auth/stream health
+                # from these intercepted page-navigation tests.
+                transport['sse_scaffold']['requests'] += 1
+                await route.fulfill(status=200, content_type='text/event-stream',
+                    headers={'Cache-Control': 'no-cache'}, body=SSE_PROTOCOL_COMMENT)
                 return
             if request.method != 'GET':
                 posts.append(u.path)
