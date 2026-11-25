@@ -83,13 +83,20 @@ def diagnostic_error(error):
 
 def expected_detail_tabs(native_html, pelanggan):
     doc = BeautifulSoup(native_html, 'html.parser')
-    selector = '.giling-tabs [role=tab]' if pelanggan else '.jasa-detail-tab a'
+    if pelanggan:
+        active=doc.select('.giling-tabs[role=tablist]')
+        closed=doc.select('.rhs-tabs[role=tablist]')
+        assert len(active)+len(closed)==1, 'Native customer Giling family must be unambiguous'
+        selector='.rhs-tabs [role=tab]' if closed else '.giling-tabs [role=tab]'
+        required=5 if closed else 4
+    else:
+        selector='.jasa-detail-tab a';required=5
     labels = [n.get_text(' ', strip=True) for n in doc.select(selector)]
-    assert labels, 'Actual authorized detail must provide its native tab labels'
+    assert len(labels)==required, 'Actual authorized detail must provide every native family tab'
     return labels
 
 
-async def framework(page, *, pelanggan, detail, labels=None):
+async def framework(page, *, pelanggan, detail, labels=None, allowed_tab_targets=()):
     await expect(page.locator('.halaman-memuat')).to_have_count(0)
     if pelanggan:
         selector = '[data-portal-detail-frame]' if detail else '[data-portal-native-frame][data-portal-page="/riwayat-proses"]'
@@ -97,10 +104,17 @@ async def framework(page, *, pelanggan, detail, labels=None):
         await expect(root).to_be_visible(timeout=700)
         await expect(root.locator('h1')).to_be_visible()
         if detail:
+            await expect(root.locator('.rhs-tabs' if len(labels)==5 else '.giling-tabs')).to_be_visible()
             tabs = root.locator('[role=tab]')
             assert [text.strip() for text in await tabs.all_text_contents()] == labels
             for tab in await tabs.all():
-                await expect(tab).to_be_disabled()
+                if await tab.evaluate("n=>n.tagName==='A'"):
+                    # A source-proven native read tab may be navigable while
+                    # data waits. Unknown/unpublished tab URLs stay disabled.
+                    assert await tab.get_attribute('href') in allowed_tab_targets
+                else:
+                    await expect(tab).to_be_disabled()
+                    assert await tab.get_attribute('aria-describedby')
             assert await root.locator('[role=tabpanel] h2').count() > 0
         else:
             await expect(root.locator('form[role=search] input[type=search][name=q]')).to_be_enabled()
@@ -151,6 +165,15 @@ async def test_diagnostics_never_keep_query_values_unknown_paths_or_header_secre
     assert 'not-for-evidence' not in json.dumps(diagnostic_error(RuntimeError('not-for-evidence')))
 
 
+async def test_native_detail_oracle_distinguishes_closed_five_from_active_four():
+    active='<nav class="giling-tabs" role="tablist">'+''.join(f'<a role="tab">{n}</a>' for n in ['Ringkasan','Bahan','Hasil & mutu','Riwayat'])+'</nav>'
+    closed='<nav class="rhs-tabs" role="tablist">'+''.join(f'<a role="tab">{n}</a>' for n in ['Ringkasan','Bahan & silo','Hasil & stok','QC asal','Riwayat'])+'</nav>'
+    assert len(expected_detail_tabs(active,True))==4
+    assert len(expected_detail_tabs(closed,True))==5
+    with pytest.raises(AssertionError):expected_detail_tabs(closed.replace('<a role="tab">QC asal</a>',''),True)
+    with pytest.raises(AssertionError):expected_detail_tabs(active+closed,True)
+
+
 @pytest.mark.parametrize('pelanggan', [False, True])
 @pytest.mark.parametrize('engine', os.environ.get('UJI_PONSEL_ENGINES', 'chromium').split(','))
 @pytest.mark.parametrize('width', [320, 390])
@@ -197,6 +220,7 @@ async def test_sidebar_detail_sekali_sentuh(pg, portal, pelanggan, engine, width
         native_detail = await c.get(detailHref, headers=native_headers)
         assert native_detail.status_code == 200
         labels = expected_detail_tabs(native_detail.text, pelanggan)
+        allowed_tab_targets={detailHref}|{n['href'] for n in BeautifulSoup(native_detail.text,'html.parser').select('[role=tab][href]')}
         before = await _sidik(pg)
         async with async_playwright() as pw:
             browser = await getattr(pw, engine).launch()
@@ -335,11 +359,11 @@ async def test_sidebar_detail_sekali_sentuh(pg, portal, pelanggan, engine, width
                 await page.locator('main a[href="' + detailHref + '"]').first.tap()
                 await snapshot('after-detail-click')
                 await asyncio.wait_for(detail_data.entered.wait(), 15)
-                await framework(page, pelanggan=pelanggan, detail=True, labels=labels)
+                await framework(page, pelanggan=pelanggan, detail=True, labels=labels, allowed_tab_targets=allowed_tab_targets)
                 await expect(page).to_have_url(BASE + detailHref)
                 assert not detail_html.release.is_set(), 'Detail HTML must still be held'
                 stale.release.set(); await asyncio.wait_for(stale.completed.wait(), 20); await two_frames(page)
-                await framework(page, pelanggan=pelanggan, detail=True, labels=labels)
+                await framework(page, pelanggan=pelanggan, detail=True, labels=labels, allowed_tab_targets=allowed_tab_targets)
                 await expect(page).to_have_url(BASE + detailHref)
                 detail_data.release.set(); detail_html.release.set()
                 await asyncio.wait_for(detail_data.completed.wait(), 20); await two_frames(page)

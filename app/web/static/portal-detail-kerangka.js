@@ -8,18 +8,21 @@
   if(u.origin!==origin||u.pathname+u.search+u.hash!==value)return null;
   let kind,resource,m;
   if((m=u.pathname.match(/^\/pelanggan\/proses-aktif\/giling\/([A-Za-z0-9_-]{1,100})$/))){kind='giling';resource=m[1];}
+  else if((m=u.pathname.match(/^\/pelanggan\/riwayat-giling\/([1-9][0-9]{0,9})$/))){kind='giling-riwayat';resource=m[1];if(Number(resource)>2147483647)return null;}
   else if((m=u.pathname.match(/^\/pelanggan\/barang-masuk\/([1-9][0-9]{0,9})$/))){kind='penerimaan';resource=m[1];}
   else return null;
-  const pairs=[...u.searchParams],q=Object.fromEntries(pairs),tabs=kind==='giling'?['ringkasan','bahan','hasil','riwayat']:['ringkasan','tiket','qc','riwayat'];
-  const keys=['tab_detail','pelanggan_id','pemilik','kepemilikan',...(kind==='giling'?['halaman_hasil','halaman_qc','halaman_jeda']:[])];
+  const pairs=[...u.searchParams],q=Object.fromEntries(pairs),tabs=kind==='giling'?['ringkasan','bahan','hasil','riwayat']:kind==='giling-riwayat'?['ringkasan','bahan','hasil','qc','riwayat']:['ringkasan','tiket','qc','riwayat'];
+  const keys=['tab_detail','pelanggan_id','pemilik','kepemilikan',...(kind==='giling'?['halaman_hasil','halaman_qc','halaman_jeda']:kind==='giling-riwayat'?['halaman_jeda','sebelum']:[])];
   if(pairs.length>9||Object.keys(q).length!==pairs.length||pairs.some(([k])=>!keys.includes(k)))return null;
   for(const[k,v]of pairs){if((k==='pelanggan_id'||k.startsWith('halaman_'))&&(!/^[1-9][0-9]{0,9}$/.test(v)||Number(v)>2147483647))return null;if(['pemilik','kepemilikan'].includes(k)&&v!=='jasa')return null;}
-  const tab=q.tab_detail||'ringkasan';if(!tabs.includes(tab)||u.hash&&(kind!=='giling'||u.hash!=='#panel-'+tab))return null;
+  if('sebelum'in q&&!/^-?[0-9]{1,10}$/.test(q.sebelum))return null;
+  const tab=q.tab_detail||'ringkasan',prefix=kind==='giling'?'#panel-':kind==='giling-riwayat'?'#rhs-panel-':null;
+  if(!tabs.includes(tab)||u.hash&&(!prefix||u.hash!==prefix+tab))return null;
   return{kind,resource,address:u.pathname+u.search,hash:u.hash,tab};
  }
  function valid(c,p,cap,account,session){
   if(!obj(c)||Object.keys(c).sort().join(',')!=='address,akun,cap,entries,sesi,sumber,versi'||c.versi!==1||c.sumber!==p.sumber||c.cap!==cap||c.akun!==account||c.sesi!==session||!cap||!session||!/^[1-9][0-9]*$/.test(account)||typeof c.address!=='string'||!c.address.startsWith('/pelanggan')||!Array.isArray(c.entries)||c.entries.length>50)return false;
-  return c.entries.every(e=>obj(e)&&Object.keys(e).sort().join(',')==='code,heading,kind,resource,targets,title'&&['giling','penerimaan'].includes(e.kind)&&[e.code,e.heading,e.title,e.resource].every(v=>typeof v==='string'&&v.length>0&&v.length<=180)&&Array.isArray(e.targets)&&e.targets.length>0&&e.targets.length<=12&&new Set(e.targets).size===e.targets.length&&e.targets.every(v=>{const a=address(v,'https://portal.invalid');return a&&a.kind===e.kind&&a.resource===e.resource;}));
+  return c.entries.every(e=>obj(e)&&Object.keys(e).sort().join(',')==='code,heading,kind,resource,targets,title'&&['giling','giling-riwayat','penerimaan'].includes(e.kind)&&[e.code,e.heading,e.title,e.resource].every(v=>typeof v==='string'&&v.length>0&&v.length<=180)&&Array.isArray(e.targets)&&e.targets.length>0&&e.targets.length<=12&&new Set(e.targets).size===e.targets.length&&e.targets.every(v=>{const a=address(v,'https://portal.invalid');return a&&a.kind===e.kind&&a.resource===e.resource;}));
  }
  if(typeof module==='object'&&module.exports){module.exports={address,valid};return;}
  const data=global.PadiKerangkaPortalDetailData;if(!obj(data)||data.versi!==1||!/^[a-f0-9]{64}$/.test(data.sumber))return;

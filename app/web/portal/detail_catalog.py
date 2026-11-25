@@ -11,7 +11,15 @@ from bs4 import BeautifulSoup
 from .detail_kerangka import deskripsi
 
 ROOT=Path(__file__).resolve().parents[3]
-NAMES={'portal/beranda.html','portal/jasa.html','portal/masuk.html','detail_giling.html','barang_masuk_detail_lama.html'}
+NAMES={'portal/beranda.html','portal/jasa.html','portal/masuk.html','portal/riwayat.html',
+       'detail_giling.html','riwayat_giling_detail.html','barang_masuk_detail_lama.html'}
+
+
+def closed_giling_heading():
+    """Same native pure identity and completed-title projection, no reader/SQL."""
+    from .identitas_proses import identitas
+    title=identitas('giling')['judul']
+    return 'Hasil '+title[0].lower()+title[1:]
 
 @lru_cache(maxsize=1)
 def aset():
@@ -45,6 +53,21 @@ def entries(name,ctx,content,scope):
                 if not heading or heading.get_text(' ',strip=True)!=row.get('judul'):continue
                 a=next((a for a in card.select('a[href]') if a['href']==href),None)
                 add(href,row['kode'],row['judul'],row['kode'],a)
+    elif name=='portal/riwayat.html':
+        from .navigation import portal_url
+        for row in (ctx.get('catatan') or {}).get('rows',[])[:25]:
+            if row.get('jenis')!='giling' or row.get('kode') not in scope.codes:continue
+            original=row.get('href')
+            if not isinstance(original,str) or len(original)>4096:continue
+            href=portal_url(original);d=deskripsi(href)
+            if (not d or d['kind']!='giling-riwayat'
+                or int(d['resource']) not in scope.resources.get('milling_process',())):continue
+            for card in s.select('.pelanggan-catatan-baris[data-jenis="giling"]'):
+                code=card.select_one('.pelanggan-kode');heading=card.select_one('h2')
+                if (not code or code.get_text(' ',strip=True)!=row['kode'] or not heading
+                    or heading.get_text(' ',strip=True)!=row.get('judul')):continue
+                a=next((a for a in card.select('a.pelanggan-catatan-buka[href]') if a['href']==href),None)
+                add(href,row['kode'],closed_giling_heading(),row['kode'],a)
     elif name=='portal/masuk.html':
         for row in (ctx.get('daftar_masuk') or {}).get('riwayat',[])[:25]:
             ident=row.get('id')
@@ -60,6 +83,19 @@ def entries(name,ctx,content,scope):
                 heading=row.get('jenis_nama') or {'gabah_basah':'Gabah basah','gabah_kering':'Gabah kering','pk':'PK','beras':'Beras','broken':'Broken'}.get(row.get('jenis'),row.get('jenis_kode'))
                 if heading in {'PK','Beras PK'}:heading='Beras pecah kulit (PK)'
                 add(href,row['kode'],heading,'Portal pelanggan',a)
+    elif name=='riwayat_giling_detail.html':
+        k=ctx.get('k');inti=ctx.get('portal_inti_proses') or {}
+        ident=getattr(k,'id',None);code=getattr(k,'kode',None)
+        if (ctx.get('jenis')!='giling' or type(ident) is not int
+            or ident not in scope.resources.get('milling_process',()) or code not in scope.codes
+            or inti.get('status')!='Selesai' or inti.get('kode')!=code):return []
+        root=s.select_one('[data-riwayat-giling].pelanggan-detail');h=root.find('h1') if root else None
+        if not h:return []
+        title=ctx.get('page_title') or ctx.get('breadcrumb_detail') or 'Portal pelanggan'
+        for a in root.select('.rhs-tabs a[role=tab][href]'):
+            d=deskripsi(a['href'])
+            if d and (d['kind'],d['resource'])==('giling-riwayat',str(ident)):
+                add(a['href'],code,h.get_text(' ',strip=True),title,a)
     else:
         root=s.select_one('.pelanggan-proses-detail-ringkas' if name=='detail_giling.html' else '.penerimaan-detail')
         h=root.find('h1') if root else None
