@@ -105,6 +105,12 @@ async def test_registry_native_tanpa_pembaca_operasional_dan_scope_utuh(pg, leng
                 assert frame.select_one('[data-jasa-kontrol] input[name=cari]')['value'] == ''
                 assert frame.select_one('[data-jasa-baca-isi]')['aria-busy'] == 'true'
                 assert not frame.select('a.jasa-pelanggan')
+                from app.web.jasa_kerangka_aset import ASET, ROOT
+                assert len(frame.select('[data-jasa-aset-native]')) == len(ASET)
+                for name, path, tag in ASET:
+                    node = frame.select_one(f'{tag}[data-jasa-aset-native="{name}"]')
+                    assert node and node.string == (ROOT/path).read_text()
+                    assert not frame.select(f'[href^="/static/{name}?"],[src^="/static/{name}?"]')
                 assert frame.select_one('button[data-js-cetak]')['disabled'] == ''
             else:
                 assert len(columns) == (5 if url.startswith('/pekerjaan') else 7 if 'diterima' in url else 6)

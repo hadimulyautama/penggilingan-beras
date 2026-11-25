@@ -18,6 +18,9 @@ async def kerangka(request, akun, konteks):
     # menyesatkan. Ini hanya atribut pada keluaran shell, bukan vendor patch.
     response.body = response.body.replace(
         b'data-js-cetak', b'disabled aria-describedby="jasa-cetak-alasan" data-js-cetak')
+    if getattr(request.state, 'frame_kerangka_langsung', False):
+        from app.web.jasa_kerangka_aset import paket_lokal
+        response.body = paket_lokal(response.body)
     response.headers['content-length'] = str(len(response.body))
     response.headers['Cache-Control'] = 'private, no-store'
     return response
