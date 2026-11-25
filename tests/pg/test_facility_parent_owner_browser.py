@@ -8,6 +8,12 @@ network responseStart or production. Direct documents intentionally stay native.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
+import os
+from pathlib import Path
+import time
+from urllib.parse import urlsplit
 
 import pytest
 from bs4 import BeautifulSoup
@@ -27,6 +33,156 @@ DOCUMENT = {'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}
 SHELL = '[data-fasilitas-parent-kerangka]'
 READY = '[data-fasilitas-parent-native-isi]'
 HOST = '#padi-fasilitas-parent-kerangka'
+
+
+class FacilityReadObservations:
+    """Passive, bounded metadata for owned fixture reads; never an error filter."""
+    LIMIT = 512
+    PATHS = frozenset((*TARGETS, '/pengaturan', '/api/kabar/jumlah', '/static/kabar-badge.js'))
+    def __init__(self, width):
+        self.width = width
+        self.started = time.monotonic()
+        self.events = []
+        self.dropped = 0
+        self.requests = {}
+        self.navigation = 0
+        self.page = None
+        self.listeners = []
+        self.passed = False
+        self.failure_type = None
+        self.cleanup_errors = []
+
+    @classmethod
+    def address(cls, value):
+        try:
+            url = urlsplit(value)
+        except (TypeError, ValueError):
+            return None
+        expected = urlsplit(BASE)
+        if (url.scheme, url.netloc) != (expected.scheme, expected.netloc) or url.path not in cls.PATHS:
+            return None
+        # Reconstruct only a literal, approved URL. Query, fragment, userinfo,
+        # cookies, headers and business/credential values are never recorded.
+        return BASE + url.path
+
+    def add(self, event, **values):
+        if len(self.events) >= self.LIMIT:
+            self.dropped += 1
+            return
+        self.events.append(dict(order=len(self.events)+1,
+            ms=round((time.monotonic()-self.started)*1000, 3),
+            document_navigation=self.navigation, event=event, **values))
+
+    def request(self, request):
+        address = self.address(request.url)
+        if address is None:
+            return
+        if request not in self.requests:
+            if len(self.requests) >= self.LIMIT:
+                self.dropped += 1
+                return
+            self.requests[request] = len(self.requests)+1
+        method = request.method if request.method in ('GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS') else 'OTHER'
+        resource = request.resource_type if request.resource_type in ('document','fetch','xhr','script','stylesheet','image','font','eventsource','other') else 'OTHER'
+        self.add('request', request=self.requests[request], url=address, method=method,
+                 resource=resource, navigation=request.is_navigation_request())
+
+    def response(self, response):
+        request = response.request
+        if request not in self.requests:
+            return
+        mime = response.headers.get('content-type','').split(';')[0].strip().lower()
+        # MIME is a closed classification, not arbitrary response headers.
+        if mime not in ('application/json','text/html','application/javascript','text/javascript','text/css'):
+            mime = 'OTHER' if mime else 'MISSING'
+        self.add('response', request=self.requests[request], status=response.status, mime=mime)
+
+    def finished(self, request):
+        if request in self.requests:
+            self.add('requestfinished', request=self.requests[request])
+
+    def failed(self, request):
+        if request not in self.requests:
+            return
+        failure = str(request.failure or '')
+        lowered = failure.lower()
+        category = 'aborted-or-cancelled' if 'abort' in lowered or 'cancel' in lowered else 'access-control' if 'access control' in lowered else 'other'
+        self.add('requestfailed', request=self.requests[request], category=category,
+                 failure_sha256=hashlib.sha256(failure.encode()).hexdigest())
+
+    def frame(self, frame):
+        if frame is self.page.main_frame:
+            self.navigation += 1
+            self.add('framenavigated', url=self.address(frame.url) or 'OTHER')
+
+    def error(self, error):
+        message = str(error)
+        category = 'kabar-count-access-control' if '/api/kabar/jumlah' in message and 'access control' in message else 'other-pageerror'
+        self.add('pageerror', category=category,
+                 error_sha256=hashlib.sha256(message.encode()).hexdigest())
+
+    def attach(self, page):
+        assert self.page is None
+        self.page = page
+        self.listeners = [('request', self.request), ('response', self.response),
+                          ('requestfailed', self.failed), ('requestfinished', self.finished), ('framenavigated', self.frame),
+                          ('pageerror', self.error)]
+        for event, handler in self.listeners:
+            page.on(event, handler)
+
+    def payload(self):
+        return dict(version=1, width=self.width, status='PASS' if self.passed else 'FAIL',
+            observation_only=True, ignored_errors=0, business_values_recorded=False,
+            query_headers_body_credentials_recorded=False, limit=self.LIMIT,
+            dropped=self.dropped, failure_type=self.failure_type, cleanup_errors=self.cleanup_errors, events=self.events)
+
+    def finish(self):
+        if self.page is not None:
+            for event, handler in self.listeners:
+                try:
+                    self.page.remove_listener(event, handler)
+                except Exception as error:
+                    self.cleanup_errors.append(type(error).__name__)
+        folder = os.environ.get('DETAIL_OUT')
+        if folder:
+            target = Path(folder)/('facility-native-read-observations-'+str(self.width)+'.json')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # New runner outputs are unique; do not overwrite a prior receipt.
+            with target.open('x') as stream:
+                json.dump(self.payload(), stream, indent=2)
+                stream.write('\n')
+        assert not self.cleanup_errors, 'Passive observation listener cleanup failed'
+
+
+async def test_facility_observation_urls_and_errors_never_record_private_values():
+    probe = FacilityReadObservations(1280)
+    assert probe.address(BASE+'/api/kabar/jumlah?token=fixture-private#fragment') == BASE+'/api/kabar/jumlah'
+    assert probe.address('https://foreign.invalid/api/kabar/jumlah') is None
+    assert probe.address(BASE+'/unknown/fixture-private') is None
+    assert probe.address('https://user:fixture-private@uji/api/kabar/jumlah') is None
+    probe.error(RuntimeError('fixture-private /api/kabar/jumlah due to access control checks.'))
+    class Request:
+        url=BASE+'/api/kabar/jumlah?token=fixture-private'
+        method='GET'
+        resource_type='fetch'
+        failure='cancelled fixture-private'
+        def is_navigation_request(self):return False
+    request=Request()
+    probe.request(request)
+    response=type('Response',(),dict(request=request,status=200,
+        headers={'content-type':'application/json; charset=utf-8','set-cookie':'fixture-private'}))()
+    probe.response(response);probe.failed(request);probe.finished(request)
+    assert probe.events[1]['url']==BASE+'/api/kabar/jumlah'
+    assert probe.events[2]['status']==200 and probe.events[2]['mime']=='application/json'
+    assert probe.events[3]['category']=='aborted-or-cancelled'
+    count=len(probe.events)
+    for _ in range(probe.LIMIT+1):
+        probe.add('bounded-control')
+    value = json.dumps(probe.payload())
+    assert 'fixture-private' not in value and 'fragment' not in value
+    assert len(probe.events) == probe.LIMIT and probe.dropped == count+1
+    assert probe.events[0]['category'] == 'kabar-count-access-control'
+    assert probe.payload()['ignored_errors'] == 0 and probe.payload()['status'] == 'FAIL'
 
 
 def chrome(html):
@@ -171,42 +327,57 @@ async def release_data(page, phases, root, data, target, expected):
 
 @pytest.mark.parametrize('width', [390, 1280], ids=['super-390', 'super-desktop'])
 async def test_four_native_settings_menu_clicks_two_phases_and_back(pg, master, monkeypatch, width):
-    client, _, _ = await klien(pg, P.SUPERADMIN, username='facility_parent_super')
-    async with client:
-        client.base_url = BASE
-        expected = {target: await golden(client, target) for target in TARGETS}
-        # The parent strategy is first-click only. A separate native browser
-        # DOCUMENT request must still perform the original full reader, not
-        # silently claim an early authorised data-free document shortcut.
-        for target in TARGETS:
-            document = await client.get(target, headers=DOCUMENT)
-            assert document.status_code == 200
-            native_doc = BeautifulSoup(document.text, 'html.parser')
-            assert native_doc.select_one(SHELL) is None
-            assert native_doc.select_one('section[data-pengaturan-form] form') is not None
-            assert chrome(document.text) == chrome(expected[target])
-            assert fixed_shape(document.text, target) == fixed_shape(expected[target], target)
-        before = await _sidik(pg)
-        phases = ReadPhases(client, monkeypatch)
-        async with peramban(client, width) as (page, transport):
-            try:
-                for target in TARGETS:
-                    await settings(page)
-                    root, data = await open_held(page, phases, target, expected[target])
-                    await release_data(page, phases, root, data, target, expected[target])
-                    await (await visible_native_back(page)).press('Enter')
-                    await page.wait_for_function('()=>location.pathname==="/pengaturan"')
-                    await expect(page.locator('.pg-pintu[href="/pengaturan/gudang"]')).to_be_visible()
-                    await page.go_back(wait_until='load')
-                    await page.wait_for_function('path=>location.pathname===path', arg=target)
-                    await expect(page.locator(SHELL)).to_have_count(0)
-                    await expect(page.locator('section[data-pengaturan-form]')).to_be_visible()
-                    assert chrome(await page.content()) == chrome(expected[target])
-                    assert fixed_shape(await page.content(), target) == fixed_shape(expected[target], target)
-                assert not transport['posts'] and not transport['errors'], transport['errors']
-            finally:
-                phases.free()
-        assert await _sidik(pg) == before
+    observations = FacilityReadObservations(width)
+    try:
+        client, _, _ = await klien(pg, P.SUPERADMIN, username='facility_parent_super')
+        async with client:
+            client.base_url = BASE
+            expected = {target: await golden(client, target) for target in TARGETS}
+            # The parent strategy is first-click only. A separate native browser
+            # DOCUMENT request must still perform the original full reader, not
+            # silently claim an early authorised data-free document shortcut.
+            for target in TARGETS:
+                document = await client.get(target, headers=DOCUMENT)
+                assert document.status_code == 200
+                native_doc = BeautifulSoup(document.text, 'html.parser')
+                assert native_doc.select_one(SHELL) is None
+                assert native_doc.select_one('section[data-pengaturan-form] form') is not None
+                assert chrome(document.text) == chrome(expected[target])
+                assert fixed_shape(document.text, target) == fixed_shape(expected[target], target)
+            before = await _sidik(pg)
+            phases = ReadPhases(client, monkeypatch)
+            async with peramban(client, width) as (page, transport):
+                observations.attach(page)
+                try:
+                    for target in TARGETS:
+                        observations.add('phase', phase='settings.begin', target=target)
+                        await settings(page)
+                        observations.add('phase', phase='settings.ready', target=target)
+                        root, data = await open_held(page, phases, target, expected[target])
+                        observations.add('phase', phase='framework.data-held', target=target)
+                        await release_data(page, phases, root, data, target, expected[target])
+                        observations.add('phase', phase='native-data.ready', target=target)
+                        await (await visible_native_back(page)).press('Enter')
+                        await page.wait_for_function('()=>location.pathname==="/pengaturan"')
+                        await expect(page.locator('.pg-pintu[href="/pengaturan/gudang"]')).to_be_visible()
+                        observations.add('phase', phase='native-back.ready', target=target)
+                        await page.go_back(wait_until='load')
+                        observations.add('phase', phase='browser-back.loaded', target=target)
+                        await page.wait_for_function('path=>location.pathname===path', arg=target)
+                        await expect(page.locator(SHELL)).to_have_count(0)
+                        await expect(page.locator('section[data-pengaturan-form]')).to_be_visible()
+                        assert chrome(await page.content()) == chrome(expected[target])
+                        assert fixed_shape(await page.content(), target) == fixed_shape(expected[target], target)
+                    assert not transport['posts'] and not transport['errors'], transport['errors']
+                finally:
+                    phases.free()
+            assert await _sidik(pg) == before
+        observations.passed = True
+    except BaseException as error:
+        observations.failure_type = type(error).__name__
+        raise
+    finally:
+        observations.finish()
 
 
 @pytest.mark.parametrize('width', [390, 1280], ids=['retry-390', 'retry-desktop'])
