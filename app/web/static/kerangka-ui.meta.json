@@ -1,7 +1,7 @@
 {
   "versi": 1,
-  "sumber": "6f5817169796eeaeb417e0481c547aba8f107ac6483b3fa8b31f4cf8921f5555",
-  "aset_sha256": "4f68855a87047201994a509ba4cfd585e2ff0abb615d6df294be7c276f94f9a1",
+  "sumber": "ed9df0f2ebd8ccc6405ce9a6b2d1aba49dd9b9bae049650acad31789b22c2e42",
+  "aset_sha256": "dce870a65bf3f7c80630e17d97fd5a4e88f2079fd57fb128659d61bdcebc7615",
   "variants": [
     "pengiriman-admin",
     "pengiriman-operator",
@@ -38,7 +38,7 @@
     "app/web/static/halaman-bertahap.css": "8f6d0a7adaa7a955c35f555fb008b0ee105352152be995421190a0e75762090f",
     "app/web/static/halaman-bertahap.js": "3fb3a23bdb3ca9a7e30edd677cbb70aeaaafa758c7660c23ca0313db7deeea47",
     "app/web/static/jasa-bertahap.css": "f3eb551f624343af3504f33dac2f3f8b9d42be0e19358e5d8d55f907b16a510c",
-    "app/web/static/jasa-bertahap.js": "f90977e4da6b35fc78b76d13d25783b6fa1a3cec06c590baec8b7bbf57af0059",
+    "app/web/static/jasa-bertahap.js": "a7fcdc636281460845e83b7debf6382443689c80792a6dd299a1d7ceb3dcfa09",
     "app/web/static/kerangka-stok-controls.js": "b880e9c9908e3efc3ec84471d44b2b451edaed7e81d2d6d930a366424fec6e7d",
     "app/web/static/kerangka-ui-runtime.js": "fc9bc8c244d8ede6879e4d70c2bac1a01e29022af6d304beed2da835e7002210",
     "app/web/static/laporan-katalog-native.js": "9505f0ccaf0317c70e8477b2f8d51e5f5b66fc348c68a6828e35f1053ee7d60a",

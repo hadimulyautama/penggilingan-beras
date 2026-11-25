@@ -1,4 +1,4 @@
-/* Pembacaan saja. Kartu, angka dan tautan tetap disusun renderer native. */
+/* Daftar Jasa; baca saja. */
 (function(){
  'use strict';
  const root=document.querySelector('[data-jasa-bertahap]');if(!root||root.dataset.ready)return;root.dataset.ready='1';
@@ -24,6 +24,7 @@
    article.querySelectorAll('.jasa-angka strong').forEach(value=>value.textContent='—');list.append(article);
   }
   const next=list.nextElementSibling,fragment=document.createDocumentFragment();fragment.append(count.cloneNode(true),list.cloneNode(true));if(next?.matches('nav[aria-label="Halaman pelanggan"]'))fragment.append(next.cloneNode(true));
+  const catalog=window.PadiKerangkaJasaDetailUI?.readCatalog?.(doc);if(catalog)fragment.append(catalog);
   if(!current(n))return;panel.replaceChildren(fragment);panel.setAttribute('aria-busy','false');status.textContent='Daftar pelanggan selesai dibaca.';
   root.querySelectorAll('[data-js-cetak]').forEach(b=>{b.disabled=false;b.removeAttribute('aria-describedby');});root.querySelector('#jasa-cetak-alasan').hidden=true;
  }

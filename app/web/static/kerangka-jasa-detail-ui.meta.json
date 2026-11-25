@@ -1,6 +1,6 @@
 {
   "versi": 1,
-  "sumber": "f136e2f7ccf8a3f189fe1be539f9cdc4ac4089103517cc181db2e35b5aa1ee25",
+  "sumber": "7802131c67533975c11fc084480eed51f3a73c6192df9ca3e2e98f93e54db062",
   "variants": [
     "ringkasan",
     "penerimaan",
@@ -8,7 +8,7 @@
     "stok",
     "pengambilan"
   ],
-  "aset_sha256": "6fba7097a3a2f40e89c6548f8b0a43ca70f469307c6204670fdc223558a2ea2b",
+  "aset_sha256": "90a533a1932956bfb727b8c1dcc2e43ef9467224f4ca3a3d15b8526279cfd320",
   "inputs": {
     "app/services/jasa_pelanggan.py": "48b3d45c316aced8df279d398ce62c136c54417f000934eff85ecb48481ff6e6",
     "app/web/breadcrumb.py": "5093e05aa6fec9a589c8a8abe9375e12d1f2c402bcdf8edd424af1bf0972f722",
@@ -16,7 +16,7 @@
     "app/web/jasa_detail_kerangka.py": "f96035075e2152f6521febcf8d313ead00ea547c7afccaf0342fa454048d55f1",
     "app/web/layar_jasa.py": "25696cf6f7ae940aa7de449086b3bdb535f4c9fd0f7fdea910f0011ffd26f50a",
     "app/web/static/jasa-detail-native.js": "d6d7ca43af096d95636051623fe7a44dcf571ae3dcfa7d10c70fa0e3b2160061",
-    "app/web/static/kerangka-jasa-detail-ui-runtime.js": "d360701aea6cb72d9ce97e72cc913e4823ae4acdde911b84452f089f08134712",
+    "app/web/static/kerangka-jasa-detail-ui-runtime.js": "247d00c8b8053e3a617e5a5364ee1c12218b07be27f7cb0618a6ff77aac125c6",
     "app/web/static/padi-baca-native.js": "3b1a552e78c81d7537d182a7aa0c758a3d8098da4a891a8ef2de5488f90e14d5",
     "app/web/templates/jasa_detail_kerangka.html": "b1119d1cf676c9ac745b0ba297e1d11af107e670fc7f60ffaa7b8d7ccdace20c",
     "hmu_tampilan/static/jasa-kontrol.css": "8ea965e53a5df195ce68889506c0e45abef9596ad0868c9f888130ce789cd9cc",

@@ -89,7 +89,26 @@
   if(doc.body?.hasAttribute('data-portal-akun')||doc.body?.classList.contains('portal-customer')||doc.querySelector('[data-editor-perintah],[data-kemas-ulang]'))return true;
   const dialog=doc.getElementById('lembar');return !!dialog&&(dialog.open||dialog.style?.display==='flex');
  }
- if(typeof module==='object'&&module.exports){module.exports={address,valid,pendingStamp,selectProvenance,shown,proofFromDOM,tabURL,blockedSource,nativeTitle,backURL,bindBreadcrumb};return;}
+ function catalogFromRead(data,doc,live,source,origin){
+  const frame=live.querySelector('.bingkai'),main=live.getElementById('isi-halaman'),session=live.getElementById('formulir-sesi');
+  const freshFrame=doc.querySelector('.bingkai'),freshMain=doc.getElementById('isi-halaman'),freshSession=doc.getElementById('formulir-sesi');
+  if(![live,doc].every(d=>['.bingkai','#isi-halaman','#formulir-sesi'].every(s=>d.querySelectorAll(s).length===1))
+   ||!frame?.contains(main)||!frame.contains(session)||!freshFrame?.contains(freshMain)||!freshFrame.contains(freshSession)
+   ||frame.dataset.pindahAlamat!==source||freshFrame.dataset.pindahAlamat!==source)return null;
+  const cap=live.documentElement.dataset.versi,ctx=frame.dataset.pindahKonteks,token=session.dataset.token;
+  if(doc.documentElement.dataset.versi!==cap||freshFrame.dataset.pindahKonteks!==ctx||freshSession.dataset.token!==token)return null;
+  const hosts=doc.querySelectorAll('#padi-jasa-detail-catalog');if(hosts.length!==1)return null;
+  const host=hosts[0],attributes=['type','id','data-cap','data-konteks','data-source-address','data-source-sha'];
+  if(host.tagName!=='SCRIPT'||host.getAttribute('type')!=='application/json'||host.attributes.length!==attributes.length
+   ||!attributes.every(k=>host.hasAttribute(k))||!freshMain.contains(host)||host.textContent.length>262144)return null;
+  let p;try{p=JSON.parse(host.textContent);}catch(_){return null;}
+  if(!valid(data,p,ctx,cap,token,host.dataset.sourceSha,origin)||p.mode!=='list'||p.source_address!==source
+   ||host.dataset.cap!==cap||host.dataset.konteks!==ctx||host.dataset.sourceAddress!==source)return null;
+  // Inert current-read metadata only. Visible-link proof and server authority
+  // are still checked by the existing factory and the native detail request.
+  return host.cloneNode(true);
+ }
+ if(typeof module==='object'&&module.exports){module.exports={address,valid,pendingStamp,selectProvenance,shown,proofFromDOM,tabURL,blockedSource,nativeTitle,backURL,bindBreadcrumb,catalogFromRead};return;}
  const data=global.PadiKerangkaJasaDetailData;
  function construct(target,base,ctx,cap,token){
   if(typeof base!=='string'||base.length>8388608||!address(target,location.origin)||blockedSource(document,location.hash))return null;
@@ -130,5 +149,6 @@
   return {versi:1,alamat:target,konteks:ctx,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  function buat(...args){try{return construct(...args);}catch(_){return null;}}
- global.PadiKerangkaJasaDetailUI=Object.freeze({versi:1,sumber:data?.sumber,buat});
+ global.PadiKerangkaJasaDetailUI=Object.freeze({versi:1,sumber:data?.sumber,buat,
+  readCatalog:doc=>catalogFromRead(data,doc,document,location.pathname+location.search,location.origin)});
 })(typeof window==='undefined'?globalThis:window);
