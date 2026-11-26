@@ -23,6 +23,10 @@
   const data=JSON.parse(json.textContent),pid=new URL(location.href).searchParams.get('pelanggan_id')||'';
   if(data.revisi!==0||Object.keys(data).sort().join(',')!=='isi,revisi'||!data.isi||Object.keys(data.isi).sort().join(',')!=='jenis,pelanggan'||data.isi.jenis!=='jasa'||data.isi.pelanggan!==pid)throw Error('Data awal formulir belum sesuai. Tidak ada draf yang disimpan.');
   for(const id of ['draf-metode','draf-armada','draf-nopol','draf-ekspedisi','draf-catatan','draf-terbitkan'])if(!fresh.querySelector('#'+id)||!root.querySelector('#'+id))throw Error('Struktur formulir berubah. Buka formulir asli sebelum mengisi.');
+  // Form native belum menandai menu induknya. Hanya sorotan tautan yang
+  // memang disediakan server diselaraskan; tidak membuat tautan/izin baru.
+  const menu=doc.querySelector('#laci a.pintu[href="/barang-keluar"]');
+  if(menu)for(const link of doc.querySelectorAll('#laci a.pintu')){link.classList.toggle('pintu--kini',link===menu);if(link===menu)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
   if(window.PINDAH&&!PINDAH.selaraskanChrome(doc))throw Error('Navigasi atau akses berubah. Buka kembali formulir.');
   const focus=document.activeElement;root.dataset.editorPerintah=fresh.dataset.editorPerintah;old.textContent=json.textContent;
   // Izin baca sementara tidak boleh terbawa ke editor: beforeunload native
