@@ -1,6 +1,7 @@
 /* Detail baca gabah/PK saja. Angka, izin dan lot tetap dibaca handler native. */
 (function(){
  'use strict';
+ function mulai(){
  const root=document.querySelector('[data-qc-detail-shell]');if(!root||root.dataset.qdReady)return;root.dataset.qdReady='1';
  const status=root.querySelector('#qc-detail-status'),retry=root.querySelector('[data-qc-detail-retry]');
  const cap=document.documentElement.dataset.versi,token=document.getElementById('formulir-sesi')?.dataset.token||'',context=root.dataset.qcContext;
@@ -59,6 +60,10 @@
   finally{clearTimeout(timer);if(controller===active)controller=null;}
  }
  retry.addEventListener('click',read,{signal:events.signal});
- const leave=event=>{const a=event.target.closest?.('a[href]');if(a&&!event.defaultPrevented&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&new URL(a.href,location.href).pathname!==path)stop();};if(window.PINDAH)PINDAH.pasang(document,'click',leave);
+ const leave=event=>{const a=event.target.closest?.('a[href]');if(a&&!event.button&&!a.target&&!a.hasAttribute('download')&&!event.defaultPrevented&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&new URL(a.href,location.href).pathname!==path)stop();};if(window.PINDAH)PINDAH.pasang(document,'click',leave);
  show();read();
+ }
+ // Pada dokumen langsung token sesi berada sesudah isi. Navigasi parsial
+ // sudah memiliki DOM lengkap; tidak perlu menunda klik atau menunggu GET.
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mulai,{once:true});else mulai();
 })();
