@@ -15,6 +15,10 @@
 </section>
 {% endblock %}
 {% block kaki %}
-<script data-pl-controller>{{ pl_aset.controller|safe }}</script>
-<script data-pl-engine>{{ pl_aset.engine|safe }}</script>
+{# Dokumen baru belum mencapai token/SDK di kaki base. Pada pindah panel
+   dokumen sudah siap, sehingga dua adapter langsung berjalan berurutan. #}
+<script data-pl-controller>(function(){function mulai(){ {{ pl_aset.controller|safe }} }
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mulai,{once:true});else mulai();})();</script>
+<script data-pl-engine>(function(){function mulai(){ {{ pl_aset.engine|safe }} }
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mulai,{once:true});else mulai();})();</script>
 {% endblock %}
