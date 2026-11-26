@@ -272,7 +272,15 @@ async def lengkapi_dokumen(request: Request, response):
                     if isinstance(error, HTTPException) and error.status_code in (401, 403):
                         raise
                     log.warning('Kerangka rincian retur belum tersedia (%s)', type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, riwayat=riwayat, beranda=beranda, qc=qc, kabar=kabar, laporan=laporan, karung_detail=karung_detail, retur_detail=retur_detail).encode()
+                retur_daftar = None
+                try:
+                    from app.web.retur_supplier_daftar_kerangka import susun as susun_retur_daftar
+                    retur_daftar = await susun_retur_daftar(request, akun, navigasi=navigasi)
+                except Exception as error:
+                    if isinstance(error, HTTPException) and error.status_code in (401, 403):
+                        raise
+                    log.warning('Kerangka daftar retur belum tersedia (%s)', type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, riwayat=riwayat, beranda=beranda, qc=qc, kabar=kabar, laporan=laporan, karung_detail=karung_detail, retur_detail=retur_detail, retur_daftar=retur_daftar).encode()
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
                 body = siap
         except Exception as e:
