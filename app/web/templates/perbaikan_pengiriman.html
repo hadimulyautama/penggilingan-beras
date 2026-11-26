@@ -3,7 +3,7 @@
 {% block isi %}
 {% import '_stok.html' as st with context %}
 <link rel="stylesheet" href="/static/perbaikan-pengiriman.css?v={{ VERSI }}&pp=1">
-<main class="pp-halaman">
+<main class="pp-halaman" data-pp-native data-pp-record="{{ perjalanan.rec.id }}" data-pp-actor="{{ user.id }}:{{ VIEW }}:{{ user.alias or '' }}">
 <a href="/barang-keluar/{{ perjalanan.rec.id }}?{{ filter_query }}" data-utuh>← Kembali ke pengiriman</a>
 <h1>Perbaiki pengiriman</h1>
 <p>{{ perjalanan.rec.kode }} · {{ perjalanan.plat or 'Armada belum dipilih' }} · {{ perjalanan.jumlah_pelanggan }} pelanggan · {{ st.kg(perjalanan.total) }} kg tercatat</p>

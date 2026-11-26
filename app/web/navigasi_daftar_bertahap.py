@@ -63,7 +63,8 @@ def pasang(response, request):
         href = re.search(rb'\bhref="([^"]+)"', tag)
         from app.web.muatan_kerangka import alamat_kerangka
         from app.web.pengambilan_kerangka import alamat_kerangka as alamat_pengambilan
-        if href and (alamat_kerangka(unescape(href[1].decode())) or alamat_pengambilan(unescape(href[1].decode()))):
+        from app.web.perbaikan_kerangka import alamat_kerangka as alamat_perbaikan
+        if href and any(check(unescape(href[1].decode())) for check in (alamat_kerangka, alamat_pengambilan, alamat_perbaikan)):
             return re.sub(rb'\sdata-utuh(?=[\s>])', b'', tag, count=1)
         return tag
     response.body = re.sub(rb'<a\b[^>]*>', tautan_muatan, response.body)
