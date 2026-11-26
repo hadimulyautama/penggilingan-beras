@@ -32,7 +32,7 @@ def aset():
     if asli.count('  function gambar() {') != 1 or asli.count('"/api/dashboard"') != 1:
         raise ValueError('Kontrak katalog paket berubah')
     code = code[:awal] + '''  var katalogTujuan = document.querySelector('[data-pekerjaan-lain]')?.padiKatalog;
-  if (katalogTujuan) katalogTujuan.ulangi = muat;
+  if (katalogTujuan) { katalogTujuan.ulangi = muat; katalogTujuan.siapkan(belah); }
   async function muat() {
     if (!katalogTujuan) return;
     var menu = await katalogTujuan.baca();
@@ -41,7 +41,7 @@ def aset():
     DATA = {menu: menu, urutGrup: (menu[0] && menu[0].urut_grup) || []};
     gambar();
   }
-  function gambar() { katalogTujuan.gambar(DATA, bukaAksi); }
+  function gambar() { katalogTujuan.gambar(DATA, bukaAksi, belah); }
 
 ''' + code[akhir:]
     controller = (root/'app/web/static/pekerjaan-lain-kerangka.js').read_text()
@@ -78,7 +78,7 @@ async def susun(request, akun, *, navigasi):
                    pl_context=penanda_konteks(request, akun), pl_katalog=await katalog(akun.user),
                    pl_aset=aset())
     body = render(native, 'pekerjaan_lain.html', **context).body.decode()
-    body = re.sub(r'(<span class="kontrol-tab__jumlah"[^>]*>).*?(</span>)', r'\1—\2', body)
+    body = re.sub(r'(<span class="kontrol-tab__jumlah"(?![^>]*aria-hidden="true")[^>]*>).*?(</span>)', r'\1—\2', body)
     if len(body.encode()) > 524288:
         return None
     nonce = request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state, 'csrf', None)

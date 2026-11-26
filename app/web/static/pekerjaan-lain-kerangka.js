@@ -44,7 +44,13 @@
   }catch(e){if(valid()&&number===n)pesan(e.name==='AbortError'?'Pembacaan terlalu lama. Anda tetap dapat berpindah tab; Coba lagi hanya membaca.':e.message);return null;}
   finally{clearTimeout(timer);if(menuRequest===ctrl)menuRequest=null;}
  }
- function gambar(data,buka){
+ function label(b,text,belah){
+  const part=belah(text);let icon=b.querySelector('.tindakan__ikon');
+  if(part.ikon){if(!icon){icon=document.createElement('span');icon.className='tindakan__ikon tindakan__ikon--emoji';b.prepend(icon);}icon.textContent=part.ikon;}else icon?.remove();
+  b.querySelector('.tindakan__nama').textContent=part.teks;
+ }
+ function siapkan(belah){for(const b of root.querySelectorAll('[data-pl-aksi]'))label(b,b.querySelector('.tindakan__nama').textContent,belah);}
+ function gambar(data,buka,belah){
   if(!valid())return;
   const groups=new Map(),actions=data.menu.filter(a=>!a.kartu),ids=new Set(actions.map(a=>a.id)),order=[...new Set([...(data.urutGrup||[]),...actions.map(a=>a.grup||'Lain-lain')])],screen=root.querySelector('#layar');
   for(const a of actions){const g=a.grup||'Lain-lain';if(!groups.has(g))groups.set(g,[]);groups.get(g).push(a);}
@@ -57,13 +63,13 @@
    for(const a of groups.get(name)){
     let b=[...group.querySelectorAll('[data-pl-aksi]')].find(n=>n.dataset.plAksi===a.id);
     if(!b){b=document.createElement('button');b.type='button';b.className='tindakan';b.dataset.plAksi=a.id;const body=document.createElement('span');body.className='tindakan__isi';for(const cls of ['tindakan__nama','tindakan__ket']){const text=document.createElement('span');text.className=cls;body.append(text);}b.append(body);group.querySelector('.grup').append(b);}
-    b.querySelector('.tindakan__nama').textContent=a.label;b.querySelector('.tindakan__ket').textContent=a.boleh?(a.hint||''):(a.alasan_akses||'Tidak diizinkan untuk peran atau gudang kerja Anda.');b.disabled=!a.boleh;b.removeAttribute('aria-describedby');b.title=a.boleh?'':(a.alasan_akses||'Tidak memiliki akses');b.onclick=()=>buka(a.id);
+    label(b,a.label,belah);b.querySelector('.tindakan__ket').textContent=a.boleh?(a.hint||''):(a.alasan_akses||'Tidak diizinkan untuk peran atau gudang kerja Anda.');b.disabled=!a.boleh;b.removeAttribute('aria-describedby');b.title=a.boleh?'':(a.alasan_akses||'Tidak memiliki akses');b.onclick=()=>buka(a.id);
    }
   }
   for(const g of screen.querySelectorAll('[data-pl-grup]'))if(!groups.has(g.dataset.plGrup))g.remove();
   const empty=screen.querySelector('[data-pl-empty]');if(actions.length){empty?.remove();}else if(!empty){const p=document.createElement('p');p.className='bantu';p.dataset.plEmpty='';p.textContent='Tidak ada aksi untuk peran Anda.';screen.append(p);}
   root.dataset.plReady='1';status.hidden=true;root.querySelector('#pl-alasan').hidden=true;
  }
- const api={baca,gambar};root.padiKatalog=api;
+ const api={baca,gambar,siapkan};root.padiKatalog=api;
  retry.addEventListener('click',()=>api.ulangi?.());
 })();
