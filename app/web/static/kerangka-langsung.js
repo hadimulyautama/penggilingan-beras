@@ -217,7 +217,7 @@
    const nav=doc.querySelector('[data-laporan-kontrol]');if(!nav)return null;
    let tabs;try{tabs=JSON.parse(nav.dataset.tujuanTab);}catch(_){return null;}
    if(!Array.isArray(tabs)||tabs.length!==3)return null;
-   for(const tab of tabs){const a=doc.querySelector('[data-tab-riwayat="'+tab.kunci+'"]');if(!a)return null;tab.href=a.getAttribute('href');}
+   for(const tab of tabs){const a=doc.querySelector('[data-tab-riwayat="'+tab.kunci+'"]');if(!a)return null;tab.href=a.getAttribute('href');a.removeAttribute('data-utuh');}
    nav.dataset.tujuanTab=JSON.stringify(tabs);
    frame.dataset.pindahAlamat=u.pathname+u.search;
    return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
