@@ -13,8 +13,12 @@
    if(!next||next.querySelector('form,script,[data-kepemilikan-sumber]')||!freshPanel||!freshList||doc.documentElement.dataset.versi!==cap||frame?.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==address||doc.getElementById('formulir-sesi')?.dataset.token!==token)throw Error('Konteks sumber karung berubah. Muat ulang untuk memeriksa akses.');
    const title=root.querySelector('h1'),freshTitle=next.querySelector('h1'),heading=panel.querySelector('h2'),freshHeading=freshPanel.querySelector('h2'),identity=next.querySelector('h1+p'),pager=panel.querySelector('nav'),freshPager=freshPanel.querySelector('nav');
    if(freshTitle?.textContent!==title.textContent||freshHeading?.textContent!==heading.textContent||!identity)throw Error('Struktur sumber karung belum lengkap. Coba lagi.');
+   const focus=document.activeElement;
    if(window.PINDAH&&!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
-   const focus=document.activeElement;root.querySelector('[data-karung-identity]').replaceChildren(...identity.childNodes);
+   // Native menyelaraskan ulang crumbrow. Bila Kembali sedang difokuskan
+   // dan tujuannya sama, pertahankan node itu agar keyboard tidak jatuh ke body.
+   if(focus?.matches('a.desktop-back')&&!focus.isConnected){const back=document.querySelector('a.desktop-back');if(back&&!back.hidden&&back.href===focus.href)back.replaceWith(focus);}
+   root.querySelector('[data-karung-identity]').replaceChildren(...identity.childNodes);
    list.replaceChildren(...freshList.childNodes);freshList.replaceWith(list);freshHeading.replaceWith(heading);
    pager.hidden=!freshPager;if(freshPager)pager.replaceChildren(...freshPager.childNodes);else pager.replaceChildren();if(freshPager)freshPager.replaceWith(pager);else freshPanel.append(pager);
    panel.replaceChildren(...freshPanel.childNodes);root.querySelector('[data-karung-detail-state]').remove();root.removeAttribute('data-karung-detail-shell');root.setAttribute('data-karung-detail-native','');root.dataset.halamanIsi='karung-detail';done=true;observer.disconnect();
