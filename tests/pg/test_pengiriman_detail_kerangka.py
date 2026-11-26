@@ -21,9 +21,13 @@ async def test_pure_structure_then_native_permissions(pg,gudang,monkeypatch,role
         before=await _sidik(pg);stock=await _stok(pg,gudang)
         request=Request({'type':'http','method':'GET','path':'/','headers':[],'query_string':b'','state':{'portal_scope':object()}})
         assert await shell.susun(request,SimpleNamespace(user=SimpleNamespace(role='admin')),navigasi={}) is None
-        old=svc.daftar
+        original_shell=shell.susun
         async def denied(*a,**kw):raise AssertionError('Prototype must not read actual outgoing records')
-        monkeypatch.setattr(svc,'daftar',denied)
+        async def guarded_shell(*a,**kw):
+            with monkeypatch.context() as scoped:
+                scoped.setattr(svc,'daftar',denied)
+                return await original_shell(*a,**kw)
+        monkeypatch.setattr(shell,'susun',guarded_shell)
         source=await c.get('/pekerjaan/catat-lain',headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});assert source.status_code==200
         node=BeautifulSoup(source.text,'html.parser').select_one('#padi-pengiriman-detail-kerangka');assert node
         data=json.loads(node.string);doc=BeautifulSoup(data['html'],'html.parser');r=doc.select_one('[data-pengiriman-detail-shell]');assert r and not r.has_attr('data-pengiriman-native')
@@ -31,7 +35,7 @@ async def test_pure_structure_then_native_permissions(pg,gudang,monkeypatch,role
         assert all(x.has_attr('disabled') for x in r.select('button:not([data-pkd-retry])'))
         assert not doc.select('[data-verifikasi-pengiriman],#verifikasi-awal,form')
         assert all(d.text=='—' for d in r.select('dd'))
-        monkeypatch.setattr(svc,'daftar',old)
+        monkeypatch.setattr(shell,'susun',original_shell)
         response=await c.get('/barang-keluar?status=dimuat');soup=BeautifulSoup(response.text,'html.parser')
         for row in soup.select('tr.keluar-baris[data-detail-keluar]'):
             assert 'rincian_perintah=1' in row['data-detail-keluar'];assert row.select_one('a')['href']==row['data-detail-keluar']
