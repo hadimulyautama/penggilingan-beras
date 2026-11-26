@@ -23,3 +23,5 @@
 {% if pengambilan %}<script type="application/json" id="padi-pengambilan-kerangka" data-konteks="{{ pengambilan.konteks }}" data-cap="{{ pengambilan.cap }}">{{ pengambilan|tojson }}</script>{% endif %}
 
 {% if perbaikan %}<script type="application/json" id="padi-perbaikan-kerangka" data-konteks="{{ perbaikan.konteks }}" data-cap="{{ perbaikan.cap }}">{{ perbaikan|tojson }}</script>{% endif %}
+
+{% if kemas_ulang %}<script type="application/json" id="padi-ku-kerangka" data-konteks="{{ kemas_ulang.konteks }}" data-cap="{{ kemas_ulang.cap }}">{{ kemas_ulang|tojson }}</script>{% endif %}

@@ -13,6 +13,7 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
+  if(u.origin===location.origin&&u.pathname==='/stok-produk/kemas-ulang'&&!u.hash&&u.searchParams.has('sku_id')&&[...u.searchParams.keys()].every(k=>['sku_id','std_id','jasa_id','kembali_stok'].includes(k)&&u.searchParams.getAll(k).length===1))return true;
   if(u.origin===location.origin&&/^\/barang-keluar\/[1-9]\d*\/perbaikan$/.test(u.pathname)&&!u.hash&&[...u.searchParams.keys()].every(k=>['q','status','sejak','sebelum'].includes(k)&&u.searchParams.getAll(k).length===1))return true;
   if(u.origin===location.origin&&u.pathname==='/barang-keluar/pengambilan-jasa'&&!u.hash&&[...u.searchParams.keys()].every(k=>k==='pelanggan_id'&&u.searchParams.getAll(k).length===1))return true;
   if(u.origin===location.origin&&!u.hash&&/^\/barang-keluar\/[1-9]\d*$/.test(u.pathname)&&u.searchParams.get('rincian_perintah')==='1'&&!u.searchParams.has('buka')&&!u.searchParams.has('nilai'))return true;
@@ -23,6 +24,11 @@
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);
+  // Hanya tautan Kemas Ulang yang memang dirender server; fallback lama
+  // tetap utuh jika prototype tujuan untuk sesi ini tidak tersedia.
+  if(document.getElementById('padi-ku-kerangka')&&!document.querySelector('[data-kemas-ulang]')){
+   document.querySelectorAll('.produk-kemasan__aksi a[data-utuh][href]').forEach(link=>{if(new URL(link.href).pathname==='/stok-produk/kemas-ulang'&&memakaiKerangka(link.href))link.removeAttribute('data-utuh');});
+  }
   // Hanya tab halaman native yang sudah direview. Penjaga editor, unduhan,
   // hash dan kontrol riwayat lain tetap milik PINDAH native.
   if(!document.querySelector('[data-editor-perintah],[data-kemas-ulang]')){

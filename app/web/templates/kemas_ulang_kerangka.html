@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block judul %}Kemas ulang{% endblock %}
+{% block isi %}
+<section class="kemas-ulang" data-ku-shell data-ku-context="{{ ku_context }}">
+<a data-ku-back href="/stok-produk">← Stok produk</a>
+<h1>Kemas ulang</h1><p data-ku-identitas>Produk dan pemilik belum dibaca.</p>
+<p class="bantu">Kemasan lama tetap habis. Hanya kemasan baru yang dipakai mengurangi stok kemasan. Jenis produk, mutu, dan pemilik tetap sama.</p>
+<form data-form-kemas>
+<label>Batch asal<select class="fld" name="sumber_id" required disabled><option value="">Menunggu pemeriksaan akses</option></select></label>
+<label>Jumlah asal<span class="kemas-ulang__jumlah"><input class="fld" name="jumlah_asal" type="number" min="0.01" step="0.01" required disabled><span data-satuan>karung</span></span></label>
+<label>Kemasan baru<select class="fld" name="kemasan" required disabled><option value="">Menunggu pilihan yang sah</option></select></label>
+<label>Merek baru<select class="fld" name="merk" required disabled><option value="">Pilih kemasan dahulu</option></select></label>
+<p role="status" data-kemasan-kosong hidden></p>
+<p class="bantu" data-saldo-kemasan role="status">Stok kemasan belum dibaca.</p>
+<label>Jumlah kemasan baru<span class="kemas-ulang__jumlah"><input class="fld" name="jumlah_baru" type="number" min="1" step="1" required disabled><span>karung</span></span></label>
+<output data-preview aria-live="polite">Tunggu pemeriksaan akses sebelum mengisi.</output>
+<label class="kemas-ulang__setuju"><input name="setuju" type="checkbox" required disabled> Saya sudah memeriksa hasil kemasan baru dan sisa curah.</label>
+<div class="nota nota--buruk" role="alert" data-galat hidden></div>
+<button class="btn" type="button" data-periksa-stok disabled>Periksa stok terbaru</button>
+<button class="btn" type="submit" disabled>Catat kemas ulang</button>
+</form>
+<p class="bantu" data-hasil role="status"></p>
+<a class="btn" data-selesai data-utuh href="/stok-produk" hidden>Kembali ke stok · sudah tercatat</a>
+<p data-ku-empty hidden></p>
+<details><summary>Riwayat kemas ulang · 20 catatan terbaru</summary><ul><li>Riwayat belum dibaca.</li></ul></details>
+<p role="status" data-ku-status>Memeriksa akses dan pilihan stok. Belum ada perubahan yang disimpan.</p>
+<button class="btn" type="button" data-ku-retry hidden>Coba lagi</button>
+<a class="btn" data-ku-original data-utuh hidden>Buka formulir asli</a>
+</section>
+<script>
+(function(){const r=document.querySelector('[data-ku-shell]');if(!r)return;r.padiMulaiKemasUlang=function(){
+{{ ku_aset.engine|safe }}
+};})();
+</script>
+<script>{{ ku_aset.reader|safe }}</script>
+{% endblock %}
