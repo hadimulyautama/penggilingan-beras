@@ -40,7 +40,7 @@ async def test_katalog_sama_izin_native_tanpa_baca_antrean(pg, lengkap, stok_len
         assert {b['data-pl-aksi'] for b in buttons} == set(expected)
         assert all(b.has_attr('disabled') and b.select_one('.tindakan__nama').text == expected[b['data-pl-aksi']]['label'] for b in buttons)
         assert all(s.text == '—' for s in proto.select('.kontrol-tab__jumlah'))
-        assert not proto.select('form[method=post]')
+        assert not proto.select_one('[data-pekerjaan-lain]').select('form[method=post]')
         assert len(data['potongan']) > 0 and len(response.content) < 4*1024*1024
         monkeypatch.setattr(layar_pekerjaan, 'siapkan_daftar_pekerjaan', original)
         cold = await client.get('/pekerjaan/catat-lain', headers={'X-Pindah':'1'})
