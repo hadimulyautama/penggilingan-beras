@@ -29,6 +29,9 @@ async def test_neutral_source_and_native_authority(pg,gudang,monkeypatch,role):
             assert aset()[script] in soup.text or aset()[script] in data['html']
         fresh=await c.get('/stok-produk/kemas-ulang',params={'sku_id':gudang['sku'],'std_id':gudang['std']},headers={'X-Pindah':'1'})
         assert fresh.status_code==200
+        detail=await c.get('/stok-produk/detail?jenis=medium')
+        links=BeautifulSoup(detail.text,'html.parser').select('.produk-kemasan__aksi a[href*="kemas-ulang"]');assert links
+        assert all(not x.has_attr('data-utuh') for x in links)
         native=BeautifulSoup(fresh.text,'html.parser');assert native.select_one('[data-kemas-ulang]')
         assert native.select_one('script[src*="kemas-ulang.js"]')
         assert not native.select_one('[data-ku-shell]')

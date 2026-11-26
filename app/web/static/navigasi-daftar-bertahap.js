@@ -24,11 +24,6 @@
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);
-  // Hanya tautan Kemas Ulang yang memang dirender server; fallback lama
-  // tetap utuh jika prototype tujuan untuk sesi ini tidak tersedia.
-  if(document.getElementById('padi-ku-kerangka')&&!document.querySelector('[data-kemas-ulang]')){
-   document.querySelectorAll('.produk-kemasan__aksi a[data-utuh][href]').forEach(link=>{if(new URL(link.href).pathname==='/stok-produk/kemas-ulang'&&memakaiKerangka(link.href))link.removeAttribute('data-utuh');});
-  }
   // Hanya tab halaman native yang sudah direview. Penjaga editor, unduhan,
   // hash dan kontrol riwayat lain tetap milik PINDAH native.
   if(!document.querySelector('[data-editor-perintah],[data-kemas-ulang]')){
