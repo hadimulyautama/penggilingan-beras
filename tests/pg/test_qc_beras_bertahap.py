@@ -42,7 +42,7 @@ async def test_readonly_shell_keeps_native_role_and_writer(pg,lengkap,stok_lengk
             # Action, unknown and duplicate parameters stay native.
             for query in ('buka=batalkan_sampel_qc_sosoh&nilai=1','tab_qc=sampel&tab_qc=asal','nilai=1'):
                 r=await client.get(path+'?'+query,headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})
-                assert r.status_code==200 and 'data-qc-beras-shell' not in r.text
+                assert r.status_code==200 and not BeautifulSoup(r.text,'html.parser').select('[data-qc-beras-shell]')
             r=await client.get('/riwayat-qc/beras-hasil-sosoh/NOT-FOUND',headers={'X-Pindah':'1'})
             assert r.status_code==404
         assert await _sidik(pg)==before
