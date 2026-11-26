@@ -88,4 +88,5 @@ def pasang(response, request):
             return row.replace(b'data-detail-keluar="'+target[1]+b'"', b'data-detail-keluar="'+declared+b'"',1).replace(b'href="'+target[1]+b'"',b'href="'+declared+b'"')
         response.body = re.sub(rb'<tr\b[^>]*class="keluar-baris"[^>]*>.*?</tr>', rincian_baris, response.body, flags=re.S)
     response.headers["content-length"] = str(len(response.body))
-    return response
+    from app.web.jasa_pesanan_bertahap import pasang as pasang_pesanan
+    return pasang_pesanan(response, request)
