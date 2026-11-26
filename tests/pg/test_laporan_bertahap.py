@@ -28,6 +28,7 @@ async def test_all_report_structures_native_parity(pg, lengkap, monkeypatch, rol
                 continue
             root=prototype.select_one('[data-laporan-shell]');assert root and root.get('aria-label')
             assert root.select('table thead th') and root.select_one('#periode') and root.select_one('[data-lp-proses]')
+            assert any('.lp-detail .lp-ringkasan' in style.text for style in root.select('style')), 'CSS must belong to the retained panel, not deleted siblings'
             assert all(x.get_text()=='—' for x in root.select('.lp-metrik dd'))
             assert not root.select('form[method=post],#laporan-data,a.lp-pdf-utama[href]')
             assert 'Tidak ada transaksi' not in root.get_text()

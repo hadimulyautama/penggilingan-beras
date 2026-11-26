@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% block judul %}{{ laporan.nama }}{% endblock %}
 {% block isi %}
+<section class="lp-detail" aria-label="{{ laporan.nama }}" data-laporan-shell="{{ tahap }}" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
 {% include '_laporan_periode_gaya.html' %}
 <style>[data-laporan-shell] .lp-panel-aksi a[aria-disabled="true"]{opacity:.5;cursor:not-allowed}</style>
-<section class="lp-detail" aria-label="{{ laporan.nama }}" data-laporan-shell="{{ tahap }}" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
  <div class="lp-panel-kontrol">
   <form class="lp-periode-form" method="get" action="/laporan/{{ tahap }}">
    <div class="grup lp-proses-grup"><label class="lbl" for="lp-proses">Proses / laporan</label><select class="fld" id="lp-proses" data-lp-proses>{% for kelompok in ['Proses','Laporan lainnya'] %}<optgroup label="{{ kelompok }}">{% for opsi in pilihan_laporan if opsi.kelompok==kelompok %}<option value="/laporan/{{ opsi.kode }}"{% if opsi.kode==tahap %} selected{% endif %}>{{ opsi.nama }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
