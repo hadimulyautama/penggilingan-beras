@@ -28,7 +28,7 @@ def pasang(response, request):
     # Hanya aset ringan. Tidak membaca pelanggan/otoritas lagi atau menyimpan
     # HTML transaksi pada registry/cache. Server native telah mengesahkan GET.
     extra = ('<style>#pesanan-pelanggan [data-jp-hidden][hidden]{display:none!important}</style>'
-             '<script src="/static/jasa-pesanan-bertahap.js?v='+CAP_ASET+'"></script>').encode()
+             '<script src="/static/jasa-pesanan-bertahap.js?v='+CAP_ASET+'" defer></script>').encode()
     response.body = response.body.replace(b'<!-- isi-halaman:akhir -->', extra+b'<!-- isi-halaman:akhir -->', 1)
     response.headers['content-length'] = str(len(response.body))
     return response
