@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/static/qc-detail.css?v={{ VERSI }}&qc=3">
 {% macro waktu(r) %}{{ r.waktu|jam('%d/%m/%Y · %H:%M') if r.waktu else 'Waktu tidak tercatat' }}{% endmacro %}
 {% macro hasil_asli(r) %}<dl class="qc-fields">{% for label, value in r.detail %}{% if label=='Kadar air' and r.bacaan_gabah %}{% for bacaan in r.bacaan_gabah %}<div><dt>Kadar air {{ loop.index }}</dt><dd>{{ (bacaan|string|replace('.', ',')) ~ '%' if bacaan is not none else 'Belum diketahui' }}</dd></div>{% endfor %}{% else %}<div><dt>{{ label }}</dt><dd style="{{ gaya_qc(label,value) }}">{{ value|replace('.', ',') if label in ('Kadar air','Broken','Susut','Penyusutan') else value }}</dd></div>{% endif %}{% endfor %}</dl>{% endmacro %}
-<div class="riwayat-detail qc-detail rhs rqd" data-riwayat-qc>
+<div class="riwayat-detail qc-detail rhs rqd" data-riwayat-qc data-qc-kind="{{ jenis }}" data-qc-ref="{{ k.ref }}">
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ judul if kembali == '/riwayat-qc/' ~ jenis else 'halaman asal' }}</a>
   <header class="rhs-header">
     <h1>{{ judul }}</h1><p class="rhs-code">{{ k.ref }}</p>

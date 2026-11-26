@@ -191,6 +191,28 @@
   if(!frame||!root||root.dataset.kind!==kind||frame.dataset.pindahAlamat!==u.pathname||frame.dataset.pindahKonteks!==context||root.dataset.stamp!==context+'|'+u.pathname||root.dataset.url!=='/api/halaman-bertahap/'+kind||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
   return {versi:1,alamat:u.pathname,konteks:context,cap,html};
  }
+ function qcDetailLangsung(pilihan,context,cap,token){
+  const u=new URL(pilihan.alamat,location.href),match=/^\/riwayat-qc\/(gabah-basah|gabah-kering|pk-hasil-giling|pk-luar)\/([\w-]+)$/.exec(u.pathname);
+  if(u.origin!==location.origin||!match||u.hash||u.search.length>3000)return null;
+  const allowed=['tab_qc','putaran','kembali_qc','kembali_jasa','kembali_stok','kembali_kerja'];
+  if([...u.searchParams.keys()].some(k=>!allowed.includes(k)||u.searchParams.getAll(k).length!==1))return null;
+  const host=document.getElementById('padi-qc-kerangka');let data;
+  if(!host?.isConnected||host.dataset.konteks!==context||host.dataset.cap!==cap||host.textContent.length>1572864)return null;
+  try{data=JSON.parse(host.textContent);}catch(_){return null;}
+  if(data?.versi!==1||data.konteks!==context||data.cap!==cap||data.sesi!==token||data.detail?.penyandian!=='baris-1')return null;
+  const html=decodeFrame(data.detail,match[1]);if(!html)return null;
+  const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),root=doc.querySelector('[data-qc-detail-shell]');
+  if(!frame||!root||root.dataset.qcKind!==match[1]||root.dataset.qcRef!=='__QC_REF__'||root.dataset.qcContext!==context||frame.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!=='/riwayat-qc/'+match[1]+'/__QC_REF__'||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
+  frame.dataset.pindahAlamat=u.pathname+u.search;root.dataset.qcRef=match[2];root.querySelector('[data-qc-detail-reference]').textContent=match[2];
+  const source=/^\/(?:riwayat-qc\/[\w-]+|pekerjaan|stok(?:\/pk\/detail)?|stok-pk-jasa|barang-masuk(?:\/\d+)?|jasa(?:\/pelanggan\/\d+)?|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:\/\d+)?|proses-aktif\/(?:giling|pengeringan|pendinginan|sosoh)\/[\w-]+)$/;
+  let back=source.test(location.pathname)?location.pathname+location.search:'/riwayat-qc/'+match[1];
+  for(const key of ['kembali_qc','kembali_jasa','kembali_stok','kembali_kerja']){const raw=u.searchParams.get(key);if(!raw)continue;const candidate=new URL(raw,location.href);if(raw.startsWith('/')&&!raw.startsWith('//')&&candidate.origin===location.origin&&source.test(candidate.pathname)){back=raw;break;}}
+  root.querySelector('[data-qc-detail-back]').href=back;
+  for(const a of root.querySelectorAll('.qc-tabs a')){const link=new URL(u);link.searchParams.set('tab_qc',a.id.slice(7));a.href=link.pathname+link.search;}
+  const title='Detail QC '+match[2];doc.title=title;const brand=doc.querySelector('.bar__merek');if(brand){brand.textContent=title;brand.setAttribute('aria-label',title);}
+  const crumb=doc.querySelector('.desktop-chrome__crumbrow .breadcrumb>span:last-child');if(crumb)crumb.textContent=title;
+  return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
+ }
  const riwayatPaths=['/riwayat-sosoh','/riwayat-giling','/riwayat-pengeringan'];
  function descriptorRiwayat(context,cap,token){
   const node=document.getElementById('padi-riwayat-kerangka');
@@ -238,7 +260,7 @@
   if(!host?.isConnected||!frame||!sesi?.dataset.token||!cap||host.dataset.cap!==cap||host.dataset.konteks!==frame.dataset.pindahKonteks||window.SESIFORM&&!SESIFORM.periksa())return null;
   if(host!==hostLama){try{registry=JSON.parse(host.textContent);hostLama=host;}catch(_){return null;}}
   if(registry?.versi!==2||registry.penyandian!=='baris-1'||registry.cap!==cap||registry.konteks!==frame.dataset.pindahKonteks||registry.sesi!==sesi.dataset.token||!registry.frames||typeof registry.frames!=='object'||Array.isArray(registry.frames))return null;
-  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat))return stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||riwayatLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||berandaLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||qcLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||kabarLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||laporanLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||detailLangsung(pilihan,registry.konteks,cap);
+  if(!Object.prototype.hasOwnProperty.call(registry.frames,pilihan.alamat))return stokLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||riwayatLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||berandaLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||qcLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||qcDetailLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||kabarLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||laporanLangsung(pilihan,registry.konteks,cap,sesi.dataset.token)||detailLangsung(pilihan,registry.konteks,cap);
   // Validasi seluruh indeks dan ukuran sebelum join. Versi/rujukan rusak
   // kembali ke navigasi native, bukan HTML parsial atau alamat tebakan.
   const html=decodeFrame(registry,pilihan.alamat);if(!html)return null;

@@ -102,7 +102,17 @@ async def susun(request,akun,*,navigasi):
         frames[path]=response.body.decode()
     if not frames:return None
     nonce=request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state,'csrf',None)
+    from app.web.qc_detail_bertahap import kerangka as detail_kerangka, PROTOTYPE
+    from app.web.detail_qc import KATEGORI
+    details={}
+    for config in TUJUAN.values():
+        if config['jenis'] not in KATEGORI or config['path'] not in frames:continue
+        path=config['path']+'/'+PROTOTYPE
+        native=Request({**request.scope,'path':path,'raw_path':path.encode(),'query_string':b'','state':dict(state)})
+        response=await detail_kerangka(native,akun,config['jenis'],PROTOTYPE,navigasi=navigasi)
+        if response.status_code!=200 or len(response.body)>524288:raise ValueError('Kerangka detail QC tidak lengkap')
+        details[config['jenis']]=response.body.decode()
     result=dict(versi=1,cap=CAP_ASET,konteks=penanda_konteks(request,akun),
         sesi=csrf.untuk_sesi(nonce,baca_token(request.cookies.get(NAMA_COOKIE)),request.cookies.get('produksi_lihat','')),
-        **kemas_frame(frames))
+        **kemas_frame(frames),detail=kemas_frame(details) if details else None)
     return result if len(htmlsafe_json_dumps(result).encode())<=1572864 else None
