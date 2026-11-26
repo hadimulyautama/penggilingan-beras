@@ -34,7 +34,7 @@
    if(focus?.matches('a.desktop-back')&&!focus.isConnected){const back=document.querySelector('a.desktop-back');if(back&&!back.hidden&&back.href===focus.href)back.replaceWith(focus);}
    // Form dan input yang sedang diketik tetap; hanya opsi yang tadinya belum
    // dibaca diisi dari cakupan native. Tidak pernah menerapkan filter otomatis.
-   for(const {old,actual} of changes){old.replaceChildren(...actual.childNodes);old.disabled=actual.disabled;old.removeAttribute('title');form.querySelectorAll('input[data-rrs-filter-pending][name="'+old.name+'"]').forEach(n=>n.remove());}
+   for(const {old,actual} of changes){const value=actual.value;old.replaceChildren(...actual.childNodes);old.value=value;for(const option of old.options)option.toggleAttribute('selected',option.selected);old.disabled=actual.disabled;old.removeAttribute('title');form.querySelectorAll('input[data-rrs-filter-pending][name="'+old.name+'"]').forEach(n=>n.remove());}
    for(const name of ['scope','filter-tags']){const old=root.querySelector('[data-rrs-'+name+']'),actual=fresh.querySelector('[data-rrs-'+name+']');if(old&&actual)old.replaceChildren(...actual.childNodes);}
    const actualTable=newTable.querySelector('table'),oldTable=table.querySelector('table'),head=oldTable.querySelector('thead');actualTable.querySelector('thead').replaceWith(head);oldTable.replaceChildren(...actualTable.childNodes);newTable.querySelector('table').replaceWith(oldTable);table.replaceChildren(...newTable.childNodes);newTable.replaceWith(table);
    cards.replaceChildren(...newCards.childNodes);newCards.replaceWith(cards);
