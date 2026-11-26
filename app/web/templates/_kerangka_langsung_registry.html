@@ -19,3 +19,5 @@
 {% if muatan %}<script type="application/json" id="padi-muatan-kerangka" data-konteks="{{ muatan.konteks }}" data-cap="{{ muatan.cap }}">{{ muatan|tojson }}</script>{% endif %}
 
 {% if pengiriman_detail %}<script type="application/json" id="padi-pengiriman-detail-kerangka" data-konteks="{{ pengiriman_detail.konteks }}" data-cap="{{ pengiriman_detail.cap }}">{{ pengiriman_detail|tojson }}</script>{% endif %}
+
+{% if pengambilan %}<script type="application/json" id="padi-pengambilan-kerangka" data-konteks="{{ pengambilan.konteks }}" data-cap="{{ pengambilan.cap }}">{{ pengambilan|tojson }}</script>{% endif %}

@@ -13,6 +13,7 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
+  if(u.origin===location.origin&&u.pathname==='/barang-keluar/pengambilan-jasa'&&!u.hash&&[...u.searchParams.keys()].every(k=>k==='pelanggan_id'&&u.searchParams.getAll(k).length===1))return true;
   if(u.origin===location.origin&&!u.hash&&/^\/barang-keluar\/[1-9]\d*$/.test(u.pathname)&&u.searchParams.get('rincian_perintah')==='1'&&!u.searchParams.has('buka')&&!u.searchParams.has('nilai'))return true;
    if(u.origin===location.origin&&!u.hash&&(['/muatan','/selesai-muat'].includes(u.pathname)||/^\/barang-keluar\/[1-9]\d*\/(muatan|selesai-muat)$/.test(u.pathname)))return true;
    if(u.origin===location.origin&&u.pathname==='/pekerjaan/catat-lain'&&!u.searchParams.has('buka')&&!u.searchParams.has('nilai')&&!u.hash)return true;
@@ -21,6 +22,7 @@
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);
+  if(document.getElementById('padi-pengambilan-kerangka')&&!document.querySelector('[data-editor-perintah],[data-kemas-ulang]'))document.querySelectorAll('a[data-utuh][href]').forEach(a=>{const u=new URL(a.href,location.href);if(u.origin===location.origin&&u.pathname==='/barang-keluar/pengambilan-jasa'&&memakaiKerangka(a.href))a.removeAttribute('data-utuh');});
   // Hanya tab halaman native yang sudah direview. Penjaga editor, unduhan,
   // hash dan kontrol riwayat lain tetap milik PINDAH native.
   if(!document.querySelector('[data-editor-perintah],[data-kemas-ulang]')){

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block judul %}Pengambilan barang jasa{% endblock %}
+{% block isi %}
+<style>{{ pj_aset.css|safe }}</style>
+{% set native_editor %}{% include '_editor_perintah.html' %}{% endset %}
+{{ native_editor|replace('<script src="/static/editor-perintah.js?v='~VERSI~'" defer></script>', '')|safe }}
+<p id="pj-baca-status" role="status">Memeriksa akses sebelum formulir dapat diisi. Belum ada draf yang disimpan.</p>
+<button type="button" class="btn" data-pj-retry hidden>Coba lagi</button>
+<a class="btn" data-pj-native-original data-utuh hidden>Buka formulir asli</a>
+<script>
+(function(){const r=document.querySelector('[data-editor-perintah="__PJ_ID__"]');if(!r)return;r.dataset.pjShell='1';r.dataset.pjContext={{ pj_context|tojson }};r.padiMulaiPengambilan=function(){
+{{ pj_aset.engine|safe }}
+};})();
+</script>
+<script>{{ pj_aset.reader|safe }}</script>
+{% endblock %}
