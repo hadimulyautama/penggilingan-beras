@@ -2,7 +2,19 @@
 (function(){
  'use strict';
  function mulai(){
-  const root=document.querySelector('[data-rrs-shell]');if(!root||root.dataset.rrsReadReady)return;root.dataset.rrsReadReady='1';
+  const root=document.querySelector('[data-daftar-retur-supplier]');if(!root)return;
+  const getForm=root.querySelector('#rrs-form');
+  // Form GET memakai navigator/penjaga yang sama dengan tautan, termasuk
+  // field di dialog yang tetap dimiliki form. Tidak ada submit transaksi.
+  if(window.PINDAH&&getForm&&!getForm.dataset.rrsGetReady){
+   getForm.dataset.rrsGetReady='1';PINDAH.pasang(getForm,'submit',e=>{
+    if(e.defaultPrevented||getForm.method.toLowerCase()!=='get'||getForm.target)return;
+    const u=new URL(getForm.action,location.href);if(u.origin!==location.origin||u.pathname!=='/riwayat-retur-supplier')return;
+    u.search=new URLSearchParams(new FormData(getForm)).toString();u.hash='';e.preventDefault();
+    const link=document.createElement('a');link.href=u.pathname+u.search;link.hidden=true;root.append(link);link.click();link.remove();
+   });
+  }
+  if(!root.hasAttribute('data-rrs-shell')||root.dataset.rrsReadReady)return;root.dataset.rrsReadReady='1';
   const address=location.pathname+location.search,context=root.dataset.rrsContext,cap=document.documentElement.dataset.versi,token=document.getElementById('formulir-sesi')?.dataset.token||'',status=root.querySelector('#rrs-baca-status'),retry=root.querySelector('[data-rrs-retry]'),content=root.querySelector('[data-rrs-content]');
   let request=null,sequence=0,done=false;
   function valid(n){return !done&&root.isConnected&&n===sequence&&location.pathname+location.search===address&&document.documentElement.dataset.versi===cap&&document.querySelector('.bingkai')?.dataset.pindahKonteks===context&&(document.getElementById('formulir-sesi')?.dataset.token||'')===token;}
