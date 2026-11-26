@@ -1,7 +1,9 @@
 {% extends 'base.html' %}
 {% block judul %}Perbaiki pengiriman{% endblock %}
 {% block isi %}
-<style>{{ pp_aset.css|safe }}</style>
+<style>{{ pp_aset.css|safe }}
+[data-pp-shell] [hidden]{display:none!important}
+</style>
 <main class="pp-halaman" data-pp-shell data-pp-context="{{ pp_context }}" data-pp-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
 <a data-pp-back>← Kembali ke pengiriman</a>
 <h1>Perbaiki pengiriman</h1>
