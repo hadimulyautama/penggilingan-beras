@@ -2,7 +2,7 @@
 {% block judul %}Perbaiki pengiriman{% endblock %}
 {% block isi %}
 <style>{{ pp_aset.css|safe }}</style>
-<main class="pp-halaman" data-pp-shell data-pp-context="{{ pp_context }}" data-pp-actor="{{ user.id }}:{{ VIEW }}:{{ user.alias or '' }}">
+<main class="pp-halaman" data-pp-shell data-pp-context="{{ pp_context }}" data-pp-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}">
 <a data-pp-back>← Kembali ke pengiriman</a>
 <h1>Perbaiki pengiriman</h1>
 <p data-pp-summary>Rincian kiriman, pelanggan dan jumlah menunggu pemeriksaan akses.</p>
