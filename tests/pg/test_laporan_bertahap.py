@@ -26,7 +26,7 @@ async def test_all_report_structures_native_parity(pg, lengkap, monkeypatch, rol
             if kind=='laporan':
                 assert len(prototype.select('[data-laporan-catalogue] a[data-laporan]'))==13
                 continue
-            root=prototype.select_one('[data-laporan-shell]');assert root
+            root=prototype.select_one('[data-laporan-shell]');assert root and root.get('aria-label')
             assert root.select('table thead th') and root.select_one('#periode') and root.select_one('[data-lp-proses]')
             assert all(x.get_text()=='—' for x in root.select('.lp-metrik dd'))
             assert not root.select('form[method=post],#laporan-data,a.lp-pdf-utama[href]')
