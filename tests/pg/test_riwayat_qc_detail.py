@@ -2,6 +2,7 @@
 from datetime import timedelta
 from pathlib import Path
 
+from bs4 import BeautifulSoup
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
@@ -74,7 +75,11 @@ async def test_daftar_menaut_ke_detail_dan_semua_hasil_tersimpan(pg,qc):
             if jenis=='gabah-basah':
                 # Format tampilan Indonesia; dua bacaan asli kini terpisah.
                 assert 'Lamur' in detail.text and '2 sak' in detail.text and '16,00%' in detail.text
-            if jenis=='gabah-kering': assert 'Lamur' not in detail.text
+            if jenis=='gabah-kering':
+                # Registry berisi kerangka tujuan QC basah yang belum tampil.
+                # Kontrak ini milik isi detail kering, bukan template inert.
+                isi_detail=BeautifulSoup(detail.text,'html.parser').select_one('[data-riwayat-qc]')
+                assert isi_detail is not None and 'Lamur' not in isi_detail.get_text()
             if jenis=='pk-luar':
                 assert 'QC 1' in detail.text
                 assert '&lt;b&gt;tetap teks&lt;/b&gt;' in detail.text
