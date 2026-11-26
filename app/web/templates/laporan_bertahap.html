@@ -2,6 +2,7 @@
 {% block judul %}{{ laporan.nama }}{% endblock %}
 {% block isi %}
 {% include '_laporan_periode_gaya.html' %}
+<style>[data-laporan-shell] .lp-panel-aksi a[aria-disabled="true"]{opacity:.5;cursor:not-allowed}</style>
 <section class="lp-detail" aria-label="{{ laporan.nama }}" data-laporan-shell="{{ tahap }}" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
  <div class="lp-panel-kontrol">
   <form class="lp-periode-form" method="get" action="/laporan/{{ tahap }}">
@@ -10,7 +11,7 @@
    <div class="lp-rentang"{% if periode_aktif!='khusus' %} hidden{% endif %}><label>Dari tanggal<input class="fld" type="date" name="dari" value="{{ dari }}"{% if periode_aktif!='khusus' %} disabled{% else %} required{% endif %}></label><label>Sampai tanggal<input class="fld" type="date" name="sampai" value="{{ sampai }}"{% if periode_aktif!='khusus' %} disabled{% else %} required{% endif %}></label></div>
    <button class="btn lp-tampilkan" type="submit"{% if periode_aktif!='khusus' %} hidden{% endif %}>Tampilkan</button>
   </form>
-  <div class="lp-panel-aksi" aria-label="Aksi laporan"><a class="btn btn--utama lp-pdf-utama" aria-disabled="true" tabindex="-1" aria-describedby="laporan-baca-status">Lihat PDF ↗</a><a class="btn" data-lp-unduh aria-disabled="true" tabindex="-1" aria-describedby="laporan-baca-status">Unduh PDF</a><button class="btn" type="button" data-lp-panduan aria-label="Panduan" title="Panduan">ⓘ</button></div>
+  <div class="lp-panel-aksi" aria-label="Aksi laporan"><a class="btn btn--utama lp-pdf-utama" aria-disabled="true" tabindex="-1" aria-describedby="laporan-baca-status" title="PDF tersedia setelah laporan selesai dibaca.">Lihat PDF ↗</a><a class="btn" data-lp-unduh aria-disabled="true" tabindex="-1" aria-describedby="laporan-baca-status" title="PDF tersedia setelah laporan selesai dibaca.">Unduh PDF</a><button class="btn" type="button" data-lp-panduan aria-label="Panduan" title="Panduan">ⓘ</button></div>
  </div>
  <div class="lap" id="lap-isi" data-shell-table-wrap aria-busy="true">
   <p class="lp-catatan" data-lp-periode>Periode dipilih: {{ dict(periode)[periode_aktif] }} · tanggal menunggu data</p><p class="lp-catatan">Dasar: {{ blueprint.dasar }}</p>

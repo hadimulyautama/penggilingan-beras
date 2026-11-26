@@ -56,7 +56,7 @@ async def test_report_shell_has_no_report_query(pg, lengkap, monkeypatch):
         assert await _sidik(pg)==before
 
 
-@pytest.mark.parametrize('query',['?periode=asing','?periode=khusus','?periode=khusus&dari=2026-11-12&sampai=2026-11-11','?dari=nope'])
+@pytest.mark.parametrize('query',['?periode=','?periode=asing','?periode=khusus','?periode=khusus&dari=2026-11-12&sampai=2026-11-11','?dari=nope'])
 async def test_report_validation_native_status(pg, lengkap, query):
     async with await _klien(pg,role='admin') as c:
         native=await c.get('/laporan/gabah_masuk'+query)

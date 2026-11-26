@@ -94,7 +94,7 @@
   if(u.pathname==='/laporan')return doc.querySelector('[data-laporan-catalogue]')?{versi:1,alamat:u.pathname,konteks:context,cap,html}:null;
   const root=doc.querySelector('[data-halaman-bertahap][data-laporan-shell]'),kind='laporan-'+u.pathname.split('/')[2];
   if(!root||root.dataset.kind!==kind||root.dataset.stamp!==context+'|'+u.pathname||root.dataset.url!=='/api/halaman-bertahap/'+kind)return null;
-  const form=root.querySelector('form'),period=form.elements.periode,value=q.get('periode')||'bulan_ini';
+  const form=root.querySelector('form'),period=form.elements.periode,value=q.get('periode')??'bulan_ini';
   if(!Array.from(period.options).some(o=>o.value===value))return null;
   period.value=value;
   for(const key of ['dari','sampai']){
