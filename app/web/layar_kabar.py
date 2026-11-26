@@ -24,6 +24,9 @@ async def halaman_kabar(request: Request, akun=Depends(butuh_akun),
                         tab: str = '', jenis: str = '', batas: int = Query(30, ge=1, le=100),
                         sampai: int | None = Query(None, ge=0),
                         sebelum: int | None = Query(None, ge=1)):
+    from app.web.kabar_bertahap import memakai,kerangka
+    if memakai(request):
+        return await kerangka(request,akun)
     async with SessionLocal() as db:
         jenis_semua = await svc.jenis_tersedia(db, akun.user)
         jenis = jenis if jenis in jenis_semua else ''

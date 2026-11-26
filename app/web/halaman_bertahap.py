@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from app.web.security import butuh_akun
 
 router = APIRouter(tags=["webapp"])
-ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa", "barang-masuk": "/barang-masuk", "beranda": "/"}
+ALAMAT = {"pekerjaan": "/pekerjaan", "stok": "/stok", "jasa": "/jasa", "barang-masuk": "/barang-masuk", "beranda": "/", "kabar": "/kabar"}
 from app.web.riwayat_bertahap import TUJUAN as RIWAYAT_TUJUAN
 ALAMAT.update({kind: data['path'] for kind, data in RIWAYAT_TUJUAN.items()})
 from app.web.qc_bertahap import TUJUAN as QC_TUJUAN
@@ -60,7 +60,7 @@ def penanda_konteks(request: Request, akun) -> str:
 
 
 def penanda(request: Request, akun, jenis: str) -> str:
-    if jenis in ('stok', 'beranda') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN:
+    if jenis in ('stok', 'beranda', 'kabar') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN:
         # Korelasi baca, bukan izin/tanda tangan. Struktur kosong dapat
         # mengikat filter baru di browser; GET tetap memeriksa aktor native.
         return penanda_konteks(request, akun) + '|' + ALAMAT[jenis] + (
@@ -240,7 +240,7 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lo
 async def _isi(request: Request, akun, jenis: str):
     if jenis not in ALAMAT:
         raise HTTPException(404, "Halaman tidak dikenal.")
-    if jenis in ('barang-masuk', 'beranda') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN:
+    if jenis in ('barang-masuk', 'beranda', 'kabar') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN:
         from app.web.portal.scope import is_customer_read
         if is_customer_read(request):
             raise HTTPException(403, 'Gunakan halaman portal sesuai cakupan pelanggan.')
@@ -249,7 +249,11 @@ async def _isi(request: Request, akun, jenis: str):
     scope = {**request.scope, "path": ALAMAT[jenis], "raw_path": ALAMAT[jenis].encode(),
              "state": {**request.scope.get("state", {}), "isi_halaman_bertahap": True}}
     native = NativeRequest(scope)
-    if jenis == 'beranda':
+    if jenis == 'kabar':
+        from app.web.kabar_bertahap import parameter
+        from app.web.layar_kabar import halaman_kabar
+        response = await halaman_kabar(native,akun=akun,**parameter(native))
+    elif jenis == 'beranda':
         from app.main import beranda
         response = await beranda(native)
     elif jenis == "pekerjaan":

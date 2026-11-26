@@ -8,6 +8,7 @@
  const main=document.getElementById('isi-halaman'),status=root.querySelector('[data-shell-status]'),retry=root.querySelector('[data-shell-retry]'),table=root.querySelector('[data-shell-table-wrap]'),message=root.querySelector('[data-shell-message]');
  const detail=root.dataset.kind==='barang-masuk-detail';
  const beranda=root.dataset.kind==='beranda';
+ const kabar=root.dataset.kind==='kabar';
  const qc=['qc-gabah-basah','qc-gabah-kering','qc-pk-hasil-giling','qc-pk-luar','qc-beras-hasil-sosoh'].includes(root.dataset.kind);
  const riwayat=['riwayat-sosoh','riwayat-giling','riwayat-pengeringan'].includes(root.dataset.kind);
  function berandaIslands(content){
@@ -130,7 +131,7 @@
   // Semua asset sudah dibaca sebelum swap. Tidak ada jeda async yang dapat
   // menjalankan kontrol halaman lama setelah pengguna pindah menu.
   for(const item of prepared){
-   if((riwayat||qc)&&!item.old.isConnected)continue;
+   if((riwayat||qc||kabar)&&!item.old.isConnected)continue;
    const script=document.createElement('script');
    for(const a of item.old.attributes)if(!['src','defer','async'].includes(a.name))script.setAttribute(a.name,a.value);
    script.textContent=item.text;item.old.replaceWith(script);
@@ -154,7 +155,7 @@
   else if(root.dataset.kind==='stok'&&previous?.hasAttribute('data-sk-buka'))target=content.querySelector('[data-sk-buka="'+CSS.escape(previous.dataset.skBuka)+'"]');
   else if(root.dataset.kind==='stok'&&previous===table){target=content.querySelector('[data-daftar-kosong]');if(!target){content.tabIndex=-1;content.setAttribute('aria-label','Daftar Stok');target=content;}}
   else if(previous?.matches('.halaman-bertahap__filter>summary'))target=content.querySelector('[data-pk-buka="pk-filter"],[data-sk-buka="sk-filter"]');
-  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':riwayat?root.dataset.riwayatLabel:qc?root.dataset.qcLabel:beranda?'Beranda':'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
+  else if(previous===retry||previous===document.body&&readFromRetry){content.tabIndex=-1;content.setAttribute('aria-label',detail?'Detail penerimaan':riwayat?root.dataset.riwayatLabel:qc?root.dataset.qcLabel:kabar?'Kabar':beranda?'Beranda':'Daftar '+(root.dataset.kind==='pekerjaan'?'Pekerjaan':'Stok'));target=content;}
   target?.focus({preventScroll:true});
  }
  // Satu pulau kontrol native, bukan morph umum formulir transaksi.
@@ -302,7 +303,7 @@
   if(!source||session?.dataset.token!==token)throw Error('Sesi pembacaan berubah. Muat ulang halaman.');
   const [start,end]=markers(source),[from,to]=markers(main);if(!start||!end||!from||!to)throw Error('Struktur daftar belum dapat dibaca. Coba lagi.');
   if(interacting()){
-   pending={payload,number};status.textContent=qc?'Data siap. Tutup panduan untuk menampilkan catatan QC.':'Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
+   pending={payload,number};status.textContent=kabar?'Data siap. Tutup panduan untuk menampilkan kabar.':qc?'Data siap. Tutup panduan untuk menampilkan catatan QC.':'Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
   }
   const content=document.createElement('div');content.dataset.halamanIsi=root.dataset.kind;
   for(let node=start.nextSibling;node&&node!==end;node=node.nextSibling)content.append(node.cloneNode(true));
@@ -312,12 +313,14 @@
   const stock=content.querySelector('[data-stok-controls]');
   if(stock){const url=new URL(stock.dataset.pelangganUrl,location.href);url.pathname='/api/halaman-bertahap/stok/html';stock.dataset.pelangganUrl=url.pathname+url.search;}
   if(qc&&window.PadiQCFrame?.versi!==1)throw Error('Kontrol daftar QC belum tersedia. Muat ulang halaman.');
+  if(kabar&&window.PadiKabarFrame?.versi!==1)throw Error('Kontrol Kabar belum tersedia. Muat ulang halaman.');
+  const kabarFrame=kabar?PadiKabarFrame.siapkan(root,content):null;
   const island=controlIsland(content),stockFrame=stockTable(content),detailFrame=detailIslands(content),historyFrame=riwayatIslands(content),homeFrame=berandaIslands(content),qcFrame=qc?PadiQCFrame.siapkan(root,content):null;
-  const prepared=await prepareScripts(content,doc,controller?.signal);
+  const prepared=kabar?[]:await prepareScripts(content,doc,controller?.signal);
   if(!current(number)||payload.stamp!==stamp)return;
   // Pengguna dapat membuka filter ketika asset masih dibaca.
   if(interacting()){
-   pending={payload,number};status.textContent=qc?'Data siap. Tutup panduan untuk menampilkan catatan QC.':'Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
+   pending={payload,number};status.textContent=kabar?'Data siap. Tutup panduan untuk menampilkan kabar.':qc?'Data siap. Tutup panduan untuk menampilkan catatan QC.':'Data siap. Terapkan filter yang sedang Anda isi; pilihan tetap dipertahankan.';return;
   }
   if(detail){
    // Tab boleh berubah selama pembacaan tanpa mengubah draf/controller.
@@ -330,6 +333,13 @@
   }
   if(!window.PINDAH?.selaraskanChrome||!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
   const previousFocus=document.activeElement;
+  if(kabarFrame){
+   // CSS dan controller panduan sudah siap bersama kerangka. Tidak perlu
+   // menunggu aset opsional atau melepas tab/filter untuk menerapkan GET.
+   observer.disconnect();finished=true;controller=null;
+   for(let node=from.nextSibling;node&&node!==to;){const next=node.nextSibling;if(node!==root)node.remove();node=next;}
+   const installed=PadiKabarFrame.isi(kabarFrame);restoreSemanticFocus(previousFocus,installed);return;
+  }
   if(qcFrame){
    // Nav QC tidak dilepas dari dokumen. Perubahan isi tidak menutup select
    // jenis yang sedang dipakai, dan tetap mempertahankan kontrol native.
@@ -354,7 +364,7 @@
  async function read(){
   readFromRetry=document.activeElement===retry;
   if(controller)controller.abort();const number=++sequence;controller=new AbortController();const active=controller;pending=null;
-  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=detail?'Memuat detail penerimaan…':riwayat?'Memuat catatan…':qc?'Membaca catatan QC…':beranda?'Membaca keadaan pabrik…':'Memuat data…';message.textContent=detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':riwayat?'Catatan sedang dibaca. Jenis proses dan panduan tetap tersedia.':qc?'Nilai belum dibaca ditandai —, bukan nol atau hasil penilaian.':beranda?'Angka bertanda — belum dibaca; bukan nol atau keadaan kosong.':'Memuat data. Judul kolom dan filter tetap tersedia.';
+  retry.hidden=true;table.setAttribute('aria-busy','true');status.textContent=kabar?'Membaca kabar…':detail?'Memuat detail penerimaan…':riwayat?'Memuat catatan…':qc?'Membaca catatan QC…':beranda?'Membaca keadaan pabrik…':'Memuat data…';message.textContent=kabar?'Jumlah dan jenis kabar menunggu pembacaan dalam cakupan akun Anda.':detail?'Nilai, sumber dan tindakan menunggu pembacaan terbaru.':riwayat?'Catatan sedang dibaca. Jenis proses dan panduan tetap tersedia.':qc?'Nilai belum dibaca ditandai —, bukan nol atau hasil penilaian.':beranda?'Angka bertanda — belum dibaca; bukan nol atau keadaan kosong.':'Memuat data. Judul kolom dan filter tetap tersedia.';
   const timeout=setTimeout(()=>active.abort(),20000);
   try{
    const response=await fetch(root.dataset.url,{credentials:'same-origin',cache:'no-store',signal:active.signal,headers:{'Accept':'application/json'}});
@@ -368,7 +378,7 @@
    failed(error,number);
   }finally{clearTimeout(timeout);if(current(number)){controller=null;table.setAttribute('aria-busy','false');}}
  }
- function failed(error,number){if(!current(number))return;if(beranda){root.querySelector('.beranda-sambut')?.after(status.parentElement);status.parentElement.after(message);}status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=detail?'Gagal memuat detail; ini bukan penerimaan kosong.':riwayat?'Catatan belum dapat dibaca; ini bukan riwayat kosong.':qc?'Catatan belum dapat dibaca; ini bukan QC kosong atau belum dinilai.':beranda?'Keadaan pabrik belum dapat dibaca; ini bukan berarti tidak ada pekerjaan atau stok.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
+ function failed(error,number){if(!current(number))return;if(beranda){root.querySelector('.beranda-sambut')?.after(status.parentElement);status.parentElement.after(message);}status.textContent=error.name==='AbortError'?'Pembacaan terlalu lama. Data belum tersedia.':error.message;message.textContent=kabar?'Kabar belum dapat dibaca; ini bukan berarti tidak ada kabar.':detail?'Gagal memuat detail; ini bukan penerimaan kosong.':riwayat?'Catatan belum dapat dibaca; ini bukan riwayat kosong.':qc?'Catatan belum dapat dibaca; ini bukan QC kosong atau belum dinilai.':beranda?'Keadaan pabrik belum dapat dibaca; ini bukan berarti tidak ada pekerjaan atau stok.':'Gagal memuat data; ini bukan daftar kosong.';retry.hidden=false;}
  async function resume(){
   if(!pending||interacting())return;
   const next=pending;pending=null;if(!current(next.number))return;
