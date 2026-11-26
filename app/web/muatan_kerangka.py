@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 PATH = '/muatan'
+SELESAI = '/selesai-muat'
 PROTOTYPE = '2147483647'
 
 
@@ -17,17 +18,19 @@ def alamat_kerangka(raw):
         q = parse_qs(u.query, keep_blank_values=True)
     except ValueError:
         return False
-    match = re.fullmatch(r'/barang-keluar/([1-9]\d{0,9})/muatan', u.path)
-    if (u.scheme or u.netloc or u.fragment or not (u.path == PATH or match)
-            or set(q) - {'perintah', 'item', 'semua', 'kembali_kerja'}
-            or any(len(v) != 1 for v in q.values()) or match and 'perintah' in q):
+    match = re.fullmatch(r'/barang-keluar/([1-9]\d{0,9})/(muatan|selesai-muat)', u.path)
+    path = '/'+match[2] if match else u.path
+    keys = {'perintah', 'kembali_kerja'} | ({'buka'} if path == SELESAI else {'item', 'semua'})
+    if (u.scheme or u.netloc or u.fragment or path not in (PATH, SELESAI)
+            or set(q) - keys or any(len(v) != 1 for v in q.values())
+            or match and 'perintah' in q):
         return False
     for key in ('perintah', 'item'):
         if q.get(key, [''])[0] and not re.fullmatch(r'[1-9]\d{0,9}', q[key][0]):
             return False
         if q.get(key, [''])[0] and int(q[key][0]) > 2147483647:
             return False
-    if match and int(match[1]) > 2147483647 or q.get('semua', [''])[0] not in ('', '0', '1'):
+    if match and int(match[1]) > 2147483647 or any(q.get(k, [''])[0] not in ('', '0', '1') for k in ('semua', 'buka')):
         return False
     back = q.get('kembali_kerja', [''])[0]
     return not back or (back == '/pekerjaan' or back.startswith('/pekerjaan?')) and not urlsplit(back).fragment
@@ -67,17 +70,18 @@ async def susun(request, akun, *, navigasi):
     state = {**request.scope.get('state', {}), 'menyusun_kerangka_langsung': True,
              'frame_kerangka_langsung': True}
     frames = {}
-    for query in ('', 'perintah='+PROTOTYPE):
-        native = Request({**request.scope, 'path': PATH, 'raw_path': PATH.encode(),
+    for path, query in ((path, query) for path in (PATH, SELESAI) for query in ('', 'perintah='+PROTOTYPE)):
+        native = Request({**request.scope, 'path': path, 'raw_path': path.encode(),
                           'query_string': query.encode(), 'state': dict(state)})
         context = dict(navigasi)
-        context.update(layar='catat_muatan', MENU_AKTIF='barang_keluar', perintah=None, boleh_catat=False,
-                       item_awal='', semua_awal='', muatan_shell=True,
+        context.update(layar='selesai_muatan' if path == SELESAI else 'catat_muatan',
+                       MENU_AKTIF='barang_keluar', perintah=None, boleh_catat=False, boleh_selesai=False,
+                       item_awal='', semua_awal='', muatan_shell=True, muatan_selesai=path == SELESAI,
                        muatan_context=penanda_konteks(request, akun), muatan_aset=aset())
         body = render(native, 'muatan_kerangka.html', **context).body
         if len(body) > 262144:
             return None
-        frames[PATH+('?' + query if query else '')] = body.decode()
+        frames[path+('?' + query if query else '')] = body.decode()
     nonce = request.cookies.get(csrf.NAMA_COOKIE) or getattr(request.state, 'csrf', None)
     result = dict(versi=1, cap=CAP_ASET, konteks=penanda_konteks(request, akun),
                   sesi=csrf.untuk_sesi(nonce, baca_token(request.cookies.get(NAMA_COOKIE)), request.cookies.get('produksi_lihat', '')),

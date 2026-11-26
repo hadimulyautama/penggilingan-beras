@@ -38,14 +38,16 @@ async def test_kerangka_nol_data_dan_hasil_native_tetap(pg, gudang, monkeypatch,
         host = BeautifulSoup(response.text, 'html.parser').select_one('#padi-muatan-kerangka')
         assert host
         data = json.loads(host.string)
-        assert set(data['frames']) == {'/muatan', '/muatan?perintah=2147483647'}
+        assert set(data['frames']) == {'/muatan', '/muatan?perintah=2147483647', '/selesai-muat', '/selesai-muat?perintah=2147483647'}
         for key in data['frames']:
             doc = BeautifulSoup(''.join(data['potongan'][i] for i in data['frames'][key]), 'html.parser')
             root = doc.select_one('[data-muatan-shell]')
             assert root and not root.has_attr('data-editor-perintah')
             assert not root.has_attr('data-lembar-muatan') and root['data-boleh'] == '0'
             assert root['data-perintah'] == ''
+            assert root['data-tahap'] == ('selesai' if key.startswith('/selesai-muat') else 'catat')
             assert len(root.select('.mr-table th')) == 4
+            assert all(n.has_attr('disabled') for n in root.select('textarea'))
             assert all(n.has_attr('disabled') for n in root.select('[data-lembar-isi] input,[data-lembar-isi] button'))
             assert all(n.text == '—' for n in root.select('.mr-summary dd'))
             assert not doc.select('#lembar-awal') and not root.select('form[method=post]')
@@ -60,6 +62,11 @@ async def test_kerangka_nol_data_dan_hasil_native_tetap(pg, gudang, monkeypatch,
         assert root['data-boleh'] == ('1' if await muatan.boleh_catat(user) else '0')
         actual = json.loads(soup.select_one('#lembar-awal').string)
         assert actual['kiriman'][0]['total_perintah_kg'] == 1000
+        done = await client.get('/selesai-muat?perintah='+str(record.rec.id), headers={'X-Pindah':'1'})
+        assert done.status_code == 200
+        actual_done = BeautifulSoup(done.text, 'html.parser')
+        assert actual_done.select_one('[data-lembar-muatan]')['data-tahap'] == 'selesai'
+        assert json.loads(actual_done.select_one('#lembar-awal').string) == actual
         missing = await client.get('/muatan?perintah=2147483647', headers={'X-Pindah':'1'})
         assert missing.status_code == 404
         assert await _stok(pg, gudang) == stock and await _sidik(pg) == before
@@ -77,7 +84,10 @@ async def test_portal_tidak_memperoleh_kerangka_internal(monkeypatch):
     ('/muatan', True), ('/muatan?perintah=12', True),
     ('/barang-keluar/12/muatan?item=9', True),
     ('/muatan?perintah=12&semua=1', True),
-    ('//example.invalid/muatan', False), ('/selesai-muat', False),
+    ('//example.invalid/muatan', False), ('/selesai-muat', True),
+    ('/selesai-muat?perintah=12&buka=1', True), ('/barang-keluar/12/selesai-muat', True),
+    ('/selesai-muat?item=9', False), ('/muatan?buka=1', False),
+    ('/selesai-muat?buka=muat_semua', False), ('/selesai-muat?buka=1&buka=0', False),
     ('/muatan?perintah=12&perintah=13', False),
     ('/barang-keluar/12/muatan?perintah=13', False),
     ('/muatan?buka=muat_semua', False), ('/muatan#lama', False),

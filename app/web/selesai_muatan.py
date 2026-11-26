@@ -61,7 +61,7 @@ async def halaman(request:Request,perintah:int|None=None,akun=Depends(butuh_akun
     boleh=await boleh_catat(akun.user)
     wajib(boleh or can_see_financials(akun.user))
     async with SessionLocal() as db:data=await papan_selesai(db,perintah)
-    return await render_laci(request,'selesai_muatan.html',awal=data,boleh_selesai=boleh,
+    return await render_laci(request,'selesai_muatan.html',awal=data,boleh_selesai=boleh,MENU_AKTIF='barang_keluar',
         perintah=perintah,buka_awal=request.query_params.get('buka',''))
 
 

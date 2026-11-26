@@ -223,16 +223,17 @@
    return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
   }
   function muatanLangsung(pilihan,context,cap,token){
-   const u=new URL(pilihan.alamat,location.href),match=/^\/barang-keluar\/([1-9]\d{0,9})\/muatan$/.exec(u.pathname),q=u.searchParams;
-   if(u.origin!==location.origin||u.hash||u.search.length>4096||!(u.pathname==='/muatan'||match)||Array.from(q.keys()).some(k=>!['perintah','item','semua','kembali_kerja'].includes(k)||q.getAll(k).length!==1)||match&&q.has('perintah'))return null;
+   const u=new URL(pilihan.alamat,location.href),match=/^\/barang-keluar\/([1-9]\d{0,9})\/(muatan|selesai-muat)$/.exec(u.pathname),q=u.searchParams;
+   const path=match?'/'+match[2]:u.pathname,finish=path==='/selesai-muat',keys=['perintah','kembali_kerja',...(finish?['buka']:['item','semua'])];
+   if(u.origin!==location.origin||u.hash||u.search.length>4096||!['/muatan','/selesai-muat'].includes(path)||Array.from(q.keys()).some(k=>!keys.includes(k)||q.getAll(k).length!==1)||match&&q.has('perintah'))return null;
    for(const key of ['perintah','item'])if(q.get(key)&&(!/^[1-9]\d{0,9}$/.test(q.get(key))||Number(q.get(key))>2147483647))return null;
-   if(match&&Number(match[1])>2147483647||!['','0','1'].includes(q.get('semua')||''))return null;
+   if(match&&Number(match[1])>2147483647||['semua','buka'].some(k=>!['','0','1'].includes(q.get(k)||'')))return null;
    const work=q.get('kembali_kerja')||'';if(work&&(!(work==='/pekerjaan'||work.startsWith('/pekerjaan?'))||new URL(work,location.href).hash))return null;
    const id=match?.[1]||q.get('perintah')||'',host=document.getElementById('padi-muatan-kerangka');let data;
    if(!host?.isConnected||host.dataset.konteks!==context||host.dataset.cap!==cap||host.textContent.length>393216)return null;
    try{data=JSON.parse(host.textContent);}catch(_){return null;}
-   if(data?.versi!==1||data.penyandian!=='baris-1'||data.konteks!==context||data.cap!==cap||data.sesi!==token||!data.frames||Object.keys(data.frames).length!==2)return null;
-   const prototype=id?'/muatan?perintah=2147483647':'/muatan',html=decodeFrame(data,prototype);if(!html)return null;
+   if(data?.versi!==1||data.penyandian!=='baris-1'||data.konteks!==context||data.cap!==cap||data.sesi!==token||!data.frames||Object.keys(data.frames).length!==4)return null;
+   const prototype=path+(id?'?perintah=2147483647':''),html=decodeFrame(data,prototype);if(!html)return null;
    const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),root=doc.querySelector('[data-muatan-shell]');
    if(!frame||!root||root.dataset.muatanContext!==context||!root.dataset.actor||frame.dataset.pindahKonteks!==context||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
    const parent='/barang-keluar/'+id;
@@ -240,7 +241,7 @@
    const old=document.querySelector('.bingkai')?.dataset.pindahAlamat||'/',back=new URL(old,location.href),cancel=root.querySelector('[data-muatan-cancel]');
    if(cancel&&back.origin===location.origin&&old.startsWith('/')&&!old.startsWith('//'))cancel.href=back.pathname+back.search;
    if(work)for(const a of doc.querySelectorAll('a.desktop-back,a.bar__balik'))a.href=work;
-   root.dataset.muatanTarget=id;frame.dataset.pindahAlamat=u.pathname+u.search;
+   root.dataset.buka=q.get('buka')||'';root.dataset.muatanTarget=id;frame.dataset.pindahAlamat=u.pathname+u.search;
    return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
   }
   function detailLangsung(pilihan,context,cap){

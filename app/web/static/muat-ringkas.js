@@ -21,7 +21,7 @@ function invalidDrafts(k){return missing().length||k.pelanggan.some(p=>p.status!
 function dirty(){return missing().length||rows().some(changed)||Object.values(reasons).some(x=>x.trim())||uncertain;}
 // Kesiapan navigasi memakai predicate penjaga native yang sama; tidak
 // membatalkan permintaan Simpan atau membuang draf/pemeriksaan yang pending.
-if(!finish)root.pfCanNavigateRead=()=>!busy&&!dirty();
+root.pfCanNavigateRead=()=>!busy&&!dirty();
 const navigationLifecycle=new AbortController();
 const navigationObserver=new MutationObserver(()=>{if(!root.isConnected){navigationLifecycle.abort();navigationObserver.disconnect();}});
 navigationObserver.observe(document.body,{childList:true,subtree:true});

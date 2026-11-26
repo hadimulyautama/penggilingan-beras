@@ -1,3 +1,3 @@
 {% extends 'base.html' %}
-{% block judul %}Catat muatan{% endblock %}
-{% block isi %}{% set tahap_selesai = false %}{% include '_lembar_muatan.html' %}{% endblock %}
+{% block judul %}{{ 'Selesai muat' if muatan_selesai else 'Catat muatan' }}{% endblock %}
+{% block isi %}{% set tahap_selesai = muatan_selesai|default(false) %}{% include '_lembar_muatan.html' %}{% endblock %}

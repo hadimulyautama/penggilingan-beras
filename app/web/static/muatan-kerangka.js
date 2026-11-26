@@ -2,6 +2,7 @@
 (function(){
  'use strict';
  const root=document.querySelector('[data-muatan-shell]');if(!root||root.dataset.mrReadReady)return;root.dataset.mrReadReady='1';
+ const stage=root.dataset.tahap;if(!['catat','selesai'].includes(stage))return;
  const address=location.pathname+location.search,context=root.dataset.muatanContext,actor=root.dataset.actor,cap=document.documentElement.dataset.versi,
   token=document.getElementById('formulir-sesi')?.dataset.token,status=root.querySelector('#muatan-baca-status'),retry=root.querySelector('[data-muatan-retry]'),start=root.padiMulaiMuatan;
  let sequence=0,request=null,done=false,abandoned=false,started=false;
@@ -14,7 +15,7 @@
  document.addEventListener('click',e=>{if(done||e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;const a=e.target.closest('a[href]');if(!a||a.target||a.hasAttribute('download')||a.getAttribute('href').startsWith('#'))return;const u=new URL(a.href,location.href);if(u.pathname+u.search!==address)stop();},{capture:true,signal:lifetime.signal});
  window.addEventListener('popstate',stop,{signal:lifetime.signal});window.addEventListener('beforeunload',stop,{signal:lifetime.signal});
  function pasang(doc,retryHadFocus){
-  const fresh=doc.querySelector('[data-lembar-muatan][data-tahap="catat"]'),frame=doc.querySelector('.bingkai'),json=doc.getElementById('lembar-awal'),area=root.querySelector('[data-lembar-isi]');
+  const fresh=doc.querySelector('[data-lembar-muatan][data-tahap="'+stage+'"]'),frame=doc.querySelector('.bingkai'),json=doc.getElementById('lembar-awal'),area=root.querySelector('[data-lembar-isi]');
   if(!fresh||!json||!area||typeof start!=='function'||fresh.querySelector('script,form')||doc.documentElement.dataset.versi!==cap||frame?.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==address||doc.getElementById('formulir-sesi')?.dataset.token!==token||fresh.dataset.actor!==actor||!['0','1'].includes(fresh.dataset.boleh)||fresh.dataset.perintah!==(root.dataset.muatanTarget||''))throw Error('Konteks sesi, perintah, gudang, atau versi aplikasi berubah. Buka kembali Muatan sebelum mengisi.');
   const data=JSON.parse(json.textContent);if(!data||!Array.isArray(data.kiriman)||data.kiriman.length>500||document.getElementById('lembar-awal'))throw Error('Data muatan belum lengkap. Coba baca lagi sebelum mengisi.');
   if(root.querySelector('h1').textContent!==fresh.querySelector('h1')?.textContent)throw Error('Struktur formulir berubah. Buka kembali halaman Muatan.');
