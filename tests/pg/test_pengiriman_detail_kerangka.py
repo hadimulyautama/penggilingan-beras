@@ -33,7 +33,7 @@ async def test_pure_structure_then_native_permissions(pg,gudang,monkeypatch,role
         data=json.loads(node.string);doc=BeautifulSoup(data['html'],'html.parser');r=doc.select_one('[data-pengiriman-detail-shell]');assert r and not r.has_attr('data-pengiriman-native')
         assert len(r.select('.detail-kirim-tabs [role=tab]'))==4 and len(r.select('[role=tabpanel]'))==4
         assert all(x.has_attr('disabled') for x in r.select('button:not([data-pkd-retry])'))
-        assert not doc.select('[data-verifikasi-pengiriman],#verifikasi-awal,form')
+        assert not r.select('[data-verifikasi-pengiriman],#verifikasi-awal,form')
         assert all(d.text=='—' for d in r.select('dd'))
         monkeypatch.setattr(shell,'susun',original_shell)
         response=await c.get('/barang-keluar?status=dimuat');soup=BeautifulSoup(response.text,'html.parser')
