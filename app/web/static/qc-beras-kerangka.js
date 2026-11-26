@@ -63,6 +63,9 @@
   }
   retry.addEventListener('click',read,{signal:events.signal});
   if(window.PINDAH)PINDAH.pasang(document,'click',e=>{const a=e.target.closest?.('a[href]');if(a&&!e.button&&!a.target&&!e.defaultPrevented&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey&&new URL(a.href,location.href).pathname!==path)stop();});
+  // Tautan lama ke komponen QC tetap membuka Sampel & hasil.
+  // Hanya state navigasi baca; identitas/aksi tidak diambil dari hash.
+  if(location.hash==='#qc-sosoh'){const u=new URL(location.href);u.searchParams.set('tab_qc','sampel');history.replaceState(history.state,'',u.pathname+u.search+u.hash);}
   show();read();
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mulai,{once:true});else mulai();
