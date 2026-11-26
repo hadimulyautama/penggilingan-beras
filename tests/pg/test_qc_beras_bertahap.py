@@ -33,6 +33,7 @@ async def test_readonly_shell_keeps_native_role_and_writer(pg,lengkap,stok_lengk
                 assert [len(t.select('thead th')) for t in root.select('table')]==[3,6,5]
                 assert not root.select('form,[data-qc-editor],[data-qc-baru],[data-qc-lengkapi]')
                 assert root.select_one('[aria-disabled=true]').text.strip()=='Lihat proses'
+                assert s.select_one('[data-lk-cetak]').has_attr('disabled')
                 assert 'Menunggu hasil QC' in n.text and n.select_one('[data-qc-sosoh]')
         home=BeautifulSoup((await client.get('/',headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})).text,'html.parser')
         host=home.select_one('#padi-qc-kerangka');desc=json.loads(host.string) if host else {}

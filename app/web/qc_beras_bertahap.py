@@ -61,5 +61,9 @@ async def kerangka(request, akun, referensi, *, navigasi=None):
                    qc_ref=referensi, qc_tab=tab if tab in TAB else 'ringkasan',
                    qc_kolom=KOLOM, qc_aset=aset(), qc_context=penanda_konteks(request, akun))
     response = render(request, 'qc_beras_bertahap.html', **context)
+    # Cetak bergantung pada data yang sudah terbaca, bukan placeholder.
+    response.body = re.sub(rb'(<button\b[^>]*?)(\sdata-lk-cetak)(?=[\s=>])',
+        rb'\1 disabled aria-describedby="qc-beras-status"\2', response.body)
+    response.headers['content-length'] = str(len(response.body))
     response.headers['Cache-Control'] = 'private, no-store'
     return response

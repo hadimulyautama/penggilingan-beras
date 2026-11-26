@@ -47,6 +47,8 @@
    const shortcuts=document.createElement('section');shortcuts.className='riwayat-detail__card rhs-shortcuts';
    for(const [id,label] of [['sampel','Lihat sampel & hasil QC'],['sesi','Lihat sesi & pemetaan'],['asal','Buka asal & catatan']]){const a=document.createElement('a'),u=new URL(location.href);u.searchParams.set('tab_qc',id);a.href=u.pathname+u.search;a.textContent=label+' →';shortcuts.append(a);}dest.ringkasan.push(shortcuts);
    for(const panel of panels)panel.replaceChildren(...dest[panel.dataset.rqdPanel]);
+   const nav=root.closest('.laporan-riwayat')?.querySelector('[data-laporan-kontrol]'),freshNav=doc.querySelector('[data-laporan-kontrol]');
+   nav?.querySelectorAll('[data-lk-cetak]').forEach((b,i)=>{const fresh=freshNav?.querySelectorAll('[data-lk-cetak]')[i];if(fresh&&!fresh.disabled){b.disabled=false;b.removeAttribute('aria-describedby');}});
    root.querySelector('[data-qc-beras-state]').remove();done=true;observer.disconnect();events.abort();root.removeAttribute('data-qc-beras-shell');root.setAttribute('data-riwayat-qc','');root.setAttribute('data-rqd-beras','');root.dataset.halamanIsi='qc-detail-beras';
    // Controller native hanya mengikat tab baca. Tanpa data-qc-sosoh,
    // bagian tidak ditata ulang dan editor tidak dipasang.
