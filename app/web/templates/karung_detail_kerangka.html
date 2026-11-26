@@ -1,0 +1,14 @@
+{% extends '_retur_supplier_navigasi.html' %}
+{% block judul %}Detail karung kosong{% endblock %}
+{% block isi %}
+<div data-karung-detail-shell data-karung-context="{{ karung_context }}">
+ <h1>Detail karung kosong</h1><p data-karung-identity>Identitas karung: — · satuan lembar. Ukuran kg adalah kapasitas kemasan.</p>
+ <section class="riwayat-detail__card" aria-labelledby="judul-sumber-kepemilikan"><h2 id="judul-sumber-kepemilikan">Detail sumber stok &amp; kepemilikan</h2>
+ <p>Pilih baris asal yang benar sebelum pindah kepemilikan. Jumlah di bawah adalah saldo baris tersimpan; pemakaian, alokasi, dan ketersediaan efektif diperiksa pada detail sumber.</p>
+ <div class="daftar-standar"><p>Daftar sumber belum dibaca.</p></div>
+ <nav aria-label="Halaman sumber stok"><span class="btn" aria-disabled="true" aria-describedby="karung-detail-status">Sebelumnya</span> <span>— / —</span> <span class="btn" aria-disabled="true" aria-describedby="karung-detail-status">Berikutnya</span></nav>
+ </section>
+ <div data-karung-detail-state><p id="karung-detail-status" role="status">Membaca sumber karung…</p><button class="btn" type="button" data-karung-detail-retry hidden>Coba lagi</button><p class="bantu">Nilai — belum dibaca, bukan saldo nol. Tautan sumber tersedia setelah data terbaca.</p></div>
+ <script data-karung-detail-controller>{{ karung_controller|safe }}</script>
+</div>
+{% endblock %}

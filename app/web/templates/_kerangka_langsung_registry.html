@@ -7,3 +7,5 @@
 {% if kabar %}<script type="application/json" id="padi-kabar-kerangka" data-konteks="{{ kabar.konteks }}" data-cap="{{ kabar.cap }}">{{ kabar|tojson }}</script>{% endif %}
 
 {% if laporan %}<script type="application/json" id="padi-laporan-kerangka" data-konteks="{{ laporan.konteks }}" data-cap="{{ laporan.cap }}">{{ laporan|tojson }}</script>{% endif %}
+
+{% if karung_detail %}<script type="application/json" id="padi-karung-detail-kerangka" data-konteks="{{ karung_detail.konteks }}" data-cap="{{ karung_detail.cap }}">{{ karung_detail|tojson }}</script>{% endif %}
