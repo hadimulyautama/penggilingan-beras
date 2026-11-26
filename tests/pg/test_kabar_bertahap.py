@@ -36,7 +36,7 @@ async def test_kabar_prototype_unknown_data_native_parity(pg,lengkap,monkeypatch
             shell=await c.get('/kabar'+query,headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})
             native=await c.get('/kabar'+query,headers={'X-Pindah':'1'})
             response=await c.get('/api/halaman-bertahap/kabar'+query)
-            assert shell.status_code==native.status_code==response.status_code==200
+            assert shell.status_code==native.status_code==response.status_code==200, (query,shell.status_code,native.status_code,response.status_code,response.text[:300])
             sr=BeautifulSoup(shell.text,'html.parser').select_one('[data-kind=kabar]');assert sr
             assert sr['data-stamp']==response.json()['stamp'] and _isi(native.text)==_isi(response.json()['html'])
         for query in ('?buka=unknown&nilai=synthetic','?tab=unknown','?tab=belum&tab='):
