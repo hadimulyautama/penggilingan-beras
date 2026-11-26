@@ -3,6 +3,7 @@ import asyncio
 from datetime import timedelta
 
 import pytest
+from bs4 import BeautifulSoup
 from sqlalchemy import select, func
 
 from app.database import now_local
@@ -111,7 +112,10 @@ async def test_batas_48_jam_dan_konfirmasi_tetap_dijaga(pg,gudang):
                 item.waktu_perubahan=now_local()-timedelta(hours=50)+timedelta(seconds=item.id)
             await db.commit()
         page=await c.get(f'/barang-keluar/{rid}/perbaikan')
-        assert 'Lewat batas 48 jam' in page.text and 'data-perbaikan-pengiriman' not in page.text
+        assert 'Lewat batas 48 jam' in page.text
+        # Registry membawa selector engine di JSON yang inert, bukan formulir.
+        # Yang wajib tidak tersedia ialah form tulis pada DOM halaman ini.
+        assert not BeautifulSoup(page.text, 'html.parser').select('form[data-perbaikan-pengiriman]')
         assert (await post(c,rid,log.id)).status_code == 409
     assert await _stok(pg,gudang) == 9900
 
