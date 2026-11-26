@@ -22,7 +22,6 @@
  }
  if(window.PINDAH&&typeof PINDAH.aturKerangkaHalaman==='function'){
   PINDAH.aturKerangkaHalaman(memakaiKerangka);
-  if(document.getElementById('padi-pengambilan-kerangka')&&!document.querySelector('[data-editor-perintah],[data-kemas-ulang]'))document.querySelectorAll('a[data-utuh][href]').forEach(a=>{const u=new URL(a.href,location.href);if(u.origin===location.origin&&u.pathname==='/barang-keluar/pengambilan-jasa'&&memakaiKerangka(a.href))a.removeAttribute('data-utuh');});
   // Hanya tab halaman native yang sudah direview. Penjaga editor, unduhan,
   // hash dan kontrol riwayat lain tetap milik PINDAH native.
   if(!document.querySelector('[data-editor-perintah],[data-kemas-ulang]')){
