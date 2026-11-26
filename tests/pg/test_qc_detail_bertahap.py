@@ -7,16 +7,20 @@ from tests.pg.test_riwayat_qc_detail import qc
 from tests.pg.test_konsolidasi_pekerjaan import lengkap,stok_lengkap,sosoh_jasa
 from tests.pg.test_tiket_antrean_produksi import _klien
 from tests.pg.test_halaman_bertahap import _sidik
+from tests.pg.test_ruang_perusahaan import siapkan,aktifkan,konfigurasi
+from hmu_identitas.ruang_data import pasang_pagar
 
 pytestmark=pytest.mark.asyncio
 REF={'gabah-basah':'GB-QC-BASAH','gabah-kering':'GB-QC-KERING',
      'pk-hasil-giling':'LOT-QC-DETAIL','pk-luar':'PKB-QC-DETAIL'}
 
 @pytest.mark.parametrize('role,warehouse,allowed',[
- ('admin',None,set(REF)),('operator','Gudang 1',{'gabah-basah','gabah-kering','pk-hasil-giling'}),
- ('operator','Gudang 2',{'pk-luar'}),('operator',None,set())])
-async def test_shell_keeps_native_scope_and_original_values(pg,lengkap,stok_lengkap,qc,role,warehouse,allowed):
-    async with await _klien(pg,role=role,gudang=warehouse) as client:
+ ('admin',None,set(REF)),('operator','g1',{'gabah-basah','gabah-kering','pk-hasil-giling'}),
+ ('operator','g2',{'pk-luar'}),('operator',None,set())])
+async def test_shell_keeps_native_scope_and_original_values(pg,lengkap,stok_lengkap,qc,monkeypatch,role,warehouse,allowed):
+    client=await _klien(pg,role=role,gudang_id=lengkap['gudang'][warehouse] if warehouse else None)
+    space=await siapkan(pg);await aktifkan(pg,space);konfigurasi(monkeypatch,space);pasang_pagar(pg.kw['bind'],wajib=True)
+    async with client:
         before=await _sidik(pg)
         home=BeautifulSoup((await client.get('/',headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})).text,'html.parser')
         host=home.select_one('#padi-qc-kerangka')
@@ -57,6 +61,7 @@ async def test_prototype_does_not_read_qc_and_unknown_query_keeps_native(pg,leng
         assert not any(re.search(r'\b'+re.escape(n)+r'\b',statement,re.I) for n in names)
     engine=pg.kw['bind'].sync_engine
     async with await _klien(pg,role='admin') as client:
+        space=await siapkan(pg);await aktifkan(pg,space);konfigurasi(monkeypatch,space);pasang_pagar(pg.kw['bind'],wajib=True)
         event.listen(engine,'before_cursor_execute',check)
         try:
             r=await client.get('/',headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})
