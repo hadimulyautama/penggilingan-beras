@@ -56,7 +56,10 @@ async def kerangka(request,akun,jenis,referensi,*,navigasi=None):
                    qc_tabs=TAB,qc_aset=aset(),qc_context=penanda_konteks(request,akun),
                    kembali=nav['kembali'])
     response=render(request,'qc_detail_bertahap.html',**context)
-    response.body=response.body.replace(b'data-lk-cetak',b'disabled aria-describedby="qc-detail-status" data-lk-cetak')
+    # Batasi ke atribut tombol. Controller inline juga memakai selector
+    # data-lk-cetak; penggantian teks global akan merusak kode itu.
+    response.body=re.sub(rb'(<button\b[^>]*?)(\sdata-lk-cetak)(?=[\s=>])',
+                         rb'\1 disabled aria-describedby="qc-detail-status"\2',response.body)
     response.headers['content-length']=str(len(response.body))
     response.headers['Cache-Control']='private, no-store'
     return response
