@@ -777,6 +777,9 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         return await detail_qc_kerangka(request,akun,jenis,referensi)
 
     if jenis == "beras-hasil-sosoh":
+        from app.web.qc_beras_bertahap import memakai as memakai_beras, kerangka as kerangka_beras
+        if referensi is not None and memakai_beras(request, akun, jenis):
+            return await kerangka_beras(request, akun, referensi)
         from app.web.riwayat_qc_sosoh import halaman
         return await halaman(request, referensi)
 

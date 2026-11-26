@@ -192,24 +192,25 @@
   return {versi:1,alamat:u.pathname,konteks:context,cap,html};
  }
  function qcDetailLangsung(pilihan,context,cap,token){
-  const u=new URL(pilihan.alamat,location.href),match=/^\/riwayat-qc\/(gabah-basah|gabah-kering|pk-hasil-giling|pk-luar)\/([\w-]+)$/.exec(u.pathname);
+  const u=new URL(pilihan.alamat,location.href),match=/^\/riwayat-qc\/(gabah-basah|gabah-kering|pk-hasil-giling|pk-luar|beras-hasil-sosoh)\/([\w-]+)$/.exec(u.pathname);
   if(u.origin!==location.origin||!match||u.hash||u.search.length>3000)return null;
-  const allowed=['tab_qc','putaran','kembali_qc','kembali_jasa','kembali_stok','kembali_kerja'];
+  const rice=match[1]==='beras-hasil-sosoh';
+  const allowed=rice?['tab_qc']:['tab_qc','putaran','kembali_qc','kembali_jasa','kembali_stok','kembali_kerja'];
   if([...u.searchParams.keys()].some(k=>!allowed.includes(k)||u.searchParams.getAll(k).length!==1))return null;
   const host=document.getElementById('padi-qc-kerangka');let data;
   if(!host?.isConnected||host.dataset.konteks!==context||host.dataset.cap!==cap||host.textContent.length>1572864)return null;
   try{data=JSON.parse(host.textContent);}catch(_){return null;}
-  if(data?.versi!==1||data.konteks!==context||data.cap!==cap||data.sesi!==token||data.detail?.penyandian!=='baris-1')return null;
-  const html=decodeFrame(data.detail,match[1]);if(!html)return null;
-  const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),root=doc.querySelector('[data-qc-detail-shell]');
-  if(!frame||!root||root.dataset.qcKind!==match[1]||root.dataset.qcRef!=='__QC_REF__'||root.dataset.qcContext!==context||frame.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!=='/riwayat-qc/'+match[1]+'/__QC_REF__'||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
-  frame.dataset.pindahAlamat=u.pathname+u.search;root.dataset.qcRef=match[2];root.querySelector('[data-qc-detail-reference]').textContent=match[2];
+  if(data?.versi!==1||data.konteks!==context||data.cap!==cap||data.sesi!==token||(rice?data.beras:data.detail)?.penyandian!=='baris-1')return null;
+  const html=decodeFrame(rice?data.beras:data.detail,match[1]);if(!html)return null;
+  const doc=new DOMParser().parseFromString(html,'text/html'),frame=doc.querySelector('.bingkai'),root=doc.querySelector(rice?'[data-qc-beras-shell]':'[data-qc-detail-shell]'),prototype=rice?'__QC_BERAS_REF__':'__QC_REF__';
+  if(!frame||!root||(!rice&&root.dataset.qcKind!==match[1])||root.dataset.qcRef!==prototype||root.dataset.qcContext!==context||frame.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!=='/riwayat-qc/'+match[1]+'/'+prototype||doc.documentElement.dataset.versi!==cap||doc.getElementById('formulir-sesi')?.dataset.token!==token)return null;
+  frame.dataset.pindahAlamat=u.pathname+u.search;root.dataset.qcRef=match[2];root.querySelector(rice?'[data-qc-beras-reference]':'[data-qc-detail-reference]').textContent=match[2];
   const source=/^\/(?:riwayat-qc\/[\w-]+|pekerjaan|stok(?:\/pk\/detail)?|stok-pk-jasa|barang-masuk(?:\/\d+)?|jasa(?:\/pelanggan\/\d+)?|riwayat-(?:giling|pengeringan|sosoh|transfer)(?:\/\d+)?|proses-aktif\/(?:giling|pengeringan|pendinginan|sosoh)\/[\w-]+)$/;
   let back=source.test(location.pathname)?location.pathname+location.search:'/riwayat-qc/'+match[1];
   for(const key of ['kembali_qc','kembali_jasa','kembali_stok','kembali_kerja']){const raw=u.searchParams.get(key);if(!raw)continue;const candidate=new URL(raw,location.href);if(raw.startsWith('/')&&!raw.startsWith('//')&&candidate.origin===location.origin&&source.test(candidate.pathname)){back=raw;break;}}
-  root.querySelector('[data-qc-detail-back]').href=back;
-  for(const a of root.querySelectorAll('.qc-tabs a')){const link=new URL(u);link.searchParams.set('tab_qc',a.id.slice(7));a.href=link.pathname+link.search;}
-  const title='Detail QC '+match[2];doc.title=title;const brand=doc.querySelector('.bar__merek');if(brand){brand.textContent=title;brand.setAttribute('aria-label',title);}
+  if(!rice)root.querySelector('[data-qc-detail-back]').href=back;
+  for(const a of root.querySelectorAll('.rhs-tabs a')){const link=new URL(u);link.searchParams.set('tab_qc',a.id.slice(7));a.href=link.pathname+link.search;}
+  const title=(rice?'QC beras hasil sosoh ':'Detail QC ')+match[2];doc.title=title;const brand=doc.querySelector('.bar__merek');if(brand){brand.textContent=title;brand.setAttribute('aria-label',title);}
   const crumb=doc.querySelector('.desktop-chrome__crumbrow .desktop-breadcrumb [aria-current="page"]');if(crumb)crumb.textContent=title;
   return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }

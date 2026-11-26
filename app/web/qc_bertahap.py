@@ -112,7 +112,15 @@ async def susun(request,akun,*,navigasi):
         response=await detail_kerangka(native,akun,config['jenis'],PROTOTYPE,navigasi=navigasi)
         if response.status_code!=200 or len(response.body)>524288:raise ValueError('Kerangka detail QC tidak lengkap')
         details[config['jenis']]=response.body.decode()
+    from app.web.qc_beras_bertahap import pembaca, kerangka as beras_kerangka, PROTOTYPE as BERAS_REF
+    beras={}
+    if pembaca(request,akun) and '/riwayat-qc/beras-hasil-sosoh' in frames:
+        path='/riwayat-qc/beras-hasil-sosoh/'+BERAS_REF
+        native=Request({**request.scope,'path':path,'raw_path':path.encode(),'query_string':b'','state':dict(state)})
+        response=await beras_kerangka(native,akun,BERAS_REF,navigasi=navigasi)
+        if response.status_code!=200 or len(response.body)>524288:raise ValueError('Kerangka baca QC beras tidak lengkap')
+        beras['beras-hasil-sosoh']=response.body.decode()
     result=dict(versi=1,cap=CAP_ASET,konteks=penanda_konteks(request,akun),
         sesi=csrf.untuk_sesi(nonce,baca_token(request.cookies.get(NAMA_COOKIE)),request.cookies.get('produksi_lihat','')),
-        **kemas_frame(frames),detail=kemas_frame(details) if details else None)
+        **kemas_frame(frames),detail=kemas_frame(details) if details else None,beras=kemas_frame(beras) if beras else None)
     return result if len(htmlsafe_json_dumps(result).encode())<=1572864 else None

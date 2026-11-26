@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block judul %}QC beras hasil sosoh {{ qc_ref }}{% endblock %}
+{% block isi %}
+<main class="riwayat-detail rhs rqd" data-qc-beras-shell data-qc-ref="{{ qc_ref }}" data-qc-context="{{ qc_context }}">
+ {% for name,code in qc_aset.styles %}<style data-qc-beras-style="{{ name }}">{{ code|safe }}</style>{% endfor %}
+ <a class="rhs-back" href="/riwayat-qc/beras-hasil-sosoh">← Kembali ke daftar Riwayat QC beras</a>
+ <header class="rhs-header"><h1>Riwayat QC beras hasil sosoh</h1><p class="rhs-code" data-qc-beras-reference>{{ qc_ref }}</p><p class="rhs-meta">Sampel: — · Menunggu hasil lab: —</p></header>
+ <div class="qc-sosoh">
+  <div class="rhs-actions" data-rqd-proses-aksi><span class="btn btn--kecil" aria-disabled="true" aria-describedby="qc-beras-status">Lihat proses</span></div>
+  <nav class="rhs-tabs" role="tablist" aria-label="Bagian riwayat QC beras" data-rqd-beras-tabs>{% for id,nama in [('ringkasan','Ringkasan'),('sampel','Sampel & hasil'),('sesi','Sesi & pemetaan'),('asal','Asal & catatan')] %}<a id="qc-tab-{{ id }}" role="tab" aria-controls="qc-panel-{{ id }}" aria-selected="{{ 'true' if qc_tab==id else 'false' }}" href="{{ request.url.path }}?tab_qc={{ id }}">{{ nama }}</a>{% endfor %}</nav>
+  {% for id,title in [('ringkasan','Total hasil timbang per jenis'),('sampel','Riwayat sampel dan hasil QC'),('sesi','Estimasi waktu dan hasil tiap garapan'),('asal','Asal pemeriksaan & penelusuran')] %}
+  <div id="qc-panel-{{ id }}" role="tabpanel" data-rqd-panel="{{ id }}" aria-labelledby="qc-tab-{{ id }}"{% if qc_tab!=id %} hidden{% endif %}>
+   {% if id=='ringkasan' %}<section class="riwayat-detail__card"><h2>QC beras hasil sosoh</h2><p>Sampel: — · Menunggu hasil lab: —</p></section>{% endif %}
+   <section class="riwayat-detail__card"><h2>{{ title }}</h2>
+   {% if id!='asal' %}{% set key='hasil' if id=='ringkasan' else id %}<div class="tabel-standar"><table class="tabel-standar" data-ponsel="rincian" data-qc-beras-table="{{ key }}"><thead><tr>{% for label in qc_kolom[key] %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead><tbody><tr><td colspan="{{ qc_kolom[key]|length }}">Membaca catatan QC…</td></tr></tbody></table></div>
+   {% else %}<dl class="qc-fields">{% for label in ['Proses sosoh','Sampel tercatat','Menunggu hasil lab'] %}<div><dt>{{ label }}</dt><dd>—</dd></div>{% endfor %}</dl>{% endif %}
+   </section>
+  </div>{% endfor %}
+ </div>
+ <div data-qc-beras-state><p id="qc-beras-status" role="status">Membaca detail QC beras…</p><button class="btn btn--kecil" type="button" data-qc-beras-retry hidden>Coba lagi</button><p class="bantu">Nilai — belum dibaca, bukan nol atau hasil pemeriksaan. Tautan proses tersedia setelah data terbaca.</p></div>
+ {% from '_riwayat_qc_alat.html' import panduan_qc with context %}{{ panduan_qc() }}
+ <script type="text/plain" data-qc-beras-native>{{ qc_aset.native|safe }}</script>
+ <script data-qc-beras-controller>{{ qc_aset.controller|safe }}</script>
+</main>
+{% endblock %}
