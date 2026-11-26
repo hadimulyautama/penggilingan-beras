@@ -65,7 +65,11 @@ async def test_empat_tab_semua_kategori_tetap_membaca_data_yang_sama(pg,qc):
                         assert fields['Kadar air 1']==str(asli.kadar_air_1).replace('.',',')+'%'
                         assert fields['Kadar air 2']==str(asli.kadar_air_2).replace('.',',')+'%'
                         assert 'Kadar air' not in fields
-                if jenis=='gabah-kering': assert 'Lamur' not in r.text and 'berlamur' not in r.text
+                if jenis=='gabah-kering':
+                    # Other destinations' inert prototypes may contain wet
+                    # grain guidance. Assert against this displayed detail.
+                    detail=s.select_one('[data-riwayat-qc]').get_text()
+                    assert 'Lamur' not in detail and 'berlamur' not in detail
                 if jenis=='pk-hasil-giling':
                     assert s.select_one('.qc-score strong').get_text()==f"{sebelum['nilai']:.2f}".replace('.',',')
                 if jenis=='pk-luar':assert '&lt;b&gt;tetap teks&lt;/b&gt;' in r.text
