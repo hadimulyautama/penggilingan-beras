@@ -154,8 +154,10 @@ async def test_gabah_rata_seluruh_bacaan_dan_status_tutup_dari_header(pg,qc):
         snap=await cuplik(pg)
         for tab in TAB:
             r=await c.get(path+'?tab_qc='+tab)
-            assert r.status_code==200 and 'Ditutup lebih awal' in r.text and '17,55%' in r.text and '5 sak' in r.text
-            assert 'Sampel telah selesai diperiksa.' in r.text and 'Perhitungan nilai gabungan' not in r.text
+            detail=BeautifulSoup(r.text,'html.parser').select_one('[data-riwayat-qc]').get_text()
+            assert r.status_code==200 and 'Ditutup lebih awal' in detail and '17,55%' in detail and '5 sak' in detail
+            # A PK destination prototype is not part of this grain detail.
+            assert 'Sampel telah selesai diperiksa.' in detail and 'Perhitungan nilai gabungan' not in detail
             bukti('gabah-ditutup-'+tab+'.html',r.text)
         assert await cuplik(pg)==snap
 
