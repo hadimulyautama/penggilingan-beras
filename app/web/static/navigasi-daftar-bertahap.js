@@ -13,6 +13,7 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
+   if(u.origin===location.origin&&!u.hash&&(u.pathname==='/muatan'||/^\/barang-keluar\/[1-9]\d*\/muatan$/.test(u.pathname)))return true;
    if(u.origin===location.origin&&u.pathname==='/pekerjaan/catat-lain'&&!u.searchParams.has('buka')&&!u.searchParams.has('nilai')&&!u.hash)return true;
   if(u.origin===location.origin&&/^\/riwayat-qc\/(gabah-basah|gabah-kering|pk-hasil-giling|pk-luar|beras-hasil-sosoh)\/[\w-]+$/.test(u.pathname))return true;
   return u.origin===location.origin&&(u.pathname==='/stok/karung/detail'||u.pathname==='/riwayat-retur-supplier'||/^\/riwayat-retur-supplier\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/barang-masuk'||/^\/barang-masuk\/[1-9]\d*$/.test(u.pathname)||u.pathname==='/jasa'||u.pathname==='/kabar'||u.pathname==='/laporan'||/^\/laporan\/[a-z_]+$/.test(u.pathname)||u.pathname==='/stok'||u.pathname==='/pekerjaan'||!u.search&&(['/','/riwayat-sosoh','/riwayat-giling','/riwayat-pengeringan'].includes(u.pathname)||/^\/riwayat-qc\/(gabah-basah|gabah-kering|pk-hasil-giling|pk-luar|beras-hasil-sosoh)$/.test(u.pathname)));

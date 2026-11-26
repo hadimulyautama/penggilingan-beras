@@ -68,7 +68,7 @@ async def halaman(request:Request,perintah:int|None=None,akun=Depends(butuh_akun
     async with SessionLocal() as db:
         from app.web.selesai_muatan import papan_selesai
         data=await papan_selesai(db,perintah)
-    return await render_laci(request,'catat_muatan.html',awal=data,boleh_catat=boleh,
+    return await render_laci(request,'catat_muatan.html',awal=data,boleh_catat=boleh,MENU_AKTIF='barang_keluar',
         perintah=perintah,item_awal=request.query_params.get('item',''),
         semua_awal=request.query_params.get('semua',''))
 

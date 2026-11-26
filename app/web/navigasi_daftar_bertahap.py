@@ -56,5 +56,15 @@ def pasang(response, request):
             return tag
         return re.sub(rb'\sdata-utuh(?=[\s>])', b'', tag, count=1)
     response.body = re.sub(rb'<a\b[^>]*\bdata-tab-riwayat="lain"[^>]*>', tab_katalog, response.body)
+    def tautan_muatan(match):
+        tag = match.group(0)
+        if b' data-utuh' not in tag:
+            return tag
+        href = re.search(rb'\bhref="([^"]+)"', tag)
+        from app.web.muatan_kerangka import alamat_kerangka
+        if href and alamat_kerangka(unescape(href[1].decode())):
+            return re.sub(rb'\sdata-utuh(?=[\s>])', b'', tag, count=1)
+        return tag
+    response.body = re.sub(rb'<a\b[^>]*>', tautan_muatan, response.body)
     response.headers["content-length"] = str(len(response.body))
     return response

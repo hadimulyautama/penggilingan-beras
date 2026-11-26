@@ -1,7 +1,7 @@
-<link rel="stylesheet" href="/static/muat-ringkas.css?v={{ VERSI }}&amp;mr=20261107.2">
-<section class="mr" data-lembar-muatan data-editor-perintah data-catat-muatan
+{% if muatan_shell|default(false) %}<style data-muatan-aset>{{ muatan_aset.css|safe }}</style>{% else %}<link rel="stylesheet" href="/static/muat-ringkas.css?v={{ VERSI }}&amp;mr=20261107.2">{% endif %}
+<section class="mr" {% if muatan_shell|default(false) %}data-muatan-shell data-muatan-context="{{ muatan_context }}"{% else %}data-lembar-muatan data-editor-perintah data-catat-muatan{% endif %}
  data-tahap="{{ 'selesai' if tahap_selesai else 'catat' }}"
- data-perintah="{{ perintah or request.query_params.get('perintah','') }}"
+ data-perintah="{{ '' if muatan_shell|default(false) else (perintah or request.query_params.get('perintah','')) }}"
  data-boleh="{{ '1' if (boleh_selesai if tahap_selesai else boleh_catat) else '0' }}"
  data-actor="{{ akun.user.id }}:{{ VIEW }}:{{ LIHAT_SEBAGAI or '' }}"
  data-buka="{{ buka_awal|default('') }}" data-item="{{ item_awal|default('') }}" data-semua="{{ semua_awal|default('') }}">
@@ -11,8 +11,13 @@
  <p data-pesan role="status" aria-live="polite" hidden></p>
  <div data-galat role="alert" class="mr-error" hidden></div>
  <div data-pulih hidden><button class="btn" type="button" data-terbaru>Periksa muatan terbaru</button><p class="mr-help">Isian dipertahankan. Baca perbandingan terbaru sebelum pemeriksaan dan konfirmasi ulang.</p></div>
- <div data-lembar-isi></div>
+ <div data-lembar-isi>{% if muatan_shell|default(false) %}{% include '_muatan_menunggu.html' %}{% endif %}</div>
+ {% if muatan_shell|default(false) %}<div data-muatan-read-state><p id="muatan-baca-status" role="status">Memeriksa akses dan membaca muatan. Belum ada tindakan yang dapat disimpan.</p><button class="btn" data-muatan-retry type="button" hidden>Coba lagi</button><a href="/" class="btn" data-muatan-cancel>Kembali</a></div>{% endif %}
  <noscript>Aktifkan JavaScript untuk memeriksa muatan. Halaman ini tidak mengubah stok ketika dibuka.</noscript>
 </section>
-<script type="application/json" id="lembar-awal">{{ awal|tojson }}</script>
+{% if muatan_shell|default(false) %}
+<script data-muatan-engine>(function(){const root=document.querySelector('[data-muatan-shell]');if(root)root.padiMulaiMuatan=function(){ {{ muatan_aset.engine|safe }} };})();</script>
+<script data-muatan-reader>{{ muatan_aset.controller|safe }}</script>
+{% else %}<script type="application/json" id="lembar-awal">{{ awal|tojson }}</script>
 <script src="/static/muat-ringkas.js?v={{ VERSI }}&amp;mr=20261107.2" defer></script>
+{% endif %}
