@@ -25,6 +25,7 @@
   var bingkai = null;
   var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
   var penyediaKerangkaLangsung = null; // opt-in presentasi, bawaan tidak memasang apa pun
+  var pembacaRiwayat = null; // opt-in baca panel; dialog native selalu didahulukan
   var pilihKerangkaHalaman = null; // aplikasi memilih sendiri; bawaan tetap native
   var nomorPindah = 0, tujuanPindah = null, nomorSentuhan = 0;
   var dataMenunggu = null, pointerAktif = false;
@@ -49,6 +50,10 @@
      kaki halaman, layar Laporan mati sejak ketukan pertama. */
   var terpasang = [];
   window.PINDAH = {
+    aturPembacaRiwayat: function (pembaca) {
+      if (pembaca !== null && typeof pembaca !== "function") throw new TypeError("Pembaca riwayat harus fungsi atau null.");
+      pembacaRiwayat = pembaca;
+    },
     // Kemampuan presentasi saja. Tidak mengganti penjaga editor atau izin server.
     aturKerangkaHalaman: function (pilih) {
       if (pilih !== null && typeof pilih !== "function") {
@@ -163,6 +168,7 @@
     }
   };
   function cabutSemua() {
+    pembacaRiwayat = null;
     terpasang.forEach(function (p) { p[0].removeEventListener(p[1], p[2]); });
     terpasang = [];
   }
@@ -1000,6 +1006,12 @@
 
   window.addEventListener("popstate", function () {
     if (window.PINDAH.tutupLembarRiwayat && window.PINDAH.tutupLembarRiwayat()) return;
+    // Satu pemilik untuk Back/Forward panel yang telah mengadopsi kontrak.
+    // Nilai selain true/exception tetap melalui navigasi native yang terjaga.
+    if (pembacaRiwayat) {
+      try { if (pembacaRiwayat(location.pathname + location.search, history.state) === true) return; }
+      catch (_) { /* pembaca opsional gagal: gunakan jalur native */ }
+    }
     pindah(location.pathname + location.search, false);
   });
 

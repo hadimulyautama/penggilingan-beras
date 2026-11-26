@@ -2,7 +2,7 @@
 (function(){
  'use strict';
  const root=document.querySelector('.jasa-detail'),panel=root?.querySelector('#pesanan-pelanggan'),form=panel?.querySelector('.jasa-pesanan-filter');
- if(!root||!panel||!form||panel.dataset.jpReady||!window.PINDAH)return;panel.dataset.jpReady='1';
+ if(!root||!panel||!form||panel.dataset.jpReady||typeof window.PINDAH?.aturPembacaRiwayat!=='function')return;panel.dataset.jpReady='1';
  const path=location.pathname,cap=document.documentElement.dataset.versi,context=document.querySelector('.bingkai')?.dataset.pindahKonteks,token=document.getElementById('formulir-sesi')?.dataset.token;
  const keys=['tab','status','cari','halaman','pesanan_halaman','pesanan_cari','pesanan_status'],life=new AbortController(),main=document.querySelector('[data-isi-halaman]')||document.querySelector('main.isi')||panel.closest('main');
  let sequence=0,request=null,target=null,stopped=false;
@@ -53,7 +53,7 @@
   if(stopped||!allowed(u.href))return;if(target?.href===u.href&&request)return;
   if(push){savePosition();history.pushState({pindah:1,jp:{path,context,cap,scroll:null}},'',u.href);}
   request?.abort();const ctrl=new AbortController();request=ctrl;target=u;const n=++sequence,values=new Map([...form.elements].map(x=>[x,x.value])),hadFocus=panel.contains(document.activeElement);shell(u);
-  if(typeof restore==='number'&&main)main.scrollTop=restore;else if(push)panel.scrollIntoView({block:'start'});
+  if(typeof restore==='number'&&main)main.scrollTop=restore;else if(push&&main)main.scrollTop+=panel.getBoundingClientRect().top-main.getBoundingClientRect().top;
   const timer=setTimeout(()=>ctrl.abort(),20000);
   try{const r=await fetch(u.pathname+u.search,{credentials:'same-origin',cache:'no-store',signal:ctrl.signal,headers:{'X-Pindah':'1','Accept':'text/html'}});if(!valid(n,u))return;if(!r.ok||r.redirected)throw Error([401,403].includes(r.status)?'Akses Ringkasan belum tersedia untuk sesi ini. Kembali ke halaman yang diizinkan.':'Pesanan belum dapat dibaca. Coba lagi hanya membaca halaman yang sedang dipilih.');const html=await r.text();if(!valid(n,u))return;if(document.querySelector('dialog[open]'))throw Error('Tutup dialog terlebih dahulu, lalu Coba lagi untuk membaca pesanan.');apply(new DOMParser().parseFromString(html,'text/html'),values,hadFocus,restore);}
   catch(e){if(valid(n,u)){panel.removeAttribute('aria-busy');status.hidden=false;status.textContent=e.name==='AbortError'?'Pembacaan pesanan terlalu lama. Coba lagi hanya membaca; Anda tetap dapat berpindah.':e.message;retry.hidden=false;}}
@@ -62,7 +62,7 @@
  panel.addEventListener('click',e=>{if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||document.querySelector('dialog[open]'))return;const a=e.target.closest('a[href]');if(!a||a.target||a.hasAttribute('download'))return;const u=allowed(a.href);if(!u||!(a.closest('.jasa-pesanan-paginasi')||a.classList.contains('jasa-tautan')))return;e.preventDefault();e.stopPropagation();read(u,true);},{signal:life.signal});
  form.addEventListener('submit',e=>{if(document.querySelector('dialog[open]'))return;const u=new URL(form.action,location.href);u.search=new URLSearchParams(new FormData(form));const safe=allowed(u.href);if(!safe)return;e.preventDefault();e.stopPropagation();read(safe,true);},{signal:life.signal});
  retry.addEventListener('click',()=>{if(target)read(target,false);},{signal:life.signal});
- window.addEventListener('popstate',e=>{if(stopped||!root.isConnected||document.querySelector('dialog[open]'))return;const u=allowed(location.href);if(!u){cancel();return;}e.stopImmediatePropagation();read(u,false,history.state?.jp?.scroll);},{capture:true,signal:life.signal});
+ window.PINDAH.aturPembacaRiwayat((address,state)=>{if(stopped||!root.isConnected||document.querySelector('dialog[open]'))return false;const u=allowed(location.href);if(!u||u.pathname+u.search!==address){cancel();return false;}read(u,false,state?.jp?.scroll);return true;});
  document.addEventListener('click',e=>{if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||document.querySelector('dialog[open]'))return;const a=e.target.closest('a[href]');if(a&&!a.target&&!a.hasAttribute('download')&&!a.getAttribute('href').startsWith('#')&&!allowed(a.href))cancel();},{capture:true,signal:life.signal});
  window.addEventListener('beforeunload',stop,{signal:life.signal});const observer=new MutationObserver(()=>{if(!root.isConnected){stop();observer.disconnect();life.abort();}});observer.observe(document.body,{childList:true,subtree:true});
 })();
