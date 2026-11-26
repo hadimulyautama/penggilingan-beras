@@ -24,5 +24,12 @@
  <p>Membaca atau menandai kabar tidak menyelesaikan pekerjaan. Buka catatan terkait untuk melihat status saat ini dan tindakan yang tersedia.</p>
  {% endcall %}
 </section>
-{% for a in KABAR_ASET if a.tag=='script' %}<script data-kabar-aset-native="{{ a.name }}">{{ a.code|safe }}</script>{% endfor %}
+{% for a in KABAR_ASET if a.tag=='script' %}<script data-kabar-aset-native="{{ a.name }}">{% if a.name=='halaman-bertahap.js' %}
+(function(){
+ function mulai(){ {{ a.code|safe }} }
+ // Dokumen langsung belum tentu selesai mem-parse token di kaki halaman.
+ // Kerangka PINDAH pada dokumen siap tetap mulai tanpa menunggu jaringan.
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mulai,{once:true});else mulai();
+})();
+{% else %}{{ a.code|safe }}{% endif %}</script>{% endfor %}
 {% endblock %}

@@ -50,6 +50,16 @@
   root.className=fresh.className;root.dataset.sampai=fresh.dataset.sampai;
   delete root.dataset.halamanBertahap;delete root.dataset.ready;root.dataset.halamanIsi='kabar';
   for(const style of p.styles)if(!root.querySelector('style[data-kabar-aset-native="'+style.dataset.kabarAsetNative+'"]'))root.prepend(style);
+  // Form asli tetap GET. Hanya submit filter ini yang diarahkan ke click
+  // navigasi native, sehingga guard editor dan provider tujuan tetap sama.
+  form.addEventListener('submit',event=>{
+   if(event.defaultPrevented||!window.PINDAH||form.method!=='get')return;
+   const target=new URL(form.getAttribute('action'),location.href);
+   target.search=new URLSearchParams(new FormData(form)).toString();
+   if(!alamat(target.href))return;
+   event.preventDefault();
+   const link=document.createElement('a');link.href=target.pathname+target.search;link.hidden=true;root.append(link);link.click();link.remove();
+  });
   return root;
  }
  window.PadiKabarFrame={versi:1,siapkan,isi};
