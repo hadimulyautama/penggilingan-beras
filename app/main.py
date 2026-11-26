@@ -645,7 +645,17 @@ async def halaman_aksi_lain(request: Request):
         kelompok, pilihan(permintaan_tab, 'kepemilikan', {'jasa', 'pabrik'}),
         pilihan(permintaan_tab, 'gudang', {'g1', 'g2'}),
         pilihan(permintaan_tab, 'jenis', dict(JENIS_KERJA)))
-    return render(request, "aksi_lain.html", layar="pekerjaan", kembali="",
+    # Katalog biasa memiliki pulau kontrol sendiri. Deep link tindakan lama
+    # tetap memakai mesin native supaya acuan/draf tidak berubah.
+    ekstra = {}
+    template = "aksi_lain.html"
+    if not buka and not petunjuk:
+        from app.web.pekerjaan_lain_kerangka import katalog, aset
+        from app.web.halaman_bertahap import penanda_konteks
+        template = "pekerjaan_lain.html"
+        ekstra = dict(pl_katalog=await katalog(akun.user), pl_aset=aset(),
+                      pl_shell=False, pl_context=penanda_konteks(request, akun))
+    return render(request, template, layar="pekerjaan", kembali="", **ekstra,
                   tab_tindakan=tab_tindakan, tab_berjalan=tab_berjalan,
                   total_tindakan=total_tindakan, total_jalan=total_jalan,
                   breadcrumb_induk={"alamat": kembali, "nama": "Pekerjaan"},

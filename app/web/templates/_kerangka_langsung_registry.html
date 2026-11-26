@@ -13,3 +13,5 @@
 {% if retur_detail %}<script type="application/json" id="padi-rsd-kerangka" data-konteks="{{ retur_detail.konteks }}" data-cap="{{ retur_detail.cap }}">{{ retur_detail|tojson }}</script>{% endif %}
 
 {% if retur_daftar %}<script type="application/json" id="padi-rrs-kerangka" data-konteks="{{ retur_daftar.konteks }}" data-cap="{{ retur_daftar.cap }}">{{ retur_daftar|tojson }}</script>{% endif %}
+
+{% if pekerjaan_lain %}<script type="application/json" id="padi-pl-kerangka" data-konteks="{{ pekerjaan_lain.konteks }}" data-cap="{{ pekerjaan_lain.cap }}">{{ pekerjaan_lain|tojson }}</script>{% endif %}
