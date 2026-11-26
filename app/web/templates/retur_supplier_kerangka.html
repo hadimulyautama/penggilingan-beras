@@ -1,0 +1,16 @@
+{% extends '_retur_supplier_navigasi.html' %}
+{% block judul %}Riwayat retur ke supplier{% endblock %}
+{% block isi %}
+<div class="riwayat-detail rsp rsh rhs rsd" data-rsd-shell data-rsd-id="__RSD_ID__" data-rsd-tab="{{ rsd_tab }}" data-rsd-context="{{ rsd_context }}">
+ {% for name,code in rsd_aset.styles %}<style data-rsd-style="{{ name }}">{{ code|safe }}</style>{% endfor %}
+ <a class="rsp-kembali" href="/riwayat-retur-supplier?">← Kembali ke daftar riwayat</a>
+ <header class="rhs-header"><h1>Riwayat retur ke supplier</h1><p class="rhs-code">Catatan retur: —</p><p class="rhs-meta">Supplier / waktu: —</p><div class="rhs-identity"><span>Status belum dibaca</span></div><p class="rhs-meta">Penerimaan: —</p></header>
+ <div class="rhs-actions rsd-actions"><span class="bantu">Tindakan yang berlaku tersedia setelah data terbaca.</span></div>
+ <nav class="rsh-tabs rhs-tabs" role="tablist" aria-label="Bagian detail retur supplier">{% for key,label in rsd_tabs %}<a id="rsd-tab-{{ key }}" role="tab" aria-controls="rsd-panel" aria-selected="{{ 'true' if rsd_tab==key else 'false' }}" href="?tab={{ key }}"{% if rsd_tab==key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+ <div class="rsd-content"><div class="rsp-stack" id="rsd-panel" role="tabpanel" aria-labelledby="rsd-tab-{{ rsd_tab }}">{% for title,fields in rsd_blueprint %}<section class="rsp-kartu"><h2>{{ title }}</h2><dl class="rsp-fakta">{% for label in fields %}<div><dt>{{ label }}</dt><dd>—</dd></div>{% endfor %}</dl></section>{% endfor %}</div></div>
+ <div data-rsd-read-state><p id="rsd-baca-status" role="status">Membaca rincian retur…</p><button class="btn btn--kecil" data-rsd-retry type="button" hidden>Coba lagi</button><p class="bantu">Nilai — belum dibaca, bukan nol atau keterangan bahwa transaksi belum terjadi. Tautan tindakan/dokumen menunggu data dan izin.</p></div>
+ {% include '_riwayat_retur_supplier_panduan.html' %}
+ <script type="text/plain" data-rsd-native>{{ rsd_aset.native|safe }}</script>
+ <script data-rsd-controller>{{ rsd_aset.controller|safe }}</script>
+</div>
+{% endblock %}

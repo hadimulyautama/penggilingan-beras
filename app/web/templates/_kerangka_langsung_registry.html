@@ -9,3 +9,5 @@
 {% if laporan %}<script type="application/json" id="padi-laporan-kerangka" data-konteks="{{ laporan.konteks }}" data-cap="{{ laporan.cap }}">{{ laporan|tojson }}</script>{% endif %}
 
 {% if karung_detail %}<script type="application/json" id="padi-karung-detail-kerangka" data-konteks="{{ karung_detail.konteks }}" data-cap="{{ karung_detail.cap }}">{{ karung_detail|tojson }}</script>{% endif %}
+
+{% if retur_detail %}<script type="application/json" id="padi-rsd-kerangka" data-konteks="{{ retur_detail.konteks }}" data-cap="{{ retur_detail.cap }}">{{ retur_detail|tojson }}</script>{% endif %}

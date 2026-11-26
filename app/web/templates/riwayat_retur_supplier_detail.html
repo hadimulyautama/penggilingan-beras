@@ -9,7 +9,7 @@
 
 {% macro sumber() %}<section class="rsp-kartu"><h2>Penerimaan & sumber</h2><dl class="rsp-fakta">{{ r.nilai('Supplier',rec.sumber.supplier) }}{{ r.nilai('Penerimaan asal',rec.sumber.kode_tiket) }}{{ r.nilai('Tiket masuk asal',rec.sumber.kode_tiket) }}{{ r.nilai('Nota pembelian',rec.sumber.get('nota') or 'Tidak tersedia') }}</dl><a class="btn" href="/barang-masuk/{{ rec.penerimaan_tiket_id }}">Buka penerimaan asal</a><h3>Alasan retur</h3><p>{{ rec.alasan }}</p><p><a href="/riwayat-retur-supplier?penerimaan={{ rec.penerimaan_tiket_id }}">Semua retur penerimaan ini</a></p></section>{% endmacro %}
 {% macro tiket_terkini() %}<section class="rsp-kartu"><h2>Tiket retur terkini</h2>{% if tiket %}<h3>{{ tiket.kode }}</h3><p>{{ tiket.nomor_polisi or 'Plat belum tercatat' }} · {{ tiket.nama_sopir or 'Sopir belum tercatat' }}</p><dl class="rsp-fakta">{{ r.nilai('Status tiket',tiket.status_tiket ~ ' · ' ~ tiket.status_transaksi) }}{{ r.nilai('Revisi terkini',tiket.jumlah_revisi if tiket.jumlah_revisi is not none else 'Belum tersedia') }}{{ r.nilai('Timbang I · kosong',r.kg(tiket.timbang1_kg)) }}{{ r.nilai('Timbang II · bermuatan',r.kg(tiket.timbang2_kg)) }}{{ r.nilai('Hasil akhir terkini',r.kg(tiket.berat_barang_kg)) }}</dl>{% if tiket_berubah %}<p class="rsp-peringatan">Data tiket terkini berbeda dari snapshot pemeriksaan. Rekaman historis tetap utuh; proses berjalan perlu diperiksa ulang.</p>{% endif %}{% elif rec.timbangan_transaksi_id %}<p class="rsp-peringatan">Status tiket terkini belum dapat dipastikan. Rekaman historis yang tersimpan tetap tersedia.</p>{% else %}<p>Belum ada tiket terhubung.</p>{% endif %}{% if not tera_url %}<p>Alamat tautan TeraFlow belum dikonfigurasikan. Gunakan aplikasi TeraFlow yang biasa dipakai.</p>{% endif %}<p>Hak PadiFlow tidak memberikan hak koreksi atau cetak TeraFlow.</p></section>{% endmacro %}
-<div class="riwayat-detail rsp rsh rhs rsd" data-riwayat-retur-supplier>
+<div class="riwayat-detail rsp rsh rhs rsd" data-riwayat-retur-supplier data-rsd-id="{{ rec.id }}" data-rsd-tab="{{ tab }}">
  <a class="rsp-kembali" href="{{ kembali }}">← Kembali ke daftar riwayat</a>
  <header class="rhs-header">
   <h1>Riwayat retur ke supplier</h1><p class="rhs-code">{{ rec.kode }}</p>
@@ -51,14 +51,7 @@
  <section class="rsp-kartu"><h2>Dokumen & tautan</h2><ul><li><a href="/barang-masuk/{{ rec.penerimaan_tiket_id }}">Penerimaan asal · {{ rec.sumber.kode_tiket }}</a></li><li><a href="/retur-supplier/{{ rec.id }}">Pengajuan · {{ rec.kode }}</a></li>{% if tera_url and rec.timbangan_transaksi_id %}<li><a href="{{ tera_url }}/timbangan/transaksi/{{ rec.timbangan_transaksi_id }}" rel="noopener">Tiket retur TeraFlow · {{ snap.get('kode_tiket') if snap else tiket.kode if tiket else 'Tiket terhubung' }}</a></li>{% endif %}{% if ledger %}<li><a href="{{ tab_href('stok') }}#catatan-keluar">Mutasi barang keluar · {{ ledger.kode }}</a></li>{% else %}<li>Dokumen barang keluar belum ada.</li>{% endif %}</ul><p>Dokumen dan cetak dibuka melalui fasilitas sumber yang sudah berlaku. Hak akses, kondisi tiket, dan validasi cetak tetap diperiksa aplikasi tujuan.</p></section>
  {% endif %}
  </div></div>
-{% from '_panduan.html' import panel as panduan %}
-{% call panduan('rsd-panduan','Panduan riwayat retur ke supplier',penutup={'data-rsd-guide-close':'','data-lk-tutup':''}) %}
-<p><strong>Empat jumlah.</strong> Diajukan adalah rencana awal. Aktual dimuat adalah muatan yang diperiksa. Keluar awal adalah catatan saat penyelesaian. Keluar efektif mengikuti seluruh koreksi sah; angka-angka ini tidak dijumlahkan.</p>
-<p><strong>Barang keluar.</strong> Selesai di gudang belum membuktikan supplier menerima barang. Pengajuan, alokasi dan verifikasi sendiri belum mengurangi stok fisik.</p>
-<p><strong>Timbang &amp; verifikasi.</strong> Rekaman saat pemeriksaan dan tiket terkini dibedakan. Tara karung adalah toleransi pemeriksaan, bukan potongan tambahan dari hasil timbang atau stok. Selisih besar tetap memerlukan koreksi data sah, pemeriksaan ulang dan verifikasi manual sesuai layanan asli.</p>
-<p><strong>Koreksi &amp; pembatalan.</strong> Koreksi jumlah mencatat selisih terhadap versi efektif sebelumnya; koreksi keterangan tidak mengubah stok. Pembatalan setelah keluar bersifat administratif dan tidak menambah stok. Barang kembali hanya diakui dari penerimaan sah yang terhubung. Formulir pemeriksaan dan penyimpanan tetap dibuka melalui tindakan aplikasi yang sama.</p>
-<p><strong>Penelusuran &amp; dokumen.</strong> Ringkasan memuat setiap barang dan penerimaan asal. Timbang &amp; verifikasi memuat tiket terkini, rekaman pemeriksaan, verifikasi dan audit tiket yang diizinkan. Stok memuat saldo historis dan tautan stok terkini. Jejak &amp; dokumen memuat audit sebelum/sesudah dan tautan sumber. Koreksi, audit serta cetak tiket tetap mengikuti hak dan fasilitas TeraFlow.</p>
-{% endcall %}
+{% include '_riwayat_retur_supplier_panduan.html' %}
 
 
 </div>
