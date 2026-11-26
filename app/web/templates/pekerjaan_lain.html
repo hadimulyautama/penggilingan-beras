@@ -5,7 +5,7 @@
 {% include '_kata_aksi_lain.html' %}
 {% for nama, css in pl_aset.styles %}<style data-pl-aset="{{ nama }}">{{ css|safe }}</style>{% endfor %}
 <style>
-#layar{display:grid;gap:20px;align-items:start;margin-top:24px}#layar>div>.lbl{display:block;margin-bottom:12px;font-size:16px}#layar .tindakan{min-height:76px;text-align:left}@media(min-width:1000px){#layar{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#layar{display:grid;gap:20px;align-items:start;margin-top:24px}#layar>div>.lbl{display:block;margin-bottom:12px;font-size:16px}#layar .tindakan{min-height:76px;text-align:left}@media(min-width:1000px){ #layar{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <section data-pekerjaan-lain data-pl-context="{{ pl_context }}"{% if pl_shell %} data-pl-shell{% endif %} aria-label="Pekerjaan lain">
 <div data-pl-status role="status"><p>Memeriksa pilihan pekerjaan. Tombol tersedia setelah izin terbaru terbaca.</p><button class="btn" type="button" data-pl-retry hidden>Coba lagi</button></div>
