@@ -30,6 +30,7 @@
   if(verification&&(!verification.hasAttribute('data-inline')||!json||!Array.isArray(JSON.parse(json.textContent))||document.getElementById('verifikasi-awal')))throw Error('Pemeriksaan verifikasi belum lengkap.');
   const action=doc.querySelector('script[data-perintah-detail]');if(action&&(action.dataset.perintahDetail!==id||action.dataset.buka||action.dataset.nilai||action.dataset.tiket))throw Error('Tujuan memerlukan formulir native tersendiri.');
   const table=root.querySelector('#panel-barang table'),newTable=next.querySelector('#panel-barang table'),heads=[...table.querySelectorAll('thead th')],newHeads=[...newTable?.querySelectorAll('thead th')||[]];if(newHeads.length!==4||heads.length!==4)throw Error('Kolom rincian berubah. Buka ulang halaman native.');
+  const tail=document.querySelector('[data-pkd-tail]'),helpers=['dialog#lembar','div#kabar'].map(selector=>({selector,node:doc.querySelector(selector)}));if(!tail||helpers.some(h=>h.node&&(h.node.children.length||h.node.textContent.trim())))throw Error('Formulir native belum netral. Buka ulang halaman asli.');
   const focus=document.activeElement,active=selected(),title=header.querySelector('h1');nextFrame.dataset.pindahAlamat=location.pathname+location.search;if(window.PINDAH&&!PINDAH.selaraskanChrome(doc))throw Error('Sesi atau cakupan navigasi berubah.');
   title.textContent=freshHeader.querySelector('h1').textContent;freshHeader.querySelector('h1').replaceWith(title);header.replaceChildren(...freshHeader.childNodes);
   const top=root.querySelector('[data-pkd-top]');for(let node=freshHeader.nextSibling;node&&node!==next.querySelector('.detail-kirim-tabs');){const after=node.nextSibling;top.before(node);node=after;}top.remove();
@@ -38,8 +39,8 @@
   heads.forEach((h,i)=>{attributes(h,newHeads[i]);h.replaceChildren(...newHeads[i].childNodes);newHeads[i].replaceWith(h);});table.replaceChildren(...newTable.childNodes);newTable.replaceWith(table);
   tabs.forEach((a,i)=>{attributes(a,freshTabs[i]);a.replaceChildren(...freshTabs[i].childNodes);const u=new URL(location.href);u.searchParams.set('tab_detail',a.id.slice(4));u.hash=a.getAttribute('aria-controls');a.href=u.pathname+u.search+u.hash;a.setAttribute('aria-selected',String(panels[i].id===active));});
   panels.forEach((p,i)=>{p.replaceChildren(...freshPanels[i].childNodes);p.hidden=p.id!==active;});
-  const tail=document.querySelector('[data-pkd-tail]');const edit=doc.querySelector('[data-pengiriman-perbaikan]');if(edit)tail.append(edit);
-  for(const selector of ['dialog#lembar','div#kabar']){const actual=doc.querySelector(selector);if(actual&&!document.querySelector(selector)){if(actual.children.length||actual.textContent.trim())throw Error('Formulir native belum netral. Buka ulang halaman asli.');tail.append(actual);}}
+  const edit=doc.querySelector('[data-pengiriman-perbaikan]');if(edit)tail.append(edit);
+  for(const h of helpers)if(h.node&&!document.querySelector(h.selector))tail.append(h.node);
   started=true;startTabs();if(verification){startVerification();if(root.querySelector('[data-verifikasi-pengiriman]')?.dataset.siap!=='1')throw Error('Verifikasi native belum siap.');}
   root.querySelector('[data-pkd-state]').remove();root.removeAttribute('data-pengiriman-detail-shell');root.setAttribute('data-pengiriman-native','');root.dataset.pkdRecord=id;root.dataset.pkdLoaded='1';done=true;observer.disconnect();events.abort();
   if(retryFocus&&focus===document.body){title.tabIndex=-1;title.focus({preventScroll:true});}else if(focus?.isConnected&&document.activeElement!==focus)focus.focus({preventScroll:true});
