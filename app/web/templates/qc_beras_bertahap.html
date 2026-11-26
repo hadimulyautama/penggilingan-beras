@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block judul %}QC beras hasil sosoh {{ qc_ref }}{% endblock %}
+{% block judul %}QC beras hasil sosoh{% endblock %}
 {% block isi %}
 <main class="riwayat-detail rhs rqd" data-qc-beras-shell data-qc-ref="{{ qc_ref }}" data-qc-context="{{ qc_context }}">
  {% for name,code in qc_aset.styles %}<style data-qc-beras-style="{{ name }}">{{ code|safe }}</style>{% endfor %}

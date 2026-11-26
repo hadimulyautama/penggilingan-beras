@@ -210,7 +210,7 @@
   for(const key of ['kembali_qc','kembali_jasa','kembali_stok','kembali_kerja']){const raw=u.searchParams.get(key);if(!raw)continue;const candidate=new URL(raw,location.href);if(raw.startsWith('/')&&!raw.startsWith('//')&&candidate.origin===location.origin&&source.test(candidate.pathname)){back=raw;break;}}
   if(!rice)root.querySelector('[data-qc-detail-back]').href=back;
   for(const a of root.querySelectorAll('.rhs-tabs a')){const link=new URL(u);link.searchParams.set('tab_qc',a.id.slice(7));a.href=link.pathname+link.search;}
-  const title=(rice?'QC beras hasil sosoh ':'Detail QC ')+match[2];doc.title=title;const brand=doc.querySelector('.bar__merek');if(brand){brand.textContent=title;brand.setAttribute('aria-label',title);}
+  const title=rice?'QC beras hasil sosoh':'Detail QC '+match[2];doc.title=title;const brand=doc.querySelector('.bar__merek');if(brand){brand.textContent=title;brand.setAttribute('aria-label',title);}
   const crumb=doc.querySelector('.desktop-chrome__crumbrow .desktop-breadcrumb [aria-current="page"]');if(crumb)crumb.textContent=title;
   return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }

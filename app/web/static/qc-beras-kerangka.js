@@ -34,6 +34,7 @@
     if(fresh){if([...fresh.querySelectorAll('thead th')].map(n=>n.textContent.trim()).join('|')!==[...table.querySelectorAll('thead th')].map(n=>n.textContent.trim()).join('|'))throw Error('Kolom QC berubah. Muat ulang halaman.');}
     else if(key==='sampel')throw Error('Sampel QC belum lengkap. Coba lagi.');
    }
+   frame.dataset.pindahAlamat=location.pathname+location.search;
    if(window.PINDAH&&!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
    const focus=document.activeElement,oldHeader=root.querySelector('.rhs-header'),heading=oldHeader.querySelector('h1');header.querySelector('h1').replaceWith(heading);oldHeader.replaceChildren(...header.childNodes);
    const currentBack=root.querySelector('.rhs-back');currentBack.href=back.getAttribute('href');currentBack.textContent=back.textContent;

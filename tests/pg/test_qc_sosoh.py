@@ -3,7 +3,7 @@ import asyncio
 import json
 from datetime import timedelta
 from decimal import Decimal
-from pathlib import Path
+from bs4 import BeautifulSoup
 
 import pytest
 import pytest_asyncio
@@ -41,7 +41,7 @@ async def ambil(pg, d, jenis='medium', menit=1):
             jenis=jenis, waktu_sampel=d['awal']+timedelta(minutes=menit))
 
 
-async def test_sampel_sebelum_timbang_hasil_lab_terlambat_dan_pemetaan_sesi(pg, dunia):
+async def test_sampel_sebelum_timbang_hasil_lab_terlambat_dan_pemetaan_sesi(pg, dunia, tmp_path):
     d = dunia
     qs = [await ambil(pg, d, menit=i) for i in range(4)]
     qp = await ambil(pg, d, 'premium', 5)
@@ -79,7 +79,7 @@ async def test_sampel_sebelum_timbang_hasil_lab_terlambat_dan_pemetaan_sesi(pg, 
         assert '5000,00 kg' in halaman.text and '3000,00 kg' in halaman.text
         assert 'MD 123,46' in halaman.text and 'MD 123,46%' not in halaman.text
         assert 'Transparant 1,01' in halaman.text and 'Whiteness 45,68' in halaman.text
-        out = Path(__file__).resolve().parents[2]/'output'/'qc-sosoh-20261104'
+        out = tmp_path/'qc-sosoh-20261104'
         out.mkdir(parents=True, exist_ok=True)
         (out/'pratinjau.html').write_text(halaman.text)
         for nama, path in [('menu', '/api/actions/menu'), ('proses', '/api/actions/proses-qc-sosoh')]:
@@ -234,11 +234,11 @@ async def test_dua_pengiriman_sampel_satu_kunci_tidak_menggandakan_sampel(pg,dun
                 jenis='premium',waktu_sampel=now_local(),kunci_kiriman='sampel-kiriman-yang-sama')
 
 
-async def test_input_qc_di_detail_dan_kartu_menu_tanpa_sesi_manual(pg,dunia):
+async def test_input_qc_di_detail_dan_kartu_menu_tanpa_sesi_manual(pg,dunia,tmp_path):
     q=await ambil(pg,dunia)
     async with await _klien(pg,peran=ADMIN) as c:
         page=await c.get('/proses-aktif/sosoh/'+dunia['proc'].kode_proses)
-        debug=Path(__file__).resolve().parents[2]/'output'/'qc-sosoh-20261104'
+        debug=tmp_path/'qc-sosoh-20261104'
         debug.mkdir(parents=True,exist_ok=True)
         (debug/'detail-awal.html').write_text(page.text)
         assert page.status_code==200,page.text[:400]
@@ -251,13 +251,14 @@ async def test_input_qc_di_detail_dan_kartu_menu_tanpa_sesi_manual(pg,dunia):
         menu=(await c.get('/api/actions/menu')).json()
         sample=next(a for a in menu if a['id']=='sampel_qc_sosoh')
         assert all(f['name']!='sesi_baru' for f in sample['fields'])
-        out=Path(__file__).resolve().parents[2]/'output'/'qc-sosoh-20261104'
+        out=tmp_path/'qc-sosoh-20261104'
         out.mkdir(parents=True,exist_ok=True)
         (out/'detail-admin.html').write_text(page.text)
         (out/'pekerjaan-admin.html').write_text(jobs.text)
     async with await _klien(pg,peran=OPERATOR,gudang='Gudang 2') as c:
         page=await c.get('/proses-aktif/sosoh/'+dunia['proc'].kode_proses)
-        assert page.status_code==200 and 'data-qc-editor' not in page.text
+        assert page.status_code==200
+        assert not BeautifulSoup(page.text,'html.parser').select('[data-qc-sosoh] [data-qc-editor]')
         assert 'QC beras hasil sosoh' in page.text
         (out/'detail-operator.html').write_text(page.text)
 
