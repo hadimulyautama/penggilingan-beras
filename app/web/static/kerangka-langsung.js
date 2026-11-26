@@ -210,7 +210,7 @@
   root.querySelector('[data-qc-detail-back]').href=back;
   for(const a of root.querySelectorAll('.qc-tabs a')){const link=new URL(u);link.searchParams.set('tab_qc',a.id.slice(7));a.href=link.pathname+link.search;}
   const title='Detail QC '+match[2];doc.title=title;const brand=doc.querySelector('.bar__merek');if(brand){brand.textContent=title;brand.setAttribute('aria-label',title);}
-  const crumb=doc.querySelector('.desktop-chrome__crumbrow .breadcrumb>span:last-child');if(crumb)crumb.textContent=title;
+  const crumb=doc.querySelector('.desktop-chrome__crumbrow .desktop-breadcrumb [aria-current="page"]');if(crumb)crumb.textContent=title;
   return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }
  const riwayatPaths=['/riwayat-sosoh','/riwayat-giling','/riwayat-pengeringan'];

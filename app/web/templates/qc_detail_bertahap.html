@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block judul %}Detail {{ judul }}{% endblock %}
+{% block judul %}Detail QC {{ qc_ref }}{% endblock %}
 {% block isi %}
 <div class="riwayat-detail qc-detail rhs rqd" data-qc-detail-shell data-qc-kind="{{ jenis }}" data-qc-ref="{{ qc_ref }}" data-qc-context="{{ qc_context }}">
  {% for name,code in qc_aset.styles %}<style data-qc-detail-style="{{ name }}">{{ code|safe }}</style>{% endfor %}
