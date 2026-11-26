@@ -43,6 +43,9 @@ async def test_katalog_sama_izin_native_tanpa_baca_antrean(pg, lengkap, stok_len
         assert not proto.select_one('[data-pekerjaan-lain]').select('form[method=post]')
         assert len(data['potongan']) > 0 and len(response.content) < 4*1024*1024
         monkeypatch.setattr(layar_pekerjaan, 'siapkan_daftar_pekerjaan', original)
+        jobs = await client.get('/pekerjaan', headers={'X-Pindah':'1'})
+        tab = BeautifulSoup(jobs.text, 'html.parser').select_one('[data-tab-riwayat=lain]')
+        assert tab and not tab.has_attr('data-utuh')
         cold = await client.get('/pekerjaan/catat-lain', headers={'X-Pindah':'1'})
         assert cold.status_code == 200 and 'data-pl-controller' in cold.text
         # Jalur aksi/deep link existing tidak diambil alih oleh shell katalog.

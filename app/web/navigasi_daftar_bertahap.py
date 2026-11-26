@@ -39,5 +39,22 @@ def pasang(response, request):
     script = ('<script src="/static/navigasi-daftar-bertahap.js?v='
               + CAP_ASET + '" data-konteks="' + konteks + '"'+data+'></script>').encode()
     response.body = response.body.replace(marker, extra.encode() + script + marker, 1)
+    # Tautan katalog yang baru tampak sudah harus memakai navigator pada
+    # klik pertama, sebelum script async pada panel tujuan sempat berjalan.
+    # Hanya tujuan baca ini; tautan ?buka= dan penjaga editor tetap native.
+    import re
+    from html import unescape
+    from urllib.parse import urlsplit, parse_qs
+    def tab_katalog(match):
+        tag = match.group(0)
+        href = re.search(rb'\bhref="([^"]+)"', tag)
+        if not href:
+            return tag
+        u = urlsplit(unescape(href[1].decode()))
+        if (u.scheme or u.netloc or u.fragment or u.path != '/pekerjaan/catat-lain'
+                or set(parse_qs(u.query, keep_blank_values=True)) - {'kembali'}):
+            return tag
+        return re.sub(rb'\sdata-utuh(?=[\s>])', b'', tag, count=1)
+    response.body = re.sub(rb'<a\b[^>]*\bdata-tab-riwayat="lain"[^>]*>', tab_katalog, response.body)
     response.headers["content-length"] = str(len(response.body))
     return response
