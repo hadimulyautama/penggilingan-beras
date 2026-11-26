@@ -45,6 +45,8 @@ async def test_shell_keeps_native_scope_and_original_values(pg,lengkap,stok_leng
                 assert root.select_one('#qc-panel-'+tab).get('hidden') is None
                 assert root.select_one('[data-qc-detail-back]')['href']=='/stok'
                 assert root.select_one('#qc-putaran').has_attr('disabled')
+                assert len(root.select('.qc-pager [aria-disabled=true]'))==2
+                assert root.select_one('.kontrol-paginasi__posisi').text=='— / —'
                 assert not root.select('.qc-history-round,form[method=post]')
                 assert n.select_one('[data-riwayat-qc]')['data-qc-ref']==ref
                 assert n.select_one('.qc-history-round') and not n.select('[data-qc-detail-shell]')

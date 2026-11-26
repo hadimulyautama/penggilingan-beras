@@ -30,6 +30,8 @@
   const script=root.querySelector('[data-qc-detail-native]');if(!script?.textContent)throw Error('Kontrol detail QC belum tersedia. Muat ulang halaman.');
   const picker=root.querySelector('.qc-picker'),nextPicker=next.querySelector('.qc-picker');
   if(!picker||!nextPicker?.querySelector('select')||!nextPicker.querySelector('button'))throw Error('Pilihan putaran belum lengkap. Coba lagi.');
+  const pager=root.querySelector('.qc-pager'),nextPager=next.querySelector('.qc-pager');
+  if(!pager||!nextPager)throw Error('Navigasi putaran belum lengkap. Coba lagi.');
   frame.dataset.pindahAlamat=location.pathname+location.search;
   if(window.PINDAH&&!PINDAH.selaraskanChrome(doc))throw Error('Konteks navigasi berubah. Muat ulang halaman.');
   const focus=document.activeElement,title=header.querySelector('h1');freshHeader.querySelector('h1').replaceWith(title);header.replaceChildren(...freshHeader.childNodes);
@@ -38,6 +40,7 @@
   select.replaceChildren(...nextPicker.querySelector('select').childNodes);select.disabled=false;select.removeAttribute('aria-describedby');nextPicker.querySelector('select').replaceWith(select);
   button.disabled=false;button.removeAttribute('aria-describedby');nextPicker.querySelector('button').replaceWith(button);
   for(const a of [...picker.attributes])picker.removeAttribute(a.name);for(const a of nextPicker.attributes)picker.setAttribute(a.name,a.value);picker.replaceChildren(...nextPicker.childNodes);nextPicker.replaceWith(picker);
+  pager.replaceChildren(...nextPager.childNodes);nextPager.replaceWith(pager);
   panels.forEach((panel,i)=>panel.replaceChildren(...freshPanels[i].childNodes));
   nav?.querySelectorAll('[data-lk-cetak]').forEach((b,i)=>{const nextButton=freshNav.querySelectorAll('[data-lk-cetak]')[i];if(nextButton&&!nextButton.disabled){b.disabled=false;b.removeAttribute('aria-describedby');}});
   root.querySelector('[data-qc-detail-state]').remove();done=true;observer.disconnect();events.abort();root.removeAttribute('data-qc-detail-shell');root.setAttribute('data-riwayat-qc','');root.dataset.halamanIsi='qc-detail-'+root.dataset.qcKind;
