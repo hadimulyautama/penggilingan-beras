@@ -28,6 +28,20 @@
    });
   }
  }
+ // Badan baris mengikuti tautan detail yang sudah dirender native. Tidak
+ // membentuk tujuan/izin sendiri atau membuka aksi verifikasi secara langsung.
+ if(window.PINDAH)document.querySelectorAll('.keluar-daftar').forEach(scope=>{
+  if(scope.dataset.keluarNavRead)return;scope.dataset.keluarNavRead='1';
+  scope.addEventListener('click',e=>{
+   if(e.defaultPrevented||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.target.closest('a,button,input,select,textarea,summary')||window.getSelection()?.toString()||document.querySelector('[data-editor-perintah],[data-kemas-ulang]'))return;
+   const row=e.target.closest('[data-detail-keluar]');if(!row||!scope.contains(row))return;
+   const target=new URL(row.dataset.detailKeluar,location.href);
+   if(target.origin!==location.origin||target.hash||!/^\/barang-keluar\/[1-9]\d*$/.test(target.pathname))return;
+   const link=[...row.querySelectorAll('a[href]')].find(a=>a.href===target.href&&!a.target&&!a.hasAttribute('download'));
+   if(!link)return;
+   e.preventDefault();link.click();
+  },true);
+ });
  const controls=document.querySelector('[data-stok-controls]');
  if(controls&&location.pathname==='/stok'){
   const u=new URL(controls.dataset.pelangganUrl,location.href);u.pathname='/api/halaman-bertahap/stok/html';controls.dataset.pelangganUrl=u.pathname+u.search;
