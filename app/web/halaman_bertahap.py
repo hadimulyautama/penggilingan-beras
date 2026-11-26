@@ -22,6 +22,8 @@ from app.web.riwayat_bertahap import TUJUAN as RIWAYAT_TUJUAN
 ALAMAT.update({kind: data['path'] for kind, data in RIWAYAT_TUJUAN.items()})
 from app.web.qc_bertahap import TUJUAN as QC_TUJUAN
 ALAMAT.update({kind: data['path'] for kind, data in QC_TUJUAN.items()})
+from app.web.laporan_bertahap import TUJUAN as LAPORAN_TUJUAN
+ALAMAT.update(LAPORAN_TUJUAN)
 
 
 def memakai_kerangka(request: Request, jenis: str) -> bool:
@@ -60,7 +62,7 @@ def penanda_konteks(request: Request, akun) -> str:
 
 
 def penanda(request: Request, akun, jenis: str) -> str:
-    if jenis in ('stok', 'beranda', 'kabar') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN:
+    if jenis in ('stok', 'beranda', 'kabar') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN or jenis in LAPORAN_TUJUAN:
         # Korelasi baca, bukan izin/tanda tangan. Struktur kosong dapat
         # mengikat filter baru di browser; GET tetap memeriksa aktor native.
         return penanda_konteks(request, akun) + '|' + ALAMAT[jenis] + (
@@ -240,7 +242,7 @@ async def kerangka(request: Request, akun, jenis: str, *, navigasi=None, stok_lo
 async def _isi(request: Request, akun, jenis: str):
     if jenis not in ALAMAT:
         raise HTTPException(404, "Halaman tidak dikenal.")
-    if jenis in ('barang-masuk', 'beranda', 'kabar') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN:
+    if jenis in ('barang-masuk', 'beranda', 'kabar') or jenis in RIWAYAT_TUJUAN or jenis in QC_TUJUAN or jenis in LAPORAN_TUJUAN:
         from app.web.portal.scope import is_customer_read
         if is_customer_read(request):
             raise HTTPException(403, 'Gunakan halaman portal sesuai cakupan pelanggan.')
@@ -249,7 +251,12 @@ async def _isi(request: Request, akun, jenis: str):
     scope = {**request.scope, "path": ALAMAT[jenis], "raw_path": ALAMAT[jenis].encode(),
              "state": {**request.scope.get("state", {}), "isi_halaman_bertahap": True}}
     native = NativeRequest(scope)
-    if jenis == 'kabar':
+    if jenis in LAPORAN_TUJUAN:
+        from app.web.laporan import halaman_laporan, detail_laporan
+        from app.web.laporan_bertahap import parameter
+        response = (await halaman_laporan(native, akun) if jenis == 'laporan' else
+            await detail_laporan(native, jenis.removeprefix('laporan-'), akun=akun, **parameter(native)))
+    elif jenis == 'kabar':
         from app.web.kabar_bertahap import parameter
         from app.web.layar_kabar import halaman_kabar
         response = await halaman_kabar(native,akun=akun,**parameter(native))

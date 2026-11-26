@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block judul %}{{ laporan.nama }}{% endblock %}
+{% block isi %}
+{% include '_laporan_periode_gaya.html' %}
+<section class="lp-detail" data-laporan-shell="{{ tahap }}" data-halaman-bertahap data-kind="{{ SHELL.kind }}" data-stamp="{{ SHELL.stamp }}" data-url="{{ SHELL.data_url }}">
+ <div class="lp-panel-kontrol">
+  <form class="lp-periode-form" method="get" action="/laporan/{{ tahap }}">
+   <div class="grup lp-proses-grup"><label class="lbl" for="lp-proses">Proses / laporan</label><select class="fld" id="lp-proses" data-lp-proses>{% for kelompok in ['Proses','Laporan lainnya'] %}<optgroup label="{{ kelompok }}">{% for opsi in pilihan_laporan if opsi.kelompok==kelompok %}<option value="/laporan/{{ opsi.kode }}"{% if opsi.kode==tahap %} selected{% endif %}>{{ opsi.nama }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
+   <div class="grup" id="periode-grup"><label class="lbl" for="periode">Periode laporan</label><select class="fld" id="periode" name="periode">{% for kode,nama in periode %}<option value="{{ kode }}"{% if kode==periode_aktif %} selected{% endif %}>{{ nama }}</option>{% endfor %}</select></div>
+   <div class="lp-rentang"{% if periode_aktif!='khusus' %} hidden{% endif %}><label>Dari tanggal<input class="fld" type="date" name="dari" value="{{ dari }}"{% if periode_aktif!='khusus' %} disabled{% else %} required{% endif %}></label><label>Sampai tanggal<input class="fld" type="date" name="sampai" value="{{ sampai }}"{% if periode_aktif!='khusus' %} disabled{% else %} required{% endif %}></label></div>
+   <button class="btn lp-tampilkan" type="submit"{% if periode_aktif!='khusus' %} hidden{% endif %}>Tampilkan</button>
+  </form>
+  <div class="lp-panel-aksi" aria-label="Aksi laporan"><a class="btn btn--utama lp-pdf-utama" aria-disabled="true" tabindex="-1" aria-describedby="laporan-baca-status">Lihat PDF ↗</a><a class="btn" data-lp-unduh aria-disabled="true" tabindex="-1" aria-describedby="laporan-baca-status">Unduh PDF</a><button class="btn" type="button" data-lp-panduan aria-label="Panduan" title="Panduan">ⓘ</button></div>
+ </div>
+ <div class="lap" id="lap-isi" data-shell-table-wrap aria-busy="true">
+  <p class="lp-catatan" data-lp-periode>Periode dipilih: {{ dict(periode)[periode_aktif] }} · tanggal menunggu data</p><p class="lp-catatan">Dasar: {{ blueprint.dasar }}</p>
+  <div class="lp-ringkasan">{% for grup in blueprint.ringkasan_kelompok %}<section class="lp-kelompok"><h3>{{ grup.nama }}</h3><div class="lp-bagian-metrik">{% for metrik in grup.rincian %}<dl class="lp-metrik"><dt>{{ metrik.nama }}</dt><dd>—</dd></dl>{% endfor %}</div></section>{% endfor %}</div>
+  <div class="lp-tabel"><table><caption class="lbl">Rincian transaksi</caption><thead>{% for baris in blueprint.kepala_tabel %}<tr>{% for c in baris %}<th scope="{{ 'colgroup' if c.kolom>1 else 'col' }}" colspan="{{ c.kolom }}" rowspan="{{ c.baris }}">{{ c.nama }}</th>{% endfor %}</tr>{% endfor %}</thead><tbody><tr><td colspan="{{ blueprint.kolom|length }}">Rincian menunggu pembacaan. Bobot dan jumlah belum diketahui.</td></tr></tbody></table></div>
+  {% if tahap=='penyosohan' %}<p class="bantu">Kolom per jenis bahan dan hasil mengikuti transaksi dalam periode setelah data terbaca.</p>{% endif %}
+ </div>
+ <div class="halaman-bertahap__status"><p id="laporan-baca-status" data-shell-status role="status">Membaca laporan…</p><button class="btn" type="button" data-shell-retry hidden>Coba lagi</button></div><p class="bantu" data-shell-message>Angka — belum dibaca; bukan nol atau laporan kosong. PDF tersedia setelah laporan terbaca.</p>
+ {% from '_panduan.html' import panel as panel_panduan %}{% call panel_panduan('lp-panduan','Panduan laporan periode',penutup={'data-lp-tutup':''}) %}<p>Pilih periode untuk membaca ringkasan dan rincian {{ laporan.nama|lower }}. Rentang tanggal dapat diisi melalui pilihan Rentang tanggal.</p><p>Tanggal transaksi mengikuti dasar laporan. Lihat PDF atau Unduh PDF memakai periode yang sama dengan halaman ini.</p><p>Gunakan pilihan Proses / laporan untuk berpindah laporan dengan periode yang sama. Gunakan Kembali untuk membuka daftar laporan. Alamat halaman ini menyimpan pilihan periode dan dapat dibuka kembali.</p>{% endcall %}
+</section>
+{% for name,code in LP_ASET %}<script data-laporan-aset-native="{{ name }}">{% if name=='halaman-bertahap.js' %}(function(){function mulai(){ {{ code|safe }} }if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mulai,{once:true});else mulai();})();{% else %}{{ code|safe }}{% endif %}</script>{% endfor %}
+{% endblock %}
