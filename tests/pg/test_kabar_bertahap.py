@@ -41,6 +41,8 @@ async def test_kabar_prototype_unknown_data_native_parity(pg,lengkap,monkeypatch
             sr=BeautifulSoup(shell.text,'html.parser').select_one('[data-kind=kabar]');assert sr
             if expected==200:
                 assert sr['data-stamp']==response.json()['stamp'] and _isi(native.text)==_isi(response.json()['html'])
+                body=BeautifulSoup(_isi(native.text),'html.parser')
+                assert sorted(n['src'].split('/')[-1].split('?')[0] for n in body.select('script[src]'))==sorted(['kabar-kontrol.js','menu-layar.js','kerangka-langsung.js','navigasi-daftar-bertahap.js'])
             else:
                 # Kerangka bukan izin atas cursor: penjaga native tetap menolak.
                 assert response.json()==native.json()

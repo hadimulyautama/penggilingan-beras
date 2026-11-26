@@ -21,7 +21,7 @@
     ||!select||!nextSelect||!button||!nextButton||!guide?.querySelector('.pd-panduan__isi')||!nextGuide?.querySelector('.pd-panduan__isi')
     ||!/^(0|[1-9]\d*)$/.test(fresh.dataset.sampai||''))throw Error('Struktur Kabar belum sesuai. Coba lagi.');
   const scripts=Array.from(content.querySelectorAll('script'));
-  const expected=['kabar-kontrol.js','kerangka-langsung.js','navigasi-daftar-bertahap.js'].map(n=>'/static/'+n+'?v='+document.documentElement.dataset.versi).sort();
+  const expected=['kabar-kontrol.js','menu-layar.js','kerangka-langsung.js','navigasi-daftar-bertahap.js'].map(n=>'/static/'+n+'?v='+document.documentElement.dataset.versi).sort();
   if(JSON.stringify(scripts.map(n=>n.getAttribute('src')).sort())!==JSON.stringify(expected))throw Error('Kontrol Kabar berubah. Muat ulang halaman.');
   const rows=Array.from(fresh.children).filter(n=>n.matches('.kb-day,.kb-feed,.kb-empty,.kb-more'));
   if(!rows.length||rows.some(n=>n.matches('a')&&!alamat(n.getAttribute('href'))))throw Error('Isi Kabar belum lengkap. Coba lagi.');
