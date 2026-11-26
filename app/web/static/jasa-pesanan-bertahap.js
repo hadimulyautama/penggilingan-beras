@@ -25,10 +25,10 @@
  function savePosition(){history.replaceState({...history.state,jp:{path,context,cap,scroll:scrollState()}},'',location.href);}
  savePosition();
  function shell(u){panel.setAttribute('aria-busy','true');retry.hidden=true;status.hidden=false;status.textContent='Memuat pesanan untuk halaman dan filter ini. Anda tetap dapat berpindah halaman.';results.replaceChildren();for(let i=0;i<3;i++){const card=document.createElement('div');card.className='jasa-catatan';const label=document.createElement('strong');label.textContent='Pesanan';const text=document.createElement('p');text.className='bantu';text.textContent='Nomor, status, dan rekap barang belum dibaca.';card.append(label,text);results.append(card);}pageLabel.textContent='Halaman '+(u.searchParams.get('pesanan_halaman')||'1')+' · Memuat pesanan…';}
- function apply(doc,values,hadFocus){
+ function apply(doc,values,hadFocus,restore){
   const freshRoot=doc.querySelector('.jasa-detail'),fresh=freshRoot?.querySelector('#pesanan-pelanggan'),frame=doc.querySelector('.bingkai'),freshForm=fresh?.querySelector('.jasa-pesanan-filter');
   if(!freshRoot||!fresh||!freshForm||doc.documentElement.dataset.versi!==cap||frame?.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==target.pathname+target.search||doc.getElementById('formulir-sesi')?.dataset.token!==token||freshRoot.querySelector('.jasa-detail-tab [aria-current=page]')?.textContent!=='Ringkasan'||!window.PINDAH.selaraskanChrome(doc))throw Error('Konteks sesi atau pelanggan berubah. Buka kembali Ringkasan sebelum melanjutkan.');
-  const focus=document.activeElement,scroll=scrollState();
+  const focus=document.activeElement,scroll=typeof restore==='number'?restore:scrollState();
   panel.querySelector('h2').textContent=fresh.querySelector('h2').textContent;panel.dataset.pesananBanyak=fresh.dataset.pesananBanyak;
   for(const field of form.elements){const f=freshForm.elements.namedItem(field.name);if(f&&field.value===values.get(field))field.value=f.value;}
   results.replaceChildren(...dataChildren(fresh).map(n=>n.cloneNode(true)));pagerFrom(fresh.querySelector('.jasa-pesanan-paginasi'));
@@ -41,7 +41,7 @@
    if(selector==='.jasa-kembali'){old.href=child.getAttribute('href');old.textContent=child.textContent;}
    if(selector==='.jasa-detail-tab')for(const [i,a] of [...old.querySelectorAll('a')].entries()){const b=child.querySelectorAll('a')[i];if(b)a.href=b.getAttribute('href');}
    if(selector==='[data-jasa-kontrol]'){const a=old.querySelector('h1'),b=child.querySelector('h1');if(a&&b)a.textContent=b.textContent;}
-   if(selector==='.jasa-terkait'){const summary=old.querySelector('summary'),open=old.open;for(const x of [...old.childNodes])if(x!==summary)x.remove();old.append(...[...child.childNodes].filter(n=>n.nodeType!==1||n.tagName!=='SUMMARY').map(n=>n.cloneNode(true)));old.open=open;}
+   if(selector==='.jasa-terkait'){const summary=old.querySelector('summary'),open=old.open,links=new Map([...old.querySelectorAll('a[href]')].map(a=>[a.textContent,a]));for(const freshLink of child.querySelectorAll('a[href]')){const oldLink=links.get(freshLink.textContent);if(oldLink){oldLink.href=freshLink.getAttribute('href');freshLink.replaceWith(oldLink);}}for(const x of [...old.childNodes])if(x!==summary)x.remove();old.append(...[...child.childNodes].filter(n=>n.nodeType!==1||n.tagName!=='SUMMARY'));old.open=open;}
    root.append(old);
   }
   panel.removeAttribute('aria-busy');status.hidden=true;retry.hidden=true;
@@ -55,7 +55,7 @@
   request?.abort();const ctrl=new AbortController();request=ctrl;target=u;const n=++sequence,values=new Map([...form.elements].map(x=>[x,x.value])),hadFocus=panel.contains(document.activeElement);shell(u);
   if(typeof restore==='number'&&main)main.scrollTop=restore;else if(push)panel.scrollIntoView({block:'start'});
   const timer=setTimeout(()=>ctrl.abort(),20000);
-  try{const r=await fetch(u.pathname+u.search,{credentials:'same-origin',cache:'no-store',signal:ctrl.signal,headers:{'X-Pindah':'1','Accept':'text/html'}});if(!valid(n,u))return;if(!r.ok||r.redirected)throw Error([401,403].includes(r.status)?'Akses Ringkasan belum tersedia untuk sesi ini. Kembali ke halaman yang diizinkan.':'Pesanan belum dapat dibaca. Coba lagi hanya membaca halaman yang sedang dipilih.');const html=await r.text();if(!valid(n,u))return;if(document.querySelector('dialog[open]'))throw Error('Tutup dialog terlebih dahulu, lalu Coba lagi untuk membaca pesanan.');apply(new DOMParser().parseFromString(html,'text/html'),values,hadFocus);}
+  try{const r=await fetch(u.pathname+u.search,{credentials:'same-origin',cache:'no-store',signal:ctrl.signal,headers:{'X-Pindah':'1','Accept':'text/html'}});if(!valid(n,u))return;if(!r.ok||r.redirected)throw Error([401,403].includes(r.status)?'Akses Ringkasan belum tersedia untuk sesi ini. Kembali ke halaman yang diizinkan.':'Pesanan belum dapat dibaca. Coba lagi hanya membaca halaman yang sedang dipilih.');const html=await r.text();if(!valid(n,u))return;if(document.querySelector('dialog[open]'))throw Error('Tutup dialog terlebih dahulu, lalu Coba lagi untuk membaca pesanan.');apply(new DOMParser().parseFromString(html,'text/html'),values,hadFocus,restore);}
   catch(e){if(valid(n,u)){panel.removeAttribute('aria-busy');status.hidden=false;status.textContent=e.name==='AbortError'?'Pembacaan pesanan terlalu lama. Coba lagi hanya membaca; Anda tetap dapat berpindah.':e.message;retry.hidden=false;}}
   finally{clearTimeout(timer);if(request===ctrl)request=null;}
  }
