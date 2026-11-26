@@ -13,7 +13,7 @@
  // baca sejak niat meninggalkan kerangka; jangan membuka editor dari balasan lama.
  document.addEventListener('click',e=>{if(done||e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;const a=e.target.closest('a[href]');if(!a||a.target||a.hasAttribute('download')||a.getAttribute('href').startsWith('#'))return;const u=new URL(a.href,location.href);if(u.pathname+u.search!==address)stop();},{capture:true,signal:lifetime.signal});
  window.addEventListener('popstate',stop,{signal:lifetime.signal});window.addEventListener('beforeunload',stop,{signal:lifetime.signal});
- function pasang(doc){
+ function pasang(doc,retryHadFocus){
   const fresh=doc.querySelector('[data-lembar-muatan][data-tahap="catat"]'),frame=doc.querySelector('.bingkai'),json=doc.getElementById('lembar-awal'),area=root.querySelector('[data-lembar-isi]');
   if(!fresh||!json||!area||typeof start!=='function'||fresh.querySelector('script,form')||doc.documentElement.dataset.versi!==cap||frame?.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==address||doc.getElementById('formulir-sesi')?.dataset.token!==token||fresh.dataset.actor!==actor||!['0','1'].includes(fresh.dataset.boleh)||fresh.dataset.perintah!==(root.dataset.muatanTarget||''))throw Error('Konteks sesi, perintah, gudang, atau versi aplikasi berubah. Buka kembali Muatan sebelum mengisi.');
   const data=JSON.parse(json.textContent);if(!data||!Array.isArray(data.kiriman)||data.kiriman.length>500||document.getElementById('lembar-awal'))throw Error('Data muatan belum lengkap. Coba baca lagi sebelum mengisi.');
@@ -28,15 +28,15 @@
   started=true;start();
   if(root.dataset.ready!=='1'||typeof root.pfCanNavigateRead!=='function')throw Error('Editor belum siap. Muat ulang halaman asli sebelum mengisi.');
   status.hidden=true;retry.hidden=true;root.querySelector('[data-muatan-read-state]').setAttribute('data-muatan-navigation','');root.dataset.muatanLoaded='1';done=true;observer.disconnect();lifetime.abort();
-  if(focus===retry){const title=root.querySelector('h1');title.tabIndex=-1;title.focus({preventScroll:true});}
+  if(focus===retry||(retryHadFocus&&focus===document.body)){const title=root.querySelector('h1');title.tabIndex=-1;title.focus({preventScroll:true});}
   else if(focus?.isConnected&&document.activeElement!==focus)focus.focus({preventScroll:true});
  }
  async function baca(){
   if(started||abandoned||done)return;
-  request?.abort();const ctrl=new AbortController();request=ctrl;const n=++sequence,timer=setTimeout(()=>ctrl.abort(),20000);retry.disabled=true;retry.textContent='Membaca…';status.textContent='Memeriksa akses dan membaca muatan. Belum ada tindakan yang dapat disimpan.';
+  request?.abort();const ctrl=new AbortController();request=ctrl;const n=++sequence,retryHadFocus=document.activeElement===retry,timer=setTimeout(()=>ctrl.abort(),20000);retry.disabled=true;retry.textContent='Membaca…';status.textContent='Memeriksa akses dan membaca muatan. Belum ada tindakan yang dapat disimpan.';
   try{const r=await fetch(address,{credentials:'same-origin',cache:'no-store',signal:ctrl.signal,headers:{'X-Pindah':'1','Accept':'text/html'}});if(!valid(n))return;
    if(!r.ok||r.redirected)throw Error([401,403].includes(r.status)?'Akses Muatan belum tersedia untuk sesi ini. Kembali ke halaman yang diizinkan. Tidak ada catatan yang disimpan.':[404,409,422].includes(r.status)?'Perintah tidak tersedia pada pilihan ini. Buka kembali pengiriman yang benar. Tidak ada catatan yang disimpan.':'Muatan belum dapat dibaca. Coba lagi hanya membaca data.');
-   const html=await r.text();if(valid(n))pasang(new DOMParser().parseFromString(html,'text/html'));
+   const html=await r.text();if(valid(n))pasang(new DOMParser().parseFromString(html,'text/html'),retryHadFocus);
   }catch(e){if(valid(n)){status.textContent=e.name==='AbortError'?'Pembacaan muatan terlalu lama. Coba lagi hanya membaca; Anda tetap dapat kembali.':e.message;retry.hidden=started;retry.disabled=false;retry.textContent='Coba lagi';if(started)for(const field of root.querySelectorAll('input,button,select,textarea'))field.disabled=true;}}
   finally{clearTimeout(timer);if(request===ctrl)request=null;}
  }
