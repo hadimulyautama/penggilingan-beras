@@ -1,7 +1,10 @@
 {% extends 'base.html' %}
 {% block judul %}Pengambilan barang jasa{% endblock %}
 {% block isi %}
-<style>{{ pj_aset.css|safe }}</style>
+<style>{{ pj_aset.css|safe }}
+/* Kontrol baca di luar editor juga harus menghormati hidden, termasuk .btn. */
+#pj-baca-status[hidden],[data-pj-retry][hidden],[data-pj-native-original][hidden]{display:none!important}
+</style>
 {% set native_editor %}{% include '_editor_perintah.html' %}{% endset %}
 {{ native_editor|replace('<script src="/static/editor-perintah.js?v='~VERSI~'" defer></script>', '')|safe }}
 <p id="pj-baca-status" role="status">Memeriksa akses sebelum formulir dapat diisi. Belum ada draf yang disimpan.</p>
