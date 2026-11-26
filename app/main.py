@@ -649,7 +649,8 @@ async def halaman_aksi_lain(request: Request):
     # tetap memakai mesin native supaya acuan/draf tidak berubah.
     ekstra = {}
     template = "aksi_lain.html"
-    if not buka and not petunjuk:
+    from app.web.retur_supplier_kerangka import pembaca as pembaca_internal
+    if not buka and not petunjuk and pembaca_internal(request, akun):
         from app.web.pekerjaan_lain_kerangka import katalog, aset
         from app.web.halaman_bertahap import penanda_konteks
         template = "pekerjaan_lain.html"

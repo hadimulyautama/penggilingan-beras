@@ -65,3 +65,16 @@ async def test_adapter_tidak_mengubah_mesin_borang_atau_kirim():
     assert engine[engine.index(marker):] == native[native.index(marker):]
     assert engine[:engine.index('  var katalogTujuan')] == native[:native.index('  async function muat() {')]
     assert '"/api/dashboard"' not in engine
+
+
+async def test_portal_tidak_memperoleh_katalog_internal(monkeypatch):
+    from types import SimpleNamespace
+    from fastapi import Request
+    from hmu_identitas import peran as P
+    from app.web import pekerjaan_lain_kerangka as module
+    async def forbidden(*a, **kw):
+        raise AssertionError('Scope portal tidak boleh membaca katalog internal')
+    monkeypatch.setattr(module, 'katalog', forbidden)
+    request = Request({'type':'http', 'method':'GET', 'path':'/', 'headers':[],
+                       'query_string':b'', 'state':{'portal_scope':object()}})
+    assert await module.susun(request, SimpleNamespace(user=SimpleNamespace(role=P.ADMIN)), navigasi={}) is None
