@@ -16,7 +16,7 @@ async def katalog(user):
     for aksi in menu:
         if not aksi.get('kartu'):
             kelompok.setdefault(aksi.get('grup') or 'Lain-lain', []).append({
-                k: aksi.get(k, '') for k in ('id', 'label', 'hint')})
+                k: aksi.get(k, '') for k in ('id', 'label', 'hint', 'boleh', 'alasan_akses')})
     return [(g, kelompok[g]) for g in dict.fromkeys([*urut, *kelompok]) if g in kelompok]
 
 
