@@ -10,7 +10,7 @@
 {% if detail %}
 {% set k = kartu[0] %}
 {% include "_pengiriman_detail_tab.html" %}
-{% if BOLEH_PERINTAH %}<p><a class="btn" href="/barang-keluar/{{ k.rec.id }}/perbaikan?{{ filter_query }}" data-utuh>Perbaiki pengiriman</a></p>{% endif %}
+{% if BOLEH_PERINTAH %}<p data-pengiriman-perbaikan><a class="btn" href="/barang-keluar/{{ k.rec.id }}/perbaikan?{{ filter_query }}" data-utuh>Perbaiki pengiriman</a></p>{% endif %}
 {% else %}
 <link rel="stylesheet" href="/static/daftar_pengiriman.css?v={{ VERSI }}">
 <div class="keluar-halaman keluar-ringkas">

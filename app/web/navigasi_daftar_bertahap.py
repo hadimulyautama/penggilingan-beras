@@ -66,5 +66,23 @@ def pasang(response, request):
             return re.sub(rb'\sdata-utuh(?=[\s>])', b'', tag, count=1)
         return tag
     response.body = re.sub(rb'<a\b[^>]*>', tautan_muatan, response.body)
+    # Tabel aktif secara eksplisit menuju varian native Rincian perintah.
+    # Riwayat perjalanan/portal tetap memakai URL dan dokumen aslinya.
+    from app.web.portal.scope import is_customer_read
+    if not is_customer_read(request):
+        def rincian_baris(match):
+            row = match.group(0)
+            target = re.search(rb'\bdata-detail-keluar="([^"]+)"', row)
+            if not target:
+                return row
+            raw = unescape(target[1].decode())
+            u = urlsplit(raw)
+            q = parse_qs(u.query, keep_blank_values=True)
+            if (u.scheme or u.netloc or u.fragment or not re.fullmatch(r'/barang-keluar/[1-9]\d*', u.path)
+                    or set(q) - {'q','status','sejak','sebelum'} or any(len(v) != 1 for v in q.values())):
+                return row
+            declared = escape(raw + ('&' if '?' in raw else '?') + 'rincian_perintah=1', quote=True).encode()
+            return row.replace(b'data-detail-keluar="'+target[1]+b'"', b'data-detail-keluar="'+declared+b'"',1).replace(b'href="'+target[1]+b'"',b'href="'+declared+b'"')
+        response.body = re.sub(rb'<tr\b[^>]*class="keluar-baris"[^>]*>.*?</tr>', rincian_baris, response.body, flags=re.S)
     response.headers["content-length"] = str(len(response.body))
     return response

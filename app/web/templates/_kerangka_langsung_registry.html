@@ -17,3 +17,5 @@
 {% if pekerjaan_lain %}<script type="application/json" id="padi-pl-kerangka" data-konteks="{{ pekerjaan_lain.konteks }}" data-cap="{{ pekerjaan_lain.cap }}">{{ pekerjaan_lain|tojson }}</script>{% endif %}
 
 {% if muatan %}<script type="application/json" id="padi-muatan-kerangka" data-konteks="{{ muatan.konteks }}" data-cap="{{ muatan.cap }}">{{ muatan|tojson }}</script>{% endif %}
+
+{% if pengiriman_detail %}<script type="application/json" id="padi-pengiriman-detail-kerangka" data-konteks="{{ pengiriman_detail.konteks }}" data-cap="{{ pengiriman_detail.cap }}">{{ pengiriman_detail|tojson }}</script>{% endif %}

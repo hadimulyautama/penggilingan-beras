@@ -13,6 +13,7 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
+  if(u.origin===location.origin&&!u.hash&&/^\/barang-keluar\/[1-9]\d*$/.test(u.pathname)&&u.searchParams.get('rincian_perintah')==='1'&&!u.searchParams.has('buka')&&!u.searchParams.has('nilai'))return true;
    if(u.origin===location.origin&&!u.hash&&(['/muatan','/selesai-muat'].includes(u.pathname)||/^\/barang-keluar\/[1-9]\d*\/(muatan|selesai-muat)$/.test(u.pathname)))return true;
    if(u.origin===location.origin&&u.pathname==='/pekerjaan/catat-lain'&&!u.searchParams.has('buka')&&!u.searchParams.has('nilai')&&!u.hash)return true;
   if(u.origin===location.origin&&/^\/riwayat-qc\/(gabah-basah|gabah-kering|pk-hasil-giling|pk-luar|beras-hasil-sosoh)\/[\w-]+$/.test(u.pathname))return true;
