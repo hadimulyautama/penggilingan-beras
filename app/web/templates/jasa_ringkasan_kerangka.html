@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block judul %}Ringkasan pelanggan jasa{% endblock %}
+{% block isi %}
+<style>{{ jd_aset.css|safe }}
+[data-jd-controls] [hidden],#pesanan-pelanggan [data-jp-hidden][hidden],#pesanan-pelanggan [data-jd-optional][hidden]{display:none!important}
+</style>
+<div class="jasa-detail" data-jd-shell data-jd-context="{{ jd_context }}">
+<a class="jasa-kembali" href="/jasa">← Kembali ke Pesanan Jasa</a>
+{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama='Ringkasan pelanggan') }}
+<div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span><p>Penerimaan, pesanan, dan proses belum dibaca.</p><p>Identitas pelanggan menunggu pemeriksaan akses.</p></div>
+<nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for key,name in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a aria-disabled="true"{% if key=='ringkasan' %} aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+<section class="jasa-bahan" aria-label="Bahan titipan sesuai tahap"><h3>Bahan titipan</h3><p class="bantu">Tahap bahan dan bobot belum dibaca.</p></section>
+<p class="jasa-produk-label">PK dan hasil yang tersedia</p>
+<div class="jasa-detail-angka" aria-label="Saldo terpisah menurut jenis">{% for label in ['PK tersedia','Beras tersisa','Hasil samping'] %}<div><span>{{ label }}</span><strong aria-label="Belum dibaca">—</strong></div>{% endfor %}</div>
+<section class="kartu"><h2>Tindak lanjut pelanggan</h2><p class="bantu">Tindakan menunggu data dan pemeriksaan akses.</p><button class="btn btn--kecil" type="button" disabled>Pengambilan barang</button></section>
+<dl class="jasa-pasang jasa-rekap-riwayat" aria-label="Jumlah pengiriman dan retur"><div><dt>Pengambilan / pengiriman</dt><dd>Belum dibaca</dd></div><div><dt>Retur terkait</dt><dd>Belum dibaca</dd></div></dl>
+<section class="kartu" id="pesanan-pelanggan" data-pesanan-banyak="0"><h2>Pesanan & rekap barang</h2><p class="bantu">Penutupan dan pembatalan berlaku untuk pesanan yang dipilih, bukan seluruh pelanggan.</p>
+<form class="jasa-pesanan-filter" method="get" action="/jasa/pelanggan/2147483647#pesanan-pelanggan" data-jd-optional>
+<input type="hidden" name="tab" value="ringkasan">
+<label>Cari pesanan<input name="pesanan_cari" value="" placeholder="Nomor atau catatan pesanan" maxlength="200" disabled></label>
+<label>Status pesanan<select name="pesanan_status" disabled>{% for key,name in PESANAN_STATUS %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label><button class="btn btn--kecil" type="submit" disabled>Tampilkan</button>
+</form><div class="jasa-catatan"><strong>Pesanan</strong><p class="bantu">Nomor, status, dan rekap barang belum dibaca.</p></div>
+</section>
+<details class="kartu jasa-terkait"><summary>Halaman terkait pelanggan</summary><p class="bantu">Tautan menunggu data dan pemeriksaan akses.</p></details>
+</div>
+<div data-jd-controls><p id="jd-baca-status" role="status">Memeriksa akses dan membaca Ringkasan pelanggan. Tidak ada perubahan yang disimpan.</p><button type="button" class="btn" data-jd-retry hidden>Coba lagi</button><a class="btn" data-jd-original data-utuh hidden>Buka halaman asli</a></div>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<script>
+(function(){const root=document.querySelector('[data-jd-shell]');if(!root)return;root.padiMulaiRingkasan=function(){
+{{ jd_aset.engine|safe }}
+};})();
+</script>
+<script>{{ jd_aset.controls|safe }}</script>
+<script>{{ jd_aset.reader|safe }}</script>
+{% endblock %}

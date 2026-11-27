@@ -25,12 +25,12 @@
  function savePosition(){history.replaceState({...history.state,jp:{path,context,cap,scroll:scrollState()}},'',location.href);}
  savePosition();
  function shell(u){panel.setAttribute('aria-busy','true');retry.hidden=true;status.hidden=false;status.textContent='Memuat pesanan untuk halaman dan filter ini. Anda tetap dapat berpindah halaman.';results.replaceChildren();for(let i=0;i<3;i++){const card=document.createElement('div');card.className='jasa-catatan';const label=document.createElement('strong');label.textContent='Pesanan';const text=document.createElement('p');text.className='bantu';text.textContent='Nomor, status, dan rekap barang belum dibaca.';card.append(label,text);results.append(card);}pageLabel.textContent='Halaman '+(u.searchParams.get('pesanan_halaman')||'1')+' · Memuat pesanan…';}
- function apply(doc,values,hadFocus,restore){
+ function apply(doc,values,hadFocus,restore,initial=false){
   const freshRoot=doc.querySelector('.jasa-detail'),fresh=freshRoot?.querySelector('#pesanan-pelanggan'),frame=doc.querySelector('.bingkai'),freshForm=fresh?.querySelector('.jasa-pesanan-filter');
-  if(!freshRoot||!fresh||!freshForm||doc.documentElement.dataset.versi!==cap||frame?.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==target.pathname+target.search||doc.getElementById('formulir-sesi')?.dataset.token!==token||freshRoot.querySelector('.jasa-detail-tab [aria-current=page]')?.textContent!=='Ringkasan'||!window.PINDAH.selaraskanChrome(doc))throw Error('Konteks sesi atau pelanggan berubah. Buka kembali Ringkasan sebelum melanjutkan.');
+  if(!freshRoot||!fresh||(!freshForm&&!initial)||doc.documentElement.dataset.versi!==cap||frame?.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==target.pathname+target.search||doc.getElementById('formulir-sesi')?.dataset.token!==token||freshRoot.querySelector('.jasa-detail-tab [aria-current=page]')?.textContent!=='Ringkasan'||!window.PINDAH.selaraskanChrome(doc))throw Error('Konteks sesi atau pelanggan berubah. Buka kembali Ringkasan sebelum melanjutkan.');
   const focus=document.activeElement,scroll=typeof restore==='number'?restore:scrollState();
   panel.querySelector('h2').textContent=fresh.querySelector('h2').textContent;panel.dataset.pesananBanyak=fresh.dataset.pesananBanyak;
-  for(const field of form.elements){const f=freshForm.elements.namedItem(field.name);if(f&&field.value===values.get(field))field.value=f.value;}
+  for(const field of form.elements){const f=freshForm?.elements.namedItem(field.name);if(f&&field.value===values.get(field))field.value=f.value;}
   results.replaceChildren(...dataChildren(fresh).map(n=>n.cloneNode(true)));pagerFrom(fresh.querySelector('.jasa-pesanan-paginasi'));
   // Baca ulang juga angka/tautan ringkasan native; kontrol dialog, tab,
   // filter, pager dan panel yang sedang dipegang tetap berupa node yang sama.
@@ -49,8 +49,25 @@
   if(focus?.isConnected){if(document.activeElement!==focus)focus.focus({preventScroll:true});}
   else if(hadFocus){const h=panel.querySelector('h2');h.tabIndex=-1;h.focus({preventScroll:true});}
  }
+ // Hanya dipakai pintu Ringkasan netral setelah GET native disahkan.
+ root.padiIsiRingkasan=function(doc,address){
+  const u=allowed(address);if(!u||u.pathname+u.search!==location.pathname+location.search)throw Error('Tujuan Ringkasan berubah.');target=u;
+  const fresh=doc.querySelector('#pesanan-pelanggan .jasa-pesanan-filter');
+  apply(doc,new Map([...form.elements].map(x=>[x,x.value])),false,undefined,true);
+  form.dataset.jdOptional='1';form.hidden=!fresh;
+  if(fresh){
+   for(const x of [...form.querySelectorAll('input[type=hidden]')])x.remove();
+   for(const x of [...fresh.querySelectorAll('input[type=hidden]')].reverse())form.prepend(x.cloneNode(true));
+   form.action=fresh.getAttribute('action');form.querySelector('button[type=submit]').disabled=fresh.querySelector('button[type=submit]').disabled;
+   for(const x of form.elements){const f=fresh.elements.namedItem(x.name);if(f){x.value=f.value;x.disabled=f.disabled;}}
+  }
+  root.querySelectorAll('.jasa-detail-tab a').forEach(a=>a.removeAttribute('aria-disabled'));
+  const controls=doc.querySelector('[data-jasa-kontrol]');
+  for(const button of root.querySelectorAll('[data-js-cetak]')){const f=controls?.querySelector('[data-js-cetak]');button.disabled=!f||f.disabled;button.removeAttribute('aria-describedby');}
+ };
+ function pendingInitial(){return root.hasAttribute('data-jd-shell')&&root.dataset.jdLoaded!=='1';}
  async function read(u,push,restore){
-  if(stopped||!allowed(u.href))return;if(target?.href===u.href&&request)return;
+  if(stopped||pendingInitial()||!allowed(u.href))return;if(target?.href===u.href&&request)return;
   if(push){savePosition();history.pushState({pindah:1,jp:{path,context,cap,scroll:null}},'',u.href);}
   request?.abort();const ctrl=new AbortController();request=ctrl;target=u;const n=++sequence,values=new Map([...form.elements].map(x=>[x,x.value])),hadFocus=panel.contains(document.activeElement);shell(u);
   if(typeof restore==='number'&&main)main.scrollTop=restore;else if(push&&main)main.scrollTop+=panel.getBoundingClientRect().top-main.getBoundingClientRect().top;
@@ -62,7 +79,7 @@
  panel.addEventListener('click',e=>{if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||document.querySelector('dialog[open]'))return;const a=e.target.closest('a[href]');if(!a||a.target||a.hasAttribute('download'))return;const u=allowed(a.href);if(!u||!(a.closest('.jasa-pesanan-paginasi')||a.classList.contains('jasa-tautan')))return;e.preventDefault();e.stopPropagation();read(u,true);},{signal:life.signal});
  form.addEventListener('submit',e=>{if(document.querySelector('dialog[open]'))return;const u=new URL(form.action,location.href);u.search=new URLSearchParams(new FormData(form));const safe=allowed(u.href);if(!safe)return;e.preventDefault();e.stopPropagation();read(safe,true);},{signal:life.signal});
  retry.addEventListener('click',()=>{if(target)read(target,false);},{signal:life.signal});
- window.PINDAH.aturPembacaRiwayat((address,state)=>{if(stopped||!root.isConnected||document.querySelector('dialog[open]'))return false;const u=allowed(location.href);if(!u||u.pathname+u.search!==address){cancel();return false;}read(u,false,state?.jp?.scroll);return true;});
+ window.PINDAH.aturPembacaRiwayat((address,state)=>{if(stopped||pendingInitial()||!root.isConnected||document.querySelector('dialog[open]'))return false;const u=allowed(location.href);if(!u||u.pathname+u.search!==address){cancel();return false;}read(u,false,state?.jp?.scroll);return true;});
  document.addEventListener('click',e=>{if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||document.querySelector('dialog[open]'))return;const a=e.target.closest('a[href]');if(a&&!a.target&&!a.hasAttribute('download')&&!a.getAttribute('href').startsWith('#')&&!allowed(a.href))cancel();},{capture:true,signal:life.signal});
  window.addEventListener('beforeunload',stop,{signal:life.signal});const observer=new MutationObserver(()=>{if(!root.isConnected){stop();observer.disconnect();life.abort();}});observer.observe(document.body,{childList:true,subtree:true});
 })();

@@ -21,6 +21,7 @@ def alamat(raw):
 def pasang(response, request):
     from app.web.portal.scope import is_customer_read
     if (is_customer_read(request) or getattr(request.state, 'portal_scope', None)
+            or getattr(request.state, 'frame_kerangka_langsung', False)
             or not alamat(str(request.url.path)+('?' + request.url.query if request.url.query else ''))
             or b'id="pesanan-pelanggan"' not in response.body):
         return response
