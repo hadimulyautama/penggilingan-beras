@@ -31,3 +31,5 @@
 {% if jasa_penerimaan %}<script type="application/json" id="padi-jpr-kerangka" data-konteks="{{ jasa_penerimaan.konteks }}" data-cap="{{ jasa_penerimaan.cap }}">{{ jasa_penerimaan|tojson }}</script>{% endif %}
 
 {% if jasa_proses %}<script type="application/json" id="padi-jpc-kerangka" data-konteks="{{ jasa_proses.konteks }}" data-cap="{{ jasa_proses.cap }}">{{ jasa_proses|tojson }}</script>{% endif %}
+
+{% if jasa_stok %}<script type="application/json" id="padi-jst-kerangka" data-konteks="{{ jasa_stok.konteks }}" data-cap="{{ jasa_stok.cap }}">{{ jasa_stok|tojson }}</script>{% endif %}

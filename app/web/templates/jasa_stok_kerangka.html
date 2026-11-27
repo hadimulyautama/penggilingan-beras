@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block judul %}Stok pelanggan jasa{% endblock %}
+{% block isi %}
+<style>{{ jst_aset.css|safe }}
+[data-jst-controls] [hidden]{display:none!important}
+</style>
+<div class="jasa-detail" data-jst-shell data-jst-context="{{ jst_context }}">
+<a class="jasa-kembali" href="/jasa">← Kembali ke Pesanan Jasa</a>
+{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama='Stok pelanggan') }}
+<div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span><p>Penerimaan, pesanan, dan proses belum dibaca.</p><p>Identitas pelanggan menunggu pemeriksaan akses.</p></div>
+<nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for key,name in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a data-jst-tab="{{ key }}"{% if key=='stok' %} aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+<section class="kartu" data-jst-panel><h2>Stok pelanggan</h2><p class="bantu">Saldo produk yang tidak memiliki alokasi per pesanan ditampilkan per pelanggan. Rincian asal adalah referensi hasil, bukan pembagian saldo lot.</p>
+<div class="saring jasa-operasi" data-jst-links>{% for key,name in [('bahan','Bahan & PK'),('produk','Produk'),('karung','Karung')] %}<a class="btn btn--kecil" data-jst-target="{{ key }}" aria-disabled="true" aria-describedby="jst-baca-status">{{ name }}</a>{% endfor %}</div>
+<div class="jasa-stok"><div class="jasa-stok__kepala"><span>Barang / sumber</span><span>Lokasi</span><span>Saldo</span></div>
+<!-- stok:mulai --><article class="jasa-stok__baris"><div><strong>Barang / sumber belum dibaca</strong></div><span>Lokasi belum dibaca</span><div><strong>Saldo belum dibaca</strong></div></article><!-- stok:akhir -->
+</div></section>
+</div>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<div data-jst-controls><p id="jst-baca-status" role="status">Memeriksa akses dan membaca Stok pelanggan. Tidak ada perubahan yang disimpan.</p><button type="button" class="btn" data-jst-retry hidden>Coba lagi</button></div>
+<script>{{ jst_aset.controls|safe }}</script>
+<script>{{ jst_aset.reader|safe }}</script>
+{% endblock %}
