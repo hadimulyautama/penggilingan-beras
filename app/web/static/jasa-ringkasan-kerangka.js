@@ -20,7 +20,11 @@
    if(doc.documentElement.dataset.versi!==cap||frame?.dataset.pindahKonteks!==context||frame.dataset.pindahAlamat!==address||doc.getElementById('formulir-sesi')?.dataset.token!==token||!doc.querySelector('.jasa-detail #pesanan-pelanggan'))throw Error('Konteks sesi atau pelanggan berubah. Buka kembali Ringkasan sebelum melanjutkan.');
    if(!started){root.padiMulaiRingkasan();started=true;}
    if(typeof root.padiIsiRingkasan!=='function')throw Error('Pembaca Ringkasan belum siap. Buka halaman asli sebelum melanjutkan.');
+   const focus=document.activeElement,main=document.getElementById('isi-halaman'),focusTop=root.contains(focus)?focus.getBoundingClientRect().top:null;
    root.padiIsiRingkasan(doc,address);root.dataset.jdLoaded='1';done=true;observer.disconnect();life.abort();controls.hidden=true;
+   // Isi yang baru datang boleh menambah tinggi di atas kontrol yang dibaca.
+   // Jaga posisi kontrol fokus, bukan menyimpan angka gulir halaman lama.
+   if(main&&focusTop!==null&&focus.isConnected&&document.activeElement===focus)main.scrollTop+=focus.getBoundingClientRect().top-focusTop;
    if(hadFocus){const h=root.querySelector('h1');h.tabIndex=-1;h.focus({preventScroll:true});}
   }catch(e){if(valid(n)){status.textContent=e.name==='AbortError'?'Pembacaan Ringkasan terlalu lama. Anda tetap dapat berpindah; Coba lagi hanya membaca.':e.message;retry.hidden=false;retry.disabled=false;if(started){original.href=address;original.hidden=false;}}}
   finally{clearTimeout(timer);if(request===ctrl)request=null;}
