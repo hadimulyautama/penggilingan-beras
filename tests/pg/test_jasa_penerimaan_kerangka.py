@@ -15,7 +15,7 @@ async def test_neutral_then_native_permission_scope(pg,banyak,monkeypatch):
  clients={r:await _klien(pg,role=r) for r in ('admin','operator')};space=await siapkan(pg);await aktifkan(pg,space);konfigurasi(monkeypatch,space);pasang_pagar(pg.kw['bind'],wajib=True);before=await _sidik(pg)
  try:
   source=await clients['admin'].get('/jasa',headers={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});assert source.status_code==200;s=BeautifulSoup(source.text,'html.parser');host=s.select_one('#padi-jpr-kerangka');assert host;data=json.loads(host.string);shell=BeautifulSoup(data['html'],'html.parser');root=shell.select_one('[data-jpr-shell]');assert root
-  assert root.select_one('h1').text=='Penerimaan pelanggan' and root.select_one('section h2').text=='Penerimaan'
+  assert root.select_one('h1').text=='Penerimaan pelanggan' and root.select_one('[data-jpr-panel] h2').text=='Penerimaan'
   assert not any(x in data['html'] for x in ('Bu Sri','GB-BANYAK-','JAS-BANYAK-'))
   assert len(root.select('.jasa-detail-tab a'))==5 and not root.select('.jasa-detail-tab a[href]')
   assert not root.select_one('[data-jpr-open]').has_attr('href')
