@@ -361,7 +361,15 @@ async def lengkapi_dokumen(request: Request, response):
                     if isinstance(error, HTTPException) and error.status_code in (401, 403):
                         raise
                     log.warning('Kerangka Stok pelanggan belum tersedia (%s)', type(error).__name__)
-                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, riwayat=riwayat, beranda=beranda, qc=qc, kabar=kabar, laporan=laporan, karung_detail=karung_detail, retur_detail=retur_detail, retur_daftar=retur_daftar, pekerjaan_lain=pekerjaan_lain, muatan=muatan, pengiriman_detail=pengiriman_detail, pengambilan=pengambilan, perbaikan=perbaikan, kemas_ulang=kemas_ulang, jasa_ringkasan=jasa_ringkasan, jasa_penerimaan=jasa_penerimaan, jasa_proses=jasa_proses, jasa_stok=jasa_stok).encode()
+                jasa_pengambilan = None
+                try:
+                    from app.web.jasa_pengambilan_kerangka import susun as susun_jasa_pengambilan
+                    jasa_pengambilan = await susun_jasa_pengambilan(request, akun, navigasi=navigasi)
+                except Exception as error:
+                    if isinstance(error, HTTPException) and error.status_code in (401, 403):
+                        raise
+                    log.warning('Kerangka Pengambilan pelanggan belum tersedia (%s)', type(error).__name__)
+                host = templates.get_template('_kerangka_langsung_registry.html').render(registry=registry, stok=stok, riwayat=riwayat, beranda=beranda, qc=qc, kabar=kabar, laporan=laporan, karung_detail=karung_detail, retur_detail=retur_detail, retur_daftar=retur_daftar, pekerjaan_lain=pekerjaan_lain, muatan=muatan, pengiriman_detail=pengiriman_detail, pengambilan=pengambilan, perbaikan=perbaikan, kemas_ulang=kemas_ulang, jasa_ringkasan=jasa_ringkasan, jasa_penerimaan=jasa_penerimaan, jasa_proses=jasa_proses, jasa_stok=jasa_stok, jasa_pengambilan=jasa_pengambilan).encode()
                 siap = body.replace(b'</body>', host + b'\n</body>', 1)
                 body = siap
         except Exception as e:

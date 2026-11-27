@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block judul %}Pengambilan & retur pelanggan jasa{% endblock %}
+{% block isi %}
+<style>{{ jgr_aset.css|safe }}
+[data-jgr-controls] [hidden]{display:none!important}
+</style>
+<div class="jasa-detail" data-jgr-shell data-jgr-context="{{ jgr_context }}">
+<a class="jasa-kembali" href="/jasa">← Kembali ke Pesanan Jasa</a>
+{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama='Pengambilan & retur pelanggan') }}
+<div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span><p>Penerimaan, pesanan, dan proses belum dibaca.</p><p>Identitas pelanggan menunggu pemeriksaan akses.</p></div>
+<nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for key,name in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a data-jgr-tab="{{ key }}"{% if key=='pengambilan' %} aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+<section class="kartu" data-jgr-panel><h2>Pengambilan & pengiriman</h2><div class="saring jasa-operasi" data-jgr-links><a class="btn btn--kecil" data-jgr-target="ambil" aria-disabled="true" aria-describedby="jgr-baca-status">Pengambilan barang</a><a class="btn btn--kecil" data-jgr-target="daftar" aria-disabled="true" aria-describedby="jgr-baca-status">Buka pengiriman pelanggan</a></div>
+<!-- pengiriman:mulai --><details class="jasa-catatan"><summary>Pengambilan / pengiriman · status belum dibaca</summary><p class="bantu">Jenis dan bobot menunggu pemeriksaan akses.</p></details><!-- pengiriman:akhir -->
+<h3>Retur terkait</h3><!-- retur:mulai --><p class="bantu">Catatan retur dan pengiriman asal belum dibaca.</p><!-- retur:akhir -->
+</section>
+</div>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<div data-jgr-controls><p id="jgr-baca-status" role="status">Memeriksa akses dan membaca Pengambilan & retur pelanggan. Tidak ada perubahan yang disimpan.</p><button type="button" class="btn" data-jgr-retry hidden>Coba lagi</button></div>
+<script>{{ jgr_aset.controls|safe }}</script>
+<script>{{ jgr_aset.reader|safe }}</script>
+{% endblock %}
