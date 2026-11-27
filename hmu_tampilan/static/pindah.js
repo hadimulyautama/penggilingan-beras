@@ -334,11 +334,40 @@
     return { main: main, awal: awal[0], akhir: akhir[0] };
   }
 
+  // Konteks Kembali Jasa hanya presentasi. Normalisasi dibatasi pada
+  // Ringkasan tujuan yang persis sama, bukan pengecualian halaman asal.
+  function alamatRingkasanJasa(doc) {
+    var raw = doc.querySelector(".bingkai")?.dataset.pindahAlamat;
+    if (typeof raw !== "string" || raw.length > 4096 || raw.charAt(0) !== "/" || raw.indexOf("\\") !== -1) return null;
+    try {
+      var u = new URL(raw, location.origin);
+      var keys = ["tab", "status", "cari", "halaman", "pesanan_halaman", "pesanan_cari", "pesanan_status"];
+      if (u.origin !== location.origin || u.hash || !/^\/jasa\/pelanggan\/[1-9]\d{0,9}$/.test(u.pathname)
+          || Number(u.pathname.split("/").pop()) > 2147483647 || (u.searchParams.get("tab") || "ringkasan") !== "ringkasan"
+          || Array.from(u.searchParams.keys()).some(function (k) { return keys.indexOf(k) < 0 || u.searchParams.getAll(k).length !== 1 || u.searchParams.get(k).length > 200; })) return null;
+      return u.pathname + u.search;
+    } catch (_) { return null; }
+  }
+
+  function rapikanRujukanJasa(salin, tujuan) {
+    if (!tujuan || !salin.matches(".desktop-chrome__shortcuts")) return;
+    salin.querySelectorAll("a[href]").forEach(function (a) {
+      try {
+        var u = new URL(a.getAttribute("href"), location.origin);
+        var kembali = u.searchParams.getAll("kembali_jasa");
+        if (u.origin !== location.origin || u.hash || kembali.length !== 1 || kembali[0] !== tujuan) return;
+        u.searchParams.delete("kembali_jasa");
+        a.setAttribute("href", u.pathname + u.search);
+      } catch (_) {} // rujukan tak cocok tetap berbeda dan memakai jalur native
+    });
+  }
+
   // Abaikan hanya penanda presentasi yang memang berubah per halaman.
   // Identitas, tautan berizin, formulir dan kontrol lain harus tetap persis.
-  function sidikChrome(el) {
+  function sidikChrome(el, kembaliJasa) {
     if (!el) return null;
     var salin = el.cloneNode(true);
+    rapikanRujukanJasa(salin, kembaliJasa);
     salin.querySelectorAll(".pintu__jml").forEach(function (n) { n.remove(); });
     [salin].concat(Array.prototype.slice.call(salin.querySelectorAll("*"))).forEach(function (n) {
       ["aria-current", "open"].forEach(function (a) { n.removeAttribute(a); });
@@ -391,7 +420,8 @@
       }).map(function (n) { return n.outerHTML; }).join("");
     };
     if (luar(lama) !== luar(baru)) return false;
-    return sidikChrome(document.querySelector(".desktop-chrome__shortcuts")) === sidikChrome(doc.querySelector(".desktop-chrome__shortcuts"));
+    var kembaliJasa = alamatRingkasanJasa(doc);
+    return sidikChrome(document.querySelector(".desktop-chrome__shortcuts"), kembaliJasa) === sidikChrome(doc.querySelector(".desktop-chrome__shortcuts"), kembaliJasa);
   }
 
   function selaraskanChrome(doc) {
@@ -417,6 +447,14 @@
       n.querySelectorAll(".pintu__jml").forEach(function (badge) { badge.remove(); });
       menuBaru[i].querySelectorAll(".pintu__jml").forEach(function (badge) { n.appendChild(badge.cloneNode(true)); });
     });
+    if (alamatRingkasanJasa(doc)) {
+      // Guard sudah membuktikan node/izin/tujuan dasar identik. Perbarui
+      // href saja agar konteks pelanggan lama tidak melekat pada tujuan baru.
+      var cepat = document.querySelectorAll(".desktop-chrome__shortcuts a[href]");
+      doc.querySelectorAll(".desktop-chrome__shortcuts a[href]").forEach(function (a, i) {
+        cepat[i].setAttribute("href", a.getAttribute("href"));
+      });
+    }
     document.title = doc.title || document.title;
   }
 
