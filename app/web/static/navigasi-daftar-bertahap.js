@@ -13,6 +13,7 @@
  // memakai kerangka generik dan HTML native; jangan memaksa navigasi utuh.
  function memakaiKerangka(alamat){
   const u=new URL(alamat,location.href);
+  if(u.origin===location.origin&&/^\/jasa\/pelanggan\/[1-9]\d{0,9}$/.test(u.pathname)&&!u.hash&&u.searchParams.get('tab')==='penerimaan'&&[...u.searchParams.keys()].every(k=>['tab','status','cari','halaman','pesanan_halaman','pesanan_cari','pesanan_status','rincian_halaman','rincian_cari'].includes(k)&&u.searchParams.getAll(k).length===1))return true;
   if(u.origin===location.origin&&/^\/jasa\/pelanggan\/[1-9]\d{0,9}$/.test(u.pathname)&&!u.hash&&(u.searchParams.get('tab')||'ringkasan')==='ringkasan'&&[...u.searchParams.keys()].every(k=>['tab','status','cari','halaman','pesanan_halaman','pesanan_cari','pesanan_status'].includes(k)&&u.searchParams.getAll(k).length===1))return true;
   if(u.origin===location.origin&&u.pathname==='/stok-produk/kemas-ulang'&&!u.hash&&u.searchParams.has('sku_id')&&[...u.searchParams.keys()].every(k=>['sku_id','std_id','jasa_id','kembali_stok'].includes(k)&&u.searchParams.getAll(k).length===1))return true;
   if(u.origin===location.origin&&/^\/barang-keluar\/[1-9]\d*\/perbaikan$/.test(u.pathname)&&!u.hash&&[...u.searchParams.keys()].every(k=>['q','status','sejak','sebelum'].includes(k)&&u.searchParams.getAll(k).length===1))return true;

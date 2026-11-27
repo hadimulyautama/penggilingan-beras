@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block judul %}Penerimaan pelanggan jasa{% endblock %}
+{% block isi %}
+<style>{{ jpr_aset.css|safe }}
+[data-jpr-controls] [hidden],[data-jpr-pager] [hidden],[data-jpr-pager][hidden]{display:none!important}
+</style>
+<div class="jasa-detail" data-jpr-shell data-jpr-context="{{ jpr_context }}">
+<a class="jasa-kembali" href="/jasa">← Kembali ke Pesanan Jasa</a>
+{% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama='Penerimaan pelanggan') }}
+<div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span><p>Penerimaan, pesanan, dan proses belum dibaca.</p><p>Identitas pelanggan menunggu pemeriksaan akses.</p></div>
+<nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for key,name in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a data-jpr-tab="{{ key }}"{% if key=='penerimaan' %} aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+<form method="get" class="saring"><input type="hidden" name="tab" value="penerimaan"><input class="fld" type="search" name="rincian_cari" value="" aria-label="Cari catatan pelanggan" placeholder="Cari kode atau pesanan…" maxlength="200"><button class="cari-berikon btn btn--kecil" type="submit">Cari</button></form>
+<section class="kartu" data-jpr-panel><h2>Penerimaan</h2><a class="btn btn--kecil" aria-disabled="true" aria-describedby="jpr-baca-status" data-jpr-open>Buka Barang Masuk pelanggan</a>
+<!-- penerimaan:mulai --><article class="jasa-catatan"><div class="baris"><strong>Penerimaan</strong><span class="lencana">Status belum dibaca</span></div><p>Jenis bahan, pesanan, waktu dan bobot menunggu data.</p></article><!-- penerimaan:akhir -->
+</section>
+</div>
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<nav class="saring" aria-label="Halaman catatan pelanggan" data-jpr-pager><span>Halaman catatan belum dibaca.</span><a class="btn btn--kecil" aria-disabled="true" data-jpr-prev>← Sebelumnya</a><a class="btn btn--kecil" aria-disabled="true" data-jpr-next>Berikutnya →</a></nav>
+<div data-jpr-controls><p id="jpr-baca-status" role="status">Memeriksa akses dan membaca Penerimaan pelanggan. Tidak ada perubahan yang disimpan.</p><button type="button" class="btn" data-jpr-retry hidden>Coba lagi</button></div>
+<script>{{ jpr_aset.controls|safe }}</script>
+<script>{{ jpr_aset.reader|safe }}</script>
+{% endblock %}
