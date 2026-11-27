@@ -39,7 +39,7 @@
   root.querySelectorAll('[data-js-cetak]').forEach(b=>{b.disabled=!nativeControls?.querySelector('[data-js-cetak]')||nativeControls.querySelector('[data-js-cetak]').disabled;b.removeAttribute('aria-describedby');});
   panel.removeAttribute('aria-busy');root.dataset.jprLoaded='1';controls.hidden=true;retry.hidden=true;if(main)main.scrollTop=scroll;
   if(focus?.isConnected&&focus.getClientRects().length){if(document.activeElement!==focus)focus.focus({preventScroll:true});if(main&&top!==null&&typeof restore!=='number')main.scrollTop+=focus.getBoundingClientRect().top-top;}
-  if(hadRetry&&focus===retry){const h=panel.querySelector('h2');h.tabIndex=-1;h.focus({preventScroll:true});}
+  if(hadRetry&&(focus===retry||focus===document.body)){const h=panel.querySelector('h2');h.tabIndex=-1;h.focus({preventScroll:true});}
  }
  async function read(u,push=false,restore){
   if(stopped||!u)return;if(request&&target?.href===u.href)return;
