@@ -255,6 +255,7 @@
   const form=root.querySelector('.jasa-pesanan-filter');if(!form)return null;form.action=u.pathname+'#pesanan-pelanggan';
   for(const name of ['pesanan_cari','pesanan_status'])form.elements.namedItem(name).value=q.get(name)||'';
   const parent=new URLSearchParams();for(const name of ['status','cari','halaman'])if(q.has(name))parent.set(name,q.get(name));root.querySelector('.jasa-kembali').href='/jasa'+(parent.toString()?'?'+parent:'');
+  const receipt=root.querySelector('[data-jd-tab="penerimaan"]');if(receipt){const next=new URLSearchParams({tab:'penerimaan',status:q.get('status')||'',cari:q.get('cari')||'',halaman:q.get('halaman')||''});for(const name of ['pesanan_halaman','pesanan_cari','pesanan_status'])if(q.has(name))next.set(name,q.get(name));receipt.href=u.pathname+'?'+next;receipt.removeAttribute('aria-disabled');}
   frame.dataset.pindahAlamat=u.pathname+u.search;
   return {versi:1,alamat:u.pathname+u.search,konteks:context,cap,html:'<!doctype html>'+doc.documentElement.outerHTML};
  }

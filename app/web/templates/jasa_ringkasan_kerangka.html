@@ -8,7 +8,7 @@
 <a class="jasa-kembali" href="/jasa">← Kembali ke Pesanan Jasa</a>
 {% from '_jasa_kontrol.html' import kontrol with context %}{{ kontrol(detail=true,nama='Ringkasan pelanggan') }}
 <div class="jasa-identitas"><span>Pesanan Jasa · Detail pelanggan</span><p>Penerimaan, pesanan, dan proses belum dibaca.</p><p>Identitas pelanggan menunggu pemeriksaan akses.</p></div>
-<nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for key,name in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a aria-disabled="true"{% if key=='ringkasan' %} aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+<nav class="jasa-detail-tab" aria-label="Detail pelanggan">{% for key,name in [('ringkasan','Ringkasan'),('penerimaan','Penerimaan'),('proses','Proses'),('stok','Stok'),('pengambilan','Pengambilan & retur')] %}<a data-jd-tab="{{ key }}" aria-disabled="true"{% if key=='ringkasan' %} aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
 <section class="jasa-bahan" aria-label="Bahan titipan sesuai tahap"><h3>Bahan titipan</h3><p class="bantu">Tahap bahan dan bobot belum dibaca.</p></section>
 <p class="jasa-produk-label">PK dan hasil yang tersedia</p>
 <div class="jasa-detail-angka" aria-label="Saldo terpisah menurut jenis">{% for label in ['PK tersedia','Beras tersisa','Hasil samping'] %}<div><span>{{ label }}</span><strong aria-label="Belum dibaca">—</strong></div>{% endfor %}</div>
