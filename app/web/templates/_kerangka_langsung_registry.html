@@ -29,3 +29,5 @@
 {% if jasa_ringkasan %}<script type="application/json" id="padi-jd-kerangka" data-konteks="{{ jasa_ringkasan.konteks }}" data-cap="{{ jasa_ringkasan.cap }}">{{ jasa_ringkasan|tojson }}</script>{% endif %}
 
 {% if jasa_penerimaan %}<script type="application/json" id="padi-jpr-kerangka" data-konteks="{{ jasa_penerimaan.konteks }}" data-cap="{{ jasa_penerimaan.cap }}">{{ jasa_penerimaan|tojson }}</script>{% endif %}
+
+{% if jasa_proses %}<script type="application/json" id="padi-jpc-kerangka" data-konteks="{{ jasa_proses.konteks }}" data-cap="{{ jasa_proses.cap }}">{{ jasa_proses|tojson }}</script>{% endif %}
